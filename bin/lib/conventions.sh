@@ -176,6 +176,7 @@ _conventions_resolve() {
 }
 
 conventions_diff_main() {
-  shift; shift
-  echo "stub: would diff conventions"
+  # Re-dispatch as link --dry-run, preserving any --repo-root caller passed.
+  shift; shift  # discard 'user' 'conventions'
+  conventions_link_main "user" "conventions" --dry-run "$@"
 }

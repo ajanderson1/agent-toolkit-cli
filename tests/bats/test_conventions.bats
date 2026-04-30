@@ -186,3 +186,12 @@ teardown() {
   [ -L "$HOME/.claude/CONVENTIONS.md" ]
   [ "$(readlink "$HOME/.claude/CONVENTIONS.md")" = "$REPO_ROOT/CONVENTIONS.md" ]
 }
+
+@test "diff user conventions reports would-link without creating" {
+  mkdir -p "$HOME/.claude"
+  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" diff user conventions --repo-root "$REPO_ROOT"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"would-link"* ]]
+  [ ! -e "$HOME/.conventions/CONVENTIONS.md" ]
+  [ ! -e "$HOME/.claude/CONVENTIONS.md" ]
+}
