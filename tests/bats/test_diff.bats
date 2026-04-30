@@ -34,3 +34,9 @@ teardown() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"would-link"* ]]
 }
+
+@test "diff user claude emits a 'Previewing' header on stderr" {
+  run bash -c "'$BATS_TEST_DIRNAME/../../bin/agent-toolkit' diff user claude --repo-root '$REPO_ROOT' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Previewing"* ]]
+}
