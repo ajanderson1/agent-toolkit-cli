@@ -67,3 +67,39 @@ def test_environment_group_warn_when_tool_missing(monkeypatch):
     assert result.status == Status.WARN
     assert result.summary == "some tools not on PATH"
     assert any("gh NOT on PATH" in f for f in result.findings)
+
+
+def test_frontmatter_group_ok_when_no_assets(tmp_path):
+    from agent_toolkit.doctor.frontmatter import run as run_fm
+    (tmp_path / "schemas").mkdir()
+    (tmp_path / "schemas" / "asset-frontmatter.v1alpha1.json").write_text(
+        '{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object"}'
+    )
+    result = run_fm(tmp_path)
+    assert result.status == Status.OK
+
+
+def test_frontmatter_group_fail_when_invalid_asset(tmp_path):
+    from agent_toolkit.doctor.frontmatter import run as run_fm
+    schema_dir = tmp_path / "schemas"
+    schema_dir.mkdir()
+    # Use the real schema so validation actually rejects bad frontmatter
+    real_schema = (
+        '{"$schema":"https://json-schema.org/draft/2020-12/schema",'
+        '"type":"object","required":["apiVersion","metadata","spec"],'
+        '"properties":{"apiVersion":{"const":"agent-toolkit/v1alpha1"},'
+        '"metadata":{"type":"object","required":["name","description","lifecycle"],'
+        '"properties":{"name":{"type":"string"},"description":{"type":"string","pattern":"\\\\.$"},'
+        '"lifecycle":{"enum":["experimental","stable","deprecated"]}}},'
+        '"spec":{"type":"object","required":["origin","vendored_via","harnesses"],'
+        '"properties":{"origin":{"enum":["first-party","third-party"]},'
+        '"vendored_via":{"enum":["none","submodule","clone","symlink"]},'
+        '"harnesses":{"type":"array","minItems":1,"items":{"enum":["claude","codex","opencode","pi"]}}}}}}'
+    )
+    (schema_dir / "asset-frontmatter.v1alpha1.json").write_text(real_schema)
+    bad_skill = tmp_path / "skills" / "bad" / "SKILL.md"
+    bad_skill.parent.mkdir(parents=True)
+    bad_skill.write_text("---\nname: bad\n---\n# bad\n")  # missing required keys
+    result = run_fm(tmp_path)
+    assert result.status == Status.FAIL
+    assert any("bad" in f for f in result.findings)
