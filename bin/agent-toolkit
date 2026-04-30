@@ -10,10 +10,14 @@ usage() {
 agent-toolkit — manage harness-agnostic assets
 
 Usage:
-  agent-toolkit link <user|project> <harness> [--repo-root DIR] [--dry-run]
-  agent-toolkit unlink <user|project> <harness> [--repo-root DIR] [--dry-run]
-  agent-toolkit list <user|project> [--repo-root DIR]
-  agent-toolkit diff <user|project> <harness> [--repo-root DIR]
+  agent-toolkit link <user|project> <harness>     [--repo-root DIR] [--dry-run]
+  agent-toolkit link user conventions             [--repo-root DIR] [--dry-run]
+  agent-toolkit unlink <user|project> <harness>   [--repo-root DIR] [--dry-run]
+  agent-toolkit unlink user conventions           [--repo-root DIR] [--dry-run]
+  agent-toolkit list <user|project>               [--repo-root DIR]
+  agent-toolkit list user conventions             [--repo-root DIR]
+  agent-toolkit diff <user|project> <harness>     [--repo-root DIR]
+  agent-toolkit diff user conventions             [--repo-root DIR]
   agent-toolkit check [--repo-root DIR] [--exit-code]
   agent-toolkit fix [--repo-root DIR] [--only=<region>] [--to-stdout]
   agent-toolkit doctor [--repo-root DIR]
@@ -24,9 +28,19 @@ EOF
 cmd="${1:-}"; shift || true
 case "$cmd" in
   link|unlink|list|diff)
-    # shellcheck source=lib/link.sh
-    . "$LIB_DIR/${cmd}.sh"
-    "${cmd}_main" "$@"
+    # Detect "conventions" target (sibling of <harness>)
+    # Args layout: link <user|project> <harness-or-conventions> [flags]
+    third_arg=""
+    if [ "$#" -ge 2 ]; then third_arg="$2"; fi
+    if [ "$third_arg" = "conventions" ]; then
+      # shellcheck source=lib/conventions.sh
+      . "$LIB_DIR/conventions.sh"
+      "conventions_${cmd}_main" "$@"
+    else
+      # shellcheck source=lib/link.sh
+      . "$LIB_DIR/${cmd}.sh"
+      "${cmd}_main" "$@"
+    fi
     ;;
   check|fix|doctor|new)
     exec uv run agent-toolkit "$cmd" "$@"
