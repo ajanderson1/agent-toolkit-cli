@@ -29,7 +29,6 @@ _conventions_layer3_slots() {
 }
 
 conventions_link_main() {
-  # Args: <user> conventions [--repo-root DIR] [--dry-run]
   shift  # discard 'user'
   shift  # discard 'conventions'
   local repo_root="$PWD"
@@ -41,7 +40,40 @@ conventions_link_main() {
       *) echo "unknown flag: $1" >&2; return 2 ;;
     esac
   done
-  echo "stub: would link conventions from $repo_root (dry_run=$dry_run)"
+
+  _conventions_link_layer2 "$repo_root" "$dry_run"
+}
+
+# Idempotent: skip if correct, replace if stale, create if missing.
+_conventions_link_layer2() {
+  local repo_root="$1"
+  local dry_run="$2"
+  [ "$dry_run" -eq 1 ] || mkdir -p "$HOME/.conventions"
+  _conventions_maybe_link \
+    "$HOME/.conventions/CONVENTIONS.md" \
+    "$repo_root/CONVENTIONS.md" \
+    "$dry_run"
+  _conventions_maybe_link \
+    "$HOME/.conventions/conventions" \
+    "$repo_root/conventions" \
+    "$dry_run"
+}
+
+# Create or replace a symlink. Idempotent.
+_conventions_maybe_link() {
+  local link_path="$1"
+  local target="$2"
+  local dry_run="$3"
+  if [ -L "$link_path" ] && [ "$(readlink "$link_path")" = "$target" ]; then
+    return  # already correct
+  fi
+  if [ "$dry_run" -eq 1 ]; then
+    echo "would-link: $link_path -> $target"
+    return
+  fi
+  rm -f "$link_path"
+  ln -s "$target" "$link_path"
+  echo "linked: $link_path -> $target"
 }
 
 conventions_unlink_main() {
