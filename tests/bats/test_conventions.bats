@@ -21,7 +21,7 @@ teardown() {
   teardown_repo
 }
 
-@test "link user conventions exits 0 (stub)" {
+@test "link user conventions exits 0" {
   run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --repo-root "$REPO_ROOT"
   [ "$status" -eq 0 ]
 }
@@ -102,4 +102,30 @@ teardown() {
   [ ! -e "$HOME/.codex/AGENTS.md" ]
   [ ! -e "$HOME/.config/opencode/AGENTS.md" ]
   [ ! -e "$HOME/.pi/agent/AGENTS.md" ]
+}
+
+@test "link user conventions Layer 3 is idempotent" {
+  mkdir -p "$HOME/.claude"
+  "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --repo-root "$REPO_ROOT"
+  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --repo-root "$REPO_ROOT"
+  [ "$status" -eq 0 ]
+  [ -L "$HOME/.claude/CONVENTIONS.md" ]
+  [ "$(readlink "$HOME/.claude/CONVENTIONS.md")" = "$HOME/.conventions/CONVENTIONS.md" ]
+  [ -L "$HOME/.claude/conventions" ]
+  [ "$(readlink "$HOME/.claude/conventions")" = "$HOME/.conventions/conventions" ]
+}
+
+@test "link user conventions creates all Layer 3 slots when every harness dir exists" {
+  mkdir -p "$HOME/.claude" "$HOME/.codex" "$HOME/.config/opencode" "$HOME/.pi/agent"
+  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --repo-root "$REPO_ROOT"
+  [ "$status" -eq 0 ]
+  [ -L "$HOME/.claude/CONVENTIONS.md" ]
+  [ -L "$HOME/.claude/conventions" ]
+  [ -L "$HOME/.codex/AGENTS.md" ]
+  [ -L "$HOME/.config/opencode/AGENTS.md" ]
+  [ -L "$HOME/.pi/agent/AGENTS.md" ]
+  # Confirm the count: 2 Layer 2 + 5 Layer 3 = 7 distinct symlinks
+  [ "$(readlink "$HOME/.codex/AGENTS.md")" = "$HOME/.conventions/CONVENTIONS.md" ]
+  [ "$(readlink "$HOME/.config/opencode/AGENTS.md")" = "$HOME/.conventions/CONVENTIONS.md" ]
+  [ "$(readlink "$HOME/.pi/agent/AGENTS.md")" = "$HOME/.conventions/CONVENTIONS.md" ]
 }
