@@ -34,3 +34,18 @@ def test_overall_green_when_at_most_one_amber():
     ]
     rep = OverallReport.compute(categories=cats, provenance="x")
     assert rep.overall == Verdict.AMBER
+
+
+def test_report_renders_human_readable():
+    from agent_toolkit.security.report import render_report
+    cats = [
+        CategoryResult(category="1. Repo identity & traction", verdict=Verdict.GREEN,
+                       evidence="2.4k stars, active, 18 contributors."),
+        CategoryResult(category="4. License & legal", verdict=Verdict.GREEN,
+                       evidence="MIT. Compatible with our default."),
+    ]
+    rep = OverallReport.compute(categories=cats, provenance="from URL", upstream="https://example.com")
+    out = render_report(rep)
+    assert "[GREEN] 1." in out
+    assert "OVERALL: GREEN" in out
+    assert "https://example.com" in out
