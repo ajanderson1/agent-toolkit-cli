@@ -230,7 +230,7 @@ local harness directory (e.g., `./.claude/skills/`).
 
 ```yaml
 # .agent-toolkit.yaml
-skills: [aj-flow, journal, conventions]
+skills: [aj-workflow, journal, conventions]
 agents: [scout, builder, validator]
 hooks: [confirm-rm]
 ```
