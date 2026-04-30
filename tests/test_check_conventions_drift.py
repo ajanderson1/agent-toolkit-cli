@@ -81,3 +81,14 @@ def test_readme_allowed_to_use_old_paths_in_diagram(tmp_path: Path) -> None:
         "Layer 3: ~/.claude/CONVENTIONS.md → ~/.conventions/CONVENTIONS.md\n",
     )
     assert _drift_for_conventions_prose(tmp_path) is None
+
+
+def test_sibling_worktree_content_is_skipped(tmp_path: Path) -> None:
+    # `.worktrees/<branch>/...` holds sibling git worktrees that aren't part of
+    # the current branch. Their content is owned by other branches and must not
+    # block this branch's drift check.
+    _write(
+        tmp_path / ".worktrees" / "other-feature" / "AGENTS.md",
+        "Skills reference these via `~/.claude/conventions/<topic>.md`.\n",
+    )
+    assert _drift_for_conventions_prose(tmp_path) is None

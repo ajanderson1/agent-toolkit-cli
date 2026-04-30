@@ -24,6 +24,7 @@ _LEAK_ALLOWED_PREFIXES = (
     "src/agent_toolkit/commands/check.py",
     "tests/test_check_conventions_drift.py",
     ".git/",
+    ".worktrees/",
 )
 
 # File extensions to scan. Stay narrow — we don't grep binaries.
