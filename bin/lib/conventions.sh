@@ -48,15 +48,19 @@ conventions_link_main() {
 _conventions_link_layer2() {
   local repo_root="$1"
   local dry_run="$2"
+  if [ -e "$HOME/.conventions" ] && [ ! -d "$HOME/.conventions" ] && [ ! -L "$HOME/.conventions" ]; then
+    echo "error: $HOME/.conventions exists and is not a directory — refuses to proceed" >&2
+    return 1
+  fi
   [ "$dry_run" -eq 1 ] || mkdir -p "$HOME/.conventions"
   _conventions_maybe_link \
     "$HOME/.conventions/CONVENTIONS.md" \
     "$repo_root/CONVENTIONS.md" \
-    "$dry_run"
+    "$dry_run" || return 1
   _conventions_maybe_link \
     "$HOME/.conventions/conventions" \
     "$repo_root/conventions" \
-    "$dry_run"
+    "$dry_run" || return 1
 }
 
 # Create or replace a symlink. Idempotent.
@@ -66,6 +70,10 @@ _conventions_maybe_link() {
   local dry_run="$3"
   if [ -L "$link_path" ] && [ "$(readlink "$link_path")" = "$target" ]; then
     return  # already correct
+  fi
+  if [ -e "$link_path" ] && [ ! -L "$link_path" ]; then
+    echo "error: $link_path exists and is not a symlink — refuses to overwrite" >&2
+    return 1
   fi
   if [ "$dry_run" -eq 1 ]; then
     echo "would-link: $link_path -> $target"

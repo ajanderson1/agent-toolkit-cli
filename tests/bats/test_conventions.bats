@@ -41,4 +41,22 @@ teardown() {
   [ "$status" -eq 0 ]
   [ -L "$HOME/.conventions/CONVENTIONS.md" ]
   [ "$(readlink "$HOME/.conventions/CONVENTIONS.md")" = "$REPO_ROOT/CONVENTIONS.md" ]
+  [ -L "$HOME/.conventions/conventions" ]
+  [ "$(readlink "$HOME/.conventions/conventions")" = "$REPO_ROOT/conventions" ]
+}
+
+@test "link user conventions refuses to clobber a real file at ~/.conventions/CONVENTIONS.md" {
+  mkdir -p "$HOME/.conventions"
+  echo "user-content" > "$HOME/.conventions/CONVENTIONS.md"
+  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --repo-root "$REPO_ROOT"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"refuses to overwrite"* ]]
+  [ "$(cat "$HOME/.conventions/CONVENTIONS.md")" = "user-content" ]
+}
+
+@test "link user conventions refuses if ~/.conventions exists as a file" {
+  echo "user-content" > "$HOME/.conventions"
+  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --repo-root "$REPO_ROOT"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"refuses to proceed"* ]]
 }
