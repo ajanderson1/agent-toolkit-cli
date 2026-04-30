@@ -147,6 +147,25 @@ teardown() {
   [ -L "$HOME/.conventions/conventions" ]
 }
 
+@test "list user conventions shows the Layer 3 -> Layer 2 -> Layer 1 chain" {
+  mkdir -p "$HOME/.claude" "$HOME/.codex"
+  "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --repo-root "$REPO_ROOT"
+
+  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" list user conventions --repo-root "$REPO_ROOT"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"$HOME/.claude/CONVENTIONS.md"* ]]
+  [[ "$output" == *"$HOME/.conventions/CONVENTIONS.md"* ]]
+  [[ "$output" == *"$REPO_ROOT/CONVENTIONS.md"* ]]
+  [[ "$output" == *"$HOME/.codex/AGENTS.md"* ]]
+}
+
+@test "list user conventions handles missing slots gracefully" {
+  # No HOME/.claude, no HOME/.codex etc.
+  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" list user conventions --repo-root "$REPO_ROOT"
+  [ "$status" -eq 0 ]
+  # No assertion on output content — just must not crash.
+}
+
 @test "unlink user conventions does not touch unrelated symlinks at slot paths" {
   mkdir -p "$HOME/.claude"
   # First, establish Layer 2 and Layer 3 normally.

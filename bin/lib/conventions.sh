@@ -126,7 +126,53 @@ conventions_unlink_main() {
 
 conventions_list_main() {
   shift; shift
-  echo "stub: would list conventions"
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --repo-root) shift 2 ;;       # accepted, ignored
+      *) echo "unknown flag: $1" >&2; return 2 ;;
+    esac
+  done
+
+  # Layer 2
+  if [ -L "$HOME/.conventions/CONVENTIONS.md" ]; then
+    local l2_target
+    l2_target="$(readlink "$HOME/.conventions/CONVENTIONS.md")"
+    echo "layer2: $HOME/.conventions/CONVENTIONS.md -> $l2_target"
+  fi
+  if [ -L "$HOME/.conventions/conventions" ]; then
+    local l2_dir_target
+    l2_dir_target="$(readlink "$HOME/.conventions/conventions")"
+    echo "layer2: $HOME/.conventions/conventions -> $l2_dir_target"
+  fi
+
+  # Layer 3
+  local slot target
+  while IFS='|' read -r slot target; do
+    if [ -L "$slot" ]; then
+      local immediate resolved
+      immediate="$(readlink "$slot")"
+      resolved="$(_conventions_resolve "$slot")"
+      echo "layer3: $slot -> $immediate -> $resolved"
+    fi
+  done < <(_conventions_layer3_slots)
+}
+
+# Resolve a symlink chain to its final real path. Avoids `readlink -f`
+# because BSD readlink (older macOS) doesn't support it. Uses a small loop
+# with a 32-iteration cap to defend against symlink cycles.
+_conventions_resolve() {
+  local path="$1"
+  local i=0
+  while [ -L "$path" ] && [ "$i" -lt 32 ]; do
+    local target
+    target="$(readlink "$path")"
+    case "$target" in
+      /*) path="$target" ;;
+      *)  path="$(dirname "$path")/$target" ;;
+    esac
+    i=$((i + 1))
+  done
+  echo "$path"
 }
 
 conventions_diff_main() {
