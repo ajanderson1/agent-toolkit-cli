@@ -147,12 +147,23 @@ teardown() {
   [ -L "$HOME/.conventions/conventions" ]
 }
 
-@test "unlink user conventions does not touch unrelated symlinks" {
+@test "unlink user conventions does not touch unrelated symlinks at slot paths" {
   mkdir -p "$HOME/.claude"
-  ln -s "$REPO_ROOT/CONVENTIONS.md" "$HOME/.claude/AGENTS.md"  # different target
+  # First, establish Layer 2 and Layer 3 normally.
   "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --repo-root "$REPO_ROOT"
+  [ -L "$HOME/.claude/CONVENTIONS.md" ]
+  [ "$(readlink "$HOME/.claude/CONVENTIONS.md")" = "$HOME/.conventions/CONVENTIONS.md" ]
+
+  # Now replace the Layer-3 symlink to point elsewhere (not Layer 2) — this exercises the
+  # target-guard inside conventions_unlink_main.
+  rm "$HOME/.claude/CONVENTIONS.md"
+  ln -s "$REPO_ROOT/CONVENTIONS.md" "$HOME/.claude/CONVENTIONS.md"  # now points at Layer 1, not Layer 2
+  [ "$(readlink "$HOME/.claude/CONVENTIONS.md")" = "$REPO_ROOT/CONVENTIONS.md" ]
+
+  # Unlink should NOT remove this symlink because it doesn't point at Layer 2.
   run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" unlink user conventions --repo-root "$REPO_ROOT"
   [ "$status" -eq 0 ]
-  # The unrelated symlink must survive
-  [ -L "$HOME/.claude/AGENTS.md" ]
+  # The modified symlink must survive — it is not Layer 2-targeting.
+  [ -L "$HOME/.claude/CONVENTIONS.md" ]
+  [ "$(readlink "$HOME/.claude/CONVENTIONS.md")" = "$REPO_ROOT/CONVENTIONS.md" ]
 }
