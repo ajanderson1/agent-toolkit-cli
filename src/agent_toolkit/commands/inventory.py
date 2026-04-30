@@ -16,7 +16,7 @@ _KINDS = ("skill", "agent", "command", "hook", "mcp", "plugin")
 @click.option("--harness", type=click.Choice(["claude", "codex", "opencode", "pi"]))
 @click.option("--origin", type=click.Choice(["first-party", "third-party"]))
 @click.option("--lifecycle", type=click.Choice(["experimental", "stable", "deprecated"]))
-@click.option("--format", "fmt", type=click.Choice(["md", "plain", "json"]), default="md")
+@click.option("--format", "fmt", type=click.Choice(["md", "json"]), default="md")
 def inventory(
     target: str | None,
     repo_root: str,
@@ -25,7 +25,18 @@ def inventory(
     lifecycle: str | None,
     fmt: str,
 ) -> None:
-    """List assets, filter by kind, or zoom into a single asset by slug."""
+    """List assets, filter by kind, or zoom into a single asset by slug.
+
+    Argument-shape dispatch:
+      - no TARGET           → full inventory (with optional filter flags)
+      - TARGET ∈ kinds      → filter to that kind. Kind names take precedence
+                              over slug names; if you have an asset whose slug
+                              equals a kind name (e.g. a skill literally named
+                              "skill"), use the kind filter and look for it in
+                              the rendered group.
+      - TARGET (otherwise)  → render the man-page card for that slug. Errors
+                              non-zero if no asset has that slug.
+    """
     root = Path(repo_root).resolve()
     if target is None:
         click.echo(render_inventory(root, fmt=fmt, harness=harness, origin=origin, lifecycle=lifecycle))
@@ -36,4 +47,4 @@ def inventory(
     try:
         click.echo(render_asset_card(root, slug=target))
     except KeyError:
-        raise click.UsageError(f"unknown asset slug or kind: {target!r}")
+        raise click.ClickException(f"unknown asset slug or kind: {target!r}")
