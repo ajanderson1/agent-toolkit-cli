@@ -17,3 +17,14 @@ def test_doctor_reports_missing_schema(tmp_path):
     assert "schema" in result.output.lower()
     # schemas/asset-frontmatter.v1alpha1.json is missing in tmp_path
     assert "missing" in result.output.lower() or "not found" in result.output.lower()
+
+
+def test_doctor_emits_header_and_summary_on_stderr(tmp_path):
+    runner = CliRunner()
+    result = runner.invoke(main, ["doctor", "--repo-root", str(tmp_path)])
+    assert result.exit_code == 0
+    # Header and summary are emitted to stderr via _ui module
+    # CliRunner's result.output includes both stdout and stderr
+    assert "Checking environment" in result.output
+    assert "OK" in result.output or "missing" in result.output
+    assert "Doctor only reports" in result.output
