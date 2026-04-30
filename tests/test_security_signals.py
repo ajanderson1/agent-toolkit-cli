@@ -59,3 +59,61 @@ def test_code_scan_eval_is_amber(tmp_path):
     (tmp_path / "x.py").write_text("eval('1 + 1')\n")
     result = scan_code(tmp_path, asset_kind="mcp")
     assert result.verdict == Verdict.AMBER
+
+
+def test_cache_round_trip(tmp_path):
+    from agent_toolkit.security.cache import load_cache, save_cache
+    save_cache(tmp_path, "owner", "repo", {"stars": 42})
+    loaded = load_cache(tmp_path, "owner", "repo", ttl_seconds=3600)
+    assert loaded == {"stars": 42}
+
+
+def test_cache_expires_past_ttl(tmp_path):
+    import os, time
+    from agent_toolkit.security.cache import load_cache, save_cache
+    save_cache(tmp_path, "owner", "repo", {"stars": 42})
+    cache_file = tmp_path / ".agent-toolkit" / "cache" / "security" / "owner" / "repo.json"
+    # Backdate the file by 2 days
+    old = time.time() - (60 * 60 * 48)
+    os.utime(cache_file, (old, old))
+    loaded = load_cache(tmp_path, "owner", "repo", ttl_seconds=3600)
+    assert loaded is None
+
+
+def test_identity_renders_from_canned_signals():
+    from agent_toolkit.security.identity import render_from_signals
+    signals = {
+        "stars": 2400, "forks": 87, "open_issues": 12,
+        "contributors": 18, "age_days": 700, "last_commit_days_ago": 6,
+    }
+    result = render_from_signals(signals)
+    assert result.verdict == Verdict.GREEN
+    assert "2400" in result.evidence or "2.4k" in result.evidence
+
+
+def test_identity_amber_when_stale():
+    from agent_toolkit.security.identity import render_from_signals
+    signals = {
+        "stars": 12000, "forks": 1000, "open_issues": 200,
+        "contributors": 100, "age_days": 2000, "last_commit_days_ago": 1500,
+    }
+    result = render_from_signals(signals)
+    assert result.verdict in (Verdict.AMBER, Verdict.RED)
+
+
+def test_credibility_renders_from_canned_signals():
+    from agent_toolkit.security.credibility import render_from_signals
+    signals = {"owner_login": "x", "owner_type": "User", "public_repos": 12, "owner_age_days": 1500}
+    result = render_from_signals(signals)
+    assert result.verdict in (Verdict.GREEN, Verdict.AMBER)
+
+
+def test_community_renders_from_canned_signals():
+    from agent_toolkit.security.community import render_from_signals
+    signals = {"open_security_issues": 0, "advisory_count": 0}
+    result = render_from_signals(signals)
+    assert result.verdict == Verdict.GREEN
+
+    bad = {"open_security_issues": 3, "advisory_count": 1}
+    result = render_from_signals(bad)
+    assert result.verdict == Verdict.RED
