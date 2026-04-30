@@ -168,3 +168,60 @@ def test_load_asset_record_returns_metadata_and_body_excerpt(tmp_path):
     assert record.metadata["metadata"]["name"] == "alpha"
     assert record.metadata["spec"]["harnesses"] == ["claude"]
     assert record.body_excerpt == "First paragraph of body content."
+
+
+def test_load_asset_record_does_not_eat_paragraphs_starting_with_hash(tmp_path):
+    """A line starting with '#1' (no space after) is body, not a heading."""
+    from agent_toolkit.walker import discover_assets, load_asset_record
+
+    (tmp_path / "skills" / "alpha").mkdir(parents=True)
+    (tmp_path / "skills" / "alpha" / "SKILL.md").write_text(
+        "---\n"
+        "apiVersion: agent-toolkit/v1alpha1\n"
+        "metadata:\n"
+        "  name: alpha\n"
+        "  description: X.\n"
+        "  lifecycle: stable\n"
+        "spec:\n"
+        "  origin: first-party\n"
+        "  vendored_via: none\n"
+        "  harnesses:\n"
+        "    - claude\n"
+        "---\n"
+        "\n"
+        "#1 priority is to ship.\n"
+        "\n"
+        "Second paragraph.\n"
+    )
+    asset = discover_assets(tmp_path)[0]
+    record = load_asset_record(asset)
+    assert record.body_excerpt == "#1 priority is to ship."
+
+
+def test_load_asset_record_skips_atx_headings_correctly(tmp_path):
+    """Multiple ATX heading lines (with required space) are correctly skipped."""
+    from agent_toolkit.walker import discover_assets, load_asset_record
+
+    (tmp_path / "skills" / "beta").mkdir(parents=True)
+    (tmp_path / "skills" / "beta" / "SKILL.md").write_text(
+        "---\n"
+        "apiVersion: agent-toolkit/v1alpha1\n"
+        "metadata:\n"
+        "  name: beta\n"
+        "  description: X.\n"
+        "  lifecycle: stable\n"
+        "spec:\n"
+        "  origin: first-party\n"
+        "  vendored_via: none\n"
+        "  harnesses:\n"
+        "    - claude\n"
+        "---\n"
+        "\n"
+        "# Top heading\n"
+        "## Sub heading\n"
+        "\n"
+        "Real paragraph.\n"
+    )
+    asset = discover_assets(tmp_path)[0]
+    record = load_asset_record(asset)
+    assert record.body_excerpt == "Real paragraph."

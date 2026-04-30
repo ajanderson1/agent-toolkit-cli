@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import configparser
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -143,10 +144,15 @@ def _strip_frontmatter(text: str) -> str:
     return text[end + len(FRONTMATTER_DELIM) + 2 :]
 
 
+_HEADING_RE = re.compile(r"^#{1,6}(\s|$)")
+
+
 def _first_paragraph(body: str, max_chars: int) -> str:
     body = body.lstrip()
-    # Skip heading lines (start with #) at the top
-    while body.startswith("#"):
+    # Skip ATX heading lines at the top. An ATX heading requires whitespace
+    # (or end-of-line) after the '#'s — so a body line like "#1 priority"
+    # is body, not a heading.
+    while body and _HEADING_RE.match(body):
         nl = body.find("\n")
         if nl == -1:
             return ""
