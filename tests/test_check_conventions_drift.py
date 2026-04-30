@@ -73,3 +73,11 @@ def test_cli_docs_allowed_to_use_old_paths_in_architecture_table(tmp_path: Path)
         "Claude:    ~/.claude/CONVENTIONS.md   -> ~/.conventions/CONVENTIONS.md\n",
     )
     assert _drift_for_conventions_prose(tmp_path) is None
+
+
+def test_readme_allowed_to_use_old_paths_in_diagram(tmp_path: Path) -> None:
+    _write(
+        tmp_path / "README.md",
+        "Layer 3: ~/.claude/CONVENTIONS.md → ~/.conventions/CONVENTIONS.md\n",
+    )
+    assert _drift_for_conventions_prose(tmp_path) is None

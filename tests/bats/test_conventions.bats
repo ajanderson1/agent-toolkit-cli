@@ -216,3 +216,15 @@ teardown() {
   # After link, the slot must point at Layer 2, not Layer 1.
   [ "$(readlink "$HOME/.claude/CONVENTIONS.md")" = "$HOME/.conventions/CONVENTIONS.md" ]
 }
+
+@test "unlink user conventions --dry-run prints would-unlink without removing" {
+  mkdir -p "$HOME/.claude"
+  "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --repo-root "$REPO_ROOT"
+  [ -L "$HOME/.claude/CONVENTIONS.md" ]
+  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" unlink user conventions --repo-root "$REPO_ROOT" --dry-run
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"would-unlink"* ]]
+  # Symlinks must still exist
+  [ -L "$HOME/.claude/CONVENTIONS.md" ]
+  [ -L "$HOME/.conventions/CONVENTIONS.md" ]
+}
