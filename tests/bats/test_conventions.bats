@@ -60,3 +60,46 @@ teardown() {
   [ "$status" -ne 0 ]
   [[ "$output" == *"refuses to proceed"* ]]
 }
+
+@test "link user conventions creates Claude Layer 3 symlinks when ~/.claude exists" {
+  mkdir -p "$HOME/.claude"
+  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --repo-root "$REPO_ROOT"
+  [ "$status" -eq 0 ]
+  [ -L "$HOME/.claude/CONVENTIONS.md" ]
+  [ "$(readlink "$HOME/.claude/CONVENTIONS.md")" = "$HOME/.conventions/CONVENTIONS.md" ]
+  [ -L "$HOME/.claude/conventions" ]
+  [ "$(readlink "$HOME/.claude/conventions")" = "$HOME/.conventions/conventions" ]
+}
+
+@test "link user conventions creates Codex Layer 3 symlink when ~/.codex exists" {
+  mkdir -p "$HOME/.codex"
+  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --repo-root "$REPO_ROOT"
+  [ "$status" -eq 0 ]
+  [ -L "$HOME/.codex/AGENTS.md" ]
+  [ "$(readlink "$HOME/.codex/AGENTS.md")" = "$HOME/.conventions/CONVENTIONS.md" ]
+}
+
+@test "link user conventions creates OpenCode Layer 3 symlink when ~/.config/opencode exists" {
+  mkdir -p "$HOME/.config/opencode"
+  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --repo-root "$REPO_ROOT"
+  [ "$status" -eq 0 ]
+  [ -L "$HOME/.config/opencode/AGENTS.md" ]
+  [ "$(readlink "$HOME/.config/opencode/AGENTS.md")" = "$HOME/.conventions/CONVENTIONS.md" ]
+}
+
+@test "link user conventions creates Pi Layer 3 symlink when ~/.pi/agent exists" {
+  mkdir -p "$HOME/.pi/agent"
+  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --repo-root "$REPO_ROOT"
+  [ "$status" -eq 0 ]
+  [ -L "$HOME/.pi/agent/AGENTS.md" ]
+  [ "$(readlink "$HOME/.pi/agent/AGENTS.md")" = "$HOME/.conventions/CONVENTIONS.md" ]
+}
+
+@test "link user conventions skips harness whose dir does not exist" {
+  # Note: setup() creates ONLY a tmp HOME, so ~/.codex etc. do not exist.
+  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --repo-root "$REPO_ROOT"
+  [ "$status" -eq 0 ]
+  [ ! -e "$HOME/.codex/AGENTS.md" ]
+  [ ! -e "$HOME/.config/opencode/AGENTS.md" ]
+  [ ! -e "$HOME/.pi/agent/AGENTS.md" ]
+}

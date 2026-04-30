@@ -41,7 +41,21 @@ conventions_link_main() {
     esac
   done
 
-  _conventions_link_layer2 "$repo_root" "$dry_run"
+  _conventions_link_layer2 "$repo_root" "$dry_run" || return 1
+  _conventions_link_layer3 "$dry_run"
+}
+
+_conventions_link_layer3() {
+  local dry_run="$1"
+  local slot target
+  while IFS='|' read -r slot target; do
+    [ -n "$slot" ] || continue
+    # Ensure the slot's parent directory exists (defensive — _slots() already
+    # gates on directory existence, but a slot path might need an intermediate
+    # subdirectory).
+    [ "$dry_run" -eq 1 ] || mkdir -p "$(dirname "$slot")"
+    _conventions_maybe_link "$slot" "$target" "$dry_run" || return 1
+  done < <(_conventions_layer3_slots)
 }
 
 # Idempotent: skip if correct, replace if stale, create if missing.
