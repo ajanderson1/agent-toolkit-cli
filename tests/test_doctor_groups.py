@@ -195,6 +195,55 @@ def test_conventions_group_ok_when_correctly_linked(tmp_path, monkeypatch):
     assert result.status == Status.OK
 
 
+def _make_skill_with_harnesses(repo_root, slug, harnesses):
+    skill_dir = repo_root / "skills" / slug
+    skill_dir.mkdir(parents=True, exist_ok=True)
+    (skill_dir / "SKILL.md").write_text(
+        "---\n"
+        "apiVersion: agent-toolkit/v1alpha1\n"
+        f"metadata:\n  name: {slug}\n  description: X.\n  lifecycle: stable\n"
+        "spec:\n  origin: first-party\n  vendored_via: none\n  harnesses:\n"
+        + "".join(f"    - {h}\n" for h in harnesses)
+        + "---\n# x\n"
+    )
+
+
+def test_symlinks_group_ok_when_all_correct(tmp_path, monkeypatch):
+    from agent_toolkit.doctor.symlinks import run as run_sl
+    _make_skill_with_harnesses(tmp_path, "alpha", ["claude"])
+    fake_home = tmp_path / "home"
+    (fake_home / ".claude" / "skills").mkdir(parents=True)
+    (fake_home / ".claude" / "skills" / "alpha").symlink_to(tmp_path / "skills" / "alpha")
+    monkeypatch.setenv("HOME", str(fake_home))
+    result = run_sl(tmp_path, harness="claude")
+    assert result.status == Status.OK
+
+
+def test_symlinks_group_warns_on_expected_unlinked(tmp_path, monkeypatch):
+    from agent_toolkit.doctor.symlinks import run as run_sl
+    _make_skill_with_harnesses(tmp_path, "alpha", ["claude"])
+    fake_home = tmp_path / "home"
+    (fake_home / ".claude" / "skills").mkdir(parents=True)
+    # No symlink at all
+    monkeypatch.setenv("HOME", str(fake_home))
+    result = run_sl(tmp_path, harness="claude")
+    assert result.status == Status.WARN
+    assert any("alpha" in f for f in result.findings)
+
+
+def test_symlinks_group_flags_dangling(tmp_path, monkeypatch):
+    from agent_toolkit.doctor.symlinks import run as run_sl
+    _make_skill_with_harnesses(tmp_path, "alpha", ["claude"])
+    fake_home = tmp_path / "home"
+    (fake_home / ".claude" / "skills").mkdir(parents=True)
+    bogus = fake_home / ".claude" / "skills" / "ghost"
+    bogus.symlink_to(tmp_path / "skills" / "ghost")  # target does not exist
+    monkeypatch.setenv("HOME", str(fake_home))
+    result = run_sl(tmp_path, harness="claude")
+    assert result.status == Status.WARN
+    assert any("ghost" in f and "dangl" in f.lower() for f in result.findings)
+
+
 def test_conventions_group_warn_when_topic_missing(tmp_path, monkeypatch):
     from agent_toolkit.doctor.conventions import run as run_conv
     (tmp_path / "CONVENTIONS.md").write_text("# C")
