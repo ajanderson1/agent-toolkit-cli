@@ -1,0 +1,25 @@
+[project]
+name = "agent-toolkit"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "jsonschema>=4.21",
+    "pyyaml>=6.0",
+    "click>=8.1",
+]
+
+[project.scripts]
+agent-toolkit = "agent_toolkit.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-snapshot>=0.9",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

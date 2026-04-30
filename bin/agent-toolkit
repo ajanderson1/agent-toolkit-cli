@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/lib" && pwd)"
+# shellcheck source=lib/common.sh
+. "$LIB_DIR/common.sh"
+
+usage() {
+  cat <<EOF
+agent-toolkit — manage harness-agnostic assets
+
+Usage:
+  agent-toolkit link <user|project> <harness> [--repo-root DIR] [--dry-run]
+  agent-toolkit unlink <user|project> <harness> [--repo-root DIR] [--dry-run]
+  agent-toolkit list <user|project> [--repo-root DIR]
+  agent-toolkit diff <user|project> <harness> [--repo-root DIR]
+  agent-toolkit check [--repo-root DIR] [--exit-code]
+  agent-toolkit fix [--repo-root DIR] [--only=<region>] [--to-stdout]
+  agent-toolkit doctor [--repo-root DIR]
+  agent-toolkit new <kind> <slug> [--repo-root DIR]
+EOF
+}
+
+cmd="${1:-}"; shift || true
+case "$cmd" in
+  link|unlink|list|diff)
+    # shellcheck source=lib/link.sh
+    . "$LIB_DIR/${cmd}.sh"
+    "${cmd}_main" "$@"
+    ;;
+  check|fix|doctor|new)
+    exec uv run agent-toolkit "$cmd" "$@"
+    ;;
+  -h|--help|"")
+    usage
+    ;;
+  *)
+    echo "unknown subcommand: $cmd" >&2
+    usage >&2
+    exit 1
+    ;;
+esac
