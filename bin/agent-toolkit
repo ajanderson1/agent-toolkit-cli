@@ -18,6 +18,7 @@ Usage:
   agent-toolkit fix [--repo-root DIR] [--only=<region>] [--to-stdout]
   agent-toolkit doctor [--repo-root DIR]
   agent-toolkit inventory [<kind>|<slug>] [--repo-root DIR] [--harness X] [--origin X] [--lifecycle X] [--format X]
+  agent-toolkit ingest [<url|name|file>] [--repo-root DIR] [--snapshot-dir DIR] [--scan-only|--finalize --slug X|--abort --slug X]
   agent-toolkit new <kind> <slug> [--repo-root DIR]
 EOF
 }
@@ -29,7 +30,7 @@ case "$cmd" in
     . "$LIB_DIR/${cmd}.sh"
     "${cmd}_main" "$@"
     ;;
-  check|fix|doctor|new|inventory)
+  check|fix|doctor|new|inventory|ingest)
     exec uv run agent-toolkit "$cmd" "$@"
     ;;
   -h|--help|"")
