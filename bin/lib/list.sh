@@ -42,5 +42,5 @@ list_main() {
     done
   done
 
-  _ui_summary "$count total. Run 'agent-toolkit diff $scope <harness>' to see drift."
+  _ui_summary "$count total. Run 'agent-toolkit link $scope <harness> --dry-run' to see drift."
 }

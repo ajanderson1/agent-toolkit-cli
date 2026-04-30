@@ -6,7 +6,6 @@
   [[ "$output" == *"link"* ]]
   [[ "$output" == *"unlink"* ]]
   [[ "$output" == *"list"* ]]
-  [[ "$output" == *"diff"* ]]
   [[ "$output" == *"check"* ]]
   [[ "$output" == *"fix"* ]]
   [[ "$output" == *"doctor"* ]]

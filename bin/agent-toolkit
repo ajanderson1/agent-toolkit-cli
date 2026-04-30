@@ -18,8 +18,6 @@ Commands that manage symlinks (filesystem, zero-dep bash):
   unlink <user|project> <harness>  Remove only symlinks pointing into this repo.
   list <user|project>              List symlinks in user-/project-scope dirs that
                                    point into this repo.
-  diff <user|project> <harness>    Preview what 'link' would change (alias for
-                                   'link --dry-run').
 
 Commands that operate on metadata (Python via uv):
   check                            Validate every asset's frontmatter and detect
@@ -39,10 +37,10 @@ Common options:
   --exit-code        check: exit non-zero on any error (CI gate).
 
 Examples:
-  agent-toolkit link user claude          # set up Claude Code on a fresh machine
-  agent-toolkit diff user claude          # see what's drifted from the source of truth
-  agent-toolkit check --exit-code         # validate (used by lefthook pre-commit)
-  agent-toolkit new skill my-skill        # scaffold a new skill
+  agent-toolkit link user claude            # set up Claude Code on a fresh machine
+  agent-toolkit link user claude --dry-run  # preview what's drifted from the source of truth
+  agent-toolkit check --exit-code           # validate (used by lefthook pre-commit)
+  agent-toolkit new skill my-skill          # scaffold a new skill
 
 Documentation: docs/agent-toolkit/cli.md
 EOF
@@ -50,7 +48,7 @@ EOF
 
 cmd="${1:-}"; shift || true
 case "$cmd" in
-  link|unlink|list|diff)
+  link|unlink|list)
     # shellcheck source=lib/link.sh
     . "$LIB_DIR/${cmd}.sh"
     "${cmd}_main" "$@"

@@ -1,7 +1,7 @@
 # agent-toolkit CLI reference
 
 The `agent-toolkit` CLI wires assets from `~/GitHub/agent-toolkit/` into per-harness
-directories on the current machine. Bash subcommands (`link`, `unlink`, `list`, `diff`)
+directories on the current machine. Bash subcommands (`link`, `unlink`, `list`)
 run with zero dependencies. Python subcommands (`check`, `fix`, `doctor`, `new`) require
 `uv` and the installed package.
 
@@ -106,30 +106,6 @@ by harness then kind then slug.
 **Example:**
 ```bash
 bin/agent-toolkit list user
-```
-
-> _Header & summary go to stderr; suppress with `--quiet` or `AGENT_TOOLKIT_QUIET=1`._
-
----
-
-## diff
-
-Preview what `link` would change without making any changes.
-
-```
-Usage: agent-toolkit diff <user|project> <harness>
-```
-
-| Flag | Description |
-|---|---|
-| `--repo-root DIR` | Path to the toolkit repo (default: `$PWD`) |
-
-Alias for `link --dry-run`. Lines prefixed `+` would be created; lines prefixed `-` would
-be removed.
-
-**Example:**
-```bash
-bin/agent-toolkit diff project opencode
 ```
 
 > _Header & summary go to stderr; suppress with `--quiet` or `AGENT_TOOLKIT_QUIET=1`._
