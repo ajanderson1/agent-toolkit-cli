@@ -15,7 +15,7 @@ def run(repo_root: Path) -> GroupResult:
     if not schema.exists():
         failures.append(f"schema missing at {schema}")
     else:
-        findings.append(f"schema present at {schema.relative_to(repo_root)}")
+        findings.append("schema present at schemas/asset-frontmatter.v1alpha1.json")
 
     agents_md = repo_root / "AGENTS.md"
     if not agents_md.exists():

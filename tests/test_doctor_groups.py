@@ -37,3 +37,33 @@ def test_environment_group_fails_when_schema_missing(tmp_path):
     result = run(tmp_path)
     assert result.status == Status.FAIL
     assert any("schema" in f.lower() for f in result.findings)
+
+
+def test_environment_group_warn_when_tool_missing(monkeypatch):
+    """If a tool is missing from PATH, status is WARN with the right finding."""
+    import shutil
+    from pathlib import Path
+    import tempfile
+
+    from agent_toolkit.doctor.environment import run
+
+    real_which = shutil.which
+
+    def fake_which(name, *args, **kwargs):
+        if name == "gh":
+            return None
+        return real_which(name, *args, **kwargs)
+
+    monkeypatch.setattr(shutil, "which", fake_which)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        (root / "schemas").mkdir()
+        (root / "schemas" / "asset-frontmatter.v1alpha1.json").write_text("{}")
+        (root / "AGENTS.md").write_text("# AGENTS")
+        (root / ".gitmodules").write_text("")
+        result = run(root)
+
+    assert result.status == Status.WARN
+    assert result.summary == "some tools not on PATH"
+    assert any("gh NOT on PATH" in f for f in result.findings)
