@@ -6,6 +6,8 @@ from pathlib import Path
 
 import click
 
+from agent_toolkit._ui import header, summary
+
 _KIND_LAYOUT = {
     "skill": ("skills/{slug}/SKILL.md", "markdown"),
     "agent": ("agents/{slug}.md", "markdown"),
@@ -35,12 +37,21 @@ TODO body.
 """
 
 
-@click.command(name="new")
+@click.command(name="new", short_help="Scaffold a new asset with valid v1alpha1 frontmatter.")
 @click.argument("kind", type=click.Choice(list(_KIND_LAYOUT)))
 @click.argument("slug")
-@click.option("--repo-root", default=".", type=click.Path(exists=True, file_okay=False))
+@click.option(
+    "--repo-root",
+    default=".",
+    type=click.Path(exists=True, file_okay=False),
+    help="Repo root to write into (defaults to current directory).",
+)
 def new(kind: str, slug: str, repo_root: str) -> None:
-    """Scaffold a new asset with valid v1alpha1 frontmatter."""
+    """Create a new asset of the given kind at the canonical path with valid
+    v1alpha1 frontmatter. The file is created with TODO placeholders; edit
+    them, then run `agent-toolkit check` to validate.
+    """
+    header(f"Scaffolding new {kind} '{slug}'...")
     root = Path(repo_root).resolve()
     layout, fmt = _KIND_LAYOUT[kind]
     target = root / layout.format(slug=slug)
@@ -84,4 +95,6 @@ def new(kind: str, slug: str, repo_root: str) -> None:
             )
             + "\n"
         )
-    click.echo(f"created {target.relative_to(root)}")
+    rel = target.relative_to(root)
+    click.echo(f"created {rel}")
+    summary(f"Created {rel}. Edit it, then run 'agent-toolkit check' to validate.")
