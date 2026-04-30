@@ -123,3 +123,21 @@ def test_frontmatter_group_fail_when_schema_invalid_json(tmp_path):
     assert result.status == Status.FAIL
     assert "schema not loadable" in result.summary
     assert any("JSONDecodeError" in f for f in result.findings)
+
+
+def test_submodules_group_ok_when_no_gitmodules(tmp_path):
+    from agent_toolkit.doctor.submodules import run as run_sm
+    result = run_sm(tmp_path)
+    assert result.status == Status.OK
+    assert "no .gitmodules" in result.summary.lower() or "0 submodule" in result.summary.lower()
+
+
+def test_submodules_group_warns_when_uninitialised(tmp_path):
+    from agent_toolkit.doctor.submodules import run as run_sm
+    (tmp_path / ".gitmodules").write_text(
+        '[submodule "skills/foo"]\n\tpath = skills/foo\n\turl = https://example.com/x.git\n'
+    )
+    # No actual checkout — this represents a freshly-cloned repo
+    result = run_sm(tmp_path)
+    assert result.status in (Status.WARN, Status.FAIL)
+    assert any("foo" in f for f in result.findings)
