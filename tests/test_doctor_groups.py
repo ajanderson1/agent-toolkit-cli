@@ -174,3 +174,41 @@ def test_submodules_group_handles_path_pointing_to_file(tmp_path):
     result = run_sm(tmp_path)
     assert result.status == Status.WARN
     assert any("broken" in f for f in result.findings)
+
+
+def test_conventions_group_ok_when_correctly_linked(tmp_path, monkeypatch):
+    from agent_toolkit.doctor.conventions import run as run_conv
+
+    # Build a fake repo that has CONVENTIONS.md and conventions/topic.md
+    (tmp_path / "CONVENTIONS.md").write_text("# C")
+    (tmp_path / "conventions").mkdir()
+    (tmp_path / "conventions" / "git.md").write_text("# git")
+
+    # Build a fake $HOME with the symlinks pointing back into the repo
+    fake_home = tmp_path / "home"
+    (fake_home / ".claude" / "conventions").mkdir(parents=True)
+    (fake_home / ".claude" / "CONVENTIONS.md").symlink_to(tmp_path / "CONVENTIONS.md")
+    (fake_home / ".claude" / "conventions" / "git.md").symlink_to(tmp_path / "conventions" / "git.md")
+
+    monkeypatch.setenv("HOME", str(fake_home))
+    result = run_conv(tmp_path)
+    assert result.status == Status.OK
+
+
+def test_conventions_group_warn_when_topic_missing(tmp_path, monkeypatch):
+    from agent_toolkit.doctor.conventions import run as run_conv
+    (tmp_path / "CONVENTIONS.md").write_text("# C")
+    (tmp_path / "conventions").mkdir()
+    (tmp_path / "conventions" / "git.md").write_text("# git")
+    (tmp_path / "conventions" / "ci.md").write_text("# ci")
+
+    fake_home = tmp_path / "home"
+    (fake_home / ".claude" / "conventions").mkdir(parents=True)
+    (fake_home / ".claude" / "CONVENTIONS.md").symlink_to(tmp_path / "CONVENTIONS.md")
+    (fake_home / ".claude" / "conventions" / "git.md").symlink_to(tmp_path / "conventions" / "git.md")
+    # ci.md is missing from ~/.claude/conventions/
+
+    monkeypatch.setenv("HOME", str(fake_home))
+    result = run_conv(tmp_path)
+    assert result.status == Status.WARN
+    assert any("ci" in f for f in result.findings)
