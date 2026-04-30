@@ -1,0 +1,51 @@
+"""Tests for the conventions-prose-leak check inside `agent-toolkit check`."""
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from agent_toolkit.commands.check import _drift_for_conventions_prose
+
+
+def _write(path: Path, body: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(body)
+
+
+def test_no_drift_when_prose_uses_neutral_path(tmp_path: Path) -> None:
+    _write(tmp_path / "CONVENTIONS.md", "imports `@~/.conventions/CONVENTIONS.md`\n")
+    _write(tmp_path / "AGENTS.md", "Skills reference `~/.conventions/conventions/foo.md`\n")
+    assert _drift_for_conventions_prose(tmp_path) is None
+
+
+def test_drift_when_prose_uses_claude_specific_path(tmp_path: Path) -> None:
+    _write(tmp_path / "CONVENTIONS.md", "imports `@~/.claude/CONVENTIONS.md`\n")
+    drift = _drift_for_conventions_prose(tmp_path)
+    assert drift is not None
+    assert "CONVENTIONS.md" in drift
+    assert "~/.claude/CONVENTIONS.md" in drift
+
+
+def test_drift_when_prose_uses_claude_conventions_dir(tmp_path: Path) -> None:
+    _write(tmp_path / "skills" / "foo" / "SKILL.md", "See `~/.claude/conventions/git.md`.\n")
+    drift = _drift_for_conventions_prose(tmp_path)
+    assert drift is not None
+    assert "~/.claude/conventions/" in drift
+
+
+def test_archived_plans_are_allowed_to_use_old_paths(tmp_path: Path) -> None:
+    _write(
+        tmp_path / "docs" / "plans" / "2026-04-25-old.md",
+        "Refers to `~/.claude/CONVENTIONS.md` (historical).\n",
+    )
+    _write(
+        tmp_path / "docs" / "superpowers" / "plans" / "2026-04-25-old.md",
+        "Refers to `~/.claude/conventions/git.md` (historical).\n",
+    )
+    assert _drift_for_conventions_prose(tmp_path) is None
+
+
+def test_drift_excludes_files_inside_dot_git(tmp_path: Path) -> None:
+    _write(tmp_path / ".git" / "ignored.md", "`~/.claude/CONVENTIONS.md`\n")
+    assert _drift_for_conventions_prose(tmp_path) is None
