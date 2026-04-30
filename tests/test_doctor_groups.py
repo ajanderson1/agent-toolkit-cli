@@ -141,3 +141,36 @@ def test_submodules_group_warns_when_uninitialised(tmp_path):
     result = run_sm(tmp_path)
     assert result.status in (Status.WARN, Status.FAIL)
     assert any("foo" in f for f in result.findings)
+
+
+def test_submodules_group_ok_when_initialised(tmp_path):
+    from agent_toolkit.doctor.submodules import run as run_sm
+    (tmp_path / ".gitmodules").write_text(
+        '[submodule "skills/foo"]\n\tpath = skills/foo\n\turl = https://example.com/x.git\n'
+    )
+    (tmp_path / "skills" / "foo").mkdir(parents=True)
+    (tmp_path / "skills" / "foo" / "README.md").write_text("hi")
+    result = run_sm(tmp_path)
+    assert result.status == Status.OK
+    assert "skills/foo" in result.findings[0]
+
+
+def test_submodules_group_fail_when_gitmodules_malformed(tmp_path):
+    from agent_toolkit.doctor.submodules import run as run_sm
+    (tmp_path / ".gitmodules").write_text("not a valid ini file at all\n=====\n")
+    result = run_sm(tmp_path)
+    assert result.status == Status.FAIL
+    assert ".gitmodules not loadable" in result.summary
+
+
+def test_submodules_group_handles_path_pointing_to_file(tmp_path):
+    """Regression: if .gitmodules path resolves to a regular file, we WARN (not crash)."""
+    from agent_toolkit.doctor.submodules import run as run_sm
+    (tmp_path / ".gitmodules").write_text(
+        '[submodule "broken"]\n\tpath = broken\n\turl = https://example.com/x.git\n'
+    )
+    # broken is a *file*, not a directory
+    (tmp_path / "broken").write_text("oops")
+    result = run_sm(tmp_path)
+    assert result.status == Status.WARN
+    assert any("broken" in f for f in result.findings)
