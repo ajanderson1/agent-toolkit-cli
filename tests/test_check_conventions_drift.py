@@ -65,3 +65,11 @@ def test_check_module_itself_allowed_to_use_old_paths(tmp_path: Path) -> None:
         '_LEAK_PATTERN = re.compile(r"~/.claude/(CONVENTIONS|conventions/)")\n',
     )
     assert _drift_for_conventions_prose(tmp_path) is None
+
+
+def test_cli_docs_allowed_to_use_old_paths_in_architecture_table(tmp_path: Path) -> None:
+    _write(
+        tmp_path / "docs" / "agent-toolkit" / "cli.md",
+        "Claude:    ~/.claude/CONVENTIONS.md   -> ~/.conventions/CONVENTIONS.md\n",
+    )
+    assert _drift_for_conventions_prose(tmp_path) is None

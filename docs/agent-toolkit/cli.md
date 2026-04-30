@@ -245,6 +245,66 @@ slugs from `list user`.
 
 ---
 
+## Conventions projection
+
+Projects `CONVENTIONS.md` and `conventions/` from the toolkit repo into the
+neutral shared path (`~/.conventions/`) and then into each harness's config
+directory — without embedding the harness or repo location in any skill or
+agent prose.
+
+```
+Usage: agent-toolkit link|unlink|list|diff user conventions [--repo-root DIR] [--dry-run]
+```
+
+| Flag | Description |
+|---|---|
+| `--repo-root DIR` | Path to the toolkit repo containing `CONVENTIONS.md` and `conventions/` (default: `$PWD`) |
+| `--dry-run` | Print what would change; make no changes (`link` and `diff` only) |
+
+### Three-layer projection
+
+```text
+Layer 1 — source of truth (toolkit repo)
+  <repo>/CONVENTIONS.md
+  <repo>/conventions/
+
+Layer 2 — neutral public path (single indirection)
+  ~/.conventions/CONVENTIONS.md  → Layer 1 file
+  ~/.conventions/conventions/    → Layer 1 dir
+
+Layer 3 — per-harness slots (point at Layer 2)
+  Claude:    ~/.claude/CONVENTIONS.md   → ~/.conventions/CONVENTIONS.md
+             ~/.claude/conventions/     → ~/.conventions/conventions/
+  Codex:     ~/.codex/AGENTS.md         → ~/.conventions/CONVENTIONS.md
+  OpenCode:  ~/.config/opencode/AGENTS.md → ~/.conventions/CONVENTIONS.md
+  Pi:        ~/.pi/agent/AGENTS.md      → ~/.conventions/CONVENTIONS.md
+```
+
+Layer 3 slots are created only when the harness directory already exists on
+disk. Slots for absent harnesses are silently skipped.
+
+`unlink user conventions` removes Layer 3 slots only; Layer 2 persists so
+skills and agents that cite `~/.conventions/...` remain valid.
+
+`list user conventions` prints the full chain for each active slot.
+
+`diff user conventions` is an alias for `link user conventions --dry-run`.
+
+### Bootstrap
+
+```bash
+# Fresh machine — run once after `agent-toolkit link user <harness>`:
+agent-toolkit link user conventions
+```
+
+Idempotent: re-running self-heals stale or missing symlinks.
+
+### Design reference
+
+[`docs/superpowers/specs/2026-04-30-neutral-conventions-path-design.md`](../superpowers/specs/2026-04-30-neutral-conventions-path-design.md)
+
+---
+
 ## See also
 
 - [`schemas/asset-frontmatter.v1alpha1.json`](../../schemas/asset-frontmatter.v1alpha1.json) — JSON Schema source (2020-12 dialect)

@@ -16,6 +16,7 @@ _LEAK_PATTERN = re.compile(r"~/\.claude/(CONVENTIONS\.md|conventions/)")
 
 # Repo-relative path prefixes that may legitimately reference the old paths.
 _LEAK_ALLOWED_PREFIXES = (
+    "docs/agent-toolkit/",
     "docs/plans/",
     "docs/superpowers/plans/",
     "docs/superpowers/specs/",
