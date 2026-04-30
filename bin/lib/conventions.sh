@@ -42,7 +42,7 @@ conventions_link_main() {
   done
 
   _conventions_link_layer2 "$repo_root" "$dry_run" || return 1
-  _conventions_link_layer3 "$dry_run"
+  _conventions_link_layer3 "$dry_run" || return 1
 }
 
 _conventions_link_layer3() {
