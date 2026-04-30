@@ -9,9 +9,17 @@ from agent_toolkit.commands.fix import fix
 from agent_toolkit.commands.new import new
 
 
-@click.group()
+@click.group(
+    help=(
+        "agent-toolkit — metadata-aware commands for asset frontmatter and AGENTS.md.\n\n"
+        "These four commands operate on the asset inventory and the AGENTS.md "
+        "auto-regions. The bash side of the CLI (link / unlink / list / diff) "
+        "handles symlinking; this Python side handles validation and generation. "
+        "Use 'agent-toolkit --help' from the bash dispatcher for the full surface."
+    )
+)
 def main() -> None:
-    """agent-toolkit — manage harness-agnostic assets."""
+    """agent-toolkit metadata commands."""
 
 
 main.add_command(check)

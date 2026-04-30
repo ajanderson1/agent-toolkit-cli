@@ -42,3 +42,10 @@ teardown() {
   [ "$status" -eq 0 ]
   [ -L "$HOME/.claude/skills/unrelated" ]
 }
+
+@test "unlink user claude emits header and summary on stderr" {
+  run bash -c "'$BATS_TEST_DIRNAME/../../bin/agent-toolkit' unlink user claude --repo-root '$REPO_ROOT' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Removing"* ]]
+  [[ "$output" == *"Removed"* ]]
+}

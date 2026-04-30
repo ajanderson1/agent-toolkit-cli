@@ -66,3 +66,35 @@ teardown() {
   [ ! -e "$HOME/.claude/skills/alpha" ]
   [[ "$output" == *"would-link"* ]]
 }
+
+@test "link user claude emits a header on stderr" {
+  run bash -c "'$BATS_TEST_DIRNAME/../../bin/agent-toolkit' link user claude --repo-root '$REPO_ROOT' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Linking"* ]]
+}
+
+@test "link user claude summary mentions 'Linked' on first run" {
+  run bash -c "'$BATS_TEST_DIRNAME/../../bin/agent-toolkit' link user claude --repo-root '$REPO_ROOT' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Linked"* ]]
+}
+
+@test "link user claude summary says 'Already in sync' on second run" {
+  "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user claude --repo-root "$REPO_ROOT" >/dev/null 2>&1
+  run bash -c "'$BATS_TEST_DIRNAME/../../bin/agent-toolkit' link user claude --repo-root '$REPO_ROOT' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Already in sync"* ]]
+}
+
+@test "link --dry-run summary mentions pending changes" {
+  run bash -c "'$BATS_TEST_DIRNAME/../../bin/agent-toolkit' link user claude --repo-root '$REPO_ROOT' --dry-run 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"pending"* ]] || [[ "$output" == *"Nothing to change"* ]]
+}
+
+@test "link with AGENT_TOOLKIT_QUIET=1 only emits would-link/etc on stdout" {
+  run bash -c "AGENT_TOOLKIT_QUIET=1 '$BATS_TEST_DIRNAME/../../bin/agent-toolkit' link user claude --repo-root '$REPO_ROOT' --dry-run 2>&1"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"Linking"* ]]
+  [[ "$output" == *"would-link"* ]]
+}

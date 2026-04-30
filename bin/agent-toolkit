@@ -6,22 +6,48 @@ LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/lib" && pwd)"
 . "$LIB_DIR/common.sh"
 
 usage() {
-  cat <<EOF
-agent-toolkit — manage harness-agnostic assets
+  cat <<'EOF'
+agent-toolkit — manage harness-agnostic assets across Claude Code, Codex, OpenCode, and Pi.
 
 Usage:
-  agent-toolkit link <user|project> <harness>     [--repo-root DIR] [--dry-run]
-  agent-toolkit link user conventions             [--repo-root DIR] [--dry-run]
-  agent-toolkit unlink <user|project> <harness>   [--repo-root DIR] [--dry-run]
-  agent-toolkit unlink user conventions           [--repo-root DIR] [--dry-run]
-  agent-toolkit list <user|project>               [--repo-root DIR]
-  agent-toolkit list user conventions             [--repo-root DIR]
-  agent-toolkit diff <user|project> <harness>     [--repo-root DIR]
-  agent-toolkit diff user conventions             [--repo-root DIR]
-  agent-toolkit check [--repo-root DIR] [--exit-code]
-  agent-toolkit fix [--repo-root DIR] [--only=<region>] [--to-stdout]
-  agent-toolkit doctor [--repo-root DIR]
-  agent-toolkit new <kind> <slug> [--repo-root DIR]
+  agent-toolkit <command> [options]
+
+Commands that manage symlinks (filesystem, zero-dep bash):
+  link <user|project> <harness>    Project assets into the harness's config dir
+                                   (idempotent — safe to re-run).
+                                   Use 'link user conventions' for the neutral
+                                   conventions projection.
+  unlink <user|project> <harness>  Remove only symlinks pointing into this repo.
+  list <user|project>              List symlinks in user-/project-scope dirs that
+                                   point into this repo.
+  diff <user|project> <harness>    Preview what 'link' would change (alias for
+                                   'link --dry-run').
+
+Commands that operate on metadata (Python via uv):
+  check                            Validate every asset's frontmatter and detect
+                                   AGENTS.md auto-region drift. Used by lefthook.
+  fix                              Regenerate AGENTS.md auto-regions from the
+                                   current asset inventory.
+  doctor                           Quick environment sanity check (schema, git,
+                                   gh, submodules). Reports only — never gates.
+  new <kind> <slug>                Scaffold a new asset with valid v1alpha1
+                                   frontmatter. Kinds: skill, agent, command,
+                                   hook, mcp, plugin.
+
+Common options:
+  --repo-root DIR    Operate on this repo (defaults to current directory).
+  --dry-run          link/unlink: show what would change without doing it.
+  --quiet, -q        Suppress header/summary chrome (also via AGENT_TOOLKIT_QUIET=1).
+  --exit-code        check: exit non-zero on any error (CI gate).
+
+Examples:
+  agent-toolkit link user claude          # set up Claude Code on a fresh machine
+  agent-toolkit link user conventions     # project conventions tree to neutral path
+  agent-toolkit diff user claude          # see what's drifted from the source of truth
+  agent-toolkit check --exit-code         # validate (used by lefthook pre-commit)
+  agent-toolkit new skill my-skill        # scaffold a new skill
+
+Documentation: docs/agent-toolkit/cli.md
 EOF
 }
 

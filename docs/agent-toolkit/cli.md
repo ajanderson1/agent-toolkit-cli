@@ -18,6 +18,23 @@ Claude also supports `agents/`, `commands/`, `hooks/`, and `plugins/`. Codex and
 support MCPs via their own config files. The CLI silently skips asset-type / harness
 combinations that have no target slot.
 
+## Output conventions
+
+Every command prints a short header to **stderr** before doing its work and a one-sentence summary to **stderr** after. The actual data the command produces (symlink listings, validation results, scaffolded files) goes to **stdout**, so pipes work the same as before:
+
+```bash
+bin/agent-toolkit list user | awk '{print $1}'    # still works
+```
+
+If you need silence (CI, scripts, fixtures), set `AGENT_TOOLKIT_QUIET=1` or pass `--quiet` / `-q`:
+
+```bash
+AGENT_TOOLKIT_QUIET=1 bin/agent-toolkit list user
+bin/agent-toolkit link user claude --quiet
+```
+
+The summary line typically includes a next-step hint (e.g. "run 'agent-toolkit check'"). Hints are part of the contract — if a hint becomes stale, fix it in the same commit that breaks it.
+
 ---
 
 ## link
@@ -42,6 +59,8 @@ existing correct symlinks are skipped; stale symlinks are replaced.
 bin/agent-toolkit link user claude
 ```
 
+> _Header & summary go to stderr; suppress with `--quiet` or `AGENT_TOOLKIT_QUIET=1`._
+
 ---
 
 ## unlink
@@ -65,6 +84,8 @@ real files are left untouched.
 bin/agent-toolkit unlink user codex
 ```
 
+> _Header & summary go to stderr; suppress with `--quiet` or `AGENT_TOOLKIT_QUIET=1`._
+
 ---
 
 ## list
@@ -86,6 +107,8 @@ by harness then kind then slug.
 ```bash
 bin/agent-toolkit list user
 ```
+
+> _Header & summary go to stderr; suppress with `--quiet` or `AGENT_TOOLKIT_QUIET=1`._
 
 ---
 
@@ -109,6 +132,8 @@ be removed.
 bin/agent-toolkit diff project opencode
 ```
 
+> _Header & summary go to stderr; suppress with `--quiet` or `AGENT_TOOLKIT_QUIET=1`._
+
 ---
 
 ## check
@@ -131,6 +156,8 @@ automatically on every commit.
 ```bash
 uv run agent-toolkit check --exit-code
 ```
+
+> _Header & summary go to stderr; suppress with `--quiet` or `AGENT_TOOLKIT_QUIET=1`._
 
 ---
 
@@ -162,6 +189,8 @@ Output is byte-stable and sorted by path, so results are deterministic across ma
 uv run agent-toolkit fix --only=component-table
 ```
 
+> _Header & summary go to stderr; suppress with `--quiet` or `AGENT_TOOLKIT_QUIET=1`._
+
 ---
 
 ## doctor
@@ -184,6 +213,8 @@ subcommand.
 ```bash
 uv run agent-toolkit doctor --repo-root ~/GitHub/agent-toolkit
 ```
+
+> _Header & summary go to stderr; suppress with `--quiet` or `AGENT_TOOLKIT_QUIET=1`._
 
 ---
 
@@ -219,6 +250,8 @@ uv run agent-toolkit new skill my-research-skill
 $EDITOR skills/my-research-skill/SKILL.md
 uv run agent-toolkit check
 ```
+
+> _Header & summary go to stderr; suppress with `--quiet` or `AGENT_TOOLKIT_QUIET=1`._
 
 ---
 

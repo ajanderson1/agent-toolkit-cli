@@ -78,3 +78,34 @@ def test_check_detects_marker_drift(tmp_path):
     result = runner.invoke(main, ["check", "--repo-root", str(repo), "--exit-code"])
     assert result.exit_code != 0
     assert "drift" in result.output.lower() or "STALE" in result.output
+
+
+def test_check_emits_header_and_summary_on_stderr(tmp_path):
+    repo = tmp_path
+    (repo / "schemas").mkdir()
+    src_schema = Path(__file__).parent.parent / "schemas" / "asset-frontmatter.v1alpha1.json"
+    (repo / "schemas" / "asset-frontmatter.v1alpha1.json").write_text(src_schema.read_text())
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["check", "--repo-root", str(repo)])
+    assert result.exit_code == 0
+    # Header and summary are emitted to stderr via _ui module
+    # CliRunner's result.output includes both stdout and stderr
+    assert "Validating" in result.output
+    assert "OK" in result.output
+    assert "validated" in result.output or "0 drift" in result.output
+
+
+def test_check_quiet_env_suppresses_chrome(tmp_path, monkeypatch):
+    monkeypatch.setenv("AGENT_TOOLKIT_QUIET", "1")
+    repo = tmp_path
+    (repo / "schemas").mkdir()
+    src_schema = Path(__file__).parent.parent / "schemas" / "asset-frontmatter.v1alpha1.json"
+    (repo / "schemas" / "asset-frontmatter.v1alpha1.json").write_text(src_schema.read_text())
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["check", "--repo-root", str(repo)])
+    assert result.exit_code == 0
+    assert "OK" in result.output
+    # With AGENT_TOOLKIT_QUIET=1, header/summary are suppressed
+    assert "Validating" not in result.output

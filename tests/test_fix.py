@@ -71,3 +71,25 @@ def test_fix_to_stdout_does_not_modify_file(tmp_path):
     assert result.exit_code == 0
     assert (tmp_path / "AGENTS.md").read_text() == original
     assert "BEGIN_AGENT_TOOLKIT:component-table" in result.output
+
+
+def test_fix_emits_header_and_summary_on_stderr(tmp_path):
+    _seed_repo(tmp_path)
+    runner = CliRunner()
+    result = runner.invoke(main, ["fix", "--repo-root", str(tmp_path)])
+    assert result.exit_code == 0
+    # Header and summary are emitted to stderr via _ui module
+    # CliRunner's result.output includes both stdout and stderr
+    assert "Regenerating" in result.output
+    assert "Updated AGENTS.md" in result.output
+
+
+def test_fix_to_stdout_summary_says_file_unchanged(tmp_path):
+    _seed_repo(tmp_path)
+    runner = CliRunner()
+    result = runner.invoke(main, ["fix", "--repo-root", str(tmp_path), "--to-stdout"])
+    assert result.exit_code == 0
+    # Summary mentions file unchanged
+    assert "file unchanged" in result.output.lower() or "stdout" in result.output.lower()
+    # Rendered AGENTS.md content is in output
+    assert "BEGIN_AGENT_TOOLKIT:component-table" in result.output

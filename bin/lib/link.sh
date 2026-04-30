@@ -1,6 +1,16 @@
 # shellcheck shell=bash
 # Implements `agent-toolkit link <user|project> <harness>`.
 
+. "$(dirname "${BASH_SOURCE[0]}")/_ui.sh"
+
+# Action counters — populated by _maybe_link, read by link_main.
+_LINK_CREATED=0
+_LINK_UPDATED=0
+_LINK_REMOVED=0
+_LINK_UNCHANGED=0
+_LINK_WOULD_LINK=0
+_LINK_WOULD_UNLINK=0
+
 link_main() {
   local scope="$1"; shift
   local harness="$1"; shift
@@ -10,14 +20,54 @@ link_main() {
     case "$1" in
       --repo-root) repo_root="$2"; shift 2 ;;
       --dry-run)   dry_run=1; shift ;;
+      --quiet|-q)  AGENT_TOOLKIT_QUIET=1; shift ;;
       *) echo "unknown flag: $1" >&2; return 2 ;;
     esac
   done
+
+  # Reset counters (in case link_main is called twice in one process)
+  _LINK_CREATED=0
+  _LINK_UPDATED=0
+  _LINK_REMOVED=0
+  _LINK_UNCHANGED=0
+  _LINK_WOULD_LINK=0
+  _LINK_WOULD_UNLINK=0
+
+  if [ "$dry_run" -eq 1 ]; then
+    _ui_header "Previewing $scope-scope changes for $harness (no files will be modified)..."
+  else
+    case "$scope" in
+      user)    _ui_header "Linking user-scope assets for $harness into ~/.$harness/..." ;;
+      project) _ui_header "Linking project-scope assets for $harness into ./.$harness/..." ;;
+    esac
+  fi
+
   case "$scope" in
     user)    _link_user_scope "$harness" "$repo_root" "$dry_run" ;;
     project) _link_project_scope "$harness" "$repo_root" "$dry_run" ;;
     *) echo "scope must be 'user' or 'project'" >&2; return 2 ;;
   esac
+
+  _link_print_summary "$dry_run"
+}
+
+_link_print_summary() {
+  local dry_run="$1"
+  if [ "$dry_run" -eq 1 ]; then
+    local total=$((_LINK_WOULD_LINK + _LINK_WOULD_UNLINK))
+    if [ "$total" -eq 0 ]; then
+      _ui_summary "Nothing to change."
+    else
+      _ui_summary "$total changes pending ($_LINK_WOULD_LINK to link, $_LINK_WOULD_UNLINK to remove). Re-run without --dry-run to apply."
+    fi
+    return
+  fi
+  local changed=$((_LINK_CREATED + _LINK_UPDATED + _LINK_REMOVED))
+  if [ "$changed" -eq 0 ]; then
+    _ui_summary "Already in sync — $_LINK_UNCHANGED assets linked, nothing to change."
+  else
+    _ui_summary "Linked $_LINK_CREATED new, updated $_LINK_UPDATED, removed $_LINK_REMOVED stale ($_LINK_UNCHANGED already in sync)."
+  fi
 }
 
 _link_user_scope() {
@@ -51,7 +101,6 @@ _link_project_scope() {
     target_dir="$(project_target_dir "$harness" "$kind")"
     [ -n "$target_dir" ] || continue
     [ "$dry_run" -eq 1 ] || mkdir -p "$target_dir"
-    # Read the section's slug list
     local section
     case "$kind" in
       skill) section=skills ;; agent) section=agents ;; command) section=commands ;;
@@ -85,22 +134,35 @@ _maybe_link() {
   esac
   local link_path="$target_dir/$slug"
 
-  # Read harness compatibility
   local harnesses
   harnesses=$(read_harnesses_from_frontmatter "$file" || true)
   if ! echo "$harnesses" | grep -qx "$harness"; then
-    # Asset doesn't support this harness — remove stale link if present.
     if [ -L "$link_path" ]; then
-      [ "$dry_run" -eq 1 ] && echo "would-unlink: $link_path" || rm "$link_path"
+      if [ "$dry_run" -eq 1 ]; then
+        echo "would-unlink: $link_path"
+        _LINK_WOULD_UNLINK=$((_LINK_WOULD_UNLINK + 1))
+      else
+        rm "$link_path"
+        _LINK_REMOVED=$((_LINK_REMOVED + 1))
+      fi
     fi
     return
   fi
+
   if [ -L "$link_path" ] && [ "$(readlink "$link_path")" = "$source_path" ]; then
-    return  # already correct
+    _LINK_UNCHANGED=$((_LINK_UNCHANGED + 1))
+    return
   fi
+
   if [ "$dry_run" -eq 1 ]; then
     echo "would-link: $link_path -> $source_path"
+    _LINK_WOULD_LINK=$((_LINK_WOULD_LINK + 1))
   else
+    if [ -L "$link_path" ] || [ -e "$link_path" ]; then
+      _LINK_UPDATED=$((_LINK_UPDATED + 1))
+    else
+      _LINK_CREATED=$((_LINK_CREATED + 1))
+    fi
     rm -f "$link_path"
     ln -s "$source_path" "$link_path"
   fi
