@@ -102,3 +102,58 @@ def _slug_for(kind: str, path: Path, root: Path) -> str | None:
         # agents/<...>/<slug>.md → "<slug>"
         return path.stem or None
     return None
+
+
+@dataclass(frozen=True)
+class AssetRecord:
+    asset: Asset
+    metadata: dict
+    body_excerpt: str  # first paragraph or first 400 chars, whichever is shorter; "" if no body
+
+
+def load_asset_record(asset: Asset) -> AssetRecord:
+    """Load full metadata and a body excerpt for an asset."""
+    import json as _json
+
+    metadata: dict
+    body_excerpt: str = ""
+
+    if asset.kind in {"skill", "agent", "command"}:
+        text = asset.path.read_text(encoding="utf-8").replace("\r\n", "\n")
+        metadata = extract_frontmatter(asset.path) or {}
+        body = _strip_frontmatter(text)
+        body_excerpt = _first_paragraph(body, max_chars=400)
+    elif asset.kind == "hook":
+        metadata = yaml.safe_load(asset.path.read_text()) or {}
+    elif asset.kind in {"mcp", "plugin"}:
+        doc = _json.loads(asset.path.read_text())
+        metadata = doc.get("agent_toolkit") or {}
+    else:
+        metadata = {}
+
+    return AssetRecord(asset=asset, metadata=metadata, body_excerpt=body_excerpt)
+
+
+def _strip_frontmatter(text: str) -> str:
+    if not text.startswith(FRONTMATTER_DELIM + "\n"):
+        return text
+    end = text.find("\n" + FRONTMATTER_DELIM + "\n", len(FRONTMATTER_DELIM) + 1)
+    if end == -1:
+        return text
+    return text[end + len(FRONTMATTER_DELIM) + 2 :]
+
+
+def _first_paragraph(body: str, max_chars: int) -> str:
+    body = body.lstrip()
+    # Skip heading lines (start with #) at the top
+    while body.startswith("#"):
+        nl = body.find("\n")
+        if nl == -1:
+            return ""
+        body = body[nl + 1 :].lstrip()
+    para_end = body.find("\n\n")
+    para = body if para_end == -1 else body[:para_end]
+    para = para.strip()
+    if len(para) > max_chars:
+        return para[:max_chars].rstrip()
+    return para
