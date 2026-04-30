@@ -153,3 +153,43 @@ def test_render_asset_card_lists_other_harnesses(tmp_path):
     _write_skill(tmp_path, "multi", harnesses=("claude", "codex", "pi"))
     out = render_asset_card(tmp_path, slug="multi")
     assert "Other harnesses supported: codex, pi" in out
+
+
+def test_inventory_cli_full_mode(tmp_path):
+    from click.testing import CliRunner
+    from agent_toolkit.cli import main
+    _write_skill(tmp_path, "alpha")
+    runner = CliRunner()
+    result = runner.invoke(main, ["inventory", "--repo-root", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    assert "alpha" in result.output
+
+
+def test_inventory_cli_kind_filter(tmp_path):
+    from click.testing import CliRunner
+    from agent_toolkit.cli import main
+    _write_skill(tmp_path, "alpha")
+    runner = CliRunner()
+    result = runner.invoke(main, ["inventory", "skill", "--repo-root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "alpha" in result.output
+
+
+def test_inventory_cli_slug_zoom(tmp_path):
+    from click.testing import CliRunner
+    from agent_toolkit.cli import main
+    _write_skill(tmp_path, "alpha", description="Alpha example.")
+    runner = CliRunner()
+    result = runner.invoke(main, ["inventory", "alpha", "--repo-root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "alpha — Alpha example." in result.output
+    assert "QUICKSTART" in result.output
+
+
+def test_inventory_cli_unknown_slug_exits_nonzero(tmp_path):
+    from click.testing import CliRunner
+    from agent_toolkit.cli import main
+    _write_skill(tmp_path, "alpha")
+    runner = CliRunner()
+    result = runner.invoke(main, ["inventory", "ghost", "--repo-root", str(tmp_path)])
+    assert result.exit_code != 0
