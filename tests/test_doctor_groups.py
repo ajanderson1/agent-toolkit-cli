@@ -103,3 +103,23 @@ def test_frontmatter_group_fail_when_invalid_asset(tmp_path):
     result = run_fm(tmp_path)
     assert result.status == Status.FAIL
     assert any("bad" in f for f in result.findings)
+
+
+def test_frontmatter_group_fail_when_schema_missing(tmp_path):
+    from agent_toolkit.doctor.frontmatter import run as run_fm
+    # No schemas/ dir at all
+    result = run_fm(tmp_path)
+    assert result.status == Status.FAIL
+    assert "schema not loadable" in result.summary
+    assert any("FileNotFoundError" in f or "schema" in f.lower() for f in result.findings)
+
+
+def test_frontmatter_group_fail_when_schema_invalid_json(tmp_path):
+    from agent_toolkit.doctor.frontmatter import run as run_fm
+    schema_dir = tmp_path / "schemas"
+    schema_dir.mkdir()
+    (schema_dir / "asset-frontmatter.v1alpha1.json").write_text("{not valid json")
+    result = run_fm(tmp_path)
+    assert result.status == Status.FAIL
+    assert "schema not loadable" in result.summary
+    assert any("JSONDecodeError" in f for f in result.findings)
