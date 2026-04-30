@@ -49,3 +49,19 @@ def test_archived_plans_are_allowed_to_use_old_paths(tmp_path: Path) -> None:
 def test_drift_excludes_files_inside_dot_git(tmp_path: Path) -> None:
     _write(tmp_path / ".git" / "ignored.md", "`~/.claude/CONVENTIONS.md`\n")
     assert _drift_for_conventions_prose(tmp_path) is None
+
+
+def test_design_specs_allowed_to_use_old_paths(tmp_path: Path) -> None:
+    _write(
+        tmp_path / "docs" / "superpowers" / "specs" / "2026-04-30-design.md",
+        "We replace `~/.claude/CONVENTIONS.md` with the neutral path.\n",
+    )
+    assert _drift_for_conventions_prose(tmp_path) is None
+
+
+def test_check_module_itself_allowed_to_use_old_paths(tmp_path: Path) -> None:
+    _write(
+        tmp_path / "src" / "agent_toolkit" / "commands" / "check.py",
+        '_LEAK_PATTERN = re.compile(r"~/.claude/(CONVENTIONS|conventions/)")\n',
+    )
+    assert _drift_for_conventions_prose(tmp_path) is None

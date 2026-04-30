@@ -18,6 +18,9 @@ _LEAK_PATTERN = re.compile(r"~/\.claude/(CONVENTIONS\.md|conventions/)")
 _LEAK_ALLOWED_PREFIXES = (
     "docs/plans/",
     "docs/superpowers/plans/",
+    "docs/superpowers/specs/",
+    "src/agent_toolkit/commands/check.py",
+    "tests/test_check_conventions_drift.py",
     ".git/",
 )
 
