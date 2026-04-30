@@ -79,3 +79,77 @@ def test_render_inventory_json_format(tmp_path):
     parsed = json.loads(out)
     assert isinstance(parsed, list)
     assert any(item["slug"] == "alpha" for item in parsed)
+
+
+def _write_agent(tmp_path: Path, slug: str, *, harnesses=("claude",)) -> None:
+    agents_dir = tmp_path / "agents"
+    agents_dir.mkdir(exist_ok=True)
+    (agents_dir / f"{slug}.md").write_text(
+        "---\n"
+        f"apiVersion: agent-toolkit/v1alpha1\n"
+        f"metadata:\n"
+        f"  name: {slug}\n"
+        f"  description: {slug.capitalize()} agent.\n"
+        f"  lifecycle: stable\n"
+        f"spec:\n"
+        f"  origin: first-party\n"
+        f"  vendored_via: none\n"
+        f"  harnesses:\n"
+        + "".join(f"    - {h}\n" for h in harnesses)
+        + "---\n# x\n"
+    )
+
+
+def test_render_inventory_filters_by_kind(tmp_path):
+    _write_skill(tmp_path, "alpha")
+    _write_agent(tmp_path, "beta")
+    out = render_inventory(tmp_path, fmt="md", kind="agent")
+    assert "beta" in out
+    assert "alpha" not in out
+
+
+def test_render_inventory_filters_by_lifecycle(tmp_path):
+    _write_skill(tmp_path, "stable-one", lifecycle="stable")
+    _write_skill(tmp_path, "exp-one", lifecycle="experimental")
+    out = render_inventory(tmp_path, fmt="md", lifecycle="experimental")
+    assert "exp-one" in out
+    assert "stable-one" not in out
+
+
+def test_render_inventory_filters_by_origin(tmp_path):
+    # Both fixtures default to first-party; assert that filter narrows correctly
+    _write_skill(tmp_path, "alpha")
+    out_first = render_inventory(tmp_path, fmt="md", origin="first-party")
+    out_third = render_inventory(tmp_path, fmt="md", origin="third-party")
+    assert "alpha" in out_first
+    assert "alpha" not in out_third
+
+
+def test_render_inventory_empty_result(tmp_path):
+    _write_skill(tmp_path, "alpha", harnesses=("claude",))
+    out = render_inventory(tmp_path, fmt="md", harness="codex")
+    assert out == "(no assets matched)\n"
+
+
+def test_render_inventory_json_includes_all_fields(tmp_path):
+    import json
+    _write_skill(tmp_path, "alpha")
+    out = render_inventory(tmp_path, fmt="json")
+    parsed = json.loads(out)
+    assert parsed, "expected at least one entry"
+    expected = {"slug", "kind", "lifecycle", "origin", "harnesses",
+                "location", "keywords", "description", "body_excerpt"}
+    assert set(parsed[0].keys()) == expected
+
+
+def test_render_asset_card_includes_body_excerpt(tmp_path):
+    _write_skill(tmp_path, "alpha", description="Alpha example.")
+    out = render_asset_card(tmp_path, slug="alpha")
+    # The fixture body is "Body of alpha." (after the heading)
+    assert "Body of alpha." in out
+
+
+def test_render_asset_card_lists_other_harnesses(tmp_path):
+    _write_skill(tmp_path, "multi", harnesses=("claude", "codex", "pi"))
+    out = render_asset_card(tmp_path, slug="multi")
+    assert "Other harnesses supported: codex, pi" in out

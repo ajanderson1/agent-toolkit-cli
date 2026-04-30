@@ -115,8 +115,11 @@ def _render_md(entries: list[InventoryEntry]) -> str:
     grouped: dict[str, list[InventoryEntry]] = {k: [] for k in _KIND_ORDER}
     for e in entries:
         grouped.setdefault(e.kind, []).append(e)
+    # Iterate known kinds first, then any unknown kinds in insertion order, so
+    # an unexpected kind appears in the output rather than being silently dropped.
+    ordered_kinds = list(_KIND_ORDER) + [k for k in grouped if k not in _KIND_ORDER]
     parts: list[str] = []
-    for k in _KIND_ORDER:
+    for k in ordered_kinds:
         bucket = grouped.get(k) or []
         if not bucket:
             continue
@@ -131,10 +134,7 @@ def _render_md(entries: list[InventoryEntry]) -> str:
 
 def _render_card(e: InventoryEntry) -> str:
     desc = e.description or "(no description)"
-    if e.body_excerpt and len(e.body_excerpt) <= 400:
-        long_desc = f"{desc}\n    {e.body_excerpt}"
-    else:
-        long_desc = desc
+    long_desc = f"{desc}\n    {e.body_excerpt}" if e.body_excerpt else desc
     keywords = ", ".join(e.keywords) if e.keywords else "(none)"
     harnesses = ", ".join(e.harnesses) if e.harnesses else "(none)"
     return (
