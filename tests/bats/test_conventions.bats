@@ -195,3 +195,24 @@ teardown() {
   [ ! -e "$HOME/.conventions/CONVENTIONS.md" ]
   [ ! -e "$HOME/.claude/CONVENTIONS.md" ]
 }
+
+@test "link user conventions replaces stale Layer 2 symlink pointing elsewhere" {
+  mkdir -p "$HOME/.conventions"
+  ln -s "/tmp/wrong-target" "$HOME/.conventions/CONVENTIONS.md"
+
+  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --repo-root "$REPO_ROOT"
+  [ "$status" -eq 0 ]
+  [ "$(readlink "$HOME/.conventions/CONVENTIONS.md")" = "$REPO_ROOT/CONVENTIONS.md" ]
+}
+
+@test "link user conventions replaces stale Layer 3 symlink pointing at old Layer 1" {
+  mkdir -p "$HOME/.claude"
+  # Pre-existing direct-to-Layer-1 symlink (the migration scenario we will
+  # hit on AJ's machine).
+  ln -s "$REPO_ROOT/CONVENTIONS.md" "$HOME/.claude/CONVENTIONS.md"
+
+  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --repo-root "$REPO_ROOT"
+  [ "$status" -eq 0 ]
+  # After link, the slot must point at Layer 2, not Layer 1.
+  [ "$(readlink "$HOME/.claude/CONVENTIONS.md")" = "$HOME/.conventions/CONVENTIONS.md" ]
+}
