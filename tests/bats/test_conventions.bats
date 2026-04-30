@@ -129,3 +129,30 @@ teardown() {
   [ "$(readlink "$HOME/.config/opencode/AGENTS.md")" = "$HOME/.conventions/CONVENTIONS.md" ]
   [ "$(readlink "$HOME/.pi/agent/AGENTS.md")" = "$HOME/.conventions/CONVENTIONS.md" ]
 }
+
+@test "unlink user conventions removes Layer 3 only" {
+  mkdir -p "$HOME/.claude" "$HOME/.codex"
+  "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --repo-root "$REPO_ROOT"
+  [ -L "$HOME/.claude/CONVENTIONS.md" ]
+  [ -L "$HOME/.codex/AGENTS.md" ]
+  [ -L "$HOME/.conventions/CONVENTIONS.md" ]
+
+  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" unlink user conventions --repo-root "$REPO_ROOT"
+  [ "$status" -eq 0 ]
+  [ ! -L "$HOME/.claude/CONVENTIONS.md" ]
+  [ ! -L "$HOME/.claude/conventions" ]
+  [ ! -L "$HOME/.codex/AGENTS.md" ]
+  # Layer 2 must persist
+  [ -L "$HOME/.conventions/CONVENTIONS.md" ]
+  [ -L "$HOME/.conventions/conventions" ]
+}
+
+@test "unlink user conventions does not touch unrelated symlinks" {
+  mkdir -p "$HOME/.claude"
+  ln -s "$REPO_ROOT/CONVENTIONS.md" "$HOME/.claude/AGENTS.md"  # different target
+  "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --repo-root "$REPO_ROOT"
+  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" unlink user conventions --repo-root "$REPO_ROOT"
+  [ "$status" -eq 0 ]
+  # The unrelated symlink must survive
+  [ -L "$HOME/.claude/AGENTS.md" ]
+}

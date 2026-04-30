@@ -99,8 +99,29 @@ _conventions_maybe_link() {
 }
 
 conventions_unlink_main() {
-  shift; shift
-  echo "stub: would unlink conventions"
+  shift  # discard 'user'
+  shift  # discard 'conventions'
+  local dry_run=0
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --repo-root) shift 2 ;;       # accepted for symmetry, ignored
+      --dry-run)   dry_run=1; shift ;;
+      *) echo "unknown flag: $1" >&2; return 2 ;;
+    esac
+  done
+
+  local slot target
+  while IFS='|' read -r slot target; do
+    [ -L "$slot" ] || continue
+    # Only remove if the symlink's target is the Layer 2 path we own.
+    [ "$(readlink "$slot")" = "$target" ] || continue
+    if [ "$dry_run" -eq 1 ]; then
+      echo "would-unlink: $slot"
+    else
+      rm "$slot"
+      echo "unlinked: $slot"
+    fi
+  done < <(_conventions_layer3_slots)
 }
 
 conventions_list_main() {
