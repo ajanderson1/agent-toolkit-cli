@@ -7,6 +7,7 @@ from pathlib import Path
 
 import click
 
+from agent_toolkit._repo_resolution import RepoNotFoundError, resolve_toolkit_root
 from agent_toolkit._ui import header, summary
 from agent_toolkit.commands.fix import _render
 from agent_toolkit.generators.markers import inject_region
@@ -57,7 +58,10 @@ def check(ctx: click.Context, toolkit_root: Path | None, use_exit_code: bool) ->
     if toolkit_root is None:
         toolkit_root = (ctx.obj or {}).get("toolkit_root")
     if toolkit_root is None:
-        toolkit_root = Path(".").resolve()
+        try:
+            toolkit_root = resolve_toolkit_root(explicit=None)
+        except RepoNotFoundError as exc:
+            raise click.ClickException(str(exc))
     else:
         toolkit_root = Path(toolkit_root).resolve()
     root = toolkit_root

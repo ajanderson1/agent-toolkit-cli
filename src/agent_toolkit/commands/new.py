@@ -6,6 +6,7 @@ from pathlib import Path
 
 import click
 
+from agent_toolkit._repo_resolution import RepoNotFoundError, resolve_toolkit_root
 from agent_toolkit._ui import header, summary
 
 _KIND_LAYOUT = {
@@ -57,7 +58,10 @@ def new(ctx: click.Context, kind: str, slug: str, toolkit_root: Path | None) -> 
     if toolkit_root is None:
         toolkit_root = (ctx.obj or {}).get("toolkit_root")
     if toolkit_root is None:
-        toolkit_root = Path(".").resolve()
+        try:
+            toolkit_root = resolve_toolkit_root(explicit=None)
+        except RepoNotFoundError as exc:
+            raise click.ClickException(str(exc))
     else:
         toolkit_root = Path(toolkit_root).resolve()
     root = toolkit_root

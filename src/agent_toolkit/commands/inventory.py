@@ -5,6 +5,7 @@ from pathlib import Path
 
 import click
 
+from agent_toolkit._repo_resolution import RepoNotFoundError, resolve_toolkit_root
 from agent_toolkit.inventory import render_asset_card, render_inventory
 
 _KINDS = ("skill", "agent", "command", "hook", "mcp", "plugin")
@@ -51,7 +52,10 @@ def inventory(
     if toolkit_root is None:
         toolkit_root = (ctx.obj or {}).get("toolkit_root")
     if toolkit_root is None:
-        toolkit_root = Path(".").resolve()
+        try:
+            toolkit_root = resolve_toolkit_root(explicit=None)
+        except RepoNotFoundError as exc:
+            raise click.ClickException(str(exc))
     else:
         toolkit_root = Path(toolkit_root).resolve()
     root = toolkit_root
