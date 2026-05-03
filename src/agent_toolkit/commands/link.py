@@ -103,7 +103,12 @@ def link(
             ctx.exit(2)
             return
 
-    project_root = Path(project_flag).resolve() if project_flag else Path.cwd()
+    if project_flag:
+        project_root = Path(project_flag).resolve()
+    elif (group_proj := (ctx.obj or {}).get("project_root")) is not None:
+        project_root = Path(group_proj).resolve()
+    else:
+        project_root = Path.cwd()
     allowlist_path = (
         Path(os.environ.get("HOME", "")) / ".agent-toolkit.yaml"
         if scope == "user"

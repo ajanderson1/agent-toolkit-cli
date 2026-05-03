@@ -11,10 +11,13 @@ from agent_toolkit import _ui
 from agent_toolkit._allowlist import kind_to_section, read_allowlist
 from agent_toolkit._repo_resolution import RepoNotFoundError, resolve_toolkit_root
 from agent_toolkit.commands._link_lib import KINDS_FOR_PROJECTION, harness_target_dir
+from agent_toolkit.commands._list_json import ALL_HARNESSES
 from agent_toolkit.walker import discover_assets, extract_frontmatter
 
-_KNOWN_KINDS = frozenset({"skill", "agent", "command", "hook", "plugin", "mcp"})
-_KNOWN_HARNESSES = frozenset({"claude", "codex", "opencode", "pi"})
+# "mcp" is intentionally excluded from KINDS_FOR_PROJECTION (no symlink path)
+# but is still a recognised filter token for list.
+_KNOWN_KINDS = frozenset(KINDS_FOR_PROJECTION) | {"mcp"}
+_KNOWN_HARNESSES = frozenset(ALL_HARNESSES)
 
 _KIND_TITLE: dict[str, str] = {
     "skill": "SKILLS",
@@ -23,8 +26,6 @@ _KIND_TITLE: dict[str, str] = {
     "hook": "HOOKS",
     "plugin": "PLUGINS",
 }
-
-_ALL_HARNESSES = ("claude", "codex", "opencode", "pi")
 
 
 def _asset_declared_harnesses(asset_path: Path) -> list[str]:
