@@ -18,3 +18,5 @@ build/
 
 # uv
 .uv-cache/
+.claude/
+.mcp.json
