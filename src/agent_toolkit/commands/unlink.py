@@ -9,19 +9,18 @@ from pathlib import Path
 import click
 
 from agent_toolkit import _ui
-from agent_toolkit._allowlist import kind_to_section
+from agent_toolkit._allowlist import kind_to_section, read_allowlist
 from agent_toolkit._repo_resolution import RepoNotFoundError, resolve_toolkit_root
 from agent_toolkit.commands._link_lib import (
     KINDS_FOR_PROJECTION,
     MALFORMED,
+    LinkCounters,
+    format_summary,
     harness_target_dir,
     iter_plan_lines,
     project_from_file,
-    LinkCounters,
-    format_summary,
 )
 from agent_toolkit.commands._yaml_edit import remove_slug
-from agent_toolkit._allowlist import read_allowlist
 
 
 @click.command("unlink")
@@ -107,7 +106,7 @@ def unlink(
     )
 
     if all_flag:
-        _do_all(scope, harness, toolkit_root, project_root, dry_run, ctx)
+        _do_all(scope, harness, toolkit_root, project_root, dry_run)
         return
     if plan_flag is not None:
         _do_plan(scope, harness, toolkit_root, project_root, allowlist_path, dry_run, ctx)
@@ -134,7 +133,7 @@ def _do_bare(scope, harness, allowlist_path, ctx):
     ctx.exit(2)
 
 
-def _do_all(scope, harness, toolkit_root, project_root, dry_run, ctx):
+def _do_all(scope, harness, toolkit_root, project_root, dry_run):
     if dry_run:
         _ui.header(
             f"Previewing removal of {scope}-scope {harness} symlinks"
@@ -155,8 +154,10 @@ def _do_all(scope, harness, toolkit_root, project_root, dry_run, ctx):
             if not entry.is_symlink():
                 continue
             raw_target = os.readlink(entry)
-            # Match: the raw readlink value starts with toolkit_root path
-            # (mirrors bash `case "$target" in "$toolkit_root"/*)`)
+            # Mirrors bash `case "$target" in "$toolkit_root"/*)` — raw string
+            # prefix match. Intentionally diverges from
+            # _link_lib._prune_if_into_repo, which resolves symlinks; this path
+            # is byte-faithful to the bash version.
             toolkit_prefix = str(toolkit_root)
             if raw_target == toolkit_prefix or raw_target.startswith(toolkit_prefix + "/"):
                 if dry_run:

@@ -1,6 +1,7 @@
 """Pytest port of tests/bats/test_unlink*.bats. Each test cites the bats file:line it replaces."""
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -202,7 +203,6 @@ def test_unlink_per_asset_removes_yaml_and_symlink(env):
     assert not link_path.is_symlink()
     yaml_text = yaml_path.read_text()
     # alpha should be removed from the skills list
-    import re
     assert not re.search(r"^\s*-\s*alpha", yaml_text, re.MULTILINE)
 
 
