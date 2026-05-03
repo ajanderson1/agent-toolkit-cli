@@ -749,3 +749,37 @@ def test_link_bare_prunes_orphan(env):
     assert result.exit_code == 0
     assert not orphan_link.is_symlink()  # orphan pruned
     assert link_alpha.is_symlink()  # alpha still there
+
+
+# ===========================================================================
+# Wire-through smoke test — invoke the installed Python entry point via
+# subprocess to validate the post-install user experience (stderr/stdout
+# split, real symlink creation). Verifies the bug at the heart of issue #1
+# is fixed: `agent-toolkit link …` works through the [project.scripts]
+# entry, not just CliRunner.
+# ===========================================================================
+
+
+def test_link_subprocess_smoke(env):
+    """End-to-end: real subprocess against `agent-toolkit` on PATH."""
+    import subprocess
+
+    home, toolkit = env["home"], env["toolkit_root"]
+    _seed_skill(toolkit, "alpha", ["claude"])
+    (home / ".agent-toolkit.yaml").write_text("skills:\n  - alpha\n")
+    (home / ".claude").mkdir()
+
+    cli = shutil.which("agent-toolkit")
+    if not cli:
+        pytest.skip("agent-toolkit not on PATH (run `uv sync --extra tui`)")
+
+    proc = subprocess.run(
+        [cli, "--toolkit-repo", str(toolkit), "link", "user", "claude"],
+        capture_output=True,
+        text=True,
+        env={**os.environ, "HOME": str(home)},
+        check=False,
+    )
+    assert proc.returncode == 0, (proc.stdout, proc.stderr)
+    assert "Linking" in proc.stderr  # header on stderr
+    assert (home / ".claude" / "skills" / "alpha").is_symlink()

@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+import os
+import shutil
 from pathlib import Path
 
 import pytest
@@ -295,3 +297,33 @@ def test_list_mcp_note(multi_env):
     assert result.exit_code == 0, (result.output, result.stderr)
     combined = result.output + (result.stderr or "")
     assert "not shown here" in combined or "mcp.json" in combined
+
+
+# ===========================================================================
+# Wire-through smoke test — invoke the installed Python entry point via
+# subprocess to validate the post-install user experience for `list`.
+# ===========================================================================
+
+
+def test_list_subprocess_smoke(env):
+    """End-to-end: real subprocess against `agent-toolkit list`."""
+    import subprocess
+
+    home, toolkit = env["home"], env["toolkit_root"]
+    _seed_skill(toolkit, "alpha", ["claude"])
+    (home / ".agent-toolkit.yaml").write_text("skills:\n  - alpha\n")
+
+    cli = shutil.which("agent-toolkit")
+    if not cli:
+        pytest.skip("agent-toolkit not on PATH (run `uv sync --extra tui`)")
+
+    proc = subprocess.run(
+        [cli, "--toolkit-repo", str(toolkit), "list"],
+        capture_output=True,
+        text=True,
+        env={**os.environ, "HOME": str(home)},
+        check=False,
+    )
+    assert proc.returncode == 0, (proc.stdout, proc.stderr)
+    assert "Asset inventory" in proc.stderr  # header on stderr
+    assert "alpha" in proc.stdout  # asset name on stdout
