@@ -57,7 +57,7 @@ def run(toolkit_root: Path, *, harness: str = "claude") -> GroupResult:
             status=Status.WARN,
             summary=f"{len(warns)} convention sync issue(s)",
             findings=findings + warns,
-            fix_hint=f"`bin/agent-toolkit link user {harness}` or check ~/.{harness}/ symlinks manually",
+            fix_hint=f"`agent-toolkit link user {harness}` or check ~/.{harness}/ symlinks manually",
         )
     return GroupResult(
         name="conventions",

@@ -4,9 +4,6 @@ pre-commit:
     pytest:
       run: uv run pytest -q
       stage_fixed: false
-    bats:
-      run: bats tests/bats
-      stage_fixed: false
     schema-vendor-check:
       run: diff schemas/asset-frontmatter.v1alpha1.json src/agent_toolkit/_schemas/asset-frontmatter.v1alpha1.json
       stage_fixed: false

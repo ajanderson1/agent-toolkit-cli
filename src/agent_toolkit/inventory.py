@@ -161,8 +161,8 @@ def _quickstart_for(e: InventoryEntry) -> str:
         return "    (no compatible harnesses declared)\n"
     lines: list[str] = []
     primary = e.harnesses[0]
-    lines.append(f"    User scope:    bin/agent-toolkit link user {primary} {e.kind}:{e.slug}")
-    lines.append(f"    Project scope: bin/agent-toolkit link project {primary} {e.kind}:{e.slug}")
+    lines.append(f"    User scope:    agent-toolkit link user {primary} {e.kind}:{e.slug}")
+    lines.append(f"    Project scope: agent-toolkit link project {primary} {e.kind}:{e.slug}")
     if len(e.harnesses) > 1:
         others = ", ".join(e.harnesses[1:])
         lines.append(f"    Other harnesses supported: {others}")

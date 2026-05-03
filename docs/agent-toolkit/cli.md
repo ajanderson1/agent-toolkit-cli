@@ -46,14 +46,14 @@ combinations that have no target slot.
 Every command prints a short header to **stderr** before doing its work and a one-sentence summary to **stderr** after. The actual data the command produces (symlink listings, validation results, scaffolded files) goes to **stdout**, so pipes work the same as before:
 
 ```bash
-bin/agent-toolkit list | awk '{print $1}'
+agent-toolkit list | awk '{print $1}'
 ```
 
 If you need silence (CI, scripts, fixtures), set `AGENT_TOOLKIT_QUIET=1` or pass `--quiet` / `-q`:
 
 ```bash
-AGENT_TOOLKIT_QUIET=1 bin/agent-toolkit list
-bin/agent-toolkit link user claude --quiet
+AGENT_TOOLKIT_QUIET=1 agent-toolkit list
+agent-toolkit link user claude --quiet
 ```
 
 The summary line typically includes a next-step hint (e.g. "run 'agent-toolkit check'"). Hints are part of the contract — if a hint becomes stale, fix it in the same commit that breaks it.
@@ -98,17 +98,17 @@ asset doesn't declare the requested harness.
 
 ```bash
 # Bootstrap a fresh machine — opt every compatible asset in:
-bin/agent-toolkit link user claude --all
+agent-toolkit link user claude --all
 
 # Or curate by hand:
 $EDITOR ~/.agent-toolkit.yaml
-bin/agent-toolkit link user claude
+agent-toolkit link user claude
 
 # Add one asset incrementally:
-bin/agent-toolkit link user claude skill:figma
+agent-toolkit link user claude skill:figma
 
 # Same shape at project scope:
-bin/agent-toolkit link project claude skill:figma
+agent-toolkit link project claude skill:figma
 ```
 
 ### Plan mode (`--plan -`)
@@ -116,7 +116,7 @@ bin/agent-toolkit link project claude skill:figma
 Apply a batch of `<kind>:<slug>` entries from stdin in a single invocation:
 
 ```
-bin/agent-toolkit link <user|project> <harness> --plan -
+agent-toolkit link <user|project> <harness> --plan -
 ```
 
 Format: one `<kind>:<slug>` per line, `#`-prefixed lines and blanks ignored,
@@ -134,7 +134,7 @@ Cannot be combined with `--all` or with a positional `<kind>:<slug>`. Used by
 the TUI's batch-apply path; also handy for scripted bootstraps.
 
 ```bash
-bin/agent-toolkit link user claude --plan - <<'EOF'
+agent-toolkit link user claude --plan - <<'EOF'
 skill:journal
 skill:conventions
 agent:scout
@@ -174,8 +174,8 @@ existing file).
 **Examples:**
 
 ```bash
-bin/agent-toolkit unlink user claude --all              # blow away all claude symlinks
-bin/agent-toolkit unlink user claude skill:figma        # opt one skill out
+agent-toolkit unlink user claude --all              # blow away all claude symlinks
+agent-toolkit unlink user claude skill:figma        # opt one skill out
 ```
 
 ### Plan mode (`--plan -`)
@@ -183,7 +183,7 @@ bin/agent-toolkit unlink user claude skill:figma        # opt one skill out
 Apply a batch of `<kind>:<slug>` entries from stdin in a single invocation:
 
 ```
-bin/agent-toolkit unlink <user|project> <harness> --plan -
+agent-toolkit unlink <user|project> <harness> --plan -
 ```
 
 Format: one `<kind>:<slug>` per line, `#`-prefixed lines and blanks ignored,
@@ -201,7 +201,7 @@ Cannot be combined with `--all` or with a positional `<kind>:<slug>`. Used by
 the TUI's batch-apply path; also handy for scripted teardowns.
 
 ```bash
-bin/agent-toolkit unlink user claude --plan - <<'EOF'
+agent-toolkit unlink user claude --plan - <<'EOF'
 skill:journal
 skill:conventions
 EOF
@@ -246,10 +246,10 @@ note (MCPs ship via the harness's `mcp.json`, not via symlinks).
 **Examples:**
 
 ```bash
-bin/agent-toolkit list                      # full inventory
-bin/agent-toolkit list skill                # skills only
-bin/agent-toolkit list claude               # claude-compatible assets
-bin/agent-toolkit list skill claude         # both filters
+agent-toolkit list                      # full inventory
+agent-toolkit list skill                # skills only
+agent-toolkit list claude               # claude-compatible assets
+agent-toolkit list skill claude         # both filters
 ```
 
 ### JSON output (`--format=json`)
@@ -259,7 +259,7 @@ covers, with explicit per-cell install state. Consumed by the TUI and any
 external tooling.
 
 ```
-bin/agent-toolkit list --format=json [--toolkit-repo DIR] [--project DIR] [<kind>] [<harness>]
+agent-toolkit list --format=json [--toolkit-repo DIR] [--project DIR] [<kind>] [<harness>]
 ```
 
 Top-level shape:
@@ -325,7 +325,7 @@ be removed.
 
 **Example:**
 ```bash
-bin/agent-toolkit diff project opencode
+agent-toolkit diff project opencode
 ```
 
 > _Header & summary go to stderr; suppress with `--quiet` or `AGENT_TOOLKIT_QUIET=1`._
@@ -343,7 +343,7 @@ Requires the optional `tui` extra:
     pip install agent-toolkit[tui]
 
 The TUI is a visual cockpit over `link`/`unlink`/`list`. It never writes to the
-filesystem directly — every mutation goes through `bin/agent-toolkit`. See the
+filesystem directly — every mutation goes through `agent-toolkit`. See the
 TUI design spec at `docs/superpowers/specs/2026-05-03-agent-toolkit-tui-design.md`
 for the full contract.
 
