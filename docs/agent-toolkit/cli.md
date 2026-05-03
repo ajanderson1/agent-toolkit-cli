@@ -5,6 +5,29 @@ directories on the current machine. Bash subcommands (`link`, `unlink`, `list`, 
 run with zero dependencies. Python subcommands (`check`, `fix`, `doctor`, `new`) require
 `uv` and the installed package.
 
+## Repo discovery — the two-flag contract
+
+Every subcommand accepts up to two repo-pointing flags:
+
+| Flag | Means | Default |
+|---|---|---|
+| `--toolkit-repo PATH` | The agent-toolkit SSOT (the library that ships assets) | resolved via four-step order below |
+| `--project PATH` | The consumer project being acted on (allow-lists, project-scope symlinks) | `.` (CWD) |
+
+`--toolkit-repo` resolves in four steps, first match wins:
+
+1. The explicit `--toolkit-repo` flag value.
+2. The `AGENT_TOOLKIT_REPO` environment variable.
+3. Walk up from the current directory looking for an `.agent-toolkit-source` marker file.
+4. The default `~/GitHub/agent-toolkit/` path.
+
+If nothing resolves, the CLI exits with an actionable error pointing at the install instructions.
+
+`--project` is simpler: it defaults to the current directory and is only
+relevant for subcommands that act on the consumer project (`link`, `unlink`,
+`list`, `diff`). SSOT-only subcommands (`check`, `fix`, `new`, `doctor`,
+`inventory`, `ingest`) take only `--toolkit-repo`.
+
 The four supported harnesses and their per-harness skills directories:
 
 | Harness | Skills target |
@@ -53,7 +76,8 @@ Usage:
 |---|---|
 | `--all` | Snapshot every harness-compatible asset into the allow-list, replacing existing content. |
 | `-y`, `--yes` | Skip the confirmation prompt under `--all` when the file is non-empty. |
-| `--repo-root DIR` | Path to the toolkit repo (default: `$PWD`) |
+| `--toolkit-repo DIR` | Path to the agent-toolkit repo (resolves via the four-step order if omitted) |
+| `--project DIR` | Path to the consumer project (default: `$PWD`) |
 | `--dry-run` | Print what would change; make no changes |
 
 **Bare form** reads the allow-list and projects every listed slug whose
@@ -135,7 +159,8 @@ Usage:
 | Flag | Description |
 |---|---|
 | `--all` | Remove every symlink in the scope+harness target dir that points into the toolkit repo. The allow-list YAML is untouched (intent preserved). |
-| `--repo-root DIR` | Path to the toolkit repo (default: `$PWD`) |
+| `--toolkit-repo DIR` | Path to the agent-toolkit repo (resolves via the four-step order if omitted) |
+| `--project DIR` | Path to the consumer project (default: `$PWD`) |
 | `--dry-run` | Print what would be removed; make no changes |
 
 The bare form errors with a hint because its blast radius differs from `--all`.
@@ -202,7 +227,8 @@ Usage:
 
 | Flag | Description |
 |---|---|
-| `--repo-root DIR` | Path to the toolkit repo (default: `$PWD`) |
+| `--toolkit-repo DIR` | Path to the agent-toolkit repo (resolves via the four-step order if omitted) |
+| `--project DIR` | Path to the consumer project (default: `$PWD`) |
 
 Output is grouped by kind. Each row carries `[harnesses]` brackets (omitted
 when filtering by harness) and two install-state columns:
@@ -233,14 +259,14 @@ covers, with explicit per-cell install state. Consumed by the TUI and any
 external tooling.
 
 ```
-bin/agent-toolkit list --format=json [--repo-root DIR] [<kind>] [<harness>]
+bin/agent-toolkit list --format=json [--toolkit-repo DIR] [--project DIR] [<kind>] [<harness>]
 ```
 
 Top-level shape:
 
 ```json
 {
-  "repo_root": "/path/to/agent-toolkit",
+  "toolkit_root": "/path/to/agent-toolkit",
   "harnesses": ["claude", "codex", "opencode", "pi"],
   "assets": [
     {
@@ -291,7 +317,8 @@ Usage: agent-toolkit diff <user|project> <harness>
 
 | Flag | Description |
 |---|---|
-| `--repo-root DIR` | Path to the toolkit repo (default: `$PWD`) |
+| `--toolkit-repo DIR` | Path to the agent-toolkit repo (resolves via the four-step order if omitted) |
+| `--project DIR` | Path to the consumer project (default: `$PWD`) |
 
 Alias for `link --dry-run`. Lines prefixed `+` would be created; lines prefixed `-` would
 be removed.
@@ -404,12 +431,12 @@ uv run agent-toolkit fix --only=component-table
 Run an environment sanity check.
 
 ```
-Usage: uv run agent-toolkit doctor [--repo-root DIR]
+Usage: uv run agent-toolkit doctor [--toolkit-repo DIR]
 ```
 
 | Flag | Description |
 |---|---|
-| `--repo-root DIR` | Path to the toolkit repo (default: `$PWD`) |
+| `--toolkit-repo DIR` | Path to the agent-toolkit repo (resolves via the four-step order if omitted) |
 
 Verifies that the schema file exists, `AGENTS.md` is present, `git` and `gh` are on
 `$PATH`, and all submodules are initialised. Run after a fresh clone before any other
@@ -417,7 +444,7 @@ subcommand.
 
 **Example:**
 ```bash
-uv run agent-toolkit doctor --repo-root ~/GitHub/agent-toolkit
+uv run agent-toolkit doctor --toolkit-repo ~/GitHub/agent-toolkit
 ```
 
 > _Header & summary go to stderr; suppress with `--quiet` or `AGENT_TOOLKIT_QUIET=1`._
@@ -508,12 +535,12 @@ directory — without embedding the harness or repo location in any skill or
 agent prose.
 
 ```
-Usage: agent-toolkit link|unlink|list|diff user conventions [--repo-root DIR] [--dry-run]
+Usage: agent-toolkit link|unlink|list|diff user conventions [--toolkit-repo DIR] [--dry-run]
 ```
 
 | Flag | Description |
 |---|---|
-| `--repo-root DIR` | Path to the toolkit repo containing `CONVENTIONS.md` and `conventions/` (default: `$PWD`) |
+| `--toolkit-repo DIR` | Path to the agent-toolkit repo containing `CONVENTIONS.md` and `conventions/` (resolves via the four-step order if omitted) |
 | `--dry-run` | Print what would change; make no changes (`link` and `diff` only) |
 
 ### Three-layer projection

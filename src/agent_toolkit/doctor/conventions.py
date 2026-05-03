@@ -7,14 +7,14 @@ from pathlib import Path
 from agent_toolkit.doctor.result import GroupResult, Status
 
 
-def run(repo_root: Path, *, harness: str = "claude") -> GroupResult:
+def run(toolkit_root: Path, *, harness: str = "claude") -> GroupResult:
     home = Path(os.environ.get("HOME", str(Path.home())))
     user_root = home / f".{harness}"
 
     findings: list[str] = []
     warns: list[str] = []
 
-    repo_conv_md = repo_root / "CONVENTIONS.md"
+    repo_conv_md = toolkit_root / "CONVENTIONS.md"
     user_conv_md = user_root / "CONVENTIONS.md"
 
     if not repo_conv_md.exists():
@@ -33,7 +33,7 @@ def run(repo_root: Path, *, harness: str = "claude") -> GroupResult:
         else:
             findings.append(f"{user_conv_md.name} ↔ repo CONVENTIONS.md")
 
-    repo_topics_dir = repo_root / "conventions"
+    repo_topics_dir = toolkit_root / "conventions"
     user_topics_dir = user_root / "conventions"
     if repo_topics_dir.is_dir():
         repo_topics = {p.name for p in repo_topics_dir.iterdir() if p.suffix == ".md"}

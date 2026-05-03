@@ -24,7 +24,7 @@ def test_read_plan_skips_comments_and_blanks(tmp_path: Path):
 def test_main_headless_dry_run_returns_zero(tmp_path: Path, monkeypatch):
     plan = tmp_path / "p.txt"
     plan.write_text("skill:alpha\n")
-    fake_argv = ["prog", "--headless", "--repo-root", str(tmp_path),
+    fake_argv = ["prog", "--headless", "--toolkit-repo", str(tmp_path),
                  "--plan", str(plan), "--scope", "user", "--harness", "claude"]
     monkeypatch.setattr("sys.argv", fake_argv)
     # Patch the runner so we don't actually shell out

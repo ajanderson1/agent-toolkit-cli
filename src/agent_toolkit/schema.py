@@ -12,10 +12,10 @@ from agent_toolkit.walker import Asset, extract_frontmatter
 
 
 class Validator:
-    def __init__(self, repo_root: Path):
-        self.repo_root = repo_root
+    def __init__(self, toolkit_root: Path):
+        self.toolkit_root = toolkit_root
         # Schema is the contract the CLI enforces; it ships with the CLI.
-        # The assets repo holds the SSOT for humans, but the validator's runtime
+        # The toolkit repo holds the SSOT for humans, but the validator's runtime
         # source of truth is the bundled copy in the agent_toolkit package.
         schema_text = (files("agent_toolkit") / "_schemas" / "asset-frontmatter.v1alpha1.json").read_text()
         self.schema = json.loads(schema_text)

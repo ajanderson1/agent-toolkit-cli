@@ -24,7 +24,7 @@ class FakeRunner:
 
 def _doc(repo: str = "/r") -> dict:
     return {
-        "repo_root": repo,
+        "toolkit_root": repo,
         "harnesses": ["claude", "codex", "opencode", "pi"],
         "assets": [
             {

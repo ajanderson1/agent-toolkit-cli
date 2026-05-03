@@ -26,7 +26,7 @@ def test_check_passes_on_valid_asset(tmp_path, monkeypatch):
     )
 
     runner = CliRunner()
-    result = runner.invoke(main, ["check", "--repo-root", str(repo)])
+    result = runner.invoke(main, ["check", "--toolkit-repo", str(repo)])
     assert result.exit_code == 0, result.output
 
 
@@ -41,7 +41,7 @@ def test_check_exit_code_on_invalid_asset(tmp_path):
     )
 
     runner = CliRunner()
-    result = runner.invoke(main, ["check", "--repo-root", str(repo), "--exit-code"])
+    result = runner.invoke(main, ["check", "--toolkit-repo", str(repo), "--exit-code"])
     assert result.exit_code != 0
     assert "schema" in result.output.lower() or "apiVersion" in result.output
 
@@ -75,7 +75,7 @@ def test_check_detects_marker_drift(tmp_path):
     )
 
     runner = CliRunner()
-    result = runner.invoke(main, ["check", "--repo-root", str(repo), "--exit-code"])
+    result = runner.invoke(main, ["check", "--toolkit-repo", str(repo), "--exit-code"])
     assert result.exit_code != 0
     assert "drift" in result.output.lower() or "STALE" in result.output
 
@@ -87,7 +87,7 @@ def test_check_emits_header_and_summary_on_stderr(tmp_path):
     (repo / "schemas" / "asset-frontmatter.v1alpha1.json").write_text(src_schema.read_text())
 
     runner = CliRunner()
-    result = runner.invoke(main, ["check", "--repo-root", str(repo)])
+    result = runner.invoke(main, ["check", "--toolkit-repo", str(repo)])
     assert result.exit_code == 0
     # Header and summary are emitted to stderr via _ui module
     # CliRunner's result.output includes both stdout and stderr
@@ -104,7 +104,7 @@ def test_check_quiet_env_suppresses_chrome(tmp_path, monkeypatch):
     (repo / "schemas" / "asset-frontmatter.v1alpha1.json").write_text(src_schema.read_text())
 
     runner = CliRunner()
-    result = runner.invoke(main, ["check", "--repo-root", str(repo)])
+    result = runner.invoke(main, ["check", "--toolkit-repo", str(repo)])
     assert result.exit_code == 0
     assert "OK" in result.output
     # With AGENT_TOOLKIT_QUIET=1, header/summary are suppressed

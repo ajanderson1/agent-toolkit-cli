@@ -7,8 +7,8 @@ from pathlib import Path
 from agent_toolkit.doctor.result import GroupResult, Status
 
 
-def run(repo_root: Path) -> GroupResult:
-    gm = repo_root / ".gitmodules"
+def run(toolkit_root: Path) -> GroupResult:
+    gm = toolkit_root / ".gitmodules"
     if not gm.exists():
         return GroupResult(
             name="submodule-health",
@@ -36,7 +36,7 @@ def run(repo_root: Path) -> GroupResult:
             warns.append(f"{sect}: missing `path`")
             continue
         sm_count += 1
-        sm_path = repo_root / path_rel
+        sm_path = toolkit_root / path_rel
         if not sm_path.is_dir() or not any(sm_path.iterdir()):
             warns.append(f"{path_rel}: uninitialised (run `git submodule update --init --recursive`)")
             continue

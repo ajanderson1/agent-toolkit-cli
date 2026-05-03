@@ -15,7 +15,13 @@ from agent_toolkit.ingest.types import InputForm, Proposal
 
 @click.command(name="ingest")
 @click.argument("value", required=False)
-@click.option("--repo-root", default=".", type=click.Path(exists=True, file_okay=False))
+@click.option(
+    "--toolkit-repo",
+    "toolkit_root",
+    default=None,
+    type=click.Path(file_okay=False, path_type=Path),
+    help="Path to the agent-toolkit repo (defaults to group --toolkit-repo / env / walk-up / ~/GitHub/agent-toolkit).",
+)
 @click.option("--scan-only", is_flag=True,
               help="Run security review only, no staging. Skill-led when invoked via the agent-toolkit skill.")
 @click.option("--finalize", "do_finalize", is_flag=True,
@@ -25,9 +31,11 @@ from agent_toolkit.ingest.types import InputForm, Proposal
 @click.option("--snapshot-dir", type=click.Path(exists=True, file_okay=False),
               help="For STAGE: directory containing the candidate (typically a checkout of the upstream).")
 @click.option("--slug", help="Slug of an existing staging dir (with --finalize / --abort).")
+@click.pass_context
 def ingest(
+    ctx: click.Context,
     value: str | None,
-    repo_root: str,
+    toolkit_root: Path | None,
     scan_only: bool,
     do_finalize: bool,
     do_abort: bool,
@@ -35,12 +43,18 @@ def ingest(
     slug: str | None,
 ) -> None:
     """Ingest an asset from a URL, name, or local file."""
-    root = Path(repo_root).resolve()
+    if toolkit_root is None:
+        toolkit_root = (ctx.obj or {}).get("toolkit_root")
+    if toolkit_root is None:
+        toolkit_root = Path(".").resolve()
+    else:
+        toolkit_root = Path(toolkit_root).resolve()
+    root = toolkit_root
 
     if do_abort:
         if not slug:
             raise click.UsageError("--abort requires --slug")
-        abort_staging(repo_root=root, slug=slug)
+        abort_staging(toolkit_root=root, slug=slug)
         click.echo(f"aborted staging for {slug}")
         return
 
@@ -49,7 +63,7 @@ def ingest(
             raise click.UsageError("--finalize requires --slug")
         proposal = _read_proposal_from_staging(root, slug=slug)
         try:
-            result = finalize(repo_root=root, proposal=proposal)
+            result = finalize(toolkit_root=root, proposal=proposal)
         except FinalizeError as e:
             raise click.ClickException(str(e))
         click.echo(json.dumps({
@@ -99,7 +113,7 @@ def ingest(
         slug=target.slug_guess,
         upstream=target.upstream_url,
     )
-    staged = stage_proposal(repo_root=root, proposal=proposal, snapshot_dir=snap)
+    staged = stage_proposal(toolkit_root=root, proposal=proposal, snapshot_dir=snap)
     click.echo(json.dumps({
         "status": "STAGED",
         "staging_dir": str(staged),
@@ -109,9 +123,9 @@ def ingest(
     }, indent=2))
 
 
-def _read_proposal_from_staging(repo_root: Path, *, slug: str) -> Proposal:
+def _read_proposal_from_staging(toolkit_root: Path, *, slug: str) -> Proposal:
     import yaml
-    p = staging_root(repo_root) / slug / "PROPOSED_FRONTMATTER.yaml"
+    p = staging_root(toolkit_root) / slug / "PROPOSED_FRONTMATTER.yaml"
     if not p.exists():
         raise click.UsageError(f"no PROPOSED_FRONTMATTER.yaml in staging/{slug}")
     payload = yaml.safe_load(p.read_text())

@@ -20,7 +20,7 @@ def test_validates_minimal_skill(tmp_path):
         "---\n"
     )
 
-    validator = Validator(repo_root=Path(__file__).parent.parent)
+    validator = Validator(toolkit_root=Path(__file__).parent.parent)
     asset = Asset(kind="skill", slug="alpha", path=tmp_path / "skills" / "alpha" / "SKILL.md")
     errors = validator.validate(asset)
     assert errors == []
@@ -35,7 +35,7 @@ def test_reports_missing_required_metadata(tmp_path):
         "---\n"
     )
 
-    validator = Validator(repo_root=Path(__file__).parent.parent)
+    validator = Validator(toolkit_root=Path(__file__).parent.parent)
     asset = Asset(kind="skill", slug="alpha", path=tmp_path / "skills" / "alpha" / "SKILL.md")
     errors = validator.validate(asset)
     assert any("apiVersion" in str(e) for e in errors)
@@ -58,7 +58,7 @@ def test_reports_slug_mismatch(tmp_path):
         "---\n"
     )
 
-    validator = Validator(repo_root=Path(__file__).parent.parent)
+    validator = Validator(toolkit_root=Path(__file__).parent.parent)
     asset = Asset(kind="skill", slug="alpha", path=tmp_path / "skills" / "alpha" / "SKILL.md")
     errors = validator.validate(asset)
     # name pattern rejects uppercase, AND we add a slug-match check

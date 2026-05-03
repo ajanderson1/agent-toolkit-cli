@@ -39,7 +39,7 @@ def _seed_repo(repo: Path) -> None:
 def test_fix_regenerates_component_table(tmp_path):
     _seed_repo(tmp_path)
     runner = CliRunner()
-    result = runner.invoke(main, ["fix", "--repo-root", str(tmp_path)])
+    result = runner.invoke(main, ["fix", "--toolkit-repo", str(tmp_path)])
     assert result.exit_code == 0, result.output
 
     text = (tmp_path / "AGENTS.md").read_text()
@@ -53,7 +53,7 @@ def test_fix_only_filters_generators(tmp_path):
     runner = CliRunner()
     result = runner.invoke(
         main,
-        ["fix", "--repo-root", str(tmp_path), "--only", "component-table"],
+        ["fix", "--toolkit-repo", str(tmp_path), "--only", "component-table"],
     )
     assert result.exit_code == 0
     text = (tmp_path / "AGENTS.md").read_text()
@@ -67,7 +67,7 @@ def test_fix_to_stdout_does_not_modify_file(tmp_path):
     _seed_repo(tmp_path)
     original = (tmp_path / "AGENTS.md").read_text()
     runner = CliRunner()
-    result = runner.invoke(main, ["fix", "--repo-root", str(tmp_path), "--to-stdout"])
+    result = runner.invoke(main, ["fix", "--toolkit-repo", str(tmp_path), "--to-stdout"])
     assert result.exit_code == 0
     assert (tmp_path / "AGENTS.md").read_text() == original
     assert "BEGIN_AGENT_TOOLKIT:component-table" in result.output
@@ -76,7 +76,7 @@ def test_fix_to_stdout_does_not_modify_file(tmp_path):
 def test_fix_emits_header_and_summary_on_stderr(tmp_path):
     _seed_repo(tmp_path)
     runner = CliRunner()
-    result = runner.invoke(main, ["fix", "--repo-root", str(tmp_path)])
+    result = runner.invoke(main, ["fix", "--toolkit-repo", str(tmp_path)])
     assert result.exit_code == 0
     # Header and summary are emitted to stderr via _ui module
     # CliRunner's result.output includes both stdout and stderr
@@ -87,7 +87,7 @@ def test_fix_emits_header_and_summary_on_stderr(tmp_path):
 def test_fix_to_stdout_summary_says_file_unchanged(tmp_path):
     _seed_repo(tmp_path)
     runner = CliRunner()
-    result = runner.invoke(main, ["fix", "--repo-root", str(tmp_path), "--to-stdout"])
+    result = runner.invoke(main, ["fix", "--toolkit-repo", str(tmp_path), "--to-stdout"])
     assert result.exit_code == 0
     # Summary mentions file unchanged
     assert "file unchanged" in result.output.lower() or "stdout" in result.output.lower()

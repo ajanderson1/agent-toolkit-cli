@@ -1,4 +1,4 @@
-"""Doctor: environment group — schema, AGENTS.md, git, gh, uv, repo-root, submodules."""
+"""Doctor: environment group — schema, AGENTS.md, git, gh, uv, toolkit-root, submodules."""
 from __future__ import annotations
 
 import shutil
@@ -7,17 +7,17 @@ from pathlib import Path
 from agent_toolkit.doctor.result import GroupResult, Status
 
 
-def run(repo_root: Path) -> GroupResult:
+def run(toolkit_root: Path) -> GroupResult:
     findings: list[str] = []
     failures: list[str] = []
 
-    schema = repo_root / "schemas" / "asset-frontmatter.v1alpha1.json"
+    schema = toolkit_root / "schemas" / "asset-frontmatter.v1alpha1.json"
     if not schema.exists():
         failures.append(f"schema missing at {schema}")
     else:
         findings.append("schema present at schemas/asset-frontmatter.v1alpha1.json")
 
-    agents_md = repo_root / "AGENTS.md"
+    agents_md = toolkit_root / "AGENTS.md"
     if not agents_md.exists():
         failures.append("AGENTS.md missing")
     else:
@@ -29,7 +29,7 @@ def run(repo_root: Path) -> GroupResult:
         else:
             findings.append(f"{tool} on PATH")
 
-    if (repo_root / ".gitmodules").exists():
+    if (toolkit_root / ".gitmodules").exists():
         findings.append(".gitmodules present")
     else:
         findings.append(".gitmodules absent (no submodules declared)")

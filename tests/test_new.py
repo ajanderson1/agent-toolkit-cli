@@ -19,7 +19,7 @@ def test_new_skill_creates_skeleton(tmp_path):
     runner = CliRunner()
     result = runner.invoke(
         main,
-        ["new", "skill", "demo-skill", "--repo-root", str(tmp_path)],
+        ["new", "skill", "demo-skill", "--toolkit-repo", str(tmp_path)],
     )
     assert result.exit_code == 0, result.output
 
@@ -37,8 +37,8 @@ def test_new_skill_validates_against_schema(tmp_path):
     (tmp_path / "schemas" / "asset-frontmatter.v1alpha1.json").write_text(src_schema.read_text())
 
     runner = CliRunner()
-    runner.invoke(main, ["new", "skill", "demo-skill", "--repo-root", str(tmp_path)])
-    result = runner.invoke(main, ["check", "--repo-root", str(tmp_path), "--exit-code"])
+    runner.invoke(main, ["new", "skill", "demo-skill", "--toolkit-repo", str(tmp_path)])
+    result = runner.invoke(main, ["check", "--toolkit-repo", str(tmp_path), "--exit-code"])
     assert result.exit_code == 0, result.output
 
 
@@ -48,7 +48,7 @@ def test_new_emits_header_and_summary_on_stderr(tmp_path):
     (tmp_path / "schemas" / "asset-frontmatter.v1alpha1.json").write_text(src_schema.read_text())
 
     runner = CliRunner()
-    result = runner.invoke(main, ["new", "skill", "demo-skill", "--repo-root", str(tmp_path)])
+    result = runner.invoke(main, ["new", "skill", "demo-skill", "--toolkit-repo", str(tmp_path)])
     assert result.exit_code == 0
     assert "Scaffolding" in result.output
     assert "agent-toolkit check" in result.output   # next-step hint

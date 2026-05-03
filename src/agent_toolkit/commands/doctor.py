@@ -21,16 +21,24 @@ _GROUPS = ("environment", "symlink-integrity", "conventions", "submodule-health"
 
 @click.command(short_help="Run five-group health check (or per-resource diagnosis).")
 @click.argument("slug", required=False)
-@click.option("--repo-root", default=".", type=click.Path(exists=True, file_okay=False))
+@click.option(
+    "--toolkit-repo",
+    "toolkit_root",
+    default=None,
+    type=click.Path(file_okay=False, path_type=Path),
+    help="Path to the agent-toolkit repo (defaults to group --toolkit-repo / env / walk-up / ~/GitHub/agent-toolkit).",
+)
 @click.option("--verbose", is_flag=True, help="Expand each group's evidence.")
 @click.option("--group", "group_name", type=click.Choice(_GROUPS), default=None)
 @click.option("--harness", type=click.Choice(["claude", "codex", "opencode", "pi"]), default="claude")
 @click.option("--scope", type=click.Choice(["user", "project"]), default="user")
 @click.option("--exit-code", "use_exit_code", is_flag=True)
 @click.option("--deep", is_flag=True, help="Reserved for future behavioural probes.")
+@click.pass_context
 def doctor(
+    ctx: click.Context,
     slug: str | None,
-    repo_root: str,
+    toolkit_root: Path | None,
     verbose: bool,
     group_name: str | None,
     harness: str,
@@ -39,7 +47,13 @@ def doctor(
     deep: bool,
 ) -> None:
     """Five-group health check for the toolkit. Pass a slug for per-resource diagnosis."""
-    root = Path(repo_root).resolve()
+    if toolkit_root is None:
+        toolkit_root = (ctx.obj or {}).get("toolkit_root")
+    if toolkit_root is None:
+        toolkit_root = Path(".").resolve()
+    else:
+        toolkit_root = Path(toolkit_root).resolve()
+    root = toolkit_root
     if slug is not None:
         header(f"Diagnosing {slug}...")
         result = diagnose(root, slug=slug, deep=deep)

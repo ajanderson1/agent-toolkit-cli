@@ -175,8 +175,8 @@ def test_conventions_group_ok_when_correctly_linked(tmp_path, monkeypatch):
     assert result.status == Status.OK
 
 
-def _make_skill_with_harnesses(repo_root, slug, harnesses):
-    skill_dir = repo_root / "skills" / slug
+def _make_skill_with_harnesses(toolkit_root, slug, harnesses):
+    skill_dir = toolkit_root / "skills" / slug
     skill_dir.mkdir(parents=True, exist_ok=True)
     (skill_dir / "SKILL.md").write_text(
         "---\n"

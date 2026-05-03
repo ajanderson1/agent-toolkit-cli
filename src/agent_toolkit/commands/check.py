@@ -34,10 +34,11 @@ _LEAK_SCAN_EXTENSIONS = {".md", ".py", ".sh", ".bash", ".yaml", ".yml", ".toml",
 
 @click.command(short_help="Validate asset frontmatter and AGENTS.md auto-regions.")
 @click.option(
-    "--repo-root",
-    default=".",
-    type=click.Path(exists=True, file_okay=False),
-    help="Repo root to scan (defaults to current directory).",
+    "--toolkit-repo",
+    "toolkit_root",
+    default=None,
+    type=click.Path(file_okay=False, path_type=Path),
+    help="Path to the agent-toolkit repo (defaults to group --toolkit-repo / env / walk-up / ~/GitHub/agent-toolkit).",
 )
 @click.option(
     "--exit-code",
@@ -45,15 +46,22 @@ _LEAK_SCAN_EXTENSIONS = {".md", ".py", ".sh", ".bash", ".yaml", ".yml", ".toml",
     is_flag=True,
     help="Exit non-zero on any error (CI gate; lefthook uses this).",
 )
-def check(repo_root: str, use_exit_code: bool) -> None:
+@click.pass_context
+def check(ctx: click.Context, toolkit_root: Path | None, use_exit_code: bool) -> None:
     """Validate every asset's frontmatter against the schema, and check AGENTS.md
     auto-generated regions for drift. Prints 'OK' to stdout when everything is
     clean. With --exit-code, returns non-zero on any problem so CI can gate.
     """
     header("Validating asset frontmatter and AGENTS.md auto-regions...")
 
-    root = Path(repo_root).resolve()
-    validator = Validator(repo_root=root)
+    if toolkit_root is None:
+        toolkit_root = (ctx.obj or {}).get("toolkit_root")
+    if toolkit_root is None:
+        toolkit_root = Path(".").resolve()
+    else:
+        toolkit_root = Path(toolkit_root).resolve()
+    root = toolkit_root
+    validator = Validator(toolkit_root=root)
     errors: list[str] = []
     asset_count = 0
     for asset in discover_assets(root):

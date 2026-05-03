@@ -41,18 +41,26 @@ TODO body.
 @click.argument("kind", type=click.Choice(list(_KIND_LAYOUT)))
 @click.argument("slug")
 @click.option(
-    "--repo-root",
-    default=".",
-    type=click.Path(exists=True, file_okay=False),
-    help="Repo root to write into (defaults to current directory).",
+    "--toolkit-repo",
+    "toolkit_root",
+    default=None,
+    type=click.Path(file_okay=False, path_type=Path),
+    help="Path to the agent-toolkit repo (defaults to group --toolkit-repo / env / walk-up / ~/GitHub/agent-toolkit).",
 )
-def new(kind: str, slug: str, repo_root: str) -> None:
+@click.pass_context
+def new(ctx: click.Context, kind: str, slug: str, toolkit_root: Path | None) -> None:
     """Create a new asset of the given kind at the canonical path with valid
     v1alpha1 frontmatter. The file is created with TODO placeholders; edit
     them, then run `agent-toolkit check` to validate.
     """
     header(f"Scaffolding new {kind} '{slug}'...")
-    root = Path(repo_root).resolve()
+    if toolkit_root is None:
+        toolkit_root = (ctx.obj or {}).get("toolkit_root")
+    if toolkit_root is None:
+        toolkit_root = Path(".").resolve()
+    else:
+        toolkit_root = Path(toolkit_root).resolve()
+    root = toolkit_root
     layout, fmt = _KIND_LAYOUT[kind]
     target = root / layout.format(slug=slug)
     target.parent.mkdir(parents=True, exist_ok=True)

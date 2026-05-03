@@ -25,7 +25,7 @@ class InventoryEntry:
     body_excerpt: str
 
     @classmethod
-    def from_record(cls, record: AssetRecord, repo_root: Path) -> "InventoryEntry":
+    def from_record(cls, record: AssetRecord, toolkit_root: Path) -> "InventoryEntry":
         meta = record.metadata.get("metadata") or {}
         spec = record.metadata.get("spec") or {}
         harnesses = tuple(spec.get("harnesses") or ())
@@ -36,22 +36,22 @@ class InventoryEntry:
             lifecycle=meta.get("lifecycle") or "experimental",
             origin=spec.get("origin") or "first-party",
             harnesses=harnesses,
-            location=str(record.asset.path.relative_to(repo_root)),
+            location=str(record.asset.path.relative_to(toolkit_root)),
             keywords=keywords,
             description=meta.get("description") or "",
             body_excerpt=record.body_excerpt,
         )
 
 
-def collect_entries(repo_root: Path) -> list[InventoryEntry]:
+def collect_entries(toolkit_root: Path) -> list[InventoryEntry]:
     return [
-        InventoryEntry.from_record(load_asset_record(a), repo_root)
-        for a in discover_assets(repo_root)
+        InventoryEntry.from_record(load_asset_record(a), toolkit_root)
+        for a in discover_assets(toolkit_root)
     ]
 
 
 def render_inventory(
-    repo_root: Path,
+    toolkit_root: Path,
     *,
     fmt: str = "md",
     kind: str | None = None,
@@ -59,15 +59,15 @@ def render_inventory(
     origin: str | None = None,
     lifecycle: str | None = None,
 ) -> str:
-    entries = collect_entries(repo_root)
+    entries = collect_entries(toolkit_root)
     entries = _apply_filters(entries, kind=kind, harness=harness, origin=origin, lifecycle=lifecycle)
     if fmt == "json":
         return json.dumps([_entry_to_dict(e) for e in entries], indent=2)
     return _render_md(entries)
 
 
-def render_asset_card(repo_root: Path, *, slug: str) -> str:
-    for entry in collect_entries(repo_root):
+def render_asset_card(toolkit_root: Path, *, slug: str) -> str:
+    for entry in collect_entries(toolkit_root):
         if entry.slug == slug:
             return _render_card(entry)
     raise KeyError(slug)

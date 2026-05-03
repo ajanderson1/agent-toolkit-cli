@@ -39,10 +39,10 @@ class TUIApp(App):
         Binding("q", "quit", "Quit"),
     ]
 
-    def __init__(self, repo_root: Path, runner: CLIRunner | None = None) -> None:
+    def __init__(self, toolkit_root: Path, runner: CLIRunner | None = None) -> None:
         super().__init__()
-        self.repo_root = repo_root
-        self.runner = runner or CLIRunner(repo_root=repo_root)
+        self.toolkit_root = toolkit_root
+        self.runner = runner or CLIRunner(toolkit_root=toolkit_root)
         self.state: InventoryState = build_state(self.runner)
 
     # ----- composition ----------------------------------------------------
@@ -156,8 +156,8 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         prog="agent-toolkit-tui",
         description="Textual cockpit for agent-toolkit.",
     )
-    p.add_argument("--repo-root", type=Path, default=Path.cwd(),
-                   help="Repo root (default: current directory).")
+    p.add_argument("--toolkit-repo", dest="toolkit_repo", type=Path, default=Path.cwd(),
+                   help="Path to the agent-toolkit repo (default: current directory).")
     p.add_argument("--headless", action="store_true",
                    help="Don't launch the UI; apply --plan and exit.")
     p.add_argument("--plan", type=Path, default=None,
@@ -193,13 +193,13 @@ def _read_plan(path: Path) -> list[tuple[str, str]]:
 
 def main() -> int:
     args = _parse_args(sys.argv[1:])
-    repo_root = args.repo_root.resolve()
+    toolkit_root = args.toolkit_repo.resolve()
 
     if args.headless:
         if args.plan is None:
             print("--headless requires --plan", file=sys.stderr)
             return 2
-        runner = CLIRunner(repo_root=repo_root)
+        runner = CLIRunner(toolkit_root=toolkit_root)
         entries = _read_plan(args.plan)
         if args.op == "link":
             res = runner.link_plan(
@@ -215,7 +215,7 @@ def main() -> int:
         print(f"{verb}: {res.ok} ok, {res.failed} failed", file=sys.stderr)
         return 0 if res.failed == 0 else 1
 
-    TUIApp(repo_root=repo_root).run()
+    TUIApp(toolkit_root=toolkit_root).run()
     return 0
 
 

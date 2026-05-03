@@ -12,8 +12,8 @@ from agent_toolkit.walker import discover_assets
 _HARNESSES = ("claude", "codex", "opencode", "pi")
 
 
-def diagnose(repo_root: Path, *, slug: str, deep: bool = False) -> GroupResult:
-    asset = next((a for a in discover_assets(repo_root) if a.slug == slug), None)
+def diagnose(toolkit_root: Path, *, slug: str, deep: bool = False) -> GroupResult:
+    asset = next((a for a in discover_assets(toolkit_root) if a.slug == slug), None)
     if asset is None:
         return GroupResult(
             name="per-resource",
@@ -29,13 +29,13 @@ def diagnose(repo_root: Path, *, slug: str, deep: bool = False) -> GroupResult:
     meta = meta_full.get("metadata") or {}
     spec = meta_full.get("spec") or {}
     findings.append(f"LIFECYCLE   {meta.get('lifecycle', 'unknown')}")
-    findings.append(f"LOCATION    {asset.path.relative_to(repo_root)}")
+    findings.append(f"LOCATION    {asset.path.relative_to(toolkit_root)}")
     declared = spec.get("harnesses") or []
     findings.append(f"HARNESSES   {declared}")
 
     # frontmatter validity
     try:
-        validator = Validator(repo_root=repo_root)
+        validator = Validator(toolkit_root=toolkit_root)
         errors = validator.validate(asset)
     except Exception as e:  # noqa: BLE001
         warns.append(f"frontmatter validator failed to load: {e}")

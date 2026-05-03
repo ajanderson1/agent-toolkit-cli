@@ -25,7 +25,7 @@ def _seed_staging(tmp_path, slug="alpha"):
     snap = tmp_path / "snap"
     snap.mkdir()
     (snap / "SKILL.md").write_text("---\nname: alpha\ndescription: Alpha test ingest.\n---\n# alpha\n")
-    return stage_proposal(repo_root=tmp_path, proposal=_proposal(slug), snapshot_dir=snap)
+    return stage_proposal(toolkit_root=tmp_path, proposal=_proposal(slug), snapshot_dir=snap)
 
 
 def test_finalize_moves_files_to_canonical_path(tmp_path):
@@ -42,7 +42,7 @@ def test_finalize_moves_files_to_canonical_path(tmp_path):
     (tmp_path / "AGENTS.md").write_text("# AGENTS")
     _seed_staging(tmp_path)
 
-    result = finalize(repo_root=tmp_path, proposal=_proposal(), skip_check=True, skip_commit=True)
+    result = finalize(toolkit_root=tmp_path, proposal=_proposal(), skip_check=True, skip_commit=True)
     assert result.target_path.exists()
     assert (tmp_path / "skills" / "alpha" / "SKILL.md").exists()
 
@@ -63,7 +63,7 @@ def test_finalize_writes_commit_when_not_skipped(tmp_path):
     subprocess.run(["git", "commit", "-q", "-m", "init"], cwd=tmp_path, check=True)
     _seed_staging(tmp_path)
 
-    finalize(repo_root=tmp_path, proposal=_proposal(), skip_check=True)
+    finalize(toolkit_root=tmp_path, proposal=_proposal(), skip_check=True)
     log = subprocess.run(["git", "log", "--oneline"], cwd=tmp_path, check=True,
                          capture_output=True, text=True).stdout
     assert "ingest" in log.lower() or "alpha" in log.lower()

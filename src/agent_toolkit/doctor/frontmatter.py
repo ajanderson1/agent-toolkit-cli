@@ -8,11 +8,11 @@ from agent_toolkit.schema import Validator
 from agent_toolkit.walker import discover_assets
 
 
-def run(repo_root: Path) -> GroupResult:
-    validator = Validator(repo_root=repo_root)
+def run(toolkit_root: Path) -> GroupResult:
+    validator = Validator(toolkit_root=toolkit_root)
     errors: list[str] = []
     asset_count = 0
-    for asset in discover_assets(repo_root):
+    for asset in discover_assets(toolkit_root):
         asset_count += 1
         errors.extend(validator.validate(asset))
     if not errors:

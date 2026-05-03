@@ -2,8 +2,8 @@
 from agent_toolkit.doctor.result import Status
 
 
-def _make_skill(repo_root, slug, harnesses=("claude",)):
-    skill_dir = repo_root / "skills" / slug
+def _make_skill(toolkit_root, slug, harnesses=("claude",)):
+    skill_dir = toolkit_root / "skills" / slug
     skill_dir.mkdir(parents=True, exist_ok=True)
     (skill_dir / "SKILL.md").write_text(
         "---\n"

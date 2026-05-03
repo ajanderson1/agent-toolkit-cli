@@ -12,14 +12,22 @@ _KINDS = ("skill", "agent", "command", "hook", "mcp", "plugin")
 
 @click.command(name="inventory")
 @click.argument("target", required=False)
-@click.option("--repo-root", default=".", type=click.Path(exists=True, file_okay=False))
+@click.option(
+    "--toolkit-repo",
+    "toolkit_root",
+    default=None,
+    type=click.Path(file_okay=False, path_type=Path),
+    help="Path to the agent-toolkit repo (defaults to group --toolkit-repo / env / walk-up / ~/GitHub/agent-toolkit).",
+)
 @click.option("--harness", type=click.Choice(["claude", "codex", "opencode", "pi"]))
 @click.option("--origin", type=click.Choice(["first-party", "third-party"]))
 @click.option("--lifecycle", type=click.Choice(["experimental", "stable", "deprecated"]))
 @click.option("--format", "fmt", type=click.Choice(["md", "json"]), default="md")
+@click.pass_context
 def inventory(
+    ctx: click.Context,
     target: str | None,
-    repo_root: str,
+    toolkit_root: Path | None,
     harness: str | None,
     origin: str | None,
     lifecycle: str | None,
@@ -37,7 +45,13 @@ def inventory(
       - TARGET (otherwise)  → render the man-page card for that slug. Errors
                               non-zero if no asset has that slug.
     """
-    root = Path(repo_root).resolve()
+    if toolkit_root is None:
+        toolkit_root = (ctx.obj or {}).get("toolkit_root")
+    if toolkit_root is None:
+        toolkit_root = Path(".").resolve()
+    else:
+        toolkit_root = Path(toolkit_root).resolve()
+    root = toolkit_root
     if target is None:
         click.echo(render_inventory(root, fmt=fmt, harness=harness, origin=origin, lifecycle=lifecycle))
         return

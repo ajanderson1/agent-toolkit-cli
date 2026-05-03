@@ -160,7 +160,7 @@ def test_inventory_cli_full_mode(tmp_path):
     from agent_toolkit.cli import main
     _write_skill(tmp_path, "alpha")
     runner = CliRunner()
-    result = runner.invoke(main, ["inventory", "--repo-root", str(tmp_path)])
+    result = runner.invoke(main, ["inventory", "--toolkit-repo", str(tmp_path)])
     assert result.exit_code == 0, result.output
     assert "alpha" in result.output
 
@@ -170,7 +170,7 @@ def test_inventory_cli_kind_filter(tmp_path):
     from agent_toolkit.cli import main
     _write_skill(tmp_path, "alpha")
     runner = CliRunner()
-    result = runner.invoke(main, ["inventory", "skill", "--repo-root", str(tmp_path)])
+    result = runner.invoke(main, ["inventory", "skill", "--toolkit-repo", str(tmp_path)])
     assert result.exit_code == 0
     assert "alpha" in result.output
 
@@ -180,7 +180,7 @@ def test_inventory_cli_slug_zoom(tmp_path):
     from agent_toolkit.cli import main
     _write_skill(tmp_path, "alpha", description="Alpha example.")
     runner = CliRunner()
-    result = runner.invoke(main, ["inventory", "alpha", "--repo-root", str(tmp_path)])
+    result = runner.invoke(main, ["inventory", "alpha", "--toolkit-repo", str(tmp_path)])
     assert result.exit_code == 0
     assert "alpha — Alpha example." in result.output
     assert "QUICKSTART" in result.output
@@ -191,5 +191,5 @@ def test_inventory_cli_unknown_slug_exits_nonzero(tmp_path):
     from agent_toolkit.cli import main
     _write_skill(tmp_path, "alpha")
     runner = CliRunner()
-    result = runner.invoke(main, ["inventory", "ghost", "--repo-root", str(tmp_path)])
+    result = runner.invoke(main, ["inventory", "ghost", "--toolkit-repo", str(tmp_path)])
     assert result.exit_code != 0

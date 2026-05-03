@@ -17,10 +17,11 @@ _REGION_GENERATORS = ("component-table", "submodule-table")
 
 @click.command(short_help="Regenerate AGENTS.md auto-regions.")
 @click.option(
-    "--repo-root",
-    default=".",
-    type=click.Path(exists=True, file_okay=False),
-    help="Repo root to operate on (defaults to current directory).",
+    "--toolkit-repo",
+    "toolkit_root",
+    default=None,
+    type=click.Path(file_okay=False, path_type=Path),
+    help="Path to the agent-toolkit repo (defaults to group --toolkit-repo / env / walk-up / ~/GitHub/agent-toolkit).",
 )
 @click.option(
     "--only",
@@ -34,13 +35,20 @@ _REGION_GENERATORS = ("component-table", "submodule-table")
     is_flag=True,
     help="Print the rebuilt AGENTS.md to stdout without modifying the file.",
 )
-def fix(repo_root: str, only: str | None, to_stdout: bool) -> None:
+@click.pass_context
+def fix(ctx: click.Context, toolkit_root: Path | None, only: str | None, to_stdout: bool) -> None:
     """Regenerate the BEGIN/END marker-bounded regions inside AGENTS.md
     (component-table and submodule-table). With --to-stdout, prints the
     result without touching the file.
     """
     header("Regenerating AGENTS.md auto-regions...")
-    root = Path(repo_root).resolve()
+    if toolkit_root is None:
+        toolkit_root = (ctx.obj or {}).get("toolkit_root")
+    if toolkit_root is None:
+        toolkit_root = Path(".").resolve()
+    else:
+        toolkit_root = Path(toolkit_root).resolve()
+    root = toolkit_root
 
     targets = (only,) if only in _REGION_GENERATORS else _REGION_GENERATORS
     agents_path = root / "AGENTS.md"
@@ -58,7 +66,7 @@ def fix(repo_root: str, only: str | None, to_stdout: bool) -> None:
 
 def _render(region: str, root: Path) -> str:
     if region == "component-table":
-        validator = Validator(repo_root=root)
+        validator = Validator(toolkit_root=root)
         assets = discover_assets(root)
         metadata: dict[tuple[str, str], dict] = {}
         for asset in assets:

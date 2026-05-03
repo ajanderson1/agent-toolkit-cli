@@ -34,20 +34,20 @@ _SUMMARY_RE = re.compile(r"Plan applied: (\d+) ok, (\d+) failed")
 class CLIRunner:
     """Single chokepoint for shelling out to bin/agent-toolkit.
 
-    Defaults to `<repo_root>/bin/agent-toolkit` so the TUI invokes the CLI
+    Defaults to `<toolkit_root>/bin/agent-toolkit` so the TUI invokes the CLI
     from the same checkout it's reading metadata from. Override `cli_path`
     in tests.
     """
 
-    def __init__(self, repo_root: Path, cli_path: Path | None = None) -> None:
-        self.repo_root = repo_root.resolve()
-        self.cli_path = cli_path or (self.repo_root / "bin" / "agent-toolkit")
+    def __init__(self, toolkit_root: Path, cli_path: Path | None = None) -> None:
+        self.toolkit_root = toolkit_root.resolve()
+        self.cli_path = cli_path or (self.toolkit_root / "bin" / "agent-toolkit")
 
     # ----- reads ----------------------------------------------------------
     def list_state(self) -> dict:
         """Invoke `list --format=json` and return the parsed document."""
         proc = subprocess.run(
-            [str(self.cli_path), "list", "--format=json", "--repo-root", str(self.repo_root)],
+            [str(self.cli_path), "list", "--format=json", "--toolkit-repo", str(self.toolkit_root)],
             capture_output=True, text=True, check=False,
         )
         if proc.returncode != 0:
@@ -73,7 +73,7 @@ class CLIRunner:
         if not entries:
             return PlanResult(ok=0, failed=0)
         cmd = [str(self.cli_path), op, scope, harness, "--plan", "-",
-               "--repo-root", str(self.repo_root)]
+               "--toolkit-repo", str(self.toolkit_root)]
         if dry_run:
             cmd.append("--dry-run")
         stdin = "".join(f"{k}:{s}\n" for k, s in entries)

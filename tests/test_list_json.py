@@ -34,7 +34,7 @@ def test_unsupported_status_for_non_declared_harness(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     (tmp_path / "home").mkdir()
     runner = CliRunner()
-    res = runner.invoke(list_json, ["--repo-root", str(tmp_path)])
+    res = runner.invoke(list_json, ["--toolkit-repo", str(tmp_path)])
     assert res.exit_code == 0, res.output
     doc = json.loads(res.output)
     cells = [c for a in doc["assets"] if a["slug"] == "alpha" for c in a["cells"]]
@@ -54,7 +54,7 @@ def test_linked_status_when_symlink_exists(tmp_path, monkeypatch):
     # allowlist
     (home / ".agent-toolkit.yaml").write_text("skills:\n  - alpha\n")
     runner = CliRunner()
-    res = runner.invoke(list_json, ["--repo-root", str(tmp_path)])
+    res = runner.invoke(list_json, ["--toolkit-repo", str(tmp_path)])
     assert res.exit_code == 0, res.output
     doc = json.loads(res.output)
     cells = [c for a in doc["assets"] if a["slug"] == "alpha" for c in a["cells"]]
@@ -72,7 +72,7 @@ def test_unlinked_status_when_no_symlink(tmp_path, monkeypatch):
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))
     runner = CliRunner()
-    res = runner.invoke(list_json, ["--repo-root", str(tmp_path)])
+    res = runner.invoke(list_json, ["--toolkit-repo", str(tmp_path)])
     assert res.exit_code == 0, res.output
     doc = json.loads(res.output)
     cells = [c for a in doc["assets"] if a["slug"] == "alpha" for c in a["cells"]]
@@ -90,7 +90,7 @@ def test_broken_status_when_symlink_target_missing(tmp_path, monkeypatch):
     # symlink pointing somewhere outside the repo, doesn't matter if it exists
     (home / ".claude" / "skills" / "alpha").symlink_to("/nonexistent/path/alpha")
     runner = CliRunner()
-    res = runner.invoke(list_json, ["--repo-root", str(tmp_path)])
+    res = runner.invoke(list_json, ["--toolkit-repo", str(tmp_path)])
     assert res.exit_code == 0, res.output
     doc = json.loads(res.output)
     cells = [c for a in doc["assets"] if a["slug"] == "alpha" for c in a["cells"]]
@@ -99,17 +99,17 @@ def test_broken_status_when_symlink_target_missing(tmp_path, monkeypatch):
     assert cl_user["target"] == "/nonexistent/path/alpha"
 
 
-def test_top_level_repo_root_and_harnesses(tmp_path, monkeypatch):
+def test_top_level_toolkit_root_and_harnesses(tmp_path, monkeypatch):
     _seed(tmp_path)
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     (tmp_path / "home").mkdir()
     runner = CliRunner()
-    res = runner.invoke(list_json, ["--repo-root", str(tmp_path)])
+    res = runner.invoke(list_json, ["--toolkit-repo", str(tmp_path)])
     assert res.exit_code == 0, res.output
     doc = json.loads(res.output)
-    # repo_root is the verbatim argv path (not resolved) so callers can compare
-    # against what they passed.
-    assert doc["repo_root"] == str(tmp_path)
+    # toolkit_root is the resolved argv path so callers comparing against
+    # their own resolved path see a stable value across platforms.
+    assert doc["toolkit_root"] == str(tmp_path.resolve())
     assert doc["harnesses"] == ["claude", "codex", "opencode", "pi"]
     assert isinstance(doc["assets"], list)
 
@@ -135,7 +135,7 @@ def test_kind_filter_drops_other_kinds(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     (tmp_path / "home").mkdir()
     runner = CliRunner()
-    res = runner.invoke(list_json, ["--repo-root", str(tmp_path), "--kind", "skill"])
+    res = runner.invoke(list_json, ["--toolkit-repo", str(tmp_path), "--kind", "skill"])
     assert res.exit_code == 0, res.output
     doc = json.loads(res.output)
     kinds = {a["kind"] for a in doc["assets"]}
@@ -166,7 +166,7 @@ def test_mcp_kind_excluded_even_without_filter(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     (tmp_path / "home").mkdir()
     runner = CliRunner()
-    res = runner.invoke(list_json, ["--repo-root", str(tmp_path)])
+    res = runner.invoke(list_json, ["--toolkit-repo", str(tmp_path)])
     assert res.exit_code == 0, res.output
     doc = json.loads(res.output)
     kinds = {a["kind"] for a in doc["assets"]}
@@ -178,7 +178,7 @@ def test_asset_path_is_absolute(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     (tmp_path / "home").mkdir()
     runner = CliRunner()
-    res = runner.invoke(list_json, ["--repo-root", str(tmp_path)])
+    res = runner.invoke(list_json, ["--toolkit-repo", str(tmp_path)])
     assert res.exit_code == 0, res.output
     doc = json.loads(res.output)
     alpha = next(a for a in doc["assets"] if a["slug"] == "alpha")

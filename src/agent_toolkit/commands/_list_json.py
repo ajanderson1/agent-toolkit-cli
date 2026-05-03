@@ -45,13 +45,13 @@ _PROJECT_TARGETS: dict[tuple[str, str], str] = {
 }
 
 
-def _slot_dir(harness: str, kind: str, scope: str, repo_root: Path) -> Path | None:
+def _slot_dir(harness: str, kind: str, scope: str, project_root: Path) -> Path | None:
     home = Path(os.environ.get("HOME", ""))
     if scope == "user":
         tmpl = _USER_TARGETS.get((harness, kind))
         return Path(tmpl.format(home=str(home))) if tmpl else None
     rel = _PROJECT_TARGETS.get((harness, kind))
-    return (repo_root / rel) if rel else None
+    return (project_root / rel) if rel else None
 
 
 def _expected_source(asset_path: Path, kind: str) -> Path:
@@ -67,9 +67,10 @@ def _cell_status(
     slug: str,
     scope: str,
     expected_src: Path,
-    repo_root: Path,
+    toolkit_root_resolved: Path,
+    project_root: Path,
 ) -> tuple[str, str | None]:
-    slot = _slot_dir(harness, kind, scope, repo_root)
+    slot = _slot_dir(harness, kind, scope, project_root)
     if slot is None:
         return ("unsupported", None)
     link_path = slot / slug
@@ -81,14 +82,14 @@ def _cell_status(
     if not target_path.is_absolute():
         target_path = (link_path.parent / target_path)
     # Resolve the target to its canonical form so prefix/equality checks line up
-    # with `repo_root.resolve()` (e.g. `/tmp` → `/private/tmp` on macOS). If it
+    # with `toolkit_root.resolve()` (e.g. `/tmp` → `/private/tmp` on macOS). If it
     # can't be resolved, the link points at something missing — treat as broken.
     try:
         resolved_target = target_path.resolve(strict=True)
     except (FileNotFoundError, RuntimeError, OSError):
         return ("broken", target)
     try:
-        resolved_target.relative_to(repo_root)
+        resolved_target.relative_to(toolkit_root_resolved)
         inside_repo = True
     except ValueError:
         inside_repo = False
@@ -102,23 +103,49 @@ def _cell_status(
 
 @click.command("_list-json", hidden=True)
 @click.option(
-    "--repo-root",
-    type=click.Path(exists=True, file_okay=False, path_type=Path),
-    required=True,
+    "--toolkit-repo",
+    "toolkit_root",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=None,
+    help="Path to the agent-toolkit repo (defaults to group --toolkit-repo / env / walk-up / ~/GitHub/agent-toolkit).",
+)
+@click.option(
+    "--project",
+    "project_root",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=None,
+    help="Path to the consumer project (default: CWD).",
 )
 @click.option("--kind", type=click.Choice(ALL_KINDS), default=None)
 @click.option("--harness", type=click.Choice(ALL_HARNESSES), default=None)
-def list_json(repo_root: Path, kind: str | None, harness: str | None) -> None:
+@click.pass_context
+def list_json(
+    ctx: click.Context,
+    toolkit_root: Path | None,
+    project_root: Path | None,
+    kind: str | None,
+    harness: str | None,
+) -> None:
     """Emit list state as JSON. Hidden internal — consumed by `list --format=json`."""
-    # Keep the user-facing `repo_root` string verbatim (e.g. `/tmp/...` not
+    if toolkit_root is None:
+        toolkit_root = (ctx.obj or {}).get("toolkit_root")
+    if toolkit_root is None:
+        toolkit_root = Path(".").resolve()
+    else:
+        toolkit_root = Path(toolkit_root).resolve()
+    if project_root is None:
+        project_root = Path(".").resolve()
+    else:
+        project_root = Path(project_root).resolve()
+    # Keep the user-facing `toolkit_root` string verbatim (e.g. `/tmp/...` not
     # `/private/tmp/...` on macOS) so callers comparing against their argv
     # see what they passed. Use a resolved copy internally for path checks.
-    repo_root_resolved = repo_root.resolve()
+    toolkit_root_resolved = toolkit_root.resolve()
     user_allow = read_allowlist(Path(os.environ.get("HOME", "")) / ".agent-toolkit.yaml")
-    proj_allow = read_allowlist(repo_root / ".agent-toolkit.yaml")
+    proj_allow = read_allowlist(project_root / ".agent-toolkit.yaml")
 
     assets_out: list[dict] = []
-    for asset in discover_assets(repo_root):
+    for asset in discover_assets(toolkit_root):
         if asset.kind == "mcp":
             continue
         if kind and asset.kind != kind:
@@ -161,7 +188,8 @@ def list_json(repo_root: Path, kind: str | None, harness: str | None) -> None:
                 ("project", proj_allowlisted),
             ):
                 status, target = _cell_status(
-                    h, asset.kind, asset.slug, scope, expected_src, repo_root_resolved
+                    h, asset.kind, asset.slug, scope, expected_src,
+                    toolkit_root_resolved, project_root,
                 )
                 cells.append({
                     "harness": h, "scope": scope,
@@ -180,7 +208,7 @@ def list_json(repo_root: Path, kind: str | None, harness: str | None) -> None:
         })
 
     out = {
-        "repo_root": str(repo_root),
+        "toolkit_root": str(toolkit_root),
         "harnesses": list(ALL_HARNESSES),
         "assets": assets_out,
     }

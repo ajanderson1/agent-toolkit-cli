@@ -48,17 +48,17 @@ def extract_frontmatter(path: Path) -> dict | None:
     return parsed if isinstance(parsed, dict) else None
 
 
-def discover_assets(repo_root: Path) -> list[Asset]:
-    submodule_paths = _read_submodule_paths(repo_root)
+def discover_assets(toolkit_root: Path) -> list[Asset]:
+    submodule_paths = _read_submodule_paths(toolkit_root)
     assets: list[Asset] = []
     for kind, root_name, pattern in _KIND_RULES:
-        root = repo_root / root_name
+        root = toolkit_root / root_name
         if not root.exists():
             continue
         for path in sorted(root.rglob(pattern)):
             if kind in {"agent", "command"} and path.name in _DOC_FILENAMES:
                 continue
-            if _path_is_inside_submodule(path, repo_root, submodule_paths):
+            if _path_is_inside_submodule(path, toolkit_root, submodule_paths):
                 continue
             slug = _slug_for(kind, path, root)
             if slug is None:
@@ -67,8 +67,8 @@ def discover_assets(repo_root: Path) -> list[Asset]:
     return sorted(assets, key=lambda a: (a.kind, a.slug))
 
 
-def _read_submodule_paths(repo_root: Path) -> list[Path]:
-    gm = repo_root / ".gitmodules"
+def _read_submodule_paths(toolkit_root: Path) -> list[Path]:
+    gm = toolkit_root / ".gitmodules"
     if not gm.exists():
         return []
     parser = configparser.ConfigParser()
@@ -77,11 +77,11 @@ def _read_submodule_paths(repo_root: Path) -> list[Path]:
     for sect in parser.sections():
         rel = parser[sect].get("path")
         if rel:
-            paths.append((repo_root / rel).resolve())
+            paths.append((toolkit_root / rel).resolve())
     return paths
 
 
-def _path_is_inside_submodule(path: Path, repo_root: Path, submodule_paths: list[Path]) -> bool:
+def _path_is_inside_submodule(path: Path, toolkit_root: Path, submodule_paths: list[Path]) -> bool:
     resolved = path.resolve()
     for sm in submodule_paths:
         try:

@@ -16,7 +16,7 @@ def test_stage_creates_staging_dir(tmp_path):
     snap = tmp_path / "snap"
     snap.mkdir()
     (snap / "SKILL.md").write_text("---\nname: alpha\n---\n# alpha\n")
-    out = stage_proposal(repo_root=tmp_path, proposal=_proposal(),
+    out = stage_proposal(toolkit_root=tmp_path, proposal=_proposal(),
                          snapshot_dir=snap)
     assert out.exists()
     assert (out / "STAGE.md").exists()
@@ -28,7 +28,7 @@ def test_stage_md_records_metadata(tmp_path):
     snap = tmp_path / "snap"
     snap.mkdir()
     (snap / "SKILL.md").write_text("# x\n")
-    out = stage_proposal(repo_root=tmp_path, proposal=_proposal(),
+    out = stage_proposal(toolkit_root=tmp_path, proposal=_proposal(),
                          snapshot_dir=snap)
     body = (out / "STAGE.md").read_text()
     assert "alpha" in body
@@ -41,6 +41,6 @@ def test_stage_overwrite_clears_previous(tmp_path):
     snap = tmp_path / "snap"
     snap.mkdir()
     (snap / "SKILL.md").write_text("# x\n")
-    stage_proposal(repo_root=tmp_path, proposal=_proposal(), snapshot_dir=snap)
-    abort_staging(repo_root=tmp_path, slug="alpha")
+    stage_proposal(toolkit_root=tmp_path, proposal=_proposal(), snapshot_dir=snap)
+    abort_staging(toolkit_root=tmp_path, slug="alpha")
     assert not (tmp_path / ".agent-toolkit" / "staging" / "alpha").exists()

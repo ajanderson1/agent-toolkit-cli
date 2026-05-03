@@ -48,7 +48,7 @@ def _doc(repo: str = "/r") -> dict:
         return cells
 
     return {
-        "repo_root": repo,
+        "toolkit_root": repo,
         "harnesses": ["claude", "codex", "opencode", "pi"],
         "assets": [
             {
@@ -88,7 +88,7 @@ def _doc(repo: str = "/r") -> dict:
 
 async def test_space_toggles_cell_and_cursor_stays_in_place():
     runner = FakeRunner(_doc())
-    app = TUIApp(repo_root=Path("/r"), runner=runner)
+    app = TUIApp(toolkit_root=Path("/r"), runner=runner)
     async with app.run_test() as pilot:
         await pilot.pause()
         from agent_toolkit_tui.widgets import AssetGrid
@@ -110,7 +110,7 @@ async def test_space_toggles_cell_and_cursor_stays_in_place():
 
 async def test_second_space_clears_pending():
     runner = FakeRunner(_doc())
-    app = TUIApp(repo_root=Path("/r"), runner=runner)
+    app = TUIApp(toolkit_root=Path("/r"), runner=runner)
     async with app.run_test() as pilot:
         await pilot.pause()
         from agent_toolkit_tui.widgets import AssetGrid
@@ -133,7 +133,7 @@ async def test_second_space_clears_pending():
 
 async def test_app_starts_and_shows_pending_zero():
     runner = FakeRunner(_doc())
-    app = TUIApp(repo_root=Path("/r"), runner=runner)
+    app = TUIApp(toolkit_root=Path("/r"), runner=runner)
     async with app.run_test() as pilot:
         await pilot.pause()
         from textual.widgets import Static
@@ -143,7 +143,7 @@ async def test_app_starts_and_shows_pending_zero():
 
 async def test_toggle_then_apply_invokes_runner():
     runner = FakeRunner(_doc())
-    app = TUIApp(repo_root=Path("/r"), runner=runner)
+    app = TUIApp(toolkit_root=Path("/r"), runner=runner)
     async with app.run_test() as pilot:
         await pilot.pause()
         # Move cursor onto the (alpha, claude) cell. The grid columns are
@@ -170,7 +170,7 @@ async def test_toggle_then_apply_invokes_runner():
 
 async def test_diff_uses_dry_run():
     runner = FakeRunner(_doc())
-    app = TUIApp(repo_root=Path("/r"), runner=runner)
+    app = TUIApp(toolkit_root=Path("/r"), runner=runner)
     async with app.run_test() as pilot:
         await pilot.pause()
         from agent_toolkit_tui.widgets import AssetGrid
@@ -195,7 +195,7 @@ async def test_diff_uses_dry_run():
 async def test_refresh_rebuilds_state():
     """ctrl+r calls list_state again and clears pending that matches new state."""
     runner = FakeRunner(_doc())
-    app = TUIApp(repo_root=Path("/r"), runner=runner)
+    app = TUIApp(toolkit_root=Path("/r"), runner=runner)
     async with app.run_test() as pilot:
         await pilot.pause()
         # Toggle a cell to create a pending entry
@@ -224,7 +224,7 @@ async def test_scope_change_updates_grid():
     from agent_toolkit_tui.widgets import AssetGrid
 
     runner = FakeRunner(_doc())
-    app = TUIApp(repo_root=Path("/r"), runner=runner)
+    app = TUIApp(toolkit_root=Path("/r"), runner=runner)
     async with app.run_test() as pilot:
         await pilot.pause()
         grid = app.query_one("#asset-grid", AssetGrid)
@@ -256,7 +256,7 @@ async def test_kind_change_filters_grid():
     from agent_toolkit_tui.widgets import AssetGrid
 
     runner = FakeRunner(_doc())
-    app = TUIApp(repo_root=Path("/r"), runner=runner)
+    app = TUIApp(toolkit_root=Path("/r"), runner=runner)
     async with app.run_test() as pilot:
         await pilot.pause()
         grid = app.query_one("#asset-grid", AssetGrid)
@@ -281,7 +281,7 @@ async def test_harness_visibility_toggle_hides_column():
     from textual.widgets import Checkbox, DataTable
 
     runner = FakeRunner(_doc())
-    app = TUIApp(repo_root=Path("/r"), runner=runner)
+    app = TUIApp(toolkit_root=Path("/r"), runner=runner)
     async with app.run_test() as pilot:
         await pilot.pause()
         grid = app.query_one("#asset-grid", AssetGrid)

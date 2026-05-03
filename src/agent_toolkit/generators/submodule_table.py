@@ -5,8 +5,8 @@ import configparser
 from pathlib import Path
 
 
-def render_submodule_table(repo_root: Path) -> str:
-    gitmodules = repo_root / ".gitmodules"
+def render_submodule_table(toolkit_root: Path) -> str:
+    gitmodules = toolkit_root / ".gitmodules"
     if not gitmodules.exists():
         return "_(no submodules)_\n"
     parser = configparser.ConfigParser()

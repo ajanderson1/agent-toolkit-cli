@@ -23,17 +23,17 @@ class FinalizeError(RuntimeError):
 
 def finalize(
     *,
-    repo_root: Path,
+    toolkit_root: Path,
     proposal: Proposal,
     security_overall: str = "GREEN",
     skip_check: bool = False,
     skip_commit: bool = False,
 ) -> FinalizeResult:
-    staging_dir = staging_root(repo_root) / proposal.slug
+    staging_dir = staging_root(toolkit_root) / proposal.slug
     if not staging_dir.exists():
         raise FinalizeError(f"no staging dir at {staging_dir}")
 
-    target = repo_root / proposal.target_path
+    target = toolkit_root / proposal.target_path
     if target.exists():
         raise FinalizeError(f"target already exists: {target}")
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -61,11 +61,11 @@ def finalize(
         shutil.copy2(primary, target)
 
     if proposal.vendor_via == "submodule" and proposal.upstream:
-        _add_submodule(repo_root=repo_root, proposal=proposal)
+        _add_submodule(toolkit_root=toolkit_root, proposal=proposal)
 
     if not skip_check:
         result = subprocess.run(
-            ["uv", "run", "agent-toolkit", "check", "--repo-root", str(repo_root), "--exit-code"],
+            ["uv", "run", "agent-toolkit", "check", "--toolkit-repo", str(toolkit_root), "--exit-code"],
             check=False,
             capture_output=True,
             text=True,
@@ -73,7 +73,7 @@ def finalize(
         if result.returncode != 0:
             raise FinalizeError(f"check failed:\n{result.stderr or result.stdout}")
         subprocess.run(
-            ["uv", "run", "agent-toolkit", "fix", "--repo-root", str(repo_root)],
+            ["uv", "run", "agent-toolkit", "fix", "--toolkit-repo", str(toolkit_root)],
             check=True,
         )
 
@@ -83,7 +83,7 @@ def finalize(
     commit_sha = None
     committed = False
     if not skip_commit:
-        commit_sha = _auto_commit(repo_root=repo_root, proposal=proposal,
+        commit_sha = _auto_commit(toolkit_root=toolkit_root, proposal=proposal,
                                   security_overall=security_overall)
         committed = True
 
@@ -113,15 +113,15 @@ def _primary_in_staging(staging_dir: Path, kind: str) -> Path | None:
     return None
 
 
-def _add_submodule(*, repo_root: Path, proposal: Proposal) -> None:
+def _add_submodule(*, toolkit_root: Path, proposal: Proposal) -> None:
     subprocess.run(
         ["git", "submodule", "add", proposal.fork or proposal.upstream, proposal.target_path.split("/")[0] + "/" + proposal.slug],
-        cwd=repo_root,
+        cwd=toolkit_root,
         check=True,
     )
 
 
-def _auto_commit(*, repo_root: Path, proposal: Proposal, security_overall: str) -> str:
+def _auto_commit(*, toolkit_root: Path, proposal: Proposal, security_overall: str) -> str:
     msg = (
         f"chore(ingest): vendor {proposal.slug} as {proposal.kind} ({proposal.origin})\n"
         f"\n"
@@ -130,10 +130,10 @@ def _auto_commit(*, repo_root: Path, proposal: Proposal, security_overall: str) 
         f"Security review: {security_overall}\n"
         f"Vendor strategy: {proposal.vendor_via}\n"
     )
-    subprocess.run(["git", "add", "-A"], cwd=repo_root, check=True)
-    subprocess.run(["git", "commit", "-q", "-m", msg], cwd=repo_root, check=True)
+    subprocess.run(["git", "add", "-A"], cwd=toolkit_root, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", msg], cwd=toolkit_root, check=True)
     out = subprocess.run(
-        ["git", "rev-parse", "HEAD"], cwd=repo_root, check=True,
+        ["git", "rev-parse", "HEAD"], cwd=toolkit_root, check=True,
         capture_output=True, text=True,
     )
     return out.stdout.strip()

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import click
 
-from agent_toolkit._repo_resolution import RepoNotFoundError, resolve_repo_root
+from agent_toolkit._repo_resolution import RepoNotFoundError, resolve_toolkit_root
 from agent_toolkit.commands._list_json import list_json
 from agent_toolkit.commands._yaml_edit import yaml_edit
 from agent_toolkit.commands.check import check
@@ -19,27 +19,27 @@ from agent_toolkit.commands.new import new
 @click.group(
     help=(
         "agent-toolkit — metadata-aware commands for asset frontmatter and AGENTS.md.\n\n"
-        "Resolves the assets repo via: --repo flag > AGENT_TOOLKIT_REPO env > "
+        "Resolves the toolkit repo via: --toolkit-repo flag > AGENT_TOOLKIT_REPO env > "
         ".agent-toolkit-source walk-up > ~/GitHub/agent-toolkit default. "
-        "Subcommands' --repo-root flag still works for explicit per-invocation paths."
+        "Subcommands' --toolkit-repo flag still works for explicit per-invocation paths."
     )
 )
 @click.option(
-    "--repo",
-    "repo",
+    "--toolkit-repo",
+    "toolkit_repo",
     type=click.Path(file_okay=False, path_type=Path),
     default=None,
-    help="Path to the agent-toolkit assets repo (overrides env/walk-up/default).",
+    help="Path to the agent-toolkit repo (overrides env/walk-up/default).",
 )
 @click.pass_context
-def main(ctx: click.Context, repo: Path | None) -> None:
+def main(ctx: click.Context, toolkit_repo: Path | None) -> None:
     """agent-toolkit metadata commands."""
     ctx.ensure_object(dict)
-    if repo is None:
-        ctx.obj["repo_root"] = None
+    if toolkit_repo is None:
+        ctx.obj["toolkit_root"] = None
         return
     try:
-        ctx.obj["repo_root"] = resolve_repo_root(repo)
+        ctx.obj["toolkit_root"] = resolve_toolkit_root(toolkit_repo)
     except RepoNotFoundError as exc:
         click.echo(str(exc), err=True)
         ctx.exit(2)

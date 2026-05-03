@@ -33,7 +33,7 @@ class AssetRow:
 
 @dataclass(frozen=True)
 class InventoryState:
-    repo_root: Path
+    toolkit_root: Path
     rows: tuple[AssetRow, ...]
     all_harnesses: tuple[str, ...]
 
@@ -63,7 +63,7 @@ def build_state(runner: _RunnerProto) -> InventoryState:
             cells=cells,
         ))
     return InventoryState(
-        repo_root=Path(doc.get("repo_root", "")),
+        toolkit_root=Path(doc.get("toolkit_root", "")),
         rows=tuple(rows),
         all_harnesses=tuple(doc.get("harnesses", ())),
     )

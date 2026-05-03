@@ -9,13 +9,13 @@ import yaml
 from agent_toolkit.ingest.types import Proposal
 
 
-def staging_root(repo_root: Path) -> Path:
-    return repo_root / ".agent-toolkit" / "staging"
+def staging_root(toolkit_root: Path) -> Path:
+    return toolkit_root / ".agent-toolkit" / "staging"
 
 
-def stage_proposal(*, repo_root: Path, proposal: Proposal, snapshot_dir: Path) -> Path:
+def stage_proposal(*, toolkit_root: Path, proposal: Proposal, snapshot_dir: Path) -> Path:
     """Copy snapshot_dir contents into the staging dir + write STAGE.md."""
-    target = staging_root(repo_root) / proposal.slug
+    target = staging_root(toolkit_root) / proposal.slug
     if target.exists():
         shutil.rmtree(target)
     target.mkdir(parents=True)
@@ -31,14 +31,14 @@ def stage_proposal(*, repo_root: Path, proposal: Proposal, snapshot_dir: Path) -
     return target
 
 
-def abort_staging(*, repo_root: Path, slug: str) -> None:
-    target = staging_root(repo_root) / slug
+def abort_staging(*, toolkit_root: Path, slug: str) -> None:
+    target = staging_root(toolkit_root) / slug
     if target.exists():
         shutil.rmtree(target)
 
 
-def list_staging(repo_root: Path) -> list[str]:
-    root = staging_root(repo_root)
+def list_staging(toolkit_root: Path) -> list[str]:
+    root = staging_root(toolkit_root)
     if not root.exists():
         return []
     return sorted(p.name for p in root.iterdir() if p.is_dir())

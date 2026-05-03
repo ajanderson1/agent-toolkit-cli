@@ -22,14 +22,14 @@ _USER_PATHS: dict[tuple[str, str], str] = {
 }
 
 
-def run(repo_root: Path, *, harness: str = "claude") -> GroupResult:
+def run(toolkit_root: Path, *, harness: str = "claude") -> GroupResult:
     home = Path(os.environ.get("HOME", str(Path.home())))
 
     findings: list[str] = []
     warns: list[str] = []
 
     expected: dict[tuple[str, str], Path] = {}
-    for asset in discover_assets(repo_root):
+    for asset in discover_assets(toolkit_root):
         meta = _meta_for(asset)
         spec = meta.get("spec") or {}
         if harness not in (spec.get("harnesses") or []):
@@ -55,7 +55,7 @@ def run(repo_root: Path, *, harness: str = "claude") -> GroupResult:
 
     # Stale: a symlink under user dir that points into the repo for an asset that
     # does NOT declare this harness.
-    declared_slugs = {(a.kind, a.slug): a for a in discover_assets(repo_root)}
+    declared_slugs = {(a.kind, a.slug): a for a in discover_assets(toolkit_root)}
     for (kind_dir_name, kind) in [
         ("skills", "skill"), ("agents", "agent"), ("commands", "command"),
         ("hooks", "hook"), ("plugins", "plugin"),
@@ -73,7 +73,7 @@ def run(repo_root: Path, *, harness: str = "claude") -> GroupResult:
             if not target.is_absolute():
                 target = (entry.parent / target).resolve()
             try:
-                target.relative_to(repo_root)
+                target.relative_to(toolkit_root)
             except ValueError:
                 continue
             asset = declared_slugs.get((kind, entry.name))
