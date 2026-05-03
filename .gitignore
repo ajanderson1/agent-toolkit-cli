@@ -23,6 +23,3 @@ assets/verification/
 .uv-cache/
 .claude/
 .mcp.json
-
-# Flow verification artifacts (per /aj-workflow flow Step 9)
-assets/verification/
