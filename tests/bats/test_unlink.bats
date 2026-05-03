@@ -7,8 +7,8 @@ setup() {
   HOME="$(mktemp -d)"
   export HOME
   mkdir -p "$HOME/.claude/skills"
-  mkdir -p "$REPO_ROOT/skills/alpha"
-  cat > "$REPO_ROOT/skills/alpha/SKILL.md" <<'EOF'
+  mkdir -p "$TOOLKIT_ROOT/skills/alpha"
+  cat > "$TOOLKIT_ROOT/skills/alpha/SKILL.md" <<'EOF'
 ---
 apiVersion: agent-toolkit/v1alpha1
 metadata:
@@ -22,7 +22,7 @@ spec:
     - claude
 ---
 EOF
-  ln -s "$REPO_ROOT/skills/alpha" "$HOME/.claude/skills/alpha"
+  ln -s "$TOOLKIT_ROOT/skills/alpha" "$HOME/.claude/skills/alpha"
 }
 
 teardown() {
@@ -31,20 +31,20 @@ teardown() {
 }
 
 @test "unlink user claude --all removes symlinks pointing into the repo" {
-  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" unlink user claude --all --repo-root "$REPO_ROOT"
+  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" unlink user claude --all --toolkit-repo "$TOOLKIT_ROOT"
   [ "$status" -eq 0 ]
   [ ! -L "$HOME/.claude/skills/alpha" ]
 }
 
 @test "unlink user claude --all leaves unrelated symlinks untouched" {
   ln -s /tmp "$HOME/.claude/skills/unrelated"
-  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" unlink user claude --all --repo-root "$REPO_ROOT"
+  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" unlink user claude --all --toolkit-repo "$TOOLKIT_ROOT"
   [ "$status" -eq 0 ]
   [ -L "$HOME/.claude/skills/unrelated" ]
 }
 
 @test "unlink user claude --all emits header and summary on stderr" {
-  run bash -c "'$BATS_TEST_DIRNAME/../../bin/agent-toolkit' unlink user claude --all --repo-root '$REPO_ROOT' 2>&1 >/dev/null"
+  run bash -c "'$BATS_TEST_DIRNAME/../../bin/agent-toolkit' unlink user claude --all --toolkit-repo '$TOOLKIT_ROOT' 2>&1 >/dev/null"
   [ "$status" -eq 0 ]
   [[ "$output" == *"Removing"* ]]
   [[ "$output" == *"Removed"* ]]

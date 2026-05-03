@@ -31,17 +31,25 @@ _conventions_layer3_slots() {
 conventions_link_main() {
   shift  # discard 'user'
   shift  # discard 'conventions'
-  local repo_root="$PWD"
+  local toolkit_root=""
   local dry_run=0
+  if [ -n "${AGENT_TOOLKIT_REPO_FLAG:-}" ]; then toolkit_root="$AGENT_TOOLKIT_REPO_FLAG"; fi
   while [ "$#" -gt 0 ]; do
     case "$1" in
-      --repo-root) repo_root="$2"; shift 2 ;;
+      --toolkit-repo) toolkit_root="$2"; shift 2 ;;
       --dry-run)   dry_run=1; shift ;;
       *) echo "unknown flag: $1" >&2; return 2 ;;
     esac
   done
 
-  _conventions_link_layer2 "$repo_root" "$dry_run" || return 1
+  # Resolve toolkit_root via the four-step order if not explicitly given.
+  if [ -z "$toolkit_root" ]; then
+    toolkit_root="$(resolve_toolkit_root "")" || return $?
+  else
+    toolkit_root="$(resolve_toolkit_root "$toolkit_root")" || return $?
+  fi
+
+  _conventions_link_layer2 "$toolkit_root" "$dry_run" || return 1
   _conventions_link_layer3 "$dry_run" || return 1
 }
 
@@ -60,7 +68,7 @@ _conventions_link_layer3() {
 
 # Idempotent: skip if correct, replace if stale, create if missing.
 _conventions_link_layer2() {
-  local repo_root="$1"
+  local toolkit_root="$1"
   local dry_run="$2"
   if [ -e "$HOME/.conventions" ] && [ ! -d "$HOME/.conventions" ] && [ ! -L "$HOME/.conventions" ]; then
     echo "error: $HOME/.conventions exists and is not a directory — refuses to proceed" >&2
@@ -69,11 +77,11 @@ _conventions_link_layer2() {
   [ "$dry_run" -eq 1 ] || mkdir -p "$HOME/.conventions"
   _conventions_maybe_link \
     "$HOME/.conventions/CONVENTIONS.md" \
-    "$repo_root/CONVENTIONS.md" \
+    "$toolkit_root/CONVENTIONS.md" \
     "$dry_run" || return 1
   _conventions_maybe_link \
     "$HOME/.conventions/conventions" \
-    "$repo_root/conventions" \
+    "$toolkit_root/conventions" \
     "$dry_run" || return 1
 }
 
@@ -104,7 +112,7 @@ conventions_unlink_main() {
   local dry_run=0
   while [ "$#" -gt 0 ]; do
     case "$1" in
-      --repo-root) shift 2 ;;       # accepted for symmetry, ignored
+      --toolkit-repo) shift 2 ;;    # accepted for symmetry, ignored
       --dry-run)   dry_run=1; shift ;;
       *) echo "unknown flag: $1" >&2; return 2 ;;
     esac
@@ -128,7 +136,7 @@ conventions_list_main() {
   shift; shift
   while [ "$#" -gt 0 ]; do
     case "$1" in
-      --repo-root) shift 2 ;;       # accepted, ignored
+      --toolkit-repo) shift 2 ;;    # accepted, ignored
       *) echo "unknown flag: $1" >&2; return 2 ;;
     esac
   done
@@ -176,7 +184,7 @@ _conventions_resolve() {
 }
 
 conventions_diff_main() {
-  # Re-dispatch as link --dry-run, preserving any --repo-root caller passed.
+  # Re-dispatch as link --dry-run, preserving any --toolkit-repo caller passed.
   shift; shift  # discard 'user' 'conventions'
   conventions_link_main "user" "conventions" --dry-run "$@"
 }

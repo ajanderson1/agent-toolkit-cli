@@ -11,11 +11,15 @@ _is_known_kind() { case " $_KNOWN_KINDS " in *" $1 "*) return 0 ;; esac; return 
 _is_known_harness() { case " $_KNOWN_HARNESSES " in *" $1 "*) return 0 ;; esac; return 1; }
 
 list_main() {
-  local repo_root="$PWD"
+  local toolkit_root=""
+  local project_root="$PWD"
   local kind_filter="" harness_filter="" format="text"
+  if [ -n "${AGENT_TOOLKIT_REPO_FLAG:-}" ]; then toolkit_root="$AGENT_TOOLKIT_REPO_FLAG"; fi
+  if [ -n "${AGENT_TOOLKIT_PROJECT_FLAG:-}" ]; then project_root="$AGENT_TOOLKIT_PROJECT_FLAG"; fi
   while [ "$#" -gt 0 ]; do
     case "$1" in
-      --repo-root) repo_root="$2"; shift 2 ;;
+      --toolkit-repo) toolkit_root="$2"; shift 2 ;;
+      --project)      project_root="$2"; shift 2 ;;
       --quiet|-q)  AGENT_TOOLKIT_QUIET=1; shift ;;
       --format)    format="$2"; shift 2 ;;
       --format=*)  format="${1#--format=}"; shift ;;
@@ -41,11 +45,18 @@ list_main() {
     *) echo "unknown --format: $format (expected: text, json)" >&2; return 2 ;;
   esac
 
+  # Resolve toolkit_root via the four-step order if not explicitly given.
+  if [ -z "$toolkit_root" ]; then
+    toolkit_root="$(resolve_toolkit_root "")" || return $?
+  else
+    toolkit_root="$(resolve_toolkit_root "$toolkit_root")" || return $?
+  fi
+
   if [ "$format" = "json" ]; then
     local _at_project
     _at_project="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
     exec uv run --project "$_at_project" \
-      agent-toolkit _list-json --repo-root "$repo_root" \
+      agent-toolkit _list-json --toolkit-repo "$toolkit_root" --project "$project_root" \
       ${kind_filter:+--kind "$kind_filter"} \
       ${harness_filter:+--harness "$harness_filter"}
   fi
@@ -59,7 +70,7 @@ list_main() {
   _ui_header "Asset inventory (filter: kind=${kind_filter:-any}, harness=${harness_filter:-any}):"
 
   local user_yaml="$HOME/.agent-toolkit.yaml"
-  local project_yaml="$PWD/.agent-toolkit.yaml"
+  local project_yaml="$project_root/.agent-toolkit.yaml"
 
   local kind
   for kind in skill agent command hook plugin; do
@@ -75,8 +86,8 @@ list_main() {
         echo "$harnesses" | grep -qx "$harness_filter" || continue
       fi
       local user_state project_state
-      user_state="$(_list_install_state "$user_yaml" "$kind" "$slug" "$harnesses" "$harness_filter" user)"
-      project_state="$(_list_install_state "$project_yaml" "$kind" "$slug" "$harnesses" "$harness_filter" project)"
+      user_state="$(_list_install_state "$user_yaml" "$kind" "$slug" "$harnesses" "$harness_filter" user "$project_root")"
+      project_state="$(_list_install_state "$project_yaml" "$kind" "$slug" "$harnesses" "$harness_filter" project "$project_root")"
       local h_display=""
       if [ -z "$harness_filter" ]; then
         h_display="[$(echo "$harnesses" | tr '\n' ' ' | sed 's/[[:space:]]*$//')]"
@@ -84,7 +95,7 @@ list_main() {
       printf -v row '  %-20s %-30s user:%s project:%s\n' "$slug" "$h_display" "$user_state" "$project_state"
       rows+="$row"
       count=$((count + 1))
-    done < <(discover_assets_for_kind "$repo_root" "$kind")
+    done < <(discover_assets_for_kind "$toolkit_root" "$kind")
 
     if [ -n "$rows" ]; then
       local section_title
@@ -104,11 +115,11 @@ list_main() {
 }
 
 # Determine the install state ✓/— for one asset against one allow-list YAML.
-# Args: yaml_path kind slug asset_harnesses harness_filter scope
+# Args: yaml_path kind slug asset_harnesses harness_filter scope project_root
 # A symlink-existence check is included for user scope; project scope checks
-# against $PWD/.<harness>/<kind>/<slug>.
+# against $project_root/.<harness>/<kind>/<slug>.
 _list_install_state() {
-  local yaml="$1" kind="$2" slug="$3" asset_harnesses="$4" harness_filter="$5" scope="$6"
+  local yaml="$1" kind="$2" slug="$3" asset_harnesses="$4" harness_filter="$5" scope="$6" project_root="$7"
   [ -f "$yaml" ] || { echo "—"; return; }
   local section
   section="$(kind_to_section "$kind")" 2>/dev/null || { echo "—"; return; }
@@ -133,7 +144,10 @@ _list_install_state() {
     if [ "$scope" = "user" ]; then
       target_dir="$(harness_target_dir "$h" "$kind")"
     else
-      target_dir="$(project_target_dir "$h" "$kind")"
+      local rel
+      rel="$(project_target_dir "$h" "$kind")"
+      target_dir=""
+      [ -n "$rel" ] && target_dir="$project_root/$rel"
     fi
     [ -n "$target_dir" ] || continue
     if [ -L "$target_dir/$slug" ]; then echo "✓"; return; fi

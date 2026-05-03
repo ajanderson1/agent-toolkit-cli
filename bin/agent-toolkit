@@ -49,10 +49,14 @@ Commands that operate on metadata (Python via uv):
   tui                              Launch the Textual cockpit (requires the [tui] extra).
 
 Common options:
-  --repo-root DIR    Operate on this repo (defaults to current directory).
-  --dry-run          link/unlink: show what would change without doing it.
-  --quiet, -q        Suppress header/summary chrome (also via AGENT_TOOLKIT_QUIET=1).
-  --exit-code        check/doctor: exit non-zero on any error (CI gate).
+  --toolkit-repo DIR   Path to the agent-toolkit repo (the SSOT). Default
+                       resolved via $AGENT_TOOLKIT_REPO, walk-up of
+                       .agent-toolkit-source, then ~/GitHub/agent-toolkit.
+  --project DIR        Path to the consumer project (for link/unlink/list/diff).
+                       Default: current directory.
+  --dry-run            link/unlink: show what would change without doing it.
+  --quiet, -q          Suppress header/summary chrome (also via AGENT_TOOLKIT_QUIET=1).
+  --exit-code          check/doctor: exit non-zero on any error (CI gate).
 
 Examples:
   agent-toolkit link user claude --all       # snapshot everything compatible, project
@@ -69,6 +73,49 @@ Examples:
 Documentation: docs/agent-toolkit/cli.md
 EOF
 }
+
+# Pre-parse --toolkit-repo <path>, --project <path>, --resolve-toolkit (test/inspection).
+TOOLKIT_REPO_FLAG=""
+PROJECT_FLAG=""
+RESOLVE_ONLY=0
+NEW_ARGS=()
+ALL_ARGS=("$@")
+total=${#ALL_ARGS[@]}
+i=0
+while [ $i -lt $total ]; do
+  arg="${ALL_ARGS[$i]}"
+  case "$arg" in
+    --toolkit-repo)
+      i=$((i+1))
+      if [ $i -lt $total ]; then TOOLKIT_REPO_FLAG="${ALL_ARGS[$i]}"; fi
+      ;;
+    --project)
+      i=$((i+1))
+      if [ $i -lt $total ]; then PROJECT_FLAG="${ALL_ARGS[$i]}"; fi
+      ;;
+    --resolve-toolkit)
+      RESOLVE_ONLY=1
+      ;;
+    *)
+      NEW_ARGS+=("$arg")
+      ;;
+  esac
+  i=$((i+1))
+done
+if [ ${#NEW_ARGS[@]} -gt 0 ]; then
+  set -- "${NEW_ARGS[@]}"
+else
+  set --
+fi
+
+if [ "$RESOLVE_ONLY" = "1" ]; then
+  resolve_toolkit_root "$TOOLKIT_REPO_FLAG"
+  exit $?
+fi
+
+# Export so subcommands can use them:
+if [ -n "$TOOLKIT_REPO_FLAG" ]; then export AGENT_TOOLKIT_REPO_FLAG="$TOOLKIT_REPO_FLAG"; fi
+if [ -n "$PROJECT_FLAG" ]; then export AGENT_TOOLKIT_PROJECT_FLAG="$PROJECT_FLAG"; fi
 
 cmd="${1:-}"; shift || true
 case "$cmd" in
@@ -89,7 +136,7 @@ case "$cmd" in
     ;;
   tui)
     exec uv run --project "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)" \
-      agent-toolkit-tui --repo-root "$PWD" "$@"
+      agent-toolkit-tui --toolkit-repo "$PWD" "$@"
     ;;
   check|fix|doctor|new|inventory|ingest)
     exec uv run agent-toolkit "$cmd" "$@"

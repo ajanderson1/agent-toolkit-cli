@@ -132,11 +132,11 @@ def list_json(
     if toolkit_root is None:
         toolkit_root = Path(".").resolve()
     else:
-        toolkit_root = Path(toolkit_root).resolve()
+        toolkit_root = Path(toolkit_root)
     if project_root is None:
         project_root = Path(".").resolve()
     else:
-        project_root = Path(project_root).resolve()
+        project_root = Path(project_root)
     # Keep the user-facing `toolkit_root` string verbatim (e.g. `/tmp/...` not
     # `/private/tmp/...` on macOS) so callers comparing against their argv
     # see what they passed. Use a resolved copy internally for path checks.

@@ -7,11 +7,11 @@ setup() {
   HOME="$(mktemp -d)"
   export HOME
   # Conventions tree the repo will link from
-  mkdir -p "$REPO_ROOT/conventions"
-  cat > "$REPO_ROOT/CONVENTIONS.md" <<'EOF'
+  mkdir -p "$TOOLKIT_ROOT/conventions"
+  cat > "$TOOLKIT_ROOT/CONVENTIONS.md" <<'EOF'
 # CONVENTIONS (test fixture)
 EOF
-  cat > "$REPO_ROOT/conventions/git.md" <<'EOF'
+  cat > "$TOOLKIT_ROOT/conventions/git.md" <<'EOF'
 # git (test fixture)
 EOF
 }
@@ -22,33 +22,33 @@ teardown() {
 }
 
 @test "link user conventions exits 0" {
-  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --repo-root "$REPO_ROOT"
+  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --toolkit-repo "$TOOLKIT_ROOT"
   [ "$status" -eq 0 ]
 }
 
 @test "link user conventions creates Layer 2 symlinks" {
-  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --repo-root "$REPO_ROOT"
+  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --toolkit-repo "$TOOLKIT_ROOT"
   [ "$status" -eq 0 ]
   [ -L "$HOME/.conventions/CONVENTIONS.md" ]
-  [ "$(readlink "$HOME/.conventions/CONVENTIONS.md")" = "$REPO_ROOT/CONVENTIONS.md" ]
+  [ "$(readlink "$HOME/.conventions/CONVENTIONS.md")" = "$TOOLKIT_ROOT/CONVENTIONS.md" ]
   [ -L "$HOME/.conventions/conventions" ]
-  [ "$(readlink "$HOME/.conventions/conventions")" = "$REPO_ROOT/conventions" ]
+  [ "$(readlink "$HOME/.conventions/conventions")" = "$TOOLKIT_ROOT/conventions" ]
 }
 
 @test "link user conventions Layer 2 is idempotent" {
-  "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --repo-root "$REPO_ROOT"
-  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --repo-root "$REPO_ROOT"
+  "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --toolkit-repo "$TOOLKIT_ROOT"
+  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --toolkit-repo "$TOOLKIT_ROOT"
   [ "$status" -eq 0 ]
   [ -L "$HOME/.conventions/CONVENTIONS.md" ]
-  [ "$(readlink "$HOME/.conventions/CONVENTIONS.md")" = "$REPO_ROOT/CONVENTIONS.md" ]
+  [ "$(readlink "$HOME/.conventions/CONVENTIONS.md")" = "$TOOLKIT_ROOT/CONVENTIONS.md" ]
   [ -L "$HOME/.conventions/conventions" ]
-  [ "$(readlink "$HOME/.conventions/conventions")" = "$REPO_ROOT/conventions" ]
+  [ "$(readlink "$HOME/.conventions/conventions")" = "$TOOLKIT_ROOT/conventions" ]
 }
 
 @test "link user conventions refuses to clobber a real file at ~/.conventions/CONVENTIONS.md" {
   mkdir -p "$HOME/.conventions"
   echo "user-content" > "$HOME/.conventions/CONVENTIONS.md"
-  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --repo-root "$REPO_ROOT"
+  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --toolkit-repo "$TOOLKIT_ROOT"
   [ "$status" -ne 0 ]
   [[ "$output" == *"refuses to overwrite"* ]]
   [ "$(cat "$HOME/.conventions/CONVENTIONS.md")" = "user-content" ]
@@ -56,14 +56,14 @@ teardown() {
 
 @test "link user conventions refuses if ~/.conventions exists as a file" {
   echo "user-content" > "$HOME/.conventions"
-  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --repo-root "$REPO_ROOT"
+  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --toolkit-repo "$TOOLKIT_ROOT"
   [ "$status" -ne 0 ]
   [[ "$output" == *"refuses to proceed"* ]]
 }
 
 @test "link user conventions creates Claude Layer 3 symlinks when ~/.claude exists" {
   mkdir -p "$HOME/.claude"
-  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --repo-root "$REPO_ROOT"
+  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --toolkit-repo "$TOOLKIT_ROOT"
   [ "$status" -eq 0 ]
   [ -L "$HOME/.claude/CONVENTIONS.md" ]
   [ "$(readlink "$HOME/.claude/CONVENTIONS.md")" = "$HOME/.conventions/CONVENTIONS.md" ]
@@ -73,7 +73,7 @@ teardown() {
 
 @test "link user conventions creates Codex Layer 3 symlink when ~/.codex exists" {
   mkdir -p "$HOME/.codex"
-  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --repo-root "$REPO_ROOT"
+  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --toolkit-repo "$TOOLKIT_ROOT"
   [ "$status" -eq 0 ]
   [ -L "$HOME/.codex/AGENTS.md" ]
   [ "$(readlink "$HOME/.codex/AGENTS.md")" = "$HOME/.conventions/CONVENTIONS.md" ]
@@ -81,7 +81,7 @@ teardown() {
 
 @test "link user conventions creates OpenCode Layer 3 symlink when ~/.config/opencode exists" {
   mkdir -p "$HOME/.config/opencode"
-  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --repo-root "$REPO_ROOT"
+  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --toolkit-repo "$TOOLKIT_ROOT"
   [ "$status" -eq 0 ]
   [ -L "$HOME/.config/opencode/AGENTS.md" ]
   [ "$(readlink "$HOME/.config/opencode/AGENTS.md")" = "$HOME/.conventions/CONVENTIONS.md" ]
@@ -89,7 +89,7 @@ teardown() {
 
 @test "link user conventions creates Pi Layer 3 symlink when ~/.pi/agent exists" {
   mkdir -p "$HOME/.pi/agent"
-  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --repo-root "$REPO_ROOT"
+  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --toolkit-repo "$TOOLKIT_ROOT"
   [ "$status" -eq 0 ]
   [ -L "$HOME/.pi/agent/AGENTS.md" ]
   [ "$(readlink "$HOME/.pi/agent/AGENTS.md")" = "$HOME/.conventions/CONVENTIONS.md" ]
@@ -97,7 +97,7 @@ teardown() {
 
 @test "link user conventions skips harness whose dir does not exist" {
   # Note: setup() creates ONLY a tmp HOME, so ~/.codex etc. do not exist.
-  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --repo-root "$REPO_ROOT"
+  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --toolkit-repo "$TOOLKIT_ROOT"
   [ "$status" -eq 0 ]
   [ ! -e "$HOME/.codex/AGENTS.md" ]
   [ ! -e "$HOME/.config/opencode/AGENTS.md" ]
@@ -106,8 +106,8 @@ teardown() {
 
 @test "link user conventions Layer 3 is idempotent" {
   mkdir -p "$HOME/.claude"
-  "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --repo-root "$REPO_ROOT"
-  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --repo-root "$REPO_ROOT"
+  "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --toolkit-repo "$TOOLKIT_ROOT"
+  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --toolkit-repo "$TOOLKIT_ROOT"
   [ "$status" -eq 0 ]
   [ -L "$HOME/.claude/CONVENTIONS.md" ]
   [ "$(readlink "$HOME/.claude/CONVENTIONS.md")" = "$HOME/.conventions/CONVENTIONS.md" ]
@@ -117,7 +117,7 @@ teardown() {
 
 @test "link user conventions creates all Layer 3 slots when every harness dir exists" {
   mkdir -p "$HOME/.claude" "$HOME/.codex" "$HOME/.config/opencode" "$HOME/.pi/agent"
-  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --repo-root "$REPO_ROOT"
+  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --toolkit-repo "$TOOLKIT_ROOT"
   [ "$status" -eq 0 ]
   [ -L "$HOME/.claude/CONVENTIONS.md" ]
   [ -L "$HOME/.claude/conventions" ]
@@ -132,12 +132,12 @@ teardown() {
 
 @test "unlink user conventions removes Layer 3 only" {
   mkdir -p "$HOME/.claude" "$HOME/.codex"
-  "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --repo-root "$REPO_ROOT"
+  "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --toolkit-repo "$TOOLKIT_ROOT"
   [ -L "$HOME/.claude/CONVENTIONS.md" ]
   [ -L "$HOME/.codex/AGENTS.md" ]
   [ -L "$HOME/.conventions/CONVENTIONS.md" ]
 
-  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" unlink user conventions --repo-root "$REPO_ROOT"
+  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" unlink user conventions --toolkit-repo "$TOOLKIT_ROOT"
   [ "$status" -eq 0 ]
   [ ! -L "$HOME/.claude/CONVENTIONS.md" ]
   [ ! -L "$HOME/.claude/conventions" ]
@@ -149,19 +149,19 @@ teardown() {
 
 @test "list user conventions shows the Layer 3 -> Layer 2 -> Layer 1 chain" {
   mkdir -p "$HOME/.claude" "$HOME/.codex"
-  "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --repo-root "$REPO_ROOT"
+  "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --toolkit-repo "$TOOLKIT_ROOT"
 
-  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" list user conventions --repo-root "$REPO_ROOT"
+  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" list user conventions --toolkit-repo "$TOOLKIT_ROOT"
   [ "$status" -eq 0 ]
   [[ "$output" == *"$HOME/.claude/CONVENTIONS.md"* ]]
   [[ "$output" == *"$HOME/.conventions/CONVENTIONS.md"* ]]
-  [[ "$output" == *"$REPO_ROOT/CONVENTIONS.md"* ]]
+  [[ "$output" == *"$TOOLKIT_ROOT/CONVENTIONS.md"* ]]
   [[ "$output" == *"$HOME/.codex/AGENTS.md"* ]]
 }
 
 @test "list user conventions handles missing slots gracefully" {
   # No HOME/.claude, no HOME/.codex etc.
-  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" list user conventions --repo-root "$REPO_ROOT"
+  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" list user conventions --toolkit-repo "$TOOLKIT_ROOT"
   [ "$status" -eq 0 ]
   # No assertion on output content — just must not crash.
 }
@@ -169,27 +169,27 @@ teardown() {
 @test "unlink user conventions does not touch unrelated symlinks at slot paths" {
   mkdir -p "$HOME/.claude"
   # First, establish Layer 2 and Layer 3 normally.
-  "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --repo-root "$REPO_ROOT"
+  "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --toolkit-repo "$TOOLKIT_ROOT"
   [ -L "$HOME/.claude/CONVENTIONS.md" ]
   [ "$(readlink "$HOME/.claude/CONVENTIONS.md")" = "$HOME/.conventions/CONVENTIONS.md" ]
 
   # Now replace the Layer-3 symlink to point elsewhere (not Layer 2) — this exercises the
   # target-guard inside conventions_unlink_main.
   rm "$HOME/.claude/CONVENTIONS.md"
-  ln -s "$REPO_ROOT/CONVENTIONS.md" "$HOME/.claude/CONVENTIONS.md"  # now points at Layer 1, not Layer 2
-  [ "$(readlink "$HOME/.claude/CONVENTIONS.md")" = "$REPO_ROOT/CONVENTIONS.md" ]
+  ln -s "$TOOLKIT_ROOT/CONVENTIONS.md" "$HOME/.claude/CONVENTIONS.md"  # now points at Layer 1, not Layer 2
+  [ "$(readlink "$HOME/.claude/CONVENTIONS.md")" = "$TOOLKIT_ROOT/CONVENTIONS.md" ]
 
   # Unlink should NOT remove this symlink because it doesn't point at Layer 2.
-  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" unlink user conventions --repo-root "$REPO_ROOT"
+  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" unlink user conventions --toolkit-repo "$TOOLKIT_ROOT"
   [ "$status" -eq 0 ]
   # The modified symlink must survive — it is not Layer 2-targeting.
   [ -L "$HOME/.claude/CONVENTIONS.md" ]
-  [ "$(readlink "$HOME/.claude/CONVENTIONS.md")" = "$REPO_ROOT/CONVENTIONS.md" ]
+  [ "$(readlink "$HOME/.claude/CONVENTIONS.md")" = "$TOOLKIT_ROOT/CONVENTIONS.md" ]
 }
 
 @test "diff user conventions reports would-link without creating" {
   mkdir -p "$HOME/.claude"
-  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" diff user conventions --repo-root "$REPO_ROOT"
+  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" diff user conventions --toolkit-repo "$TOOLKIT_ROOT"
   [ "$status" -eq 0 ]
   [[ "$output" == *"would-link"* ]]
   [ ! -e "$HOME/.conventions/CONVENTIONS.md" ]
@@ -200,18 +200,18 @@ teardown() {
   mkdir -p "$HOME/.conventions"
   ln -s "/tmp/wrong-target" "$HOME/.conventions/CONVENTIONS.md"
 
-  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --repo-root "$REPO_ROOT"
+  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --toolkit-repo "$TOOLKIT_ROOT"
   [ "$status" -eq 0 ]
-  [ "$(readlink "$HOME/.conventions/CONVENTIONS.md")" = "$REPO_ROOT/CONVENTIONS.md" ]
+  [ "$(readlink "$HOME/.conventions/CONVENTIONS.md")" = "$TOOLKIT_ROOT/CONVENTIONS.md" ]
 }
 
 @test "link user conventions replaces stale Layer 3 symlink pointing at old Layer 1" {
   mkdir -p "$HOME/.claude"
   # Pre-existing direct-to-Layer-1 symlink (the migration scenario we will
   # hit on AJ's machine).
-  ln -s "$REPO_ROOT/CONVENTIONS.md" "$HOME/.claude/CONVENTIONS.md"
+  ln -s "$TOOLKIT_ROOT/CONVENTIONS.md" "$HOME/.claude/CONVENTIONS.md"
 
-  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --repo-root "$REPO_ROOT"
+  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --toolkit-repo "$TOOLKIT_ROOT"
   [ "$status" -eq 0 ]
   # After link, the slot must point at Layer 2, not Layer 1.
   [ "$(readlink "$HOME/.claude/CONVENTIONS.md")" = "$HOME/.conventions/CONVENTIONS.md" ]
@@ -219,9 +219,9 @@ teardown() {
 
 @test "unlink user conventions --dry-run prints would-unlink without removing" {
   mkdir -p "$HOME/.claude"
-  "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --repo-root "$REPO_ROOT"
+  "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user conventions --toolkit-repo "$TOOLKIT_ROOT"
   [ -L "$HOME/.claude/CONVENTIONS.md" ]
-  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" unlink user conventions --repo-root "$REPO_ROOT" --dry-run
+  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" unlink user conventions --toolkit-repo "$TOOLKIT_ROOT" --dry-run
   [ "$status" -eq 0 ]
   [[ "$output" == *"would-unlink"* ]]
   # Symlinks must still exist

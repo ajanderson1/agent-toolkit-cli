@@ -6,9 +6,10 @@
 . "$(dirname "${BASH_SOURCE[0]}")/link.sh"   # for _link_project_from_file (re-projection on per-asset)
 
 _unlink_allowlist_path() {
-  case "$1" in
+  local scope="$1" project_root="$2"
+  case "$scope" in
     user)    echo "$HOME/.agent-toolkit.yaml" ;;
-    project) echo "$PWD/.agent-toolkit.yaml" ;;
+    project) echo "$project_root/.agent-toolkit.yaml" ;;
     *)       echo ""; return 1 ;;
   esac
 }
@@ -16,13 +17,17 @@ _unlink_allowlist_path() {
 unlink_main() {
   local scope="$1"; shift
   local harness="$1"; shift
-  local repo_root="$PWD"
+  local toolkit_root=""
+  local project_root="$PWD"
   local dry_run=0
   local mode="bare"
   local kind="" slug=""
+  if [ -n "${AGENT_TOOLKIT_REPO_FLAG:-}" ]; then toolkit_root="$AGENT_TOOLKIT_REPO_FLAG"; fi
+  if [ -n "${AGENT_TOOLKIT_PROJECT_FLAG:-}" ]; then project_root="$AGENT_TOOLKIT_PROJECT_FLAG"; fi
   while [ "$#" -gt 0 ]; do
     case "$1" in
-      --repo-root) repo_root="$2"; shift 2 ;;
+      --toolkit-repo) toolkit_root="$2"; shift 2 ;;
+      --project)      project_root="$2"; shift 2 ;;
       --dry-run)   dry_run=1; shift ;;
       --quiet|-q)  AGENT_TOOLKIT_QUIET=1; shift ;;
       --all)
@@ -57,14 +62,21 @@ unlink_main() {
 
   case "$scope" in user|project) ;; *) echo "scope must be 'user' or 'project'" >&2; return 2 ;; esac
 
+  # Resolve toolkit_root via the four-step order if not explicitly given.
+  if [ -z "$toolkit_root" ]; then
+    toolkit_root="$(resolve_toolkit_root "")" || return $?
+  else
+    toolkit_root="$(resolve_toolkit_root "$toolkit_root")" || return $?
+  fi
+
   local allowlist_path
-  allowlist_path="$(_unlink_allowlist_path "$scope")"
+  allowlist_path="$(_unlink_allowlist_path "$scope" "$project_root")"
 
   case "$mode" in
     bare)      _unlink_bare_error "$scope" "$harness" "$allowlist_path" ;;
-    all)       _unlink_all "$scope" "$harness" "$repo_root" "$dry_run" ;;
-    per-asset) _unlink_per_asset "$scope" "$harness" "$kind" "$slug" "$repo_root" "$allowlist_path" "$dry_run" ;;
-    plan)      _unlink_plan "$scope" "$harness" "$repo_root" "$allowlist_path" "$dry_run" ;;
+    all)       _unlink_all "$scope" "$harness" "$toolkit_root" "$project_root" "$dry_run" ;;
+    per-asset) _unlink_per_asset "$scope" "$harness" "$kind" "$slug" "$toolkit_root" "$project_root" "$allowlist_path" "$dry_run" ;;
+    plan)      _unlink_plan "$scope" "$harness" "$toolkit_root" "$project_root" "$allowlist_path" "$dry_run" ;;
   esac
 }
 
@@ -80,12 +92,12 @@ EOF
 }
 
 _unlink_all() {
-  local scope="$1" harness="$2" repo_root="$3" dry_run="$4"
+  local scope="$1" harness="$2" toolkit_root="$3" project_root="$4" dry_run="$5"
 
   if [ "$dry_run" -eq 1 ]; then
-    _ui_header "Previewing removal of $scope-scope $harness symlinks pointing into $repo_root..."
+    _ui_header "Previewing removal of $scope-scope $harness symlinks pointing into $toolkit_root..."
   else
-    _ui_header "Removing $scope-scope $harness symlinks pointing into $repo_root..."
+    _ui_header "Removing $scope-scope $harness symlinks pointing into $toolkit_root..."
   fi
 
   local removed=0
@@ -95,7 +107,10 @@ _unlink_all() {
     if [ "$scope" = "user" ]; then
       target_dir="$(harness_target_dir "$harness" "$kind")"
     else
-      target_dir="$(project_target_dir "$harness" "$kind")"
+      local rel
+      rel="$(project_target_dir "$harness" "$kind")"
+      target_dir=""
+      [ -n "$rel" ] && target_dir="$project_root/$rel"
     fi
     [ -n "$target_dir" ] || continue
     [ -d "$target_dir" ] || continue
@@ -105,7 +120,7 @@ _unlink_all() {
       local target
       target="$(readlink "$entry")"
       case "$target" in
-        "$repo_root"/*)
+        "$toolkit_root"/*)
           if [ "$dry_run" -eq 1 ]; then
             echo "would-unlink: $entry"
           else
@@ -126,7 +141,7 @@ _unlink_all() {
 
 _unlink_per_asset() {
   local scope="$1" harness="$2" kind="$3" slug="$4"
-  local repo_root="$5" allowlist_path="$6" dry_run="$7"
+  local toolkit_root="$5" project_root="$6" allowlist_path="$7" dry_run="$8"
 
   if [ "$kind" = "mcp" ]; then
     echo "mcps are not yet scope-routed — edit the harness's mcp.json directly" >&2
@@ -160,7 +175,7 @@ _unlink_per_asset() {
   # Reset link counters and re-project to prune
   _LINK_CREATED=0; _LINK_UPDATED=0; _LINK_REMOVED=0
   _LINK_UNCHANGED=0; _LINK_WOULD_LINK=0; _LINK_WOULD_UNLINK=0
-  _link_project_from_file "$scope" "$harness" "$repo_root" "$allowlist_path" "$dry_run"
+  _link_project_from_file "$scope" "$harness" "$toolkit_root" "$project_root" "$allowlist_path" "$dry_run"
   _link_print_summary "$dry_run"
 }
 
@@ -170,7 +185,7 @@ _unlink_per_asset() {
 # Per-entry failures are reported on stderr but do NOT abort the batch.
 # Returns 0 if every entry succeeded; 1 if any entry failed.
 _unlink_plan() {
-  local scope="$1" harness="$2" repo_root="$3" allowlist_path="$4" dry_run="$5"
+  local scope="$1" harness="$2" toolkit_root="$3" project_root="$4" allowlist_path="$5" dry_run="$6"
   local ok=0 failed=0 total=0
   local errors=""
 
@@ -193,7 +208,7 @@ _unlink_plan() {
     esac
     total=$((total+1))
     if AGENT_TOOLKIT_QUIET=1 _unlink_per_asset "$scope" "$harness" "${line%%:*}" "${line#*:}" \
-         "$repo_root" "$allowlist_path" "$dry_run" >/dev/null 2>>"$plan_err"; then
+         "$toolkit_root" "$project_root" "$allowlist_path" "$dry_run" >/dev/null 2>>"$plan_err"; then
       ok=$((ok+1))
     else
       failed=$((failed+1))

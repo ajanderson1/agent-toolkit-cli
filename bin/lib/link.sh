@@ -18,9 +18,10 @@ _LINK_WOULD_UNLINK=0
 
 # Resolve the path to the allow-list YAML for a given scope.
 _link_allowlist_path() {
-  case "$1" in
+  local scope="$1" project_root="$2"
+  case "$scope" in
     user)    echo "$HOME/.agent-toolkit.yaml" ;;
-    project) echo "$PWD/.agent-toolkit.yaml" ;;
+    project) echo "$project_root/.agent-toolkit.yaml" ;;
     *)       echo ""; return 1 ;;
   esac
 }
@@ -28,14 +29,19 @@ _link_allowlist_path() {
 link_main() {
   local scope="$1"; shift
   local harness="$1"; shift
-  local repo_root="$PWD"
+  local toolkit_root=""
+  local project_root="$PWD"
   local dry_run=0
   local mode="bare"          # bare | per-asset | all
   local kind="" slug=""
   local assume_yes=0
+  # Honour pre-pass exports.
+  if [ -n "${AGENT_TOOLKIT_REPO_FLAG:-}" ]; then toolkit_root="$AGENT_TOOLKIT_REPO_FLAG"; fi
+  if [ -n "${AGENT_TOOLKIT_PROJECT_FLAG:-}" ]; then project_root="$AGENT_TOOLKIT_PROJECT_FLAG"; fi
   while [ "$#" -gt 0 ]; do
     case "$1" in
-      --repo-root) repo_root="$2"; shift 2 ;;
+      --toolkit-repo) toolkit_root="$2"; shift 2 ;;
+      --project)      project_root="$2"; shift 2 ;;
       --dry-run)   dry_run=1; shift ;;
       --quiet|-q)  AGENT_TOOLKIT_QUIET=1; shift ;;
       --all)
@@ -71,24 +77,31 @@ link_main() {
 
   case "$scope" in user|project) ;; *) echo "scope must be 'user' or 'project'" >&2; return 2 ;; esac
 
+  # Resolve toolkit_root via the four-step order if not explicitly given.
+  if [ -z "$toolkit_root" ]; then
+    toolkit_root="$(resolve_toolkit_root "")" || return $?
+  else
+    toolkit_root="$(resolve_toolkit_root "$toolkit_root")" || return $?
+  fi
+
   local allowlist_path
-  allowlist_path="$(_link_allowlist_path "$scope")"
+  allowlist_path="$(_link_allowlist_path "$scope" "$project_root")"
 
   # Reset counters
   _LINK_CREATED=0; _LINK_UPDATED=0; _LINK_REMOVED=0
   _LINK_UNCHANGED=0; _LINK_WOULD_LINK=0; _LINK_WOULD_UNLINK=0
 
   case "$mode" in
-    per-asset) _link_per_asset "$scope" "$harness" "$kind" "$slug" "$repo_root" "$allowlist_path" "$dry_run" ;;
-    all)       _link_all "$scope" "$harness" "$repo_root" "$allowlist_path" "$assume_yes" "$dry_run" ;;
-    plan)      _link_plan "$scope" "$harness" "$repo_root" "$allowlist_path" "$dry_run" ;;
-    bare)      _link_bare "$scope" "$harness" "$repo_root" "$allowlist_path" "$dry_run" ;;
+    per-asset) _link_per_asset "$scope" "$harness" "$kind" "$slug" "$toolkit_root" "$project_root" "$allowlist_path" "$dry_run" ;;
+    all)       _link_all "$scope" "$harness" "$toolkit_root" "$project_root" "$allowlist_path" "$assume_yes" "$dry_run" ;;
+    plan)      _link_plan "$scope" "$harness" "$toolkit_root" "$project_root" "$allowlist_path" "$dry_run" ;;
+    bare)      _link_bare "$scope" "$harness" "$toolkit_root" "$project_root" "$allowlist_path" "$dry_run" ;;
   esac
 }
 
 # === Bare form ==============================================================
 _link_bare() {
-  local scope="$1" harness="$2" repo_root="$3" allowlist_path="$4" dry_run="$5"
+  local scope="$1" harness="$2" toolkit_root="$3" project_root="$4" allowlist_path="$5" dry_run="$6"
   if [ ! -f "$allowlist_path" ]; then
     cat >&2 <<EOF
 no $allowlist_path found.
@@ -103,14 +116,14 @@ EOF
   else
     _ui_header "Linking $scope-scope assets for $harness from $allowlist_path..."
   fi
-  _link_project_from_file "$scope" "$harness" "$repo_root" "$allowlist_path" "$dry_run"
+  _link_project_from_file "$scope" "$harness" "$toolkit_root" "$project_root" "$allowlist_path" "$dry_run"
   _link_print_summary "$dry_run"
 }
 
 # === Per-asset form =========================================================
 _link_per_asset() {
   local scope="$1" harness="$2" kind="$3" slug="$4"
-  local repo_root="$5" allowlist_path="$6" dry_run="$7"
+  local toolkit_root="$5" project_root="$6" allowlist_path="$7" dry_run="$8"
 
   # 1. mcp guard
   if [ "$kind" = "mcp" ]; then
@@ -124,7 +137,7 @@ _link_per_asset() {
   local found_file=""
   while IFS=':' read -r _k _s _f; do
     if [ "$_s" = "$slug" ]; then found_file="$_f"; break; fi
-  done < <(discover_assets_for_kind "$repo_root" "$kind")
+  done < <(discover_assets_for_kind "$toolkit_root" "$kind")
   if [ -z "$found_file" ]; then
     echo "no $kind named '$slug' found. Run 'agent-toolkit list $kind' to see what's available." >&2
     return 1
@@ -164,15 +177,15 @@ _link_per_asset() {
   else
     _ui_header "Linking $scope-scope $kind:$slug for $harness..."
   fi
-  _link_project_from_file "$scope" "$harness" "$repo_root" "$target_path" "$dry_run"
+  _link_project_from_file "$scope" "$harness" "$toolkit_root" "$project_root" "$target_path" "$dry_run"
   [ -n "$tmp_path" ] && rm -f "$tmp_path"
   _link_print_summary "$dry_run"
 }
 
 # === --all form =============================================================
 _link_all() {
-  local scope="$1" harness="$2" repo_root="$3" allowlist_path="$4"
-  local assume_yes="$5" dry_run="$6"
+  local scope="$1" harness="$2" toolkit_root="$3" project_root="$4" allowlist_path="$5"
+  local assume_yes="$6" dry_run="$7"
 
   # Confirm overwrite if file is populated
   if [ -f "$allowlist_path" ] && [ "$(_link_file_has_slugs "$allowlist_path")" = "1" ]; then
@@ -216,7 +229,7 @@ _link_all() {
         if echo "$harnesses" | grep -qx "$harness"; then
           echo "$section $_s"
         fi
-      done < <(discover_assets_for_kind "$repo_root" "$kind")
+      done < <(discover_assets_for_kind "$toolkit_root" "$kind")
     done
   } | uv run --project "$_AT_TOOLKIT_PROJECT" agent-toolkit _yaml-edit snapshot "$target_path" || {
     [ -n "$tmp_path" ] && rm -f "$tmp_path"
@@ -228,7 +241,7 @@ _link_all() {
   else
     _ui_header "Snapshotted every $harness-compatible asset into $allowlist_path; projecting..."
   fi
-  _link_project_from_file "$scope" "$harness" "$repo_root" "$target_path" "$dry_run"
+  _link_project_from_file "$scope" "$harness" "$toolkit_root" "$project_root" "$target_path" "$dry_run"
   [ -n "$tmp_path" ] && rm -f "$tmp_path"
   _link_print_summary "$dry_run"
 }
@@ -239,7 +252,7 @@ _link_all() {
 # Per-entry failures are reported on stderr but do NOT abort the batch.
 # Returns 0 if every entry succeeded; 1 if any entry failed.
 _link_plan() {
-  local scope="$1" harness="$2" repo_root="$3" allowlist_path="$4" dry_run="$5"
+  local scope="$1" harness="$2" toolkit_root="$3" project_root="$4" allowlist_path="$5" dry_run="$6"
   local ok=0 failed=0 total=0
   local errors=""
 
@@ -267,7 +280,7 @@ _link_plan() {
     # Reuse _link_per_asset semantics. Suppress chrome via AGENT_TOOLKIT_QUIET=1
     # and capture the per-call exit code only.
     if AGENT_TOOLKIT_QUIET=1 _link_per_asset "$scope" "$harness" "${line%%:*}" "${line#*:}" \
-         "$repo_root" "$allowlist_path" "$dry_run" >/dev/null 2>>"$plan_err"; then
+         "$toolkit_root" "$project_root" "$allowlist_path" "$dry_run" >/dev/null 2>>"$plan_err"; then
       ok=$((ok+1))
     else
       failed=$((failed+1))
@@ -293,14 +306,17 @@ _link_plan() {
 # Walks every kind, reads the section in the allow-list, projects only those
 # slugs that also declare <harness>. Counts populated for the summary.
 _link_project_from_file() {
-  local scope="$1" harness="$2" repo_root="$3" allowlist_path="$4" dry_run="$5"
+  local scope="$1" harness="$2" toolkit_root="$3" project_root="$4" allowlist_path="$5" dry_run="$6"
   local kind
   for kind in skill agent command hook plugin; do
     local target_dir
     if [ "$scope" = "user" ]; then
       target_dir="$(harness_target_dir "$harness" "$kind")"
     else
-      target_dir="$(project_target_dir "$harness" "$kind")"
+      local rel
+      rel="$(project_target_dir "$harness" "$kind")"
+      [ -n "$rel" ] || target_dir=""
+      [ -n "$rel" ] && target_dir="$project_root/$rel"
     fi
     [ -n "$target_dir" ] || continue
     [ "$dry_run" -eq 1 ] || mkdir -p "$target_dir"
@@ -312,7 +328,7 @@ _link_project_from_file() {
     while IFS=':' read -r _ slug file; do
       discovered+="$slug "
       if [[ "$allowed" == *" $slug "* ]]; then
-        _maybe_link "$harness" "$kind" "$slug" "$file" "$target_dir" "$repo_root" "$dry_run"
+        _maybe_link "$harness" "$kind" "$slug" "$file" "$target_dir" "$toolkit_root" "$dry_run"
       else
         # Asset not in allow-list — prune any existing symlink to this slug
         local link_path="$target_dir/$slug"
@@ -320,7 +336,7 @@ _link_project_from_file() {
           local target
           target="$(readlink "$link_path")"
           case "$target" in
-            "$repo_root"/*)
+            "$toolkit_root"/*)
               if [ "$dry_run" -eq 1 ]; then
                 echo "would-unlink: $link_path"
                 _LINK_WOULD_UNLINK=$((_LINK_WOULD_UNLINK + 1))
@@ -332,7 +348,7 @@ _link_project_from_file() {
           esac
         fi
       fi
-    done < <(discover_assets_for_kind "$repo_root" "$kind")
+    done < <(discover_assets_for_kind "$toolkit_root" "$kind")
 
     # Sweep: prune orphan symlinks (slug exists as symlink into repo but the
     # asset is gone from the toolkit). Keep symlinks that target outside the
@@ -349,7 +365,7 @@ _link_project_from_file() {
       local target
       target="$(readlink "$entry")"
       case "$target" in
-        "$repo_root"/*)
+        "$toolkit_root"/*)
           if [ "$dry_run" -eq 1 ]; then
             echo "would-unlink: $entry"
             _LINK_WOULD_UNLINK=$((_LINK_WOULD_UNLINK + 1))
@@ -417,7 +433,7 @@ _maybe_link() {
   local slug="$3"
   local file="$4"
   local target_dir="$5"
-  local repo_root="$6"
+  local toolkit_root="$6"
   local dry_run="$7"
 
   local source_path
