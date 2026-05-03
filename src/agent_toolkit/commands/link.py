@@ -28,7 +28,7 @@ from agent_toolkit.walker import discover_assets
 
 @click.command("link")
 @click.argument("scope", type=click.Choice(["user", "project"]))
-@click.argument("harness")  # accept any string; conventions/etc dispatched by sibling cmd
+@click.argument("harness")
 @click.argument("target", required=False, default=None)
 @click.option("--all", "all_flag", is_flag=True, default=False)
 @click.option(
