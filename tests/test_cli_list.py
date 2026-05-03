@@ -1,0 +1,297 @@
+"""Pytest port of tests/bats/test_list*.bats. Each test cites the bats file:line it replaces."""
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pytest
+from click.testing import CliRunner
+
+from agent_toolkit.cli import main
+
+
+SKILL_FRONTMATTER = """\
+---
+apiVersion: agent-toolkit/v1alpha1
+metadata:
+  name: {slug}
+  description: {slug} skill.
+  lifecycle: stable
+spec:
+  origin: first-party
+  vendored_via: none
+  harnesses:
+{harness_lines}
+---
+"""
+
+
+def _seed_toolkit(tmp: Path) -> Path:
+    """Create a minimal valid toolkit repo at `tmp/toolkit`."""
+    root = tmp / "toolkit"
+    root.mkdir()
+    (root / ".agent-toolkit-source").write_text("tool: agent-toolkit-cli\n")
+    (root / "schemas").mkdir()
+    schema_src = (
+        Path(__file__).resolve().parents[1] / "schemas" / "asset-frontmatter.v1alpha1.json"
+    )
+    (root / "schemas" / "asset-frontmatter.v1alpha1.json").write_text(schema_src.read_text())
+    return root
+
+
+def _seed_skill(toolkit_root: Path, slug: str, harnesses: list[str]) -> Path:
+    skill_dir = toolkit_root / "skills" / slug
+    skill_dir.mkdir(parents=True, exist_ok=True)
+    lines = "\n".join(f"    - {h}" for h in harnesses)
+    (skill_dir / "SKILL.md").write_text(
+        SKILL_FRONTMATTER.format(slug=slug, harness_lines=lines)
+    )
+    return skill_dir
+
+
+@pytest.fixture
+def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.delenv("AGENT_TOOLKIT_REPO", raising=False)
+    monkeypatch.delenv("AGENT_TOOLKIT_QUIET", raising=False)
+    toolkit_root = _seed_toolkit(tmp_path)
+    return {"home": home, "toolkit_root": toolkit_root}
+
+
+@pytest.fixture
+def multi_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Three skills: alpha (claude), beta (claude+codex), gamma (codex only)."""
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.delenv("AGENT_TOOLKIT_REPO", raising=False)
+    monkeypatch.delenv("AGENT_TOOLKIT_QUIET", raising=False)
+    toolkit_root = _seed_toolkit(tmp_path)
+    _seed_skill(toolkit_root, "alpha", ["claude"])
+    _seed_skill(toolkit_root, "beta", ["claude", "codex"])
+    _seed_skill(toolkit_root, "gamma", ["codex"])
+    # User scope: alpha installed (in YAML + symlink)
+    (home / ".agent-toolkit.yaml").write_text(
+        "skills:\n  - alpha\nagents: []\ncommands: []\nhooks: []\nplugins: []\n"
+    )
+    (home / ".claude" / "skills").mkdir(parents=True)
+    (home / ".claude" / "skills" / "alpha").symlink_to(toolkit_root / "skills" / "alpha")
+    return {"home": home, "toolkit_root": toolkit_root}
+
+
+# ===========================================================================
+# test_list.bats: basic scenarios
+# ===========================================================================
+
+
+def test_list_shows_user_check(env):
+    """Replaces tests/bats/test_list.bats:33-46."""
+    home, toolkit = env["home"], env["toolkit_root"]
+    _seed_skill(toolkit, "alpha", ["claude"])
+    (home / ".agent-toolkit.yaml").write_text("skills:\n  - alpha\n")
+    (home / ".claude" / "skills").mkdir(parents=True)
+    (home / ".claude" / "skills" / "alpha").symlink_to(toolkit / "skills" / "alpha")
+    runner = CliRunner()
+    result = runner.invoke(main, ["--toolkit-repo", str(toolkit), "list"])
+    assert result.exit_code == 0, (result.output, result.stderr)
+    assert "alpha" in result.output
+    assert "user:✓" in result.output
+
+
+def test_list_header_and_summary_on_stderr(env):
+    """Replaces tests/bats/test_list.bats:48-53."""
+    toolkit = env["toolkit_root"]
+    _seed_skill(toolkit, "alpha", ["claude"])
+    runner = CliRunner()
+    result = runner.invoke(main, ["--toolkit-repo", str(toolkit), "list"])
+    assert result.exit_code == 0, (result.output, result.stderr)
+    assert "Asset inventory" in result.stderr
+    assert "Done" in result.stderr
+
+
+def test_list_quiet_env_silent(env, monkeypatch):
+    """Replaces tests/bats/test_list.bats:55-59."""
+    toolkit = env["toolkit_root"]
+    _seed_skill(toolkit, "alpha", ["claude"])
+    monkeypatch.setenv("AGENT_TOOLKIT_QUIET", "1")
+    runner = CliRunner()
+    result = runner.invoke(main, ["--toolkit-repo", str(toolkit), "list"])
+    assert result.exit_code == 0, (result.output, result.stderr)
+    assert result.stderr == ""
+
+
+def test_list_json_valid(env):
+    """Replaces tests/bats/test_list.bats:61-73."""
+    home, toolkit = env["home"], env["toolkit_root"]
+    _seed_skill(toolkit, "alpha", ["claude"])
+    (home / ".agent-toolkit.yaml").write_text("skills:\n  - alpha\n")
+    (home / ".claude" / "skills").mkdir(parents=True)
+    (home / ".claude" / "skills" / "alpha").symlink_to(toolkit / "skills" / "alpha")
+    runner = CliRunner()
+    result = runner.invoke(
+        main, ["--toolkit-repo", str(toolkit), "list", "--format=json"]
+    )
+    assert result.exit_code == 0, (result.output, result.stderr)
+    data = json.loads(result.output)
+    assert str(toolkit) in data["toolkit_root"] or data["toolkit_root"].endswith(
+        toolkit.name
+    )
+    assert any(a["slug"] == "alpha" for a in data["assets"])
+    cells = [
+        c
+        for a in data["assets"]
+        if a["slug"] == "alpha"
+        for c in a["cells"]
+    ]
+    assert any(
+        c["harness"] == "claude" and c["scope"] == "user" and c["status"] == "linked"
+        for c in cells
+    ), cells
+
+
+def test_list_json_unsupported_cells(env):
+    """Replaces tests/bats/test_list.bats:75-79."""
+    toolkit = env["toolkit_root"]
+    _seed_skill(toolkit, "alpha", ["claude"])
+    runner = CliRunner()
+    result = runner.invoke(
+        main, ["--toolkit-repo", str(toolkit), "list", "--format=json"]
+    )
+    assert result.exit_code == 0, (result.output, result.stderr)
+    data = json.loads(result.output)
+    cells = [
+        c
+        for a in data["assets"]
+        if a["slug"] == "alpha"
+        for c in a["cells"]
+    ]
+    assert any(
+        c["harness"] == "codex" and c["status"] == "unsupported" for c in cells
+    ), cells
+
+
+# ===========================================================================
+# test_list_new_grammar.bats
+# ===========================================================================
+
+
+def test_list_no_args_all_with_cols(multi_env):
+    """Replaces tests/bats/test_list_new_grammar.bats:50-62."""
+    toolkit = multi_env["toolkit_root"]
+    runner = CliRunner()
+    result = runner.invoke(main, ["--toolkit-repo", str(toolkit), "list"])
+    assert result.exit_code == 0, (result.output, result.stderr)
+    assert "alpha" in result.output
+    assert "beta" in result.output
+    assert "gamma" in result.output
+    # alpha is user-installed
+    alpha_line = next(
+        line for line in result.output.splitlines() if line.strip().startswith("alpha")
+    )
+    assert "user:✓" in alpha_line
+    # beta and gamma are not installed
+    beta_line = next(
+        line for line in result.output.splitlines() if line.strip().startswith("beta")
+    )
+    assert "user:—" in beta_line
+    gamma_line = next(
+        line for line in result.output.splitlines() if line.strip().startswith("gamma")
+    )
+    assert "user:—" in gamma_line
+
+
+def test_list_kind_filter(multi_env):
+    """Replaces tests/bats/test_list_new_grammar.bats:64-71."""
+    toolkit = multi_env["toolkit_root"]
+    runner = CliRunner()
+    result = runner.invoke(main, ["--toolkit-repo", str(toolkit), "list", "skill"])
+    assert result.exit_code == 0, (result.output, result.stderr)
+    assert "SKILLS" in result.output
+    assert "AGENTS" not in result.output
+
+
+def test_list_harness_filter(multi_env):
+    """Replaces tests/bats/test_list_new_grammar.bats:73-80."""
+    toolkit = multi_env["toolkit_root"]
+    runner = CliRunner()
+    result = runner.invoke(main, ["--toolkit-repo", str(toolkit), "list", "claude"])
+    assert result.exit_code == 0, (result.output, result.stderr)
+    assert "alpha" in result.output
+    assert "beta" in result.output
+    assert "gamma" not in result.output
+
+
+def test_list_kind_and_harness(multi_env):
+    """Replaces tests/bats/test_list_new_grammar.bats:82-89."""
+    toolkit = multi_env["toolkit_root"]
+    runner = CliRunner()
+    result = runner.invoke(
+        main, ["--toolkit-repo", str(toolkit), "list", "skill", "claude"]
+    )
+    assert result.exit_code == 0, (result.output, result.stderr)
+    assert "alpha" in result.output
+    assert "beta" in result.output
+    assert "gamma" not in result.output
+
+
+def test_list_outside_project(multi_env):
+    """Replaces tests/bats/test_list_new_grammar.bats:91-96.
+
+    When CWD has no .agent-toolkit.yaml the project column should show '—' for all.
+    """
+    toolkit = multi_env["toolkit_root"]
+    home = multi_env["home"]
+    # Use a project dir that has no .agent-toolkit.yaml
+    empty_dir = home / "empty_project"
+    empty_dir.mkdir()
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        ["--toolkit-repo", str(toolkit), "--project", str(empty_dir), "list"],
+    )
+    assert result.exit_code == 0, (result.output, result.stderr)
+    assert "project:—" in result.output
+
+
+def test_list_rejects_unknown_positional(multi_env):
+    """Replaces tests/bats/test_list_new_grammar.bats:98-103."""
+    toolkit = multi_env["toolkit_root"]
+    runner = CliRunner()
+    result = runner.invoke(
+        main, ["--toolkit-repo", str(toolkit), "list", "nonsense"]
+    )
+    assert result.exit_code != 0
+    assert "nonsense" in result.output or "nonsense" in (result.stderr or "")
+
+
+def test_list_project_check(multi_env):
+    """Replaces tests/bats/test_list_new_grammar.bats:105-120."""
+    toolkit = multi_env["toolkit_root"]
+    # Add beta to project scope
+    (toolkit / ".agent-toolkit.yaml").write_text(
+        "skills:\n  - beta\nagents: []\ncommands: []\nhooks: []\nplugins: []\n"
+    )
+    (toolkit / ".claude" / "skills").mkdir(parents=True)
+    (toolkit / ".claude" / "skills" / "beta").symlink_to(toolkit / "skills" / "beta")
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        ["--toolkit-repo", str(toolkit), "--project", str(toolkit), "list"],
+    )
+    assert result.exit_code == 0, (result.output, result.stderr)
+    beta_line = next(
+        line for line in result.output.splitlines() if line.strip().startswith("beta")
+    )
+    assert "project:✓" in beta_line
+
+
+def test_list_mcp_note(multi_env):
+    """Replaces tests/bats/test_list_new_grammar.bats:122-131."""
+    toolkit = multi_env["toolkit_root"]
+    runner = CliRunner()
+    result = runner.invoke(main, ["--toolkit-repo", str(toolkit), "list", "mcp"])
+    assert result.exit_code == 0, (result.output, result.stderr)
+    combined = result.output + (result.stderr or "")
+    assert "not shown here" in combined or "mcp.json" in combined

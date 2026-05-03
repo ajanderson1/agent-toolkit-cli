@@ -14,6 +14,7 @@ from agent_toolkit.commands.fix import fix
 from agent_toolkit.commands.ingest import ingest
 from agent_toolkit.commands.inventory import inventory
 from agent_toolkit.commands.link import link
+from agent_toolkit.commands.list import list_cmd
 from agent_toolkit.commands.new import new
 from agent_toolkit.commands.unlink import unlink
 
@@ -33,10 +34,18 @@ from agent_toolkit.commands.unlink import unlink
     default=None,
     help="Path to the agent-toolkit repo (overrides env/walk-up/default).",
 )
+@click.option(
+    "--project",
+    "project_root",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=None,
+    help="Path to the consumer project (for link/unlink/list/diff).",
+)
 @click.pass_context
-def main(ctx: click.Context, toolkit_repo: Path | None) -> None:
+def main(ctx: click.Context, toolkit_repo: Path | None, project_root: Path | None) -> None:
     """agent-toolkit metadata commands."""
     ctx.ensure_object(dict)
+    ctx.obj["project_root"] = Path(project_root) if project_root else None
     if toolkit_repo is None:
         ctx.obj["toolkit_root"] = None
         return
@@ -53,6 +62,7 @@ main.add_command(fix)
 main.add_command(ingest)
 main.add_command(inventory)
 main.add_command(link)
+main.add_command(list_cmd)
 main.add_command(new)
 main.add_command(unlink)
 main.add_command(yaml_edit)
