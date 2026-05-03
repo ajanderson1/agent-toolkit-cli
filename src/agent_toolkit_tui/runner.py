@@ -1,4 +1,4 @@
-"""Subprocess wrapper around bin/agent-toolkit.
+"""Subprocess wrapper around the agent-toolkit CLI.
 
 The TUI's only writer-of-truth on the filesystem. The widgets and state code
 never call subprocess directly — they go through this class. Mockable: pass
@@ -9,45 +9,36 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
 
-def _locate_bash_cli() -> Path:
-    """Find this CLI's bash entry point (`bin/agent-toolkit`).
-
-    The TUI shells out to the bash CLI for `list`/`link`/`unlink` (which the
-    Python entry point doesn't expose). The bash script lives in this CLI's
-    source tree and is not installed onto $PATH by `uv tool install`, so we
-    walk up from this module's location to find it.
+def _locate_cli() -> Path:
+    """Find the installed `agent-toolkit` script.
 
     Resolution order:
-      1. $AGENT_TOOLKIT_BASH_CLI override (escape hatch for tests/installs)
-      2. Walk up from runner.py looking for `bin/agent-toolkit`
+      1. $AGENT_TOOLKIT_CLI override (escape hatch for tests/installs)
+      2. `shutil.which("agent-toolkit")` — picks up the script installed by
+         `uv tool install` or the dev `.venv/bin/agent-toolkit` entry point
       3. Raise FileNotFoundError with an actionable message
     """
-    override = os.environ.get("AGENT_TOOLKIT_BASH_CLI")
+    override = os.environ.get("AGENT_TOOLKIT_CLI")
     if override:
         p = Path(override)
         if p.is_file():
             return p
-        raise FileNotFoundError(f"$AGENT_TOOLKIT_BASH_CLI={override} is not a file")
+        raise FileNotFoundError(f"$AGENT_TOOLKIT_CLI={override} is not a file")
 
-    here = Path(__file__).resolve()
-    for parent in here.parents:
-        candidate = parent / "bin" / "agent-toolkit"
-        # The bash CLI sits next to a `lib/` subdir of helper sourceables; the
-        # python entry point installed by `uv tool install` does not. This
-        # disambiguates the two when both happen to share the parent name.
-        if candidate.is_file() and (candidate.parent / "lib").is_dir():
-            return candidate
+    found = shutil.which("agent-toolkit")
+    if found:
+        return Path(found)
 
     raise FileNotFoundError(
-        "Cannot locate `bin/agent-toolkit` — the TUI requires a source checkout "
-        "of agent-toolkit-cli (the wheel does not bundle the bash script). "
-        "Set $AGENT_TOOLKIT_BASH_CLI to override, or run from "
-        "`uv run --project <cli-repo> agent-toolkit-tui`."
+        "Cannot locate `agent-toolkit` on PATH. Run `uv tool install agent-toolkit-cli` "
+        "or `uv sync --extra tui` from a source checkout, or set $AGENT_TOOLKIT_CLI to "
+        "the script's path."
     )
 
 
@@ -70,16 +61,15 @@ _SUMMARY_RE = re.compile(r"Plan applied: (\d+) ok, (\d+) failed")
 
 
 class CLIRunner:
-    """Single chokepoint for shelling out to bin/agent-toolkit.
+    """Single chokepoint for shelling out to the agent-toolkit CLI.
 
-    Defaults to `<toolkit_root>/bin/agent-toolkit` so the TUI invokes the CLI
-    from the same checkout it's reading metadata from. Override `cli_path`
-    in tests.
+    Resolves the CLI script via `_locate_cli()` (PATH lookup + env override).
+    Override `cli_path` in tests.
     """
 
     def __init__(self, toolkit_root: Path, cli_path: Path | None = None) -> None:
         self.toolkit_root = toolkit_root.resolve()
-        self.cli_path = cli_path or _locate_bash_cli()
+        self.cli_path = cli_path or _locate_cli()
 
     # ----- reads ----------------------------------------------------------
     def list_state(self) -> dict:
