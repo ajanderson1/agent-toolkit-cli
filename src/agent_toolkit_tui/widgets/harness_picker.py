@@ -13,7 +13,8 @@ class HarnessPicker(Horizontal):
     """Scope (user/project) + which harness columns are visible."""
 
     DEFAULT_CSS = """
-    HarnessPicker { height: 5; border: round $primary; padding: 0 1; }
+    HarnessPicker { height: 6; border: round $primary; padding: 0 1; }
+    HarnessPicker > Static { width: auto; margin: 0 1; }
     HarnessPicker RadioSet { width: 24; }
     HarnessPicker RadioSet > RadioButton.-on { background: $accent; color: $text; }
     HarnessPicker .harness-cb { margin-left: 1; }
