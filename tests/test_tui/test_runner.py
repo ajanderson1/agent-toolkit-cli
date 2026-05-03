@@ -28,6 +28,7 @@ def test_locate_cli_env_override_wins(monkeypatch: pytest.MonkeyPatch, tmp_path:
     fake = tmp_path / "fake-cli"
     fake.write_text("#!/bin/sh\n")
     fake.chmod(0o755)
+    monkeypatch.setenv("PATH", "/nonexistent")
     monkeypatch.setenv("AGENT_TOOLKIT_CLI", str(fake))
     assert _locate_cli() == fake
 
