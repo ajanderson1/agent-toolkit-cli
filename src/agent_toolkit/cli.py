@@ -15,6 +15,7 @@ from agent_toolkit.commands.ingest import ingest
 from agent_toolkit.commands.inventory import inventory
 from agent_toolkit.commands.link import link
 from agent_toolkit.commands.new import new
+from agent_toolkit.commands.unlink import unlink
 
 
 @click.group(
@@ -53,6 +54,7 @@ main.add_command(ingest)
 main.add_command(inventory)
 main.add_command(link)
 main.add_command(new)
+main.add_command(unlink)
 main.add_command(yaml_edit)
 main.add_command(list_json)
 
