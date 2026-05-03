@@ -1,56 +1,54 @@
 """Unit tests for runner.py — the only module that shells out."""
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from agent_toolkit_tui.runner import CLIRunner, RunnerError, _locate_bash_cli
+from agent_toolkit_tui.runner import CLIRunner, RunnerError, _locate_cli
 
 
-def test_locate_bash_cli_walks_up_to_source_tree(tmp_path: Path) -> None:
-    """The default resolver must find `bin/agent-toolkit` in this CLI's source
-    tree (not in toolkit_root). After the SSOT extraction, the bash script
-    lives alongside the python package, not in the SSOT.
-    """
-    cli_path = _locate_bash_cli()
-    assert cli_path.is_file()
-    assert cli_path.name == "agent-toolkit"
-    assert cli_path.parent.name == "bin"
+def test_locate_cli_uses_shutil_which(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """After the unification, runner.py must find the installed `agent-toolkit`
+    via PATH, not by walking up to bin/agent-toolkit."""
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    fake_cli = fake_bin / "agent-toolkit"
+    fake_cli.write_text("#!/bin/sh\n")
+    fake_cli.chmod(0o755)
+    monkeypatch.setenv("PATH", str(fake_bin))
+    monkeypatch.delenv("AGENT_TOOLKIT_CLI", raising=False)
+    monkeypatch.delenv("AGENT_TOOLKIT_BASH_CLI", raising=False)
+    assert _locate_cli() == fake_cli
 
 
-def test_locate_bash_cli_honours_env_override(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """$AGENT_TOOLKIT_BASH_CLI overrides the walk-up — useful when the bash
-    script is installed in a non-standard location.
-    """
+def test_locate_cli_env_override_wins(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """$AGENT_TOOLKIT_CLI overrides PATH lookup."""
     fake = tmp_path / "fake-cli"
     fake.write_text("#!/bin/sh\n")
     fake.chmod(0o755)
-    monkeypatch.setenv("AGENT_TOOLKIT_BASH_CLI", str(fake))
-    assert _locate_bash_cli() == fake
+    monkeypatch.setenv("AGENT_TOOLKIT_CLI", str(fake))
+    assert _locate_cli() == fake
 
 
-def test_locate_bash_cli_rejects_invalid_override(
+def test_locate_cli_rejects_invalid_override(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("AGENT_TOOLKIT_BASH_CLI", str(tmp_path / "missing"))
+    monkeypatch.setenv("AGENT_TOOLKIT_CLI", str(tmp_path / "missing"))
     with pytest.raises(FileNotFoundError):
-        _locate_bash_cli()
+        _locate_cli()
 
 
-def test_runner_default_cli_path_does_not_use_toolkit_root(tmp_path: Path) -> None:
-    """Regression: TUI used to default `cli_path` to `<toolkit_root>/bin/agent-toolkit`,
-    which broke after the SSOT was split out. cli_path must come from this CLI's
-    source tree, independent of toolkit_root.
-    """
-    runner = CLIRunner(toolkit_root=tmp_path)
-    assert runner.cli_path.is_file()
-    # Must NOT be inside the (empty) tmp toolkit_root
-    assert tmp_path not in runner.cli_path.parents
+def test_locate_cli_raises_when_not_on_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    """When agent-toolkit is not on PATH and no override is set, raise with an
+    actionable hint."""
+    monkeypatch.setenv("PATH", "/nonexistent")
+    monkeypatch.delenv("AGENT_TOOLKIT_CLI", raising=False)
+    monkeypatch.delenv("AGENT_TOOLKIT_BASH_CLI", raising=False)
+    with pytest.raises(FileNotFoundError) as excinfo:
+        _locate_cli()
+    assert "agent-toolkit" in str(excinfo.value)
 
 
 def test_runner_list_state_invokes_correct_args(tmp_path: Path):
@@ -64,7 +62,7 @@ def test_runner_list_state_invokes_correct_args(tmp_path: Path):
 
 
 def test_runner_list_state_raises_on_nonzero(tmp_path: Path):
-    runner = CLIRunner(toolkit_root=tmp_path)
+    runner = CLIRunner(toolkit_root=tmp_path, cli_path=Path("/fake/agent-toolkit"))
     fake_proc = MagicMock(returncode=2, stdout="", stderr="bad flag")
     with patch("agent_toolkit_tui.runner.subprocess.run", return_value=fake_proc):
         with pytest.raises(RunnerError) as excinfo:
@@ -73,7 +71,7 @@ def test_runner_list_state_raises_on_nonzero(tmp_path: Path):
 
 
 def test_runner_link_plan_pipes_stdin(tmp_path: Path):
-    runner = CLIRunner(toolkit_root=tmp_path)
+    runner = CLIRunner(toolkit_root=tmp_path, cli_path=Path("/fake/agent-toolkit"))
     fake_proc = MagicMock(returncode=0, stdout="", stderr="Plan applied: 2 ok, 0 failed (of 2 entries).")
     with patch("agent_toolkit_tui.runner.subprocess.run", return_value=fake_proc) as mock:
         result = runner.link_plan(scope="user", harness="claude",
@@ -86,7 +84,7 @@ def test_runner_link_plan_pipes_stdin(tmp_path: Path):
 
 
 def test_runner_link_plan_partial_failure_returncode_1(tmp_path: Path):
-    runner = CLIRunner(toolkit_root=tmp_path)
+    runner = CLIRunner(toolkit_root=tmp_path, cli_path=Path("/fake/agent-toolkit"))
     fake_proc = MagicMock(returncode=1, stdout="",
                           stderr="failed: skill:does-not-exist\nPlan applied: 1 ok, 1 failed (of 2 entries).")
     with patch("agent_toolkit_tui.runner.subprocess.run", return_value=fake_proc):
@@ -98,7 +96,7 @@ def test_runner_link_plan_partial_failure_returncode_1(tmp_path: Path):
 
 def test_runner_rc2_carries_parsed_errors(tmp_path: Path):
     """RunnerError raised on rc=2 must preserve parsed error lines."""
-    runner = CLIRunner(toolkit_root=tmp_path)
+    runner = CLIRunner(toolkit_root=tmp_path, cli_path=Path("/fake/agent-toolkit"))
     stderr = "failed: skill:bad-slug\nPlan applied: 0 ok, 1 failed (of 1 entries)."
     fake_proc = MagicMock(returncode=2, stdout="", stderr=stderr)
     with patch("agent_toolkit_tui.runner.subprocess.run", return_value=fake_proc):
