@@ -12,13 +12,14 @@ from agent_toolkit.doctor import (
     duplicates as g_duplicates,
     environment as g_environment,
     frontmatter as g_frontmatter,
+    harness_homes as g_harness_homes,
     submodules as g_submodules,
     symlinks as g_symlinks,
 )
 from agent_toolkit.doctor.per_resource import diagnose
 from agent_toolkit.doctor.result import GroupResult, Status
 
-_GROUPS = ("environment", "symlink-integrity", "conventions", "submodule-health", "frontmatter", "duplicates")
+_GROUPS = ("environment", "symlink-integrity", "conventions", "submodule-health", "frontmatter", "duplicates", "harness-homes")
 
 
 @click.command(short_help="Run five-group health check (or per-resource diagnosis).")
@@ -92,6 +93,7 @@ def _run_global(root: Path, *, harness: str, group_name: str | None) -> list[Gro
         ("submodule-health", lambda: g_submodules.run(root)),
         ("frontmatter", lambda: g_frontmatter.run(root)),
         ("duplicates", lambda: g_duplicates.run(root)),
+        ("harness-homes", lambda: g_harness_homes.run()),
     ]
     if group_name:
         runners = [(n, fn) for (n, fn) in runners if n == group_name]

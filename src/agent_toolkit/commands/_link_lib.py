@@ -19,6 +19,13 @@ from agent_toolkit.walker import Asset, discover_assets, extract_frontmatter
 
 ALL_HARNESSES: tuple[str, ...] = ("claude", "codex", "opencode", "pi")
 
+HARNESS_HOMES: dict[str, str] = {
+    "claude":   ".claude",
+    "codex":    ".codex",
+    "opencode": ".opencode",
+    "pi":       ".pi",
+}
+
 
 def validate_harness(ctx: click.Context, harness: str) -> None:
     """Exit 2 with a clean error if `harness` is not one of ALL_HARNESSES."""
@@ -29,6 +36,12 @@ def validate_harness(ctx: click.Context, harness: str) -> None:
             err=True,
         )
         ctx.exit(2)
+
+
+def harness_home_path(harness: str, home: Path | None = None) -> Path:
+    """Return the absolute path to a harness's home directory under $HOME."""
+    h = home if home is not None else Path(os.environ.get("HOME", ""))
+    return h / HARNESS_HOMES[harness]
 
 
 @dataclass

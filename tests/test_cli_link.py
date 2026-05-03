@@ -770,3 +770,49 @@ def test_link_dry_run_unknown_harness_still_validates(env):
     )
     assert result.exit_code == 2
     assert "unknown harness 'banana'" in result.stderr
+
+
+# ===========================================================================
+# Issue #13 — warn when the harness home doesn't exist
+# ===========================================================================
+
+
+def test_link_warns_when_harness_home_missing(env, seed_skill):
+    home, toolkit = env["home"], env["toolkit_root"]
+    seed_skill(toolkit, "alpha", ["codex"])
+    (home / ".agent-toolkit.yaml").write_text("skills:\n  - alpha\n")
+    # ~/.codex deliberately not created
+    runner = CliRunner()
+    result = runner.invoke(
+        main, ["--toolkit-repo", str(toolkit), "link", "user", "codex"],
+    )
+    assert result.exit_code == 0  # warn, not error
+    assert "codex home not present" in result.stderr
+
+
+def test_link_quiet_suppresses_missing_home_warning(env, seed_skill, monkeypatch):
+    home, toolkit = env["home"], env["toolkit_root"]
+    seed_skill(toolkit, "alpha", ["codex"])
+    (home / ".agent-toolkit.yaml").write_text("skills:\n  - alpha\n")
+    # Use the env var (cleaned up by monkeypatch) instead of --quiet, which
+    # mutates os.environ directly and would leak into later tests.
+    monkeypatch.setenv("AGENT_TOOLKIT_QUIET", "1")
+    runner = CliRunner()
+    result = runner.invoke(
+        main, ["--toolkit-repo", str(toolkit), "link", "user", "codex"],
+    )
+    assert result.exit_code == 0
+    assert "home not present" not in (result.stderr or "")
+
+
+def test_link_no_warning_when_harness_home_exists(env, seed_skill):
+    home, toolkit = env["home"], env["toolkit_root"]
+    (home / ".claude").mkdir()
+    seed_skill(toolkit, "alpha", ["claude"])
+    (home / ".agent-toolkit.yaml").write_text("skills:\n  - alpha\n")
+    runner = CliRunner()
+    result = runner.invoke(
+        main, ["--toolkit-repo", str(toolkit), "link", "user", "claude"],
+    )
+    assert result.exit_code == 0
+    assert "home not present" not in (result.stderr or "")
