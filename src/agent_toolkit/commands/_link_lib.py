@@ -6,8 +6,14 @@ unit-tested in tests/test_link_lib.py.
 """
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
-from typing import Iterator
+from pathlib import Path
+from typing import IO, Iterator
+
+from agent_toolkit._allowlist import SECTIONS, kind_to_section, read_allowlist
+from agent_toolkit.commands._list_json import _PROJECT_TARGETS, _USER_TARGETS
+from agent_toolkit.walker import Asset, discover_assets, extract_frontmatter
 
 
 @dataclass
@@ -59,3 +65,153 @@ def iter_plan_lines(text: str) -> Iterator[tuple[str, str]]:
             continue
         kind, _, slug = line.partition(":")
         yield (kind.strip(), slug.strip())
+
+
+KINDS_FOR_PROJECTION: tuple[str, ...] = ("skill", "agent", "command", "hook", "plugin")
+
+
+def harness_target_dir(harness: str, kind: str, scope: str, project_root: Path) -> Path | None:
+    """Mirror of bash harness_target_dir / project_target_dir."""
+    if scope == "user":
+        tmpl = _USER_TARGETS.get((harness, kind))
+        if not tmpl:
+            return None
+        home = os.environ.get("HOME", "")
+        return Path(tmpl.format(home=home))
+    rel = _PROJECT_TARGETS.get((harness, kind))
+    return (project_root / rel) if rel else None
+
+
+def _expected_source(asset_path: Path, kind: str) -> Path:
+    if kind in {"skill", "mcp", "plugin"}:
+        return asset_path.parent
+    return asset_path
+
+
+def _asset_harnesses(asset_path: Path) -> list[str]:
+    fm = extract_frontmatter(asset_path) or {}
+    spec = fm.get("spec") or {}
+    return list(spec.get("harnesses") or [])
+
+
+def maybe_link(
+    *,
+    harness: str,
+    kind: str,
+    slug: str,
+    asset_path: Path,
+    target_dir: Path,
+    toolkit_root: Path,
+    dry_run: bool,
+    counters: LinkCounters,
+    stdout: IO[str],
+) -> None:
+    """Create/replace/skip a symlink for one asset; update counters.
+
+    Direct port of bash _maybe_link in bin/lib/link.sh:430.
+    """
+    source_path = _expected_source(asset_path, kind)
+    link_path = target_dir / slug
+    declared = _asset_harnesses(asset_path)
+    if harness not in declared:
+        if link_path.is_symlink():
+            if dry_run:
+                print(f"would-unlink: {link_path}", file=stdout)
+                counters.would_unlink += 1
+            else:
+                link_path.unlink()
+                counters.removed += 1
+        return
+
+    if link_path.is_symlink() and Path(os.readlink(str(link_path))) == source_path:
+        counters.unchanged += 1
+        return
+
+    if dry_run:
+        print(f"would-link: {link_path} -> {source_path}", file=stdout)
+        counters.would_link += 1
+        return
+
+    if link_path.is_symlink() or link_path.exists():
+        link_path.unlink()
+        counters.updated += 1
+    else:
+        counters.created += 1
+    link_path.symlink_to(source_path)
+
+
+def project_from_file(
+    *,
+    scope: str,
+    harness: str,
+    toolkit_root: Path,
+    project_root: Path,
+    allowlist_path: Path,
+    dry_run: bool,
+    counters: LinkCounters,
+    stdout: IO[str],
+) -> None:
+    """Walk every asset kind. Project allow-listed slugs, prune the rest."""
+    allowed = read_allowlist(allowlist_path)
+    by_kind: dict[str, list[Asset]] = {k: [] for k in KINDS_FOR_PROJECTION}
+    for asset in discover_assets(toolkit_root):
+        if asset.kind in by_kind:
+            by_kind[asset.kind].append(asset)
+
+    for kind in KINDS_FOR_PROJECTION:
+        target_dir = harness_target_dir(harness, kind, scope, project_root)
+        if target_dir is None:
+            continue
+        if not dry_run:
+            target_dir.mkdir(parents=True, exist_ok=True)
+        section = kind_to_section(kind)
+        allowed_slugs = set(allowed.get(section, []))
+        discovered_slugs: set[str] = set()
+        for asset in by_kind[kind]:
+            discovered_slugs.add(asset.slug)
+            if asset.slug in allowed_slugs:
+                maybe_link(
+                    harness=harness,
+                    kind=kind,
+                    slug=asset.slug,
+                    asset_path=asset.path,
+                    target_dir=target_dir,
+                    toolkit_root=toolkit_root,
+                    dry_run=dry_run,
+                    counters=counters,
+                    stdout=stdout,
+                )
+            else:
+                _prune_if_into_repo(
+                    target_dir / asset.slug, toolkit_root, dry_run, counters, stdout,
+                )
+        # Sweep orphan symlinks (slug in target dir but no asset in repo)
+        if target_dir.is_dir():
+            for entry in target_dir.iterdir():
+                if not entry.is_symlink():
+                    continue
+                if entry.name in discovered_slugs:
+                    continue
+                _prune_if_into_repo(entry, toolkit_root, dry_run, counters, stdout)
+
+
+def _prune_if_into_repo(
+    link_path: Path,
+    toolkit_root: Path,
+    dry_run: bool,
+    counters: LinkCounters,
+    stdout: IO[str],
+) -> None:
+    if not link_path.is_symlink():
+        return
+    target = os.readlink(str(link_path))
+    try:
+        Path(target).resolve().relative_to(toolkit_root.resolve())
+    except (ValueError, FileNotFoundError, OSError):
+        return
+    if dry_run:
+        print(f"would-unlink: {link_path}", file=stdout)
+        counters.would_unlink += 1
+    else:
+        link_path.unlink()
+        counters.removed += 1

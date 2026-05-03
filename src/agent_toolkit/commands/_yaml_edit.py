@@ -46,6 +46,47 @@ def _dump(doc: CommentedMap, path: Path) -> None:
         _yaml.dump(doc, fh)
 
 
+def add_slug(path: Path, section: str, slug: str) -> None:
+    """Add SLUG to SECTION in PATH (idempotent; creates file if missing)."""
+    if section not in SECTIONS:
+        raise ValueError(f"unknown section: {section!r}")
+    doc = _load(path)
+    seq = doc[section]
+    if slug in list(seq):
+        return
+    seq.append(slug)
+    _dump(doc, path)
+
+
+def remove_slug(path: Path, section: str, slug: str) -> None:
+    """Remove SLUG from SECTION in PATH (idempotent; errors if file missing)."""
+    if section not in SECTIONS:
+        raise ValueError(f"unknown section: {section!r}")
+    if not path.exists():
+        raise FileNotFoundError(f"no such file: {path} — nothing to unlink.")
+    doc = _load(path)
+    seq = doc[section]
+    items = list(seq)
+    if slug not in items:
+        return
+    seq.remove(slug)
+    _dump(doc, path)
+
+
+def write_snapshot(path: Path, entries: list[tuple[str, str]]) -> None:
+    """Replace `path` with sections built from (section, slug) entries.
+
+    Same logic as the `snapshot` Click subcommand but callable in-process.
+    """
+    doc = _empty_doc()
+    for section, slug in entries:
+        if section not in SECTIONS:
+            raise ValueError(f"unknown section in snapshot: {section!r}")
+        if slug not in list(doc[section]):
+            doc[section].append(slug)
+    _dump(doc, path)
+
+
 @click.group("_yaml-edit", hidden=True)
 def yaml_edit() -> None:
     """Internal: mutate `.agent-toolkit.yaml`. Not for direct use."""
@@ -90,7 +131,7 @@ def remove_cmd(path: Path, section: str, slug: str) -> None:
 @click.argument("path", type=click.Path(path_type=Path))
 def snapshot_cmd(path: Path) -> None:
     """Replace PATH with sections built from stdin lines `<section> <slug>`."""
-    doc = _empty_doc()
+    entries: list[tuple[str, str]] = []
     for raw in sys.stdin.read().splitlines():
         line = raw.strip()
         if not line:
@@ -99,8 +140,8 @@ def snapshot_cmd(path: Path) -> None:
         if len(parts) != 2:
             raise click.ClickException(f"malformed snapshot line: {raw!r}")
         section, slug = parts
-        if section not in SECTIONS:
-            raise click.ClickException(f"unknown section in snapshot: {section!r}")
-        if slug not in list(doc[section]):
-            doc[section].append(slug)
-    _dump(doc, path)
+        entries.append((section, slug))
+    try:
+        write_snapshot(path, entries)
+    except ValueError as exc:
+        raise click.ClickException(str(exc))

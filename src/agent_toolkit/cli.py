@@ -13,6 +13,7 @@ from agent_toolkit.commands.doctor import doctor
 from agent_toolkit.commands.fix import fix
 from agent_toolkit.commands.ingest import ingest
 from agent_toolkit.commands.inventory import inventory
+from agent_toolkit.commands.link import link
 from agent_toolkit.commands.new import new
 
 
@@ -50,6 +51,7 @@ main.add_command(doctor)
 main.add_command(fix)
 main.add_command(ingest)
 main.add_command(inventory)
+main.add_command(link)
 main.add_command(new)
 main.add_command(yaml_edit)
 main.add_command(list_json)
