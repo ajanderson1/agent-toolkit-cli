@@ -11,7 +11,11 @@ from agent_toolkit_tui.messages import AssetToggled
 from agent_toolkit_tui.state import AssetRow, CellState, InventoryState
 
 _GLYPH = {
-    "linked":       "[x]",
+    # `[x]` is escaped because Rich's markup parser (run by Textual's DataTable)
+    # would otherwise treat `[x]` as an unknown style tag and swallow it,
+    # rendering linked cells blank. `[ ]` survives because the space-after-`[`
+    # doesn't match the tag grammar.
+    "linked":       r"\[x]",
     "unlinked":     "[ ]",
     "unsupported":  "──",
     "broken":       "⚠ ",
