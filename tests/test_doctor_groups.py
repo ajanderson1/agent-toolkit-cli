@@ -241,3 +241,35 @@ def test_conventions_group_warn_when_topic_missing(tmp_path, monkeypatch):
     result = run_conv(tmp_path)
     assert result.status == Status.WARN
     assert any("ci" in f for f in result.findings)
+
+
+def test_duplicates_group_ok_when_unique(tmp_path):
+    from agent_toolkit.doctor.duplicates import run as run_dupes
+    cmd = tmp_path / "commands" / "alpha.md"
+    cmd.parent.mkdir(parents=True)
+    cmd.write_text("---\nname: alpha\n---\n# alpha\n")
+    result = run_dupes(tmp_path)
+    assert result.status == Status.OK
+    assert "no duplicate" in result.summary
+
+
+def test_duplicates_group_fails_when_kind_slug_collide(tmp_path):
+    """Two files producing the same (kind, slug) — the SSOT-side drift the TUI exposes."""
+    from agent_toolkit.doctor.duplicates import run as run_dupes
+    a = tmp_path / "commands" / "aj" / "session" / "shared.md"
+    b = tmp_path / "commands" / "custom_commands" / "session" / "shared.md"
+    for p in (a, b):
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text("---\nname: shared\n---\n# shared\n")
+    result = run_dupes(tmp_path)
+    assert result.status == Status.FAIL
+    assert "1 duplicate" in result.summary
+    assert any("command:shared" in f and "appears 2x" in f for f in result.findings)
+    assert result.fix_hint is not None
+
+
+def test_duplicates_group_ok_with_no_assets(tmp_path):
+    from agent_toolkit.doctor.duplicates import run as run_dupes
+    result = run_dupes(tmp_path)
+    assert result.status == Status.OK
+    assert "0 asset" in result.summary
