@@ -57,3 +57,23 @@ EOF
   [ "$status" -eq 0 ]
   [ -z "$output" ]
 }
+
+@test "list --format=json emits valid JSON with assets and cells" {
+  cat > "$HOME/.agent-toolkit.yaml" <<'EOF'
+skills:
+  - alpha
+agents: []
+commands: []
+hooks: []
+plugins: []
+EOF
+  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" list --format=json --repo-root "$REPO_ROOT"
+  [ "$status" -eq 0 ]
+  echo "$output" | uv run python -c "import json,sys; d=json.load(sys.stdin); assert d['repo_root']=='$REPO_ROOT'; assert any(a['slug']=='alpha' for a in d['assets']); cells=[c for a in d['assets'] if a['slug']=='alpha' for c in a['cells']]; assert any(c['harness']=='claude' and c['scope']=='user' and c['status']=='linked' for c in cells), cells"
+}
+
+@test "list --format=json marks unsupported cells correctly" {
+  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" list --format=json --repo-root "$REPO_ROOT"
+  [ "$status" -eq 0 ]
+  echo "$output" | uv run python -c "import json,sys; d=json.load(sys.stdin); cells=[c for a in d['assets'] if a['slug']=='alpha' for c in a['cells']]; assert any(c['harness']=='codex' and c['status']=='unsupported' for c in cells), cells"
+}

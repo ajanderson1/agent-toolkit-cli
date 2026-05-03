@@ -81,3 +81,57 @@ teardown() {
   "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" unlink user claude --all --repo-root "$REPO_ROOT"
   [ -L "$HOME/.claude/skills/unrelated" ]
 }
+
+@test "unlink user claude --plan - removes multiple slugs from stdin" {
+  # Add a second skill so the batch has >1 entry
+  mkdir -p "$REPO_ROOT/skills/beta"
+  cat > "$REPO_ROOT/skills/beta/SKILL.md" <<'EOF'
+---
+apiVersion: agent-toolkit/v1alpha1
+metadata:
+  name: beta
+  description: Beta skill.
+  lifecycle: stable
+spec:
+  origin: first-party
+  vendored_via: none
+  harnesses:
+    - claude
+---
+EOF
+  # Rewrite the YAML to include both, then link both first.
+  cat > "$HOME/.agent-toolkit.yaml" <<'EOF'
+skills:
+  - alpha
+  - beta
+agents: []
+commands: []
+hooks: []
+plugins: []
+EOF
+  "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user claude --repo-root "$REPO_ROOT" >/dev/null 2>&1
+  [ -L "$HOME/.claude/skills/alpha" ]
+  [ -L "$HOME/.claude/skills/beta" ]
+
+  run bash -c "printf 'skill:alpha\nskill:beta\n' | '$BATS_TEST_DIRNAME/../../bin/agent-toolkit' unlink user claude --plan - --repo-root '$REPO_ROOT'"
+  [ "$status" -eq 0 ]
+  [ ! -L "$HOME/.claude/skills/alpha" ]
+  [ ! -L "$HOME/.claude/skills/beta" ]
+}
+
+@test "unlink --plan - rejects combination with --all" {
+  run bash -c "printf '' | '$BATS_TEST_DIRNAME/../../bin/agent-toolkit' unlink user claude --plan - --all --repo-root '$REPO_ROOT'"
+  [ "$status" -eq 2 ]
+}
+
+@test "unlink --plan with no following arg returns rc=2" {
+  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" unlink user claude --repo-root "$REPO_ROOT" --plan
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"--plan"* ]]
+}
+
+@test "unlink --plan with non-dash arg returns rc=2" {
+  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" unlink user claude --plan myfile.txt --repo-root "$REPO_ROOT"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"--plan"* ]]
+}

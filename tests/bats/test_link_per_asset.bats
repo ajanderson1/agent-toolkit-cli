@@ -116,3 +116,50 @@ teardown() {
   [ ! -f "$HOME/.agent-toolkit.yaml" ]   # the user's file is NOT created under --dry-run
   [ ! -L "$HOME/.claude/skills/alpha" ]
 }
+
+@test "link user claude --plan - applies multiple slugs from stdin" {
+  run bash -c "printf 'skill:alpha\nskill:beta\n' | '$BATS_TEST_DIRNAME/../../bin/agent-toolkit' link user claude --plan - --repo-root '$REPO_ROOT'"
+  [ "$status" -eq 0 ]
+  [ -L "$HOME/.claude/skills/alpha" ]
+  [ -L "$HOME/.claude/skills/beta" ]
+}
+
+@test "link --plan - ignores comments and blank lines" {
+  run bash -c "printf '# this is a comment\n\nskill:alpha\n# trailing comment\n' | '$BATS_TEST_DIRNAME/../../bin/agent-toolkit' link user claude --plan - --repo-root '$REPO_ROOT'"
+  [ "$status" -eq 0 ]
+  [ -L "$HOME/.claude/skills/alpha" ]
+}
+
+@test "link --plan - reports per-entry failure but continues" {
+  run bash -c "printf 'skill:alpha\nskill:does-not-exist\n' | '$BATS_TEST_DIRNAME/../../bin/agent-toolkit' link user claude --plan - --repo-root '$REPO_ROOT' 2>&1"
+  [ "$status" -eq 1 ]   # 1 = some failed
+  [ -L "$HOME/.claude/skills/alpha" ]   # the good one still landed
+  [[ "$output" == *"does-not-exist"* ]]
+}
+
+@test "link --plan - rejects combination with --all" {
+  run bash -c "printf '' | '$BATS_TEST_DIRNAME/../../bin/agent-toolkit' link user claude --plan - --all --repo-root '$REPO_ROOT'"
+  [ "$status" -eq 2 ]
+}
+
+@test "link --plan - rejects combination with skill:slug" {
+  run bash -c "printf '' | '$BATS_TEST_DIRNAME/../../bin/agent-toolkit' link user claude --plan - skill:alpha --repo-root '$REPO_ROOT'"
+  [ "$status" -eq 2 ]
+}
+
+@test "link --all rejects combination with --plan -" {
+  run bash -c "printf '' | '$BATS_TEST_DIRNAME/../../bin/agent-toolkit' link user claude --all --plan - --repo-root '$REPO_ROOT'"
+  [ "$status" -eq 2 ]
+}
+
+@test "link --plan with no following arg returns rc=2" {
+  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user claude --repo-root "$REPO_ROOT" --plan
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"--plan"* ]]
+}
+
+@test "link --plan with non-dash arg returns rc=2" {
+  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" link user claude --plan myfile.txt --repo-root "$REPO_ROOT"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"--plan"* ]]
+}

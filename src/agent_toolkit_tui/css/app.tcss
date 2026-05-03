@@ -1,0 +1,25 @@
+Screen {
+    layout: vertical;
+}
+
+#main-row {
+    layout: horizontal;
+    height: 1fr;
+}
+
+#main-row KindsSidebar {
+    width: 20;
+}
+
+#main-row AssetGrid {
+    width: 1fr;
+}
+
+Footer {
+    background: $primary 30%;
+}
+
+#footer-pending {
+    color: $accent;
+    padding: 0 1;
+}

@@ -46,6 +46,7 @@ Commands that operate on metadata (Python via uv):
   new <kind> <slug>                Scaffold a new asset with valid v1alpha1
                                    frontmatter. Kinds: skill, agent, command,
                                    hook, mcp, plugin.
+  tui                              Launch the Textual cockpit (requires the [tui] extra).
 
 Common options:
   --repo-root DIR    Operate on this repo (defaults to current directory).
@@ -63,6 +64,7 @@ Examples:
   agent-toolkit doctor                       # five-group repo health check
   agent-toolkit inventory --harness pi       # what's available for the Pi harness
   agent-toolkit new skill my-skill           # scaffold a new skill
+  agent-toolkit tui                          # launch the visual cockpit
 
 Documentation: docs/agent-toolkit/cli.md
 EOF
@@ -84,6 +86,10 @@ case "$cmd" in
       . "$LIB_DIR/${cmd}.sh"
       "${cmd}_main" "$@"
     fi
+    ;;
+  tui)
+    exec uv run --project "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)" \
+      agent-toolkit-tui --repo-root "$PWD" "$@"
     ;;
   check|fix|doctor|new|inventory|ingest)
     exec uv run agent-toolkit "$cmd" "$@"

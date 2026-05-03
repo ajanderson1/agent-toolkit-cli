@@ -87,6 +87,36 @@ bin/agent-toolkit link user claude skill:figma
 bin/agent-toolkit link project claude skill:figma
 ```
 
+### Plan mode (`--plan -`)
+
+Apply a batch of `<kind>:<slug>` entries from stdin in a single invocation:
+
+```
+bin/agent-toolkit link <user|project> <harness> --plan -
+```
+
+Format: one `<kind>:<slug>` per line, `#`-prefixed lines and blanks ignored,
+EOF terminates. Each entry is applied independently — a failure on one line
+does not abort the rest; per-line errors are reported on stderr.
+
+Exit codes:
+
+- `0` — every entry applied successfully.
+- `1` — at least one entry failed (allow-list write or symlink creation).
+- `2` — grammar error (e.g. combined with `--all`, missing `-` after `--plan`,
+  malformed `<kind>:<slug>`).
+
+Cannot be combined with `--all` or with a positional `<kind>:<slug>`. Used by
+the TUI's batch-apply path; also handy for scripted bootstraps.
+
+```bash
+bin/agent-toolkit link user claude --plan - <<'EOF'
+skill:journal
+skill:conventions
+agent:scout
+EOF
+```
+
 > _Header & summary go to stderr; suppress with `--quiet` or `AGENT_TOOLKIT_QUIET=1`._
 
 ---
@@ -121,6 +151,35 @@ existing file).
 ```bash
 bin/agent-toolkit unlink user claude --all              # blow away all claude symlinks
 bin/agent-toolkit unlink user claude skill:figma        # opt one skill out
+```
+
+### Plan mode (`--plan -`)
+
+Apply a batch of `<kind>:<slug>` entries from stdin in a single invocation:
+
+```
+bin/agent-toolkit unlink <user|project> <harness> --plan -
+```
+
+Format: one `<kind>:<slug>` per line, `#`-prefixed lines and blanks ignored,
+EOF terminates. Each entry is applied independently — a failure on one line
+does not abort the rest; per-line errors are reported on stderr.
+
+Exit codes:
+
+- `0` — every entry unlinked successfully.
+- `1` — at least one entry failed (allow-list write or symlink removal).
+- `2` — grammar error (e.g. combined with `--all`, missing `-` after `--plan`,
+  malformed `<kind>:<slug>`).
+
+Cannot be combined with `--all` or with a positional `<kind>:<slug>`. Used by
+the TUI's batch-apply path; also handy for scripted teardowns.
+
+```bash
+bin/agent-toolkit unlink user claude --plan - <<'EOF'
+skill:journal
+skill:conventions
+EOF
 ```
 
 > _Header & summary go to stderr; suppress with `--quiet` or `AGENT_TOOLKIT_QUIET=1`._
@@ -167,6 +226,57 @@ bin/agent-toolkit list claude               # claude-compatible assets
 bin/agent-toolkit list skill claude         # both filters
 ```
 
+### JSON output (`--format=json`)
+
+Machine-readable view of the same inventory data the human-formatted output
+covers, with explicit per-cell install state. Consumed by the TUI and any
+external tooling.
+
+```
+bin/agent-toolkit list --format=json [--repo-root DIR] [<kind>] [<harness>]
+```
+
+Top-level shape:
+
+```json
+{
+  "repo_root": "/path/to/agent-toolkit",
+  "harnesses": ["claude", "codex", "opencode", "pi"],
+  "assets": [
+    {
+      "kind": "skill",
+      "slug": "journal",
+      "origin": "first-party",
+      "description": "Journal Skill.",
+      "path": "/.../skills/journal/SKILL.md",
+      "declared_harnesses": ["claude"],
+      "cells": [
+        {"harness": "claude", "scope": "user",
+         "status": "linked", "target": "/.../skills/journal", "allowlisted": true},
+        {"harness": "codex",  "scope": "user",
+         "status": "unsupported", "target": null, "allowlisted": false}
+      ]
+    }
+  ]
+}
+```
+
+Cell `status` is one of `linked`, `unlinked`, `broken`, `unsupported`. The
+`target` field is the **raw `os.readlink()`** value when the symlink exists
+(both `linked` and `broken`) — consumers see one consistent representation
+regardless of whether the link resolves correctly. `unlinked` and
+`unsupported` cells have `target: null`.
+
+`allowlisted` reflects the YAML allow-list (`~/.agent-toolkit.yaml` for
+`scope: user`, `<cwd>/.agent-toolkit.yaml` for `scope: project`) and is
+reported truthfully even for `unsupported` cells: the allow-list is
+harness-independent, so a slug can be allow-listed for a harness that does
+not support it. The TUI uses this to render the cell as "blocked by harness"
+rather than "user opted out".
+
+Output is sorted by `(kind, slug)` for stable, diffable JSON. Pretty-printed
+with two-space indent.
+
 > _Header & summary go to stderr; suppress with `--quiet` or `AGENT_TOOLKIT_QUIET=1`._
 
 ---
@@ -192,6 +302,43 @@ bin/agent-toolkit diff project opencode
 ```
 
 > _Header & summary go to stderr; suppress with `--quiet` or `AGENT_TOOLKIT_QUIET=1`._
+
+---
+
+## tui
+
+Launch the Textual cockpit:
+
+    agent-toolkit tui
+
+Requires the optional `tui` extra:
+
+    pip install agent-toolkit[tui]
+
+The TUI is a visual cockpit over `link`/`unlink`/`list`. It never writes to the
+filesystem directly — every mutation goes through `bin/agent-toolkit`. See the
+TUI design spec at `docs/superpowers/specs/2026-05-03-agent-toolkit-tui-design.md`
+for the full contract.
+
+### Keyboard bindings
+
+| Key | Action |
+|---|---|
+| `Enter` | Toggle the focused cell (link ↔ unlink) |
+| `Tab` | Cycle focus between the kinds sidebar and the asset grid |
+| `Ctrl+S` | Apply all pending changes |
+| `Ctrl+D` | Diff (dry-run) pending changes |
+| `Ctrl+R` | Refresh state from disk |
+| `q` | Quit |
+
+### Headless mode
+
+For scripted use and Layer-3 smoke tests:
+
+    agent-toolkit-tui --headless --plan plan.txt --apply --scope user --harness claude --op link
+
+`plan.txt` is a kind:slug-per-line file (same format as `link --plan -`). Without
+`--apply`, runs in dry-run mode. Exits 0 on full success, 1 on any failure.
 
 ---
 

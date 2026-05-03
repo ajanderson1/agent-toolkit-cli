@@ -39,16 +39,26 @@ link_main() {
       --dry-run)   dry_run=1; shift ;;
       --quiet|-q)  AGENT_TOOLKIT_QUIET=1; shift ;;
       --all)
-        if [ "$mode" = "per-asset" ]; then
-          echo "cannot combine --all with $kind:$slug" >&2; return 2
+        if [ "$mode" != "bare" ]; then
+          echo "cannot combine --all with $mode mode" >&2; return 2
         fi
         mode="all"
         shift
         ;;
+      --plan)
+        if [ "$mode" != "bare" ]; then
+          echo "cannot combine --plan with $mode mode" >&2; return 2
+        fi
+        if [ "$#" -lt 2 ] || [ "${2:-}" != "-" ]; then
+          echo "--plan currently supports only '-' (stdin)" >&2; return 2
+        fi
+        mode="plan"
+        shift 2
+        ;;
       -y|--yes)    assume_yes=1; shift ;;
       *:*)
-        if [ "$mode" = "all" ]; then
-          echo "cannot combine --all with $1" >&2; return 2
+        if [ "$mode" != "bare" ]; then
+          echo "cannot combine ${1} with $mode mode" >&2; return 2
         fi
         mode="per-asset"
         kind="${1%%:*}"
@@ -71,6 +81,7 @@ link_main() {
   case "$mode" in
     per-asset) _link_per_asset "$scope" "$harness" "$kind" "$slug" "$repo_root" "$allowlist_path" "$dry_run" ;;
     all)       _link_all "$scope" "$harness" "$repo_root" "$allowlist_path" "$assume_yes" "$dry_run" ;;
+    plan)      _link_plan "$scope" "$harness" "$repo_root" "$allowlist_path" "$dry_run" ;;
     bare)      _link_bare "$scope" "$harness" "$repo_root" "$allowlist_path" "$dry_run" ;;
   esac
 }
@@ -220,6 +231,62 @@ _link_all() {
   _link_project_from_file "$scope" "$harness" "$repo_root" "$target_path" "$dry_run"
   [ -n "$tmp_path" ] && rm -f "$tmp_path"
   _link_print_summary "$dry_run"
+}
+
+# === --plan - form ==========================================================
+# Reads `<kind>:<slug>` entries from stdin (one per line), ignores `#`-comments
+# and blank lines, applies each entry independently via _link_per_asset.
+# Per-entry failures are reported on stderr but do NOT abort the batch.
+# Returns 0 if every entry succeeded; 1 if any entry failed.
+_link_plan() {
+  local scope="$1" harness="$2" repo_root="$3" allowlist_path="$4" dry_run="$5"
+  local ok=0 failed=0 total=0
+  local errors=""
+
+  # Read stdin into a tempfile so the per-entry _link_per_asset call doesn't
+  # re-read fd0 inside its body.
+  local plan_file plan_err
+  plan_file="$(mktemp -t agent-toolkit-plan.XXXXXX)"
+  plan_err="${plan_file}.err"
+  # Ensure tempfiles are removed on SIGINT/SIGTERM even if the function is
+  # interrupted mid-loop. The explicit rm at the end still runs on normal exit.
+  trap 'rm -f "$plan_file" "$plan_err"; exit 130' INT TERM
+  cat - > "$plan_file"
+
+  while IFS= read -r raw; do
+    # strip comments + trim
+    local line="${raw%%#*}"
+    line="${line#"${line%%[![:space:]]*}"}"
+    line="${line%"${line##*[![:space:]]}"}"
+    [ -n "$line" ] || continue
+    case "$line" in
+      *:*) ;;
+      *) errors+="malformed (no kind:slug): $raw"$'\n'; failed=$((failed+1)); total=$((total+1)); continue ;;
+    esac
+    total=$((total+1))
+    # Reuse _link_per_asset semantics. Suppress chrome via AGENT_TOOLKIT_QUIET=1
+    # and capture the per-call exit code only.
+    if AGENT_TOOLKIT_QUIET=1 _link_per_asset "$scope" "$harness" "${line%%:*}" "${line#*:}" \
+         "$repo_root" "$allowlist_path" "$dry_run" >/dev/null 2>>"$plan_err"; then
+      ok=$((ok+1))
+    else
+      failed=$((failed+1))
+      errors+="failed: $line"$'\n'
+    fi
+  done < "$plan_file"
+
+  if [ -n "$errors" ]; then
+    printf '%s' "$errors" >&2
+  fi
+  if [ -s "$plan_err" ]; then
+    cat "$plan_err" >&2
+  fi
+  rm -f "$plan_file" "$plan_err"
+  trap - INT TERM
+
+  _ui_summary "Plan applied: $ok ok, $failed failed (of $total entries)."
+  if [ "$failed" -gt 0 ]; then return 1; fi
+  return 0
 }
 
 # === Projection (shared) ====================================================

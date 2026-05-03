@@ -10,12 +10,19 @@ dependencies = [
 ]
 
 [project.scripts]
-agent-toolkit = "agent_toolkit.cli:main"
+agent-toolkit     = "agent_toolkit.cli:main"
+agent-toolkit-tui = "agent_toolkit_tui.app:main"
 
 [dependency-groups]
 dev = [
     "pytest>=8.0",
     "pytest-snapshot>=0.9",
+    "pytest-asyncio>=0.23",
+]
+
+[project.optional-dependencies]
+tui = [
+  "textual>=0.79",
 ]
 
 [build-system]
@@ -24,3 +31,4 @@ build-backend = "hatchling.build"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+asyncio_mode = "auto"

@@ -27,3 +27,9 @@
   [ "$status" -eq 0 ]
   [[ "$output" == *"Usage:"* ]] || [[ "$output" == *"usage:"* ]]
 }
+
+@test "help mentions tui subcommand" {
+  run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" --help
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"tui"* ]]
+}

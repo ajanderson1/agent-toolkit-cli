@@ -12,11 +12,13 @@ _is_known_harness() { case " $_KNOWN_HARNESSES " in *" $1 "*) return 0 ;; esac; 
 
 list_main() {
   local repo_root="$PWD"
-  local kind_filter="" harness_filter=""
+  local kind_filter="" harness_filter="" format="text"
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --repo-root) repo_root="$2"; shift 2 ;;
       --quiet|-q)  AGENT_TOOLKIT_QUIET=1; shift ;;
+      --format)    format="$2"; shift 2 ;;
+      --format=*)  format="${1#--format=}"; shift ;;
       -*) echo "unknown flag: $1" >&2; return 2 ;;
       *)
         if _is_known_kind "$1"; then
@@ -33,6 +35,20 @@ list_main() {
         ;;
     esac
   done
+
+  case "$format" in
+    text|json) ;;
+    *) echo "unknown --format: $format (expected: text, json)" >&2; return 2 ;;
+  esac
+
+  if [ "$format" = "json" ]; then
+    local _at_project
+    _at_project="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+    exec uv run --project "$_at_project" \
+      agent-toolkit _list-json --repo-root "$repo_root" \
+      ${kind_filter:+--kind "$kind_filter"} \
+      ${harness_filter:+--harness "$harness_filter"}
+  fi
 
   if [ "$kind_filter" = "mcp" ]; then
     _ui_header "Asset inventory (filter: kind=mcp):"
