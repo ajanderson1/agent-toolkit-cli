@@ -1,0 +1,6 @@
+[21:53:44] flow.log initialised — issue #1, mode --auto
+[22:02:04] step 4 done — spec accepted by user, proceeding to plan
+[22:12:26] step 5 done — plan accepted (incl. Task 5.5 conventions port), entering build
+[22:40:53] step 6 start — subagent-driven build (12 tasks)
+[22:40:53] T0: decision recorded — port conventions in T5.5 (no code)
+[22:46:01] scope shift — PR-1 = T1-T6+T7+T10; T8 (delete bash/bats) and T9 (docs) deferred to PR-2 per user

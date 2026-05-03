@@ -7,7 +7,6 @@ unit-tested in tests/test_link_lib.py.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Iterator
 
 
@@ -47,8 +46,9 @@ def iter_plan_lines(text: str) -> Iterator[tuple[str, str]]:
 
     - Strips `#`-comments (anything from `#` to end-of-line).
     - Skips blank-after-strip lines.
-    - For lines without a colon, yields (MALFORMED, raw_line) so the caller
-      can report and continue.
+    - For lines without a colon, yields (MALFORMED, raw_line) — the original
+      pre-strip line, so callers can render the user's input verbatim in
+      diagnostics. Caller should not re-parse it.
     """
     for raw in text.splitlines():
         line = raw.split("#", 1)[0].strip()
