@@ -11,66 +11,16 @@ from click.testing import CliRunner
 from agent_toolkit.cli import main
 
 
-SKILL_FRONTMATTER = """\
----
-apiVersion: agent-toolkit/v1alpha1
-metadata:
-  name: {slug}
-  description: {slug} skill.
-  lifecycle: stable
-spec:
-  origin: first-party
-  vendored_via: none
-  harnesses:
-{harness_lines}
----
-"""
-
-
-def _seed_toolkit(tmp: Path) -> Path:
-    """Create a minimal valid toolkit repo at `tmp/toolkit`."""
-    root = tmp / "toolkit"
-    root.mkdir()
-    (root / ".agent-toolkit-source").write_text("tool: agent-toolkit-cli\n")
-    (root / "schemas").mkdir()
-    schema_src = (
-        Path(__file__).resolve().parents[1] / "schemas" / "asset-frontmatter.v1alpha1.json"
-    )
-    (root / "schemas" / "asset-frontmatter.v1alpha1.json").write_text(schema_src.read_text())
-    return root
-
-
-def _seed_skill(toolkit_root: Path, slug: str, harnesses: list[str]) -> Path:
-    skill_dir = toolkit_root / "skills" / slug
-    skill_dir.mkdir(parents=True, exist_ok=True)
-    lines = "\n".join(f"    - {h}" for h in harnesses)
-    (skill_dir / "SKILL.md").write_text(
-        SKILL_FRONTMATTER.format(slug=slug, harness_lines=lines)
-    )
-    return skill_dir
-
-
-@pytest.fixture
-def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    home = tmp_path / "home"
-    home.mkdir()
-    monkeypatch.setenv("HOME", str(home))
-    monkeypatch.delenv("AGENT_TOOLKIT_REPO", raising=False)
-    monkeypatch.delenv("AGENT_TOOLKIT_QUIET", raising=False)
-    toolkit_root = _seed_toolkit(tmp_path)
-    return {"home": home, "toolkit_root": toolkit_root}
-
-
 # ===========================================================================
 # test_link.bats: bare form
 # ===========================================================================
 
 
-def test_link_user_claude_creates_symlink(env):
+def test_link_user_claude_creates_symlink(env, seed_skill):
     """Replaces tests/bats/test_link.bats:41-46."""
     home = env["home"]
     toolkit = env["toolkit_root"]
-    _seed_skill(toolkit, "alpha", ["claude"])
+    seed_skill(toolkit, "alpha", ["claude"])
     (home / ".agent-toolkit.yaml").write_text("skills:\n  - alpha\n")
     (home / ".claude").mkdir()
     runner = CliRunner()
@@ -83,11 +33,11 @@ def test_link_user_claude_creates_symlink(env):
     assert os.readlink(str(link)) == str(toolkit / "skills" / "alpha")
 
 
-def test_link_user_claude_idempotent(env):
+def test_link_user_claude_idempotent(env, seed_skill):
     """Replaces tests/bats/test_link.bats:48-53."""
     home = env["home"]
     toolkit = env["toolkit_root"]
-    _seed_skill(toolkit, "alpha", ["claude"])
+    seed_skill(toolkit, "alpha", ["claude"])
     (home / ".agent-toolkit.yaml").write_text("skills:\n  - alpha\n")
     runner = CliRunner()
     # First run
@@ -101,11 +51,11 @@ def test_link_user_claude_idempotent(env):
     assert link.is_symlink()
 
 
-def test_link_user_codex_skips_incompatible(env):
+def test_link_user_codex_skips_incompatible(env, seed_skill):
     """Replaces tests/bats/test_link.bats:55-59."""
     home = env["home"]
     toolkit = env["toolkit_root"]
-    _seed_skill(toolkit, "alpha", ["claude"])
+    seed_skill(toolkit, "alpha", ["claude"])
     (home / ".agent-toolkit.yaml").write_text("skills:\n  - alpha\n")
     runner = CliRunner()
     result = runner.invoke(
@@ -116,11 +66,11 @@ def test_link_user_codex_skips_incompatible(env):
     assert not (home / ".codex" / "skills" / "alpha").exists()
 
 
-def test_link_removes_stale_when_harness_changes(env):
+def test_link_removes_stale_when_harness_changes(env, seed_skill, skill_frontmatter):
     """Replaces tests/bats/test_link.bats:61-69."""
     home = env["home"]
     toolkit = env["toolkit_root"]
-    _seed_skill(toolkit, "alpha", ["claude"])
+    seed_skill(toolkit, "alpha", ["claude"])
     (home / ".agent-toolkit.yaml").write_text("skills:\n  - alpha\n")
     runner = CliRunner()
     # First run — creates symlink
@@ -130,7 +80,7 @@ def test_link_removes_stale_when_harness_changes(env):
     # Update skill to no longer support claude
     skill_md = toolkit / "skills" / "alpha" / "SKILL.md"
     skill_md.write_text(
-        SKILL_FRONTMATTER.format(slug="alpha", harness_lines="    - codex")
+        skill_frontmatter.format(slug="alpha", harness_lines="    - codex")
     )
     result = runner.invoke(
         main, ["--toolkit-repo", str(toolkit), "link", "user", "claude"],
@@ -139,11 +89,11 @@ def test_link_removes_stale_when_harness_changes(env):
     assert not link.is_symlink()
 
 
-def test_link_dry_run_no_symlink_emits_would_link(env):
+def test_link_dry_run_no_symlink_emits_would_link(env, seed_skill):
     """Replaces tests/bats/test_link.bats:71-76."""
     home = env["home"]
     toolkit = env["toolkit_root"]
-    _seed_skill(toolkit, "alpha", ["claude"])
+    seed_skill(toolkit, "alpha", ["claude"])
     (home / ".agent-toolkit.yaml").write_text("skills:\n  - alpha\n")
     runner = CliRunner()
     result = runner.invoke(
@@ -154,11 +104,11 @@ def test_link_dry_run_no_symlink_emits_would_link(env):
     assert "would-link" in result.output
 
 
-def test_link_emits_linking_header_on_stderr(env):
+def test_link_emits_linking_header_on_stderr(env, seed_skill):
     """Replaces tests/bats/test_link.bats:78-82."""
     toolkit = env["toolkit_root"]
     home = env["home"]
-    _seed_skill(toolkit, "alpha", ["claude"])
+    seed_skill(toolkit, "alpha", ["claude"])
     (home / ".agent-toolkit.yaml").write_text("skills:\n  - alpha\n")
     runner = CliRunner()
     result = runner.invoke(
@@ -168,11 +118,11 @@ def test_link_emits_linking_header_on_stderr(env):
     assert "Linking" in result.stderr
 
 
-def test_link_summary_says_linked_on_first_run(env):
+def test_link_summary_says_linked_on_first_run(env, seed_skill):
     """Replaces tests/bats/test_link.bats:84-88."""
     toolkit = env["toolkit_root"]
     home = env["home"]
-    _seed_skill(toolkit, "alpha", ["claude"])
+    seed_skill(toolkit, "alpha", ["claude"])
     (home / ".agent-toolkit.yaml").write_text("skills:\n  - alpha\n")
     runner = CliRunner()
     result = runner.invoke(
@@ -182,11 +132,11 @@ def test_link_summary_says_linked_on_first_run(env):
     assert "Linked" in result.stderr
 
 
-def test_link_summary_already_in_sync_on_second_run(env):
+def test_link_summary_already_in_sync_on_second_run(env, seed_skill):
     """Replaces tests/bats/test_link.bats:90-95."""
     toolkit = env["toolkit_root"]
     home = env["home"]
-    _seed_skill(toolkit, "alpha", ["claude"])
+    seed_skill(toolkit, "alpha", ["claude"])
     (home / ".agent-toolkit.yaml").write_text("skills:\n  - alpha\n")
     runner = CliRunner()
     runner.invoke(main, ["--toolkit-repo", str(toolkit), "link", "user", "claude"])
@@ -197,11 +147,11 @@ def test_link_summary_already_in_sync_on_second_run(env):
     assert "Already in sync" in result.stderr
 
 
-def test_link_dry_run_summary_pending_or_nothing(env):
+def test_link_dry_run_summary_pending_or_nothing(env, seed_skill):
     """Replaces tests/bats/test_link.bats:97-101."""
     toolkit = env["toolkit_root"]
     home = env["home"]
-    _seed_skill(toolkit, "alpha", ["claude"])
+    seed_skill(toolkit, "alpha", ["claude"])
     (home / ".agent-toolkit.yaml").write_text("skills:\n  - alpha\n")
     runner = CliRunner()
     result = runner.invoke(
@@ -212,7 +162,7 @@ def test_link_dry_run_summary_pending_or_nothing(env):
     assert "pending" in combined or "Nothing to change" in combined
 
 
-def test_link_quiet_env_suppresses_chrome(env, monkeypatch):
+def test_link_quiet_env_suppresses_chrome(env, monkeypatch, seed_skill):
     """Replaces tests/bats/test_link.bats:103-108.
 
     With AGENT_TOOLKIT_QUIET=1 the header and summary should be suppressed,
@@ -220,7 +170,7 @@ def test_link_quiet_env_suppresses_chrome(env, monkeypatch):
     """
     toolkit = env["toolkit_root"]
     home = env["home"]
-    _seed_skill(toolkit, "alpha", ["claude"])
+    seed_skill(toolkit, "alpha", ["claude"])
     (home / ".agent-toolkit.yaml").write_text("skills:\n  - alpha\n")
     monkeypatch.setenv("AGENT_TOOLKIT_QUIET", "1")
     runner = CliRunner()
@@ -238,11 +188,11 @@ def test_link_quiet_env_suppresses_chrome(env, monkeypatch):
 # ===========================================================================
 
 
-def test_link_per_asset_creates_yaml_and_symlink(env):
+def test_link_per_asset_creates_yaml_and_symlink(env, seed_skill):
     """Replaces tests/bats/test_link_per_asset.bats:49-55."""
     home = env["home"]
     toolkit = env["toolkit_root"]
-    _seed_skill(toolkit, "alpha", ["claude"])
+    seed_skill(toolkit, "alpha", ["claude"])
     runner = CliRunner()
     result = runner.invoke(
         main,
@@ -255,12 +205,12 @@ def test_link_per_asset_creates_yaml_and_symlink(env):
     assert (home / ".claude" / "skills" / "alpha").is_symlink()
 
 
-def test_link_per_asset_keeps_both(env):
+def test_link_per_asset_keeps_both(env, seed_skill):
     """Replaces tests/bats/test_link_per_asset.bats:57-65."""
     home = env["home"]
     toolkit = env["toolkit_root"]
-    _seed_skill(toolkit, "alpha", ["claude"])
-    _seed_skill(toolkit, "beta", ["claude"])
+    seed_skill(toolkit, "alpha", ["claude"])
+    seed_skill(toolkit, "beta", ["claude"])
     runner = CliRunner()
     runner.invoke(
         main,
@@ -278,11 +228,11 @@ def test_link_per_asset_keeps_both(env):
     assert (home / ".claude" / "skills" / "beta").is_symlink()
 
 
-def test_link_per_asset_idempotent_no_dup(env):
+def test_link_per_asset_idempotent_no_dup(env, seed_skill):
     """Replaces tests/bats/test_link_per_asset.bats:67-75."""
     home = env["home"]
     toolkit = env["toolkit_root"]
-    _seed_skill(toolkit, "alpha", ["claude"])
+    seed_skill(toolkit, "alpha", ["claude"])
     runner = CliRunner()
     runner.invoke(
         main,
@@ -314,11 +264,11 @@ def test_link_per_asset_unknown_slug_errors(env):
     assert not (home / ".agent-toolkit.yaml").exists()
 
 
-def test_link_per_asset_harness_incompat_errors(env):
+def test_link_per_asset_harness_incompat_errors(env, seed_skill):
     """Replaces tests/bats/test_link_per_asset.bats:84-90."""
     home = env["home"]
     toolkit = env["toolkit_root"]
-    _seed_skill(toolkit, "codex-only", ["codex"])
+    seed_skill(toolkit, "codex-only", ["codex"])
     runner = CliRunner()
     result = runner.invoke(
         main,
@@ -344,12 +294,12 @@ def test_link_per_asset_mcp_errors(env):
     assert "mcps are not yet scope-routed" in combined
 
 
-def test_link_project_per_asset(env, tmp_path):
+def test_link_project_per_asset(env, tmp_path, seed_skill):
     """Replaces tests/bats/test_link_per_asset.bats:98-104."""
     toolkit = env["toolkit_root"]
     project = tmp_path / "project"
     project.mkdir()
-    _seed_skill(toolkit, "alpha", ["claude"])
+    seed_skill(toolkit, "alpha", ["claude"])
     runner = CliRunner()
     result = runner.invoke(
         main,
@@ -364,10 +314,10 @@ def test_link_project_per_asset(env, tmp_path):
     assert (project / ".claude" / "skills" / "alpha").is_symlink()
 
 
-def test_link_per_asset_plus_all_rc2(env):
+def test_link_per_asset_plus_all_rc2(env, seed_skill):
     """Replaces tests/bats/test_link_per_asset.bats:106-110."""
     toolkit = env["toolkit_root"]
-    _seed_skill(toolkit, "alpha", ["claude"])
+    seed_skill(toolkit, "alpha", ["claude"])
     runner = CliRunner()
     result = runner.invoke(
         main,
@@ -381,11 +331,11 @@ def test_link_per_asset_plus_all_rc2(env):
     assert "cannot combine --all with" in combined
 
 
-def test_link_per_asset_dry_run_no_yaml_write(env):
+def test_link_per_asset_dry_run_no_yaml_write(env, seed_skill):
     """Replaces tests/bats/test_link_per_asset.bats:112-118."""
     home = env["home"]
     toolkit = env["toolkit_root"]
-    _seed_skill(toolkit, "alpha", ["claude"])
+    seed_skill(toolkit, "alpha", ["claude"])
     runner = CliRunner()
     result = runner.invoke(
         main,
@@ -401,12 +351,12 @@ def test_link_per_asset_dry_run_no_yaml_write(env):
     assert not (home / ".claude" / "skills" / "alpha").is_symlink()
 
 
-def test_link_plan_multi_slugs(env):
+def test_link_plan_multi_slugs(env, seed_skill):
     """Replaces tests/bats/test_link_per_asset.bats:120-125."""
     home = env["home"]
     toolkit = env["toolkit_root"]
-    _seed_skill(toolkit, "alpha", ["claude"])
-    _seed_skill(toolkit, "beta", ["claude"])
+    seed_skill(toolkit, "alpha", ["claude"])
+    seed_skill(toolkit, "beta", ["claude"])
     runner = CliRunner()
     result = runner.invoke(
         main,
@@ -418,11 +368,11 @@ def test_link_plan_multi_slugs(env):
     assert (home / ".claude" / "skills" / "beta").is_symlink()
 
 
-def test_link_plan_ignores_comments_and_blanks(env):
+def test_link_plan_ignores_comments_and_blanks(env, seed_skill):
     """Replaces tests/bats/test_link_per_asset.bats:127-131."""
     home = env["home"]
     toolkit = env["toolkit_root"]
-    _seed_skill(toolkit, "alpha", ["claude"])
+    seed_skill(toolkit, "alpha", ["claude"])
     runner = CliRunner()
     result = runner.invoke(
         main,
@@ -433,11 +383,11 @@ def test_link_plan_ignores_comments_and_blanks(env):
     assert (home / ".claude" / "skills" / "alpha").is_symlink()
 
 
-def test_link_plan_partial_failure_rc1(env):
+def test_link_plan_partial_failure_rc1(env, seed_skill):
     """Replaces tests/bats/test_link_per_asset.bats:133-138."""
     home = env["home"]
     toolkit = env["toolkit_root"]
-    _seed_skill(toolkit, "alpha", ["claude"])
+    seed_skill(toolkit, "alpha", ["claude"])
     runner = CliRunner()
     result = runner.invoke(
         main,
@@ -526,12 +476,12 @@ def test_link_plan_non_dash_rc2(env):
 # ===========================================================================
 
 
-def test_link_all_yes_creates_yaml_with_slugs(env):
+def test_link_all_yes_creates_yaml_with_slugs(env, seed_skill):
     """Replaces tests/bats/test_link_all_prompt.bats:33-41."""
     home = env["home"]
     toolkit = env["toolkit_root"]
-    _seed_skill(toolkit, "alpha", ["claude"])
-    _seed_skill(toolkit, "beta", ["claude"])
+    seed_skill(toolkit, "alpha", ["claude"])
+    seed_skill(toolkit, "beta", ["claude"])
     runner = CliRunner()
     result = runner.invoke(
         main,
@@ -547,11 +497,11 @@ def test_link_all_yes_creates_yaml_with_slugs(env):
     assert (home / ".claude" / "skills" / "beta").is_symlink()
 
 
-def test_link_all_yes_overwrites(env):
+def test_link_all_yes_overwrites(env, seed_skill):
     """Replaces tests/bats/test_link_all_prompt.bats:43-56."""
     home = env["home"]
     toolkit = env["toolkit_root"]
-    _seed_skill(toolkit, "alpha", ["claude"])
+    seed_skill(toolkit, "alpha", ["claude"])
     (home / ".agent-toolkit.yaml").write_text(
         "skills:\n  - oldslug\nagents: []\ncommands: []\nhooks: []\nplugins: []\n"
     )
@@ -566,7 +516,7 @@ def test_link_all_yes_overwrites(env):
     assert "alpha" in yaml_text
 
 
-def test_link_all_non_tty_no_yes_refuses(env, monkeypatch):
+def test_link_all_non_tty_no_yes_refuses(env, monkeypatch, seed_skill):
     """Replaces tests/bats/test_link_all_prompt.bats:58-71.
 
     Non-TTY without -y should refuse. We simulate no-TTY by using CliRunner
@@ -574,7 +524,7 @@ def test_link_all_non_tty_no_yes_refuses(env, monkeypatch):
     """
     home = env["home"]
     toolkit = env["toolkit_root"]
-    _seed_skill(toolkit, "alpha", ["claude"])
+    seed_skill(toolkit, "alpha", ["claude"])
     (home / ".agent-toolkit.yaml").write_text(
         "skills:\n  - oldslug\nagents: []\ncommands: []\nhooks: []\nplugins: []\n"
     )
@@ -591,11 +541,11 @@ def test_link_all_non_tty_no_yes_refuses(env, monkeypatch):
     assert "oldslug" in (home / ".agent-toolkit.yaml").read_text()
 
 
-def test_link_all_empty_file_no_prompt(env):
+def test_link_all_empty_file_no_prompt(env, seed_skill):
     """Replaces tests/bats/test_link_all_prompt.bats:73-78."""
     home = env["home"]
     toolkit = env["toolkit_root"]
-    _seed_skill(toolkit, "alpha", ["claude"])
+    seed_skill(toolkit, "alpha", ["claude"])
     (home / ".agent-toolkit.yaml").write_text("")
     runner = CliRunner()
     result = runner.invoke(
@@ -607,12 +557,12 @@ def test_link_all_empty_file_no_prompt(env):
     assert "alpha" in (home / ".agent-toolkit.yaml").read_text()
 
 
-def test_link_all_dry_run_no_write(env):
+def test_link_all_dry_run_no_write(env, seed_skill):
     """Replaces tests/bats/test_link_all_prompt.bats:80-96."""
     home = env["home"]
     toolkit = env["toolkit_root"]
-    _seed_skill(toolkit, "alpha", ["claude"])
-    _seed_skill(toolkit, "beta", ["claude"])
+    seed_skill(toolkit, "alpha", ["claude"])
+    seed_skill(toolkit, "beta", ["claude"])
     (home / ".agent-toolkit.yaml").write_text(
         "skills:\n  - oldslug\nagents: []\ncommands: []\nhooks: []\nplugins: []\n"
     )
@@ -636,11 +586,11 @@ def test_link_all_dry_run_no_write(env):
 # ===========================================================================
 
 
-def test_link_bare_no_yaml_hints_with_all_and_kind_slug(env):
+def test_link_bare_no_yaml_hints_with_all_and_kind_slug(env, seed_skill):
     """Replaces tests/bats/test_link_user_optin.bats:31-38."""
     home = env["home"]
     toolkit = env["toolkit_root"]
-    _seed_skill(toolkit, "alpha", ["claude"])
+    seed_skill(toolkit, "alpha", ["claude"])
     runner = CliRunner()
     result = runner.invoke(
         main, ["--toolkit-repo", str(toolkit), "link", "user", "claude"],
@@ -653,11 +603,11 @@ def test_link_bare_no_yaml_hints_with_all_and_kind_slug(env):
     assert not (home / ".claude" / "skills" / "alpha").is_symlink()
 
 
-def test_link_bare_empty_yaml_links_nothing(env):
+def test_link_bare_empty_yaml_links_nothing(env, seed_skill):
     """Replaces tests/bats/test_link_user_optin.bats:40-45."""
     home = env["home"]
     toolkit = env["toolkit_root"]
-    _seed_skill(toolkit, "alpha", ["claude"])
+    seed_skill(toolkit, "alpha", ["claude"])
     (home / ".agent-toolkit.yaml").write_text("")
     runner = CliRunner()
     result = runner.invoke(
@@ -667,11 +617,11 @@ def test_link_bare_empty_yaml_links_nothing(env):
     assert not (home / ".claude" / "skills" / "alpha").is_symlink()
 
 
-def test_link_bare_allowlisted_links(env):
+def test_link_bare_allowlisted_links(env, seed_skill):
     """Replaces tests/bats/test_link_user_optin.bats:47-59."""
     home = env["home"]
     toolkit = env["toolkit_root"]
-    _seed_skill(toolkit, "alpha", ["claude"])
+    seed_skill(toolkit, "alpha", ["claude"])
     (home / ".agent-toolkit.yaml").write_text(
         "skills:\n  - alpha\nagents: []\ncommands: []\nhooks: []\nplugins: []\n"
     )
@@ -683,11 +633,11 @@ def test_link_bare_allowlisted_links(env):
     assert (home / ".claude" / "skills" / "alpha").is_symlink()
 
 
-def test_link_bare_skips_unlisted(env):
+def test_link_bare_skips_unlisted(env, seed_skill):
     """Replaces tests/bats/test_link_user_optin.bats:61-72."""
     home = env["home"]
     toolkit = env["toolkit_root"]
-    _seed_skill(toolkit, "alpha", ["claude"])
+    seed_skill(toolkit, "alpha", ["claude"])
     (home / ".agent-toolkit.yaml").write_text(
         "skills: []\nagents: []\ncommands: []\nhooks: []\nplugins: []\n"
     )
@@ -699,11 +649,11 @@ def test_link_bare_skips_unlisted(env):
     assert not (home / ".claude" / "skills" / "alpha").is_symlink()
 
 
-def test_link_bare_prunes_when_removed(env):
+def test_link_bare_prunes_when_removed(env, seed_skill):
     """Replaces tests/bats/test_link_user_optin.bats:74-95."""
     home = env["home"]
     toolkit = env["toolkit_root"]
-    _seed_skill(toolkit, "alpha", ["claude"])
+    seed_skill(toolkit, "alpha", ["claude"])
     (home / ".agent-toolkit.yaml").write_text(
         "skills:\n  - alpha\nagents: []\ncommands: []\nhooks: []\nplugins: []\n"
     )
@@ -722,11 +672,11 @@ def test_link_bare_prunes_when_removed(env):
     assert not link.is_symlink()
 
 
-def test_link_bare_prunes_orphan(env):
+def test_link_bare_prunes_orphan(env, seed_skill):
     """Replaces tests/bats/test_link_user_optin.bats:97-131."""
     home = env["home"]
     toolkit = env["toolkit_root"]
-    _seed_skill(toolkit, "alpha", ["claude"])
+    seed_skill(toolkit, "alpha", ["claude"])
     (home / ".agent-toolkit.yaml").write_text(
         "skills:\n  - alpha\nagents: []\ncommands: []\nhooks: []\nplugins: []\n"
     )
@@ -736,7 +686,7 @@ def test_link_bare_prunes_orphan(env):
     assert link_alpha.is_symlink()
 
     # Simulate orphan: create a skill, link it manually, then delete it from repo
-    _seed_skill(toolkit, "orphan", ["claude"])
+    seed_skill(toolkit, "orphan", ["claude"])
     orphan_link = home / ".claude" / "skills" / "orphan"
     orphan_link.symlink_to(toolkit / "skills" / "orphan")
     # Remove from repo
@@ -760,12 +710,12 @@ def test_link_bare_prunes_orphan(env):
 # ===========================================================================
 
 
-def test_link_subprocess_smoke(env):
+def test_link_subprocess_smoke(env, seed_skill):
     """End-to-end: real subprocess against `agent-toolkit` on PATH."""
     import subprocess
 
     home, toolkit = env["home"], env["toolkit_root"]
-    _seed_skill(toolkit, "alpha", ["claude"])
+    seed_skill(toolkit, "alpha", ["claude"])
     (home / ".agent-toolkit.yaml").write_text("skills:\n  - alpha\n")
     (home / ".claude").mkdir()
 

@@ -12,68 +12,18 @@ from click.testing import CliRunner
 from agent_toolkit.cli import main
 
 
-SKILL_FRONTMATTER = """\
----
-apiVersion: agent-toolkit/v1alpha1
-metadata:
-  name: {slug}
-  description: {slug} skill.
-  lifecycle: stable
-spec:
-  origin: first-party
-  vendored_via: none
-  harnesses:
-{harness_lines}
----
-"""
-
-
-def _seed_toolkit(tmp: Path) -> Path:
-    """Create a minimal valid toolkit repo at `tmp/toolkit`."""
-    root = tmp / "toolkit"
-    root.mkdir()
-    (root / ".agent-toolkit-source").write_text("tool: agent-toolkit-cli\n")
-    (root / "schemas").mkdir()
-    schema_src = (
-        Path(__file__).resolve().parents[1] / "schemas" / "asset-frontmatter.v1alpha1.json"
-    )
-    (root / "schemas" / "asset-frontmatter.v1alpha1.json").write_text(schema_src.read_text())
-    return root
-
-
-def _seed_skill(toolkit_root: Path, slug: str, harnesses: list[str]) -> Path:
-    skill_dir = toolkit_root / "skills" / slug
-    skill_dir.mkdir(parents=True, exist_ok=True)
-    lines = "\n".join(f"    - {h}" for h in harnesses)
-    (skill_dir / "SKILL.md").write_text(
-        SKILL_FRONTMATTER.format(slug=slug, harness_lines=lines)
-    )
-    return skill_dir
-
-
 @pytest.fixture
-def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    home = tmp_path / "home"
-    home.mkdir()
-    monkeypatch.setenv("HOME", str(home))
-    monkeypatch.delenv("AGENT_TOOLKIT_REPO", raising=False)
-    monkeypatch.delenv("AGENT_TOOLKIT_QUIET", raising=False)
-    toolkit_root = _seed_toolkit(tmp_path)
-    return {"home": home, "toolkit_root": toolkit_root}
-
-
-@pytest.fixture
-def multi_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def multi_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, seed_skill, seed_toolkit):
     """Three skills: alpha (claude), beta (claude+codex), gamma (codex only)."""
     home = tmp_path / "home"
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.delenv("AGENT_TOOLKIT_REPO", raising=False)
     monkeypatch.delenv("AGENT_TOOLKIT_QUIET", raising=False)
-    toolkit_root = _seed_toolkit(tmp_path)
-    _seed_skill(toolkit_root, "alpha", ["claude"])
-    _seed_skill(toolkit_root, "beta", ["claude", "codex"])
-    _seed_skill(toolkit_root, "gamma", ["codex"])
+    toolkit_root = seed_toolkit(tmp_path)
+    seed_skill(toolkit_root, "alpha", ["claude"])
+    seed_skill(toolkit_root, "beta", ["claude", "codex"])
+    seed_skill(toolkit_root, "gamma", ["codex"])
     # User scope: alpha installed (in YAML + symlink)
     (home / ".agent-toolkit.yaml").write_text(
         "skills:\n  - alpha\nagents: []\ncommands: []\nhooks: []\nplugins: []\n"
@@ -88,10 +38,10 @@ def multi_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 # ===========================================================================
 
 
-def test_list_shows_user_check(env):
+def test_list_shows_user_check(env, seed_skill):
     """Replaces tests/bats/test_list.bats:33-46."""
     home, toolkit = env["home"], env["toolkit_root"]
-    _seed_skill(toolkit, "alpha", ["claude"])
+    seed_skill(toolkit, "alpha", ["claude"])
     (home / ".agent-toolkit.yaml").write_text("skills:\n  - alpha\n")
     (home / ".claude" / "skills").mkdir(parents=True)
     (home / ".claude" / "skills" / "alpha").symlink_to(toolkit / "skills" / "alpha")
@@ -102,10 +52,10 @@ def test_list_shows_user_check(env):
     assert "user:✓" in result.output
 
 
-def test_list_header_and_summary_on_stderr(env):
+def test_list_header_and_summary_on_stderr(env, seed_skill):
     """Replaces tests/bats/test_list.bats:48-53."""
     toolkit = env["toolkit_root"]
-    _seed_skill(toolkit, "alpha", ["claude"])
+    seed_skill(toolkit, "alpha", ["claude"])
     runner = CliRunner()
     result = runner.invoke(main, ["--toolkit-repo", str(toolkit), "list"])
     assert result.exit_code == 0, (result.output, result.stderr)
@@ -113,10 +63,10 @@ def test_list_header_and_summary_on_stderr(env):
     assert "Done" in result.stderr
 
 
-def test_list_quiet_env_silent(env, monkeypatch):
+def test_list_quiet_env_silent(env, monkeypatch, seed_skill):
     """Replaces tests/bats/test_list.bats:55-59."""
     toolkit = env["toolkit_root"]
-    _seed_skill(toolkit, "alpha", ["claude"])
+    seed_skill(toolkit, "alpha", ["claude"])
     monkeypatch.setenv("AGENT_TOOLKIT_QUIET", "1")
     runner = CliRunner()
     result = runner.invoke(main, ["--toolkit-repo", str(toolkit), "list"])
@@ -124,10 +74,10 @@ def test_list_quiet_env_silent(env, monkeypatch):
     assert result.stderr == ""
 
 
-def test_list_json_valid(env):
+def test_list_json_valid(env, seed_skill):
     """Replaces tests/bats/test_list.bats:61-73."""
     home, toolkit = env["home"], env["toolkit_root"]
-    _seed_skill(toolkit, "alpha", ["claude"])
+    seed_skill(toolkit, "alpha", ["claude"])
     (home / ".agent-toolkit.yaml").write_text("skills:\n  - alpha\n")
     (home / ".claude" / "skills").mkdir(parents=True)
     (home / ".claude" / "skills" / "alpha").symlink_to(toolkit / "skills" / "alpha")
@@ -153,10 +103,10 @@ def test_list_json_valid(env):
     ), cells
 
 
-def test_list_json_unsupported_cells(env):
+def test_list_json_unsupported_cells(env, seed_skill):
     """Replaces tests/bats/test_list.bats:75-79."""
     toolkit = env["toolkit_root"]
-    _seed_skill(toolkit, "alpha", ["claude"])
+    seed_skill(toolkit, "alpha", ["claude"])
     runner = CliRunner()
     result = runner.invoke(
         main, ["--toolkit-repo", str(toolkit), "list", "--format=json"]
@@ -305,12 +255,12 @@ def test_list_mcp_note(multi_env):
 # ===========================================================================
 
 
-def test_list_subprocess_smoke(env):
+def test_list_subprocess_smoke(env, seed_skill):
     """End-to-end: real subprocess against `agent-toolkit list`."""
     import subprocess
 
     home, toolkit = env["home"], env["toolkit_root"]
-    _seed_skill(toolkit, "alpha", ["claude"])
+    seed_skill(toolkit, "alpha", ["claude"])
     (home / ".agent-toolkit.yaml").write_text("skills:\n  - alpha\n")
 
     cli = shutil.which("agent-toolkit")
