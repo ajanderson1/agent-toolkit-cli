@@ -1,12 +1,12 @@
 # AGENTS.md — agent-toolkit-cli
 
-This repo is the **tooling** for the `agent-toolkit` asset library. The bash+Python CLI (`bin/agent-toolkit`, `src/agent_toolkit`) and the Textual TUI (`src/agent_toolkit_tui`) live here. Asset content lives in the sibling toolkit repo.
+This repo is the **tooling** for the `agent-toolkit` asset library. The Python CLI (`src/agent_toolkit`) and the Textual TUI (`src/agent_toolkit_tui`) live here. Asset content lives in the sibling toolkit repo.
 
 **Data source:** `~/GitHub/agent-toolkit/` (default). Override via `--toolkit-repo` flag or `AGENT_TOOLKIT_REPO` env var. Discovery walks up from CWD looking for `.agent-toolkit-source`.
 
 **Schema:** Bundled at `src/agent_toolkit/_schemas/asset-frontmatter.v1alpha1.json` (vendored from the toolkit repo's `schemas/`). The bundled copy is what the CLI validates against at runtime; the toolkit-repo copy is the SSOT humans edit. CI (`.github/workflows/schema-drift.yml`) fails on drift.
 
-**Drift gate (toolkit repo):** `lefthook.yml` in the toolkit repo shells out to whichever `agent-toolkit` is on `$PATH`. CI in the toolkit repo installs this CLI before running pre-commit.
+**Drift gate (toolkit repo):** `lefthook.yml` in the toolkit repo shells out to whichever `agent-toolkit` is on `$PATH`. CI in the toolkit repo installs this CLI before running pre-commit. (The `agent-toolkit` script is the Python entry point installed by `uv tool install` or `uv sync`.)
 
 ## Two-flag contract
 
@@ -29,10 +29,6 @@ Internal parameter names: `toolkit_root` (when value is the SSOT) or `project_ro
 ## Code map
 
 ```
-bin/agent-toolkit                  Top-level dispatcher (zero-dep bash).
-                                   Pre-parses --toolkit-repo / --project / --resolve-toolkit.
-bin/lib/                           Subcommand modules (link, unlink, list, diff, conventions)
-                                   plus common.sh (resolve_toolkit_root, target-dir tables).
 src/agent_toolkit/                 Python package: validator, walker, generators,
                                    ingest, security, doctor, command implementations.
   _repo_resolution.py              Four-step resolver: resolve_toolkit_root().
@@ -40,13 +36,14 @@ src/agent_toolkit/                 Python package: validator, walker, generators
   schema.py                        Validator (loads bundled schema via importlib.resources).
   walker.py                        Asset discovery (path-driven, skips submodules).
   cli.py                           Click group with --toolkit-repo option.
-  commands/                        check, fix, doctor, new, inventory, ingest, _list_json, _yaml_edit.
+  commands/                        check, fix, doctor, new, inventory, ingest,
+                                   link, unlink, list, diff, _list_json, _yaml_edit.
   generators/                      Pure functions: (assets, repo_state) → string.
 src/agent_toolkit_tui/             Textual TUI (sibling package, [tui] extra).
 schemas/                           Top-level vendored schema (mirrors _schemas, used by
                                    schema-drift CI as the diff target).
 docs/agent-toolkit/cli.md          Command reference (human-readable).
-tests/                             pytest + bats.
+tests/                             pytest.
 ```
 
 ## Layered contract (do not invert)
@@ -56,14 +53,12 @@ tests/                             pytest + bats.
 3. **Validator** enforces schema + cross-asset rules. Returns errors; does not print or exit.
 4. **Commands** orchestrate (call walker → validator → generators → I/O).
 5. **Generators** are pure: `(assets, repo_state) → string`.
-6. **Bash CLI** is for filesystem operations (symlinks). Stays zero-dep.
 
 ## Development workflow
 
 ```bash
 uv sync --all-extras
 uv run pytest -q
-bats tests/bats
 uv run agent-toolkit --toolkit-repo ~/GitHub/agent-toolkit check --exit-code
 ```
 

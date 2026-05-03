@@ -63,7 +63,7 @@ def test_render_asset_card_for_skill(tmp_path):
     assert "KIND        skill" in out
     assert "HARNESSES   claude" in out
     assert "QUICKSTART" in out
-    assert "bin/agent-toolkit link user claude" in out
+    assert "agent-toolkit link user claude" in out
 
 
 def test_render_asset_card_unknown_slug_raises(tmp_path):

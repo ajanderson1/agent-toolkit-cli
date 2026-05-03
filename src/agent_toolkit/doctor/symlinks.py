@@ -98,7 +98,7 @@ def run(toolkit_root: Path, *, harness: str = "claude") -> GroupResult:
             status=Status.WARN,
             summary=f"{len(warns)} symlink issue(s) for harness={harness}",
             findings=findings + warns,
-            fix_hint=f"`bin/agent-toolkit link user {harness}` to reconcile",
+            fix_hint=f"`agent-toolkit link user {harness}` to reconcile",
         )
     return GroupResult(
         name="symlink-integrity",
