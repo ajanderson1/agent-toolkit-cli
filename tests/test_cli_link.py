@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 from pathlib import Path
 
 import pytest
@@ -739,7 +740,6 @@ def test_link_bare_prunes_orphan(env):
     orphan_link = home / ".claude" / "skills" / "orphan"
     orphan_link.symlink_to(toolkit / "skills" / "orphan")
     # Remove from repo
-    import shutil
     shutil.rmtree(toolkit / "skills" / "orphan")
     assert orphan_link.is_symlink()  # dangling symlink remains
 

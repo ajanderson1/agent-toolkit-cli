@@ -232,7 +232,7 @@ def _do_per_asset(
 
     try:
         add_slug(target_path, section, slug)
-    except Exception as exc:
+    except (ValueError, OSError) as exc:
         if tmp_path:
             Path(tmp_path).unlink(missing_ok=True)
         click.echo(str(exc), err=True)
@@ -307,18 +307,21 @@ def _do_all(
                 ctx.exit(2)
                 return
 
-    # Build the snapshot of all harness-compatible assets
+    # Build the snapshot of all harness-compatible assets — single pass,
+    # bucketed by kind (mirrors _link_lib.project_from_file).
+    by_kind: dict[str, list] = {k: [] for k in KINDS_FOR_PROJECTION}
+    for asset in discover_assets(toolkit_root):
+        if asset.kind in by_kind:
+            by_kind[asset.kind].append(asset)
+
     entries: list[tuple[str, str]] = []
     for kind in KINDS_FOR_PROJECTION:
-        for asset in discover_assets(toolkit_root):
-            if asset.kind != kind:
-                continue
-            declared = _asset_harnesses(asset.path)
-            if harness in declared:
-                try:
-                    section = kind_to_section(kind)
-                except ValueError:
-                    continue
+        try:
+            section = kind_to_section(kind)
+        except ValueError:
+            continue
+        for asset in by_kind[kind]:
+            if harness in _asset_harnesses(asset.path):
                 entries.append((section, asset.slug))
 
     # Real run: write to allowlist_path. Dry-run: write to temp file.
@@ -331,7 +334,7 @@ def _do_all(
 
     try:
         write_snapshot(target_path, entries)
-    except Exception as exc:
+    except (ValueError, OSError) as exc:
         if tmp_path:
             Path(tmp_path).unlink(missing_ok=True)
         click.echo(str(exc), err=True)
@@ -472,7 +475,7 @@ def _do_plan_entry(
             counters=counters,
             stdout=sys.stdout,
         )
-    except Exception as exc:
+    except (ValueError, OSError) as exc:
         error_lines.append(f"failed: {kind}:{slug} — {exc}")
         return False
     finally:

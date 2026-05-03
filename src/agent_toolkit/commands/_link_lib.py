@@ -123,7 +123,7 @@ def maybe_link(
                 counters.removed += 1
         return
 
-    if link_path.is_symlink() and Path(os.readlink(str(link_path))) == source_path:
+    if link_path.is_symlink() and Path(os.readlink(link_path)) == source_path:
         counters.unchanged += 1
         return
 
@@ -204,7 +204,7 @@ def _prune_if_into_repo(
 ) -> None:
     if not link_path.is_symlink():
         return
-    target = os.readlink(str(link_path))
+    target = os.readlink(link_path)
     try:
         Path(target).resolve().relative_to(toolkit_root.resolve())
     except (ValueError, FileNotFoundError, OSError):
