@@ -9,6 +9,7 @@ from agent_toolkit._repo_resolution import RepoNotFoundError, resolve_toolkit_ro
 from agent_toolkit.commands._list_json import list_json
 from agent_toolkit.commands._yaml_edit import yaml_edit
 from agent_toolkit.commands.check import check
+from agent_toolkit.commands.diff import diff
 from agent_toolkit.commands.doctor import doctor
 from agent_toolkit.commands.fix import fix
 from agent_toolkit.commands.ingest import ingest
@@ -57,6 +58,7 @@ def main(ctx: click.Context, toolkit_repo: Path | None, project_root: Path | Non
 
 
 main.add_command(check)
+main.add_command(diff)
 main.add_command(doctor)
 main.add_command(fix)
 main.add_command(ingest)
