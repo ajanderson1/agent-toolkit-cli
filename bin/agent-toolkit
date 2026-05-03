@@ -23,9 +23,12 @@ Commands that manage symlinks (filesystem, zero-dep bash):
                                    every symlink for the scope+harness (file
                                    preserved). <kind>:<slug> removes one slug
                                    from the file and prunes its symlink.
-  list [<kind>] [<harness>]        Inventory + install state. Filter by kind
-                                   and/or harness; both are positional and
-                                   disambiguated by name.
+  list [<kind>] [<harness>]        Project-scoped: shows install state (✓/—)
+                                   per scope+harness. Filter by kind and/or
+                                   harness; both are positional and
+                                   disambiguated by name. For a pure asset
+                                   catalog with no install state, see
+                                   `inventory`.
   diff <user|project> <harness>    Preview what 'link' would change (alias for
                                    'link --dry-run').
 
@@ -38,8 +41,10 @@ Commands that operate on metadata (Python via uv):
                                    symlink-integrity, conventions,
                                    submodule-health, frontmatter); pass a slug
                                    for per-resource diagnosis.
-  inventory [<kind>|<slug>]        Browse the asset library (filterable by
-                                   --harness / --origin / --lifecycle / --format).
+  inventory [<kind>|<slug>]        Library-scoped: read-only catalog of the
+                                   SSOT (filterable by --harness / --origin /
+                                   --lifecycle / --format). For per-scope
+                                   install state, see `list`.
   ingest [<url|name|file>]         Run the IDENTIFY/RESEARCH/STAGE pipeline for
                                    third-party assets; --finalize/--abort/--slug
                                    manage the staging dir.

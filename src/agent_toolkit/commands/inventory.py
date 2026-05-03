@@ -35,6 +35,9 @@ def inventory(
 ) -> None:
     """List assets, filter by kind, or zoom into a single asset by slug.
 
+    Library-scoped: this is a read-only view of the SSOT's asset catalog. For
+    install state per scope (user/project), use the bash `list` command.
+
     Argument-shape dispatch:
       - no TARGET           → full inventory (with optional filter flags)
       - TARGET ∈ kinds      → filter to that kind. Kind names take precedence

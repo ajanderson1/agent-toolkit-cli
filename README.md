@@ -38,16 +38,18 @@ git -C ~/GitHub/agent-toolkit submodule update --init --recursive
 ```text
 agent-toolkit link <user|project> <harness> [<kind>:<slug>] [--all] [-y]
 agent-toolkit unlink <user|project> <harness> (--all | <kind>:<slug>)
-agent-toolkit list [<kind>] [<harness>]
+agent-toolkit list [<kind>] [<harness>]      # install state per scope (bash)
 agent-toolkit diff <user|project> <harness>
 agent-toolkit check [--exit-code]
 agent-toolkit fix
 agent-toolkit doctor [<slug>]
-agent-toolkit inventory [<kind>|<slug>]
+agent-toolkit inventory [<kind>|<slug>]      # asset library catalog (python)
 agent-toolkit ingest [<url|name|file>]
 agent-toolkit new <kind> <slug>
 agent-toolkit tui                    # requires [tui] extra
 ```
+
+`list` vs `inventory`: `list` is project-scoped — shows what's installed for a `<user|project>` scope and harness, with ✓/— install state. `inventory` is library-scoped — browses the SSOT's asset catalog with no notion of install state.
 
 Full reference: [`docs/agent-toolkit/cli.md`](docs/agent-toolkit/cli.md).
 Schema reference: [SSOT in the toolkit repo](https://github.com/ajanderson1/agent-toolkit/blob/main/docs/agent-toolkit/schema.md).
