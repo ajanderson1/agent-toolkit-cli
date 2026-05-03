@@ -1,6 +1,7 @@
 """Ingest stage 6 — FINALISE: move staging → canonical path, check, auto-commit."""
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -8,6 +9,13 @@ from pathlib import Path
 
 from agent_toolkit.ingest.stage import staging_root
 from agent_toolkit.ingest.types import Proposal
+
+
+def _git_env() -> dict[str, str]:
+    # Strip GIT_* vars so a parent git invocation (hook, test runner, harness)
+    # can't redirect this commit into the parent's index/worktree. cwd= alone
+    # is not enough — GIT_DIR/GIT_INDEX_FILE/GIT_WORK_TREE override it.
+    return {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
 
 
 @dataclass
@@ -118,6 +126,7 @@ def _add_submodule(*, toolkit_root: Path, proposal: Proposal) -> None:
         ["git", "submodule", "add", proposal.fork or proposal.upstream, proposal.target_path.split("/")[0] + "/" + proposal.slug],
         cwd=toolkit_root,
         check=True,
+        env=_git_env(),
     )
 
 
@@ -130,10 +139,11 @@ def _auto_commit(*, toolkit_root: Path, proposal: Proposal, security_overall: st
         f"Security review: {security_overall}\n"
         f"Vendor strategy: {proposal.vendor_via}\n"
     )
-    subprocess.run(["git", "add", "-A"], cwd=toolkit_root, check=True)
-    subprocess.run(["git", "commit", "-q", "-m", msg], cwd=toolkit_root, check=True)
+    env = _git_env()
+    subprocess.run(["git", "add", "-A"], cwd=toolkit_root, check=True, env=env)
+    subprocess.run(["git", "commit", "-q", "-m", msg], cwd=toolkit_root, check=True, env=env)
     out = subprocess.run(
         ["git", "rev-parse", "HEAD"], cwd=toolkit_root, check=True,
-        capture_output=True, text=True,
+        capture_output=True, text=True, env=env,
     )
     return out.stdout.strip()

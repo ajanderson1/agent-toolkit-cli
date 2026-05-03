@@ -1,13 +1,22 @@
 """Tests for ingest FINALISE."""
+import os
 import subprocess
 
 from agent_toolkit.ingest.types import Proposal
 
 
+def _git_env():
+    # Without this, a parent git (lefthook pre-commit, harness wrapper) leaks
+    # GIT_DIR/GIT_INDEX_FILE into the subprocess and the fixture commits land
+    # in the parent repo's index instead of tmp_path.
+    return {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+
+
 def _init_git_repo(tmp_path):
-    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
-    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, check=True)
-    subprocess.run(["git", "config", "user.name", "Test"], cwd=tmp_path, check=True)
+    env = _git_env()
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True, env=env)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, check=True, env=env)
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=tmp_path, check=True, env=env)
 
 
 def _proposal(slug="alpha"):
@@ -59,11 +68,12 @@ def test_finalize_writes_commit_when_not_skipped(tmp_path):
     (schemas_dir / "asset-frontmatter.v1alpha1.json").write_text(real_schema_src.read_text())
     (tmp_path / "AGENTS.md").write_text("# AGENTS")
     # initial commit so there is HEAD
-    subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
-    subprocess.run(["git", "commit", "-q", "-m", "init"], cwd=tmp_path, check=True)
+    env = _git_env()
+    subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True, env=env)
+    subprocess.run(["git", "commit", "-q", "-m", "init"], cwd=tmp_path, check=True, env=env)
     _seed_staging(tmp_path)
 
     finalize(toolkit_root=tmp_path, proposal=_proposal(), skip_check=True)
     log = subprocess.run(["git", "log", "--oneline"], cwd=tmp_path, check=True,
-                         capture_output=True, text=True).stdout
+                         capture_output=True, text=True, env=env).stdout
     assert "ingest" in log.lower() or "alpha" in log.lower()
