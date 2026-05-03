@@ -1,0 +1,30 @@
+name: install-smoke
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  uv-tool-install:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+
+      - name: Install agent-toolkit from this checkout
+        run: uv tool install --from . agent-toolkit
+
+      - name: Checkout toolkit repo (SSOT)
+        uses: actions/checkout@v4
+        with:
+          repository: ajanderson1/agent-toolkit
+          path: toolkit-repo
+          submodules: recursive
+
+      - name: Smoke test against toolkit repo
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          agent-toolkit --toolkit-repo "$PWD/toolkit-repo" check --exit-code
+          agent-toolkit --toolkit-repo "$PWD/toolkit-repo" list
+          agent-toolkit --toolkit-repo "$PWD/toolkit-repo" doctor
