@@ -77,3 +77,25 @@ def test_validate_harness_rejects_unknown_with_message(capsys):
     assert "unknown harness 'banana'" in captured.err
     for h in ALL_HARNESSES:
         assert h in captured.err
+
+
+# ===========================================================================
+# Issue #13 — harness_home_path helper
+# ===========================================================================
+
+
+def test_harness_home_path_uses_home_env(monkeypatch, tmp_path):
+    from agent_toolkit.commands._link_lib import harness_home_path
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    assert harness_home_path("claude") == tmp_path / ".claude"
+    assert harness_home_path("pi") == tmp_path / ".pi"
+
+
+def test_harness_home_path_explicit_home_overrides_env(tmp_path):
+    from pathlib import Path as _P
+    from agent_toolkit.commands._link_lib import harness_home_path
+
+    other = tmp_path / "other-home"
+    assert harness_home_path("codex", home=other) == other / ".codex"
+    assert harness_home_path("opencode", home=_P("/tmp/x")) == _P("/tmp/x/.opencode")

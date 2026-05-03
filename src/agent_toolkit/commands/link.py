@@ -18,6 +18,7 @@ from agent_toolkit.commands._link_lib import (
     MALFORMED,
     _asset_harnesses,
     format_summary,
+    harness_home_path,
     iter_plan_lines,
     project_from_file,
     validate_harness,
@@ -71,6 +72,16 @@ def link(
         os.environ["AGENT_TOOLKIT_QUIET"] = "1"
 
     validate_harness(ctx, harness)
+
+    if os.environ.get("AGENT_TOOLKIT_QUIET") != "1":
+        home_path = harness_home_path(harness)
+        if not home_path.is_dir():
+            click.echo(
+                f"warning: {harness} home not present at {home_path} — "
+                f"linking anyway, but the symlinks won't be picked up until "
+                f"{harness} is installed",
+                err=True,
+            )
 
     # Mode resolution + mutex checks
     if plan_flag is not None and plan_flag != "-":
