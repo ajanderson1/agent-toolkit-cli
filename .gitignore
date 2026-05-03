@@ -16,6 +16,9 @@ build/
 # Worktrees
 .worktrees/
 
+# Flow verification artifacts
+assets/verification/
+
 # uv
 .uv-cache/
 .claude/
