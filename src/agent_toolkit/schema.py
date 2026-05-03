@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from importlib.resources import files
 from pathlib import Path
 
 import jsonschema
@@ -13,8 +14,11 @@ from agent_toolkit.walker import Asset, extract_frontmatter
 class Validator:
     def __init__(self, repo_root: Path):
         self.repo_root = repo_root
-        schema_path = repo_root / "schemas" / "asset-frontmatter.v1alpha1.json"
-        self.schema = json.loads(schema_path.read_text())
+        # Schema is the contract the CLI enforces; it ships with the CLI.
+        # The assets repo holds the SSOT for humans, but the validator's runtime
+        # source of truth is the bundled copy in the agent_toolkit package.
+        schema_text = (files("agent_toolkit") / "_schemas" / "asset-frontmatter.v1alpha1.json").read_text()
+        self.schema = json.loads(schema_text)
 
     def validate(self, asset: Asset) -> list[str]:
         data = self._load_metadata(asset)
