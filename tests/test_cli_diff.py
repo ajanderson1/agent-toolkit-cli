@@ -80,3 +80,13 @@ def test_diff_previewing_header(env):
     result = runner.invoke(main, ["--toolkit-repo", str(toolkit), "diff", "user", "claude"])
     assert result.exit_code == 0
     assert "Previewing" in result.stderr
+
+
+# Issue #9 — diff inherits link's harness validation via ctx.invoke
+def test_diff_unknown_harness_exits_2(env):
+    runner = CliRunner()
+    result = runner.invoke(
+        main, ["--toolkit-repo", str(env["toolkit_root"]), "diff", "user", "banana"],
+    )
+    assert result.exit_code == 2
+    assert "unknown harness 'banana'" in result.stderr

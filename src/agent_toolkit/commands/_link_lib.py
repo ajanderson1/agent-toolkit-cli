@@ -11,9 +11,24 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import IO, Iterator
 
+import click
+
 from agent_toolkit._allowlist import kind_to_section, read_allowlist
 from agent_toolkit.commands._list_json import _PROJECT_TARGETS, _USER_TARGETS
 from agent_toolkit.walker import Asset, discover_assets, extract_frontmatter
+
+ALL_HARNESSES: tuple[str, ...] = ("claude", "codex", "opencode", "pi")
+
+
+def validate_harness(ctx: click.Context, harness: str) -> None:
+    """Exit 2 with a clean error if `harness` is not one of ALL_HARNESSES."""
+    if harness not in ALL_HARNESSES:
+        click.echo(
+            f"unknown harness '{harness}' — expected one of: "
+            + " ".join(ALL_HARNESSES),
+            err=True,
+        )
+        ctx.exit(2)
 
 
 @dataclass

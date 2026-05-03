@@ -364,3 +364,41 @@ def test_unlink_plan_non_dash_rc2(env):
     assert result.exit_code == 2
     combined = result.output + result.stderr
     assert "--plan" in combined
+
+
+# ===========================================================================
+# Issue #9 — reject unknown harness with a clean error
+# ===========================================================================
+
+
+def test_unlink_unknown_harness_exits_2_with_message(env):
+    runner = CliRunner()
+    result = runner.invoke(
+        main, ["--toolkit-repo", str(env["toolkit_root"]), "unlink", "user", "banana", "--all"],
+    )
+    assert result.exit_code == 2
+    assert "unknown harness 'banana'" in result.stderr
+    assert "claude codex opencode pi" in result.stderr
+
+
+def test_unlink_unknown_harness_does_not_touch_filesystem(env):
+    home = env["home"]
+    (home / ".claude").mkdir()
+    before = sorted(p for p in home.rglob("*"))
+    runner = CliRunner()
+    runner.invoke(
+        main, ["--toolkit-repo", str(env["toolkit_root"]), "unlink", "user", "banana", "--all"],
+    )
+    after = sorted(p for p in home.rglob("*"))
+    assert before == after
+
+
+def test_unlink_dry_run_unknown_harness_still_validates(env):
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        ["--toolkit-repo", str(env["toolkit_root"]),
+         "unlink", "user", "banana", "--all", "--dry-run"],
+    )
+    assert result.exit_code == 2
+    assert "unknown harness 'banana'" in result.stderr

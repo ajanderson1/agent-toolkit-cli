@@ -1,8 +1,12 @@
+import pytest
+
 from agent_toolkit.commands._link_lib import (
+    ALL_HARNESSES,
     MALFORMED,
     LinkCounters,
     format_summary,
     iter_plan_lines,
+    validate_harness,
 )
 
 
@@ -52,3 +56,24 @@ def test_iter_plan_lines_yields_malformed_marker_for_bad_line():
     pairs = list(iter_plan_lines("garbage-no-colon\nskill:alpha\n"))
     assert pairs[0] == (MALFORMED, "garbage-no-colon")
     assert pairs[1] == ("skill", "alpha")
+
+
+@pytest.mark.parametrize("harness", ALL_HARNESSES)
+def test_validate_harness_accepts_known(harness):
+    import click
+
+    ctx = click.Context(click.Command("noop"))
+    validate_harness(ctx, harness)  # must not raise / exit
+
+
+def test_validate_harness_rejects_unknown_with_message(capsys):
+    import click
+
+    ctx = click.Context(click.Command("noop"))
+    with pytest.raises(click.exceptions.Exit) as exc:
+        validate_harness(ctx, "banana")
+    assert exc.value.exit_code == 2
+    captured = capsys.readouterr()
+    assert "unknown harness 'banana'" in captured.err
+    for h in ALL_HARNESSES:
+        assert h in captured.err

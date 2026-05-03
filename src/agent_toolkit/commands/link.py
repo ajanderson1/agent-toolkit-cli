@@ -20,6 +20,7 @@ from agent_toolkit.commands._link_lib import (
     format_summary,
     iter_plan_lines,
     project_from_file,
+    validate_harness,
 )
 from agent_toolkit.commands._yaml_edit import add_slug, write_snapshot
 from agent_toolkit.walker import discover_assets
@@ -68,6 +69,8 @@ def link(
     """Project assets per the allow-list. Bare form reads the file."""
     if quiet:
         os.environ["AGENT_TOOLKIT_QUIET"] = "1"
+
+    validate_harness(ctx, harness)
 
     # Mode resolution + mutex checks
     if plan_flag is not None and plan_flag != "-":
