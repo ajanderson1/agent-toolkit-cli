@@ -15,6 +15,9 @@ from agent_toolkit._allowlist import kind_to_section, read_allowlist
 from agent_toolkit._repo_resolution import RepoNotFoundError, resolve_toolkit_root
 from agent_toolkit.walker import discover_assets, load_asset_record
 
+# Kept in lockstep with `_link_lib.ALL_HARNESSES` (defined there to avoid a
+# circular import: `_link_lib` already imports `_USER_TARGETS`/`_PROJECT_TARGETS`
+# from this module). If you add a harness, update both.
 ALL_HARNESSES = ("claude", "codex", "opencode", "pi")
 ALL_KINDS = ("skill", "agent", "command", "hook", "plugin")  # mcp deliberately excluded
 

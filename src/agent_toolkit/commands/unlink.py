@@ -19,6 +19,7 @@ from agent_toolkit.commands._link_lib import (
     harness_target_dir,
     iter_plan_lines,
     project_from_file,
+    validate_harness,
 )
 from agent_toolkit.commands._yaml_edit import remove_slug
 
@@ -64,6 +65,8 @@ def unlink(
     """Remove projected symlinks per the allow-list."""
     if quiet:
         os.environ["AGENT_TOOLKIT_QUIET"] = "1"
+
+    validate_harness(ctx, harness)
 
     # Mode resolution + mutex checks
     if plan_flag is not None and plan_flag != "-":

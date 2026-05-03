@@ -783,3 +783,40 @@ def test_link_subprocess_smoke(env):
     assert proc.returncode == 0, (proc.stdout, proc.stderr)
     assert "Linking" in proc.stderr  # header on stderr
     assert (home / ".claude" / "skills" / "alpha").is_symlink()
+
+
+# ===========================================================================
+# Issue #9 — reject unknown harness with a clean error
+# ===========================================================================
+
+
+def test_link_unknown_harness_exits_2_with_message(env):
+    runner = CliRunner()
+    result = runner.invoke(
+        main, ["--toolkit-repo", str(env["toolkit_root"]), "link", "user", "banana"],
+    )
+    assert result.exit_code == 2
+    assert "unknown harness 'banana'" in result.stderr
+    assert "claude codex opencode pi" in result.stderr
+
+
+def test_link_unknown_harness_does_not_touch_filesystem(env):
+    home = env["home"]
+    (home / ".claude").mkdir()
+    before = sorted(p for p in home.rglob("*"))
+    runner = CliRunner()
+    runner.invoke(
+        main, ["--toolkit-repo", str(env["toolkit_root"]), "link", "user", "banana"],
+    )
+    after = sorted(p for p in home.rglob("*"))
+    assert before == after
+
+
+def test_link_dry_run_unknown_harness_still_validates(env):
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        ["--toolkit-repo", str(env["toolkit_root"]), "link", "user", "banana", "--dry-run"],
+    )
+    assert result.exit_code == 2
+    assert "unknown harness 'banana'" in result.stderr
