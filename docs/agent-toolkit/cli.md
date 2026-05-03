@@ -23,13 +23,13 @@ combinations that have no target slot.
 Every command prints a short header to **stderr** before doing its work and a one-sentence summary to **stderr** after. The actual data the command produces (symlink listings, validation results, scaffolded files) goes to **stdout**, so pipes work the same as before:
 
 ```bash
-bin/agent-toolkit list user | awk '{print $1}'    # still works
+bin/agent-toolkit list | awk '{print $1}'
 ```
 
 If you need silence (CI, scripts, fixtures), set `AGENT_TOOLKIT_QUIET=1` or pass `--quiet` / `-q`:
 
 ```bash
-AGENT_TOOLKIT_QUIET=1 bin/agent-toolkit list user
+AGENT_TOOLKIT_QUIET=1 bin/agent-toolkit list
 bin/agent-toolkit link user claude --quiet
 ```
 
@@ -39,24 +39,52 @@ The summary line typically includes a next-step hint (e.g. "run 'agent-toolkit c
 
 ## link
 
-Create per-entry symlinks for every asset compatible with the requested harness.
+Project assets per the allow-list at `~/.agent-toolkit.yaml` (user scope) or
+`<project>/.agent-toolkit.yaml` (project scope). Both files share the same shape.
 
 ```
-Usage: agent-toolkit link <user|project> <harness>
+Usage:
+  agent-toolkit link <user|project> <harness>                     # project current allow-list
+  agent-toolkit link <user|project> <harness> --all [-y]          # snapshot all compatible, then project
+  agent-toolkit link <user|project> <harness> <kind>:<slug>       # add one slug, then project
 ```
 
 | Flag | Description |
 |---|---|
+| `--all` | Snapshot every harness-compatible asset into the allow-list, replacing existing content. |
+| `-y`, `--yes` | Skip the confirmation prompt under `--all` when the file is non-empty. |
 | `--repo-root DIR` | Path to the toolkit repo (default: `$PWD`) |
 | `--dry-run` | Print what would change; make no changes |
 
-Reads `spec.harnesses` from each asset's frontmatter. If the requested harness is listed,
-creates a symlink `~/<harness-target>/<type>/<slug>` → `<repo>/<type>/<slug>`. Idempotent:
-existing correct symlinks are skipped; stale symlinks are replaced.
+**Bare form** reads the allow-list and projects every listed slug whose
+`spec.harnesses` contains the requested harness. If the file is missing,
+errors with a hint pointing at `--all` or `<kind>:<slug>` — there is no silent
+default-on.
 
-**Example:**
+**`--all`** captures the current toolkit state into the YAML file, then
+projects. If the file already has slugs, prompts before overwriting (skip with
+`-y`). In a non-TTY environment without `-y`, refuses with a TTY message.
+
+**`<kind>:<slug>`** adds one slug to the relevant section of the YAML file,
+creating the file if missing, and projects. Idempotent — running twice has the
+same effect as running once. Errors out if the slug doesn't exist or if the
+asset doesn't declare the requested harness.
+
+**Examples:**
+
 ```bash
+# Bootstrap a fresh machine — opt every compatible asset in:
+bin/agent-toolkit link user claude --all
+
+# Or curate by hand:
+$EDITOR ~/.agent-toolkit.yaml
 bin/agent-toolkit link user claude
+
+# Add one asset incrementally:
+bin/agent-toolkit link user claude skill:figma
+
+# Same shape at project scope:
+bin/agent-toolkit link project claude skill:figma
 ```
 
 > _Header & summary go to stderr; suppress with `--quiet` or `AGENT_TOOLKIT_QUIET=1`._
@@ -65,23 +93,34 @@ bin/agent-toolkit link user claude
 
 ## unlink
 
-Remove symlinks in harness target directories that point into the toolkit repo.
+Remove symlinks (and optionally remove from the allow-list).
 
 ```
-Usage: agent-toolkit unlink <user|project> <harness>
+Usage:
+  agent-toolkit unlink <user|project> <harness>                   # error — explicit target required
+  agent-toolkit unlink <user|project> <harness> --all             # remove every symlink, preserve YAML
+  agent-toolkit unlink <user|project> <harness> <kind>:<slug>     # remove from YAML, prune symlink
 ```
 
 | Flag | Description |
 |---|---|
+| `--all` | Remove every symlink in the scope+harness target dir that points into the toolkit repo. The allow-list YAML is untouched (intent preserved). |
 | `--repo-root DIR` | Path to the toolkit repo (default: `$PWD`) |
 | `--dry-run` | Print what would be removed; make no changes |
 
-Only removes symlinks whose resolved target is inside the repo root. Other symlinks and
-real files are left untouched.
+The bare form errors with a hint because its blast radius differs from `--all`.
+The mental model: the YAML file is the user's *authored intent*; the symlinks
+are the *projection of intent*. `unlink --all` resets the projection;
+`unlink <kind>:<slug>` resets both. Neither form deletes the YAML file.
 
-**Example:**
+To rebuild after `unlink --all`, run `link <scope> <harness>` (re-projects the
+existing file).
+
+**Examples:**
+
 ```bash
-bin/agent-toolkit unlink user codex
+bin/agent-toolkit unlink user claude --all              # blow away all claude symlinks
+bin/agent-toolkit unlink user claude skill:figma        # opt one skill out
 ```
 
 > _Header & summary go to stderr; suppress with `--quiet` or `AGENT_TOOLKIT_QUIET=1`._
@@ -90,22 +129,42 @@ bin/agent-toolkit unlink user codex
 
 ## list
 
-Print all symlinks in harness target directories that point into the toolkit repo.
+Print the asset library with install-state columns for each scope.
 
 ```
-Usage: agent-toolkit list <user|project>
+Usage:
+  agent-toolkit list [<kind>] [<harness>]
 ```
+
+| Argument | Description |
+|---|---|
+| `<kind>` | One of `skill`, `agent`, `command`, `hook`, `plugin`. Optional. |
+| `<harness>` | One of `claude`, `codex`, `opencode`, `pi`. Optional. |
 
 | Flag | Description |
 |---|---|
 | `--repo-root DIR` | Path to the toolkit repo (default: `$PWD`) |
 
-Output format: `<harness>/<kind>/<slug> -> <absolute-path>`, one line per symlink, sorted
-by harness then kind then slug.
+Output is grouped by kind. Each row carries `[harnesses]` brackets (omitted
+when filtering by harness) and two install-state columns:
 
-**Example:**
+- `user:✓` — the slug appears in `~/.agent-toolkit.yaml` AND a symlink exists
+  in `~/<harness-target>/<kind>/`.
+- `project:✓` — same logic against `<cwd>/.agent-toolkit.yaml` and
+  `<cwd>/.<harness>/`. Outside a project (no `.agent-toolkit.yaml` in CWD),
+  the column is always `—`.
+
+Disambiguation: position-1 is `<kind>` if it matches a known kind, else
+`<harness>` if it matches a known harness, else error. `list mcp` prints a
+note (MCPs ship via the harness's `mcp.json`, not via symlinks).
+
+**Examples:**
+
 ```bash
-bin/agent-toolkit list user
+bin/agent-toolkit list                      # full inventory
+bin/agent-toolkit list skill                # skills only
+bin/agent-toolkit list claude               # claude-compatible assets
+bin/agent-toolkit list skill claude         # both filters
 ```
 
 > _Header & summary go to stderr; suppress with `--quiet` or `AGENT_TOOLKIT_QUIET=1`._
@@ -255,26 +314,42 @@ uv run agent-toolkit check
 
 ---
 
-## Per-project allow-list
+## Allow-list files
 
-When using `link project <harness>`, the CLI reads `.agent-toolkit.yaml` from the current
-working directory. Only assets listed in the allow-list are linked into the project's
-local harness directory (e.g., `./.claude/skills/`).
+Both `link` scopes are opt-in via a YAML file with the same shape:
+
+- `~/.agent-toolkit.yaml` — user scope, per-machine
+- `<project>/.agent-toolkit.yaml` — project scope, in-repo
 
 ```yaml
 # .agent-toolkit.yaml
-skills: [aj-workflow, journal, conventions]
-agents: [scout, builder, validator]
-hooks: [confirm-rm]
+skills:
+  - aj-workflow
+  - journal
+  - conventions
+agents:
+  - scout
+  - builder
+hooks:
+  - confirm-rm
+commands: []
+plugins: []
 ```
 
-The CLI intersects the allow-list with each asset's `spec.harnesses`. An asset must appear
-in the allow-list **and** declare the requested harness in its frontmatter to receive a
-symlink. Assets not listed in `.agent-toolkit.yaml` are never linked at project scope,
-even if they are compatible with the harness.
+Section keys map to asset kinds: `skills`, `agents`, `commands`, `hooks`,
+`plugins`. The `mcps` kind is not yet scope-routed (MCPs ship via per-harness
+JSON config files). Each section is a flat list of slugs that must match
+`metadata.name` exactly. Empty file or empty sections are valid.
 
-To generate a starter allow-list, run `list project` after setting up user scope, or copy
-slugs from `list user`.
+The CLI accepts both inline (`skills: [a, b]`) and multi-line (one slug per
+dash) forms when reading. The internal writer (used by `link <kind>:<slug>`
+and `link --all`) emits the multi-line form so diffs are clean.
+
+**Layering rule.** Scopes do not merge at link-time. Each scope projects into
+its own directory (`~/<harness-target>/` vs `./<harness-target>/`); the
+harness loads both at runtime. The intersection rule per scope is unchanged:
+a symlink is created iff the slug is in the relevant allow-list AND the
+asset's `spec.harnesses` contains the requested harness.
 
 ---
 

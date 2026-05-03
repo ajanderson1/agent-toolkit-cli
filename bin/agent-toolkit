@@ -13,13 +13,19 @@ Usage:
   agent-toolkit <command> [options]
 
 Commands that manage symlinks (filesystem, zero-dep bash):
-  link <user|project> <harness>    Project assets into the harness's config dir
-                                   (idempotent — safe to re-run).
-                                   Use 'link user conventions' for the neutral
-                                   conventions projection.
-  unlink <user|project> <harness>  Remove only symlinks pointing into this repo.
-  list <user|project>              List symlinks in user-/project-scope dirs that
-                                   point into this repo.
+  link <user|project> <harness> [<kind>:<slug>] [--all] [-y]
+                                   Project assets per the allow-list. Bare form
+                                   reads the file. <kind>:<slug> adds one slug
+                                   then projects. --all snapshots every
+                                   compatible asset (prompts unless -y).
+  unlink <user|project> <harness> (--all | <kind>:<slug>)
+                                   Bare form errors with a hint. --all clears
+                                   every symlink for the scope+harness (file
+                                   preserved). <kind>:<slug> removes one slug
+                                   from the file and prunes its symlink.
+  list [<kind>] [<harness>]        Inventory + install state. Filter by kind
+                                   and/or harness; both are positional and
+                                   disambiguated by name.
   diff <user|project> <harness>    Preview what 'link' would change (alias for
                                    'link --dry-run').
 
@@ -48,13 +54,15 @@ Common options:
   --exit-code        check/doctor: exit non-zero on any error (CI gate).
 
 Examples:
-  agent-toolkit link user claude          # set up Claude Code on a fresh machine
-  agent-toolkit link user conventions     # project conventions tree to neutral path
-  agent-toolkit diff user claude          # see what's drifted from the source of truth
-  agent-toolkit check --exit-code         # validate (used by lefthook pre-commit)
-  agent-toolkit doctor                    # five-group repo health check
-  agent-toolkit inventory --harness pi    # what's available for the Pi harness
-  agent-toolkit new skill my-skill        # scaffold a new skill
+  agent-toolkit link user claude --all       # snapshot everything compatible, project
+  agent-toolkit link user claude skill:figma # add one skill, project
+  agent-toolkit list                         # full inventory + install state
+  agent-toolkit list skill claude            # filter to claude-compatible skills
+  agent-toolkit unlink user claude --all     # clear all claude symlinks for user
+  agent-toolkit check --exit-code            # validate (used by lefthook pre-commit)
+  agent-toolkit doctor                       # five-group repo health check
+  agent-toolkit inventory --harness pi       # what's available for the Pi harness
+  agent-toolkit new skill my-skill           # scaffold a new skill
 
 Documentation: docs/agent-toolkit/cli.md
 EOF

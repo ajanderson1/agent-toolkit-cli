@@ -23,6 +23,14 @@ spec:
     - claude
 ---
 EOF
+  cat > "$HOME/.agent-toolkit.yaml" <<'EOF'
+skills:
+  - alpha
+agents: []
+commands: []
+hooks: []
+plugins: []
+EOF
 }
 
 teardown() {

@@ -17,7 +17,7 @@
   run "$BATS_TEST_DIRNAME/../../bin/agent-toolkit" --help
   [ "$status" -eq 0 ]
   # Each command should have a short explainer alongside its usage.
-  [[ "$output" == *"project assets into"* ]] || [[ "$output" == *"Project assets into"* ]]
+  [[ "$output" == *"Project assets per"* ]] || [[ "$output" == *"project assets per"* ]]
   [[ "$output" == *"frontmatter"* ]]
   [[ "$output" == *"AGENTS.md"* ]]
 }

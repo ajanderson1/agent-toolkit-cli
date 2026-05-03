@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import click
 
+from agent_toolkit.commands._yaml_edit import yaml_edit
 from agent_toolkit.commands.check import check
 from agent_toolkit.commands.doctor import doctor
 from agent_toolkit.commands.fix import fix
@@ -30,6 +31,7 @@ main.add_command(fix)
 main.add_command(ingest)
 main.add_command(inventory)
 main.add_command(new)
+main.add_command(yaml_edit)
 
 
 if __name__ == "__main__":

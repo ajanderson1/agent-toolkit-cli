@@ -161,24 +161,9 @@ def _quickstart_for(e: InventoryEntry) -> str:
         return "    (no compatible harnesses declared)\n"
     lines: list[str] = []
     primary = e.harnesses[0]
-    lines.append(f"    User scope:    bin/agent-toolkit link user {primary}")
-    section = _config_section_for(e.kind)
-    lines.append(
-        f"    Project scope: add `{e.slug}` to .agent-toolkit.yaml under `{section}:`, then"
-    )
-    lines.append(f"                   bin/agent-toolkit link project {primary}")
+    lines.append(f"    User scope:    bin/agent-toolkit link user {primary} {e.kind}:{e.slug}")
+    lines.append(f"    Project scope: bin/agent-toolkit link project {primary} {e.kind}:{e.slug}")
     if len(e.harnesses) > 1:
         others = ", ".join(e.harnesses[1:])
         lines.append(f"    Other harnesses supported: {others}")
     return "\n".join(lines) + "\n"
-
-
-def _config_section_for(kind: str) -> str:
-    return {
-        "skill": "skills",
-        "agent": "agents",
-        "command": "commands",
-        "hook": "hooks",
-        "mcp": "mcps",
-        "plugin": "plugins",
-    }.get(kind, kind + "s")
