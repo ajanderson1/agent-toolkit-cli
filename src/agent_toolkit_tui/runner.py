@@ -7,10 +7,48 @@ a fake to TUIApp(runner=...) in tests.
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
+
+
+def _locate_bash_cli() -> Path:
+    """Find this CLI's bash entry point (`bin/agent-toolkit`).
+
+    The TUI shells out to the bash CLI for `list`/`link`/`unlink` (which the
+    Python entry point doesn't expose). The bash script lives in this CLI's
+    source tree and is not installed onto $PATH by `uv tool install`, so we
+    walk up from this module's location to find it.
+
+    Resolution order:
+      1. $AGENT_TOOLKIT_BASH_CLI override (escape hatch for tests/installs)
+      2. Walk up from runner.py looking for `bin/agent-toolkit`
+      3. Raise FileNotFoundError with an actionable message
+    """
+    override = os.environ.get("AGENT_TOOLKIT_BASH_CLI")
+    if override:
+        p = Path(override)
+        if p.is_file():
+            return p
+        raise FileNotFoundError(f"$AGENT_TOOLKIT_BASH_CLI={override} is not a file")
+
+    here = Path(__file__).resolve()
+    for parent in here.parents:
+        candidate = parent / "bin" / "agent-toolkit"
+        # The bash CLI sits next to a `lib/` subdir of helper sourceables; the
+        # python entry point installed by `uv tool install` does not. This
+        # disambiguates the two when both happen to share the parent name.
+        if candidate.is_file() and (candidate.parent / "lib").is_dir():
+            return candidate
+
+    raise FileNotFoundError(
+        "Cannot locate `bin/agent-toolkit` — the TUI requires a source checkout "
+        "of agent-toolkit-cli (the wheel does not bundle the bash script). "
+        "Set $AGENT_TOOLKIT_BASH_CLI to override, or run from "
+        "`uv run --project <cli-repo> agent-toolkit-tui`."
+    )
 
 
 class RunnerError(RuntimeError):
@@ -41,7 +79,7 @@ class CLIRunner:
 
     def __init__(self, toolkit_root: Path, cli_path: Path | None = None) -> None:
         self.toolkit_root = toolkit_root.resolve()
-        self.cli_path = cli_path or (self.toolkit_root / "bin" / "agent-toolkit")
+        self.cli_path = cli_path or _locate_bash_cli()
 
     # ----- reads ----------------------------------------------------------
     def list_state(self) -> dict:

@@ -7,7 +7,50 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from agent_toolkit_tui.runner import CLIRunner, RunnerError
+from agent_toolkit_tui.runner import CLIRunner, RunnerError, _locate_bash_cli
+
+
+def test_locate_bash_cli_walks_up_to_source_tree(tmp_path: Path) -> None:
+    """The default resolver must find `bin/agent-toolkit` in this CLI's source
+    tree (not in toolkit_root). After the SSOT extraction, the bash script
+    lives alongside the python package, not in the SSOT.
+    """
+    cli_path = _locate_bash_cli()
+    assert cli_path.is_file()
+    assert cli_path.name == "agent-toolkit"
+    assert cli_path.parent.name == "bin"
+
+
+def test_locate_bash_cli_honours_env_override(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """$AGENT_TOOLKIT_BASH_CLI overrides the walk-up — useful when the bash
+    script is installed in a non-standard location.
+    """
+    fake = tmp_path / "fake-cli"
+    fake.write_text("#!/bin/sh\n")
+    fake.chmod(0o755)
+    monkeypatch.setenv("AGENT_TOOLKIT_BASH_CLI", str(fake))
+    assert _locate_bash_cli() == fake
+
+
+def test_locate_bash_cli_rejects_invalid_override(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("AGENT_TOOLKIT_BASH_CLI", str(tmp_path / "missing"))
+    with pytest.raises(FileNotFoundError):
+        _locate_bash_cli()
+
+
+def test_runner_default_cli_path_does_not_use_toolkit_root(tmp_path: Path) -> None:
+    """Regression: TUI used to default `cli_path` to `<toolkit_root>/bin/agent-toolkit`,
+    which broke after the SSOT was split out. cli_path must come from this CLI's
+    source tree, independent of toolkit_root.
+    """
+    runner = CLIRunner(toolkit_root=tmp_path)
+    assert runner.cli_path.is_file()
+    # Must NOT be inside the (empty) tmp toolkit_root
+    assert tmp_path not in runner.cli_path.parents
 
 
 def test_runner_list_state_invokes_correct_args(tmp_path: Path):
