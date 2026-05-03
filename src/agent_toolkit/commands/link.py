@@ -18,7 +18,6 @@ from agent_toolkit.commands._link_lib import (
     MALFORMED,
     _asset_harnesses,
     format_summary,
-    harness_target_dir,
     iter_plan_lines,
     project_from_file,
 )

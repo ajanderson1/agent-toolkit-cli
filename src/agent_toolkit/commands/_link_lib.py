@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import IO, Iterator
 
-from agent_toolkit._allowlist import SECTIONS, kind_to_section, read_allowlist
+from agent_toolkit._allowlist import kind_to_section, read_allowlist
 from agent_toolkit.commands._list_json import _PROJECT_TARGETS, _USER_TARGETS
 from agent_toolkit.walker import Asset, discover_assets, extract_frontmatter
 
