@@ -89,6 +89,13 @@ def _install_state(
     default=None,
     help="Path to the agent-toolkit repo.",
 )
+@click.option(
+    "--project",
+    "project_flag",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=None,
+    help="Path to the consumer project (defaults to CWD).",
+)
 @click.pass_context
 def list_cmd(
     ctx: click.Context,
@@ -97,6 +104,7 @@ def list_cmd(
     fmt: str,
     quiet: bool,
     toolkit_repo: Path | None,
+    project_flag: Path | None,
 ) -> None:
     """Display the asset inventory with user/project install state."""
     if quiet:
@@ -146,8 +154,12 @@ def list_cmd(
             ctx.exit(2)
             return
 
-    project_root_raw: Path | None = (ctx.obj or {}).get("project_root")
-    project_root = project_root_raw.resolve() if project_root_raw else Path.cwd()
+    if project_flag:
+        project_root = Path(project_flag).resolve()
+    elif (group_proj := (ctx.obj or {}).get("project_root")) is not None:
+        project_root = Path(group_proj).resolve()
+    else:
+        project_root = Path.cwd()
 
     # JSON format: delegate entirely to the existing _list-json hidden command.
     if fmt == "json":

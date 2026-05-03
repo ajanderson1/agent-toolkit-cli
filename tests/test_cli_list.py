@@ -277,3 +277,32 @@ def test_list_subprocess_smoke(env, seed_skill):
     assert proc.returncode == 0, (proc.stdout, proc.stderr)
     assert "Asset inventory" in proc.stderr  # header on stderr
     assert "alpha" in proc.stdout  # asset name on stdout
+
+
+# ===========================================================================
+# Issue #7 — --project flag for symmetry with link/unlink/diff
+# ===========================================================================
+
+
+def test_list_project_flag_resolves_correctly(tmp_path, env, seed_skill, monkeypatch):
+    """`list --project /x` reads /x/.agent-toolkit.yaml, not CWD's."""
+    home, toolkit = env["home"], env["toolkit_root"]
+    seed_skill(toolkit, "alpha", ["claude"])
+
+    proj = home / "myproject"
+    proj.mkdir()
+    (proj / ".agent-toolkit.yaml").write_text(
+        "skills:\n  - alpha\nagents: []\ncommands: []\nhooks: []\nplugins: []\n"
+    )
+    (proj / ".claude" / "skills").mkdir(parents=True)
+    (proj / ".claude" / "skills" / "alpha").symlink_to(toolkit / "skills" / "alpha")
+
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        ["--toolkit-repo", str(toolkit), "list", "--project", str(proj)],
+    )
+    assert result.exit_code == 0, (result.output, result.stderr)
+    assert "alpha" in result.output
+    assert "project:✓" in result.output
