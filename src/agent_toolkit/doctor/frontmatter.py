@@ -1,7 +1,6 @@
 """Doctor: frontmatter group — re-runs schema validation across all assets."""
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from agent_toolkit.doctor.result import GroupResult, Status
@@ -10,16 +9,7 @@ from agent_toolkit.walker import discover_assets
 
 
 def run(repo_root: Path) -> GroupResult:
-    try:
-        validator = Validator(repo_root=repo_root)
-    except (OSError, json.JSONDecodeError) as e:
-        return GroupResult(
-            name="frontmatter",
-            status=Status.FAIL,
-            summary="schema not loadable",
-            findings=[f"{type(e).__name__}: {e}"],
-            fix_hint="ensure schemas/asset-frontmatter.v1alpha1.json exists and is valid JSON",
-        )
+    validator = Validator(repo_root=repo_root)
     errors: list[str] = []
     asset_count = 0
     for asset in discover_assets(repo_root):
