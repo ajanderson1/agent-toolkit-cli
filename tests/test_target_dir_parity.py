@@ -14,8 +14,8 @@ from pathlib import Path
 
 from agent_toolkit.commands._list_json import _PROJECT_TARGETS, _USER_TARGETS
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-COMMON_SH = REPO_ROOT / "bin" / "lib" / "common.sh"
+CLI_REPO_ROOT = Path(__file__).resolve().parents[1]
+COMMON_SH = CLI_REPO_ROOT / "bin" / "lib" / "common.sh"
 
 # Case-statement entries look like:
 #   claude:skill)    echo "$HOME/.claude/skills" ;;
