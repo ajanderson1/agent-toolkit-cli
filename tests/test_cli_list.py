@@ -306,3 +306,33 @@ def test_list_project_flag_resolves_correctly(tmp_path, env, seed_skill, monkeyp
     assert result.exit_code == 0, (result.output, result.stderr)
     assert "alpha" in result.output
     assert "project:✓" in result.output
+
+
+# ===========================================================================
+# Issue #11 — list --report
+# ===========================================================================
+
+
+def test_list_report_smoke(env, seed_skill):
+    home, toolkit = env["home"], env["toolkit_root"]
+    seed_skill(toolkit, "alpha", ["claude"])
+    (home / ".agent-toolkit.yaml").write_text("skills:\n  - alpha\n")
+    (home / ".claude" / "skills").mkdir(parents=True)
+    (home / ".claude" / "skills" / "alpha").symlink_to(toolkit / "skills" / "alpha")
+    runner = CliRunner()
+    result = runner.invoke(main, ["--toolkit-repo", str(toolkit), "list", "--report"])
+    assert result.exit_code == 0, (result.output, result.stderr)
+    assert "Asset inventory report" in result.output
+    assert "claude" in result.output
+    assert "alpha" in result.output
+    assert "linked" in result.output
+
+
+def test_list_report_rejects_format_json(env):
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        ["--toolkit-repo", str(env["toolkit_root"]), "list", "--report", "--format=json"],
+    )
+    assert result.exit_code == 2
+    assert "cannot combine" in result.stderr
