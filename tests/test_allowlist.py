@@ -22,6 +22,7 @@ def test_kind_to_section_all_kinds():
     assert kind_to_section("command") == "commands"
     assert kind_to_section("hook") == "hooks"
     assert kind_to_section("plugin") == "plugins"
+    assert kind_to_section("pi-extension") == "pi_extensions"
 
 
 def test_kind_to_section_mcp_raises():
@@ -30,12 +31,12 @@ def test_kind_to_section_mcp_raises():
 
 
 def test_section_to_kind_inverse():
-    for kind in ("skill", "agent", "command", "hook", "plugin"):
+    for kind in ("skill", "agent", "command", "hook", "plugin", "pi-extension"):
         assert section_to_kind(kind_to_section(kind)) == kind
 
 
 def test_sections_constant_matches_routing():
-    assert set(SECTIONS) == {"skills", "agents", "commands", "hooks", "plugins"}
+    assert set(SECTIONS) == {"skills", "agents", "commands", "hooks", "plugins", "pi_extensions"}
 
 
 def test_read_allowlist_missing_file(tmp_path):

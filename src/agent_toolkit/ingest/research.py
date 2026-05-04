@@ -40,6 +40,8 @@ def infer_from_snapshot(
 
 
 def _infer_kind(d: Path) -> str:
+    if (d / "extension.meta.yaml").exists():
+        return "pi-extension"
     if (d / "SKILL.md").exists():
         return "skill"
     if (d / "marketplace.json").exists():
@@ -56,7 +58,7 @@ def _infer_kind(d: Path) -> str:
         if "mcp" in kw or any("mcp" in k for k in kw):
             return "mcp"
         if any("pi-extension" in k or k == "pi" for k in kw):
-            return "skill"  # extensions go through 'skill' kind today; documented in harness-pi.md
+            return "pi-extension"
     if any(p.suffix == ".meta.yaml" for p in d.iterdir() if p.is_file()):
         return "hook"
     return "skill"
@@ -82,6 +84,8 @@ def _infer_harnesses(d: Path, *, kind: str) -> list[str]:
 
     # Default: harness-agnostic skill — all four. For non-skill kinds where only
     # claude has full support today, narrow to claude.
+    if kind == "pi-extension":
+        return ["pi"]
     if kind == "skill":
         return list(_ALL_HARNESSES)
     if kind in ("agent",):
@@ -105,6 +109,7 @@ def _canonical_target_path(kind: str, slug: str) -> str:
         "hook": f"hooks/{slug}.meta.yaml",
         "mcp": f"mcps/{slug}/mcp.json",
         "plugin": f"plugins/{slug}/marketplace.json",
+        "pi-extension": f"extensions/{slug}/extension.meta.yaml",
     }[kind]
 
 

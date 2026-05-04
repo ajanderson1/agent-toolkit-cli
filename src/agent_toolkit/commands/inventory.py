@@ -8,7 +8,7 @@ import click
 from agent_toolkit._repo_resolution import RepoNotFoundError, resolve_toolkit_root
 from agent_toolkit.inventory import render_asset_card, render_inventory
 
-_KINDS = ("skill", "agent", "command", "hook", "mcp", "plugin")
+_KINDS = ("skill", "agent", "command", "hook", "mcp", "plugin", "pi-extension")
 
 
 @click.command(name="inventory")

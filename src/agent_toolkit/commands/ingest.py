@@ -164,4 +164,5 @@ def _canonical(kind: str, slug: str) -> str:
         "hook": f"hooks/{slug}.meta.yaml",
         "mcp": f"mcps/{slug}/mcp.json",
         "plugin": f"plugins/{slug}/marketplace.json",
+        "pi-extension": f"extensions/{slug}/extension.meta.yaml",
     }[kind]

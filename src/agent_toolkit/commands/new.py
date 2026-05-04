@@ -16,6 +16,7 @@ _KIND_LAYOUT = {
     "hook": ("hooks/{slug}.meta.yaml", "yaml"),
     "mcp": ("mcps/{slug}/mcp.json", "json"),
     "plugin": ("plugins/{slug}/marketplace.json", "json"),
+    "pi-extension": ("extensions/{slug}/extension.meta.yaml", "yaml"),
 }
 
 
@@ -73,6 +74,7 @@ def new(ctx: click.Context, kind: str, slug: str, toolkit_root: Path | None) -> 
     if fmt == "markdown":
         target.write_text(_FRONTMATTER_TEMPLATE.format(slug=slug))
     elif fmt == "yaml":
+        default_harness = "pi" if kind == "pi-extension" else "claude"
         target.write_text(
             f"apiVersion: agent-toolkit/v1alpha1\n"
             f"metadata:\n"
@@ -83,7 +85,7 @@ def new(ctx: click.Context, kind: str, slug: str, toolkit_root: Path | None) -> 
             f"  origin: first-party\n"
             f"  vendored_via: none\n"
             f"  harnesses:\n"
-            f"    - claude\n"
+            f"    - {default_harness}\n"
         )
     elif fmt == "json":
         target.write_text(

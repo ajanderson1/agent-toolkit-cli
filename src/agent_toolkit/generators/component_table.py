@@ -13,6 +13,7 @@ _KIND_LABELS = {
     "mcp": "MCPs",
     "plugin": "Plugins",
     "skill": "Skills",
+    "pi-extension": "Pi Extensions",
 }
 
 

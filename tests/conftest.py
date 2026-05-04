@@ -45,6 +45,27 @@ def _seed_skill_impl(toolkit_root: Path, slug: str, harnesses: list[str]) -> Pat
     return skill_dir
 
 
+def _seed_pi_extension_impl(toolkit_root: Path, slug: str, harnesses: list[str]) -> Path:
+    ext_dir = toolkit_root / "extensions" / slug
+    ext_dir.mkdir(parents=True, exist_ok=True)
+    harness_lines = "\n".join(f"    - {h}" for h in harnesses)
+    (ext_dir / "extension.meta.yaml").write_text(
+        f"apiVersion: agent-toolkit/v1alpha1\n"
+        f"metadata:\n"
+        f"  name: {slug}\n"
+        f"  description: {slug} pi extension.\n"
+        f"  lifecycle: stable\n"
+        f"spec:\n"
+        f"  origin: first-party\n"
+        f"  vendored_via: none\n"
+        f"  harnesses:\n"
+        f"{harness_lines}\n"
+    )
+    (ext_dir / "package.json").write_text('{"name": "' + slug + '", "version": "1.0.0", "type": "module"}\n')
+    (ext_dir / "index.ts").write_text("export default function (pi: any) {}\n")
+    return ext_dir
+
+
 @pytest.fixture
 def skill_frontmatter() -> str:
     """Template for SKILL.md frontmatter; format with `slug=` and `harness_lines=`."""
@@ -59,6 +80,11 @@ def seed_toolkit() -> Callable[[Path], Path]:
 @pytest.fixture
 def seed_skill() -> Callable[[Path, str, list[str]], Path]:
     return _seed_skill_impl
+
+
+@pytest.fixture
+def seed_pi_extension() -> Callable[[Path, str, list[str]], Path]:
+    return _seed_pi_extension_impl
 
 
 @pytest.fixture

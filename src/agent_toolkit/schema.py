@@ -40,7 +40,7 @@ class Validator:
     def _load_metadata(self, asset: Asset) -> dict | None:
         if asset.kind in {"skill", "agent", "command"}:
             return extract_frontmatter(asset.path)
-        if asset.kind == "hook":
+        if asset.kind in {"hook", "pi-extension"}:
             return yaml.safe_load(asset.path.read_text())
         if asset.kind in {"mcp", "plugin"}:
             doc = json.loads(asset.path.read_text())

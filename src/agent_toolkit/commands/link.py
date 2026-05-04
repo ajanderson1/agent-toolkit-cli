@@ -219,7 +219,7 @@ def _do_per_asset(
         return
 
     # 3. harness compatibility
-    declared = _asset_harnesses(found_asset_path)
+    declared = _asset_harnesses(found_asset_path, kind)
     if harness not in declared:
         csv = ", ".join(declared) if declared else "none"
         click.echo(
@@ -339,7 +339,7 @@ def _do_all(
         except ValueError:
             continue
         for asset in by_kind[kind]:
-            if harness in _asset_harnesses(asset.path):
+            if harness in _asset_harnesses(asset.path, asset.kind):
                 entries.append((section, asset.slug))
 
     # Real run: write to allowlist_path. Dry-run: write to temp file.
@@ -455,7 +455,7 @@ def _do_plan_entry(
         return False
 
     # Harness compatibility
-    declared = _asset_harnesses(found_asset_path)
+    declared = _asset_harnesses(found_asset_path, kind)
     if harness not in declared:
         csv = ", ".join(declared) if declared else "none"
         error_lines.append(

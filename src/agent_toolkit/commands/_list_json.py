@@ -19,33 +19,33 @@ from agent_toolkit.walker import discover_assets, load_asset_record
 # circular import: `_link_lib` already imports `_USER_TARGETS`/`_PROJECT_TARGETS`
 # from this module). If you add a harness, update both.
 ALL_HARNESSES = ("claude", "codex", "opencode", "pi")
-ALL_KINDS = ("skill", "agent", "command", "hook", "plugin")  # mcp deliberately excluded
+ALL_KINDS = ("skill", "agent", "command", "hook", "plugin", "pi-extension")  # mcp deliberately excluded
 
 # Mirror of bin/lib/common.sh's harness_target_dir / project_target_dir.
 # Kept in lockstep — if the bash table changes, this one MUST change too.
 _USER_TARGETS: dict[tuple[str, str], str] = {
-    ("claude", "skill"):   "{home}/.claude/skills",
-    ("claude", "agent"):   "{home}/.claude/agents",
-    ("claude", "command"): "{home}/.claude/commands",
-    ("claude", "hook"):    "{home}/.claude/hooks",
-    ("claude", "plugin"):  "{home}/.claude/plugins",
-    ("codex", "skill"):    "{home}/.codex/skills",
-    ("opencode", "skill"): "{home}/.config/opencode/skills",
-    ("pi", "skill"):       "{home}/.pi/agent/skills",
-    ("pi", "agent"):       "{home}/.pi/agent/agents",
-    ("pi", "plugin"):      "{home}/.pi/agent/extensions",
+    ("claude", "skill"):       "{home}/.claude/skills",
+    ("claude", "agent"):       "{home}/.claude/agents",
+    ("claude", "command"):     "{home}/.claude/commands",
+    ("claude", "hook"):        "{home}/.claude/hooks",
+    ("claude", "plugin"):      "{home}/.claude/plugins",
+    ("codex", "skill"):        "{home}/.codex/skills",
+    ("opencode", "skill"):     "{home}/.config/opencode/skills",
+    ("pi", "skill"):           "{home}/.pi/agent/skills",
+    ("pi", "agent"):           "{home}/.pi/agent/agents",
+    ("pi", "pi-extension"):    "{home}/.pi/agent/extensions",
 }
 _PROJECT_TARGETS: dict[tuple[str, str], str] = {
-    ("claude", "skill"):   ".claude/skills",
-    ("claude", "agent"):   ".claude/agents",
-    ("claude", "command"): ".claude/commands",
-    ("claude", "hook"):    ".claude/hooks",
-    ("claude", "plugin"):  ".claude/plugins",
-    ("codex", "skill"):    ".codex/skills",
-    ("opencode", "skill"): ".opencode/skills",
-    ("pi", "skill"):       ".pi/agent/skills",
-    ("pi", "agent"):       ".pi/agent/agents",
-    ("pi", "plugin"):      ".pi/agent/extensions",
+    ("claude", "skill"):       ".claude/skills",
+    ("claude", "agent"):       ".claude/agents",
+    ("claude", "command"):     ".claude/commands",
+    ("claude", "hook"):        ".claude/hooks",
+    ("claude", "plugin"):      ".claude/plugins",
+    ("codex", "skill"):        ".codex/skills",
+    ("opencode", "skill"):     ".opencode/skills",
+    ("pi", "skill"):           ".pi/agent/skills",
+    ("pi", "agent"):           ".pi/agent/agents",
+    ("pi", "pi-extension"):    ".pi/agent/extensions",
 }
 
 
@@ -60,7 +60,7 @@ def _slot_dir(harness: str, kind: str, scope: str, project_root: Path) -> Path |
 
 def _expected_source(asset_path: Path, kind: str) -> Path:
     # Mirrors _maybe_link in bin/lib/link.sh.
-    if kind in {"skill", "mcp", "plugin"}:
+    if kind in {"skill", "mcp", "plugin", "pi-extension"}:
         return asset_path.parent
     return asset_path
 

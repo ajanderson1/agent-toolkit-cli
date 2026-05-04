@@ -10,9 +10,13 @@ import click
 from agent_toolkit import _ui
 from agent_toolkit._allowlist import kind_to_section, read_allowlist
 from agent_toolkit._repo_resolution import RepoNotFoundError, resolve_toolkit_root
-from agent_toolkit.commands._link_lib import KINDS_FOR_PROJECTION, harness_target_dir
+from agent_toolkit.commands._link_lib import (
+    KINDS_FOR_PROJECTION,
+    _asset_harnesses,
+    harness_target_dir,
+)
 from agent_toolkit.commands._list_json import ALL_HARNESSES
-from agent_toolkit.walker import discover_assets, extract_frontmatter
+from agent_toolkit.walker import discover_assets
 
 # "mcp" is intentionally excluded from KINDS_FOR_PROJECTION (no symlink path)
 # but is still a recognised filter token for list.
@@ -25,13 +29,12 @@ _KIND_TITLE: dict[str, str] = {
     "command": "COMMANDS",
     "hook": "HOOKS",
     "plugin": "PLUGINS",
+    "pi-extension": "PI EXTENSIONS",
 }
 
 
-def _asset_declared_harnesses(asset_path: Path) -> list[str]:
-    fm = extract_frontmatter(asset_path) or {}
-    spec = fm.get("spec") or {}
-    return list(spec.get("harnesses") or [])
+def _asset_declared_harnesses(asset_path: Path, kind: str) -> list[str]:
+    return _asset_harnesses(asset_path, kind)
 
 
 def _install_state(
@@ -223,7 +226,7 @@ def list_cmd(
         for asset in discover_assets(toolkit_root):
             if asset.kind != kind:
                 continue
-            declared = _asset_declared_harnesses(asset.path)
+            declared = _asset_declared_harnesses(asset.path, asset.kind)
             if harness_filter and harness_filter not in declared:
                 continue
 
