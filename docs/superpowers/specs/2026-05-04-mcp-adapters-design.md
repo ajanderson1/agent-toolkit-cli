@@ -23,7 +23,7 @@ Carried from the parent spec: secrets, substitution-syntax translation across ha
 
 The parent spec listed four open items deferred to implementation. This design fixes them where it can and earmarks the rest for plan-phase-0 spikes:
 
-1. *Does Claude's plugin manifest `mcpServers` actually load MCPs?* → Empirical test in PR-cli-2 phase 0. Protocol shape supports either outcome (PluginFolder or ConfigFile fallback) without redesign.
+1. *Does Claude's plugin manifest `mcpServers` actually load MCPs?* → Empirical test in CLI-PR-2 phase 0. Protocol shape supports either outcome (PluginFolder or ConfigFile fallback) without redesign.
 2. *Does OpenCode have a plugin model for MCPs?* → Default assumption: no. OpenCode adapter uses `config_file`. Confirmed during implementation phase 0.
 3. *Pi project-scope target = `.pi/mcp.json`?* → Yes. Each adapter writes its own target; we explicitly do not share `.mcp.json` between Claude and Pi project scope.
 4. *`tomlkit` round-trip stability on Codex configs?* → Phase-0 spike before Codex impl, with byte-equal test against a representative config.
@@ -51,25 +51,34 @@ harness_adapters/
 Per the design discussion (Q1), one base + two strategy Protocols, not one fat Protocol with NotImplementedError stubs. Adapters implement exactly one strategy (Claude may implement both if its fallback path triggers).
 
 ```python
+Scope = Literal["user", "project"]                       # matches existing string usage
+
 @dataclass(frozen=True)
 class McpEntry:
-    name: str                                # toolkit-repo dir name; canonical id
-    inner_config: dict                       # parsed mcps/<name>/config.json verbatim
-    mcp_spec: dict                           # parsed spec.mcp from sibling README.md frontmatter
+    name: str                                            # toolkit-repo dir name; canonical id
+    inner_config: dict                                   # parsed mcps/<name>/config.json verbatim
+    mcp_spec: dict                                       # parsed spec.mcp from sibling README.md
 
 @dataclass(frozen=True)
 class WriteAction:
     path: Path
     op: Literal["create", "update", "delete", "unchanged"]
-    bytes_before: int | None
-    bytes_after: int | None
+    bytes_before: int | None                             # None on create
+    bytes_after: int | None                              # None on delete
+    contents: bytes | None                               # rendered desired bytes; None on delete
+
+class CannotInstall(Exception):
+    """Pre-flight refusal raised by adapters. Caller catches and skips one entry,
+    proceeding with siblings. Matches the codebase's exception-raising pattern
+    (see _yaml_edit.add_slug → ValueError, walker → yaml.YAMLError)."""
 
 class _AdapterCommon(Protocol):
     name: str                                            # "claude" | "codex" | "opencode" | "pi"
     strategy: Literal["plugin_folder", "config_file"]
 
-    def can_install(self, entry: McpEntry) -> Result[None, str]:
-        """Pre-flight refusal. Adapter-specific."""
+    def can_install(self, entry: McpEntry) -> None:
+        """Pre-flight refusal. Adapter-specific. Raises CannotInstall(message)
+        on refusal; returns None on success."""
 
     def list_installed(self, scope: Scope, project_root: Path) -> set[str]:
         """Names currently present in this harness's MCP namespace.
@@ -92,7 +101,8 @@ class PluginFolderAdapter(_AdapterCommon, Protocol):
     def diff(
         self, scope: Scope, project_root: Path, entries: list[McpEntry]
     ) -> list[WriteAction]:
-        """Compare on-disk against render(entries). Used by `diff` and `doctor`."""
+        """Compare on-disk against render(entries). Each WriteAction's `contents`
+        carries the bytes to write; `apply_link` does not re-render."""
 
 class ConfigFileAdapter(_AdapterCommon, Protocol):
     strategy: Literal["config_file"]
@@ -115,20 +125,28 @@ class ConfigFileAdapter(_AdapterCommon, Protocol):
     def diff(
         self, scope: Scope, project_root: Path, entries: list[McpEntry]
     ) -> list[WriteAction]:
-        """At most one action (the config file) or empty if no change."""
+        """At most one WriteAction (the config file) or empty if no change.
+        The action's `contents` carries the rendered bytes."""
 ```
 
-`ParsedConfig` is each adapter's own concrete type (TOMLDocument for Codex, JSONC tree for OpenCode, etc.). It's opaque to callers.
+`ParsedConfig` is each adapter's own concrete type (TOMLDocument for Codex, dict for plain JSON, etc.). Opaque to callers.
 
 ### Dispatch
 
 New module: `src/agent_toolkit/commands/_mcp_dispatch.py`. Owns:
 
 - The `apply_link` entry point used by both `link` and `unlink` (since both reduce to "reconcile harness state to current allow-list desired set").
-- The atomic-write helper: `tempfile.NamedTemporaryFile(dir=target.parent, delete=False) → os.replace(target)`.
-- The loud-write print contract:
-  - Before write: `→ writing <path>`
-  - After write: `✓ wrote <path> (<bytes_before>B → <bytes_after>B)`
+- The atomic-write helper: `tempfile.NamedTemporaryFile(dir=target.parent, delete=False) → os.replace(target)` for writes, `os.unlink` (then optional `os.rmdir`) for deletes.
+- The loud-write print contract, op-specialised:
+
+| Op | Pre-write | Post-write |
+|---|---|---|
+| `create` | `→ creating <path>` | `✓ created <path> (<bytes_after>B)` |
+| `update` | `→ updating <path>` | `✓ updated <path> (<bytes_before>B → <bytes_after>B)` |
+| `delete` | `→ deleting <path>` | `✓ deleted <path> (was <bytes_before>B)` |
+| `unchanged` | (no output) | (no output) |
+
+`WriteAction` carries the rendered `contents` from `diff()` so the writer never re-renders. The dispatcher only knows how to write bytes atomically and delete files; adapter-internal logic (parse/upsert/render) all happens during `diff()`.
 
 ```python
 def apply_link(
@@ -143,27 +161,44 @@ def apply_link(
     actions = adapter.diff(scope, project_root, entries)
     if dry_run:
         for act in actions:
-            print(f"would-{act.op}: {act.path}", file=stdout)
+            if act.op != "unchanged":
+                print(f"would-{act.op}: {act.path}", file=stdout)
         return actions
     for act in actions:
         if act.op == "unchanged":
             continue
-        print(f"→ writing {act.path}", file=stdout)
-        _execute_action(adapter, scope, project_root, entries, act)
-        print(f"✓ wrote {act.path} ({act.bytes_before or 0}B → {act.bytes_after or 0}B)",
-              file=stdout)
+        _print_pre(act, stdout)
+        _execute_action(act)              # writes act.contents atomically, or deletes
+        _print_post(act, stdout)
     return actions
 ```
 
-### Schema bump v1alpha1 → v1alpha2
+### Schema bump v1alpha1 → v1alpha2 (full replacement, no dual dispatch)
 
-New file: `src/agent_toolkit/_schemas/asset-frontmatter.v1alpha2.json`. v1alpha1 stays in place; the validator picks the schema by `apiVersion`.
+The current validator (`src/agent_toolkit/schema.py:20`) hard-codes the v1alpha1 schema path. There is no version-dispatch infrastructure, and adding one for a single transitional version would be dead code the moment the catalog finishes migrating.
 
-Two changes from v1alpha1:
+We **replace** v1alpha1 with v1alpha2. There is no period where both validate. The CLI ships v1alpha2 only; the catalog migrates in lockstep (PR ordering below).
 
-1. `metadata.kind` becomes optional. Walker continues to derive kind from directory structure. If frontmatter declares `metadata.kind`, the validator cross-checks it matches the walker's derivation; mismatch is a validation error. Per parent spec, this avoids forcing migration of every existing skill/command/agent.
+#### File-level changes
 
-2. `spec.mcp` block (only required when walker-derived kind is `mcp`):
+- New: `src/agent_toolkit/_schemas/asset-frontmatter.v1alpha2.json`. Mirrors v1alpha1 with the two changes below.
+- Delete: `src/agent_toolkit/_schemas/asset-frontmatter.v1alpha1.json`.
+- `src/agent_toolkit/schema.py:20` — points at the v1alpha2 file. No `apiVersion` dispatch.
+- `src/agent_toolkit/_repo_resolution.py:26` (`_SCHEMA = "schemas/..."`) — bump the path constant.
+- `src/agent_toolkit/doctor/environment.py:14,18` — bump the schema-presence check.
+- `src/agent_toolkit/doctor/per_resource.py:46` — update the "v1alpha1 valid" finding string.
+- `src/agent_toolkit/commands/new.py:24,79,95` — emit `apiVersion: agent-toolkit/v1alpha2` and add an `mcp` kind branch (see "new mcp scaffold" note below).
+- `src/agent_toolkit/ingest/types.py:46` — bump emitted `apiVersion`.
+- `tests/conftest.py:12,32,34` — bump fixture text and schema path.
+- Repo-level `schemas/asset-frontmatter.v1alpha2.json` (the SSOT copy referenced by `doctor/environment.py`) — replace alongside the bundled package copy.
+
+#### Schema content changes
+
+Two changes vs v1alpha1:
+
+1. **`metadata.kind` becomes optional.** Walker derives kind from directory structure. If frontmatter declares `metadata.kind`, the validator cross-checks it matches the walker's derivation; mismatch is a validation error. Per parent spec, this avoids forcing changes to skill/command/agent *content* — only their `apiVersion` line bumps.
+
+2. **`spec.mcp` block** (required when walker-derived kind is `mcp`, forbidden otherwise):
 
 ```json
 "mcp": {
@@ -182,9 +217,20 @@ Two changes from v1alpha1:
 }
 ```
 
-The conditional "required when kind==mcp" is enforced via JSON Schema `allOf` + `if`/`then`, the same pattern v1alpha1 uses for `origin`/`upstream`.
+The conditional ("required when kind==mcp") is enforced via JSON Schema `allOf` + `if`/`then`, the same pattern v1alpha1 already uses for `origin`/`upstream`. The kind discriminator is `metadata.kind` if present, else taken from validator context (the validator passes the walker-derived kind down with the asset).
 
-**Catalog migration sequencing.** v1alpha1's `spec` has `additionalProperties: false`, so a `spec.mcp` block fails validation under v1alpha1. The catalog migration (lifting all `mcps/<name>/README.md` files in `~/GitHub/agent-toolkit` to v1alpha2) lands as a separate PR in the content repo *before* this CLI PR. The CLI PR ships against an already-migrated catalog; the v1alpha2 schema rejects v1alpha1-shaped MCP frontmatter and vice versa.
+#### `new mcp <slug>` scaffold
+
+`commands/new.py` currently scaffolds skill/agent/command/hook/plugin. The schema bump adds an `mcp` branch that writes a starter `mcps/<slug>/README.md` with v1alpha2 frontmatter (the catalog shape) and a stub `config.json`. Follow-up work; this PR ships the scaffold function but the broader "MCP authoring UX" is its own thing.
+
+#### Catalog migration sequencing (two-PR cadence)
+
+Because there is no transitional dual-validate window, the catalog has to be migrated *before* the CLI PR lands, but the migrated catalog can't validate against `agent-toolkit-cli` `main` (still v1alpha1). The cadence:
+
+1. **Content repo PR (`agent-toolkit/mcps/*` + the rest)** — bumps every `apiVersion` from `v1alpha1` → `v1alpha2` and adds `spec.mcp` blocks to MCP READMEs. This PR breaks `agent-toolkit-cli` validation against the catalog by design. It does not need CI to pass against `main` of `agent-toolkit-cli`; the content repo's own checks pass.
+2. **CLI PR-1 (this plan, Codex proof + full wiring)** — ships v1alpha2 schema. Once merged, the catalog and CLI agree again.
+
+Order matters but the gap window only affects developers running `agent-toolkit check` against an in-flight tree. CI is unaffected — the CLI's own tests use a fixture catalog (`tests/conftest.py`) which migrates inside the CLI PR.
 
 ### Per-adapter targets and translation
 
@@ -234,10 +280,10 @@ We **do not** share `<project>/.mcp.json` between Claude and Pi project scope. E
 | Target (user, plugin) | `~/.claude/plugins/agent-toolkit/` |
 | Target (project, plugin) | `<project>/.claude/plugins/agent-toolkit/` |
 | Plugin manifest file | `agent-toolkit/plugin.json` carrying `mcpServers: { ... }` |
-| Fallback target (user) | `~/.claude.json` (only if plugin loading doesn't work — phase 0 in PR-cli-2) |
+| Fallback target (user) | `~/.claude.json` (only if plugin loading doesn't work — phase 0 in CLI-PR-2) |
 | Fallback target (project) | `<project>/.mcp.json` |
 
-The plugin-vs-fallback decision is empirical (phase 0 in PR-cli-2). Result drives whether `claude.py` exposes only `PluginFolderAdapter` or both.
+The plugin-vs-fallback decision is empirical (phase 0 in CLI-PR-2). Result drives whether `claude.py` exposes only `PluginFolderAdapter` or both.
 
 Safety guards specific to Claude:
 
@@ -252,7 +298,7 @@ The tool **mechanically translates only what is syntactic and obvious**:
 - `env` key rename `env` → `environment` (OpenCode).
 - `${VAR}` → `{env:VAR}` (OpenCode, single direction).
 
-Anything else — defaults, ternaries, harness-specific bearer-token fields — triggers `can_install → Err` with a message naming the offending construct.
+Anything else — defaults, ternaries, harness-specific bearer-token fields — causes `can_install` to raise `CannotInstall(message)` naming the offending construct.
 
 ### link / unlink wiring
 
@@ -287,14 +333,15 @@ The unified semantics ("reconcile harness state to current allow-list desired se
 
 #### Failure isolation
 
-- `adapter.can_install()` returns `Err` for one entry → that entry is skipped with a loud warning; siblings proceed.
+- `adapter.can_install()` raises `CannotInstall` for one entry → that entry is skipped with a loud warning; siblings proceed.
 - Adapter parse/I/O error → dispatcher raises; `link`/`unlink` exits non-zero. Same contract as skill projection.
 
 #### Flag semantics
 
-- `--strict` — promotes "harness home not present" warning to error. Existing flag, unchanged for MCPs.
-- `--force` — new, bypasses the running-`claude` guard when fallback path mutates `~/.claude.json`. No-op otherwise. Distinct from `--strict`.
-- `--dry-run` — `apply_link` returns the action list, prints `would-<op>: <path>` per action, makes no filesystem mutation.
+- `--dry-run` — already exists on `link`/`unlink`. `apply_link` returns the action list, prints `would-<op>: <path>` per non-`unchanged` action, makes no filesystem mutation.
+- `--force` — **new flag introduced by this plan**, only relevant in PR-2 (Claude). Bypasses the running-`claude` guard when the fallback path mutates `~/.claude.json`. No-op for adapters whose target is not under live harness contention. Defined here, implemented in PR-2.
+
+The parent spec also mentions `--strict` (promote missing-harness-home warning to error). That flag does not exist today and is **not introduced by Plan B** — it's orthogonal to MCP work. If `--strict` lands later it transparently affects all asset kinds; no special-casing for MCPs is anticipated.
 
 ### diff
 
@@ -481,40 +528,40 @@ Integration test: TUI calls `runner.link_plan(scope="user", harness="codex", ent
 
 ### Phasing and acceptance criteria
 
-#### PR-content-1 (catalog migration)
+#### Content-PR — catalog migration to v1alpha2
 
-Lands first, in `~/GitHub/agent-toolkit` content repo. Lifts all `mcps/<name>/README.md` from v1alpha1-shaped frontmatter to v1alpha2.
+In `~/GitHub/agent-toolkit`. Bumps every `apiVersion` from `v1alpha1` → `v1alpha2`. Adds `spec.mcp` blocks to all MCP READMEs. Lands before CLI-PR-1, but it does not need to validate against `agent-toolkit-cli@main` mid-flight — see "Catalog migration sequencing" above.
 
-#### PR-cli-1 (this plan, Codex proof + full wiring)
+#### CLI-PR-1 — Codex proof + full wiring (this plan)
 
-Schema + Protocol package + Codex adapter + dispatcher + list/diff/doctor/fix wiring + TUI test.
+Schema replacement (v1alpha1 → v1alpha2 across all the files listed in the schema-bump section) + Protocol package + Codex adapter + dispatcher + list/diff/doctor/fix wiring + TUI integration test. Test fixtures (`tests/conftest.py`) migrate to v1alpha2 in this PR.
 
-Codex is fully working at the end of this PR. Other harnesses print `no MCP adapter for harness X yet — skipping` (loud) and exit 0.
+Codex is fully working at end of PR. Claude / OpenCode / Pi print `no MCP adapter for harness X yet — skipping` (loud) and exit 0.
 
 Satisfies:
 
-- AC #1, #2, #3 for Codex (link/re-link byte-identical/unlink-leaves-other-entries-intact).
+- AC #1, #2, #3 for Codex (link / re-link byte-identical / unlink leaves siblings intact).
 - AC #4, #5, #6, #7 for Codex (list, diff, doctor, fix).
 - AC #8 round-trip test for Codex.
-- AC #9 schema-drift CI on v1alpha2.
-- AC #10 TUI MCP cells flow through CLI, integration test green.
+- AC #9 (v1alpha2 schema, no v1alpha1 leftover).
+- AC #10 (TUI MCP cells flow through CLI; integration test green).
 
-#### PR-cli-2 (Claude adapter)
+#### CLI-PR-2 — Claude adapter
 
-Phase 0: empirical test of Claude plugin manifest's `mcpServers` loading.
+Phase 0 spike: empirical test of Claude plugin manifest's `mcpServers` loading.
 
 - If it loads: `claude.py` implements `PluginFolderAdapter` only.
-- If it doesn't: `claude.py` implements `ConfigFileAdapter` against `.mcp.json` (project) / `~/.claude.json` (user), with the running-process safety guard and `--force` opt-out.
+- If it doesn't: `claude.py` implements `ConfigFileAdapter` against `.mcp.json` (project) / `~/.claude.json` (user). This PR introduces the `--force` flag and the running-`claude`-process guard.
 
 AC #1–#8 satisfied for Claude.
 
-#### PR-cli-3 (OpenCode adapter)
+#### CLI-PR-3 — OpenCode adapter
 
-Phase 0: pick JSONC round-trip lib or accept comment-loss with documented warning.
+Phase 0 spike: pick JSONC round-trip lib or accept comment-loss with documented warning.
 
 AC #1–#8 satisfied for OpenCode.
 
-#### PR-cli-4 (Pi adapter)
+#### CLI-PR-4 — Pi adapter
 
 AC #1–#8 satisfied for Pi.
 
@@ -524,7 +571,7 @@ AC #1–#8 satisfied for Pi.
 |---|---|
 | `tomlkit` round-trip churn on real Codex configs | Phase-0 spike before Codex impl: byte-equal test against representative `config.toml` with `[notice.*]`, `[tui.*]`, comments. If churn, document and pin tomlkit. |
 | OpenCode JSONC round-trip lib doesn't exist | Phase-0 spike. Fall back to plain `json` with `doctor` warning, *or* drop OpenCode comment preservation as accepted limitation. |
-| Claude plugin manifest doesn't load `mcpServers` | Phase-0 empirical test in PR-cli-2. Protocol design supports the fallback path without redesign. |
+| Claude plugin manifest doesn't load `mcpServers` | Phase-0 empirical test in CLI-PR-2. Protocol design supports the fallback path without redesign. |
 | Catalog `inner_config` shape varies across the 20+ MCPs | Discovered when migrating; each adapter's translation layer documents what it accepts and rejects via `can_install`. |
 | `list` per-entry drift check is N adapter calls | Acceptable cost — each `entry_drift` call is a parse + re-render of one small table. Cache the parse if it shows up in profiles. |
 
@@ -550,7 +597,7 @@ A correct implementation, after all four PRs:
 6. `agent-toolkit doctor` reports drift for MCPs whose installed entry differs structurally from the rendered template, and warns on missing env vars / prerequisites.
 7. `agent-toolkit fix` reconciles drift to canonical form. No write when already in sync.
 8. For each adapter, a round-trip test asserts: source file with comments + unknown sections + hand-rolled MCP entries → `link` an unrelated MCP → `unlink` it → byte-equal to source.
-9. Schema-drift CI passes against the bumped v1alpha2 schema; v1alpha1 still validates against v1alpha1 catalog files (none post-migration).
+9. Schema-drift CI passes against the v1alpha2 schema. The v1alpha1 schema file is removed; no `apiVersion: agent-toolkit/v1alpha1` strings remain in the codebase or the migrated catalog.
 10. The TUI's MCPs section reads via `_list_json` and writes via `runner.link_plan`/`unlink_plan`. No adapter imports inside the TUI package.
 
 ## References
