@@ -21,7 +21,7 @@ _KIND_RULES = (
     ("agent", "agents", "*.md"),
     ("command", "commands", "*.md"),
     ("hook", "hooks", "*.meta.yaml"),
-    ("mcp", "mcps", "mcp.json"),
+    ("mcp", "mcps", "config.json"),
     ("plugin", "plugins", "marketplace.json"),
     ("pi-extension", "extensions", "extension.meta.yaml"),
 )
@@ -127,7 +127,16 @@ def load_asset_record(asset: Asset) -> AssetRecord:
         body_excerpt = _first_paragraph(body, max_chars=400)
     elif asset.kind in {"hook", "pi-extension"}:
         metadata = yaml.safe_load(asset.path.read_text()) or {}
-    elif asset.kind in {"mcp", "plugin"}:
+    elif asset.kind == "mcp":
+        readme = asset.path.parent / "README.md"
+        if readme.is_file():
+            text = readme.read_text(encoding="utf-8").replace("\r\n", "\n")
+            metadata = extract_frontmatter(readme) or {}
+            body = _strip_frontmatter(text)
+            body_excerpt = _first_paragraph(body, max_chars=400)
+        else:
+            metadata = {}
+    elif asset.kind == "plugin":
         doc = _json.loads(asset.path.read_text())
         metadata = doc.get("agent_toolkit") or {}
     else:

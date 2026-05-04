@@ -42,7 +42,12 @@ class Validator:
             return extract_frontmatter(asset.path)
         if asset.kind in {"hook", "pi-extension"}:
             return yaml.safe_load(asset.path.read_text())
-        if asset.kind in {"mcp", "plugin"}:
+        if asset.kind == "mcp":
+            readme = asset.path.parent / "README.md"
+            if not readme.is_file():
+                return None
+            return extract_frontmatter(readme)
+        if asset.kind == "plugin":
             doc = json.loads(asset.path.read_text())
             return doc.get("agent_toolkit")
         return None
