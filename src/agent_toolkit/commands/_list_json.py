@@ -105,6 +105,92 @@ def _cell_status(
     return ("linked", target)
 
 
+def _build_inventory(
+    toolkit_root: Path,
+    project_root: Path,
+    *,
+    kind: str | None = None,
+    harness: str | None = None,
+) -> dict:
+    """Pure data path: produce the inventory dict consumed by JSON output and `--report`.
+
+    Sorts assets by (kind, slug) for stable, diffable output.
+    """
+    # Keep the user-facing `toolkit_root` string verbatim (e.g. `/tmp/...` not
+    # `/private/tmp/...` on macOS) so callers comparing against their argv
+    # see what they passed. Use a resolved copy internally for path checks.
+    toolkit_root_resolved = toolkit_root.resolve()
+    user_allow = read_allowlist(Path(os.environ.get("HOME", "")) / ".agent-toolkit.yaml")
+    proj_allow = read_allowlist(project_root / ".agent-toolkit.yaml")
+
+    assets_out: list[dict] = []
+    for asset in discover_assets(toolkit_root):
+        if asset.kind == "mcp":
+            continue
+        if kind and asset.kind != kind:
+            continue
+        record = load_asset_record(asset)
+        meta = record.metadata or {}
+        spec = meta.get("spec") or {}
+        declared = list(spec.get("harnesses") or [])
+        description = (
+            (meta.get("metadata") or {}).get("description")
+            or meta.get("description")
+            or ""
+        )
+        origin = spec.get("origin") or "unknown"
+
+        cells = []
+        for h in ALL_HARNESSES:
+            if harness and h != harness:
+                continue
+            section = kind_to_section(asset.kind)
+            user_allowlisted = asset.slug in (user_allow.get(section) or [])
+            proj_allowlisted = asset.slug in (proj_allow.get(section) or [])
+            if h not in declared:
+                cells.append({
+                    "harness": h, "scope": "user",
+                    "status": "unsupported", "target": None,
+                    "allowlisted": user_allowlisted,
+                })
+                cells.append({
+                    "harness": h, "scope": "project",
+                    "status": "unsupported", "target": None,
+                    "allowlisted": proj_allowlisted,
+                })
+                continue
+            expected_src = _expected_source(asset.path, asset.kind)
+            for scope, allowlisted in (
+                ("user", user_allowlisted),
+                ("project", proj_allowlisted),
+            ):
+                status, target = _cell_status(
+                    h, asset.kind, asset.slug, scope, expected_src,
+                    toolkit_root_resolved, project_root,
+                )
+                cells.append({
+                    "harness": h, "scope": scope,
+                    "status": status, "target": target,
+                    "allowlisted": allowlisted,
+                })
+
+        assets_out.append({
+            "kind": asset.kind,
+            "slug": asset.slug,
+            "origin": origin,
+            "description": description,
+            "path": str(asset.path),
+            "declared_harnesses": declared,
+            "cells": cells,
+        })
+
+    return {
+        "toolkit_root": str(toolkit_root),
+        "harnesses": list(ALL_HARNESSES),
+        "assets": sorted(assets_out, key=lambda a: (a["kind"], a["slug"])),
+    }
+
+
 @click.command("_list-json", hidden=True)
 @click.option(
     "--toolkit-repo",
@@ -144,82 +230,6 @@ def list_json(
         project_root = Path(".").resolve()
     else:
         project_root = Path(project_root)
-    # Keep the user-facing `toolkit_root` string verbatim (e.g. `/tmp/...` not
-    # `/private/tmp/...` on macOS) so callers comparing against their argv
-    # see what they passed. Use a resolved copy internally for path checks.
-    toolkit_root_resolved = toolkit_root.resolve()
-    user_allow = read_allowlist(Path(os.environ.get("HOME", "")) / ".agent-toolkit.yaml")
-    proj_allow = read_allowlist(project_root / ".agent-toolkit.yaml")
 
-    assets_out: list[dict] = []
-    for asset in discover_assets(toolkit_root):
-        if asset.kind == "mcp":
-            continue
-        if kind and asset.kind != kind:
-            continue
-        record = load_asset_record(asset)
-        meta = record.metadata or {}
-        spec = meta.get("spec") or {}
-        declared = list(spec.get("harnesses") or [])
-        description = (
-            (meta.get("metadata") or {}).get("description")
-            or meta.get("description")
-            or ""
-        )
-        origin = spec.get("origin") or "unknown"
-
-        # For each harness × scope, compute cell.
-        cells = []
-        for h in ALL_HARNESSES:
-            if harness and h != harness:
-                continue
-            section = kind_to_section(asset.kind)
-            user_allowlisted = asset.slug in (user_allow.get(section) or [])
-            proj_allowlisted = asset.slug in (proj_allow.get(section) or [])
-            if h not in declared:
-                # unsupported in BOTH scopes
-                cells.append({
-                    "harness": h, "scope": "user",
-                    "status": "unsupported", "target": None,
-                    "allowlisted": user_allowlisted,
-                })
-                cells.append({
-                    "harness": h, "scope": "project",
-                    "status": "unsupported", "target": None,
-                    "allowlisted": proj_allowlisted,
-                })
-                continue
-            expected_src = _expected_source(asset.path, asset.kind)
-            for scope, allowlisted in (
-                ("user", user_allowlisted),
-                ("project", proj_allowlisted),
-            ):
-                status, target = _cell_status(
-                    h, asset.kind, asset.slug, scope, expected_src,
-                    toolkit_root_resolved, project_root,
-                )
-                cells.append({
-                    "harness": h, "scope": scope,
-                    "status": status, "target": target,
-                    "allowlisted": allowlisted,
-                })
-
-        assets_out.append({
-            "kind": asset.kind,
-            "slug": asset.slug,
-            "origin": origin,
-            "description": description,
-            "path": str(asset.path),
-            "declared_harnesses": declared,
-            "cells": cells,
-        })
-
-    out = {
-        "toolkit_root": str(toolkit_root),
-        "harnesses": list(ALL_HARNESSES),
-        "assets": assets_out,
-    }
-    # Sort assets by (kind, slug) for stable, diffable output. discover_assets
-    # already does this but we re-sort defensively after potential filtering.
-    out["assets"] = sorted(out["assets"], key=lambda a: (a["kind"], a["slug"]))
+    out = _build_inventory(toolkit_root, project_root, kind=kind, harness=harness)
     click.echo(json.dumps(out, indent=2))

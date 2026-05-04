@@ -293,6 +293,33 @@ Cell `status` is one of `linked`, `unlinked`, `broken`, `unsupported`. The
 regardless of whether the link resolves correctly. `unlinked` and
 `unsupported` cells have `target: null`.
 
+### Human-readable report (`--report`)
+
+Grouped, plain-text view of the same inventory data: harness → scope → kind
+→ asset entries. Deterministic ordering — two runs against the same state
+produce byte-identical output, so the report diffs cleanly in CI logs.
+
+```
+agent-toolkit list --report [--toolkit-repo DIR] [--project DIR] [<kind>] [<harness>]
+```
+
+Example:
+
+```
+Asset inventory report
+
+Toolkit:  /Users/aj/GitHub/agent-toolkit
+Project:  /Users/aj/code/myproj
+
+claude
+  user
+    skill
+      alpha        linked       /Users/aj/GitHub/agent-toolkit/skills/alpha
+      beta         unlinked
+```
+
+`--report` is mutually exclusive with `--format=json`. Pass either, not both.
+
 `allowlisted` reflects the YAML allow-list (`~/.agent-toolkit.yaml` for
 `scope: user`, `<cwd>/.agent-toolkit.yaml` for `scope: project`) and is
 reported truthfully even for `unsupported` cells: the allow-list is

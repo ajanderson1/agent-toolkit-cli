@@ -96,6 +96,13 @@ def _install_state(
     default=None,
     help="Path to the consumer project (defaults to CWD).",
 )
+@click.option(
+    "--report",
+    "report",
+    is_flag=True,
+    default=False,
+    help="Emit a grouped human-readable inventory (harness → scope → kind).",
+)
 @click.pass_context
 def list_cmd(
     ctx: click.Context,
@@ -105,10 +112,16 @@ def list_cmd(
     quiet: bool,
     toolkit_repo: Path | None,
     project_flag: Path | None,
+    report: bool,
 ) -> None:
     """Display the asset inventory with user/project install state."""
     if quiet:
         os.environ["AGENT_TOOLKIT_QUIET"] = "1"
+
+    if report and fmt == "json":
+        click.echo("cannot combine --report with --format=json", err=True)
+        ctx.exit(2)
+        return
 
     # Disambiguate positional filters against known kinds/harnesses.
     kind_filter: str | None = None
@@ -160,6 +173,18 @@ def list_cmd(
         project_root = Path(group_proj).resolve()
     else:
         project_root = Path.cwd()
+
+    # Report format: grouped human-readable view via the same inventory builder.
+    if report:
+        from agent_toolkit.commands._list_json import _build_inventory  # noqa: PLC0415
+        from agent_toolkit.generators.list_report import format_report  # noqa: PLC0415
+
+        inv = _build_inventory(
+            toolkit_root, project_root, kind=kind_filter, harness=harness_filter
+        )
+        click.echo(format_report(inv, project_root=project_root), nl=False)
+        _ui.summary("Done.")
+        return
 
     # JSON format: delegate entirely to the existing _list-json hidden command.
     if fmt == "json":
