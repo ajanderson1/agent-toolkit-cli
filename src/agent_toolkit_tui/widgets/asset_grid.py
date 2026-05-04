@@ -33,6 +33,7 @@ class AssetGrid(Vertical):
 
     BINDINGS = [
         Binding("space", "toggle_cell", "Toggle", priority=True),
+        Binding("a", "toggle_column", "All/None", priority=True),
     ]
 
     def __init__(self, state: InventoryState, *, id: str | None = None) -> None:
@@ -93,6 +94,69 @@ class AssetGrid(Vertical):
         except Exception:
             return
         self._toggle_at(table.cursor_coordinate)
+
+    def action_toggle_column(self) -> None:
+        try:
+            table = self.query_one("#grid-table", DataTable)
+        except Exception:
+            return
+        col = table.cursor_coordinate.column
+        if col == 0 or col - 1 >= len(self._visible_harnesses):
+            return
+        harness = self._visible_harnesses[col - 1]
+        rows = self._rows_for_kind()
+
+        # Decide direction: if any visible+supported cell would still be
+        # "off" after pending ops, link-all; otherwise unlink-all.
+        any_off = False
+        for row in rows:
+            cell = row.cells.get((harness, self._scope))
+            if cell is None or cell.status == "unsupported":
+                continue
+            key = (self._scope, harness, row.kind, row.slug)
+            pending = self._pending.get(key)
+            effective_linked = (
+                (cell.status == "linked" and pending != "unlink")
+                or pending == "link"
+            )
+            if not effective_linked:
+                any_off = True
+                break
+        target_op = "link" if any_off else "unlink"
+
+        for row in rows:
+            cell = row.cells.get((harness, self._scope))
+            if cell is None or cell.status == "unsupported":
+                continue
+            key = (self._scope, harness, row.kind, row.slug)
+            pending = self._pending.get(key)
+            already = (
+                (cell.status == "linked" and pending != "unlink")
+                or pending == "link"
+            ) if target_op == "link" else (
+                (cell.status != "linked" and pending != "link")
+                or pending == "unlink"
+            )
+            if already:
+                # Cell already in target state — drop any pending inverse.
+                if pending and pending != target_op:
+                    del self._pending[key]
+                continue
+            # Need to flip. If ground truth already matches, just clear pending.
+            ground_matches = (
+                (target_op == "link" and cell.status == "linked")
+                or (target_op == "unlink" and cell.status != "linked")
+            )
+            if ground_matches:
+                if pending:
+                    del self._pending[key]
+                continue
+            self._pending[key] = target_op
+            self.post_message(AssetToggled(
+                kind=row.kind, slug=row.slug,
+                harness=harness, scope=self._scope, op=target_op,
+            ))
+        self._rebuild()
 
     def _toggle_at(self, coord: Coordinate) -> None:
         # Column 0 = slug; columns 1..N = harnesses in self._visible_harnesses.

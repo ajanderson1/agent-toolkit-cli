@@ -250,6 +250,79 @@ async def test_scope_change_updates_grid():
         assert scope == "user"
 
 
+async def test_a_key_links_all_in_column_then_unlinks_all():
+    """Pressing 'a' on a column links all visible+supported rows; pressing again unlinks all."""
+    from agent_toolkit_tui.widgets import AssetGrid
+    from textual.coordinate import Coordinate
+    from textual.widgets import DataTable
+
+    # Build a doc with two skills, both unlinked on claude.
+    doc = _doc()
+    doc["assets"].append({
+        "kind": "skill", "slug": "beta",
+        "origin": "first-party", "description": "Beta.",
+        "path": "/r/skills/beta/SKILL.md",
+        "declared_harnesses": ["claude"],
+        "cells": [
+            {"harness": "claude", "scope": "user", "status": "unlinked",
+             "target": None, "allowlisted": False},
+            {"harness": "claude", "scope": "project", "status": "unlinked",
+             "target": None, "allowlisted": False},
+            *[{"harness": h, "scope": s, "status": "unsupported",
+               "target": None, "allowlisted": False}
+              for h in ("codex", "opencode", "pi") for s in ("user", "project")],
+        ],
+    })
+    runner = FakeRunner(doc)
+    app = TUIApp(toolkit_root=Path("/r"), runner=runner)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        grid = app.query_one("#asset-grid", AssetGrid)
+        table = grid.query_one("#grid-table", DataTable)
+        # Cursor on row 0, claude column (col 1).
+        table.cursor_coordinate = Coordinate(row=0, column=1)
+        table.focus()
+        await pilot.pause()
+        await pilot.press("a")
+        await pilot.pause()
+        pending = grid.pending_entries()
+        # Both skills should be queued for link on (project, claude).
+        assert ("project", "claude", "skill", "alpha") in pending
+        assert ("project", "claude", "skill", "beta") in pending
+        assert all(op == "link" for op in pending.values())
+
+        # Pressing 'a' again with all-pending-link should clear them
+        # (unlink would no-op since ground truth is unlinked).
+        await pilot.press("a")
+        await pilot.pause()
+        assert grid.pending_entries() == {}, (
+            f"second 'a' should clear pending, got {grid.pending_entries()}"
+        )
+
+
+async def test_a_key_skips_unsupported_cells():
+    """'a' on an unsupported column queues nothing."""
+    from agent_toolkit_tui.widgets import AssetGrid
+    from textual.coordinate import Coordinate
+    from textual.widgets import DataTable
+
+    runner = FakeRunner(_doc())
+    app = TUIApp(toolkit_root=Path("/r"), runner=runner)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        grid = app.query_one("#asset-grid", AssetGrid)
+        table = grid.query_one("#grid-table", DataTable)
+        # codex column (col 2) — unsupported for the skill row.
+        table.cursor_coordinate = Coordinate(row=0, column=2)
+        table.focus()
+        await pilot.pause()
+        await pilot.press("a")
+        await pilot.pause()
+        assert grid.pending_entries() == {}, (
+            "'a' on unsupported column should not queue anything"
+        )
+
+
 async def test_kind_change_filters_grid():
     """Posting KindChanged updates the grid's kind and filters rows accordingly."""
     from agent_toolkit_tui.messages import KindChanged
