@@ -8,9 +8,9 @@ from textual.widgets import ListItem, ListView, Static
 from agent_toolkit_tui.messages import KindChanged
 from agent_toolkit_tui.state import InventoryState
 
-KINDS = ("skill", "agent", "command", "hook", "plugin")
+KINDS = ("skill", "agent", "command", "hook", "plugin", "pi-extension")
 KIND_LABELS = {"skill": "Skills", "agent": "Agents", "command": "Commands",
-                "hook": "Hooks", "plugin": "Plugins"}
+                "hook": "Hooks", "plugin": "Plugins", "pi-extension": "Pi Ext"}
 
 
 class KindsSidebar(Vertical):

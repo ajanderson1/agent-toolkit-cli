@@ -23,6 +23,7 @@ _KIND_RULES = (
     ("hook", "hooks", "*.meta.yaml"),
     ("mcp", "mcps", "mcp.json"),
     ("plugin", "plugins", "marketplace.json"),
+    ("pi-extension", "extensions", "extension.meta.yaml"),
 )
 
 
@@ -96,7 +97,7 @@ def _slug_for(kind: str, path: Path, root: Path) -> str | None:
     if kind == "hook":
         # hooks/confirm-rm.meta.yaml → "confirm-rm"
         return path.name.removesuffix(".meta.yaml") or None
-    if kind in {"skill", "mcp", "plugin"}:
+    if kind in {"skill", "mcp", "plugin", "pi-extension"}:
         # skills/<...>/<slug>/SKILL.md → "<slug>" (last directory component)
         return path.parent.name or None
     if kind in {"agent", "command"}:
@@ -124,7 +125,7 @@ def load_asset_record(asset: Asset) -> AssetRecord:
         metadata = extract_frontmatter(asset.path) or {}
         body = _strip_frontmatter(text)
         body_excerpt = _first_paragraph(body, max_chars=400)
-    elif asset.kind == "hook":
+    elif asset.kind in {"hook", "pi-extension"}:
         metadata = yaml.safe_load(asset.path.read_text()) or {}
     elif asset.kind in {"mcp", "plugin"}:
         doc = _json.loads(asset.path.read_text())

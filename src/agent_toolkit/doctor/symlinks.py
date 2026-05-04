@@ -9,16 +9,16 @@ from agent_toolkit.walker import discover_assets, extract_frontmatter
 
 # Mirror bin/lib/common.sh harness_target_dir() table.
 _USER_PATHS: dict[tuple[str, str], str] = {
-    ("claude", "skill"):    ".claude/skills",
-    ("claude", "agent"):    ".claude/agents",
-    ("claude", "command"):  ".claude/commands",
-    ("claude", "hook"):     ".claude/hooks",
-    ("claude", "plugin"):   ".claude/plugins",
-    ("codex", "skill"):     ".codex/skills",
-    ("opencode", "skill"):  ".config/opencode/skills",
-    ("pi", "skill"):        ".pi/agent/skills",
-    ("pi", "agent"):        ".pi/agent/agents",
-    ("pi", "plugin"):       ".pi/agent/extensions",
+    ("claude", "skill"):       ".claude/skills",
+    ("claude", "agent"):       ".claude/agents",
+    ("claude", "command"):     ".claude/commands",
+    ("claude", "hook"):        ".claude/hooks",
+    ("claude", "plugin"):      ".claude/plugins",
+    ("codex", "skill"):        ".codex/skills",
+    ("opencode", "skill"):     ".config/opencode/skills",
+    ("pi", "skill"):           ".pi/agent/skills",
+    ("pi", "agent"):           ".pi/agent/agents",
+    ("pi", "pi-extension"):    ".pi/agent/extensions",
 }
 
 
@@ -58,7 +58,7 @@ def run(toolkit_root: Path, *, harness: str = "claude") -> GroupResult:
     declared_slugs = {(a.kind, a.slug): a for a in discover_assets(toolkit_root)}
     for (kind_dir_name, kind) in [
         ("skills", "skill"), ("agents", "agent"), ("commands", "command"),
-        ("hooks", "hook"), ("plugins", "plugin"),
+        ("hooks", "hook"), ("plugins", "plugin"), ("extensions", "pi-extension"),
     ]:
         rel = _USER_PATHS.get((harness, kind))
         if rel is None:

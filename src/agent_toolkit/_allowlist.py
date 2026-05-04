@@ -12,7 +12,7 @@ from pathlib import Path
 import yaml
 
 # Order matches the order sections appear when we materialise an empty file.
-SECTIONS: tuple[str, ...] = ("skills", "agents", "commands", "hooks", "plugins")
+SECTIONS: tuple[str, ...] = ("skills", "agents", "commands", "hooks", "plugins", "pi_extensions")
 
 _KIND_TO_SECTION: dict[str, str] = {
     "skill": "skills",
@@ -20,6 +20,7 @@ _KIND_TO_SECTION: dict[str, str] = {
     "command": "commands",
     "hook": "hooks",
     "plugin": "plugins",
+    "pi-extension": "pi_extensions",
 }
 
 _SECTION_TO_KIND: dict[str, str] = {v: k for k, v in _KIND_TO_SECTION.items()}

@@ -95,7 +95,7 @@ def iter_plan_lines(text: str) -> Iterator[tuple[str, str]]:
         yield (kind.strip(), slug.strip())
 
 
-KINDS_FOR_PROJECTION: tuple[str, ...] = ("skill", "agent", "command", "hook", "plugin")
+KINDS_FOR_PROJECTION: tuple[str, ...] = ("skill", "agent", "command", "hook", "plugin", "pi-extension")
 
 
 def harness_target_dir(harness: str, kind: str, scope: str, project_root: Path) -> Path | None:
@@ -111,14 +111,30 @@ def harness_target_dir(harness: str, kind: str, scope: str, project_root: Path) 
 
 
 def _expected_source(asset_path: Path, kind: str) -> Path:
-    if kind in {"skill", "mcp", "plugin"}:
+    if kind in {"skill", "mcp", "plugin", "pi-extension"}:
         return asset_path.parent
     return asset_path
 
 
-def _asset_harnesses(asset_path: Path) -> list[str]:
-    fm = extract_frontmatter(asset_path) or {}
-    spec = fm.get("spec") or {}
+def _asset_harnesses(asset_path: Path, kind: str | None = None) -> list[str]:
+    """Return spec.harnesses declared by the asset.
+
+    For markdown-frontmatter kinds (skill/agent/command), parses `---` frontmatter.
+    For pure-YAML kinds (hook/pi-extension), parses the whole file.
+    For JSON manifest kinds (mcp/plugin), reads the agent_toolkit block.
+    Falls back to markdown-frontmatter when kind is unknown (legacy callers).
+    """
+    fm: dict | None
+    if kind in {"hook", "pi-extension"}:
+        import yaml as _yaml
+        fm = _yaml.safe_load(asset_path.read_text()) or {}
+    elif kind in {"mcp", "plugin"}:
+        import json as _json
+        doc = _json.loads(asset_path.read_text())
+        fm = doc.get("agent_toolkit") or {}
+    else:
+        fm = extract_frontmatter(asset_path) or {}
+    spec = (fm or {}).get("spec") or {}
     return list(spec.get("harnesses") or [])
 
 
@@ -140,7 +156,7 @@ def maybe_link(
     """
     source_path = _expected_source(asset_path, kind)
     link_path = target_dir / slug
-    declared = _asset_harnesses(asset_path)
+    declared = _asset_harnesses(asset_path, kind)
     if harness not in declared:
         if link_path.is_symlink():
             if dry_run:

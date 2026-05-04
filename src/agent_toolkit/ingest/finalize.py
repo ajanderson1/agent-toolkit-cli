@@ -52,7 +52,7 @@ def finalize(
     primary = _primary_in_staging(staging_dir, proposal.kind)
     if primary is None:
         raise FinalizeError(f"no recognisable {proposal.kind} payload in {staging_dir}")
-    if proposal.kind in {"skill", "mcp", "plugin"}:
+    if proposal.kind in {"skill", "mcp", "plugin", "pi-extension"}:
         # Copy the directory containing the primary file (i.e., the staging dir's
         # contents — minus the staging metadata files) into target.parent.
         target_dir = target.parent
@@ -106,6 +106,7 @@ def _primary_in_staging(staging_dir: Path, kind: str) -> Path | None:
         "hook": None,            # any *.meta.yaml
         "mcp": "mcp.json",
         "plugin": "marketplace.json",
+        "pi-extension": "extension.meta.yaml",
     }.get(kind)
     if name:
         p = staging_dir / name

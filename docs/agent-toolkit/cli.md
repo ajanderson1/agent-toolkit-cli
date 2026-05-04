@@ -37,7 +37,10 @@ The four supported harnesses and their per-harness skills directories:
 | `opencode` | `~/.config/opencode/skills/` |
 | `pi` | `~/.pi/agent/skills/` |
 
-Claude also supports `agents/`, `commands/`, `hooks/`, and `plugins/`. Codex and OpenCode
+Claude also supports `agents/`, `commands/`, `hooks/`, and `plugins/`. Pi additionally
+supports `agents/` and TypeScript-based extensions at `~/.pi/agent/extensions/`
+(asset kind `pi-extension`, sourced from `extensions/<slug>/extension.meta.yaml` in the
+toolkit repo — distinct from Claude Code's `plugins/`). Codex and OpenCode
 support MCPs via their own config files. The CLI silently skips asset-type / harness
 combinations that have no target slot.
 
@@ -222,7 +225,7 @@ Usage:
 
 | Argument | Description |
 |---|---|
-| `<kind>` | One of `skill`, `agent`, `command`, `hook`, `plugin`. Optional. |
+| `<kind>` | One of `skill`, `agent`, `command`, `hook`, `plugin`, `pi-extension`. Optional. |
 | `<harness>` | One of `claude`, `codex`, `opencode`, `pi`. Optional. |
 
 | Flag | Description |
@@ -488,12 +491,12 @@ Usage: uv run agent-toolkit new <kind> <slug>
 
 | Argument | Description |
 |---|---|
-| `kind` | One of: `skill`, `agent`, `command`, `hook`, `mcp`, `plugin` |
+| `kind` | One of: `skill`, `agent`, `command`, `hook`, `mcp`, `plugin`, `pi-extension` |
 | `slug` | Lowercase kebab-case name matching `^[a-z0-9][a-z0-9-]*$` |
 
 Creates the asset at its canonical path with `lifecycle: experimental`, a TODO description
-placeholder, and `spec.harnesses: [claude]`. Edit the description and harnesses, then run
-`check` before committing.
+placeholder, and `spec.harnesses: [claude]` (`[pi]` for `pi-extension`). Edit the
+description and harnesses, then run `check` before committing.
 
 | Kind | Scaffolded path |
 |---|---|
@@ -503,6 +506,7 @@ placeholder, and `spec.harnesses: [claude]`. Edit the description and harnesses,
 | `hook` | `hooks/<slug>.meta.yaml` |
 | `mcp` | `mcps/<slug>/mcp.json` |
 | `plugin` | `plugins/<slug>/marketplace.json` |
+| `pi-extension` | `extensions/<slug>/extension.meta.yaml` |
 
 **Example:**
 ```bash
@@ -538,9 +542,10 @@ plugins: []
 ```
 
 Section keys map to asset kinds: `skills`, `agents`, `commands`, `hooks`,
-`plugins`. The `mcps` kind is not yet scope-routed (MCPs ship via per-harness
-JSON config files). Each section is a flat list of slugs that must match
-`metadata.name` exactly. Empty file or empty sections are valid.
+`plugins`, `pi_extensions`. The `mcps` kind is not yet scope-routed (MCPs
+ship via per-harness JSON config files). Each section is a flat list of
+slugs that must match `metadata.name` exactly. Empty file or empty sections
+are valid.
 
 The CLI accepts both inline (`skills: [a, b]`) and multi-line (one slug per
 dash) forms when reading. The internal writer (used by `link <kind>:<slug>`

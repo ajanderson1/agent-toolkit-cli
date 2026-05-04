@@ -9,7 +9,7 @@ from typing import Iterable
 from agent_toolkit.walker import AssetRecord, discover_assets, load_asset_record
 
 _LIFECYCLE_ORDER = {"stable": 0, "experimental": 1, "deprecated": 2}
-_KIND_ORDER = ("skill", "agent", "command", "hook", "mcp", "plugin")
+_KIND_ORDER = ("skill", "agent", "command", "hook", "mcp", "plugin", "pi-extension")
 
 
 @dataclass(frozen=True)

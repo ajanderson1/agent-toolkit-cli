@@ -9,7 +9,7 @@ from pathlib import Path
 
 _HARNESSES = ("claude", "codex", "opencode", "pi")
 _SCOPES = ("user", "project")
-_KINDS = ("skill", "agent", "command", "hook", "plugin")
+_KINDS = ("skill", "agent", "command", "hook", "plugin", "pi-extension")
 
 
 def format_report(inventory: dict, *, project_root: Path) -> str:
