@@ -239,14 +239,21 @@ def test_list_project_check(multi_env):
     assert "project:✓" in beta_line
 
 
-def test_list_mcp_note(multi_env):
-    """Replaces tests/bats/test_list_new_grammar.bats:122-131."""
+def test_list_mcp_filter_succeeds(multi_env):
+    """Replaces tests/bats/test_list_new_grammar.bats:122-131.
+
+    The 'mcp' kind filter is accepted by the CLI parser and the command runs
+    cleanly. With no MCPs seeded in multi_env the inventory body for MCPs is
+    simply empty (no MCPs section emitted), but parsing/dispatch succeed.
+    """
     toolkit = multi_env["toolkit_root"]
     runner = CliRunner()
     result = runner.invoke(main, ["--toolkit-repo", str(toolkit), "list", "mcp"])
-    assert result.exit_code == 0, (result.output, result.stderr)
+    assert result.exit_code == 0, result.output
     combined = result.output + (result.stderr or "")
-    assert "not shown here" in combined or "mcp.json" in combined
+    # Filter parsing must succeed (no "unknown filter" rejection).
+    assert "unknown filter" not in combined
+    assert "Asset inventory" in combined
 
 
 # ===========================================================================
@@ -336,3 +343,46 @@ def test_list_report_rejects_format_json(env):
     )
     assert result.exit_code == 2
     assert "cannot combine" in result.stderr
+
+
+def test_list_text_includes_mcps(tmp_path, monkeypatch):
+    """Text-mode list shows an MCPs section with allow-listed MCPs."""
+    from click.testing import CliRunner
+    from agent_toolkit.cli import main
+
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.delenv("AGENT_TOOLKIT_REPO", raising=False)
+
+    toolkit = tmp_path / "toolkit"
+    toolkit.mkdir()
+    (toolkit / ".agent-toolkit-source").write_text("")
+    (toolkit / "schemas").mkdir()
+    schema_src = Path(__file__).resolve().parents[1] / "schemas" / "asset-frontmatter.v1alpha1.json"
+    (toolkit / "schemas" / "asset-frontmatter.v1alpha1.json").write_text(schema_src.read_text())
+    mcp_dir = toolkit / "mcps" / "context7"
+    mcp_dir.mkdir(parents=True)
+    (mcp_dir / "config.json").write_text('{"type":"stdio","command":"npx"}\n')
+    (mcp_dir / "README.md").write_text(
+        "---\napiVersion: agent-toolkit/v1alpha1\n"
+        "metadata:\n  name: context7\n  description: c.\n  lifecycle: stable\n"
+        "spec:\n  origin: third-party\n  vendored_via: none\n"
+        "  upstream: https://example.com\n  harnesses:\n    - claude\n---\n"
+    )
+
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / ".agent-toolkit.yaml").write_text("mcps:\n  - context7\n")
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        ["list", "--toolkit-repo", str(toolkit), "--project", str(project)],
+    )
+    assert result.exit_code == 0, result.output
+    assert "MCPs (1)" in result.output
+    assert "context7" in result.output
+    # Issue 1 regression guard: bracket must show declared harnesses, not "[]"
+    assert "[claude]" in result.output, f"expected bracket containing 'claude', got:\n{result.output}"
+    assert "[]" not in result.output, f"bracket was empty — _asset_harnesses not reading README.md frontmatter:\n{result.output}"

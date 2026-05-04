@@ -189,14 +189,6 @@ def _do_per_asset(
         return
     kind, _, slug = target.partition(":")
 
-    if kind == "mcp":
-        click.echo(
-            "mcps are not yet scope-routed — edit the harness's mcp.json directly",
-            err=True,
-        )
-        ctx.exit(2)
-        return
-
     try:
         section = kind_to_section(kind)
     except ValueError as exc:
@@ -289,12 +281,6 @@ def _do_plan_entry(
     allowlist_path, dry_run, error_lines,
 ) -> bool:
     """Execute one plan entry for unlink. Returns True on success, False on failure."""
-    if kind == "mcp":
-        error_lines.append(
-            "mcps are not yet scope-routed — edit the harness's mcp.json directly"
-        )
-        return False
-
     try:
         section = kind_to_section(kind)
     except ValueError as exc:

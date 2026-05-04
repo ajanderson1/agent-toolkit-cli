@@ -142,26 +142,27 @@ def test_kind_filter_drops_other_kinds(tmp_path, monkeypatch):
     assert kinds == {"skill"}, kinds
 
 
-def test_mcp_kind_excluded_even_without_filter(tmp_path, monkeypatch):
+def test_mcp_kind_included_without_filter(tmp_path, monkeypatch):
+    """MCPs appear in JSON output alongside other kinds (no longer excluded)."""
     _seed(tmp_path)
-    # Add an mcp asset — should be excluded from output
+    # Walker discovers MCPs via config.json; frontmatter is read from sibling README.md.
     (tmp_path / "mcps" / "gamma").mkdir(parents=True)
-    (tmp_path / "mcps" / "gamma" / "mcp.json").write_text(
-        json.dumps({
-            "agent_toolkit": {
-                "apiVersion": "agent-toolkit/v1alpha1",
-                "metadata": {
-                    "name": "gamma",
-                    "description": "Gamma mcp.",
-                    "lifecycle": "stable",
-                },
-                "spec": {
-                    "origin": "first-party",
-                    "vendored_via": "none",
-                    "harnesses": ["claude"],
-                },
-            }
-        })
+    (tmp_path / "mcps" / "gamma" / "config.json").write_text(
+        '{"type":"stdio","command":"npx"}\n'
+    )
+    (tmp_path / "mcps" / "gamma" / "README.md").write_text(
+        "---\n"
+        "apiVersion: agent-toolkit/v1alpha1\n"
+        "metadata:\n"
+        "  name: gamma\n"
+        "  description: Gamma mcp.\n"
+        "  lifecycle: stable\n"
+        "spec:\n"
+        "  origin: first-party\n"
+        "  vendored_via: none\n"
+        "  harnesses:\n"
+        "    - claude\n"
+        "---\n"
     )
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     (tmp_path / "home").mkdir()
@@ -170,7 +171,7 @@ def test_mcp_kind_excluded_even_without_filter(tmp_path, monkeypatch):
     assert res.exit_code == 0, res.output
     doc = json.loads(res.output)
     kinds = {a["kind"] for a in doc["assets"]}
-    assert "mcp" not in kinds, kinds
+    assert "mcp" in kinds, kinds
 
 
 def test_asset_path_is_absolute(tmp_path, monkeypatch):
@@ -183,3 +184,54 @@ def test_asset_path_is_absolute(tmp_path, monkeypatch):
     doc = json.loads(res.output)
     alpha = next(a for a in doc["assets"] if a["slug"] == "alpha")
     assert Path(alpha["path"]).is_absolute()
+
+
+def test_list_json_includes_mcps(tmp_path, monkeypatch):
+    """MCPs appear as kind=mcp entries in JSON output with status=unsupported per cell."""
+    import json
+    from click.testing import CliRunner
+    from agent_toolkit.cli import main
+
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.delenv("AGENT_TOOLKIT_REPO", raising=False)
+
+    toolkit = tmp_path / "toolkit"
+    toolkit.mkdir()
+    (toolkit / ".agent-toolkit-source").write_text("")
+    (toolkit / "schemas").mkdir()
+    schema_src = Path(__file__).resolve().parents[1] / "schemas" / "asset-frontmatter.v1alpha1.json"
+    (toolkit / "schemas" / "asset-frontmatter.v1alpha1.json").write_text(schema_src.read_text())
+    mcp_dir = toolkit / "mcps" / "context7"
+    mcp_dir.mkdir(parents=True)
+    (mcp_dir / "config.json").write_text('{"type":"stdio","command":"npx"}\n')
+    (mcp_dir / "README.md").write_text(
+        "---\napiVersion: agent-toolkit/v1alpha1\n"
+        "metadata:\n  name: context7\n  description: c.\n  lifecycle: stable\n"
+        "spec:\n  origin: third-party\n  vendored_via: none\n"
+        "  upstream: https://example.com\n  harnesses:\n    - claude\n---\n"
+    )
+
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / ".agent-toolkit.yaml").write_text("mcps:\n  - context7\n")
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        ["list", "--format", "json", "--toolkit-repo", str(toolkit),
+         "--project", str(project)],
+    )
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.output)
+    mcps = [a for a in data["assets"] if a["kind"] == "mcp"]
+    assert len(mcps) == 1
+    assert mcps[0]["slug"] == "context7"
+    # All cells should be unsupported (no adapter yet) but allowlisted on project
+    project_claude = next(
+        c for c in mcps[0]["cells"]
+        if c["harness"] == "claude" and c["scope"] == "project"
+    )
+    assert project_claude["status"] == "unsupported"
+    assert project_claude["allowlisted"] is True

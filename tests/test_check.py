@@ -109,3 +109,30 @@ def test_check_quiet_env_suppresses_chrome(tmp_path, monkeypatch):
     assert "OK" in result.output
     # With AGENT_TOOLKIT_QUIET=1, header/summary are suppressed
     assert "Validating" not in result.output
+
+
+def test_check_accepts_v1alpha1_mcp(tmp_path, monkeypatch):
+    """Validator accepts a catalog MCP with structured v1alpha1 frontmatter."""
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.delenv("AGENT_TOOLKIT_REPO", raising=False)
+
+    toolkit = tmp_path / "toolkit"
+    toolkit.mkdir()
+    (toolkit / ".agent-toolkit-source").write_text("")
+    mcp_dir = toolkit / "mcps" / "context7"
+    mcp_dir.mkdir(parents=True)
+    (mcp_dir / "config.json").write_text('{"type":"stdio","command":"npx"}\n')
+    (mcp_dir / "README.md").write_text(
+        "---\napiVersion: agent-toolkit/v1alpha1\n"
+        "metadata:\n  name: context7\n  description: c.\n  lifecycle: stable\n"
+        "spec:\n  origin: third-party\n  vendored_via: none\n"
+        "  upstream: https://example.com\n  harnesses:\n    - claude\n---\n"
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main, ["check", "--exit-code", "--toolkit-repo", str(toolkit)],
+    )
+    assert result.exit_code == 0, result.output

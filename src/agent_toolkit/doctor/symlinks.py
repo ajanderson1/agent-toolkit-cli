@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 
 from agent_toolkit.doctor.result import GroupResult, Status
-from agent_toolkit.walker import discover_assets, extract_frontmatter
+from agent_toolkit.walker import discover_assets, extract_frontmatter, frontmatter_path
 
 # Mirror bin/lib/common.sh harness_target_dir() table.
 _USER_PATHS: dict[tuple[str, str], str] = {
@@ -114,8 +114,13 @@ def _meta_for(asset) -> dict:
     if asset.kind == "hook":
         import yaml
         return yaml.safe_load(asset.path.read_text()) or {}
-    if asset.kind in {"mcp", "plugin"}:
+    if asset.kind == "plugin":
         import json
         doc = json.loads(asset.path.read_text())
         return doc.get("agent_toolkit") or {}
+    if asset.kind == "mcp":
+        fm = frontmatter_path(asset.path, asset.kind)
+        if not fm.is_file():
+            return {}
+        return extract_frontmatter(fm) or {}
     return {}

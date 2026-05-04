@@ -281,17 +281,47 @@ def test_link_per_asset_harness_incompat_errors(env, seed_skill):
     assert not (home / ".agent-toolkit.yaml").exists()
 
 
-def test_link_per_asset_mcp_errors(env):
-    """Replaces tests/bats/test_link_per_asset.bats:92-96."""
+def test_link_per_asset_mcp_succeeds(env, tmp_path):
+    """MCPs flow through the per-asset path: allow-list mutation + no-op projection."""
     toolkit = env["toolkit_root"]
+    # Seed an MCP in the toolkit
+    mcp_dir = toolkit / "mcps" / "context7"
+    mcp_dir.mkdir(parents=True)
+    (mcp_dir / "config.json").write_text('{"type":"stdio","command":"npx"}\n')
+    (mcp_dir / "README.md").write_text(
+        "---\n"
+        "apiVersion: agent-toolkit/v1alpha1\n"
+        "metadata:\n"
+        "  name: context7\n"
+        "  description: c.\n"
+        "  lifecycle: stable\n"
+        "spec:\n"
+        "  origin: third-party\n"
+        "  vendored_via: none\n"
+        "  upstream: https://example.com\n"
+        "  harnesses:\n"
+        "    - claude\n"
+        "---\n"
+    )
+
+    project = tmp_path / "project"
+    project.mkdir()
+
     runner = CliRunner()
     result = runner.invoke(
         main,
-        ["--toolkit-repo", str(toolkit), "link", "user", "claude", "mcp:foo"],
+        [
+            "--toolkit-repo", str(toolkit),
+            "link", "project", "claude", "mcp:context7",
+            "--project", str(project),
+        ],
     )
-    assert result.exit_code != 0
-    combined = result.output + (result.stderr or "")
-    assert "mcps are not yet scope-routed" in combined
+    assert result.exit_code == 0, result.output
+    assert "MCP install path for claude not yet implemented" in result.output
+    # YAML allow-list mutated
+    text = (project / ".agent-toolkit.yaml").read_text()
+    assert "mcps:" in text
+    assert "context7" in text
 
 
 def test_link_project_per_asset(env, tmp_path, seed_skill):

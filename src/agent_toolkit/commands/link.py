@@ -194,15 +194,6 @@ def _do_per_asset(
         return
     kind, _, slug = target.partition(":")
 
-    # 1. mcp guard
-    if kind == "mcp":
-        click.echo(
-            "mcps are not yet scope-routed — edit the harness's mcp.json directly",
-            err=True,
-        )
-        ctx.exit(2)
-        return
-
     # 2. resolve asset — find in toolkit
     found_asset_path: Path | None = None
     for asset in discover_assets(toolkit_root):
@@ -434,13 +425,6 @@ def _do_plan_entry(
     allowlist_path, dry_run, counters, error_lines,
 ) -> bool:
     """Execute one plan entry. Returns True on success, False on failure."""
-    # mcp guard
-    if kind == "mcp":
-        error_lines.append(
-            "mcps are not yet scope-routed — edit the harness's mcp.json directly"
-        )
-        return False
-
     # Find the asset
     found_asset_path: Path | None = None
     for asset in discover_assets(toolkit_root):

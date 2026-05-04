@@ -1,6 +1,35 @@
+"""Tests for src/agent_toolkit/walker.py — discovery and metadata loading."""
+from __future__ import annotations
+
 from pathlib import Path
 
-from agent_toolkit.walker import discover_assets, extract_frontmatter
+from agent_toolkit.walker import discover_assets, extract_frontmatter, load_asset_record
+
+
+def _write_mcp(toolkit_root: Path, slug: str, *, harnesses: list[str]) -> None:
+    mcp_dir = toolkit_root / "mcps" / slug
+    mcp_dir.mkdir(parents=True, exist_ok=True)
+    (mcp_dir / "config.json").write_text(
+        '{"type": "stdio", "command": "npx", "args": ["-y", "fake"]}\n'
+    )
+    harness_lines = "\n".join(f"    - {h}" for h in harnesses)
+    (mcp_dir / "README.md").write_text(
+        "---\n"
+        "apiVersion: agent-toolkit/v1alpha1\n"
+        "metadata:\n"
+        f"  name: {slug}\n"
+        f"  description: {slug} mcp.\n"
+        "  lifecycle: stable\n"
+        "spec:\n"
+        "  origin: third-party\n"
+        "  vendored_via: none\n"
+        "  upstream: https://example.com\n"
+        "  harnesses:\n"
+        f"{harness_lines}\n"
+        "---\n\n"
+        f"# {slug}\n\n"
+        f"Body for {slug}.\n"
+    )
 
 
 def test_extracts_yaml_frontmatter_from_markdown(tmp_path):
@@ -63,9 +92,9 @@ def test_discover_handles_archived_dir(tmp_path):
     assert assets[0].slug == "old"
 
 
-def test_discover_mcps_via_mcp_json(tmp_path):
+def test_discover_mcps_via_config_json(tmp_path):
     (tmp_path / "mcps" / "first_party" / "demo").mkdir(parents=True)
-    (tmp_path / "mcps" / "first_party" / "demo" / "mcp.json").write_text("{}")
+    (tmp_path / "mcps" / "first_party" / "demo" / "config.json").write_text("{}")
 
     assets = list(discover_assets(tmp_path))
     assert len(assets) == 1
@@ -225,3 +254,32 @@ def test_load_asset_record_skips_atx_headings_correctly(tmp_path):
     asset = discover_assets(tmp_path)[0]
     record = load_asset_record(asset)
     assert record.body_excerpt == "Real paragraph."
+
+
+def test_discover_mcp_uses_config_json(tmp_path):
+    _write_mcp(tmp_path, "context7", harnesses=["claude", "codex"])
+    assets = discover_assets(tmp_path)
+    mcps = [a for a in assets if a.kind == "mcp"]
+    assert len(mcps) == 1
+    assert mcps[0].slug == "context7"
+    assert mcps[0].path.name == "config.json"
+
+
+def test_load_asset_record_mcp_reads_readme_frontmatter(tmp_path):
+    _write_mcp(tmp_path, "context7", harnesses=["claude"])
+    [asset] = [a for a in discover_assets(tmp_path) if a.kind == "mcp"]
+    record = load_asset_record(asset)
+    assert record.metadata["metadata"]["name"] == "context7"
+    assert record.metadata["spec"]["harnesses"] == ["claude"]
+
+
+def test_discover_mcp_skips_directory_without_readme(tmp_path):
+    """A config.json without sibling README.md is still discovered (no metadata loss)
+    but record metadata is empty. This pins the contract: discovery is structural,
+    metadata read is best-effort."""
+    mcp_dir = tmp_path / "mcps" / "orphan"
+    mcp_dir.mkdir(parents=True)
+    (mcp_dir / "config.json").write_text("{}\n")
+    [asset] = [a for a in discover_assets(tmp_path) if a.kind == "mcp"]
+    record = load_asset_record(asset)
+    assert record.metadata == {}

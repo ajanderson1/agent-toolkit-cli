@@ -21,7 +21,7 @@ _KIND_RULES = (
     ("agent", "agents", "*.md"),
     ("command", "commands", "*.md"),
     ("hook", "hooks", "*.meta.yaml"),
-    ("mcp", "mcps", "mcp.json"),
+    ("mcp", "mcps", "config.json"),
     ("plugin", "plugins", "marketplace.json"),
     ("pi-extension", "extensions", "extension.meta.yaml"),
 )
@@ -32,6 +32,18 @@ class Asset:
     kind: str
     slug: str
     path: Path  # the file carrying the metadata (SKILL.md, mcp.json, *.meta.yaml, etc.)
+
+
+def frontmatter_path(asset_path: Path, kind: str) -> Path:
+    """Return the file carrying the asset's YAML frontmatter.
+
+    For most kinds the frontmatter lives in `asset_path` itself. MCPs are the
+    exception: discovery triggers on `config.json`, but frontmatter lives in
+    the sibling `README.md`.
+    """
+    if kind == "mcp":
+        return asset_path.parent / "README.md"
+    return asset_path
 
 
 def extract_frontmatter(path: Path) -> dict | None:
@@ -121,13 +133,23 @@ def load_asset_record(asset: Asset) -> AssetRecord:
     body_excerpt: str = ""
 
     if asset.kind in {"skill", "agent", "command"}:
-        text = asset.path.read_text(encoding="utf-8").replace("\r\n", "\n")
-        metadata = extract_frontmatter(asset.path) or {}
+        fm_path = frontmatter_path(asset.path, asset.kind)
+        text = fm_path.read_text(encoding="utf-8").replace("\r\n", "\n")
+        metadata = extract_frontmatter(fm_path) or {}
         body = _strip_frontmatter(text)
         body_excerpt = _first_paragraph(body, max_chars=400)
     elif asset.kind in {"hook", "pi-extension"}:
         metadata = yaml.safe_load(asset.path.read_text()) or {}
-    elif asset.kind in {"mcp", "plugin"}:
+    elif asset.kind == "mcp":
+        fm_path = frontmatter_path(asset.path, asset.kind)
+        if fm_path.is_file():
+            text = fm_path.read_text(encoding="utf-8").replace("\r\n", "\n")
+            metadata = extract_frontmatter(fm_path) or {}
+            body = _strip_frontmatter(text)
+            body_excerpt = _first_paragraph(body, max_chars=400)
+        else:
+            metadata = {}
+    elif asset.kind == "plugin":
         doc = _json.loads(asset.path.read_text())
         metadata = doc.get("agent_toolkit") or {}
     else:

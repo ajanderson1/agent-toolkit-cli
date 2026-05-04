@@ -18,9 +18,7 @@ from agent_toolkit.commands._link_lib import (
 from agent_toolkit.commands._list_json import ALL_HARNESSES
 from agent_toolkit.walker import discover_assets
 
-# "mcp" is intentionally excluded from KINDS_FOR_PROJECTION (no symlink path)
-# but is still a recognised filter token for list.
-_KNOWN_KINDS = frozenset(KINDS_FOR_PROJECTION) | {"mcp"}
+_KNOWN_KINDS = frozenset(KINDS_FOR_PROJECTION)
 _KNOWN_HARNESSES = frozenset(ALL_HARNESSES)
 
 _KIND_TITLE: dict[str, str] = {
@@ -29,12 +27,9 @@ _KIND_TITLE: dict[str, str] = {
     "command": "COMMANDS",
     "hook": "HOOKS",
     "plugin": "PLUGINS",
+    "mcp": "MCPs",
     "pi-extension": "PI EXTENSIONS",
 }
-
-
-def _asset_declared_harnesses(asset_path: Path, kind: str) -> list[str]:
-    return _asset_harnesses(asset_path, kind)
 
 
 def _install_state(
@@ -202,14 +197,6 @@ def list_cmd(
         )
         return
 
-    # MCP short-circuit: MCPs aren't symlink-managed.
-    if kind_filter == "mcp":
-        _ui.header("Asset inventory (filter: kind=mcp):")
-        _ui.summary(
-            "MCPs are configured via the harness's mcp.json, not symlinks — not shown here."
-        )
-        return
-
     _ui.header(
         f"Asset inventory (filter: kind={kind_filter or 'any'},"
         f" harness={harness_filter or 'any'}):"
@@ -226,7 +213,7 @@ def list_cmd(
         for asset in discover_assets(toolkit_root):
             if asset.kind != kind:
                 continue
-            declared = _asset_declared_harnesses(asset.path, asset.kind)
+            declared = _asset_harnesses(asset.path, asset.kind)
             if harness_filter and harness_filter not in declared:
                 continue
 
