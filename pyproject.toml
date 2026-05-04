@@ -35,6 +35,7 @@ packages = ["src/agent_toolkit", "src/agent_toolkit_tui"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "src/agent_toolkit/_schemas/asset-frontmatter.v1alpha1.json" = "agent_toolkit/_schemas/asset-frontmatter.v1alpha1.json"
+"src/agent_toolkit/_schemas/asset-frontmatter.v1alpha2.json" = "agent_toolkit/_schemas/asset-frontmatter.v1alpha2.json"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

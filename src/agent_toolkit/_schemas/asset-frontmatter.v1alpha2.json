@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ajanderson1/agent-toolkit/schemas/asset-frontmatter.v1alpha2.json",
+  "title": "agent-toolkit asset frontmatter",
+  "type": "object",
+  "required": ["apiVersion", "metadata", "spec"],
+  "properties": {
+    "apiVersion": { "const": "agent-toolkit/v1alpha2" },
+    "metadata": {
+      "type": "object",
+      "required": ["name", "description", "lifecycle"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+        "description": { "type": "string", "pattern": "\\.$" },
+        "kind": {
+          "enum": ["skill", "agent", "command", "hook", "plugin", "mcp", "pi-extension"]
+        },
+        "keywords": {
+          "type": "array",
+          "items": { "type": "string" },
+          "uniqueItems": true
+        },
+        "lifecycle": { "enum": ["experimental", "stable", "deprecated"] },
+        "license": { "type": "string" },
+        "notes": { "type": "string" }
+      }
+    },
+    "spec": {
+      "type": "object",
+      "required": ["origin", "vendored_via", "harnesses"],
+      "additionalProperties": false,
+      "properties": {
+        "origin": { "enum": ["first-party", "third-party"] },
+        "vendored_via": { "enum": ["none", "submodule", "clone", "symlink"] },
+        "upstream": { "type": "string", "format": "uri" },
+        "fork": { "type": "string", "format": "uri" },
+        "harnesses": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["claude", "codex", "opencode", "pi"] }
+        },
+        "mcp": {
+          "type": "object",
+          "required": ["transport", "install_method"],
+          "additionalProperties": false,
+          "properties": {
+            "transport":      { "enum": ["stdio", "http", "sse"] },
+            "install_method": { "enum": ["npx", "uvx", "docker", "local", "remote"] },
+            "command":        { "type": "string" },
+            "env":            { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+            "optional_env":   { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+            "prerequisites":  { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+            "verify":         { "type": "string" }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "origin": { "const": "third-party" } } },
+          "then": { "required": ["upstream"] }
+        },
+        {
+          "if": { "properties": { "vendored_via": { "const": "submodule" } } },
+          "then": { "required": ["fork"] }
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "metadata": { "properties": { "kind": { "const": "mcp" } }, "required": ["kind"] } },
+        "required": ["metadata"]
+      },
+      "then": { "properties": { "spec": { "required": ["mcp"] } } }
+    },
+    {
+      "if": {
+        "properties": { "metadata": { "properties": { "kind": { "not": { "const": "mcp" } } } } }
+      },
+      "then": { "properties": { "spec": { "not": { "required": ["mcp"] } } } }
+    }
+  ]
+}
