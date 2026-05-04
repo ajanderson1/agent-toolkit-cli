@@ -242,15 +242,18 @@ def test_list_project_check(multi_env):
 def test_list_mcp_filter_succeeds(multi_env):
     """Replaces tests/bats/test_list_new_grammar.bats:122-131.
 
-    MCPs are now surfaced in list output (no longer short-circuited). With no MCPs
-    seeded in multi_env the command exits 0 and shows the standard inventory header.
+    The 'mcp' kind filter is accepted by the CLI parser and the command runs
+    cleanly. With no MCPs seeded in multi_env the inventory body for MCPs is
+    simply empty (no MCPs section emitted), but parsing/dispatch succeed.
     """
     toolkit = multi_env["toolkit_root"]
     runner = CliRunner()
     result = runner.invoke(main, ["--toolkit-repo", str(toolkit), "list", "mcp"])
-    assert result.exit_code == 0, (result.output, result.stderr)
-    # Header always appears; no MCPs seeded so body is empty but command succeeds.
-    assert "Asset inventory" in (result.stderr or result.output)
+    assert result.exit_code == 0, result.output
+    combined = result.output + (result.stderr or "")
+    # Filter parsing must succeed (no "unknown filter" rejection).
+    assert "unknown filter" not in combined
+    assert "Asset inventory" in combined
 
 
 # ===========================================================================

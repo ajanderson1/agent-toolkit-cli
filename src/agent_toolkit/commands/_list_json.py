@@ -157,6 +157,12 @@ def _build_inventory(
                     "allowlisted": proj_allowlisted,
                 })
                 continue
+            # TODO(plan-b): MCPs reuse status="unsupported" as a stand-in for
+            # "allow-listed but no installer adapter yet". This overloads the
+            # term used elsewhere (e.g. TUI asset_grid.py treats unsupported
+            # cells as non-interactive). When per-harness MCP adapters land,
+            # consider introducing a distinct status (e.g. "pending") or
+            # widening CellStatus.
             if asset.kind == "mcp":
                 # MCPs have no symlink path yet — adapter work lands in a follow-up.
                 # Report status=unsupported but preserve the allowlisted bit so
