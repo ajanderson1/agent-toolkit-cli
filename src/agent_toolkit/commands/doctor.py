@@ -8,6 +8,7 @@ import click
 from agent_toolkit._repo_resolution import RepoNotFoundError, resolve_toolkit_root
 from agent_toolkit._ui import header, summary
 from agent_toolkit.doctor import (
+    allowlist_audit as g_allowlist_audit,
     conventions as g_conventions,
     duplicates as g_duplicates,
     environment as g_environment,
@@ -19,7 +20,7 @@ from agent_toolkit.doctor import (
 from agent_toolkit.doctor.per_resource import diagnose
 from agent_toolkit.doctor.result import GroupResult, Status
 
-_GROUPS = ("environment", "symlink-integrity", "conventions", "submodule-health", "frontmatter", "duplicates", "harness-homes")
+_GROUPS = ("environment", "symlink-integrity", "conventions", "submodule-health", "frontmatter", "duplicates", "harness-homes", "allowlist-audit")
 
 
 @click.command(short_help="Run five-group health check (or per-resource diagnosis).")
@@ -94,6 +95,7 @@ def _run_global(root: Path, *, harness: str, group_name: str | None) -> list[Gro
         ("frontmatter", lambda: g_frontmatter.run(root)),
         ("duplicates", lambda: g_duplicates.run(root)),
         ("harness-homes", lambda: g_harness_homes.run()),
+        ("allowlist-audit", lambda: g_allowlist_audit.run(root, project_root=Path.cwd())),
     ]
     if group_name:
         runners = [(n, fn) for (n, fn) in runners if n == group_name]
