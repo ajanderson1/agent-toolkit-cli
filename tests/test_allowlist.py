@@ -25,18 +25,35 @@ def test_kind_to_section_all_kinds():
     assert kind_to_section("pi-extension") == "pi_extensions"
 
 
-def test_kind_to_section_mcp_raises():
-    with pytest.raises(ValueError, match="not yet scope-routed"):
-        kind_to_section("mcp")
+def test_kind_to_section_mcp():
+    assert kind_to_section("mcp") == "mcps"
 
 
 def test_section_to_kind_inverse():
-    for kind in ("skill", "agent", "command", "hook", "plugin", "pi-extension"):
+    for kind in ("skill", "agent", "command", "hook", "plugin", "mcp", "pi-extension"):
         assert section_to_kind(kind_to_section(kind)) == kind
 
 
 def test_sections_constant_matches_routing():
-    assert set(SECTIONS) == {"skills", "agents", "commands", "hooks", "plugins", "pi_extensions"}
+    assert set(SECTIONS) == {"skills", "agents", "commands", "hooks", "plugins", "mcps", "pi_extensions"}
+
+
+def test_section_to_kind_mcps():
+    assert section_to_kind("mcps") == "mcp"
+
+
+def test_read_allowlist_mcps_section(tmp_path):
+    f = tmp_path / "a.yaml"
+    f.write_text(
+        "skills:\n"
+        "  - alpha\n"
+        "mcps:\n"
+        "  - context7\n"
+        "  - playwright\n"
+    )
+    result = read_allowlist(f)
+    assert result["skills"] == ["alpha"]
+    assert result["mcps"] == ["context7", "playwright"]
 
 
 def test_read_allowlist_missing_file(tmp_path):

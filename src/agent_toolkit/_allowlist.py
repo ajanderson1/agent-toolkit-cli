@@ -12,15 +12,16 @@ from pathlib import Path
 import yaml
 
 # Order matches the order sections appear when we materialise an empty file.
-SECTIONS: tuple[str, ...] = ("skills", "agents", "commands", "hooks", "plugins", "pi_extensions")
+SECTIONS: tuple[str, ...] = ("skills", "agents", "commands", "hooks", "plugins", "mcps", "pi_extensions")
 
 _KIND_TO_SECTION: dict[str, str] = {
-    "skill": "skills",
-    "agent": "agents",
-    "command": "commands",
-    "hook": "hooks",
-    "plugin": "plugins",
-    "pi-extension": "pi_extensions",
+    "skill":         "skills",
+    "agent":         "agents",
+    "command":       "commands",
+    "hook":          "hooks",
+    "plugin":        "plugins",
+    "mcp":           "mcps",
+    "pi-extension":  "pi_extensions",
 }
 
 _SECTION_TO_KIND: dict[str, str] = {v: k for k, v in _KIND_TO_SECTION.items()}
@@ -29,12 +30,8 @@ _SECTION_TO_KIND: dict[str, str] = {v: k for k, v in _KIND_TO_SECTION.items()}
 def kind_to_section(kind: str) -> str:
     """Map an asset kind to its allow-list section name.
 
-    Raises ValueError for `mcp` (not scope-routed) or any unknown kind.
+    Raises ValueError for any unknown kind.
     """
-    if kind == "mcp":
-        raise ValueError(
-            "mcps are not yet scope-routed — edit the harness's mcp.json directly"
-        )
     if kind not in _KIND_TO_SECTION:
         raise ValueError(f"unknown asset kind: {kind!r}")
     return _KIND_TO_SECTION[kind]
