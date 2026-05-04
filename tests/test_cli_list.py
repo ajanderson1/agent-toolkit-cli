@@ -383,3 +383,6 @@ def test_list_text_includes_mcps(tmp_path, monkeypatch):
     assert result.exit_code == 0, result.output
     assert "MCPs (1)" in result.output
     assert "context7" in result.output
+    # Issue 1 regression guard: bracket must show declared harnesses, not "[]"
+    assert "[claude]" in result.output, f"expected bracket containing 'claude', got:\n{result.output}"
+    assert "[]" not in result.output, f"bracket was empty — _asset_harnesses not reading README.md frontmatter:\n{result.output}"

@@ -211,10 +211,10 @@ def project_from_file(
     for kind in KINDS_FOR_PROJECTION:
         if kind == "mcp":
             section = kind_to_section(kind)
-            allowed_slugs = list(allowed.get(section, []))
-            if not allowed_slugs:
+            mcp_allowed_slugs = list(allowed.get(section, []))
+            if not mcp_allowed_slugs:
                 continue
-            slugs_csv = ", ".join(allowed_slugs)
+            slugs_csv = ", ".join(mcp_allowed_slugs)
             print(
                 f"MCP install path for {harness} not yet implemented; "
                 f"allow-list updated only ({slugs_csv}).",

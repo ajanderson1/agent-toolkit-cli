@@ -32,10 +32,6 @@ _KIND_TITLE: dict[str, str] = {
 }
 
 
-def _asset_declared_harnesses(asset_path: Path, kind: str) -> list[str]:
-    return _asset_harnesses(asset_path, kind)
-
-
 def _install_state(
     yaml_path: Path,
     kind: str,
@@ -217,7 +213,7 @@ def list_cmd(
         for asset in discover_assets(toolkit_root):
             if asset.kind != kind:
                 continue
-            declared = _asset_declared_harnesses(asset.path, asset.kind)
+            declared = _asset_harnesses(asset.path, asset.kind)
             if harness_filter and harness_filter not in declared:
                 continue
 
