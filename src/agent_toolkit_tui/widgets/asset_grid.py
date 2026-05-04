@@ -11,15 +11,17 @@ from agent_toolkit_tui.messages import AssetToggled
 from agent_toolkit_tui.state import AssetRow, CellState, InventoryState
 
 _GLYPH = {
-    # `[x]` is escaped because Rich's markup parser (run by Textual's DataTable)
-    # would otherwise treat `[x]` as an unknown style tag and swallow it,
-    # rendering linked cells blank. `[ ]` survives because the space-after-`[`
-    # doesn't match the tag grammar.
-    "linked":       r"\[x]",
-    "unlinked":     "[ ]",
+    "linked":       "☑",
+    "unlinked":     "☐",
     "unsupported":  "──",
     "broken":       "⚠ ",
 }
+
+# Pending overlay: same shape as the *target* state, colored to signal
+# "queued, not yet applied". Rich markup runs through DataTable cells, but
+# Textual CSS vars like $warning aren't resolved there — use a literal color.
+_PENDING_LINK   = "[yellow]☑[/]"
+_PENDING_UNLINK = "[yellow]☐[/]"
 
 
 class AssetGrid(Vertical):
@@ -210,9 +212,9 @@ class AssetGrid(Vertical):
                 glyph = _GLYPH.get(cell.status, "  ") if cell else "  "
                 pending = self._pending.get((self._scope, h, row.kind, row.slug))
                 if pending == "link":
-                    glyph = "+x "
+                    glyph = _PENDING_LINK
                 elif pending == "unlink":
-                    glyph = "-  "
+                    glyph = _PENDING_UNLINK
                 cells.append(glyph)
             # Schema allows duplicate (kind, slug) pairs at distinct paths
             # (see commands/aj/journal/* vs commands/custom_commands/*). Use

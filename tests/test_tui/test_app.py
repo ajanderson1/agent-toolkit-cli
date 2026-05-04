@@ -323,6 +323,35 @@ async def test_a_key_skips_unsupported_cells():
         )
 
 
+async def test_ctrl_z_reverts_all_pending():
+    """Ctrl+Z clears the pending queue without applying anything."""
+    from agent_toolkit_tui.widgets import AssetGrid
+    from textual.coordinate import Coordinate
+    from textual.widgets import DataTable
+
+    runner = FakeRunner(_doc())
+    app = TUIApp(toolkit_root=Path("/r"), runner=runner)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        grid = app.query_one("#asset-grid", AssetGrid)
+        table = grid.query_one("#grid-table", DataTable)
+        # Queue a link on the alpha/claude/project cell.
+        table.cursor_coordinate = Coordinate(row=0, column=1)
+        table.focus()
+        await pilot.pause()
+        await pilot.press("space")
+        await pilot.pause()
+        assert grid.pending_entries(), "precondition: should have a pending entry"
+
+        await pilot.press("ctrl+z")
+        await pilot.pause()
+        assert grid.pending_entries() == {}, "ctrl+z should clear pending"
+        # Revert must NOT call the runner.
+        assert runner.calls == [], (
+            f"revert must not invoke runner, got {runner.calls}"
+        )
+
+
 async def test_kind_change_filters_grid():
     """Posting KindChanged updates the grid's kind and filters rows accordingly."""
     from agent_toolkit_tui.messages import KindChanged

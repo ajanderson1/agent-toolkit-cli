@@ -35,6 +35,7 @@ class TUIApp(App):
         Binding("ctrl+s", "apply", "Apply", priority=True),
         Binding("ctrl+d", "diff", "Diff", priority=True),
         Binding("ctrl+r", "refresh", "Refresh", priority=True),
+        Binding("ctrl+z", "revert", "Revert", priority=True),
         Binding("slash", "focus_filter", "Filter", priority=True),
         Binding("q", "quit", "Quit"),
     ]
@@ -83,6 +84,15 @@ class TUIApp(App):
         self.query_one("#asset-grid", AssetGrid).update_state(self.state)
         self.query_one("#kinds-sidebar", KindsSidebar).update_state(self.state)
         self._refresh_pending_label()
+
+    def action_revert(self) -> None:
+        grid = self.query_one("#asset-grid", AssetGrid)
+        n = len(grid.pending_entries())
+        grid.clear_pending()
+        self._refresh_pending_label()
+        self.query_one("#footer-pending", Static).update(
+            f"reverted: {n} pending cleared"
+        )
 
     def action_diff(self) -> None:
         # Diff = run pending through --dry-run and surface counts in the footer.

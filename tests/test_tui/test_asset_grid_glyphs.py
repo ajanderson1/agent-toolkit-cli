@@ -1,18 +1,19 @@
 """Regression tests for asset_grid glyph rendering.
 
-The bug we guard against: Rich's markup parser (run by Textual's DataTable on
-every cell string) treats `[x]` as an unknown style tag and swallows it,
-leaving linked cells visually blank. The fix escapes the leading bracket on
-the `linked` glyph (`r"\\[x]"`) so the rendered output is the literal `[x]`.
-
-These tests pin the *rendered* glyph for `linked` and `unlinked` so a future
-edit that drops the escape — or grows brackets on another glyph — fails loudly.
+DataTable runs every cell string through Rich's markup parser, so any glyph
+containing `[...]` risks being parsed as a style tag and swallowed. These
+tests pin the *rendered* output for each glyph so a future edit that
+introduces unescaped brackets (or otherwise breaks rendering) fails loudly.
 """
 from __future__ import annotations
 
 from rich.text import Text
 
-from agent_toolkit_tui.widgets.asset_grid import _GLYPH
+from agent_toolkit_tui.widgets.asset_grid import (
+    _GLYPH,
+    _PENDING_LINK,
+    _PENDING_UNLINK,
+)
 
 
 def _rendered(markup: str) -> str:
@@ -20,12 +21,12 @@ def _rendered(markup: str) -> str:
     return Text.from_markup(markup).plain
 
 
-def test_linked_glyph_renders_as_visible_x():
-    assert _rendered(_GLYPH["linked"]) == "[x]"
+def test_linked_glyph_renders_as_ticked_box():
+    assert _rendered(_GLYPH["linked"]) == "☑"
 
 
-def test_unlinked_glyph_renders_as_visible_empty_box():
-    assert _rendered(_GLYPH["unlinked"]) == "[ ]"
+def test_unlinked_glyph_renders_as_empty_box():
+    assert _rendered(_GLYPH["unlinked"]) == "☐"
 
 
 def test_unsupported_glyph_renders_unchanged():
@@ -34,6 +35,15 @@ def test_unsupported_glyph_renders_unchanged():
 
 def test_broken_glyph_renders_unchanged():
     assert _rendered(_GLYPH["broken"]) == "⚠ "
+
+
+def test_pending_link_renders_as_ticked_box():
+    """Pending-link wraps the linked glyph in color markup; plain text == glyph."""
+    assert _rendered(_PENDING_LINK) == "☑"
+
+
+def test_pending_unlink_renders_as_empty_box():
+    assert _rendered(_PENDING_UNLINK) == "☐"
 
 
 def test_no_glyph_silently_collapses_to_empty():
@@ -46,5 +56,11 @@ def test_no_glyph_silently_collapses_to_empty():
         rendered = _rendered(glyph)
         assert rendered.strip(), (
             f"glyph for status={status!r} ({glyph!r}) renders as whitespace — "
+            "Rich is probably parsing it as markup and swallowing it"
+        )
+    for name, glyph in [("pending_link", _PENDING_LINK), ("pending_unlink", _PENDING_UNLINK)]:
+        rendered = _rendered(glyph)
+        assert rendered.strip(), (
+            f"pending glyph {name!r} ({glyph!r}) renders as whitespace — "
             "Rich is probably parsing it as markup and swallowing it"
         )
