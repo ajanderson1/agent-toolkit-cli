@@ -95,7 +95,7 @@ def iter_plan_lines(text: str) -> Iterator[tuple[str, str]]:
         yield (kind.strip(), slug.strip())
 
 
-KINDS_FOR_PROJECTION: tuple[str, ...] = ("skill", "agent", "command", "hook", "plugin", "pi-extension")
+KINDS_FOR_PROJECTION: tuple[str, ...] = ("skill", "agent", "command", "hook", "plugin", "mcp", "pi-extension")
 
 
 def harness_target_dir(harness: str, kind: str, scope: str, project_root: Path) -> Path | None:
@@ -197,12 +197,26 @@ def project_from_file(
 ) -> None:
     """Walk every asset kind. Project allow-listed slugs, prune the rest."""
     allowed = read_allowlist(allowlist_path)
-    by_kind: dict[str, list[Asset]] = {k: [] for k in KINDS_FOR_PROJECTION}
+    by_kind: dict[str, list[Asset]] = {
+        k: [] for k in KINDS_FOR_PROJECTION if k != "mcp"
+    }
     for asset in discover_assets(toolkit_root):
         if asset.kind in by_kind:
             by_kind[asset.kind].append(asset)
 
     for kind in KINDS_FOR_PROJECTION:
+        if kind == "mcp":
+            section = kind_to_section(kind)
+            allowed_slugs = list(allowed.get(section, []))
+            if not allowed_slugs:
+                continue
+            slugs_csv = ", ".join(allowed_slugs)
+            print(
+                f"MCP install path for {harness} not yet implemented; "
+                f"allow-list updated only ({slugs_csv}).",
+                file=stdout,
+            )
+            continue
         target_dir = harness_target_dir(harness, kind, scope, project_root)
         if target_dir is None:
             continue

@@ -99,3 +99,59 @@ def test_harness_home_path_explicit_home_overrides_env(tmp_path):
     other = tmp_path / "other-home"
     assert harness_home_path("codex", home=other) == other / ".codex"
     assert harness_home_path("opencode", home=_P("/tmp/x")) == _P("/tmp/x/.opencode")
+
+
+def test_project_from_file_mcp_emits_no_op_message(tmp_path, monkeypatch, capsys):
+    """When the allow-list contains MCPs, the projection step emits a clear
+    'install path not yet implemented' line and creates no symlinks."""
+    import io
+    from pathlib import Path
+
+    from agent_toolkit.commands._link_lib import LinkCounters, project_from_file
+
+    # Seed a toolkit with one MCP
+    toolkit_root = tmp_path / "toolkit"
+    mcp_dir = toolkit_root / "mcps" / "context7"
+    mcp_dir.mkdir(parents=True)
+    (mcp_dir / "config.json").write_text('{"type":"stdio","command":"npx"}\n')
+    (mcp_dir / "README.md").write_text(
+        "---\n"
+        "apiVersion: agent-toolkit/v1alpha1\n"
+        "metadata:\n"
+        "  name: context7\n"
+        "  description: c7.\n"
+        "  lifecycle: stable\n"
+        "spec:\n"
+        "  origin: third-party\n"
+        "  vendored_via: none\n"
+        "  upstream: https://example.com\n"
+        "  harnesses:\n"
+        "    - claude\n"
+        "---\n"
+    )
+
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    allowlist = project_root / ".agent-toolkit.yaml"
+    allowlist.write_text("mcps:\n  - context7\n")
+
+    counters = LinkCounters()
+    buf = io.StringIO()
+    project_from_file(
+        scope="project",
+        harness="claude",
+        toolkit_root=toolkit_root,
+        project_root=project_root,
+        allowlist_path=allowlist,
+        dry_run=False,
+        counters=counters,
+        stdout=buf,
+    )
+
+    out = buf.getvalue()
+    assert "MCP install path for claude not yet implemented" in out
+    assert "context7" in out
+    # No symlinks created, no counters bumped
+    assert counters.created == 0
+    assert counters.updated == 0
+    assert counters.removed == 0
