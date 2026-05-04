@@ -41,12 +41,10 @@ pytestmark = pytest.mark.skip(
 import os
 import subprocess
 
-import pytest
-
 from agent_toolkit.ingest.types import Proposal
 ```
 
-`pytest` import stays (still used by other test functions / future use). `os` and `subprocess` stay (used by `_git_env`, `_init_git_repo`, the inline subprocess calls).
+`import pytest` is removed too — once the `pytestmark` line is gone, nothing else in the file references `pytest.*`. `os` and `subprocess` stay (used by `_git_env`, `_init_git_repo`, the inline subprocess calls).
 
 ### 2. Run the now-un-skipped tests in isolation
 
@@ -110,6 +108,7 @@ git checkout HEAD -- .
 - **No conftest.py autouse fixture** to scrub `GIT_*` for the whole suite. That's the issue's "optional hardening" callout. If it's needed, it's a separate change.
 - **No fixture refactor** from `cwd=tmp_path` to `git -C tmp_path`. The issue's snippet was written against the pre-fix file. The current code is already correct.
 - **No removal of `_git_env()` helper** even though it's now used by only one file. Deleting helpers that defend against a known recurring bug class is a regression magnet. Leave it.
+- **No promotion of `_git_env()` to `conftest.py` autouse**. Note: `_git_env()` only addresses the GIT_*-env-override mechanism. The sibling failure mode in `feedback_subagent_git_isolation.md` — `git config --local` writing into the worktree's `.git/config` even with env scrubbed — is a different mechanism env-scrub does not catch. If that resurfaces, file a fresh issue for the autouse-fixture work the issue body called "optional hardening."
 
 ## Definition of done
 
