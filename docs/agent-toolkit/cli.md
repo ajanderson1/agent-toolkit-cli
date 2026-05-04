@@ -97,6 +97,21 @@ creating the file if missing, and projects. Idempotent — running twice has the
 same effect as running once. Errors out if the slug doesn't exist or if the
 asset doesn't declare the requested harness.
 
+### MCPs
+
+`mcp:<name>` is recognised the same as other kinds (`skill:`, `agent:`, etc.). The
+allow-list YAML is updated under the `mcps:` section; the projection step emits a
+`MCP install path for <harness> not yet implemented` line because per-harness MCP
+adapters are not yet wired up. Per-harness MCP installation lands in a follow-up
+plan; for now, MCPs are first-class allow-list citizens but produce no symlinks or
+harness config edits.
+
+```bash
+agent-toolkit link project claude mcp:context7
+# → allow-list updated, then:
+# MCP install path for claude not yet implemented; allow-list updated only (context7).
+```
+
 **Examples:**
 
 ```bash
