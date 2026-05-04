@@ -15,7 +15,7 @@ import click
 
 from agent_toolkit._allowlist import kind_to_section, read_allowlist
 from agent_toolkit.commands._list_json import _PROJECT_TARGETS, _USER_TARGETS
-from agent_toolkit.walker import Asset, discover_assets, extract_frontmatter
+from agent_toolkit.walker import Asset, discover_assets, extract_frontmatter, frontmatter_path
 
 ALL_HARNESSES: tuple[str, ...] = ("claude", "codex", "opencode", "pi")
 
@@ -134,8 +134,8 @@ def _asset_harnesses(asset_path: Path, kind: str | None = None) -> list[str]:
         doc = _json.loads(asset_path.read_text())
         fm = doc.get("agent_toolkit") or {}
     elif kind == "mcp" or asset_path.name == "config.json":
-        readme = asset_path.parent / "README.md"
-        fm = (extract_frontmatter(readme) if readme.is_file() else None) or {}
+        fm_path = frontmatter_path(asset_path, "mcp")
+        fm = (extract_frontmatter(fm_path) if fm_path.is_file() else None) or {}
     else:
         fm = extract_frontmatter(asset_path) or {}
     spec = (fm or {}).get("spec") or {}

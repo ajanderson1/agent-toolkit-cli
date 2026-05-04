@@ -8,7 +8,7 @@ from pathlib import Path
 import jsonschema
 import yaml
 
-from agent_toolkit.walker import Asset, extract_frontmatter
+from agent_toolkit.walker import Asset, extract_frontmatter, frontmatter_path
 
 
 class Validator:
@@ -43,10 +43,10 @@ class Validator:
         if asset.kind in {"hook", "pi-extension"}:
             return yaml.safe_load(asset.path.read_text())
         if asset.kind == "mcp":
-            readme = asset.path.parent / "README.md"
-            if not readme.is_file():
+            fm_path = frontmatter_path(asset.path, asset.kind)
+            if not fm_path.is_file():
                 return None
-            return extract_frontmatter(readme)
+            return extract_frontmatter(fm_path)
         if asset.kind == "plugin":
             doc = json.loads(asset.path.read_text())
             return doc.get("agent_toolkit")
