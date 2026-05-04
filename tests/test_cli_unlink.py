@@ -352,3 +352,48 @@ def test_unlink_dry_run_unknown_harness_still_validates(env):
     )
     assert result.exit_code == 2
     assert "unknown harness 'banana'" in result.stderr
+
+
+# ===========================================================================
+# MCP per-asset unlink — removes from allow-list and emits no-op projection msg
+# ===========================================================================
+
+
+def test_unlink_mcp_removes_from_allowlist(tmp_path, monkeypatch):
+    """Unlink mcp:slug removes it from the allow-list and prints the no-op message."""
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.delenv("AGENT_TOOLKIT_REPO", raising=False)
+
+    toolkit = tmp_path / "toolkit"
+    toolkit.mkdir()
+    (toolkit / ".agent-toolkit-source").write_text("tool: agent-toolkit-cli\n")
+    (toolkit / "schemas").mkdir()
+    schema_src = (
+        Path(__file__).resolve().parents[1] / "schemas" / "asset-frontmatter.v1alpha1.json"
+    )
+    (toolkit / "schemas" / "asset-frontmatter.v1alpha1.json").write_text(schema_src.read_text())
+    mcp_dir = toolkit / "mcps" / "context7"
+    mcp_dir.mkdir(parents=True)
+    (mcp_dir / "config.json").write_text('{"type":"stdio","command":"npx"}\n')
+    (mcp_dir / "README.md").write_text(
+        "---\napiVersion: agent-toolkit/v1alpha1\n"
+        "metadata:\n  name: context7\n  description: c.\n  lifecycle: stable\n"
+        "spec:\n  origin: third-party\n  vendored_via: none\n"
+        "  upstream: https://example.com\n  harnesses:\n    - claude\n---\n"
+    )
+
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / ".agent-toolkit.yaml").write_text("mcps:\n  - context7\n")
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        ["--toolkit-repo", str(toolkit), "unlink", "project", "claude", "mcp:context7",
+         "--project", str(project)],
+    )
+    assert result.exit_code == 0, result.output
+    text = (project / ".agent-toolkit.yaml").read_text()
+    assert "context7" not in text

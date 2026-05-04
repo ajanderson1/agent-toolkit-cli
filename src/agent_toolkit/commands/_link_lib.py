@@ -121,17 +121,21 @@ def _asset_harnesses(asset_path: Path, kind: str | None = None) -> list[str]:
 
     For markdown-frontmatter kinds (skill/agent/command), parses `---` frontmatter.
     For pure-YAML kinds (hook/pi-extension), parses the whole file.
-    For JSON manifest kinds (mcp/plugin), reads the agent_toolkit block.
+    For mcp, reads markdown frontmatter from sibling README.md.
+    For plugin (JSON manifest), reads the agent_toolkit block.
     Falls back to markdown-frontmatter when kind is unknown (legacy callers).
     """
     fm: dict | None
     if kind in {"hook", "pi-extension"}:
         import yaml as _yaml
         fm = _yaml.safe_load(asset_path.read_text()) or {}
-    elif kind in {"mcp", "plugin"}:
+    elif kind == "plugin":
         import json as _json
         doc = _json.loads(asset_path.read_text())
         fm = doc.get("agent_toolkit") or {}
+    elif kind == "mcp" or asset_path.name == "config.json":
+        readme = asset_path.parent / "README.md"
+        fm = (extract_frontmatter(readme) if readme.is_file() else None) or {}
     else:
         fm = extract_frontmatter(asset_path) or {}
     spec = (fm or {}).get("spec") or {}
