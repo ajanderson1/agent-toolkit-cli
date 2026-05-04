@@ -162,7 +162,7 @@ async def test_toggle_then_apply_invokes_runner():
         assert runner.calls, "expected at least one runner call"
         op, scope, harness, entries, dry = runner.calls[0]
         assert op == "link"
-        assert scope == "user"
+        assert scope == "project"
         assert harness == "claude"
         assert ("skill", "alpha") in entries
         assert dry is False
@@ -228,14 +228,14 @@ async def test_scope_change_updates_grid():
     async with app.run_test() as pilot:
         await pilot.pause()
         grid = app.query_one("#asset-grid", AssetGrid)
-        assert grid._scope == "user"
-
-        # Post message directly (scope radio is not Tab-focusable)
-        app.post_message(ScopeChanged(scope="project"))
-        await pilot.pause()
         assert grid._scope == "project"
 
-        # Toggle a cell and verify runner is called with scope=project
+        # Post message directly (scope radio is not Tab-focusable)
+        app.post_message(ScopeChanged(scope="user"))
+        await pilot.pause()
+        assert grid._scope == "user"
+
+        # Toggle a cell and verify runner is called with scope=user
         from textual.coordinate import Coordinate
         from textual.widgets import DataTable
         table = grid.query_one("#grid-table", DataTable)
@@ -247,7 +247,7 @@ async def test_scope_change_updates_grid():
         await pilot.pause()
         assert runner.calls, "expected at least one runner call"
         _, scope, _, _, _ = runner.calls[0]
-        assert scope == "project"
+        assert scope == "user"
 
 
 async def test_kind_change_filters_grid():
@@ -275,31 +275,3 @@ async def test_kind_change_filters_grid():
         assert len(agent_rows) >= 1, "Expected at least one agent asset in fixture"
 
 
-async def test_harness_visibility_toggle_hides_column():
-    """Unchecking a harness checkbox removes it from visible harnesses and the grid."""
-    from agent_toolkit_tui.widgets import AssetGrid
-    from textual.widgets import Checkbox, DataTable
-
-    runner = FakeRunner(_doc())
-    app = TUIApp(toolkit_root=Path("/r"), runner=runner)
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        grid = app.query_one("#asset-grid", AssetGrid)
-        harnesses_before = list(grid._visible_harnesses)
-        assert "codex" in harnesses_before
-
-        # Uncheck codex
-        cb = app.query_one("#hcb-codex", Checkbox)
-        cb.value = False
-        await pilot.pause()
-
-        assert "codex" not in grid._visible_harnesses, (
-            "codex should be removed from visible harnesses"
-        )
-        # Grid should now have one fewer harness column (slug + remaining harnesses)
-        table = grid.query_one("#grid-table", DataTable)
-        expected_cols = 1 + len(grid._visible_harnesses)
-        actual_cols = len(list(table.ordered_columns))
-        assert actual_cols == expected_cols, (
-            f"Expected {expected_cols} columns, got {actual_cols}"
-        )

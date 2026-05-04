@@ -13,11 +13,10 @@ from pathlib import Path
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal
-from textual.widgets import Checkbox, Footer, Header, Static
+from textual.widgets import Footer, Header, Static
 
 from agent_toolkit_tui.messages import (
     AssetToggled,
-    HarnessVisibilityChanged,
     KindChanged,
     ScopeChanged,
 )
@@ -36,6 +35,7 @@ class TUIApp(App):
         Binding("ctrl+s", "apply", "Apply", priority=True),
         Binding("ctrl+d", "diff", "Diff", priority=True),
         Binding("ctrl+r", "refresh", "Refresh", priority=True),
+        Binding("slash", "focus_filter", "Filter", priority=True),
         Binding("q", "quit", "Quit"),
     ]
 
@@ -67,20 +67,17 @@ class TUIApp(App):
     def on_scope_changed(self, event: ScopeChanged) -> None:
         self.query_one("#asset-grid", AssetGrid).set_scope(event.scope)
 
-    def on_harness_visibility_changed(self, event: HarnessVisibilityChanged) -> None:
-        grid = self.query_one("#asset-grid", AssetGrid)
-        # Walk the picker's checkboxes to figure out the new set.
-        visible = []
-        for h in self.state.all_harnesses:
-            cb = self.query_one(f"#hcb-{h}", Checkbox)
-            if cb.value:
-                visible.append(h)
-        grid.set_visible_harnesses(visible)
-
     def on_asset_toggled(self, event: AssetToggled) -> None:
         self._refresh_pending_label()
 
     # ----- actions --------------------------------------------------------
+    def action_focus_filter(self) -> None:
+        from textual.widgets import Input
+        try:
+            self.query_one("#grid-filter", Input).focus()
+        except Exception:
+            pass
+
     def action_refresh(self) -> None:
         self.state = build_state(self.runner)
         self.query_one("#asset-grid", AssetGrid).update_state(self.state)

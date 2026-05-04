@@ -5,7 +5,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical
 from textual.coordinate import Coordinate
-from textual.widgets import DataTable
+from textual.widgets import DataTable, Input
 
 from agent_toolkit_tui.messages import AssetToggled
 from agent_toolkit_tui.state import AssetRow, CellState, InventoryState
@@ -27,6 +27,7 @@ class AssetGrid(Vertical):
 
     DEFAULT_CSS = """
     AssetGrid { border: round $primary; }
+    AssetGrid Input#grid-filter { height: 3; border: round $primary 30%; margin: 0 1 1 1; }
     AssetGrid DataTable { height: 1fr; }
     """
 
@@ -38,12 +39,23 @@ class AssetGrid(Vertical):
         super().__init__(id=id)
         self._state = state
         self._kind = "skill"
-        self._scope = "user"
+        self._scope = "project"
         self._visible_harnesses = list(state.all_harnesses)
         self._pending: dict[tuple[str, str, str, str], str] = {}   # (scope,harness,kind,slug) -> op
+        self._filter: str = ""
 
     def compose(self) -> ComposeResult:
+        yield Input(placeholder="filter…", id="grid-filter")
         yield DataTable(id="grid-table", cursor_type="cell", zebra_stripes=True)
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        if event.input.id == "grid-filter":
+            self._filter = event.value.strip().lower()
+            self._rebuild()
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        if event.input.id == "grid-filter":
+            self.query_one("#grid-table", DataTable).focus()
 
     def on_mount(self) -> None:
         self._rebuild()
@@ -55,10 +67,6 @@ class AssetGrid(Vertical):
 
     def set_scope(self, scope: str) -> None:
         self._scope = scope
-        self._rebuild()
-
-    def set_visible_harnesses(self, harnesses: list[str]) -> None:
-        self._visible_harnesses = harnesses
         self._rebuild()
 
     def update_state(self, state: InventoryState) -> None:
@@ -114,7 +122,10 @@ class AssetGrid(Vertical):
 
     # ----- internals --------------------------------------------------------
     def _rows_for_kind(self) -> list[AssetRow]:
-        return [r for r in self._state.rows if r.kind == self._kind]
+        rows = [r for r in self._state.rows if r.kind == self._kind]
+        if self._filter:
+            rows = [r for r in rows if self._filter in r.slug.lower()]
+        return rows
 
     def _rebuild(self) -> None:
         try:
@@ -123,7 +134,7 @@ class AssetGrid(Vertical):
             return
         saved_cursor = table.cursor_coordinate
         table.clear(columns=True)
-        table.add_column("slug", width=32)
+        table.add_column(self._kind.upper(), width=32)
         for h in self._visible_harnesses:
             table.add_column(h, width=8)
         rows = self._rows_for_kind()

@@ -37,10 +37,3 @@ class ScopeChanged(Message):
 class KindChanged(Message):
     """Sidebar selection changed."""
     kind: str   # "skill" | "agent" | "command" | "hook" | "plugin" | "pi-extension"
-
-
-@dataclass
-class HarnessVisibilityChanged(Message):
-    """One of the harness column-visibility checkboxes was toggled."""
-    harness: str
-    visible: bool
