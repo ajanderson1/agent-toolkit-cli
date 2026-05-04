@@ -19,7 +19,7 @@ from agent_toolkit.walker import discover_assets, load_asset_record
 # circular import: `_link_lib` already imports `_USER_TARGETS`/`_PROJECT_TARGETS`
 # from this module). If you add a harness, update both.
 ALL_HARNESSES = ("claude", "codex", "opencode", "pi")
-ALL_KINDS = ("skill", "agent", "command", "hook", "plugin", "pi-extension")  # mcp deliberately excluded
+ALL_KINDS = ("skill", "agent", "command", "hook", "plugin", "mcp", "pi-extension")
 
 # Mirror of bin/lib/common.sh's harness_target_dir / project_target_dir.
 # Kept in lockstep — if the bash table changes, this one MUST change too.
@@ -125,8 +125,6 @@ def _build_inventory(
 
     assets_out: list[dict] = []
     for asset in discover_assets(toolkit_root):
-        if asset.kind == "mcp":
-            continue
         if kind and asset.kind != kind:
             continue
         record = load_asset_record(asset)
@@ -158,6 +156,20 @@ def _build_inventory(
                     "status": "unsupported", "target": None,
                     "allowlisted": proj_allowlisted,
                 })
+                continue
+            if asset.kind == "mcp":
+                # MCPs have no symlink path yet — adapter work lands in a follow-up.
+                # Report status=unsupported but preserve the allowlisted bit so
+                # `list` can still show users which MCPs they've selected.
+                for scope, allowlisted in (
+                    ("user", user_allowlisted),
+                    ("project", proj_allowlisted),
+                ):
+                    cells.append({
+                        "harness": h, "scope": scope,
+                        "status": "unsupported", "target": None,
+                        "allowlisted": allowlisted,
+                    })
                 continue
             expected_src = _expected_source(asset.path, asset.kind)
             for scope, allowlisted in (
