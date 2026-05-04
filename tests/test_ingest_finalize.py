@@ -2,20 +2,7 @@
 import os
 import subprocess
 
-import pytest
-
 from agent_toolkit.ingest.types import Proposal
-
-# These tests run `git init` + `git config user.email/name` + `git commit` in
-# subprocesses with cwd=tmp_path. When the host repo is a parent of tmp_path,
-# git's parent-walk can land on the host's `.git/`, polluting `.git/config`
-# with `[user] test@example.com` and (somehow) `bare = true`, and writing real
-# commits onto the host's current branch as `Test <test@example.com>`. This
-# breaks every subsequent git op on the host repo. Skipping until the fixture
-# is hardened to use isolated GIT_DIR. Filed as follow-up on issue #9.
-pytestmark = pytest.mark.skip(
-    reason="leaks git config and rogue commits to host repo; see issue #9 follow-up"
-)
 
 
 def _git_env():
