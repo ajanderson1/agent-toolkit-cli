@@ -26,9 +26,14 @@ def test_all_kinds_is_canonical():
 
 
 def test_supported_pairs_match_target_keys():
-    """SUPPORTED_PAIRS is derived from the target tables — no second SSOT."""
+    """SUPPORTED_PAIRS is derived from _USER_TARGETS — no second SSOT.
+
+    _PROJECT_TARGETS is a subset of _USER_TARGETS: project scope can omit a
+    pair the harness only reads at user scope (e.g. pi agents at user scope
+    only — see issue #49).
+    """
     assert SUPPORTED_PAIRS == frozenset(_USER_TARGETS.keys())
-    assert frozenset(_USER_TARGETS.keys()) == frozenset(_PROJECT_TARGETS.keys())
+    assert frozenset(_PROJECT_TARGETS.keys()) <= frozenset(_USER_TARGETS.keys())
 
 
 def test_supported_pairs_known_members():
