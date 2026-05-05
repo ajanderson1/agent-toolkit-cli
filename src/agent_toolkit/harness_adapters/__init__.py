@@ -23,15 +23,19 @@ def get_adapter(harness: str):
     """Return the adapter for `harness`.
 
     Raises ValueError on unknown harness names.
-    Returns UnimplementedAdapter for known-but-pending harnesses.
+    Returns UnimplementedAdapter for known-but-pending harnesses (currently `pi`).
     """
     if harness not in _KNOWN_HARNESSES:
         raise ValueError(f"unknown harness {harness!r}")
     if harness == "codex":
-        # Lazy import so the dependency on tomlkit (and any future codex deps)
-        # only loads when the codex adapter is actually requested.
         from agent_toolkit.harness_adapters.codex import CodexAdapter
         return CodexAdapter()
+    if harness == "claude":
+        from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+        return ClaudeAdapter()
+    if harness == "opencode":
+        from agent_toolkit.harness_adapters.opencode import OpenCodeAdapter
+        return OpenCodeAdapter()
     return UnimplementedAdapter(harness)
 
 

@@ -22,11 +22,11 @@ def test_get_adapter_unknown_harness_raises():
 
 
 def test_get_adapter_returns_unimplemented_for_pending_harnesses():
-    """Claude/OpenCode/Pi return UnimplementedAdapter until their PRs land."""
+    """Pi remains UnimplementedAdapter (Pi has no MCP support by design)."""
     from agent_toolkit.harness_adapters import get_adapter
     from agent_toolkit.harness_adapters.base import UnimplementedAdapter
 
-    for h in ("claude", "opencode", "pi"):
+    for h in ("pi",):
         a = get_adapter(h)
         assert isinstance(a, UnimplementedAdapter), f"{h} should be UnimplementedAdapter"
         assert a.name == h
@@ -73,3 +73,32 @@ def test_cannot_install_is_exception():
 
     with pytest.raises(CannotInstall, match="bad-mcp"):
         raise CannotInstall("bad-mcp: transport http unsupported")
+
+
+def test_get_adapter_returns_real_claude_adapter():
+    from agent_toolkit.harness_adapters import get_adapter
+    from agent_toolkit.harness_adapters.base import UnimplementedAdapter
+
+    a = get_adapter("claude")
+    assert not isinstance(a, UnimplementedAdapter)
+    assert a.name == "claude"
+    assert a.strategy == "config_file"
+
+
+def test_get_adapter_returns_real_opencode_adapter():
+    from agent_toolkit.harness_adapters import get_adapter
+    from agent_toolkit.harness_adapters.base import UnimplementedAdapter
+
+    a = get_adapter("opencode")
+    assert not isinstance(a, UnimplementedAdapter)
+    assert a.name == "opencode"
+    assert a.strategy == "config_file"
+
+
+def test_get_adapter_pi_remains_unimplemented():
+    """Pi MCP is unsupported by design; adapter stays UnimplementedAdapter."""
+    from agent_toolkit.harness_adapters import get_adapter
+    from agent_toolkit.harness_adapters.base import UnimplementedAdapter
+
+    a = get_adapter("pi")
+    assert isinstance(a, UnimplementedAdapter)
