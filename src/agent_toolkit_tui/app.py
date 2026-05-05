@@ -210,6 +210,7 @@ class TUIApp(App):
         n = len(grid.pending_entries())
         grid.clear_pending()
         self._refresh_pending_label()
+        self._refresh_status_bar()
         self.query_one("#footer-pending", Static).update(
             f"reverted: {n} pending cleared"
         )
@@ -235,6 +236,7 @@ class TUIApp(App):
         if failed == 0:
             grid.clear_pending()
         self._refresh_pending_label()
+        self._refresh_status_bar()
         self.query_one("#footer-pending", Static).update(
             f"applied: {ok} ok, {failed} failed"
         )
