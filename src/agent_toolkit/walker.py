@@ -22,9 +22,14 @@ _KIND_RULES = (
     ("command", "commands", "*.md"),
     ("hook", "hooks", "*.meta.yaml"),
     ("mcp", "mcps", "config.json"),
-    ("plugin", "plugins", "marketplace.json"),
     ("pi-extension", "extensions", "extension.meta.yaml"),
 )
+
+# Plugin discovery uses a separate two-step walk because the canonical layout
+# places either plugin.json or marketplace.json inside a .claude-plugin/
+# subdirectory, and we want exactly one Asset per plugin directory regardless
+# of which file is present.
+_PLUGIN_FILENAMES = ("marketplace.json", "plugin.json")
 
 
 @dataclass(frozen=True)
@@ -77,7 +82,33 @@ def discover_assets(toolkit_root: Path) -> list[Asset]:
             if slug is None:
                 continue
             assets.append(Asset(kind=kind, slug=slug, path=path))
+    assets.extend(_discover_plugins(toolkit_root, submodule_paths))
     return sorted(assets, key=lambda a: (a.kind, a.slug))
+
+
+def _discover_plugins(toolkit_root: Path, submodule_paths: list[Path]) -> list[Asset]:
+    """Discover plugins under plugins/<slug>/.claude-plugin/.
+
+    Each .claude-plugin/ directory yields at most one Asset: marketplace.json
+    takes precedence over plugin.json (the spec treats them as alternatives).
+    """
+    plugin_root = toolkit_root / "plugins"
+    if not plugin_root.exists():
+        return []
+    assets: list[Asset] = []
+    for claude_dir in sorted(plugin_root.rglob(".claude-plugin")):
+        if not claude_dir.is_dir():
+            continue
+        if _path_is_inside_submodule(claude_dir, toolkit_root, submodule_paths):
+            continue
+        for filename in _PLUGIN_FILENAMES:
+            path = claude_dir / filename
+            if path.is_file():
+                slug = claude_dir.parent.name
+                if slug:
+                    assets.append(Asset(kind="plugin", slug=slug, path=path))
+                break
+    return assets
 
 
 def _read_submodule_paths(toolkit_root: Path) -> list[Path]:
@@ -109,7 +140,7 @@ def _slug_for(kind: str, path: Path, root: Path) -> str | None:
     if kind == "hook":
         # hooks/confirm-rm.meta.yaml → "confirm-rm"
         return path.name.removesuffix(".meta.yaml") or None
-    if kind in {"skill", "mcp", "plugin", "pi-extension"}:
+    if kind in {"skill", "mcp", "pi-extension"}:
         # skills/<...>/<slug>/SKILL.md → "<slug>" (last directory component)
         return path.parent.name or None
     if kind in {"agent", "command"}:

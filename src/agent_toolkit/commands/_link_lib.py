@@ -260,7 +260,10 @@ def harness_target_dir(harness: str, kind: str, scope: str, project_root: Path) 
 
 
 def _expected_source(asset_path: Path, kind: str) -> Path:
-    if kind in {"skill", "mcp", "plugin", "pi-extension"}:
+    if kind == "plugin":
+        # asset_path is plugins/<slug>/.claude-plugin/{plugin,marketplace}.json
+        return asset_path.parent.parent
+    if kind in {"skill", "mcp", "pi-extension"}:
         return asset_path.parent
     return asset_path
 

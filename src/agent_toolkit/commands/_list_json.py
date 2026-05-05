@@ -33,7 +33,10 @@ from agent_toolkit.walker import discover_assets, load_asset_record
 
 def _expected_source(asset_path: Path, kind: str) -> Path:
     # Mirrors _maybe_link in bin/lib/link.sh.
-    if kind in {"skill", "mcp", "plugin", "pi-extension"}:
+    if kind == "plugin":
+        # asset_path is plugins/<slug>/.claude-plugin/{plugin,marketplace}.json
+        return asset_path.parent.parent
+    if kind in {"skill", "mcp", "pi-extension"}:
         return asset_path.parent
     return asset_path
 

@@ -15,7 +15,7 @@ _KIND_LAYOUT = {
     "command": ("commands/{slug}.md", "markdown"),
     "hook": ("hooks/{slug}.meta.yaml", "yaml"),
     "mcp": ("mcps/{slug}/README.md", "mcp"),
-    "plugin": ("plugins/{slug}/marketplace.json", "json"),
+    "plugin": ("plugins/{slug}/.claude-plugin/plugin.json", "json"),
     "pi-extension": ("extensions/{slug}/extension.meta.yaml", "yaml"),
 }
 
