@@ -14,10 +14,14 @@ from typing import IO, Iterator
 import click
 
 from agent_toolkit._allowlist import kind_to_section, read_allowlist
-from agent_toolkit.commands._list_json import _PROJECT_TARGETS, _USER_TARGETS
+from agent_toolkit._support import (
+    ALL_HARNESSES,
+    UnsupportedPair,
+    _PROJECT_TARGETS,
+    _USER_TARGETS,
+    is_supported,
+)
 from agent_toolkit.walker import Asset, discover_assets, extract_frontmatter, frontmatter_path
-
-ALL_HARNESSES: tuple[str, ...] = ("claude", "codex", "opencode", "pi")
 
 HARNESS_HOMES: dict[str, str] = {
     "claude":   ".claude",
@@ -158,6 +162,8 @@ def maybe_link(
 
     Direct port of bash _maybe_link in bin/lib/link.sh:430.
     """
+    if not is_supported(harness, kind):
+        raise UnsupportedPair(harness, kind)
     source_path = _expected_source(asset_path, kind)
     link_path = target_dir / slug
     declared = _asset_harnesses(asset_path, kind)
@@ -261,9 +267,17 @@ def project_from_file(
                 print(f"warning: {exc}", file=stdout)
                 continue
             continue
-        target_dir = harness_target_dir(harness, kind, scope, project_root)
-        if target_dir is None:
+        if not is_supported(harness, kind):
+            # Boundary: caller asked for a harness/kind pair we have no slot
+            # for. Silent-skip is wrong (#30) but non-MCP kinds reach here
+            # from a discovery loop, not user input — we honour the filter
+            # rather than raise. Direct entrypoints (maybe_link) raise.
             continue
+        target_dir = harness_target_dir(harness, kind, scope, project_root)
+        assert target_dir is not None, (
+            f"is_supported({harness!r}, {kind!r}) is True but "
+            f"harness_target_dir returned None — invariant broken"
+        )
         if not dry_run:
             target_dir.mkdir(parents=True, exist_ok=True)
         section = kind_to_section(kind)
