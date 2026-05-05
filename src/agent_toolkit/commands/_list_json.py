@@ -22,7 +22,8 @@ from agent_toolkit._support import (  # noqa: F401  (re-exported)
     _USER_TARGETS,
     slot_dir as _slot_dir,
 )
-from agent_toolkit.commands._link_lib import _translated_slot_filename
+from agent_toolkit._translators import TRANSLATORS
+from agent_toolkit.commands._link_lib import _scope_cache_root, _translated_slot_filename
 from agent_toolkit.walker import discover_assets, load_asset_record
 
 
@@ -60,6 +61,16 @@ def _cell_status(
         resolved_target = target_path.resolve(strict=True)
     except (FileNotFoundError, RuntimeError, OSError):
         return ("broken", target)
+    # Translate cells point into the per-scope cache, not the toolkit repo.
+    # Recognise that as a valid target before falling through to the toolkit
+    # check (which would otherwise misreport translate cells as "broken").
+    if (harness, kind) in TRANSLATORS:
+        try:
+            cache_root = _scope_cache_root(harness, scope, project_root).resolve()
+            resolved_target.relative_to(cache_root)
+            return ("linked", target)
+        except (ValueError, OSError):
+            pass
     try:
         resolved_target.relative_to(toolkit_root_resolved)
         inside_repo = True

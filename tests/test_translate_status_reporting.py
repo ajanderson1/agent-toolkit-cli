@@ -48,16 +48,16 @@ def _link_opencode_agent(env, seed_agent, slug: str = "foo") -> dict:
 
 
 def test_list_json_finds_opencode_translated_agent(env, seed_agent):
-    """`_cell_status` must locate the translated slot file (filename `<slug>.md`).
+    """`_cell_status` must report `linked` for an OpenCode-translated agent.
 
-    Before the fix, this assertion fails with `status == "unlinked"` because
-    the lookup uses a bare slug.
-
-    Note: this test does NOT assert `status == "linked"`. The cache target is
-    outside the toolkit repo, so the existing `inside_repo` check in
-    `_cell_status` (lines 62-69) reports `"broken"`. That's a real second-order
-    bug to be fixed in #40 PR-B; this PR only asserts the lookup is no longer
-    silently misreporting cells as `"unlinked"`.
+    History:
+    - On `main` (pre-PR-A): asserted `status != "unlinked"` and FAILED
+      because the bare-slug lookup missed `<slug>.md`.
+    - After PR-A only: this assertion would PASS but the cell would
+      report `status == "broken"` (cache target outside toolkit repo).
+    - After PR-B: the inside-repo check is widened to recognise the
+      per-scope cache root as a valid translate target, so the cell
+      now reports `status == "linked"`.
     """
     e = _link_opencode_agent(env, seed_agent)
     inv = _build_inventory(e["toolkit_root"], project_root=Path("/nonexistent-project"))
@@ -69,8 +69,8 @@ def test_list_json_finds_opencode_translated_agent(env, seed_agent):
         None,
     )
     assert cell is not None, "no (opencode, user) cell found"
-    assert cell["status"] != "unlinked", (
-        f"bug regression: bare-slug lookup missed the translated slot; "
+    assert cell["status"] == "linked", (
+        f"expected linked after PR-B cache-root recognition; "
         f"got status={cell['status']!r}, target={cell['target']!r}"
     )
 
