@@ -26,7 +26,7 @@ class CellState:
 @dataclass(frozen=True)
 class AssetRow:
     slug: str
-    kind: str                       # "skill" | "agent" | "command" | "hook" | "plugin" | "pi-extension"
+    kind: str                       # "skill" | "agent" | "command" | "hook" | "plugin" | "mcp" | "pi-extension"
     origin: str                     # "first-party" | "third-party" | "unknown"
     description: str
     path: Path

@@ -45,12 +45,29 @@ class _Host(App):
 
 
 def test_counts_each_kind() -> None:
-    state = _state("skill", "skill", "agent", "command", "command", "command")
+    state = _state("skill", "skill", "agent", "command", "command", "command", "mcp")
     sidebar = KindsSidebar(state)
     assert sidebar._counts == {
         "skill": 2, "agent": 1, "command": 3,
-        "hook": 0, "plugin": 0, "pi-extension": 0,
+        "hook": 0, "plugin": 0, "mcp": 1, "pi-extension": 0,
     }
+
+
+def test_mcp_is_in_kinds_and_labels() -> None:
+    """Regression for #39 — MCP option must appear in the sidebar."""
+    assert "mcp" in KINDS
+    assert KIND_LABELS["mcp"] == "MCPs"
+
+
+def test_mcp_appears_after_plugin_before_pi_extension() -> None:
+    """MCP sits at index 5 (between plugin and pi-extension).
+
+    Number-key activation depends on this ordering — App.BINDINGS maps key 6
+    to action_kind('mcp') and key 7 to action_kind('pi-extension').
+    """
+    assert KINDS.index("plugin") == 4
+    assert KINDS.index("mcp") == 5
+    assert KINDS.index("pi-extension") == 6
 
 
 def test_set_active_noop_for_same_kind() -> None:
