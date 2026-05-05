@@ -43,12 +43,33 @@ class ClaudeAdapter:
         # Claude supports stdio/sse/http natively; nothing to refuse.
         return None
 
-    # ---- introspection (stubs for now; Task 3) ----
+    # ---- introspection ----
     def list_installed(self, scope: Scope, project_root: Path) -> set[str]:
-        raise NotImplementedError
+        target = self.config_target(scope, project_root)
+        if target is None or not target.is_file():
+            return set()
+        doc = self._read(target)
+        servers = doc.get("mcpServers")
+        if not isinstance(servers, dict):
+            return set()
+        return set(servers.keys())
 
     def entry_drift(self, scope: Scope, project_root: Path, entry: McpEntry) -> bool:
-        raise NotImplementedError
+        """True iff on-disk single entry differs from its template render.
+
+        Returns False when entry is not installed — callers check
+        `list_installed` separately for presence.
+        """
+        target = self.config_target(scope, project_root)
+        if target is None or not target.is_file():
+            return False
+        doc = self._read(target)
+        servers = doc.get("mcpServers") or {}
+        on_disk = servers.get(entry.name)
+        if on_disk is None:
+            return False
+        template = self._build_entry_dict(entry)
+        return on_disk != template
 
     # ---- diff (the engine) ----
     def diff(

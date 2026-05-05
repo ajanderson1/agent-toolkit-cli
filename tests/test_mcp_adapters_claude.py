@@ -138,3 +138,159 @@ def test_claude_diff_unchanged_when_aligned(monkeypatch, tmp_path):
 
     actions2 = a.diff("user", tmp_path, [entry])
     assert actions2 == []
+
+
+def test_claude_unlink_removes_managed_entry_via_previously_allowed(monkeypatch, tmp_path):
+    """unlink semantics: entries=[], previously_allowed={'context7'} → removes context7."""
+    import json
+    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    target = tmp_path / ".claude.json"
+    a = ClaudeAdapter()
+    entry = _make_entry(args=["-y", "@upstash/context7-mcp"])
+    [link_act] = a.diff("user", tmp_path, [entry])
+    target.write_bytes(link_act.contents)
+    assert "context7" in json.loads(target.read_bytes())["mcpServers"]
+
+    actions = a.diff("user", tmp_path, [], previously_allowed={"context7"})
+    assert len(actions) == 1
+    act = actions[0]
+    assert act.op == "update"
+    parsed = json.loads(act.contents)
+    assert "mcpServers" not in parsed or "context7" not in parsed.get("mcpServers", {})
+
+
+def test_claude_unlink_does_not_touch_handrolled_entries(monkeypatch, tmp_path):
+    """Names not in previously_allowed | desired are hand-rolled — preserved."""
+    import json
+    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    target = tmp_path / ".claude.json"
+    target.write_text(json.dumps({
+        "mcpServers": {
+            "preexisting": {"type": "stdio", "command": "node",
+                            "args": ["./local-mcp.js"]}
+        },
+        "theme": "dark",
+    }, indent=2, sort_keys=True) + "\n")
+    a = ClaudeAdapter()
+    entry = _make_entry(args=["-y", "@upstash/context7-mcp"])
+
+    [link_act] = a.diff("user", tmp_path, [entry])
+    target.write_bytes(link_act.contents)
+    after_link = json.loads(target.read_bytes())
+    assert "context7" in after_link["mcpServers"]
+    assert "preexisting" in after_link["mcpServers"]
+    assert after_link["theme"] == "dark"
+
+    actions = a.diff("user", tmp_path, [], previously_allowed={"context7"})
+    assert len(actions) == 1
+    parsed = json.loads(actions[0].contents)
+    assert "context7" not in parsed.get("mcpServers", {})
+    assert "preexisting" in parsed["mcpServers"]
+    assert parsed["theme"] == "dark"
+
+
+def test_claude_link_unlink_round_trip_idempotent(monkeypatch, tmp_path):
+    """Source with hand-rolled entry → link unrelated MCP → unlink → structurally equal."""
+    import json
+    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    target = tmp_path / ".claude.json"
+    src_doc = {
+        "mcpServers": {
+            "preexisting": {"type": "stdio", "command": "node",
+                            "args": ["./local-mcp.js"]}
+        },
+        "theme": "dark",
+        "numStartups": 7,
+    }
+    target.write_text(json.dumps(src_doc, indent=2, sort_keys=True) + "\n")
+
+    a = ClaudeAdapter()
+    entry = _make_entry(args=["-y", "@upstash/context7-mcp"])
+
+    [act] = a.diff("user", tmp_path, [entry])
+    target.write_bytes(act.contents)
+
+    actions = a.diff("user", tmp_path, [], previously_allowed={"context7"})
+    assert len(actions) == 1
+    target.write_bytes(actions[0].contents)
+
+    after = json.loads(target.read_bytes())
+    assert after == src_doc, (
+        f"Round-trip is not structurally equal.\n"
+        f"src={src_doc}\nafter={after}"
+    )
+
+
+def test_claude_list_installed_returns_all_mcp_server_names(monkeypatch, tmp_path):
+    import json
+    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    target = tmp_path / ".claude.json"
+    target.write_text(json.dumps({
+        "mcpServers": {
+            "context7": {"type": "stdio", "command": "npx"},
+            "preexisting": {"type": "stdio", "command": "node"},
+        }
+    }, indent=2, sort_keys=True) + "\n")
+    a = ClaudeAdapter()
+    assert a.list_installed("user", tmp_path) == {"context7", "preexisting"}
+
+
+def test_claude_list_installed_missing_file_returns_empty(monkeypatch, tmp_path):
+    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    a = ClaudeAdapter()
+    assert a.list_installed("user", tmp_path) == set()
+
+
+def test_claude_entry_drift_false_when_aligned(monkeypatch, tmp_path):
+    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    target = tmp_path / ".claude.json"
+    a = ClaudeAdapter()
+    entry = _make_entry(args=["-y", "@upstash/context7-mcp"])
+    [act] = a.diff("user", tmp_path, [entry])
+    target.write_bytes(act.contents)
+
+    assert a.entry_drift("user", tmp_path, entry) is False
+
+
+def test_claude_entry_drift_true_after_hand_edit(monkeypatch, tmp_path):
+    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    target = tmp_path / ".claude.json"
+    a = ClaudeAdapter()
+    entry = _make_entry(args=["-y", "@upstash/context7-mcp"])
+    [act] = a.diff("user", tmp_path, [entry])
+    target.write_bytes(act.contents)
+
+    text = target.read_text().replace(
+        '"@upstash/context7-mcp"', '"@upstash/context7-mcp", "--debug"'
+    )
+    target.write_text(text)
+    assert a.entry_drift("user", tmp_path, entry) is True
+
+
+def test_claude_re_link_byte_identical_when_already_linked(monkeypatch, tmp_path):
+    """AC #2 analogue: re-running link with same allow-list yields no write."""
+    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    target = tmp_path / ".claude.json"
+    a = ClaudeAdapter()
+    entry = _make_entry(args=["-y", "@upstash/context7-mcp"])
+
+    [first] = a.diff("user", tmp_path, [entry])
+    target.write_bytes(first.contents)
+    actions = a.diff("user", tmp_path, [entry], previously_allowed={"context7"})
+    assert actions == []
