@@ -16,8 +16,8 @@ def home(tmp_path, monkeypatch):
 
 
 def test_all_present_returns_ok(home):
-    for d in (".claude", ".codex", ".opencode", ".pi"):
-        (home / d).mkdir()
+    for d in (".claude", ".codex", ".config/opencode", ".pi"):
+        (home / d).mkdir(parents=True)
     result = harness_homes.run()
     assert result.status == Status.OK
     assert result.name == "harness-homes"
@@ -25,8 +25,8 @@ def test_all_present_returns_ok(home):
 
 def test_one_missing_returns_warn(home):
     # codex deliberately not created
-    for d in (".claude", ".opencode", ".pi"):
-        (home / d).mkdir()
+    for d in (".claude", ".config/opencode", ".pi"):
+        (home / d).mkdir(parents=True)
     result = harness_homes.run()
     assert result.status == Status.WARN
     assert any("codex" in f and "not present" in f for f in result.findings)

@@ -98,7 +98,7 @@ def test_harness_home_path_explicit_home_overrides_env(tmp_path):
 
     other = tmp_path / "other-home"
     assert harness_home_path("codex", home=other) == other / ".codex"
-    assert harness_home_path("opencode", home=_P("/tmp/x")) == _P("/tmp/x/.opencode")
+    assert harness_home_path("opencode", home=_P("/tmp/x")) == _P("/tmp/x/.config/opencode")
 
 
 def test_project_from_file_codex_mcp_dispatches_to_adapter(tmp_path, monkeypatch):

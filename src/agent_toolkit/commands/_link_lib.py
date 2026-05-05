@@ -31,7 +31,7 @@ from agent_toolkit.walker import (
 HARNESS_HOMES: dict[str, str] = {
     "claude":   ".claude",
     "codex":    ".codex",
-    "opencode": ".opencode",
+    "opencode": ".config/opencode",
     "pi":       ".pi",
 }
 
