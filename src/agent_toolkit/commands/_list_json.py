@@ -22,6 +22,7 @@ from agent_toolkit._support import (  # noqa: F401  (re-exported)
     _USER_TARGETS,
     slot_dir as _slot_dir,
 )
+from agent_toolkit.commands._link_lib import _translated_slot_filename
 from agent_toolkit.walker import discover_assets, load_asset_record
 
 
@@ -44,7 +45,7 @@ def _cell_status(
     slot = _slot_dir(harness, kind, scope, project_root)
     if slot is None:
         return ("unsupported", None)
-    link_path = slot / slug
+    link_path = slot / _translated_slot_filename(slug, kind, harness)
     if not link_path.is_symlink():
         return ("unlinked", None)
     target = os.readlink(str(link_path))
