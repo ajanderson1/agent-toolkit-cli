@@ -60,7 +60,7 @@ Screen {
 }
 
 #content-header {
-    height: 2;
+    height: auto;
     color: $text;
     padding: 0 0 1 0;
     border-bottom: tall $primary-darken-2;
