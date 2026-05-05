@@ -4,7 +4,7 @@ This repo is the **tooling** for the `agent-toolkit` asset library. The Python C
 
 **Data source:** `~/GitHub/agent-toolkit/` (default). Override via `--toolkit-repo` flag or `AGENT_TOOLKIT_REPO` env var. Discovery walks up from CWD looking for `.agent-toolkit-source`.
 
-**Schema:** Bundled at `src/agent_toolkit/_schemas/asset-frontmatter.v1alpha2.json` (vendored from the toolkit repo's `schemas/`). The bundled copy is what the CLI validates against at runtime; the toolkit-repo copy is the SSOT humans edit. CI (`.github/workflows/schema-drift.yml`) fails on drift.
+**Schema:** Bundled at `src/agent_toolkit/_schemas/asset-frontmatter.v1alpha2.json` (vendored from the toolkit repo's `schemas/`). The bundled copy is what the CLI validates against at runtime; the toolkit-repo copy is the SSOT humans edit. The pre-commit `schema-vendor-check` hook (lefthook) ensures the two vendored copies in this repo (`schemas/` and `src/agent_toolkit/_schemas/`) stay in lockstep. Drift against the toolkit-repo SSOT is caught at sync time by the procedure in "Schema sync" below.
 
 **Drift gate (toolkit repo):** `lefthook.yml` in the toolkit repo shells out to whichever `agent-toolkit` is on `$PATH`. CI in the toolkit repo installs this CLI before running pre-commit. (The `agent-toolkit` script is the Python entry point installed by `uv tool install` or `uv sync`.)
 
@@ -40,8 +40,8 @@ src/agent_toolkit/                 Python package: validator, walker, generators
                                    link, unlink, list, diff, _list_json, _yaml_edit.
   generators/                      Pure functions: (assets, repo_state) → string.
 src/agent_toolkit_tui/             Textual TUI (sibling package, [tui] extra).
-schemas/                           Top-level vendored schema (mirrors _schemas, used by
-                                   schema-drift CI as the diff target).
+schemas/                           Top-level vendored schema (mirrors _schemas;
+                                   pre-commit `schema-vendor-check` keeps both copies in lockstep).
 docs/agent-toolkit/cli.md          Command reference (human-readable).
 tests/                             pytest.
 ```
@@ -62,7 +62,7 @@ uv run pytest -q
 uv run agent-toolkit --toolkit-repo ~/GitHub/agent-toolkit check --exit-code
 ```
 
-Lefthook runs lint + tests on pre-commit. CI runs the full suite plus schema-drift and install-smoke workflows.
+Lefthook runs lint + tests on pre-commit (including `schema-vendor-check` to keep the two vendored schema copies in lockstep). CI runs the full suite plus the install-smoke workflow.
 
 ## Schema sync
 
@@ -76,7 +76,7 @@ git add schemas src/agent_toolkit/_schemas
 git commit -m "chore(schema): sync vendored copy with toolkit repo"
 ```
 
-CI's schema-drift workflow will catch any forgotten sync.
+The pre-commit `schema-vendor-check` hook (lefthook) blocks any commit where the two vendored copies (`schemas/` and `src/agent_toolkit/_schemas/`) diverge. There is no separate CI workflow that diffs against the toolkit-repo SSOT — that would require cross-repo read access, which the repo doesn't currently provide. Instead, the human running this procedure verifies the sync at copy time.
 
 ## Adding a new harness / asset kind / CLI subcommand
 
