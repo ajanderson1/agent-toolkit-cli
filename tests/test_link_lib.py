@@ -291,3 +291,55 @@ def test_project_from_file_skips_unsupported_kinds_silently(tmp_path, monkeypatc
     assert counters.removed == 0
     assert counters.would_link == 0
     assert counters.would_unlink == 0
+
+
+def test_project_from_file_skips_pi_agent_at_project_scope_cleanly(tmp_path, monkeypatch):
+    """Acceptance #5: project_from_file with harness=pi, scope=project must
+    NOT raise when an `agent` asset is allow-listed.
+
+    Pi has no project-scope agent discovery (issue #49). With the per-scope
+    is_supported check at _link_lib.py:488 we skip cleanly; without it we'd
+    fall through to harness_target_dir(pi, agent, "project", ...) → None →
+    RuntimeError("SSOT invariant broken").
+    """
+    import io
+    from agent_toolkit.commands._link_lib import LinkCounters, project_from_file
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    allowlist_path = project_root / ".agent-toolkit.yaml"
+    allowlist_path.write_text("agents: [foo-agent]\n")
+
+    toolkit_root = tmp_path / "toolkit"
+    agents_dir = toolkit_root / "agents"
+    agents_dir.mkdir(parents=True)
+    asset_path = agents_dir / "foo-agent.md"
+    asset_path.write_text(
+        "---\n"
+        "kind: agent\n"
+        "slug: foo-agent\n"
+        "spec:\n"
+        "  harnesses: [pi]\n"
+        "---\n"
+        "body\n"
+    )
+
+    counters = LinkCounters()
+    out = io.StringIO()
+
+    project_from_file(
+        scope="project",
+        harness="pi",
+        toolkit_root=toolkit_root,
+        project_root=project_root,
+        allowlist_path=allowlist_path,
+        dry_run=True,
+        counters=counters,
+        stdout=out,
+    )
+    # No symlinks created/would-be-created, no RuntimeError.
+    assert counters.created == 0
+    assert counters.would_link == 0
+    assert counters.removed == 0
+    assert counters.would_unlink == 0
