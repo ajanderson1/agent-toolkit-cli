@@ -15,7 +15,8 @@ the code disagree.
   `~/.codex/config.toml`). Used for MCPs and any kind that registers via
   config rather than file drop-in.
 - **plugin_folder** — adapter owns a whole subfolder (e.g.
-  `~/.claude/plugins/agent-toolkit/`). Currently used for MCPs in Claude.
+  `~/.claude/plugins/agent-toolkit/`). Currently unused; reserved for future
+  kinds that own a directory rather than a config file.
 - **translate** — generate a per-harness flavored file in a CLI-managed
   cache (`~/.config/opencode/.agent-toolkit-cache/` for user scope), then
   symlink the harness slot to the cache file. Used when the harness expects
@@ -51,7 +52,7 @@ human readers can trace any cache file back to its source asset.
 | **command** | symlink → `~/.claude/commands/<slug>.md` | unsupported (by design) — Codex has no `~/.codex/commands/`; commands surface as `$skill` invocations from inside skills | translate → `~/.config/opencode/commands/<slug>.md` (cache: `~/.config/opencode/.agent-toolkit-cache/command/<slug>.md`) — emits OpenCode-shaped frontmatter with `description` and `agent_toolkit` wrapper block | unsupported (by design) — Pi has no command concept |
 | **hook** | symlink → `~/.claude/hooks/<slug>.<ext>` | unsupported (by design) — Codex has no hooks API at the user level | unsupported (by design) — OpenCode hooks live inside TS plugin files (`session.start`, `tool.execute.before`, etc.); not drop-in markdown | unsupported (by design) — Pi has no hooks API at the user level |
 | **plugin** | symlink → `~/.claude/plugins/<slug>/` | unsupported (by design) — Codex plugins are bundles with `.codex-plugin/plugin.json` manifests, installed via `codex plugin marketplace add` (different concept and install path from Claude markdown plugins) | unsupported (by design) — OpenCode plugins are TS/JS files at `~/.config/opencode/plugins/` or npm packages declared in `config.json` (different concept entirely) | unsupported (by design) — Pi extends via `pi-extension`, not a plugin concept |
-| **mcp** | unsupported (gap) — adapter not yet implemented | config_file → `~/.codex/config.toml` `[mcp_servers.<name>]` | unsupported (gap) — adapter not yet implemented | unsupported (gap) — adapter not yet implemented |
+| **mcp** | config_file → `~/.claude.json` `mcpServers.<name>` | config_file → `~/.codex/config.toml` `[mcp_servers.<name>]` | config_file → `~/.config/opencode/opencode.json` `mcp.<name>` | unsupported (by design) — Pi has no MCP concept |
 | **pi-extension** | unsupported (by design) | unsupported (by design) | unsupported (by design) | symlink → `~/.pi/agent/extensions/<slug>/` |
 
 ## Project-scope target paths
@@ -134,9 +135,10 @@ not meaningful). Per kind:
 - **pi-extension** is Pi-only by definition: TypeScript modules using
   the Pi runtime API. No other harness can load them.
 
-- **mcp** is currently three gaps + one supported (codex). All four
-  harnesses support MCP servers; the gaps are CLI work, not design
-  limits.
+- **mcp** is supported on three of four harnesses (claude, codex,
+  opencode) via `config_file` adapters. Pi has no MCP concept — it
+  loads tools from its own extension API instead, see the
+  `pi-extension` row.
 
 When in doubt, the rule is: declaring `harnesses:` includes a
 genuinely-unsupported pair will trip `agent-toolkit link --all`'s

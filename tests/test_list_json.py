@@ -187,7 +187,11 @@ def test_asset_path_is_absolute(tmp_path, monkeypatch):
 
 
 def test_list_json_includes_mcps(tmp_path, monkeypatch):
-    """MCPs appear as kind=mcp entries in JSON output with status=unsupported per cell."""
+    """MCPs appear as kind=mcp entries in JSON output with status=unsupported per cell.
+
+    Pi remains UnimplementedAdapter (Pi has no MCP support by design); using pi
+    here keeps the unsupported-cell semantics stable across adapter additions.
+    """
     import json
     from click.testing import CliRunner
     from agent_toolkit.cli import main
@@ -210,7 +214,7 @@ def test_list_json_includes_mcps(tmp_path, monkeypatch):
         "---\napiVersion: agent-toolkit/v1alpha2\n"
         "metadata:\n  name: context7\n  description: c.\n  lifecycle: stable\n"
         "spec:\n  origin: third-party\n  vendored_via: none\n"
-        "  upstream: https://example.com\n  harnesses:\n    - claude\n---\n"
+        "  upstream: https://example.com\n  harnesses:\n    - pi\n---\n"
     )
 
     project = tmp_path / "project"
@@ -229,12 +233,12 @@ def test_list_json_includes_mcps(tmp_path, monkeypatch):
     assert len(mcps) == 1
     assert mcps[0]["slug"] == "context7"
     # All cells should be unsupported (no adapter yet) but allowlisted on project
-    project_claude = next(
+    project_pi = next(
         c for c in mcps[0]["cells"]
-        if c["harness"] == "claude" and c["scope"] == "project"
+        if c["harness"] == "pi" and c["scope"] == "project"
     )
-    assert project_claude["status"] == "unsupported"
-    assert project_claude["allowlisted"] is True
+    assert project_pi["status"] == "unsupported"
+    assert project_pi["allowlisted"] is True
 
 
 # ---------------------------------------------------------------------------

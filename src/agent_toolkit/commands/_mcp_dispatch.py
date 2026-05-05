@@ -54,7 +54,7 @@ def apply_link(
     dry_run: bool,
     stdout: IO[str],
     previously_allowed: set[str] = frozenset(),
-    force: bool = False,  # noqa: ARG001 — CLI-PR-2 wires this for Claude; ignored here
+    force: bool = False,  # noqa: ARG001 — reserved; not wired by any current adapter
 ) -> list[WriteAction]:
     """Reconcile adapter state to the desired entry set.
 

@@ -152,7 +152,10 @@ def test_fix_reconciles_mcp_drift(tmp_path, monkeypatch):
 
 
 def test_fix_skips_unimplemented_harness(tmp_path, monkeypatch):
-    """fix --harness claude prints skip and does not error."""
+    """fix --harness pi prints skip and does not error.
+
+    Pi remains UnimplementedAdapter (Pi has no MCP support by design).
+    """
     from click.testing import CliRunner
 
     from agent_toolkit.cli import main
@@ -170,10 +173,10 @@ def test_fix_skips_unimplemented_harness(tmp_path, monkeypatch):
     result = runner.invoke(
         main,
         ["fix", "--toolkit-repo", str(tmp_path),
-         "--harness", "claude", "--scope", "user"],
+         "--harness", "pi", "--scope", "user"],
     )
     assert result.exit_code == 0, result.output
-    assert "no MCP adapter for harness claude yet" in result.output
+    assert "no MCP adapter for harness pi yet" in result.output
 
 
 def test_fix_mcps_only_skips_agents_md(tmp_path, monkeypatch):

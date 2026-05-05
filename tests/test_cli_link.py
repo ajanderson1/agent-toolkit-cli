@@ -281,8 +281,11 @@ def test_link_per_asset_harness_incompat_errors(env, seed_skill):
     assert not (home / ".agent-toolkit.yaml").exists()
 
 
-def test_link_per_asset_mcp_claude_skips_loudly(env, tmp_path):
-    """Claude MCP: allow-list mutated + loud skip (UnimplementedAdapter)."""
+def test_link_per_asset_mcp_pi_skips_loudly(env, tmp_path):
+    """Pi MCP: allow-list mutated + loud skip (UnimplementedAdapter).
+
+    Pi remains UnimplementedAdapter (Pi has no MCP support by design).
+    """
     toolkit = env["toolkit_root"]
     # Seed an MCP in the toolkit
     mcp_dir = toolkit / "mcps" / "context7"
@@ -300,7 +303,7 @@ def test_link_per_asset_mcp_claude_skips_loudly(env, tmp_path):
         "  vendored_via: none\n"
         "  upstream: https://example.com\n"
         "  harnesses:\n"
-        "    - claude\n"
+        "    - pi\n"
         "  mcp:\n"
         "    transport: stdio\n"
         "    install_method: npx\n"
@@ -315,12 +318,12 @@ def test_link_per_asset_mcp_claude_skips_loudly(env, tmp_path):
         main,
         [
             "--toolkit-repo", str(toolkit),
-            "link", "project", "claude", "mcp:context7",
+            "link", "project", "pi", "mcp:context7",
             "--project", str(project),
         ],
     )
     assert result.exit_code == 0, result.output
-    assert "no MCP adapter for harness claude yet — skipping" in result.output
+    assert "no MCP adapter for harness pi yet — skipping" in result.output
     # YAML allow-list mutated
     text = (project / ".agent-toolkit.yaml").read_text()
     assert "mcps:" in text

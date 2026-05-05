@@ -156,14 +156,17 @@ def test_project_from_file_codex_mcp_dispatches_to_adapter(tmp_path, monkeypatch
     assert "[mcp_servers.context7]" in target.read_text()
 
 
-def test_project_from_file_claude_mcp_skips_loudly(tmp_path, monkeypatch):
-    """Claude + allow-listed MCP → loud skip, exit clean, no file written."""
+def test_project_from_file_pi_mcp_skips_loudly(tmp_path, monkeypatch):
+    """Pi + allow-listed MCP → loud skip, exit clean, no file written.
+
+    Pi remains UnimplementedAdapter (Pi has no MCP support by design).
+    """
     import io
 
     from agent_toolkit.commands._link_lib import LinkCounters, project_from_file
 
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
-    (tmp_path / "home" / ".claude").mkdir(parents=True)
+    (tmp_path / "home").mkdir(parents=True)
 
     toolkit_root = tmp_path / "toolkit"
     mcp_dir = toolkit_root / "mcps" / "context7"
@@ -181,7 +184,7 @@ def test_project_from_file_claude_mcp_skips_loudly(tmp_path, monkeypatch):
         "  vendored_via: none\n"
         "  upstream: https://example.com\n"
         "  harnesses:\n"
-        "    - claude\n"
+        "    - pi\n"
         "  mcp:\n"
         "    transport: stdio\n"
         "    install_method: npx\n"
@@ -196,13 +199,13 @@ def test_project_from_file_claude_mcp_skips_loudly(tmp_path, monkeypatch):
     counters = LinkCounters()
     buf = io.StringIO()
     project_from_file(
-        scope="user", harness="claude", toolkit_root=toolkit_root,
+        scope="user", harness="pi", toolkit_root=toolkit_root,
         project_root=project_root, allowlist_path=allowlist,
         dry_run=False, counters=counters, stdout=buf,
     )
 
     out = buf.getvalue()
-    assert "no MCP adapter for harness claude yet — skipping" in out
+    assert "no MCP adapter for harness pi yet — skipping" in out
     assert counters.created == 0
 
 

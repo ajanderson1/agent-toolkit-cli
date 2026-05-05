@@ -225,13 +225,20 @@ def test_apply_link_raises_on_cannot_install(monkeypatch, tmp_path):
 
 def test_apply_link_unimplemented_adapter_is_silent_noop(monkeypatch, tmp_path):
     """Unimplemented adapter returns []; caller is responsible for the skip-print
-    (apply_link itself does nothing — caller should detect and print skip_message)."""
+    (apply_link itself does nothing — caller should detect and print skip_message).
+
+    Pi remains UnimplementedAdapter (Pi has no MCP support by design).
+    """
     from agent_toolkit.commands._mcp_dispatch import apply_link
     from agent_toolkit.harness_adapters import get_adapter
+    from agent_toolkit.harness_adapters.base import UnimplementedAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
 
-    a = get_adapter("claude")  # UnimplementedAdapter
+    a = get_adapter("pi")  # UnimplementedAdapter
+    assert isinstance(a, UnimplementedAdapter), (
+        "Test assumes pi remains unimplemented — update if pi MCP support is ever added."
+    )
 
     buf = io.StringIO()
     actions = apply_link(a, scope="user", project_root=tmp_path, entries=[],

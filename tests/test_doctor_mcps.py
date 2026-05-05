@@ -214,7 +214,7 @@ def test_doctor_mcps_warn_on_missing_prereq(monkeypatch, tmp_path):
 
 
 def test_doctor_mcps_skips_unimplemented_harness(monkeypatch, tmp_path):
-    """harness=claude → group reports OK with 'no adapter' note (no checks attempted)."""
+    """harness=pi → group reports OK with 'no adapter' note (Pi MCP unsupported by design)."""
     from agent_toolkit.doctor.mcps import run
     from agent_toolkit.doctor.result import Status
 
@@ -224,7 +224,7 @@ def test_doctor_mcps_skips_unimplemented_harness(monkeypatch, tmp_path):
     (home / ".agent-toolkit.yaml").write_text("mcps:\n  - context7\n")
     _seed_toolkit_with_mcp(tmp_path)
 
-    result = run(toolkit_root=tmp_path, harness="claude", scope="user",
+    result = run(toolkit_root=tmp_path, harness="pi", scope="user",
                  project_root=tmp_path)
     assert result.status == Status.OK
     assert any("no MCP adapter" in f for f in result.findings)
