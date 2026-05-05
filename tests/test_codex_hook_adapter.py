@@ -276,3 +276,56 @@ def test_codex_hook_entry_drift_detects_changed_script(monkeypatch, tmp_path):
     script_path.write_bytes(b"#!/usr/bin/env bash\necho TAMPERED\n")
 
     assert a.entry_drift("user", tmp_path, entry) is True
+
+
+def test_codex_hook_diff_preserves_hand_rolled_unknown_event(monkeypatch, tmp_path):
+    """A hand-rolled group under an unknown future event must survive a link+unlink cycle.
+
+    The empty-[hooks] check at the end of _merge_hooks must inspect actual
+    keys in the table, not just the six known events. Otherwise a future
+    Codex event with user content would be silently destroyed.
+    """
+    from agent_toolkit.harness_adapters.codex_hook import CodexHookAdapter
+    from agent_toolkit.commands._mcp_dispatch import _atomic_write_bytes
+
+    home = _seed_home(tmp_path, monkeypatch)
+    target = home / ".codex" / "config.toml"
+
+    # Pre-existing config: only a hand-rolled hook under an UNKNOWN event.
+    target.write_text(
+        '[[hooks.FutureEvent]]\n'
+        'matcher = "^Bash$"\n'
+        '\n'
+        '[[hooks.FutureEvent.hooks]]\n'
+        'type = "command"\n'
+        'command = "/usr/local/bin/future.sh"\n',
+        encoding="utf-8",
+    )
+    original = target.read_bytes()
+
+    a = CodexHookAdapter()
+    entry = _make_entry(home=home)
+
+    # Link.
+    for act in a.diff("user", tmp_path, [entry]):
+        if act.op in {"create", "update"}:
+            _atomic_write_bytes(act.path, act.contents)
+
+    rendered = target.read_text(encoding="utf-8")
+    assert "[[hooks.FutureEvent]]" in rendered, "unknown-event hand-rolled group must survive link"
+    assert "/usr/local/bin/future.sh" in rendered
+
+    # Unlink.
+    for act in a.diff("user", tmp_path, [], previously_allowed={"demo"}):
+        if act.op in {"create", "update"}:
+            _atomic_write_bytes(act.path, act.contents)
+        elif act.op == "delete":
+            try:
+                act.path.unlink()
+            except (FileNotFoundError, IsADirectoryError, PermissionError):
+                pass
+
+    after = target.read_bytes()
+    # The unknown-event group must still be present after unlink.
+    assert b"[[hooks.FutureEvent]]" in after
+    assert b"/usr/local/bin/future.sh" in after

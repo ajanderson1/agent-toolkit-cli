@@ -324,10 +324,12 @@ class CodexHookAdapter:
                 # the tomlkit leading-\n artifact on absent keys.
                 del hooks_table[event]
 
-        # If [hooks] became empty, remove it.
+        # If [hooks] became empty, remove it. Iterate the table's actual
+        # keys (not just _CODEX_HOOK_EVENTS) so a hand-rolled group under a
+        # future event name isn't silently destroyed.
         empty = all(
-            (hooks_table.get(e) is None or len(hooks_table.get(e)) == 0)
-            for e in _CODEX_HOOK_EVENTS
+            (hooks_table.get(k) is None or len(hooks_table.get(k)) == 0)
+            for k in list(hooks_table.keys())
         )
         if empty:
             del doc["hooks"]
