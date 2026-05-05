@@ -44,9 +44,17 @@ _PROJECT_TARGETS: dict[tuple[str, str], str] = {
     ("opencode", "skill"):     ".opencode/skills",
     ("opencode", "agent"):     ".opencode/agents",
     ("opencode", "command"):   ".opencode/commands",
-    ("pi", "skill"):           ".pi/agent/skills",
-    ("pi", "agent"):           ".pi/agent/agents",
-    ("pi", "pi-extension"):    ".pi/agent/extensions",
+    # Pi project-scope: pi reads from <cwd>/.pi/{skills,extensions} (no /agent/
+    # infix at project scope). User-scope keeps the .pi/agent/ prefix because
+    # pi's globalBaseDir == ~/.pi/agent. See package-manager.js:669-686.
+    ("pi", "skill"):           ".pi/skills",
+    ("pi", "agent"):           ".pi/agent/agents",  # pi has no project-scope
+                                                    # agents discovery; left in
+                                                    # the table to preserve the
+                                                    # _USER/_PROJECT key parity
+                                                    # invariant. Tracked as a
+                                                    # follow-up to #41.
+    ("pi", "pi-extension"):    ".pi/extensions",
 }
 
 # Derived: SUPPORTED_PAIRS = the set of (harness, kind) pairs with adapter slots.

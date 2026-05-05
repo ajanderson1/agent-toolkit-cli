@@ -7,14 +7,12 @@
 **Test (`tests/test_support.py`):**
 - `test_pi_project_skill_path_is_under_dot_pi` — assert `slot_dir("pi", "skill", "project", root) == root / ".pi" / "skills"`. Fails on main with `.pi/agent/skills`.
 - `test_pi_project_pi_extension_path_is_under_dot_pi` — assert `slot_dir("pi", "pi-extension", "project", root) == root / ".pi" / "extensions"`.
-- `test_pi_project_agent_is_unsupported` — assert `slot_dir("pi", "agent", "project", root) is None` (because the entry is removed; the function returns `None` when the pair is absent from the table).
 
 **Code (`_support.py`):**
 - Line 47: `".pi/agent/skills"` → `".pi/skills"`.
-- Line 48: remove `("pi", "agent"): ".pi/agent/agents",` entirely.
 - Line 49: `".pi/agent/extensions"` → `".pi/extensions"`.
 
-Audit: `is_supported("pi", "agent")` reads from `_USER_TARGETS.keys()` (line 54) — that pair stays in `_USER_TARGETS`, so it remains "supported overall". The user-scope path keeps working. Project-scope becomes a no-op slot, which surfaces as `unsupported` cell in `list`/TUI for project-scope.
+`("pi", "agent")` project entry is left at `.pi/agent/agents` for this PR (see spec § "_support.py — pi project paths" for rationale).
 
 ### 2. OpenCode skill translator + new slot shape
 

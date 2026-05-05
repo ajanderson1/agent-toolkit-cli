@@ -42,14 +42,11 @@ So opencode needs a **third slot shape**: real slot directory + file symlink to 
 | Pair | Before | After |
 |---|---|---|
 | `("pi", "skill")` project | `.pi/agent/skills` | `.pi/skills` |
-| `("pi", "agent")` project | `.pi/agent/agents` | **removed** (unsupported pair, falls through `_PROJECT_TARGETS`) |
 | `("pi", "pi-extension")` project | `.pi/agent/extensions` | `.pi/extensions` |
 
 User-scope (`_USER_TARGETS`) entries are unchanged — they're correct.
 
-Removing `("pi", "agent")` from `_PROJECT_TARGETS` means `slot_dir("pi", "agent", "project", _)` returns `None`, so attempts to project a pi agent at project scope will surface as `unsupported` cells in `list`/TUI rather than silently writing to a path pi never reads. This matches the issue #30 / PR #33 "fail loud on unsupported pairs" discipline.
-
-Note: `("pi", "agent")` remains in `_USER_TARGETS`, so user-scope projection still works. The `SUPPORTED_PAIRS` derivation (line 54) reads from `_USER_TARGETS.keys()`, so the pair stays "supported" overall — only the project-scope cell becomes a no-op. This is the cleanest expression of "user yes, project no" given the current table shape.
+**`("pi", "agent")` project entry is left as-is in this PR** even though pi has no project-scope agents discovery (pi's source iterates `extensions/skills/prompts/themes`, never `agents`). Removing the entry would break the `_USER_TARGETS.keys() == _PROJECT_TARGETS.keys()` parity invariant tested in `tests/test_support.py:28-31`, and the linker at `_link_lib.py:440-445` raises `RuntimeError` if `is_supported(...)` is True but `harness_target_dir` returns None. Properly expressing "user yes, project no" requires per-scope support — wider blast radius than warranted for #41, which is about skills. Filing a follow-up issue for the pi project-agent dead drop.
 
 ### `_translators.py` — opencode skill translator
 

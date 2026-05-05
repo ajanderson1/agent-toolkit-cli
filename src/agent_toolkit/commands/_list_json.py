@@ -23,7 +23,11 @@ from agent_toolkit._support import (  # noqa: F401  (re-exported)
     slot_dir as _slot_dir,
 )
 from agent_toolkit._translators import TRANSLATORS
-from agent_toolkit.commands._link_lib import _scope_cache_root, _translated_slot_filename
+from agent_toolkit.commands._link_lib import (
+    _scope_cache_root,
+    _translate_slot_layout,
+    _translated_slot_filename,
+)
 from agent_toolkit.walker import discover_assets, load_asset_record
 
 
@@ -47,6 +51,19 @@ def _cell_status(
     if slot is None:
         return ("unsupported", None)
     link_path = slot / _translated_slot_filename(slug, kind, harness)
+    # For the "dir-with-file-symlink" translate layout (e.g. opencode skill),
+    # link_path is a real directory containing a single file symlink whose
+    # target is in the cache. Look one level deeper for the actual symlink.
+    if (
+        (harness, kind) in TRANSLATORS
+        and _translate_slot_layout(harness, kind) == "dir-with-file-symlink"
+        and link_path.is_dir()
+        and not link_path.is_symlink()
+    ):
+        symlinks_inside = [c for c in link_path.iterdir() if c.is_symlink()]
+        if not symlinks_inside:
+            return ("unlinked", None)
+        link_path = symlinks_inside[0]
     if not link_path.is_symlink():
         return ("unlinked", None)
     target = os.readlink(str(link_path))
