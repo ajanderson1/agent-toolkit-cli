@@ -43,7 +43,7 @@ def test_unimplemented_adapter_skip_message():
 
 
 def test_mcp_entry_dataclass_is_frozen():
-    """McpEntry must be hashable (frozen) for set membership in callers."""
+    """McpEntry is frozen so its fields can't be reassigned after construction."""
     from agent_toolkit.harness_adapters.base import McpEntry
 
     e1 = McpEntry(name="x", inner_config={"a": 1}, mcp_spec={"transport": "stdio"})
