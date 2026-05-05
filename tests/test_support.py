@@ -82,3 +82,53 @@ def test_validate_pair_rejects_unsupported_with_exit_2(capsys):
     assert "agent" in captured.err
     # The error names supported kinds for the given harness as a hint.
     assert "skill" in captured.err
+
+
+# ---- direct coverage for helpers exercised only indirectly above ----------
+
+
+def test_supported_kinds_for_claude_returns_full_kind_set():
+    """`supported_kinds_for` must return the kinds in `ALL_KINDS` order
+    for the harness given. claude has all five non-MCP, non-pi-extension
+    kinds; mcp is intentionally absent from the SSOT (handled separately
+    by per-harness MCP adapters)."""
+    from agent_toolkit._support import supported_kinds_for
+
+    assert supported_kinds_for("claude") == (
+        "skill", "agent", "command", "hook", "plugin",
+    )
+
+
+def test_supported_kinds_for_unknown_harness_is_empty():
+    from agent_toolkit._support import supported_kinds_for
+
+    assert supported_kinds_for("nonsense") == ()
+
+
+def test_slot_dir_user_scope_returns_home_anchored_absolute_path(tmp_path, monkeypatch):
+    """`slot_dir` for `scope="user"` expands the `{home}` template and
+    returns an absolute path. project_root is unused for user scope."""
+    from agent_toolkit._support import slot_dir
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    p = slot_dir("claude", "skill", "user", project_root=tmp_path / "ignored")
+    assert p == tmp_path / ".claude" / "skills"
+    assert p is not None and p.is_absolute()
+
+
+def test_slot_dir_project_scope_returns_project_root_relative(tmp_path):
+    """`slot_dir` for project scope returns a path under `project_root`."""
+    from agent_toolkit._support import slot_dir
+
+    project = tmp_path / "myproject"
+    p = slot_dir("claude", "skill", "project", project_root=project)
+    assert p == project / ".claude" / "skills"
+
+
+def test_slot_dir_unsupported_pair_returns_none(tmp_path):
+    """Unsupported (harness, kind) returns None for both scopes — caller's
+    responsibility to fail loudly via UnsupportedPair, not slot_dir."""
+    from agent_toolkit._support import slot_dir
+
+    assert slot_dir("opencode", "agent", "user", project_root=tmp_path) is None
+    assert slot_dir("opencode", "agent", "project", project_root=tmp_path) is None
