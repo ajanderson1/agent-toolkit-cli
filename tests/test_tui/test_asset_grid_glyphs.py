@@ -46,6 +46,22 @@ def test_pending_unlink_renders_as_empty_box():
     assert _rendered(_PENDING_UNLINK) == "☐"
 
 
+def test_linked_matches_glyph_renders_as_ticked_box():
+    assert _rendered(_GLYPH["linked-matches"]) == "☑"
+
+
+def test_linked_drifted_glyph_renders_as_tilde_bar():
+    assert _rendered(_GLYPH["linked-drifted"]) == "≁"
+
+
+def test_unlinked_allowlisted_glyph_renders_as_empty_box():
+    assert _rendered(_GLYPH["unlinked-allowlisted"]) == "☐"
+
+
+def test_installed_not_allowlisted_glyph_renders_as_exclamation():
+    assert _rendered(_GLYPH["installed-not-allowlisted"]) == "!"
+
+
 def test_no_glyph_silently_collapses_to_empty():
     """Smoke-test: any glyph that round-trips to empty under Rich is broken.
 

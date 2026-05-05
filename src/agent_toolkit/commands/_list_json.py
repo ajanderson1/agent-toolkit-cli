@@ -157,24 +157,80 @@ def _build_inventory(
                     "allowlisted": proj_allowlisted,
                 })
                 continue
-            # TODO(plan-b): MCPs reuse status="unsupported" as a stand-in for
-            # "allow-listed but no installer adapter yet". This overloads the
-            # term used elsewhere (e.g. TUI asset_grid.py treats unsupported
-            # cells as non-interactive). When per-harness MCP adapters land,
-            # consider introducing a distinct status (e.g. "pending") or
-            # widening CellStatus.
             if asset.kind == "mcp":
-                # MCPs have no symlink path yet — adapter work lands in a follow-up.
-                # Report status=unsupported but preserve the allowlisted bit so
-                # `list` can still show users which MCPs they've selected.
+                # Status comes from the per-harness adapter when available.
+                # Cells for UnimplementedAdapter harnesses keep "unsupported".
+                from agent_toolkit.commands._mcp_dispatch import _build_mcp_entries  # noqa: PLC0415
+                from agent_toolkit.harness_adapters import get_adapter  # noqa: PLC0415
+                from agent_toolkit.harness_adapters.base import (  # noqa: PLC0415
+                    UnimplementedAdapter,
+                )
+
+                adapter = get_adapter(h)
+                if isinstance(adapter, UnimplementedAdapter):
+                    cells.append({
+                        "harness": h, "scope": "user",
+                        "status": "unsupported", "target": None,
+                        "allowlisted": user_allowlisted,
+                    })
+                    cells.append({
+                        "harness": h, "scope": "project",
+                        "status": "unsupported", "target": None,
+                        "allowlisted": proj_allowlisted,
+                    })
+                    continue
+
+                # Build the McpEntry for this slug; pass to adapter for status checks.
+                resolved = _build_mcp_entries(toolkit_root, [asset.slug])
+                entry = resolved[0] if resolved else None
+
                 for scope, allowlisted in (
                     ("user", user_allowlisted),
                     ("project", proj_allowlisted),
                 ):
+                    target_path = adapter.config_target(scope, project_root)
+                    installed_names = adapter.list_installed(scope, project_root)
+                    is_installed = asset.slug in installed_names
+
+                    if entry is None:
+                        # Catalog entry resolved poorly — degrade to unsupported.
+                        cells.append({
+                            "harness": h, "scope": scope,
+                            "status": "unsupported", "target": None,
+                            "allowlisted": allowlisted,
+                        })
+                        continue
+
+                    if not allowlisted:
+                        if is_installed:
+                            cells.append({
+                                "harness": h, "scope": scope,
+                                "status": "installed-not-allowlisted",
+                                "target": str(target_path) if target_path else None,
+                                "allowlisted": False,
+                            })
+                        else:
+                            cells.append({
+                                "harness": h, "scope": scope,
+                                "status": "unsupported", "target": None,
+                                "allowlisted": False,
+                            })
+                        continue
+
+                    if not is_installed:
+                        cells.append({
+                            "harness": h, "scope": scope,
+                            "status": "unlinked-allowlisted", "target": None,
+                            "allowlisted": True,
+                        })
+                        continue
+
+                    drifted = adapter.entry_drift(scope, project_root, entry)
                     cells.append({
                         "harness": h, "scope": scope,
-                        "status": "unsupported", "target": None,
-                        "allowlisted": allowlisted,
+                        "status": "linked-drifted" if drifted else "linked-matches",
+                        "target": str(target_path) if target_path else None,
+                        "allowlisted": True,
                     })
                 continue
             expected_src = _expected_source(asset.path, asset.kind)
