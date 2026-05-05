@@ -1,25 +1,84 @@
+/* agent-toolkit-tui — V3 Dashboard, tokyo-night styled.
+   Layout: Header → tabs → breadcrumb → AssetGrid (filter inside) → status-bar → Footer.
+*/
+
 Screen {
-    layout: vertical;
+    background: $surface;
 }
 
-#main-row {
-    layout: horizontal;
+#kinds-tabs {
+    height: 1;
+    color: $text;
+    background: $panel;
+    padding: 0 2;
+}
+
+#kinds-tabs-line {
+    height: 1;
+    background: $panel;
+    color: $text;
+}
+
+#breadcrumb {
+    height: 1;
+    color: $text;
+    background: $surface;
+    padding: 0 2;
+    margin: 1 0;
+}
+
+/* AssetGrid — filter sits inside, table below. */
+#asset-grid {
     height: 1fr;
+    background: $surface;
+    padding: 0 2;
 }
 
-#main-row KindsSidebar {
-    width: 20;
+#grid-filter {
+    height: 3;
+    border: round $primary-darken-1;
+    background: $panel;
+    color: $text;
+    margin: 0 0 1 0;
 }
 
-#main-row AssetGrid {
-    width: 1fr;
+#grid-filter:focus {
+    border: round $accent;
 }
 
-Footer {
-    background: $primary 30%;
+#grid-table {
+    height: 1fr;
+    border: round $surface-lighten-1;
+    background: $surface;
+    scrollbar-size-vertical: 1;
+    scrollbar-background: $surface-darken-1;
+    scrollbar-color: $primary-darken-2;
+    scrollbar-color-hover: $primary-darken-1;
+    scrollbar-color-active: $primary;
+}
+
+DataTable > .datatable--header {
+    background: $panel;
+    color: $accent;
+    text-style: bold;
+}
+
+DataTable > .datatable--cursor {
+    background: $primary;
+    color: $text;
+}
+
+#status-bar {
+    height: 1;
+    color: $text-muted;
+    background: $panel;
+    padding: 0 2;
+    border-top: tall $primary-darken-2;
 }
 
 #footer-pending {
+    height: 1;
     color: $accent;
-    padding: 0 1;
+    background: $panel;
+    padding: 0 2;
 }
