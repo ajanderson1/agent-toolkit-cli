@@ -123,3 +123,156 @@ def test_codex_hook_list_installed_returns_slug_dirs(monkeypatch, tmp_path):
 
     a = CodexHookAdapter()
     assert a.list_installed("user", tmp_path) == {"alpha", "beta"}
+
+
+import shutil
+
+
+FIXTURE = Path(__file__).parent / "_fixtures" / "codex_config_realistic_with_hooks.toml"
+
+
+def _seed_home(tmp_path: Path, monkeypatch) -> Path:
+    """Create $HOME/.codex/ and return tmp_path."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / ".codex").mkdir()
+    return tmp_path
+
+
+def test_codex_hook_diff_creates_file_when_missing(monkeypatch, tmp_path):
+    """No config.toml on disk → create-action with rendered TOML + create-action per script file."""
+    from agent_toolkit.harness_adapters.codex_hook import CodexHookAdapter
+
+    home = _seed_home(tmp_path, monkeypatch)
+    a = CodexHookAdapter()
+    entry = _make_entry(home=home)
+
+    actions = a.diff("user", tmp_path, [entry])
+
+    # One config.toml create + one script file create.
+    paths = {act.path for act in actions}
+    assert (home / ".codex" / "config.toml") in paths
+    assert (home / ".codex" / "agent-toolkit-hooks" / "demo" / "check.sh") in paths
+    for act in actions:
+        assert act.op == "create"
+        assert act.contents is not None
+
+
+def test_codex_hook_diff_round_trip_byte_equal(monkeypatch, tmp_path):
+    """link → write → re-diff should be empty."""
+    from agent_toolkit.harness_adapters.codex_hook import CodexHookAdapter
+    from agent_toolkit.commands._mcp_dispatch import _atomic_write_bytes
+
+    home = _seed_home(tmp_path, monkeypatch)
+    a = CodexHookAdapter()
+    entry = _make_entry(home=home)
+
+    actions = a.diff("user", tmp_path, [entry])
+    for act in actions:
+        if act.op in {"create", "update"}:
+            _atomic_write_bytes(act.path, act.contents)
+
+    # Re-diff should be empty.
+    actions2 = a.diff("user", tmp_path, [entry])
+    assert actions2 == []
+
+
+def test_codex_hook_diff_unlink_byte_equal_to_original(monkeypatch, tmp_path):
+    """link → write → unlink → write should restore byte-equality with the original."""
+    from agent_toolkit.harness_adapters.codex_hook import CodexHookAdapter
+    from agent_toolkit.commands._mcp_dispatch import _atomic_write_bytes
+
+    home = _seed_home(tmp_path, monkeypatch)
+    target = home / ".codex" / "config.toml"
+    shutil.copy(FIXTURE, target)
+    original = target.read_bytes()
+
+    a = CodexHookAdapter()
+    entry = _make_entry(home=home)
+
+    # Link.
+    for act in a.diff("user", tmp_path, [entry]):
+        if act.op in {"create", "update"}:
+            _atomic_write_bytes(act.path, act.contents)
+
+    # Verify the user-owned hook is still intact in the file.
+    after_link = target.read_text(encoding="utf-8")
+    assert "/usr/local/bin/my-bash-guard.sh" in after_link
+    assert "demo/check.sh" in after_link
+
+    # Unlink.
+    for act in a.diff("user", tmp_path, [], previously_allowed={"demo"}):
+        if act.op in {"create", "update"}:
+            _atomic_write_bytes(act.path, act.contents)
+        elif act.op == "delete":
+            try:
+                act.path.unlink()
+            except (FileNotFoundError, IsADirectoryError, PermissionError):
+                # unlink() raises IsADirectoryError on Linux and PermissionError
+                # on macOS when the path is a directory — skip; the test only
+                # cares about byte-equality of config.toml after the operation.
+                pass
+
+    assert target.read_bytes() == original
+
+
+def test_codex_hook_diff_preserves_hand_rolled_groups(monkeypatch, tmp_path):
+    """A user-authored matcher-group whose command is not under script_root must survive a link."""
+    from agent_toolkit.harness_adapters.codex_hook import CodexHookAdapter
+    from agent_toolkit.commands._mcp_dispatch import _atomic_write_bytes
+
+    home = _seed_home(tmp_path, monkeypatch)
+    target = home / ".codex" / "config.toml"
+    shutil.copy(FIXTURE, target)
+
+    a = CodexHookAdapter()
+    entry = _make_entry(home=home)
+
+    for act in a.diff("user", tmp_path, [entry]):
+        if act.op in {"create", "update"}:
+            _atomic_write_bytes(act.path, act.contents)
+
+    rendered = target.read_text(encoding="utf-8")
+    # User-owned hook still present.
+    assert "/usr/local/bin/my-bash-guard.sh" in rendered
+    # Toolkit hook also present.
+    assert "agent-toolkit-hooks/demo/check.sh" in rendered
+
+
+def test_codex_hook_diff_multi_event_produces_one_group_per_event(monkeypatch, tmp_path):
+    """An entry with events=(PreToolUse, Stop) appears under both event arrays."""
+    from agent_toolkit.harness_adapters.codex_hook import CodexHookAdapter
+    from agent_toolkit.commands._mcp_dispatch import _atomic_write_bytes
+
+    home = _seed_home(tmp_path, monkeypatch)
+    a = CodexHookAdapter()
+    entry = _make_entry(events=("PreToolUse", "Stop"), home=home)
+
+    for act in a.diff("user", tmp_path, [entry]):
+        if act.op in {"create", "update"}:
+            _atomic_write_bytes(act.path, act.contents)
+
+    rendered = (home / ".codex" / "config.toml").read_text(encoding="utf-8")
+    assert "[[hooks.PreToolUse]]" in rendered
+    assert "[[hooks.Stop]]" in rendered
+
+
+def test_codex_hook_entry_drift_detects_changed_script(monkeypatch, tmp_path):
+    """Drift = on-disk script bytes differ from entry's rendered bytes."""
+    from agent_toolkit.harness_adapters.codex_hook import CodexHookAdapter
+    from agent_toolkit.commands._mcp_dispatch import _atomic_write_bytes
+
+    home = _seed_home(tmp_path, monkeypatch)
+    a = CodexHookAdapter()
+    entry = _make_entry(home=home)
+
+    for act in a.diff("user", tmp_path, [entry]):
+        if act.op in {"create", "update"}:
+            _atomic_write_bytes(act.path, act.contents)
+
+    assert a.entry_drift("user", tmp_path, entry) is False
+
+    # Mutate the on-disk script.
+    script_path = home / ".codex" / "agent-toolkit-hooks" / "demo" / "check.sh"
+    script_path.write_bytes(b"#!/usr/bin/env bash\necho TAMPERED\n")
+
+    assert a.entry_drift("user", tmp_path, entry) is True
