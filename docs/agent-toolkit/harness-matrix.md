@@ -16,10 +16,10 @@ the code disagree.
   config rather than file drop-in.
 - **plugin_folder** — adapter owns a whole subfolder (e.g.
   `~/.claude/plugins/agent-toolkit/`). Currently used for MCPs in Claude.
-- **translate** *(Phase 3, not yet implemented)* — generate a per-harness
-  flavored file in a CLI-managed cache, then symlink the harness slot to
-  the cache. Used when the harness expects different runtime frontmatter
-  fields than Claude's.
+- **translate** — generate a per-harness flavored file in a CLI-managed
+  cache (`~/.config/opencode/.agent-toolkit-cache/` for user scope), then
+  symlink the harness slot to the cache file. Used when the harness expects
+  different runtime frontmatter fields than Claude's.
 - **unsupported (gap)** — harness supports this kind in principle but the
   CLI hasn't wired the adapter yet. Tracked in matching GitHub issue.
 - **unsupported (by design)** — the kind has no equivalent concept in this
@@ -30,8 +30,8 @@ the code disagree.
 | Kind \\ Harness | Claude | Codex | OpenCode | Pi |
 |---|---|---|---|---|
 | **skill** | symlink → `~/.claude/skills/<slug>/` | symlink → `~/.codex/skills/<slug>/` | symlink → `~/.config/opencode/skills/<slug>/` | symlink → `~/.pi/agent/skills/<slug>/` |
-| **agent** | symlink → `~/.claude/agents/<slug>.md` | unsupported (by design) — Codex has no `~/.codex/agents/` drop-in; agents are plugin-internal, distributed via `codex plugin marketplace add` | unsupported (gap) — slot exists at `~/.config/opencode/agents/<slug>.md` and OpenCode does register drop-ins, but our wrapper frontmatter lacks `mode: subagent` so they register as `mode: all` (primary). Phase 3 `translate` adapter will inject the mode at link time. | symlink → `~/.pi/agent/agents/<slug>.md` |
-| **command** | symlink → `~/.claude/commands/<slug>.md` | unsupported (by design) — Codex has no `~/.codex/commands/`; commands surface as `$skill` invocations from inside skills | unsupported (gap) — slot exists at `~/.config/opencode/commands/<slug>.md`. OpenCode commands have a different frontmatter shape (`agent`, `model`, `subtask`, `template`) than Claude's. Phase 3 `translate` adapter will bridge. | unsupported (by design) — Pi has no command concept |
+| **agent** | symlink → `~/.claude/agents/<slug>.md` | unsupported (by design) — Codex has no `~/.codex/agents/` drop-in; agents are plugin-internal, distributed via `codex plugin marketplace add` | translate → `~/.config/opencode/agents/<slug>.md` (cache: `~/.config/opencode/.agent-toolkit-cache/agent/<slug>.md`) — injects `mode: subagent` and strips toolkit wrapper frontmatter | symlink → `~/.pi/agent/agents/<slug>.md` |
+| **command** | symlink → `~/.claude/commands/<slug>.md` | unsupported (by design) — Codex has no `~/.codex/commands/`; commands surface as `$skill` invocations from inside skills | translate → `~/.config/opencode/commands/<slug>.md` (cache: `~/.config/opencode/.agent-toolkit-cache/command/<slug>.md`) — emits OpenCode-shaped frontmatter with `description` and `agent_toolkit` wrapper block | unsupported (by design) — Pi has no command concept |
 | **hook** | symlink → `~/.claude/hooks/<slug>.<ext>` | unsupported (by design) — Codex has no hooks API at the user level | unsupported (by design) — OpenCode hooks live inside TS plugin files (`session.start`, `tool.execute.before`, etc.); not drop-in markdown | unsupported (by design) — Pi has no hooks API at the user level |
 | **plugin** | symlink → `~/.claude/plugins/<slug>/` | unsupported (by design) — Codex plugins are bundles with `.codex-plugin/plugin.json` manifests, installed via `codex plugin marketplace add` (different concept and install path from Claude markdown plugins) | unsupported (by design) — OpenCode plugins are TS/JS files at `~/.config/opencode/plugins/` or npm packages declared in `config.json` (different concept entirely) | unsupported (by design) — Pi extends via `pi-extension`, not a plugin concept |
 | **mcp** | unsupported (gap) — adapter not yet implemented | config_file → `~/.codex/config.toml` `[mcp_servers.<name>]` | unsupported (gap) — adapter not yet implemented | unsupported (gap) — adapter not yet implemented |
@@ -58,10 +58,11 @@ frontmatter fields. Pi reads its own frontmatter shape (`name`,
 `description`, `tools`, `model`, `extensions`) and falls back gracefully on
 extra keys.
 
-The Phase 3 **translate** mechanism will introduce harness-flavored
-frontmatter generation for kinds where the runtime fields differ
-materially (notably `agent` for OpenCode, where `mode: subagent` is
-required).
+The **translate** mechanism (Phase 3) generates harness-flavored frontmatter
+for kinds where the runtime fields differ materially. For OpenCode agents,
+`mode: subagent` is injected and the toolkit wrapper block is preserved under
+`agent_toolkit:`. For OpenCode commands, a `description`-only frontmatter is
+emitted alongside the `agent_toolkit:` wrapper block.
 
 ## Why some pairs are "by design" unsupported
 

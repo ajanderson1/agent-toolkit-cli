@@ -212,7 +212,13 @@ class TestSymlinkParity:
         )
 
     def test_every_user_target_entry_has_symlink_cell(self, matrix):
-        """Every (harness, kind) in _USER_TARGETS must have a 'symlink' cell in the doc."""
+        """Every (harness, kind) in _USER_TARGETS must have a 'symlink' or
+        'translate' cell in the doc.
+
+        Translate cells land in _USER_TARGETS because they share the same slot
+        directories; only the projection mechanism differs (cache + symlink
+        instead of direct symlink). Both mechanism strings are valid here.
+        """
         bad: list[tuple[str, str, str]] = []
         for (harness, kind) in sorted(_USER_TARGETS.keys()):
             cell = matrix.get((harness, kind))
@@ -220,12 +226,12 @@ class TestSymlinkParity:
                 bad.append((harness, kind, "pair not found in matrix at all"))
                 continue
             mech = _cell_mechanism(cell)
-            if mech != "symlink":
+            if mech not in {"symlink", "translate"}:
                 bad.append(
-                    (harness, kind, f"doc says {mech!r}, expected 'symlink'")
+                    (harness, kind, f"doc says {mech!r}, expected 'symlink' or 'translate'")
                 )
         assert not bad, (
-            "_USER_TARGETS has entries the doc does not mark as 'symlink':\n"
+            "_USER_TARGETS has entries the doc does not mark as 'symlink' or 'translate':\n"
             + "\n".join(
                 f"  ({h!r}, {k!r}): {reason}" for h, k, reason in bad
             )

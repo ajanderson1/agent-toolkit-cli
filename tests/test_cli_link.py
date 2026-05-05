@@ -935,3 +935,37 @@ def test_link_plan_with_unsupported_pair_exits_2_with_message(env, tmp_path):
     assert "agent" in msg
     # Hint surface: at least one supported kind is named for guidance.
     assert "skill" in msg
+
+
+# ===========================================================================
+# Phase 3: translate mechanism — opencode agents
+# ===========================================================================
+
+
+def test_link_user_opencode_agent_translates_and_symlinks(env, seed_agent):
+    """A toolkit asset declaring `harnesses: [opencode]` projects via the
+    translate mechanism: cache file written under the per-scope cache,
+    slot symlink targets the cache."""
+    home = env["home"]
+    toolkit = env["toolkit_root"]
+    seed_agent(toolkit, "foo", ["opencode"])
+    (home / ".agent-toolkit.yaml").write_text("agents:\n  - foo\n")
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main, ["--toolkit-repo", str(toolkit), "link", "user", "opencode"],
+    )
+    assert result.exit_code == 0, (result.output, result.stderr)
+
+    slot = home / ".config" / "opencode" / "agents" / "foo.md"
+    cache = home / ".config" / "opencode" / ".agent-toolkit-cache" / "agent" / "foo.md"
+    assert slot.is_symlink(), "slot symlink should exist"
+    assert Path(os.readlink(str(slot))) == cache, "slot must point at the cache file"
+    assert cache.is_file(), "cache file must exist"
+
+    text = cache.read_text(encoding="utf-8")
+    assert text.startswith("---\n")
+    assert "mode: subagent\n" in text
+    assert "description: foo agent." in text
+    assert "agent_toolkit:" in text
+    assert "# foo agent body\n" in text
