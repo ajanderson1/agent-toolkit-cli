@@ -101,32 +101,37 @@ def test_harness_home_path_explicit_home_overrides_env(tmp_path):
     assert harness_home_path("opencode", home=_P("/tmp/x")) == _P("/tmp/x/.opencode")
 
 
-def test_project_from_file_mcp_emits_no_op_message(tmp_path, monkeypatch, capsys):
-    """When the allow-list contains MCPs, the projection step emits a clear
-    'install path not yet implemented' line and creates no symlinks."""
+def test_project_from_file_codex_mcp_dispatches_to_adapter(tmp_path, monkeypatch):
+    """Codex + allow-listed MCP → adapter writes target file."""
     import io
-    from pathlib import Path
 
     from agent_toolkit.commands._link_lib import LinkCounters, project_from_file
 
-    # Seed a toolkit with one MCP
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    (tmp_path / "home" / ".codex").mkdir(parents=True)
+
     toolkit_root = tmp_path / "toolkit"
     mcp_dir = toolkit_root / "mcps" / "context7"
     mcp_dir.mkdir(parents=True)
-    (mcp_dir / "config.json").write_text('{"type":"stdio","command":"npx"}\n')
+    (mcp_dir / "config.json").write_text(
+        '{"type":"stdio","command":"npx","args":["-y","@upstash/context7-mcp"]}\n'
+    )
     (mcp_dir / "README.md").write_text(
         "---\n"
-        "apiVersion: agent-toolkit/v1alpha1\n"
+        "apiVersion: agent-toolkit/v1alpha2\n"
         "metadata:\n"
         "  name: context7\n"
-        "  description: c7.\n"
+        "  description: c.\n"
         "  lifecycle: stable\n"
         "spec:\n"
         "  origin: third-party\n"
         "  vendored_via: none\n"
         "  upstream: https://example.com\n"
         "  harnesses:\n"
-        "    - claude\n"
+        "    - codex\n"
+        "  mcp:\n"
+        "    transport: stdio\n"
+        "    install_method: npx\n"
         "---\n"
     )
 
@@ -138,20 +143,64 @@ def test_project_from_file_mcp_emits_no_op_message(tmp_path, monkeypatch, capsys
     counters = LinkCounters()
     buf = io.StringIO()
     project_from_file(
-        scope="project",
-        harness="claude",
-        toolkit_root=toolkit_root,
-        project_root=project_root,
-        allowlist_path=allowlist,
-        dry_run=False,
-        counters=counters,
-        stdout=buf,
+        scope="user", harness="codex", toolkit_root=toolkit_root,
+        project_root=project_root, allowlist_path=allowlist,
+        dry_run=False, counters=counters, stdout=buf,
     )
 
     out = buf.getvalue()
-    assert "MCP install path for claude not yet implemented" in out
-    assert "context7" in out
-    # No symlinks created, no counters bumped
+    assert "→ creating" in out
+    assert "✓ created" in out
+    target = tmp_path / "home" / ".codex" / "config.toml"
+    assert target.is_file()
+    assert "[mcp_servers.context7]" in target.read_text()
+
+
+def test_project_from_file_claude_mcp_skips_loudly(tmp_path, monkeypatch):
+    """Claude + allow-listed MCP → loud skip, exit clean, no file written."""
+    import io
+
+    from agent_toolkit.commands._link_lib import LinkCounters, project_from_file
+
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    (tmp_path / "home" / ".claude").mkdir(parents=True)
+
+    toolkit_root = tmp_path / "toolkit"
+    mcp_dir = toolkit_root / "mcps" / "context7"
+    mcp_dir.mkdir(parents=True)
+    (mcp_dir / "config.json").write_text('{"type":"stdio","command":"npx"}\n')
+    (mcp_dir / "README.md").write_text(
+        "---\n"
+        "apiVersion: agent-toolkit/v1alpha2\n"
+        "metadata:\n"
+        "  name: context7\n"
+        "  description: c.\n"
+        "  lifecycle: stable\n"
+        "spec:\n"
+        "  origin: third-party\n"
+        "  vendored_via: none\n"
+        "  upstream: https://example.com\n"
+        "  harnesses:\n"
+        "    - claude\n"
+        "  mcp:\n"
+        "    transport: stdio\n"
+        "    install_method: npx\n"
+        "---\n"
+    )
+
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    allowlist = project_root / ".agent-toolkit.yaml"
+    allowlist.write_text("mcps:\n  - context7\n")
+
+    counters = LinkCounters()
+    buf = io.StringIO()
+    project_from_file(
+        scope="user", harness="claude", toolkit_root=toolkit_root,
+        project_root=project_root, allowlist_path=allowlist,
+        dry_run=False, counters=counters, stdout=buf,
+    )
+
+    out = buf.getvalue()
+    assert "no MCP adapter for harness claude yet — skipping" in out
     assert counters.created == 0
-    assert counters.updated == 0
-    assert counters.removed == 0

@@ -20,7 +20,7 @@ def test_doctor_exit_code_flag_propagates_failure(tmp_path):
 
 def test_doctor_per_resource_unknown_slug(tmp_path):
     (tmp_path / "schemas").mkdir()
-    (tmp_path / "schemas" / "asset-frontmatter.v1alpha1.json").write_text("{}")
+    (tmp_path / "schemas" / "asset-frontmatter.v1alpha2.json").write_text("{}")
     runner = CliRunner()
     result = runner.invoke(main, ["doctor", "ghost", "--toolkit-repo", str(tmp_path)])
     assert "ghost" in result.output

@@ -359,13 +359,13 @@ def test_list_text_includes_mcps(tmp_path, monkeypatch):
     toolkit.mkdir()
     (toolkit / ".agent-toolkit-source").write_text("")
     (toolkit / "schemas").mkdir()
-    schema_src = Path(__file__).resolve().parents[1] / "schemas" / "asset-frontmatter.v1alpha1.json"
-    (toolkit / "schemas" / "asset-frontmatter.v1alpha1.json").write_text(schema_src.read_text())
+    schema_src = Path(__file__).resolve().parents[1] / "schemas" / "asset-frontmatter.v1alpha2.json"
+    (toolkit / "schemas" / "asset-frontmatter.v1alpha2.json").write_text(schema_src.read_text())
     mcp_dir = toolkit / "mcps" / "context7"
     mcp_dir.mkdir(parents=True)
     (mcp_dir / "config.json").write_text('{"type":"stdio","command":"npx"}\n')
     (mcp_dir / "README.md").write_text(
-        "---\napiVersion: agent-toolkit/v1alpha1\n"
+        "---\napiVersion: agent-toolkit/v1alpha2\n"
         "metadata:\n  name: context7\n  description: c.\n  lifecycle: stable\n"
         "spec:\n  origin: third-party\n  vendored_via: none\n"
         "  upstream: https://example.com\n  harnesses:\n    - claude\n---\n"

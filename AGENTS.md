@@ -4,7 +4,7 @@ This repo is the **tooling** for the `agent-toolkit` asset library. The Python C
 
 **Data source:** `~/GitHub/agent-toolkit/` (default). Override via `--toolkit-repo` flag or `AGENT_TOOLKIT_REPO` env var. Discovery walks up from CWD looking for `.agent-toolkit-source`.
 
-**Schema:** Bundled at `src/agent_toolkit/_schemas/asset-frontmatter.v1alpha1.json` (vendored from the toolkit repo's `schemas/`). The bundled copy is what the CLI validates against at runtime; the toolkit-repo copy is the SSOT humans edit. CI (`.github/workflows/schema-drift.yml`) fails on drift.
+**Schema:** Bundled at `src/agent_toolkit/_schemas/asset-frontmatter.v1alpha2.json` (vendored from the toolkit repo's `schemas/`). The bundled copy is what the CLI validates against at runtime; the toolkit-repo copy is the SSOT humans edit. CI (`.github/workflows/schema-drift.yml`) fails on drift.
 
 **Drift gate (toolkit repo):** `lefthook.yml` in the toolkit repo shells out to whichever `agent-toolkit` is on `$PATH`. CI in the toolkit repo installs this CLI before running pre-commit. (The `agent-toolkit` script is the Python entry point installed by `uv tool install` or `uv sync`.)
 
@@ -32,7 +32,7 @@ Internal parameter names: `toolkit_root` (when value is the SSOT) or `project_ro
 src/agent_toolkit/                 Python package: validator, walker, generators,
                                    ingest, security, doctor, command implementations.
   _repo_resolution.py              Four-step resolver: resolve_toolkit_root().
-  _schemas/                        Bundled v1alpha1 schema (vendored).
+  _schemas/                        Bundled v1alpha2 schema (vendored).
   schema.py                        Validator (loads bundled schema via importlib.resources).
   walker.py                        Asset discovery (path-driven, skips submodules).
   cli.py                           Click group with --toolkit-repo option.
@@ -66,12 +66,12 @@ Lefthook runs lint + tests on pre-commit. CI runs the full suite plus schema-dri
 
 ## Schema sync
 
-When the toolkit-repo schema (`~/GitHub/agent-toolkit/schemas/asset-frontmatter.v1alpha1.json`) changes:
+When the toolkit-repo schema (`~/GitHub/agent-toolkit/schemas/asset-frontmatter.v1alpha2.json`) changes:
 
 ```bash
-cp ~/GitHub/agent-toolkit/schemas/asset-frontmatter.v1alpha1.json schemas/
-cp ~/GitHub/agent-toolkit/schemas/asset-frontmatter.v1alpha1.json src/agent_toolkit/_schemas/
-diff schemas/asset-frontmatter.v1alpha1.json src/agent_toolkit/_schemas/asset-frontmatter.v1alpha1.json
+cp ~/GitHub/agent-toolkit/schemas/asset-frontmatter.v1alpha2.json schemas/
+cp ~/GitHub/agent-toolkit/schemas/asset-frontmatter.v1alpha2.json src/agent_toolkit/_schemas/
+diff schemas/asset-frontmatter.v1alpha2.json src/agent_toolkit/_schemas/asset-frontmatter.v1alpha2.json
 git add schemas src/agent_toolkit/_schemas
 git commit -m "chore(schema): sync vendored copy with toolkit repo"
 ```

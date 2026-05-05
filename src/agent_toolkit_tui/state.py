@@ -10,7 +10,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, Protocol
 
-CellStatus = Literal["linked", "unlinked", "unsupported", "broken"]
+CellStatus = Literal[
+    "linked", "unlinked", "unsupported", "broken",
+    "linked-matches", "linked-drifted", "unlinked-allowlisted", "installed-not-allowlisted",
+]
 
 
 @dataclass(frozen=True)

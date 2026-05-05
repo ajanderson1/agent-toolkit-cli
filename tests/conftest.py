@@ -9,7 +9,7 @@ import pytest
 
 SKILL_FRONTMATTER = """\
 ---
-apiVersion: agent-toolkit/v1alpha1
+apiVersion: agent-toolkit/v1alpha2
 metadata:
   name: {slug}
   description: {slug} skill.
@@ -29,9 +29,9 @@ def _seed_toolkit_impl(tmp: Path) -> Path:
     (root / ".agent-toolkit-source").write_text("tool: agent-toolkit-cli\n")
     (root / "schemas").mkdir()
     schema_src = (
-        Path(__file__).resolve().parents[1] / "schemas" / "asset-frontmatter.v1alpha1.json"
+        Path(__file__).resolve().parents[1] / "schemas" / "asset-frontmatter.v1alpha2.json"
     )
-    (root / "schemas" / "asset-frontmatter.v1alpha1.json").write_text(schema_src.read_text())
+    (root / "schemas" / "asset-frontmatter.v1alpha2.json").write_text(schema_src.read_text())
     return root
 
 
@@ -50,7 +50,7 @@ def _seed_pi_extension_impl(toolkit_root: Path, slug: str, harnesses: list[str])
     ext_dir.mkdir(parents=True, exist_ok=True)
     harness_lines = "\n".join(f"    - {h}" for h in harnesses)
     (ext_dir / "extension.meta.yaml").write_text(
-        f"apiVersion: agent-toolkit/v1alpha1\n"
+        f"apiVersion: agent-toolkit/v1alpha2\n"
         f"metadata:\n"
         f"  name: {slug}\n"
         f"  description: {slug} pi extension.\n"

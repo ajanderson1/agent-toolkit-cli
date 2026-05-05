@@ -43,7 +43,7 @@ class Proposal:
 
     def to_dict(self) -> dict:
         out: dict = {
-            "apiVersion": "agent-toolkit/v1alpha1",
+            "apiVersion": "agent-toolkit/v1alpha2",
             "metadata": {
                 "name": self.slug,
                 "description": self.description,

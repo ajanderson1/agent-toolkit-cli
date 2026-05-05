@@ -4,13 +4,13 @@ from pathlib import Path
 import jsonschema
 import pytest
 
-SCHEMA_PATH = Path(__file__).parent.parent / "schemas" / "asset-frontmatter.v1alpha1.json"
+SCHEMA_PATH = Path(__file__).parent.parent / "schemas" / "asset-frontmatter.v1alpha2.json"
 
 
 def test_minimal_valid_frontmatter_passes():
     schema = json.loads(SCHEMA_PATH.read_text())
     data = {
-        "apiVersion": "agent-toolkit/v1alpha1",
+        "apiVersion": "agent-toolkit/v1alpha2",
         "metadata": {
             "name": "example",
             "description": "An example asset.",
@@ -31,7 +31,7 @@ def _load_schema():
 
 def _base():
     return {
-        "apiVersion": "agent-toolkit/v1alpha1",
+        "apiVersion": "agent-toolkit/v1alpha2",
         "metadata": {
             "name": "example",
             "description": "An example asset.",
@@ -123,7 +123,7 @@ def test_spec_no_extra_keys():
         jsonschema.validate(data, schema)
 
 
-def test_apiversion_must_be_v1alpha1():
+def test_apiversion_must_be_v1alpha2():
     schema = _load_schema()
     data = _base()
     data["apiVersion"] = "agent-toolkit/v2"

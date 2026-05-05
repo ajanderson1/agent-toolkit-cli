@@ -43,7 +43,7 @@ def diagnose(toolkit_root: Path, *, slug: str, deep: bool = False) -> GroupResul
     if errors:
         warns.extend(f"[FAIL] frontmatter   {e}" for e in errors)
     else:
-        findings.append("[OK]   frontmatter   v1alpha1 valid")
+        findings.append("[OK]   frontmatter   v1alpha2 valid")
 
     # location/format consistency
     findings.append("[OK]   location      slug matches dir/file")

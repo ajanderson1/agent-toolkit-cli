@@ -13,7 +13,7 @@ def _write_skill(tmp_path: Path, slug: str, *, lifecycle: str = "stable",
     skill_dir.mkdir(parents=True)
     (skill_dir / "SKILL.md").write_text(
         "---\n"
-        f"apiVersion: agent-toolkit/v1alpha1\n"
+        f"apiVersion: agent-toolkit/v1alpha2\n"
         f"metadata:\n"
         f"  name: {slug}\n"
         f"  description: {description}\n"
@@ -86,7 +86,7 @@ def _write_agent(tmp_path: Path, slug: str, *, harnesses=("claude",)) -> None:
     agents_dir.mkdir(exist_ok=True)
     (agents_dir / f"{slug}.md").write_text(
         "---\n"
-        f"apiVersion: agent-toolkit/v1alpha1\n"
+        f"apiVersion: agent-toolkit/v1alpha2\n"
         f"metadata:\n"
         f"  name: {slug}\n"
         f"  description: {slug.capitalize()} agent.\n"

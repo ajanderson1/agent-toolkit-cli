@@ -281,8 +281,8 @@ def test_link_per_asset_harness_incompat_errors(env, seed_skill):
     assert not (home / ".agent-toolkit.yaml").exists()
 
 
-def test_link_per_asset_mcp_succeeds(env, tmp_path):
-    """MCPs flow through the per-asset path: allow-list mutation + no-op projection."""
+def test_link_per_asset_mcp_claude_skips_loudly(env, tmp_path):
+    """Claude MCP: allow-list mutated + loud skip (UnimplementedAdapter)."""
     toolkit = env["toolkit_root"]
     # Seed an MCP in the toolkit
     mcp_dir = toolkit / "mcps" / "context7"
@@ -290,7 +290,7 @@ def test_link_per_asset_mcp_succeeds(env, tmp_path):
     (mcp_dir / "config.json").write_text('{"type":"stdio","command":"npx"}\n')
     (mcp_dir / "README.md").write_text(
         "---\n"
-        "apiVersion: agent-toolkit/v1alpha1\n"
+        "apiVersion: agent-toolkit/v1alpha2\n"
         "metadata:\n"
         "  name: context7\n"
         "  description: c.\n"
@@ -301,6 +301,9 @@ def test_link_per_asset_mcp_succeeds(env, tmp_path):
         "  upstream: https://example.com\n"
         "  harnesses:\n"
         "    - claude\n"
+        "  mcp:\n"
+        "    transport: stdio\n"
+        "    install_method: npx\n"
         "---\n"
     )
 
@@ -317,11 +320,62 @@ def test_link_per_asset_mcp_succeeds(env, tmp_path):
         ],
     )
     assert result.exit_code == 0, result.output
-    assert "MCP install path for claude not yet implemented" in result.output
+    assert "no MCP adapter for harness claude yet — skipping" in result.output
     # YAML allow-list mutated
     text = (project / ".agent-toolkit.yaml").read_text()
     assert "mcps:" in text
     assert "context7" in text
+
+
+def test_link_per_asset_mcp_codex_dispatches_to_adapter(env, tmp_path):
+    """Codex MCP: allow-list mutated + adapter writes config.toml."""
+    home = env["home"]
+    toolkit = env["toolkit_root"]
+    (home / ".codex").mkdir(parents=True, exist_ok=True)
+
+    mcp_dir = toolkit / "mcps" / "context7"
+    mcp_dir.mkdir(parents=True)
+    (mcp_dir / "config.json").write_text(
+        '{"type":"stdio","command":"npx","args":["-y","@upstash/context7-mcp"]}\n'
+    )
+    (mcp_dir / "README.md").write_text(
+        "---\n"
+        "apiVersion: agent-toolkit/v1alpha2\n"
+        "metadata:\n"
+        "  name: context7\n"
+        "  description: c.\n"
+        "  lifecycle: stable\n"
+        "spec:\n"
+        "  origin: third-party\n"
+        "  vendored_via: none\n"
+        "  upstream: https://example.com\n"
+        "  harnesses:\n"
+        "    - codex\n"
+        "  mcp:\n"
+        "    transport: stdio\n"
+        "    install_method: npx\n"
+        "---\n"
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        [
+            "--toolkit-repo", str(toolkit),
+            "link", "user", "codex", "mcp:context7",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "→ creating" in result.output
+    assert "✓ created" in result.output
+    # YAML allow-list mutated
+    text = (home / ".agent-toolkit.yaml").read_text()
+    assert "mcps:" in text
+    assert "context7" in text
+    # Config file written
+    config_toml = home / ".codex" / "config.toml"
+    assert config_toml.is_file()
+    assert "[mcp_servers.context7]" in config_toml.read_text()
 
 
 def test_link_project_per_asset(env, tmp_path, seed_skill):

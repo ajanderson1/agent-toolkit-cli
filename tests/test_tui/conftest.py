@@ -12,14 +12,14 @@ def fake_repo(tmp_path: Path) -> Path:
     repo = tmp_path / "repo"
     (repo / "schemas").mkdir(parents=True)
     # Copy the real schema so check works if invoked.
-    real_schema = Path(__file__).resolve().parents[2] / "schemas" / "asset-frontmatter.v1alpha1.json"
-    (repo / "schemas" / "asset-frontmatter.v1alpha1.json").write_text(real_schema.read_text())
+    real_schema = Path(__file__).resolve().parents[2] / "schemas" / "asset-frontmatter.v1alpha2.json"
+    (repo / "schemas" / "asset-frontmatter.v1alpha2.json").write_text(real_schema.read_text())
 
     # alpha — claude only
     (repo / "skills" / "alpha").mkdir(parents=True)
     (repo / "skills" / "alpha" / "SKILL.md").write_text(
         "---\n"
-        "apiVersion: agent-toolkit/v1alpha1\n"
+        "apiVersion: agent-toolkit/v1alpha2\n"
         "metadata:\n  name: alpha\n  description: Alpha skill.\n  lifecycle: stable\n"
         "spec:\n  origin: first-party\n  vendored_via: none\n  harnesses:\n    - claude\n"
         "---\n"
@@ -28,7 +28,7 @@ def fake_repo(tmp_path: Path) -> Path:
     (repo / "skills" / "beta").mkdir(parents=True)
     (repo / "skills" / "beta" / "SKILL.md").write_text(
         "---\n"
-        "apiVersion: agent-toolkit/v1alpha1\n"
+        "apiVersion: agent-toolkit/v1alpha2\n"
         "metadata:\n  name: beta\n  description: Beta skill.\n  lifecycle: stable\n"
         "spec:\n  origin: first-party\n  vendored_via: none\n  harnesses:\n    - claude\n    - opencode\n"
         "---\n"

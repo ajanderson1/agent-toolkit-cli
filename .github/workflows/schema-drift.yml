@@ -33,9 +33,9 @@ jobs:
         run: |
           set -euo pipefail
           diff -u \
-            assets-repo/schemas/asset-frontmatter.v1alpha1.json \
-            schemas/asset-frontmatter.v1alpha1.json
+            assets-repo/schemas/asset-frontmatter.v1alpha2.json \
+            schemas/asset-frontmatter.v1alpha2.json
           diff -u \
-            assets-repo/schemas/asset-frontmatter.v1alpha1.json \
-            src/agent_toolkit/_schemas/asset-frontmatter.v1alpha1.json
+            assets-repo/schemas/asset-frontmatter.v1alpha2.json \
+            src/agent_toolkit/_schemas/asset-frontmatter.v1alpha2.json
           echo "Schema in sync with SSOT."

@@ -11,10 +11,14 @@ from agent_toolkit_tui.messages import AssetToggled
 from agent_toolkit_tui.state import AssetRow, CellState, InventoryState
 
 _GLYPH = {
-    "linked":       "☑",
-    "unlinked":     "☐",
-    "unsupported":  "──",
-    "broken":       "⚠ ",
+    "linked":                     "☑",
+    "unlinked":                   "☐",
+    "unsupported":                "──",
+    "broken":                     "⚠ ",
+    "linked-matches":             "☑",
+    "linked-drifted":             "≁",
+    "unlinked-allowlisted":       "☐",
+    "installed-not-allowlisted":  "!",
 }
 
 # Pending overlay: same shape as the *target* state, colored to signal
@@ -113,12 +117,13 @@ class AssetGrid(Vertical):
         any_off = False
         for row in rows:
             cell = row.cells.get((harness, self._scope))
-            if cell is None or cell.status == "unsupported":
+            if cell is None or cell.status in {"unsupported", "installed-not-allowlisted"}:
                 continue
             key = (self._scope, harness, row.kind, row.slug)
             pending = self._pending.get(key)
+            _is_linked = cell.status in {"linked", "linked-matches", "linked-drifted"}
             effective_linked = (
-                (cell.status == "linked" and pending != "unlink")
+                (_is_linked and pending != "unlink")
                 or pending == "link"
             )
             if not effective_linked:
@@ -128,15 +133,16 @@ class AssetGrid(Vertical):
 
         for row in rows:
             cell = row.cells.get((harness, self._scope))
-            if cell is None or cell.status == "unsupported":
+            if cell is None or cell.status in {"unsupported", "installed-not-allowlisted"}:
                 continue
             key = (self._scope, harness, row.kind, row.slug)
             pending = self._pending.get(key)
+            _is_linked = cell.status in {"linked", "linked-matches", "linked-drifted"}
             already = (
-                (cell.status == "linked" and pending != "unlink")
+                (_is_linked and pending != "unlink")
                 or pending == "link"
             ) if target_op == "link" else (
-                (cell.status != "linked" and pending != "link")
+                (not _is_linked and pending != "link")
                 or pending == "unlink"
             )
             if already:
@@ -146,8 +152,8 @@ class AssetGrid(Vertical):
                 continue
             # Need to flip. If ground truth already matches, just clear pending.
             ground_matches = (
-                (target_op == "link" and cell.status == "linked")
-                or (target_op == "unlink" and cell.status != "linked")
+                (target_op == "link" and _is_linked)
+                or (target_op == "unlink" and not _is_linked)
             )
             if ground_matches:
                 if pending:
@@ -171,7 +177,7 @@ class AssetGrid(Vertical):
             return
         row = rows[coord.row]
         cell = row.cells.get((harness, self._scope))
-        if cell is None or cell.status == "unsupported":
+        if cell is None or cell.status in {"unsupported", "installed-not-allowlisted"}:
             return
         key = (self._scope, harness, row.kind, row.slug)
         # If there's already a pending op on this cell, toggle it OFF — restore
@@ -180,7 +186,8 @@ class AssetGrid(Vertical):
             del self._pending[key]
             op = "clear"
         else:
-            op = "unlink" if cell.status == "linked" else "link"
+            _is_linked = cell.status in {"linked", "linked-matches", "linked-drifted"}
+            op = "unlink" if _is_linked else "link"
             self._pending[key] = op
         self.post_message(AssetToggled(kind=row.kind, slug=row.slug,
                                        harness=harness, scope=self._scope, op=op))
@@ -240,8 +247,10 @@ class AssetGrid(Vertical):
                 cell = r.cells.get((harness, scope))
                 if cell is None:
                     return True   # cell vanished — pending is moot
-                if op == "link" and cell.status == "linked":
+                if op == "link" and cell.status in {"linked", "linked-matches", "linked-drifted"}:
                     return True
-                if op == "unlink" and cell.status in {"unlinked", "unsupported"}:
+                if op == "unlink" and cell.status in {
+                    "unlinked", "unsupported", "unlinked-allowlisted", "installed-not-allowlisted",
+                }:
                     return True
         return False

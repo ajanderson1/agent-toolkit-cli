@@ -15,7 +15,7 @@ def _seed(tmp: Path) -> None:
     (tmp / "skills" / "alpha").mkdir(parents=True)
     (tmp / "skills" / "alpha" / "SKILL.md").write_text(
         "---\n"
-        "apiVersion: agent-toolkit/v1alpha1\n"
+        "apiVersion: agent-toolkit/v1alpha2\n"
         "metadata:\n"
         "  name: alpha\n"
         "  description: Alpha skill.\n"
@@ -120,7 +120,7 @@ def test_kind_filter_drops_other_kinds(tmp_path, monkeypatch):
     (tmp_path / "agents").mkdir()
     (tmp_path / "agents" / "beta.md").write_text(
         "---\n"
-        "apiVersion: agent-toolkit/v1alpha1\n"
+        "apiVersion: agent-toolkit/v1alpha2\n"
         "metadata:\n"
         "  name: beta\n"
         "  description: Beta agent.\n"
@@ -152,7 +152,7 @@ def test_mcp_kind_included_without_filter(tmp_path, monkeypatch):
     )
     (tmp_path / "mcps" / "gamma" / "README.md").write_text(
         "---\n"
-        "apiVersion: agent-toolkit/v1alpha1\n"
+        "apiVersion: agent-toolkit/v1alpha2\n"
         "metadata:\n"
         "  name: gamma\n"
         "  description: Gamma mcp.\n"
@@ -201,13 +201,13 @@ def test_list_json_includes_mcps(tmp_path, monkeypatch):
     toolkit.mkdir()
     (toolkit / ".agent-toolkit-source").write_text("")
     (toolkit / "schemas").mkdir()
-    schema_src = Path(__file__).resolve().parents[1] / "schemas" / "asset-frontmatter.v1alpha1.json"
-    (toolkit / "schemas" / "asset-frontmatter.v1alpha1.json").write_text(schema_src.read_text())
+    schema_src = Path(__file__).resolve().parents[1] / "schemas" / "asset-frontmatter.v1alpha2.json"
+    (toolkit / "schemas" / "asset-frontmatter.v1alpha2.json").write_text(schema_src.read_text())
     mcp_dir = toolkit / "mcps" / "context7"
     mcp_dir.mkdir(parents=True)
     (mcp_dir / "config.json").write_text('{"type":"stdio","command":"npx"}\n')
     (mcp_dir / "README.md").write_text(
-        "---\napiVersion: agent-toolkit/v1alpha1\n"
+        "---\napiVersion: agent-toolkit/v1alpha2\n"
         "metadata:\n  name: context7\n  description: c.\n  lifecycle: stable\n"
         "spec:\n  origin: third-party\n  vendored_via: none\n"
         "  upstream: https://example.com\n  harnesses:\n    - claude\n---\n"
@@ -235,3 +235,211 @@ def test_list_json_includes_mcps(tmp_path, monkeypatch):
     )
     assert project_claude["status"] == "unsupported"
     assert project_claude["allowlisted"] is True
+
+
+# ---------------------------------------------------------------------------
+# MCP four-glyph status tests (codex adapter)
+# ---------------------------------------------------------------------------
+
+def _seed_mcp_toolkit(toolkit: Path, harnesses: list[str], *, has_args: bool = True) -> None:
+    """Set up toolkit dir with context7 MCP for the given harnesses."""
+    (toolkit / "schemas").mkdir(parents=True, exist_ok=True)
+    schema_src = Path(__file__).resolve().parents[1] / "schemas" / "asset-frontmatter.v1alpha2.json"
+    (toolkit / "schemas" / "asset-frontmatter.v1alpha2.json").write_text(schema_src.read_text())
+    (toolkit / ".agent-toolkit-source").write_text("")
+    mcp_dir = toolkit / "mcps" / "context7"
+    mcp_dir.mkdir(parents=True, exist_ok=True)
+    config = '{"type":"stdio","command":"npx","args":["-y","@upstash/context7-mcp"]}' if has_args else '{"type":"stdio","command":"npx"}'
+    (mcp_dir / "config.json").write_text(config + "\n")
+    harness_lines = "\n".join(f"    - {h}" for h in harnesses)
+    (mcp_dir / "README.md").write_text(
+        "---\napiVersion: agent-toolkit/v1alpha2\n"
+        "metadata:\n  name: context7\n  description: c.\n  lifecycle: stable\n"
+        "spec:\n  origin: third-party\n  vendored_via: none\n"
+        "  upstream: https://example.com\n  harnesses:\n"
+        f"{harness_lines}\n"
+        "  mcp:\n    transport: stdio\n    install_method: npx\n---\n"
+    )
+
+
+def test_list_json_mcp_codex_linked_matches_after_link(tmp_path, monkeypatch):
+    """After linking, the codex/user cell reports linked-matches with the target path."""
+    from agent_toolkit.cli import main
+
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / ".codex").mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.delenv("AGENT_TOOLKIT_REPO", raising=False)
+
+    toolkit = tmp_path / "toolkit"
+    _seed_mcp_toolkit(toolkit, ["codex"])
+
+    project = tmp_path / "project"
+    project.mkdir()
+
+    runner = CliRunner()
+    # Link to user scope
+    rl = runner.invoke(
+        main,
+        ["link", "user", "codex", "mcp:context7",
+         "--toolkit-repo", str(toolkit), "--project", str(project)],
+    )
+    assert rl.exit_code == 0, rl.output
+
+    # Read state via JSON
+    rl2 = runner.invoke(
+        main,
+        ["list", "--format", "json", "--toolkit-repo", str(toolkit), "--project", str(project)],
+    )
+    assert rl2.exit_code == 0, rl2.output
+    data = json.loads(rl2.output)
+    [mcp] = [a for a in data["assets"] if a["kind"] == "mcp"]
+    user_codex = next(c for c in mcp["cells"]
+                      if c["harness"] == "codex" and c["scope"] == "user")
+    assert user_codex["status"] == "linked-matches"
+    target = home / ".codex" / "config.toml"
+    assert user_codex["target"] == str(target)
+    assert user_codex["allowlisted"] is True
+
+
+def test_list_json_mcp_codex_unlinked_allowlisted(tmp_path, monkeypatch):
+    """Allow-listed but not installed → unlinked-allowlisted, target=None."""
+    from agent_toolkit.cli import main
+
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / ".codex").mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.delenv("AGENT_TOOLKIT_REPO", raising=False)
+    # User-scope allow-list lists context7 but nothing is installed.
+    (home / ".agent-toolkit.yaml").write_text("mcps:\n  - context7\n")
+
+    toolkit = tmp_path / "toolkit"
+    _seed_mcp_toolkit(toolkit, ["codex"])
+
+    project = tmp_path / "project"
+    project.mkdir()
+
+    runner = CliRunner()
+    r = runner.invoke(
+        main,
+        ["list", "--format", "json", "--toolkit-repo", str(toolkit), "--project", str(project)],
+    )
+    assert r.exit_code == 0, r.output
+    data = json.loads(r.output)
+    [mcp] = [a for a in data["assets"] if a["kind"] == "mcp"]
+    user_codex = next(c for c in mcp["cells"]
+                      if c["harness"] == "codex" and c["scope"] == "user")
+    assert user_codex["status"] == "unlinked-allowlisted"
+    assert user_codex["target"] is None
+
+
+def test_list_json_mcp_codex_installed_not_allowlisted(tmp_path, monkeypatch):
+    """Hand-rolled entry in codex config + absent from allow-list → installed-not-allowlisted."""
+    from agent_toolkit.cli import main
+
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / ".codex").mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.delenv("AGENT_TOOLKIT_REPO", raising=False)
+    target = home / ".codex" / "config.toml"
+    target.write_text(
+        "[mcp_servers.context7]\ncommand = \"node\"\nargs = [\"hand-rolled.js\"]\n"
+    )
+    # No allow-list at all.
+
+    toolkit = tmp_path / "toolkit"
+    _seed_mcp_toolkit(toolkit, ["codex"])
+
+    project = tmp_path / "project"
+    project.mkdir()
+
+    runner = CliRunner()
+    r = runner.invoke(
+        main,
+        ["list", "--format", "json", "--toolkit-repo", str(toolkit), "--project", str(project)],
+    )
+    assert r.exit_code == 0, r.output
+    data = json.loads(r.output)
+    [mcp] = [a for a in data["assets"] if a["kind"] == "mcp"]
+    user_codex = next(c for c in mcp["cells"]
+                      if c["harness"] == "codex" and c["scope"] == "user")
+    assert user_codex["status"] == "installed-not-allowlisted"
+    assert user_codex["target"] == str(target)
+    assert user_codex["allowlisted"] is False
+
+
+def test_list_json_mcp_codex_linked_drifted_after_handedit(tmp_path, monkeypatch):
+    """Allow-listed + installed + structural drift → linked-drifted."""
+    from agent_toolkit.cli import main
+
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / ".codex").mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.delenv("AGENT_TOOLKIT_REPO", raising=False)
+
+    toolkit = tmp_path / "toolkit"
+    _seed_mcp_toolkit(toolkit, ["codex"])
+
+    project = tmp_path / "project"
+    project.mkdir()
+
+    runner = CliRunner()
+    # Link first.
+    rl = runner.invoke(
+        main,
+        ["link", "user", "codex", "mcp:context7",
+         "--toolkit-repo", str(toolkit), "--project", str(project)],
+    )
+    assert rl.exit_code == 0, rl.output
+
+    # Hand-edit the installed entry to introduce drift.
+    target = home / ".codex" / "config.toml"
+    text = target.read_text().replace(
+        '"@upstash/context7-mcp"', '"@upstash/context7-mcp", "--debug"'
+    )
+    target.write_text(text)
+
+    # Re-read state.
+    r = runner.invoke(
+        main,
+        ["list", "--format", "json", "--toolkit-repo", str(toolkit), "--project", str(project)],
+    )
+    assert r.exit_code == 0, r.output
+    data = json.loads(r.output)
+    [mcp] = [a for a in data["assets"] if a["kind"] == "mcp"]
+    user_codex = next(c for c in mcp["cells"]
+                      if c["harness"] == "codex" and c["scope"] == "user")
+    assert user_codex["status"] == "linked-drifted"
+
+
+def test_list_json_mcp_claude_unsupported(tmp_path, monkeypatch):
+    """Cells for harnesses with UnimplementedAdapter still report 'unsupported'."""
+    from agent_toolkit.cli import main
+
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.delenv("AGENT_TOOLKIT_REPO", raising=False)
+
+    toolkit = tmp_path / "toolkit"
+    _seed_mcp_toolkit(toolkit, ["claude", "codex"])
+
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / ".agent-toolkit.yaml").write_text("mcps:\n  - context7\n")
+
+    runner = CliRunner()
+    r = runner.invoke(
+        main,
+        ["list", "--format", "json", "--toolkit-repo", str(toolkit), "--project", str(project)],
+    )
+    assert r.exit_code == 0, r.output
+    data = json.loads(r.output)
+    [mcp] = [a for a in data["assets"] if a["kind"] == "mcp"]
+    user_claude = next(c for c in mcp["cells"]
+                       if c["harness"] == "claude" and c["scope"] == "user")
+    assert user_claude["status"] == "unsupported"

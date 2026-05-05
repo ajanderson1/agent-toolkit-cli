@@ -97,7 +97,7 @@ def test_asset_harnesses_legacy_call_misses_pure_yaml(env, seed_pi_extension):
 
 def test_research_routes_extension_meta_yaml_to_pi_extension(tmp_path):
     (tmp_path / "extension.meta.yaml").write_text(
-        "apiVersion: agent-toolkit/v1alpha1\n"
+        "apiVersion: agent-toolkit/v1alpha2\n"
         "metadata:\n  name: thing\n"
     )
     proposal = infer_from_snapshot(
@@ -124,8 +124,8 @@ def test_research_routes_pi_extension_keyword_to_pi_extension(tmp_path):
 
 def test_new_pi_extension_scaffolds_with_pi_harness(tmp_path):
     (tmp_path / "schemas").mkdir()
-    src_schema = Path(__file__).parent.parent / "schemas" / "asset-frontmatter.v1alpha1.json"
-    (tmp_path / "schemas" / "asset-frontmatter.v1alpha1.json").write_text(src_schema.read_text())
+    src_schema = Path(__file__).parent.parent / "schemas" / "asset-frontmatter.v1alpha2.json"
+    (tmp_path / "schemas" / "asset-frontmatter.v1alpha2.json").write_text(src_schema.read_text())
 
     runner = CliRunner()
     result = runner.invoke(

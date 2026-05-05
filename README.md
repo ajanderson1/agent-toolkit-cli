@@ -51,7 +51,13 @@ agent-toolkit tui                    # requires [tui] extra
 
 `list` vs `inventory`: `list` is project-scoped — shows what's installed for a `<user|project>` scope and harness, with ✓/— install state. `inventory` is library-scoped — browses the SSOT's asset catalog with no notion of install state.
 
-**MCPs** are recognised as a first-class kind in the allow-list (`mcps:` section) and surfaced in `list`/`inventory`. Per-harness MCP installation (writing `mcp.json`, etc.) arrives in a follow-up; for now, `link mcp:<name>` updates the allow-list and emits a `not yet implemented` note.
+**MCPs** (Codex shipped; Claude / OpenCode / Pi pending follow-up PRs).
+`link mcp:<name>` writes `[mcp_servers.<name>]` to `~/.codex/config.toml` via a
+round-trip parser; sibling sections and comments are preserved. The four-glyph
+status `[☑] [≁] [☐] [!]` appears in `list` (and the TUI) for MCPs. Run
+`doctor --group mcps --harness codex` to report drift, missing env vars, and
+missing prerequisites. Use `fix --mcps-only` to reconcile installed entries to
+the canonical allow-list template.
 
 Full reference: [`docs/agent-toolkit/cli.md`](docs/agent-toolkit/cli.md).
 Schema reference: [SSOT in the toolkit repo](https://github.com/ajanderson1/agent-toolkit/blob/main/docs/agent-toolkit/schema.md).

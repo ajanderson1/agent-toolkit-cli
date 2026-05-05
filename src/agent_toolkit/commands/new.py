@@ -1,4 +1,4 @@
-"""`agent-toolkit new` — scaffold a new asset with valid v1alpha1 frontmatter."""
+"""`agent-toolkit new` — scaffold a new asset with valid v1alpha2 frontmatter."""
 from __future__ import annotations
 
 import json
@@ -14,14 +14,14 @@ _KIND_LAYOUT = {
     "agent": ("agents/{slug}.md", "markdown"),
     "command": ("commands/{slug}.md", "markdown"),
     "hook": ("hooks/{slug}.meta.yaml", "yaml"),
-    "mcp": ("mcps/{slug}/mcp.json", "json"),
+    "mcp": ("mcps/{slug}/README.md", "mcp"),
     "plugin": ("plugins/{slug}/marketplace.json", "json"),
     "pi-extension": ("extensions/{slug}/extension.meta.yaml", "yaml"),
 }
 
 
 _FRONTMATTER_TEMPLATE = """---
-apiVersion: agent-toolkit/v1alpha1
+apiVersion: agent-toolkit/v1alpha2
 metadata:
   name: {slug}
   description: TODO write one sentence ending with a period.
@@ -39,7 +39,7 @@ TODO body.
 """
 
 
-@click.command(name="new", short_help="Scaffold a new asset with valid v1alpha1 frontmatter.")
+@click.command(name="new", short_help="Scaffold a new asset with valid v1alpha2 frontmatter.")
 @click.argument("kind", type=click.Choice(list(_KIND_LAYOUT)))
 @click.argument("slug")
 @click.option(
@@ -52,7 +52,7 @@ TODO body.
 @click.pass_context
 def new(ctx: click.Context, kind: str, slug: str, toolkit_root: Path | None) -> None:
     """Create a new asset of the given kind at the canonical path with valid
-    v1alpha1 frontmatter. The file is created with TODO placeholders; edit
+    v1alpha2 frontmatter. The file is created with TODO placeholders; edit
     them, then run `agent-toolkit check` to validate.
     """
     header(f"Scaffolding new {kind} '{slug}'...")
@@ -71,12 +71,47 @@ def new(ctx: click.Context, kind: str, slug: str, toolkit_root: Path | None) -> 
     target.parent.mkdir(parents=True, exist_ok=True)
     if target.exists():
         raise click.UsageError(f"{target} already exists")
-    if fmt == "markdown":
+    if fmt == "mcp":
+        # Two files: README.md (frontmatter) and config.json (inner MCP config).
+        target.write_text(
+            "---\n"
+            "apiVersion: agent-toolkit/v1alpha2\n"
+            "metadata:\n"
+            f"  name: {slug}\n"
+            "  description: TODO write one sentence ending with a period.\n"
+            "  lifecycle: experimental\n"
+            "spec:\n"
+            "  origin: third-party\n"
+            "  vendored_via: none\n"
+            "  upstream: https://TODO\n"
+            "  harnesses:\n"
+            "    - codex\n"
+            "  mcp:\n"
+            "    transport: stdio\n"
+            "    install_method: npx\n"
+            "---\n\n"
+            f"# {slug}\n\n"
+            "TODO body.\n"
+        )
+        # Sibling config.json carrying the inner MCP server config.
+        config_path = target.parent / "config.json"
+        config_path.write_text(
+            json.dumps(
+                {"type": "stdio", "command": "npx", "args": ["-y", f"@TODO/{slug}"]},
+                indent=2,
+            ) + "\n"
+        )
+        rel = target.relative_to(root)
+        click.echo(f"created {rel}")
+        click.echo(f"created {config_path.relative_to(root)}")
+        summary(f"Created {rel}. Edit it, then run 'agent-toolkit check' to validate.")
+        return
+    elif fmt == "markdown":
         target.write_text(_FRONTMATTER_TEMPLATE.format(slug=slug))
     elif fmt == "yaml":
         default_harness = "pi" if kind == "pi-extension" else "claude"
         target.write_text(
-            f"apiVersion: agent-toolkit/v1alpha1\n"
+            f"apiVersion: agent-toolkit/v1alpha2\n"
             f"metadata:\n"
             f"  name: {slug}\n"
             f"  description: TODO ending with period.\n"
@@ -92,7 +127,7 @@ def new(ctx: click.Context, kind: str, slug: str, toolkit_root: Path | None) -> 
             json.dumps(
                 {
                     "agent_toolkit": {
-                        "apiVersion": "agent-toolkit/v1alpha1",
+                        "apiVersion": "agent-toolkit/v1alpha2",
                         "metadata": {
                             "name": slug,
                             "description": "TODO ending with period.",

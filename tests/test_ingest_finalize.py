@@ -45,9 +45,9 @@ def test_finalize_moves_files_to_canonical_path(tmp_path):
     schemas_dir.mkdir()
     real_schema_src = (
         __import__("pathlib").Path(__file__).resolve().parents[1]
-        / "schemas" / "asset-frontmatter.v1alpha1.json"
+        / "schemas" / "asset-frontmatter.v1alpha2.json"
     )
-    (schemas_dir / "asset-frontmatter.v1alpha1.json").write_text(real_schema_src.read_text())
+    (schemas_dir / "asset-frontmatter.v1alpha2.json").write_text(real_schema_src.read_text())
     (tmp_path / "AGENTS.md").write_text("# AGENTS")
     _seed_staging(tmp_path)
 
@@ -63,9 +63,9 @@ def test_finalize_writes_commit_when_not_skipped(tmp_path):
     schemas_dir.mkdir()
     real_schema_src = (
         __import__("pathlib").Path(__file__).resolve().parents[1]
-        / "schemas" / "asset-frontmatter.v1alpha1.json"
+        / "schemas" / "asset-frontmatter.v1alpha2.json"
     )
-    (schemas_dir / "asset-frontmatter.v1alpha1.json").write_text(real_schema_src.read_text())
+    (schemas_dir / "asset-frontmatter.v1alpha2.json").write_text(real_schema_src.read_text())
     (tmp_path / "AGENTS.md").write_text("# AGENTS")
     # initial commit so there is HEAD
     env = _git_env()
