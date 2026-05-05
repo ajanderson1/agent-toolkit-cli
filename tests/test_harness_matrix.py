@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 
 from agent_toolkit._support import _USER_TARGETS, ALL_HARNESSES, ALL_KINDS
+from agent_toolkit._translators import TRANSLATORS
 from agent_toolkit.harness_adapters import get_adapter
 from agent_toolkit.harness_adapters.base import UnimplementedAdapter
 
@@ -300,4 +301,56 @@ class TestAdapterParity:
             + "\n".join(
                 f"  ({h!r}, {k!r}): {dv} vs {cv}" for h, k, dv, cv in bad
             )
+        )
+
+
+_TRANSLATE_PATH_RE = re.compile(
+    r"(agents|commands)/<slug>\.md\s*$"
+)
+
+
+class TestTranslateParity:
+    def test_every_translate_cell_has_translator_entry(self, matrix):
+        bad: list[tuple[str, str, str]] = []
+        for (harness, kind), cell in sorted(matrix.items()):
+            if _cell_mechanism(cell) != "translate":
+                continue
+            if (harness, kind) not in TRANSLATORS:
+                bad.append((harness, kind, cell))
+        assert not bad, (
+            "Doc says 'translate' but TRANSLATORS has no entry:\n"
+            + "\n".join(f"  ({h!r}, {k!r}): {c!r}" for h, k, c in bad)
+        )
+
+    def test_every_translator_entry_has_translate_cell(self, matrix):
+        bad: list[tuple[str, str, str]] = []
+        for (harness, kind) in sorted(TRANSLATORS.keys()):
+            cell = matrix.get((harness, kind))
+            if cell is None:
+                bad.append((harness, kind, "pair not in matrix"))
+                continue
+            mech = _cell_mechanism(cell)
+            if mech != "translate":
+                bad.append((harness, kind, f"doc says {mech!r}, expected 'translate'"))
+        assert not bad, (
+            "TRANSLATORS has entries the doc does not mark as 'translate':\n"
+            + "\n".join(f"  ({h!r}, {k!r}): {reason}" for h, k, reason in bad)
+        )
+
+    def test_translate_cell_path_matches_slot_convention(self, matrix):
+        """Every `translate` cell's `→ <path>` fragment names a slot path
+        ending in `agents/<slug>.md` or `commands/<slug>.md`."""
+        bad: list[tuple[str, str, str]] = []
+        for (harness, kind), cell in sorted(matrix.items()):
+            if _cell_mechanism(cell) != "translate":
+                continue
+            doc_path = _cell_target_path(cell)
+            if doc_path is None:
+                bad.append((harness, kind, f"no `→` arrow in cell: {cell!r}"))
+                continue
+            if not _TRANSLATE_PATH_RE.search(doc_path):
+                bad.append((harness, kind, f"path does not match convention: {doc_path!r}"))
+        assert not bad, (
+            "Translate cell path does not match `agents/<slug>.md` or `commands/<slug>.md`:\n"
+            + "\n".join(f"  ({h!r}, {k!r}): {reason}" for h, k, reason in bad)
         )

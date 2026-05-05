@@ -25,6 +25,23 @@ the code disagree.
 - **unsupported (by design)** — the kind has no equivalent concept in this
   harness. Not a gap, won't be filled.
 
+### Translation cache layout
+
+The `translate` mechanism writes flavored markdown into a per-scope cache,
+then the harness slot symlinks to the cache file. Cache layout:
+
+| Scope | Cache root |
+|---|---|
+| user | `~/.config/<harness>/.agent-toolkit-cache/<kind>/<slug>.md` |
+| project | `<project>/.<harness>/.agent-toolkit-cache/<kind>/<slug>.md` |
+
+The output preserves the toolkit's wrapper frontmatter under a nested
+`agent_toolkit:` key (with `apiVersion`, `metadata`, `spec`) for SSOT
+traceability — the harness ignores this key, but `agent-toolkit` and
+human readers can trace any cache file back to its source asset.
+
+`unlink` removes both the slot symlink and its cache file together.
+
 ## Matrix
 
 | Kind \\ Harness | Claude | Codex | OpenCode | Pi |
