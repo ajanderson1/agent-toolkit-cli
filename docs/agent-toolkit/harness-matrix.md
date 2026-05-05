@@ -30,10 +30,10 @@ the code disagree.
 | Kind \\ Harness | Claude | Codex | OpenCode | Pi |
 |---|---|---|---|---|
 | **skill** | symlink → `~/.claude/skills/<slug>/` | symlink → `~/.codex/skills/<slug>/` | symlink → `~/.config/opencode/skills/<slug>/` | symlink → `~/.pi/agent/skills/<slug>/` |
-| **agent** | symlink → `~/.claude/agents/<slug>.md` | unsupported (by design) — agents are plugin-internal in Codex | unsupported (gap) — slot exists at `~/.config/opencode/agents/<slug>.md`, Phase 2 wires it | symlink → `~/.pi/agent/agents/<slug>.md` |
-| **command** | symlink → `~/.claude/commands/<slug>.md` | unsupported (by design) — commands surface as `$skill` invocations | unsupported (gap) — slot exists at `~/.config/opencode/commands/<slug>.md`, Phase 2 wires it | unsupported (by design) |
-| **hook** | symlink → `~/.claude/hooks/<slug>.<ext>` | unsupported (by design) | unsupported (by design) — opencode hooks are TS plugin internals | unsupported (by design) |
-| **plugin** | symlink → `~/.claude/plugins/<slug>/` | unsupported (by design) — Codex plugins are bundles installed via `codex plugin marketplace add` | unsupported (by design) — OpenCode plugins are TS files or npm packages | unsupported (by design) |
+| **agent** | symlink → `~/.claude/agents/<slug>.md` | unsupported (by design) — Codex has no `~/.codex/agents/` drop-in; agents are plugin-internal, distributed via `codex plugin marketplace add` | unsupported (gap) — slot exists at `~/.config/opencode/agents/<slug>.md` and OpenCode does register drop-ins, but our wrapper frontmatter lacks `mode: subagent` so they register as `mode: all` (primary). Phase 3 `translate` adapter will inject the mode at link time. | symlink → `~/.pi/agent/agents/<slug>.md` |
+| **command** | symlink → `~/.claude/commands/<slug>.md` | unsupported (by design) — Codex has no `~/.codex/commands/`; commands surface as `$skill` invocations from inside skills | unsupported (gap) — slot exists at `~/.config/opencode/commands/<slug>.md`. OpenCode commands have a different frontmatter shape (`agent`, `model`, `subtask`, `template`) than Claude's. Phase 3 `translate` adapter will bridge. | unsupported (by design) — Pi has no command concept |
+| **hook** | symlink → `~/.claude/hooks/<slug>.<ext>` | unsupported (by design) — Codex has no hooks API at the user level | unsupported (by design) — OpenCode hooks live inside TS plugin files (`session.start`, `tool.execute.before`, etc.); not drop-in markdown | unsupported (by design) — Pi has no hooks API at the user level |
+| **plugin** | symlink → `~/.claude/plugins/<slug>/` | unsupported (by design) — Codex plugins are bundles with `.codex-plugin/plugin.json` manifests, installed via `codex plugin marketplace add` (different concept and install path from Claude markdown plugins) | unsupported (by design) — OpenCode plugins are TS/JS files at `~/.config/opencode/plugins/` or npm packages declared in `config.json` (different concept entirely) | unsupported (by design) — Pi extends via `pi-extension`, not a plugin concept |
 | **mcp** | unsupported (gap) — adapter not yet implemented | config_file → `~/.codex/config.toml` `[mcp_servers.<name>]` | unsupported (gap) — adapter not yet implemented | unsupported (gap) — adapter not yet implemented |
 | **pi-extension** | unsupported (by design) | unsupported (by design) | unsupported (by design) | symlink → `~/.pi/agent/extensions/<slug>/` |
 
@@ -62,6 +62,61 @@ The Phase 3 **translate** mechanism will introduce harness-flavored
 frontmatter generation for kinds where the runtime fields differ
 materially (notably `agent` for OpenCode, where `mode: subagent` is
 required).
+
+## Why some pairs are "by design" unsupported
+
+The matrix has two flavors of "unsupported": **gap** (the harness
+supports the kind but the CLI hasn't wired it yet) and **by design**
+(the kind has no equivalent concept in that harness, so projection is
+not meaningful). Per kind:
+
+- **plugin** is Claude-only by design. Each harness has a different
+  notion of "plugin":
+  - Claude: a markdown directory at `~/.claude/plugins/<slug>/` (what
+    this toolkit projects).
+  - Codex: a bundle with a `.codex-plugin/plugin.json` manifest plus
+    optional skills/MCP/app-connector subfolders, installed via
+    `codex plugin marketplace add <name>`. Different shape, different
+    install verb — symlinking a markdown file would not register.
+  - OpenCode: a TypeScript or JavaScript file at
+    `~/.config/opencode/plugins/<slug>.{ts,js}` exporting hook
+    functions (e.g. `session.start`, `tool.execute.before`); or an npm
+    package declared in `config.json`'s `plugin` array. Neither is a
+    markdown file.
+  - Pi: extends via the dedicated `pi-extension` kind (TypeScript
+    modules using Pi's runtime API), not a "plugin" concept.
+
+  These are not gaps the toolkit can close — they're four genuinely
+  different extension models that happen to share the word "plugin".
+
+- **hook** is Claude-only by design. Codex and Pi have no user-level
+  hooks API. OpenCode does have hook *behavior* but it's expressed
+  inside TypeScript plugin files (`tool.execute.before`,
+  `session.error`, etc.) — not as drop-in markdown.
+
+- **command** is Claude+(opencode-via-Phase-3) by design. Codex
+  surfaces commands as `$skill-name` invocations from inside skills;
+  there is no `~/.codex/commands/` drop-in path. Pi has no command
+  concept at all. OpenCode does support drop-in commands but with a
+  different frontmatter shape than Claude — Phase 3 will bridge.
+
+- **agent** is Claude+Pi+(opencode-via-Phase-3) by design. Codex
+  exposes agents only through plugin bundles; there's no
+  `~/.codex/agents/` drop-in. OpenCode supports drop-in markdown
+  agents but defaults missing `mode:` to `all` (primary), which
+  silently mis-classifies our subagents — Phase 3 injects the right
+  mode at link time.
+
+- **pi-extension** is Pi-only by definition: TypeScript modules using
+  the Pi runtime API. No other harness can load them.
+
+- **mcp** is currently three gaps + one supported (codex). All four
+  harnesses support MCP servers; the gaps are CLI work, not design
+  limits.
+
+When in doubt, the rule is: declaring `harnesses:` includes a
+genuinely-unsupported pair will trip `agent-toolkit link --all`'s
+hard-stop on `UnsupportedPair`. So the asset metadata stays honest.
 
 ## Cross-asset dependencies (`spec.requires`)
 
