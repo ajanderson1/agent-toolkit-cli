@@ -485,17 +485,20 @@ def project_from_file(
                 print(f"warning: {exc}", file=stdout)
                 continue
             continue
-        if not is_supported(harness, kind):
-            # Boundary: caller asked for a harness/kind pair we have no slot
-            # for. Silent-skip is wrong (#30) but non-MCP kinds reach here
-            # from a discovery loop, not user input — we honour the filter
-            # rather than raise. Direct entrypoints (maybe_link) raise.
+        if not is_supported(harness, kind, scope=scope):
+            # Boundary: caller asked for a (harness, kind) pair that has no
+            # slot at this scope. Silent-skip is wrong (#30) but non-MCP
+            # kinds reach here from a discovery loop, not user input — we
+            # honour the filter rather than raise. Direct entrypoints
+            # (maybe_link) raise. Per-scope check (#49) lets us cleanly skip
+            # pairs like (pi, agent) at project scope where the user-scope
+            # entry exists but the project-scope one doesn't.
             continue
         target_dir = harness_target_dir(harness, kind, scope, project_root)
         if target_dir is None:
             raise RuntimeError(
-                f"is_supported({harness!r}, {kind!r}) is True but "
-                f"harness_target_dir returned None — SSOT invariant broken"
+                f"is_supported({harness!r}, {kind!r}, scope={scope!r}) is True"
+                f" but harness_target_dir returned None — SSOT invariant broken"
             )
         if not dry_run:
             target_dir.mkdir(parents=True, exist_ok=True)
