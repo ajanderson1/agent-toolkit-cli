@@ -13,8 +13,6 @@ import click
 
 from agent_toolkit._allowlist import kind_to_section, read_allowlist
 from agent_toolkit._repo_resolution import RepoNotFoundError, resolve_toolkit_root
-from agent_toolkit.walker import discover_assets, load_asset_record
-
 # Re-export from the SSOT module so existing callers (commands/list.py,
 # tests/test_link_lib.py, etc.) keep their import paths working.
 from agent_toolkit._support import (  # noqa: F401  (re-exported)
@@ -24,6 +22,7 @@ from agent_toolkit._support import (  # noqa: F401  (re-exported)
     _USER_TARGETS,
     slot_dir as _slot_dir,
 )
+from agent_toolkit.walker import discover_assets, load_asset_record
 
 
 def _expected_source(asset_path: Path, kind: str) -> Path:
