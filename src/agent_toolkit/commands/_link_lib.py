@@ -434,15 +434,33 @@ def project_from_file(
                     project_root=project_root,
                 )
             else:
-                _prune_if_into_repo(
-                    target_dir / asset.slug, toolkit_root, dry_run, counters, stdout,
-                )
+                slot_path_translated = target_dir / _translated_slot_filename(asset.slug, kind, harness)
+                slot_path_plain = target_dir / asset.slug
+                # Try translated slot first (path-based detection); fall back to plain.
+                if not _prune_translated_slot(
+                    slot_path_translated, harness, scope, project_root,
+                    dry_run, counters, stdout,
+                ):
+                    _prune_if_into_repo(
+                        slot_path_plain, toolkit_root, dry_run, counters, stdout,
+                    )
         # Sweep orphan symlinks (slug in target dir but no asset in repo)
         if target_dir.is_dir():
             for entry in target_dir.iterdir():
                 if not entry.is_symlink():
                     continue
-                if entry.name in discovered_slugs:
+                # discovered_slugs uses bare slugs; check both naming conventions
+                bare_name = entry.name
+                if bare_name in discovered_slugs:
+                    continue
+                # Strip a `.md` suffix to compare against bare slugs (translated slots
+                # use `<slug>.md` filenames; non-translated use bare `<slug>`)
+                if bare_name.endswith(".md") and bare_name[:-3] in discovered_slugs:
+                    continue
+                if _prune_translated_slot(
+                    entry, harness, scope, project_root,
+                    dry_run, counters, stdout,
+                ):
                     continue
                 _prune_if_into_repo(entry, toolkit_root, dry_run, counters, stdout)
 
@@ -505,3 +523,47 @@ def _prune_if_into_repo(
     else:
         link_path.unlink()
         counters.removed += 1
+
+
+def _prune_translated_slot(
+    link_path: Path,
+    harness: str,
+    scope: str,
+    project_root: Path,
+    dry_run: bool,
+    counters: LinkCounters,
+    stdout: IO[str],
+) -> bool:
+    """If `link_path` is a symlink whose target is inside the per-scope
+    translation cache, remove both the symlink and the cache file. Returns
+    True if it acted (slot was a translated slot), False otherwise so the
+    caller can fall through to other prune paths.
+
+    Edge case: cache file already missing (manual tampering) — silently
+    delete the dangling symlink and return True.
+    """
+    if not link_path.is_symlink():
+        return False
+    try:
+        cache_root = _scope_cache_root(harness, scope, project_root).resolve()
+    except ValueError:
+        return False  # no cache layout for this harness
+    target = Path(os.readlink(str(link_path)))
+    try:
+        target_resolved = target.resolve()
+    except (OSError, RuntimeError):
+        return False
+    try:
+        target_resolved.relative_to(cache_root)
+    except ValueError:
+        return False  # target is outside our cache
+
+    if dry_run:
+        print(f"would-unlink: {link_path}", file=stdout)
+        counters.would_unlink += 1
+    else:
+        link_path.unlink()
+        if target.exists():
+            target.unlink()
+        counters.removed += 1
+    return True

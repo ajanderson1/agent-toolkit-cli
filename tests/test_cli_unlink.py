@@ -404,6 +404,42 @@ def test_unlink_mcp_removes_from_allowlist(tmp_path, monkeypatch):
 # ===========================================================================
 
 
+def test_unlink_user_opencode_agent_removes_slot_and_cache(env, seed_agent):
+    """Unlinking a translated agent removes both the slot symlink and the
+    cache file it points at."""
+    home = env["home"]
+    toolkit = env["toolkit_root"]
+    seed_agent(toolkit, "foo", ["opencode"])
+    allowlist = home / ".agent-toolkit.yaml"
+    allowlist.write_text("agents:\n  - foo\n")
+
+    # Step 1: link to create slot + cache
+    runner = CliRunner()
+    result = runner.invoke(
+        main, ["--toolkit-repo", str(toolkit), "link", "user", "opencode"],
+    )
+    assert result.exit_code == 0, (result.output, result.stderr)
+    slot = home / ".config" / "opencode" / "agents" / "foo.md"
+    cache = home / ".config" / "opencode" / ".agent-toolkit-cache" / "agent" / "foo.md"
+    assert slot.is_symlink()
+    assert cache.is_file()
+
+    # Step 2: remove the slug from the allowlist, then unlink --all should sweep it
+    allowlist.write_text("agents:\n")
+    result = runner.invoke(
+        main, ["--toolkit-repo", str(toolkit), "unlink", "user", "opencode", "--all"],
+    )
+    assert result.exit_code == 0, (result.output, result.stderr)
+
+    assert not slot.exists() and not slot.is_symlink(), "slot symlink should be gone"
+    assert not cache.exists(), "cache file should be gone"
+
+
+# ===========================================================================
+# Issue #30 — unlink refuses unsupported (harness, kind) loudly in plan mode
+# ===========================================================================
+
+
 def test_unlink_plan_with_unsupported_pair_exits_2_with_message(tmp_path, monkeypatch):
     """`unlink user codex --plan -` with `agent: foo` must exit 2 (not 0)
     and the output names the pair plus the supported kinds for codex."""
