@@ -9,6 +9,7 @@ import yaml
 from agent_toolkit._repo_resolution import resolve_toolkit_root
 from agent_toolkit._translators import (
     TRANSLATORS,
+    _translate_codex_skill,
     _translate_opencode_agent,
     _translate_opencode_command,
 )
@@ -130,7 +131,76 @@ def test_translators_dict_has_opencode_command_entry():
     assert TRANSLATORS[("opencode", "command")] is _translate_opencode_command
 
 
-@pytest.mark.parametrize("kind,harness", [("agent", "opencode"), ("command", "opencode")])
+def _make_skill_record(slug: str, description: str) -> AssetRecord:
+    metadata = {
+        "apiVersion": "agent-toolkit/v1alpha2",
+        "metadata": {
+            "name": slug,
+            "description": description,
+            "lifecycle": "stable",
+        },
+        "spec": {"origin": "first-party", "vendored_via": "none", "harnesses": ["codex"]},
+    }
+    asset = Asset(kind="skill", slug=slug, path=Path(f"/fake/skills/{slug}/SKILL.md"))
+    return AssetRecord(asset=asset, metadata=metadata, body_excerpt="", requires={})
+
+
+def test_translate_codex_skill_emits_top_level_description():
+    """Codex's loader requires `description:` at the YAML top level."""
+    record = _make_skill_record("demo-skill", "Demo skill — does demo things.")
+    out = _translate_codex_skill(record, "# demo-skill\n\nBody.\n")
+
+    assert isinstance(out, bytes)
+    text = out.decode("utf-8")
+    assert text.startswith("---\n")
+    end_idx = text.find("\n---\n", 4)
+    assert end_idx != -1
+    fm = yaml.safe_load(text[4:end_idx])
+
+    assert fm["description"] == "Demo skill — does demo things."
+    assert "mode" not in fm  # skills don't have a mode field
+
+
+def test_translate_codex_skill_preserves_wrapper_under_agent_toolkit_key():
+    record = _make_skill_record("demo-skill", "Desc.")
+    out = _translate_codex_skill(record, "")
+    text = out.decode("utf-8")
+    end_idx = text.find("\n---\n", 4)
+    fm = yaml.safe_load(text[4:end_idx])
+
+    assert fm["agent_toolkit"]["apiVersion"] == "agent-toolkit/v1alpha2"
+    assert fm["agent_toolkit"]["metadata"]["name"] == "demo-skill"
+    assert fm["agent_toolkit"]["spec"]["harnesses"] == ["codex"]
+
+
+def test_translate_codex_skill_appends_body():
+    record = _make_skill_record("demo-skill", "Desc.")
+    body = "# Heading\n\nParagraph.\n"
+    out = _translate_codex_skill(record, body)
+    text = out.decode("utf-8")
+    closing_fence_at = text.find("\n---\n", 4)
+    after = text[closing_fence_at + len("\n---\n"):]
+    assert after == body
+
+
+def test_translate_codex_skill_round_trip_stable():
+    record = _make_skill_record("demo-skill", "Desc.")
+    body = "Body.\n"
+    a = _translate_codex_skill(record, body)
+    b = _translate_codex_skill(record, body)
+    assert a == b
+
+
+def test_translators_dict_has_codex_skill_entry():
+    assert ("codex", "skill") in TRANSLATORS
+    assert TRANSLATORS[("codex", "skill")] is _translate_codex_skill
+
+
+@pytest.mark.parametrize("kind,harness", [
+    ("agent", "opencode"),
+    ("command", "opencode"),
+    ("skill", "codex"),
+])
 def test_translator_renders_every_shipping_eligible_asset(kind: str, harness: str):
     """For each (harness, kind) the translator handles, render every shipping
     asset in the toolkit repo whose `spec.harnesses` includes the harness.

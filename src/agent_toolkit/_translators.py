@@ -62,7 +62,24 @@ def _translate_opencode_command(record: AssetRecord, body: str) -> bytes:
     return _render(fm, body)
 
 
+def _translate_codex_skill(record: AssetRecord, body: str) -> bytes:
+    """Codex skills require `description:` at the YAML top level. The toolkit's
+    v1alpha2 wrapper nests it under `metadata.description`, so the loader rejects
+    every skill with `failed to load skill ... missing field 'description'` (#40).
+
+    Output mirrors `_translate_opencode_command` exactly — top-level `description`
+    plus `agent_toolkit` wrapper for round-trip traceability. Empirically verified
+    against codex 0.128.0: extra top-level keys are tolerated.
+    """
+    fm = {
+        "description": _description(record),
+        "agent_toolkit": _wrapper_block(record),
+    }
+    return _render(fm, body)
+
+
 TRANSLATORS: dict[tuple[str, str], Callable[[AssetRecord, str], bytes]] = {
     ("opencode", "agent"): _translate_opencode_agent,
     ("opencode", "command"): _translate_opencode_command,
+    ("codex", "skill"): _translate_codex_skill,
 }
