@@ -1,6 +1,8 @@
 """Unit tests for translator functions in agent_toolkit._translators."""
 from __future__ import annotations
 
+from pathlib import Path
+
 import yaml
 
 from agent_toolkit._translators import TRANSLATORS, _translate_opencode_agent
@@ -22,7 +24,7 @@ def _make_record(slug: str, description: str, harnesses: list[str]) -> AssetReco
             "harnesses": harnesses,
         },
     }
-    asset = Asset(kind="agent", slug=slug, path=__import__("pathlib").Path(f"/fake/agents/{slug}.md"))
+    asset = Asset(kind="agent", slug=slug, path=Path(f"/fake/agents/{slug}.md"))
     return AssetRecord(asset=asset, metadata=metadata, body_excerpt="", requires={})
 
 
