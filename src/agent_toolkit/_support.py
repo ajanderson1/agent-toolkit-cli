@@ -78,9 +78,29 @@ class UnsupportedPair(Exception):
         )
 
 
-def is_supported(harness: str, kind: str) -> bool:
-    """True iff `(harness, kind)` has a real adapter slot in the matrix."""
-    return (harness, kind) in SUPPORTED_PAIRS
+def is_supported(harness: str, kind: str, scope: str | None = None) -> bool:
+    """True iff `(harness, kind)` has a real adapter slot in the matrix.
+
+    With `scope=None` (default), returns True if the pair has a slot at *any*
+    scope — i.e., membership in `SUPPORTED_PAIRS`. This is the back-compat
+    answer used by allow-list/validate code paths that operate before a scope
+    is in scope.
+
+    With `scope="user"` or `scope="project"`, returns True only if the pair
+    has a slot at *that* scope. Use this in projection-time code paths
+    (linker iteration loops, etc.) so per-scope-only entries (e.g.
+    `("pi","agent")` at user scope only) are skipped cleanly instead of
+    falling through to a `harness_target_dir → None → RuntimeError`.
+
+    Any other scope value returns False.
+    """
+    if scope is None:
+        return (harness, kind) in SUPPORTED_PAIRS
+    if scope == "user":
+        return (harness, kind) in _USER_TARGETS
+    if scope == "project":
+        return (harness, kind) in _PROJECT_TARGETS
+    return False
 
 
 def supported_kinds_for(harness: str) -> tuple[str, ...]:
