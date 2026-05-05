@@ -14,7 +14,7 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
-from textual.widgets import Button, Footer, Header, Label, Static
+from textual.widgets import Button, Footer, Header, Input, Label, Static
 
 from agent_toolkit_tui.messages import (
     AssetToggled,
@@ -23,7 +23,9 @@ from agent_toolkit_tui.messages import (
 )
 from agent_toolkit_tui.runner import CLIRunner, PlanResult, RunnerError
 from agent_toolkit_tui.state import InventoryState, build_state
-from agent_toolkit_tui.widgets import AssetGrid, HarnessPicker, KindsSidebar
+from agent_toolkit_tui.widgets import AssetGrid, KindsTabs
+
+HARNESSES_DISPLAY_ORDER = ("claude", "codex", "cursor", "opencode", "pi")
 
 
 class ConfirmDiscardScreen(ModalScreen[bool]):
@@ -35,7 +37,7 @@ class ConfirmDiscardScreen(ModalScreen[bool]):
     }
     ConfirmDiscardScreen > Vertical {
         background: $panel;
-        border: round $warning;
+        border: thick $warning;
         padding: 1 2;
         width: 50;
         height: auto;
@@ -43,6 +45,8 @@ class ConfirmDiscardScreen(ModalScreen[bool]):
     ConfirmDiscardScreen Label {
         width: 100%;
         content-align: center middle;
+        text-style: bold;
+        color: $warning;
         margin-bottom: 1;
     }
     ConfirmDiscardScreen #buttons {
@@ -51,7 +55,7 @@ class ConfirmDiscardScreen(ModalScreen[bool]):
         align: center middle;
     }
     ConfirmDiscardScreen Button {
-        margin: 0 1;
+        margin: 0 2;
     }
     """
 
@@ -94,6 +98,14 @@ class TUIApp(App):
         Binding("ctrl+r", "refresh", "Refresh", priority=True),
         Binding("ctrl+z", "revert", "Revert", priority=True),
         Binding("slash", "focus_filter", "Filter", priority=True),
+        Binding("u", "scope('user')", "user scope"),
+        Binding("p", "scope('project')", "project scope"),
+        Binding("1", "kind('skill')", "Skills", show=False),
+        Binding("2", "kind('agent')", "Agents", show=False),
+        Binding("3", "kind('command')", "Commands", show=False),
+        Binding("4", "kind('hook')", "Hooks", show=False),
+        Binding("5", "kind('plugin')", "Plugins", show=False),
+        Binding("6", "kind('pi-extension')", "Pi Ext", show=False),
         Binding("q", "quit", "Quit"),
     ]
 
@@ -102,31 +114,51 @@ class TUIApp(App):
         self.toolkit_root = toolkit_root
         self.runner = runner or CLIRunner(toolkit_root=toolkit_root)
         self.state: InventoryState = build_state(self.runner)
+        self._scope: str = "project"
+        self._kind: str = "skill"
 
     # ----- composition ----------------------------------------------------
     def compose(self) -> ComposeResult:
         yield Header()
-        yield HarnessPicker(self.state, id="harness-picker")
-        with Horizontal(id="main-row"):
-            yield KindsSidebar(self.state, id="kinds-sidebar")
-            yield AssetGrid(self.state, id="asset-grid")
+        yield KindsTabs(self.state, id="kinds-tabs")
+        yield Static(self._build_breadcrumb(), id="breadcrumb")
+        yield AssetGrid(self.state, id="asset-grid")
+        yield Static("", id="status-bar")
         yield Static("", id="footer-pending")
         yield Footer()
 
     # ----- lifecycle ------------------------------------------------------
     def on_mount(self) -> None:
-        # Initialize the footer label so it shows "Pending: 0" from startup.
+        try:
+            self.theme = "tokyo-night"
+        except Exception:
+            pass
         self._refresh_pending_label()
+        self._refresh_status_bar()
+        # Default focus on the data table, not the filter Input — `q` and other
+        # bindings should fire as bindings, not as text input.
+        try:
+            from textual.widgets import DataTable
+            self.query_one("#grid-table", DataTable).focus()
+        except Exception:
+            pass
 
     # ----- message handlers ------------------------------------------------
     def on_kind_changed(self, event: KindChanged) -> None:
+        self._kind = event.kind
         self.query_one("#asset-grid", AssetGrid).set_kind(event.kind)
+        self._refresh_breadcrumb()
+        self._refresh_status_bar()
 
     def on_scope_changed(self, event: ScopeChanged) -> None:
+        self._scope = event.scope
         self.query_one("#asset-grid", AssetGrid).set_scope(event.scope)
+        self._refresh_breadcrumb()
+        self._refresh_status_bar()
 
     def on_asset_toggled(self, event: AssetToggled) -> None:
         self._refresh_pending_label()
+        self._refresh_status_bar()
 
     # ----- actions --------------------------------------------------------
     def action_quit(self) -> None:
@@ -143,17 +175,35 @@ class TUIApp(App):
         self.push_screen(ConfirmDiscardScreen(n), _on_close)
 
     def action_focus_filter(self) -> None:
-        from textual.widgets import Input
         try:
             self.query_one("#grid-filter", Input).focus()
         except Exception:
             pass
 
+    def action_scope(self, scope: str) -> None:
+        if scope not in ("user", "project") or scope == self._scope:
+            return
+        self._scope = scope
+        self.query_one("#asset-grid", AssetGrid).set_scope(scope)
+        self._refresh_breadcrumb()
+        self._refresh_status_bar()
+
+    def action_kind(self, kind: str) -> None:
+        if kind == self._kind:
+            return
+        self._kind = kind
+        self.query_one("#kinds-tabs", KindsTabs).set_active(kind)
+        self.query_one("#asset-grid", AssetGrid).set_kind(kind)
+        self._refresh_breadcrumb()
+        self._refresh_status_bar()
+
     def action_refresh(self) -> None:
         self.state = build_state(self.runner)
         self.query_one("#asset-grid", AssetGrid).update_state(self.state)
-        self.query_one("#kinds-sidebar", KindsSidebar).update_state(self.state)
+        self.query_one("#kinds-tabs", KindsTabs).update_state(self.state)
         self._refresh_pending_label()
+        self._refresh_breadcrumb()
+        self._refresh_status_bar()
 
     def action_revert(self) -> None:
         grid = self.query_one("#asset-grid", AssetGrid)
@@ -221,6 +271,63 @@ class TUIApp(App):
     def _refresh_pending_label(self) -> None:
         n = len(self.query_one("#asset-grid", AssetGrid).pending_entries())
         self.query_one("#footer-pending", Static).update(f"Pending: {n}")
+
+    # ----- breadcrumb + status bar ----------------------------------------
+    def _harnesses_for_display(self) -> tuple[str, ...]:
+        """Order known harnesses first (HARNESSES_DISPLAY_ORDER), then any extras."""
+        seen = set()
+        ordered: list[str] = []
+        for h in HARNESSES_DISPLAY_ORDER:
+            if h in self.state.all_harnesses and h not in seen:
+                ordered.append(h)
+                seen.add(h)
+        for h in self.state.all_harnesses:
+            if h not in seen:
+                ordered.append(h)
+                seen.add(h)
+        return tuple(ordered)
+
+    def _build_breadcrumb(self) -> str:
+        kind_label = self._kind.replace("-", " ").title() if self._kind != "pi-extension" else "Pi Ext"
+        scope_chip = f"[reverse] {self._scope} [/]"
+        harness_chips = "  ".join(f"[reverse] {h} [/]" for h in self._harnesses_for_display())
+        return (
+            f"  [dim]agent-toolkit ›[/] [b]{kind_label}[/]   [dim]·[/]   "
+            f"scope: {scope_chip}   [dim]·[/]   harnesses: {harness_chips}"
+        )
+
+    def _refresh_breadcrumb(self) -> None:
+        try:
+            self.query_one("#breadcrumb", Static).update(self._build_breadcrumb())
+        except Exception:
+            pass
+
+    def _refresh_status_bar(self) -> None:
+        """Roll up state into linked / pending / drifted / broken counts."""
+        linked = drifted = broken = 0
+        for row in self.state.rows:
+            for cell in row.cells.values():
+                if cell.status in ("linked", "linked-matches"):
+                    linked += 1
+                elif cell.status == "linked-drifted":
+                    drifted += 1
+                elif cell.status == "broken":
+                    broken += 1
+        try:
+            grid = self.query_one("#asset-grid", AssetGrid)
+            pending = len(grid.pending_entries())
+        except Exception:
+            pending = 0
+        text = (
+            f"  [b green]{linked}[/] linked   "
+            f"[b yellow]{pending}[/] pending   "
+            f"[b orange3]{drifted}[/] drifted   "
+            f"[b red]{broken}[/] broken"
+        )
+        try:
+            self.query_one("#status-bar", Static).update(text)
+        except Exception:
+            pass
 
 
 # --------------------------------------------------------------------------
