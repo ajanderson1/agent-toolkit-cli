@@ -8,6 +8,8 @@ from __future__ import annotations
 from agent_toolkit.harness_adapters.base import (
     CannotInstall,
     ConfigFileAdapter,
+    ConfigFileFolderAdapter,
+    HookEntry,
     McpEntry,
     PluginFolderAdapter,
     Scope,
@@ -41,11 +43,13 @@ def get_adapter(harness: str):
 
 __all__ = [
     "get_adapter",
-    "McpEntry",
-    "WriteAction",
     "CannotInstall",
-    "Scope",
-    "PluginFolderAdapter",
     "ConfigFileAdapter",
+    "ConfigFileFolderAdapter",
+    "HookEntry",
+    "McpEntry",
+    "PluginFolderAdapter",
+    "Scope",
     "UnimplementedAdapter",
+    "WriteAction",
 ]
