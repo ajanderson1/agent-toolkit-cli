@@ -54,6 +54,15 @@ def _translate_opencode_agent(record: AssetRecord, body: str) -> bytes:
     return _render(fm, body)
 
 
+def _translate_opencode_command(record: AssetRecord, body: str) -> bytes:
+    fm = {
+        "description": _description(record),
+        "agent_toolkit": _wrapper_block(record),
+    }
+    return _render(fm, body)
+
+
 TRANSLATORS: dict[tuple[str, str], Callable[[AssetRecord, str], bytes]] = {
     ("opencode", "agent"): _translate_opencode_agent,
+    ("opencode", "command"): _translate_opencode_command,
 }

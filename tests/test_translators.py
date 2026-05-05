@@ -79,3 +79,43 @@ def test_translate_opencode_agent_round_trip_stable():
 def test_translators_dict_has_opencode_agent_entry():
     assert ("opencode", "agent") in TRANSLATORS
     assert TRANSLATORS[("opencode", "agent")] is _translate_opencode_agent
+
+
+from agent_toolkit._translators import _translate_opencode_command
+
+
+def _make_command_record(slug: str, description: str) -> AssetRecord:
+    metadata = {
+        "apiVersion": "agent-toolkit/v1alpha2",
+        "metadata": {
+            "name": slug,
+            "description": description,
+            "lifecycle": "stable",
+        },
+        "spec": {"origin": "first-party", "vendored_via": "none", "harnesses": ["opencode"]},
+    }
+    asset = Asset(kind="command", slug=slug, path=Path(f"/fake/commands/{slug}.md"))
+    return AssetRecord(asset=asset, metadata=metadata, body_excerpt="", requires={})
+
+
+def test_translate_opencode_command_has_description_and_no_mode():
+    record = _make_command_record("explain", "Explain something.")
+    out = _translate_opencode_command(record, "Body.\n")
+    text = out.decode("utf-8")
+    end_idx = text.find("\n---\n", 4)
+    fm = yaml.safe_load(text[4:end_idx])
+    assert fm["description"] == "Explain something."
+    assert "mode" not in fm
+    assert fm["agent_toolkit"]["metadata"]["name"] == "explain"
+
+
+def test_translate_opencode_command_round_trip_stable():
+    record = _make_command_record("explain", "desc")
+    a = _translate_opencode_command(record, "x")
+    b = _translate_opencode_command(record, "x")
+    assert a == b
+
+
+def test_translators_dict_has_opencode_command_entry():
+    assert ("opencode", "command") in TRANSLATORS
+    assert TRANSLATORS[("opencode", "command")] is _translate_opencode_command
