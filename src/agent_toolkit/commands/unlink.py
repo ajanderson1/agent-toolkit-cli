@@ -157,7 +157,7 @@ def _do_all(scope, harness, toolkit_root, project_root, dry_run):
 
     counters = LinkCounters()
     for kind in KINDS_FOR_PROJECTION:
-        if not is_supported(harness, kind):
+        if not is_supported(harness, kind, scope=scope):
             continue
         target_dir = harness_target_dir(harness, kind, scope, project_root)
         if not target_dir.is_dir():

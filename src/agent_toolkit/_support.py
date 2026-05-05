@@ -47,18 +47,16 @@ _PROJECT_TARGETS: dict[tuple[str, str], str] = {
     # Pi project-scope: pi reads from <cwd>/.pi/{skills,extensions} (no /agent/
     # infix at project scope). User-scope keeps the .pi/agent/ prefix because
     # pi's globalBaseDir == ~/.pi/agent. See package-manager.js:669-686.
+    # Pi has no project-scope `agents` discovery (package-manager.js:1788-1794
+    # — only extensions, skills, prompts, themes are auto-discovered at
+    # project scope), so ("pi","agent") is intentionally absent here. Per-
+    # scope `is_supported(..., scope="project")` answers False for this pair.
     ("pi", "skill"):           ".pi/skills",
-    ("pi", "agent"):           ".pi/agent/agents",  # pi has no project-scope
-                                                    # agents discovery; left in
-                                                    # the table to preserve the
-                                                    # _USER/_PROJECT key parity
-                                                    # invariant. Tracked as a
-                                                    # follow-up to #41.
     ("pi", "pi-extension"):    ".pi/extensions",
 }
 
 # Derived: SUPPORTED_PAIRS = the set of (harness, kind) pairs with adapter slots.
-# Both tables MUST share the same key set; tested in tests/test_support.py.
+# Derived from _USER_TARGETS; _PROJECT_TARGETS is a subset (tested in tests/test_support.py).
 SUPPORTED_PAIRS: frozenset[tuple[str, str]] = frozenset(_USER_TARGETS.keys())
 
 
@@ -78,9 +76,29 @@ class UnsupportedPair(Exception):
         )
 
 
-def is_supported(harness: str, kind: str) -> bool:
-    """True iff `(harness, kind)` has a real adapter slot in the matrix."""
-    return (harness, kind) in SUPPORTED_PAIRS
+def is_supported(harness: str, kind: str, scope: str | None = None) -> bool:
+    """True iff `(harness, kind)` has a real adapter slot in the matrix.
+
+    With `scope=None` (default), returns True if the pair has a slot at *any*
+    scope — i.e., membership in `SUPPORTED_PAIRS`. This is the back-compat
+    answer used by allow-list/validate code paths that operate before a scope
+    is in scope.
+
+    With `scope="user"` or `scope="project"`, returns True only if the pair
+    has a slot at *that* scope. Use this in projection-time code paths
+    (linker iteration loops, etc.) so per-scope-only entries (e.g.
+    `("pi","agent")` at user scope only) are skipped cleanly instead of
+    falling through to a `harness_target_dir → None → RuntimeError`.
+
+    Any other scope value returns False.
+    """
+    if scope is None:
+        return (harness, kind) in SUPPORTED_PAIRS
+    if scope == "user":
+        return (harness, kind) in _USER_TARGETS
+    if scope == "project":
+        return (harness, kind) in _PROJECT_TARGETS
+    return False
 
 
 def supported_kinds_for(harness: str) -> tuple[str, ...]:

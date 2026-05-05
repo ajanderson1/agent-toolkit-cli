@@ -443,3 +443,21 @@ def test_list_json_mcp_claude_unsupported(tmp_path, monkeypatch):
     user_claude = next(c for c in mcp["cells"]
                        if c["harness"] == "claude" and c["scope"] == "user")
     assert user_claude["status"] == "unsupported"
+
+
+def test_cell_status_pi_agent_project_scope_is_unsupported(tmp_path):
+    """Acceptance #7: the (pi, agent) project-scope cell reports 'unsupported'
+    after _PROJECT_TARGETS row removal (#49)."""
+    from agent_toolkit.commands._list_json import _cell_status
+
+    status, target = _cell_status(
+        harness="pi",
+        kind="agent",
+        slug="any-slug",
+        scope="project",
+        expected_src=tmp_path / "ignored",
+        toolkit_root_resolved=tmp_path / "ignored-toolkit",
+        project_root=tmp_path,
+    )
+    assert status == "unsupported"
+    assert target is None
