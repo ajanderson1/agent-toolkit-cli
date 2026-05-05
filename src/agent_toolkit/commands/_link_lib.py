@@ -56,31 +56,49 @@ def harness_home_path(harness: str, home: Path | None = None) -> Path:
 CACHE_DIR_NAME = ".agent-toolkit-cache"
 
 
+# Per-harness cache layout. The harness-home for opencode differs between
+# scopes (.config/opencode vs .opencode); codex uses .codex in both. New
+# translate harnesses register here.
+_CACHE_LAYOUT: dict[str, dict[str, tuple[str, ...]]] = {
+    "opencode": {
+        "user":    (".config", "opencode", CACHE_DIR_NAME),
+        "project": (".opencode", CACHE_DIR_NAME),
+    },
+    "codex": {
+        "user":    (".codex", CACHE_DIR_NAME),
+        "project": (".codex", CACHE_DIR_NAME),
+    },
+}
+
+
 def _scope_cache_root(harness: str, scope: str, project_root: Path) -> Path:
     """Return the per-scope cache root for a harness.
 
-    user scope:    $HOME/<harness-home>/<CACHE_DIR_NAME>/
-    project scope: <project_root>/<harness-home>/<CACHE_DIR_NAME>/
-
-    The harness-home for opencode differs between scopes:
-      - user:    .config/opencode/
-      - project: .opencode/
-    Mirrors the path conventions in _support.py (_USER_TARGETS / _PROJECT_TARGETS).
+    user scope:    $HOME/<segments>/
+    project scope: <project_root>/<segments>/
     """
-    if harness != "opencode":
-        # No other harness has a translate cell yet; defensively raise.
+    layout = _CACHE_LAYOUT.get(harness)
+    if layout is None:
         raise ValueError(f"no cache layout defined for harness {harness!r}")
+    segments = layout.get(scope)
+    if segments is None:
+        raise ValueError(
+            f"no cache layout defined for harness {harness!r} in scope {scope!r}"
+        )
     if scope == "user":
-        home = Path(os.environ.get("HOME", ""))
-        return home / ".config" / "opencode" / CACHE_DIR_NAME
-    return project_root / ".opencode" / CACHE_DIR_NAME
+        return Path(os.environ.get("HOME", "")).joinpath(*segments)
+    return project_root.joinpath(*segments)
 
 
 def _translated_slot_filename(slug: str, kind: str, harness: str) -> str:
     """Return the filename used for the slot symlink in this (harness, kind).
 
-    OpenCode requires `.md` extension on agent and command slot files; Claude
-    does not. Today only opencode has translate cells, so this is `<slug>.md`."""
+    File-slot kinds get `<slug>.md` (OpenCode agents/commands). Directory-slot
+    kinds — and any unsupported pair — get the bare `<slug>`.
+
+    Callers can detect the slot shape from the result: `endswith(".md")` ⇒
+    file-slot; otherwise directory-slot or non-translated.
+    """
     if harness == "opencode" and kind in {"agent", "command"}:
         return f"{slug}.md"
     return slug
@@ -95,10 +113,15 @@ def _render_to_cache(
     scope: str,
     project_root: Path,
     dry_run: bool,
-) -> tuple[Path, bytes]:
-    """Render translated bytes for an asset and return the (cache_path, bytes).
+) -> tuple[Path, Path, bytes]:
+    """Render translated bytes for an asset and return `(cache_path, slot_target, bytes)`.
 
-    In dry_run, computes bytes in-memory and returns the would-be cache path
+    `cache_path` is the rendered file. `slot_target` is what the slot symlink
+    should point at — equal to `cache_path` for file-slot kinds (e.g. opencode
+    agents/commands), equal to `cache_path.parent` (the per-slug cache
+    directory) for directory-slot kinds (e.g. skills).
+
+    In dry_run, computes bytes in-memory and returns the would-be paths
     without writing. Out of dry_run, writes the bytes atomically (tmp+rename),
     creating parent directories as needed.
 
@@ -115,14 +138,24 @@ def _render_to_cache(
     body = strip_frontmatter(text)
     rendered = translator(record, body)
 
-    cache_dir = _scope_cache_root(harness, scope, project_root) / kind
-    cache_path = cache_dir / f"{slug}.md"
+    cache_root = _scope_cache_root(harness, scope, project_root) / kind
+    slot_filename = _translated_slot_filename(slug, kind, harness)
+    if slot_filename.endswith(".md"):
+        # File-slot: cache layout is <cache_root>/<kind>/<slug>.md
+        cache_dir = cache_root
+        cache_path = cache_dir / f"{slug}.md"
+        slot_target = cache_path
+    else:
+        # Directory-slot: cache layout is <cache_root>/<kind>/<slug>/<asset.name>
+        cache_dir = cache_root / slug
+        cache_path = cache_dir / asset_path.name
+        slot_target = cache_dir
     if not dry_run:
         cache_dir.mkdir(parents=True, exist_ok=True)
         tmp = cache_path.with_suffix(cache_path.suffix + ".tmp")
         tmp.write_bytes(rendered)
         tmp.replace(cache_path)
-    return cache_path, rendered
+    return cache_path, slot_target, rendered
 
 
 def _relative_to_toolkit(asset_path: Path, toolkit_root: Path) -> str:
@@ -278,24 +311,25 @@ def maybe_link(
         return
 
     if is_translated:
-        cache_path, rendered = _render_to_cache(
+        cache_path, slot_target, rendered = _render_to_cache(
             harness=harness, kind=kind, slug=slug,
             asset_path=asset_path, scope=scope,
             project_root=project_root, dry_run=dry_run,
         )
-        source_path = cache_path
-        # Cache-staleness rule: if the cache exists and its bytes match the
-        # rendered output, AND the slot symlink already points at the cache,
-        # this is unchanged. Any drift counts as updated.
+        source_path = slot_target
+        # Cache-staleness rule: if the cache file's bytes match the rendered
+        # output AND the slot symlink already points at the slot_target (the
+        # cache file for file-slot kinds, the cache dir for directory-slot
+        # kinds), this is unchanged. Any drift counts as updated.
         cache_in_sync = cache_path.is_file() and cache_path.read_bytes() == rendered
-        slot_correct = link_path.is_symlink() and Path(os.readlink(link_path)) == cache_path
+        slot_correct = link_path.is_symlink() and Path(os.readlink(link_path)) == slot_target
         if slot_correct and cache_in_sync:
             counters.unchanged += 1
             return
         if dry_run:
             rel_asset = _relative_to_toolkit(asset_path, toolkit_root)
             print(
-                f"would-link: {link_path} -> {cache_path} (translated from {rel_asset})",
+                f"would-link: {link_path} -> {slot_target} (translated from {rel_asset})",
                 file=stdout,
             )
             counters.would_link += 1
@@ -535,11 +569,15 @@ def _prune_translated_slot(
     stdout: IO[str],
 ) -> bool:
     """If `link_path` is a symlink whose target is inside the per-scope
-    translation cache, remove both the symlink and the cache file. Returns
-    True if it acted (slot was a translated slot), False otherwise so the
-    caller can fall through to other prune paths.
+    translation cache, remove both the symlink and the cache content. For
+    file-slot caches (e.g. opencode agents/commands), removes the cache
+    file. For directory-slot caches (e.g. skills), removes the cache files
+    inside the slug directory and rmdir's the directory itself.
 
-    Edge case: cache file already missing (manual tampering) — silently
+    Returns True if it acted (slot was a translated slot), False otherwise
+    so the caller can fall through to other prune paths.
+
+    Edge case: cache content already missing (manual tampering) — silently
     delete the dangling symlink and return True.
     """
     if not link_path.is_symlink():
@@ -563,7 +601,18 @@ def _prune_translated_slot(
         counters.would_unlink += 1
     else:
         link_path.unlink()
-        if target.exists():
-            target.unlink()
+        if target_resolved.is_dir():
+            # Directory-slot cache: remove every file in the slug dir, then
+            # rmdir the directory itself. Tolerate missing entries (tampering)
+            # and a non-empty directory (rmdir raises OSError).
+            try:
+                for child in target_resolved.iterdir():
+                    if child.is_file() or child.is_symlink():
+                        child.unlink()
+                target_resolved.rmdir()
+            except OSError:
+                pass
+        elif target_resolved.exists():
+            target_resolved.unlink()
         counters.removed += 1
     return True
