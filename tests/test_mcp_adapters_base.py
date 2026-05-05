@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 
+@pytest.mark.xfail(reason="codex adapter implemented in task 5", strict=True)
 def test_get_adapter_returns_codex_adapter():
     from agent_toolkit.harness_adapters import get_adapter
 
