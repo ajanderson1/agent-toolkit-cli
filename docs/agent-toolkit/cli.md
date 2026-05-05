@@ -100,16 +100,37 @@ asset doesn't declare the requested harness.
 ### MCPs
 
 `mcp:<name>` is recognised the same as other kinds (`skill:`, `agent:`, etc.). The
-allow-list YAML is updated under the `mcps:` section; the projection step emits a
-`MCP install path for <harness> not yet implemented` line because per-harness MCP
-adapters are not yet wired up. Per-harness MCP installation lands in a follow-up
-plan; for now, MCPs are first-class allow-list citizens but produce no symlinks or
-harness config edits.
+allow-list YAML is updated under the `mcps:` section; per-harness MCP adapters
+write the appropriate config file on `link`:
+
+| Harness                    | Status (this release)                                 | Target |
+|----------------------------|--------------------------------------------------------|--------|
+| `codex`                    | ✓ implemented                                          | `~/.codex/config.toml` (user); `<project>/.codex/config.toml` (project, only if `.codex/` exists) |
+| `claude`, `opencode`, `pi` | not yet — `link`/`unlink` print a loud skip message    | —      |
+
+For `codex`, `link` mutates `[mcp_servers.<name>]` tables via a round-trip
+`tomlkit` parse, preserving every other section, comment, and key order.
+The adapter refuses MCPs whose `spec.mcp.transport` is not `stdio`.
+
+**Four-glyph status** in `list` (and the TUI):
+
+| Status (JSON)              | Glyph | Meaning |
+|----------------------------|-------|---------|
+| `linked-matches`           | `☑`   | allow-listed, installed, no drift |
+| `linked-drifted`           | `≁`   | allow-listed, installed, structural drift |
+| `unlinked-allowlisted`     | `☐`   | allow-listed, not installed (run `link` to fix) |
+| `installed-not-allowlisted`| `!`   | hand-rolled — never touched by this CLI |
+
+`agent-toolkit list mcp` (or `--format=json`) renders the four-glyph status.
+The human-readable text output shows `user:` and `project:` columns with these
+glyphs; JSON includes a `status` field with the string values above.
 
 ```bash
-agent-toolkit link project claude mcp:context7
-# → allow-list updated, then:
-# MCP install path for claude not yet implemented; allow-list updated only (context7).
+agent-toolkit link project codex mcp:context7
+# → .codex/config.toml written (or skipped if harness unimplemented)
+
+agent-toolkit list mcp codex
+#   context7              [codex]                user:☑ project:☐
 ```
 
 **Examples:**
@@ -240,7 +261,7 @@ Usage:
 
 | Argument | Description |
 |---|---|
-| `<kind>` | One of `skill`, `agent`, `command`, `hook`, `plugin`, `pi-extension`. Optional. |
+| `<kind>` | One of `skill`, `agent`, `command`, `hook`, `plugin`, `mcp`, `pi-extension`. Optional. |
 | `<harness>` | One of `claude`, `codex`, `opencode`, `pi`. Optional. |
 
 | Flag | Description |
@@ -258,8 +279,8 @@ when filtering by harness) and two install-state columns:
   the column is always `—`.
 
 Disambiguation: position-1 is `<kind>` if it matches a known kind, else
-`<harness>` if it matches a known harness, else error. `list mcp` prints a
-note (MCPs ship via the harness's `mcp.json`, not via symlinks).
+`<harness>` if it matches a known harness, else error. MCPs use the four-glyph
+status described above; they do not create symlinks (config-file entries instead).
 
 **Examples:**
 
@@ -305,11 +326,17 @@ Top-level shape:
 }
 ```
 
-Cell `status` is one of `linked`, `unlinked`, `broken`, `unsupported`. The
-`target` field is the **raw `os.readlink()`** value when the symlink exists
-(both `linked` and `broken`) — consumers see one consistent representation
-regardless of whether the link resolves correctly. `unlinked` and
-`unsupported` cells have `target: null`.
+For symlink-based kinds (`skill`, `agent`, etc.), cell `status` is one of:
+`linked`, `unlinked`, `broken`, `unsupported`. The `target` field is the
+**raw `os.readlink()`** value when the symlink exists (both `linked` and
+`broken`) — consumers see one consistent representation regardless of whether
+the link resolves correctly. `unlinked` and `unsupported` cells have `target: null`.
+
+For `mcp` kind, cell `status` is one of: `linked-matches`, `linked-drifted`,
+`unlinked-allowlisted`, `installed-not-allowlisted`. The `target` field is the
+config file path (e.g. `~/.codex/config.toml`) when the entry is installed
+(both `linked-*` statuses); `unlinked-allowlisted` and `installed-not-allowlisted`
+cells have `target: null`.
 
 ### Human-readable report (`--report`)
 
@@ -441,16 +468,19 @@ uv run agent-toolkit check --exit-code
 
 ## fix
 
-Regenerate auto-generated regions in `AGENTS.md`.
+Regenerate auto-generated regions in `AGENTS.md` and/or reconcile MCP drift.
 
 ```
-Usage: uv run agent-toolkit fix [--only=<region>] [--to-stdout]
+Usage: uv run agent-toolkit fix [--only=<region>] [--to-stdout] [--harness] [--scope] [--mcps-only]
 ```
 
 | Flag | Description |
 |---|---|
-| `--only=<region>` | Limit regeneration to one named region (`component-table` or `submodule-table`) |
-| `--to-stdout` | Print the regenerated content to stdout instead of writing to `AGENTS.md` |
+| `--only=<region>` | Limit AGENTS.md regeneration to one named region (`component-table` or `submodule-table`) |
+| `--to-stdout` | Print the regenerated AGENTS.md to stdout instead of writing to the file (skips MCP reconcile) |
+| `--harness <harness>` | Harness for MCP reconcile (default: `codex`; one of `claude`, `codex`, `opencode`, `pi`) |
+| `--scope <scope>` | Scope for MCP reconcile (default: `user`; one of `user`, `project`) |
+| `--mcps-only` | Skip AGENTS.md region regen; reconcile MCPs only |
 
 Regions are bounded by HTML comment markers:
 
@@ -460,11 +490,24 @@ Regions are bounded by HTML comment markers:
 <!-- END_AGENT_TOOLKIT:component-table -->
 ```
 
-Output is byte-stable and sorted by path, so results are deterministic across machines.
+AGENTS.md output is byte-stable and sorted by path, so results are deterministic
+across machines.
 
-**Example:**
+MCP reconcile brings on-disk config files (e.g. `~/.codex/config.toml`) into
+sync with the canonical template render from the allow-list. Drift is detected
+via structural comparison (toml parse, not string match), so formatting edits
+are allowed. When nothing would change, file mtime is preserved.
+
+**Examples:**
 ```bash
+# Regenerate AGENTS.md component table:
 uv run agent-toolkit fix --only=component-table
+
+# Reconcile MCPs for the current user/codex scope:
+uv run agent-toolkit fix --mcps-only
+
+# Regenerate AGENTS.md AND reconcile MCPs in one go:
+uv run agent-toolkit fix
 ```
 
 > _Header & summary go to stderr; suppress with `--quiet` or `AGENT_TOOLKIT_QUIET=1`._
@@ -473,23 +516,48 @@ uv run agent-toolkit fix --only=component-table
 
 ## doctor
 
-Run an environment sanity check.
+Run environment, harness, and asset health checks.
 
 ```
-Usage: uv run agent-toolkit doctor [--toolkit-repo DIR]
+Usage: uv run agent-toolkit doctor [SLUG] [--group GROUP] [--harness H] [--scope S] [--verbose]
 ```
+
+| Argument | Description |
+|---|---|
+| `SLUG` (optional) | Diagnose one specific asset by slug (e.g. `journal`, `context7`). Overrides `--group`. |
 
 | Flag | Description |
 |---|---|
 | `--toolkit-repo DIR` | Path to the agent-toolkit repo (resolves via the four-step order if omitted) |
+| `--group <name>` | Run only one group: `environment`, `symlink-integrity`, `conventions`, `submodule-health`, `frontmatter`, `duplicates`, `harness-homes`, `allowlist-audit`, or `mcps` |
+| `--harness <harness>` | Harness for group checks (default: `claude`; one of `claude`, `codex`, `opencode`, `pi`). Only affects symlink-integrity and mcps groups. |
+| `--scope <scope>` | Scope for mcps group (default: `user`; one of `user`, `project`) |
+| `--verbose` | Expand each group's evidence |
+| `--exit-code` | Exit with code 1 if any group fails (default: always exit 0) |
 
-Verifies that the schema file exists, `AGENTS.md` is present, `git` and `gh` are on
-`$PATH`, and all submodules are initialised. Run after a fresh clone before any other
-subcommand.
+Verifies toolkit setup (schema, AGENTS.md, git, gh, submodules), asset conventions,
+symlink integrity, and MCP installation state. The `mcps` group reports:
 
-**Example:**
+- **Drift:** installed entry differs from canonical template (warn if mismatched)
+- **Env vars:** required vars from `spec.mcp.env` present in shell (warn if missing)
+- **Prerequisites:** tools from `spec.mcp.prerequisites` on `$PATH` (warn if missing)
+
+The `mcps` group skips silently with an OK status if the harness has no adapter yet
+(e.g. claude, opencode, pi await follow-up PRs).
+
+**Examples:**
 ```bash
-uv run agent-toolkit doctor --toolkit-repo ~/GitHub/agent-toolkit
+# Full health check with default harness (claude):
+uv run agent-toolkit doctor
+
+# MCP-specific check for codex/user:
+uv run agent-toolkit doctor --group mcps --harness codex --scope user
+
+# Diagnose a single asset:
+uv run agent-toolkit doctor context7
+
+# Verbose output:
+uv run agent-toolkit doctor --group mcps --verbose
 ```
 
 > _Header & summary go to stderr; suppress with `--quiet` or `AGENT_TOOLKIT_QUIET=1`._
