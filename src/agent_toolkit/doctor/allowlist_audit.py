@@ -16,7 +16,7 @@ import os
 from pathlib import Path
 
 from agent_toolkit._allowlist import read_allowlist, section_to_kind
-from agent_toolkit.commands._list_json import _USER_TARGETS
+from agent_toolkit._support import _USER_TARGETS
 from agent_toolkit.doctor.result import GroupResult, Status
 from agent_toolkit.walker import discover_assets
 

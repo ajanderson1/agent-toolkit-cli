@@ -204,3 +204,90 @@ def test_project_from_file_claude_mcp_skips_loudly(tmp_path, monkeypatch):
     out = buf.getvalue()
     assert "no MCP adapter for harness claude yet — skipping" in out
     assert counters.created == 0
+
+
+# ===========================================================================
+# Issue #30 — UnsupportedPair on direct apply
+# ===========================================================================
+
+
+def test_maybe_link_raises_unsupported_pair_for_codex_agent(tmp_path):
+    """maybe_link must refuse an unsupported (harness, kind) loudly."""
+    from agent_toolkit._support import UnsupportedPair
+    from agent_toolkit.commands._link_lib import LinkCounters, maybe_link
+
+    asset_path = tmp_path / "agent.md"
+    asset_path.write_text("---\nspec:\n  harnesses: [codex]\n---\nbody\n")
+    target = tmp_path / "target"
+    target.mkdir()
+    counters = LinkCounters()
+    import io
+
+    with pytest.raises(UnsupportedPair) as exc:
+        maybe_link(
+            harness="codex",
+            kind="agent",
+            slug="foo",
+            asset_path=asset_path,
+            target_dir=target,
+            toolkit_root=tmp_path,
+            dry_run=True,
+            counters=counters,
+            stdout=io.StringIO(),
+        )
+    assert exc.value.harness == "codex"
+    assert exc.value.kind == "agent"
+
+
+def test_project_from_file_skips_unsupported_kinds_silently(tmp_path, monkeypatch):
+    """project_from_file iterates only supported kinds for the given harness.
+
+    Pin: an agent asset declaring `codex` is allow-listed; running
+    project_from_file with harness=codex must NOT touch it (codex/agent
+    is unsupported). Removing the is_supported filter would surface the
+    pair to harness_target_dir → None → RuntimeError; the filter is the
+    only reason this test passes silently.
+    """
+    import io
+    from agent_toolkit.commands._link_lib import LinkCounters, project_from_file
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    allowlist_path = project_root / ".agent-toolkit.yaml"
+    allowlist_path.write_text("agents: [foo-agent]\n")
+
+    # Build a one-asset toolkit: agents/foo-agent.md declaring [codex].
+    toolkit_root = tmp_path / "toolkit"
+    agents_dir = toolkit_root / "agents"
+    agents_dir.mkdir(parents=True)
+    asset_path = agents_dir / "foo-agent.md"
+    asset_path.write_text(
+        "---\n"
+        "kind: agent\n"
+        "slug: foo-agent\n"
+        "spec:\n"
+        "  harnesses: [codex]\n"
+        "---\n"
+        "body\n"
+    )
+
+    counters = LinkCounters()
+    out = io.StringIO()
+
+    project_from_file(
+        scope="project",
+        harness="codex",
+        toolkit_root=toolkit_root,
+        project_root=project_root,
+        allowlist_path=allowlist_path,
+        dry_run=True,
+        counters=counters,
+        stdout=out,
+    )
+    # Filter is the line that prevents the loop from reaching
+    # harness_target_dir(codex, agent) → None → RuntimeError.
+    assert counters.created == 0
+    assert counters.removed == 0
+    assert counters.would_link == 0
+    assert counters.would_unlink == 0

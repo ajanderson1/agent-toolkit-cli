@@ -397,3 +397,44 @@ def test_unlink_mcp_removes_from_allowlist(tmp_path, monkeypatch):
     assert result.exit_code == 0, result.output
     text = (project / ".agent-toolkit.yaml").read_text()
     assert "context7" not in text
+
+
+# ===========================================================================
+# Issue #30 — unlink refuses unsupported (harness, kind) loudly in plan mode
+# ===========================================================================
+
+
+def test_unlink_plan_with_unsupported_pair_exits_2_with_message(tmp_path, monkeypatch):
+    """`unlink user codex --plan -` with `agent: foo` must exit 2 (not 0)
+    and the output names the pair plus the supported kinds for codex."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.delenv("AGENT_TOOLKIT_REPO", raising=False)
+
+    toolkit = tmp_path / "toolkit"
+    toolkit.mkdir()
+    (toolkit / ".agent-toolkit-source").write_text("tool: agent-toolkit-cli\n")
+    (toolkit / "schemas").mkdir()
+    schema_src = (
+        Path(__file__).resolve().parents[1] / "schemas" / "asset-frontmatter.v1alpha2.json"
+    )
+    (toolkit / "schemas" / "asset-frontmatter.v1alpha2.json").write_text(schema_src.read_text())
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        [
+            "--toolkit-repo", str(toolkit),
+            "unlink", "user", "codex",
+            "--plan", "-",
+        ],
+        input="agent:foo\n",
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 2, (
+        f"expected exit 2, got {result.exit_code}; output:\n{result.output}"
+    )
+    msg = result.output + (result.stderr or "")
+    assert "unsupported" in msg.lower()
+    assert "codex" in msg
+    assert "agent" in msg
+    assert "skill" in msg

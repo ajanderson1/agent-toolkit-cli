@@ -448,3 +448,38 @@ async def test_quit_with_pending_and_confirm_discards_and_exits():
     # Discarding does not call the runner — pending is dropped, app exits.
     assert runner.calls == [], f"discard must not invoke runner, got {runner.calls}"
 
+
+async def test_space_on_unsupported_cell_is_noop():
+    """Pressing Space on an `unsupported` cell yields no AssetToggled and
+    no pending entry. Regression for issue #30."""
+    from agent_toolkit_tui.messages import KindChanged
+    from agent_toolkit_tui.widgets import AssetGrid
+    from textual.coordinate import Coordinate
+    from textual.widgets import DataTable
+
+    # _doc() already contains "my-agent" (kind=agent) whose codex/opencode/pi
+    # cells are all "unsupported". Switch the grid to kind=agent so that row
+    # is visible, then press Space on codex (column 2).
+    runner = FakeRunner(_doc())
+    app = TUIApp(toolkit_root=Path("/r"), runner=runner)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        grid = app.query_one("#asset-grid", AssetGrid)
+        table = grid.query_one("#grid-table", DataTable)
+
+        # Switch to agent kind so "my-agent" is rendered.
+        app.post_message(KindChanged(kind="agent"))
+        await pilot.pause()
+
+        # Columns: 0=slug, 1=claude, 2=codex (unsupported), 3=opencode, 4=pi.
+        # Row 0 is the only agent row ("my-agent").
+        table.cursor_coordinate = Coordinate(row=0, column=2)
+        table.focus()
+        await pilot.pause()
+        await pilot.press("space")
+        await pilot.pause()
+
+        assert not grid.pending_entries(), (
+            "Space on an unsupported cell must not queue a pending edit"
+        )
+
