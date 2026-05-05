@@ -27,9 +27,7 @@ _USER_TARGETS: dict[tuple[str, str], str] = {
     ("claude", "hook"):        "{home}/.claude/hooks",
     ("claude", "plugin"):      "{home}/.claude/plugins",
     ("codex", "skill"):        "{home}/.codex/skills",
-    # ("codex", "hook") wired in Task 8 of feat/56 — requires the matrix
-    # doc cell to flip from "unsupported (by design)" to "config_file+folder"
-    # in the same commit (TestSymlinkParity reads both).
+    ("codex", "hook"):         "{home}/.codex/agent-toolkit-hooks",  # config_file+folder
     ("opencode", "skill"):     "{home}/.config/opencode/skills",
     ("opencode", "agent"):     "{home}/.config/opencode/agents",
     ("opencode", "command"):   "{home}/.config/opencode/commands",
