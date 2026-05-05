@@ -12,6 +12,7 @@ import click
 from agent_toolkit import _ui
 from agent_toolkit._allowlist import SECTIONS, kind_to_section, read_allowlist
 from agent_toolkit._repo_resolution import RepoNotFoundError, resolve_toolkit_root
+from agent_toolkit._requires import RequiresUnsatisfied
 from agent_toolkit._support import validate_pair
 from agent_toolkit.commands._link_lib import (
     KINDS_FOR_PROJECTION,
@@ -152,6 +153,31 @@ def link(
     _do_bare(scope, harness, toolkit_root, project_root, allowlist_path, dry_run, counters, ctx)
 
 
+def _emit_requires_error(exc: RequiresUnsatisfied, scope: str, ctx: click.Context) -> None:
+    """Format and emit a RequiresUnsatisfied error, then exit 2."""
+    missing_str = ", ".join(
+        f"{k}:{s}" if k else s for k, s in exc.missing
+    )
+    first_kind, first_slug = exc.missing[0]
+    from agent_toolkit._allowlist import kind_to_section as _k2s  # noqa: PLC0415
+    try:
+        first_section = _k2s(first_kind) if first_kind else None
+    except ValueError:
+        first_section = None
+    section_hint = f"under [{first_section}]" if first_section else "in the appropriate section"
+    fix_cmd = (
+        f"`agent-toolkit link {scope} {exc.harness} {first_kind}:{first_slug}` first"
+        if first_kind
+        else "add the missing asset to the allowlist"
+    )
+    click.echo(
+        f"{exc.asset_kind}:{exc.asset_slug} requires {missing_str} on {exc.harness} — "
+        f"add it to the allowlist {section_hint} or run {fix_cmd}.",
+        err=True,
+    )
+    ctx.exit(2)
+
+
 def _do_bare(scope, harness, toolkit_root, project_root, allowlist_path, dry_run, counters, ctx):
     if not allowlist_path.is_file():
         msg = (
@@ -172,16 +198,21 @@ def _do_bare(scope, harness, toolkit_root, project_root, allowlist_path, dry_run
         )
     else:
         _ui.header(f"Linking {scope}-scope assets for {harness} from {allowlist_path}...")
-    project_from_file(
-        scope=scope,
-        harness=harness,
-        toolkit_root=toolkit_root,
-        project_root=project_root,
-        allowlist_path=allowlist_path,
-        dry_run=dry_run,
-        counters=counters,
-        stdout=sys.stdout,
-    )
+    try:
+        project_from_file(
+            scope=scope,
+            harness=harness,
+            toolkit_root=toolkit_root,
+            project_root=project_root,
+            allowlist_path=allowlist_path,
+            dry_run=dry_run,
+            counters=counters,
+            stdout=sys.stdout,
+            enforce_requires=True,
+        )
+    except RequiresUnsatisfied as exc:
+        _emit_requires_error(exc, scope, ctx)
+        return
     _ui.summary(format_summary(counters, dry_run))
 
 
@@ -264,17 +295,24 @@ def _do_per_asset(
         )
     else:
         _ui.header(f"Linking {scope}-scope {kind}:{slug} for {harness}...")
-    project_from_file(
-        scope=scope,
-        harness=harness,
-        toolkit_root=toolkit_root,
-        project_root=project_root,
-        allowlist_path=target_path,
-        dry_run=dry_run,
-        counters=counters,
-        stdout=sys.stdout,
-        previous_allowed=prev_snapshot,
-    )
+    try:
+        project_from_file(
+            scope=scope,
+            harness=harness,
+            toolkit_root=toolkit_root,
+            project_root=project_root,
+            allowlist_path=target_path,
+            dry_run=dry_run,
+            counters=counters,
+            stdout=sys.stdout,
+            previous_allowed=prev_snapshot,
+            enforce_requires=True,
+        )
+    except RequiresUnsatisfied as exc:
+        if tmp_path:
+            Path(tmp_path).unlink(missing_ok=True)
+        _emit_requires_error(exc, scope, ctx)
+        return
     if tmp_path:
         Path(tmp_path).unlink(missing_ok=True)
     _ui.summary(format_summary(counters, dry_run))
@@ -378,17 +416,24 @@ def _do_all(
             f"Snapshotted every {harness}-compatible asset into {allowlist_path}; projecting..."
         )
 
-    project_from_file(
-        scope=scope,
-        harness=harness,
-        toolkit_root=toolkit_root,
-        project_root=project_root,
-        allowlist_path=target_path,
-        dry_run=dry_run,
-        counters=counters,
-        stdout=sys.stdout,
-        previous_allowed=prev_snapshot,
-    )
+    try:
+        project_from_file(
+            scope=scope,
+            harness=harness,
+            toolkit_root=toolkit_root,
+            project_root=project_root,
+            allowlist_path=target_path,
+            dry_run=dry_run,
+            counters=counters,
+            stdout=sys.stdout,
+            previous_allowed=prev_snapshot,
+            enforce_requires=True,
+        )
+    except RequiresUnsatisfied as exc:
+        if tmp_path:
+            Path(tmp_path).unlink(missing_ok=True)
+        _emit_requires_error(exc, scope, ctx)
+        return
     if tmp_path:
         Path(tmp_path).unlink(missing_ok=True)
     _ui.summary(format_summary(counters, dry_run))
@@ -509,7 +554,11 @@ def _do_plan_entry(
             counters=counters,
             stdout=sys.stdout,
             previous_allowed=prev_snapshot,
+            enforce_requires=True,
         )
+    except RequiresUnsatisfied as exc:
+        error_lines.append(str(exc))
+        return False
     except (ValueError, OSError) as exc:
         error_lines.append(f"failed: {kind}:{slug} — {exc}")
         return False

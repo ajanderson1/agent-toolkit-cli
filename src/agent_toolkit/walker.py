@@ -123,6 +123,7 @@ class AssetRecord:
     asset: Asset
     metadata: dict
     body_excerpt: str  # first paragraph or first 400 chars, whichever is shorter; "" if no body
+    requires: dict[str, list[str]]  # harness → list of "kind:slug" strings; {} if absent
 
 
 def load_asset_record(asset: Asset) -> AssetRecord:
@@ -155,7 +156,9 @@ def load_asset_record(asset: Asset) -> AssetRecord:
     else:
         metadata = {}
 
-    return AssetRecord(asset=asset, metadata=metadata, body_excerpt=body_excerpt)
+    requires: dict[str, list[str]] = (metadata.get("spec") or {}).get("requires") or {}
+
+    return AssetRecord(asset=asset, metadata=metadata, body_excerpt=body_excerpt, requires=requires)
 
 
 def _strip_frontmatter(text: str) -> str:
