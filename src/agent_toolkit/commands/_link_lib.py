@@ -256,6 +256,14 @@ def maybe_link(
 
     declared = _asset_harnesses(asset_path, kind)
     is_translated = (harness, kind) in TRANSLATORS
+
+    # Translated cells need a project_root to resolve project-scope cache paths.
+    # The user-scope path doesn't actually consult project_root, but we accept
+    # the default cwd here for the rare in-the-wild caller that omits it. Keep
+    # this resolution at function entry so the behaviour is visible at a glance.
+    if is_translated and project_root is None:
+        project_root = Path.cwd()
+
     slot_filename = _translated_slot_filename(slug, kind, harness) if is_translated else slug
     link_path = target_dir / slot_filename
 
@@ -270,8 +278,6 @@ def maybe_link(
         return
 
     if is_translated:
-        if project_root is None:
-            project_root = Path.cwd()
         cache_path, rendered = _render_to_cache(
             harness=harness, kind=kind, slug=slug,
             asset_path=asset_path, scope=scope,
@@ -281,10 +287,7 @@ def maybe_link(
         # Cache-staleness rule: if the cache exists and its bytes match the
         # rendered output, AND the slot symlink already points at the cache,
         # this is unchanged. Any drift counts as updated.
-        cache_in_sync = (
-            cache_path.is_file() and cache_path.read_bytes() == rendered
-            if cache_path.exists() else False
-        )
+        cache_in_sync = cache_path.is_file() and cache_path.read_bytes() == rendered
         slot_correct = link_path.is_symlink() and Path(os.readlink(link_path)) == cache_path
         if slot_correct and cache_in_sync:
             counters.unchanged += 1
