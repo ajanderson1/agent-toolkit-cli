@@ -97,3 +97,10 @@ class KindsSidebar(Vertical):
         """User pressed Enter on an option — switch active kind."""
         if event.option.id and event.option.id in KINDS:
             self.set_active(event.option.id)
+
+    def on_option_list_option_highlighted(
+        self, event: OptionList.OptionHighlighted
+    ) -> None:
+        """Arrow-key navigation moves the highlight — drive the content pane immediately."""
+        if event.option_id and event.option_id in KINDS:
+            self.set_active(event.option_id)

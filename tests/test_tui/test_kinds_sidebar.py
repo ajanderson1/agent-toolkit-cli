@@ -120,3 +120,27 @@ async def test_optionlist_selection_posts_kind_changed() -> None:
         await pilot.pause()
 
         assert sidebar._active == "agent"
+
+
+async def test_arrow_key_navigation_drives_active_kind() -> None:
+    """OptionHighlighted (arrow keys) immediately switches the active kind —
+    no need to press Enter. Spec mockup footer says '↑↓ kinds'."""
+    app = _Host(_state("skill", "agent", "command"))
+    async with app.run_test() as pilot:
+        sidebar = app.query_one(KindsSidebar)
+        olist = sidebar.query_one(OptionList)
+        olist.focus()
+        await pilot.pause()
+        assert sidebar._active == "skill"
+
+        # Down arrow once — agent (index 1)
+        await pilot.press("down")
+        await pilot.pause()
+        assert sidebar._active == "agent", (
+            "arrow-down should drive content immediately, not wait for Enter"
+        )
+
+        # Down arrow again — command (index 2)
+        await pilot.press("down")
+        await pilot.pause()
+        assert sidebar._active == "command"

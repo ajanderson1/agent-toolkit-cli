@@ -40,15 +40,15 @@ Screen {
     scrollbar-color-hover: $primary;
 }
 
-OptionList > .option-list--option {
+#kinds-list > .option-list--option {
     padding: 0 2;
 }
-OptionList > .option-list--option-highlighted {
+#kinds-list > .option-list--option-highlighted {
     background: $primary;
     color: $text;
     text-style: bold;
 }
-OptionList > .option-list--option-hover {
+#kinds-list > .option-list--option-hover {
     background: $boost;
 }
 
