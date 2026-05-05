@@ -20,7 +20,10 @@ from agent_toolkit.doctor import (
 from agent_toolkit.doctor.per_resource import diagnose
 from agent_toolkit.doctor.result import GroupResult, Status
 
-_GROUPS = ("environment", "symlink-integrity", "conventions", "submodule-health", "frontmatter", "duplicates", "harness-homes", "allowlist-audit")
+_GROUPS = (
+    "environment", "symlink-integrity", "conventions", "submodule-health",
+    "frontmatter", "duplicates", "harness-homes", "allowlist-audit", "mcps",
+)
 
 
 @click.command(short_help="Run five-group health check (or per-resource diagnosis).")
@@ -71,7 +74,7 @@ def doctor(
         return
 
     header(f"Running doctor groups (harness={harness})...")
-    results = _run_global(root, harness=harness, group_name=group_name)
+    results = _run_global(root, harness=harness, scope=scope, group_name=group_name)
     for r in results:
         _print_result(r, verbose=verbose)
     worst = max((r.status for r in results), default=Status.OK)
@@ -86,7 +89,10 @@ def doctor(
         raise SystemExit(1)
 
 
-def _run_global(root: Path, *, harness: str, group_name: str | None) -> list[GroupResult]:
+def _run_global(
+    root: Path, *, harness: str, scope: str, group_name: str | None
+) -> list[GroupResult]:
+    from agent_toolkit.doctor import mcps as g_mcps  # noqa: PLC0415
     runners: list[tuple[str, callable]] = [
         ("environment", lambda: g_environment.run(root)),
         ("symlink-integrity", lambda: g_symlinks.run(root, harness=harness)),
@@ -96,6 +102,7 @@ def _run_global(root: Path, *, harness: str, group_name: str | None) -> list[Gro
         ("duplicates", lambda: g_duplicates.run(root)),
         ("harness-homes", lambda: g_harness_homes.run()),
         ("allowlist-audit", lambda: g_allowlist_audit.run(root, project_root=Path.cwd())),
+        ("mcps", lambda: g_mcps.run(root, harness=harness, scope=scope, project_root=Path.cwd())),
     ]
     if group_name:
         runners = [(n, fn) for (n, fn) in runners if n == group_name]
