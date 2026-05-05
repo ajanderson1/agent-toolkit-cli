@@ -5,7 +5,11 @@ from pathlib import Path
 
 import yaml
 
-from agent_toolkit._translators import TRANSLATORS, _translate_opencode_agent
+from agent_toolkit._translators import (
+    TRANSLATORS,
+    _translate_opencode_agent,
+    _translate_opencode_command,
+)
 from agent_toolkit.walker import Asset, AssetRecord
 
 
@@ -79,9 +83,6 @@ def test_translate_opencode_agent_round_trip_stable():
 def test_translators_dict_has_opencode_agent_entry():
     assert ("opencode", "agent") in TRANSLATORS
     assert TRANSLATORS[("opencode", "agent")] is _translate_opencode_agent
-
-
-from agent_toolkit._translators import _translate_opencode_command
 
 
 def _make_command_record(slug: str, description: str) -> AssetRecord:
