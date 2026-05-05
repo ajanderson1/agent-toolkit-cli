@@ -240,13 +240,13 @@ def test_maybe_link_raises_unsupported_pair_for_codex_agent(tmp_path):
 
 
 def test_project_from_file_skips_unsupported_kinds_silently(tmp_path, monkeypatch):
-    """project_from_file iterates only supported kinds for the given harness.
+    """project_from_file iterates only supported kinds for the given (harness, scope).
 
     Pin: an agent asset declaring `codex` is allow-listed; running
     project_from_file with harness=codex must NOT touch it (codex/agent
-    is unsupported). Removing the is_supported filter would surface the
-    pair to harness_target_dir → None → RuntimeError; the filter is the
-    only reason this test passes silently.
+    is unsupported at every scope). Removing the per-scope is_supported
+    filter would surface the pair to harness_target_dir → None →
+    RuntimeError; the filter is the only reason this test passes silently.
     """
     import io
     from agent_toolkit.commands._link_lib import LinkCounters, project_from_file
@@ -285,8 +285,9 @@ def test_project_from_file_skips_unsupported_kinds_silently(tmp_path, monkeypatc
         counters=counters,
         stdout=out,
     )
-    # Filter is the line that prevents the loop from reaching
-    # harness_target_dir(codex, agent) → None → RuntimeError.
+    # The per-scope is_supported filter (#49) is the line that prevents the
+    # loop from reaching harness_target_dir(codex, agent, ...) → None →
+    # RuntimeError.
     assert counters.created == 0
     assert counters.removed == 0
     assert counters.would_link == 0
