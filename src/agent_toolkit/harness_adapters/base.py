@@ -65,7 +65,12 @@ class PluginFolderAdapter(Protocol):
     def plugin_target(self, scope: Scope, project_root: Path) -> Path: ...
     def render(self, entries: list[McpEntry]) -> dict[Path, bytes]: ...
     def diff(
-        self, scope: Scope, project_root: Path, entries: list[McpEntry],
+        self,
+        scope: Scope,
+        project_root: Path,
+        entries: list[McpEntry],
+        *,
+        previously_allowed: set[str] = frozenset(),
     ) -> list[WriteAction]: ...
 
 
@@ -81,7 +86,12 @@ class ConfigFileAdapter(Protocol):
     def entry_drift(self, scope: Scope, project_root: Path, entry: McpEntry) -> bool: ...
     def config_target(self, scope: Scope, project_root: Path) -> Path: ...
     def diff(
-        self, scope: Scope, project_root: Path, entries: list[McpEntry],
+        self,
+        scope: Scope,
+        project_root: Path,
+        entries: list[McpEntry],
+        *,
+        previously_allowed: set[str] = frozenset(),
     ) -> list[WriteAction]: ...
 
 
