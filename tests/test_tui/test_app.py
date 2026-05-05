@@ -483,3 +483,85 @@ async def test_space_on_unsupported_cell_is_noop():
             "Space on an unsupported cell must not queue a pending edit"
         )
 
+
+
+# ── Dashboard layout: new keybindings (#43) ───────────────────────────────
+
+async def test_number_key_switches_kind():
+    """Pressing 1-6 changes the active kind in both AssetGrid and KindsTabs."""
+    from agent_toolkit_tui.widgets import AssetGrid, KindsTabs
+
+    runner = FakeRunner(_doc())
+    app = TUIApp(toolkit_root=Path("/r"), runner=runner)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        grid = app.query_one("#asset-grid", AssetGrid)
+        tabs = app.query_one("#kinds-tabs", KindsTabs)
+        assert grid._kind == "skill"
+        assert tabs._active == "skill"
+
+        await pilot.press("2")  # agents
+        await pilot.pause()
+        assert grid._kind == "agent"
+        assert tabs._active == "agent"
+
+        await pilot.press("3")  # commands
+        await pilot.pause()
+        assert grid._kind == "command"
+        assert tabs._active == "command"
+
+
+async def test_u_p_keys_switch_scope():
+    """Pressing u / p switches between user and project scopes."""
+    from agent_toolkit_tui.widgets import AssetGrid
+
+    runner = FakeRunner(_doc())
+    app = TUIApp(toolkit_root=Path("/r"), runner=runner)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        grid = app.query_one("#asset-grid", AssetGrid)
+        assert grid._scope == "project"
+
+        await pilot.press("u")
+        await pilot.pause()
+        assert grid._scope == "user"
+
+        await pilot.press("p")
+        await pilot.pause()
+        assert grid._scope == "project"
+
+
+async def test_breadcrumb_reflects_current_kind_and_scope():
+    """The breadcrumb Static updates when kind or scope changes."""
+    from textual.widgets import Static
+
+    runner = FakeRunner(_doc())
+    app = TUIApp(toolkit_root=Path("/r"), runner=runner)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        breadcrumb = app.query_one("#breadcrumb", Static)
+        text = str(breadcrumb.render())
+        assert "Skill" in text
+        assert "project" in text
+
+        await pilot.press("2")  # agent
+        await pilot.press("u")  # user scope
+        await pilot.pause()
+        text = str(app.query_one("#breadcrumb", Static).render())
+        assert "Agent" in text
+        assert "user" in text
+
+
+async def test_status_bar_shows_summary_counts():
+    """The status bar reports linked / pending / drifted / broken roll-up."""
+    from textual.widgets import Static
+
+    runner = FakeRunner(_doc())
+    app = TUIApp(toolkit_root=Path("/r"), runner=runner)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        text = str(app.query_one("#status-bar", Static).render())
+        assert "linked" in text
+        assert "pending" in text
+        assert "drifted" in text
+        assert "broken" in text
