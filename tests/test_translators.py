@@ -136,8 +136,13 @@ def test_translator_renders_every_shipping_eligible_asset(kind: str, harness: st
     asset in the toolkit repo whose `spec.harnesses` includes the harness.
     Asserts the output parses as YAML frontmatter + body. Catches
     metadata-shape bugs against real assets. Skips with no error if no
-    matching assets exist (expected pre-sweep)."""
-    toolkit_root = resolve_toolkit_root(explicit=None)
+    matching assets exist (expected pre-sweep) OR if the toolkit repo
+    isn't resolvable from the current environment (expected in CI)."""
+    from agent_toolkit._repo_resolution import RepoNotFoundError
+    try:
+        toolkit_root = resolve_toolkit_root(explicit=None)
+    except RepoNotFoundError:
+        pytest.skip("toolkit repo not resolvable from this environment")
     translator = TRANSLATORS[(harness, kind)]
 
     matching_assets = []
