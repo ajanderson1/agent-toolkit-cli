@@ -377,3 +377,74 @@ async def test_kind_change_filters_grid():
         assert len(agent_rows) >= 1, "Expected at least one agent asset in fixture"
 
 
+async def test_quit_with_no_pending_exits_immediately():
+    """No pending edits -> q quits without prompting."""
+    runner = FakeRunner(_doc())
+    app = TUIApp(toolkit_root=Path("/r"), runner=runner)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("q")
+        await pilot.pause()
+    # If we got here without hanging, the modal was not shown.
+    assert app.return_code is not None or app._exit, "app should have exited"
+
+
+async def test_quit_with_pending_prompts_and_cancel_keeps_state():
+    """With pending edits, q opens the discard modal; pressing 'n' cancels."""
+    from agent_toolkit_tui.app import ConfirmDiscardScreen
+    from agent_toolkit_tui.widgets import AssetGrid
+    from textual.coordinate import Coordinate
+    from textual.widgets import DataTable
+
+    runner = FakeRunner(_doc())
+    app = TUIApp(toolkit_root=Path("/r"), runner=runner)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        grid = app.query_one("#asset-grid", AssetGrid)
+        table = grid.query_one("#grid-table", DataTable)
+        table.cursor_coordinate = Coordinate(row=0, column=1)
+        table.focus()
+        await pilot.pause()
+        await pilot.press("space")
+        await pilot.pause()
+        assert grid.pending_entries(), "precondition: pending edit"
+
+        await pilot.press("q")
+        await pilot.pause()
+        assert isinstance(app.screen, ConfirmDiscardScreen), (
+            f"expected ConfirmDiscardScreen, got {type(app.screen).__name__}"
+        )
+
+        # Cancel — pending edits preserved, app keeps running.
+        await pilot.press("n")
+        await pilot.pause()
+        assert not isinstance(app.screen, ConfirmDiscardScreen), "modal should dismiss"
+        assert grid.pending_entries(), "cancel must not clear pending"
+
+
+async def test_quit_with_pending_and_confirm_discards_and_exits():
+    """With pending edits, q -> y discards and quits."""
+    from agent_toolkit_tui.widgets import AssetGrid
+    from textual.coordinate import Coordinate
+    from textual.widgets import DataTable
+
+    runner = FakeRunner(_doc())
+    app = TUIApp(toolkit_root=Path("/r"), runner=runner)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        grid = app.query_one("#asset-grid", AssetGrid)
+        table = grid.query_one("#grid-table", DataTable)
+        table.cursor_coordinate = Coordinate(row=0, column=1)
+        table.focus()
+        await pilot.pause()
+        await pilot.press("space")
+        await pilot.pause()
+        assert grid.pending_entries(), "precondition: pending edit"
+
+        await pilot.press("q")
+        await pilot.pause()
+        await pilot.press("y")
+        await pilot.pause()
+    # Discarding does not call the runner — pending is dropped, app exits.
+    assert runner.calls == [], f"discard must not invoke runner, got {runner.calls}"
+

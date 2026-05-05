@@ -12,8 +12,9 @@ from pathlib import Path
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal
-from textual.widgets import Footer, Header, Static
+from textual.containers import Horizontal, Vertical
+from textual.screen import ModalScreen
+from textual.widgets import Button, Footer, Header, Label, Static
 
 from agent_toolkit_tui.messages import (
     AssetToggled,
@@ -23,6 +24,62 @@ from agent_toolkit_tui.messages import (
 from agent_toolkit_tui.runner import CLIRunner, PlanResult, RunnerError
 from agent_toolkit_tui.state import InventoryState, build_state
 from agent_toolkit_tui.widgets import AssetGrid, HarnessPicker, KindsSidebar
+
+
+class ConfirmDiscardScreen(ModalScreen[bool]):
+    """Yes/No prompt shown when quitting with unapplied pending edits."""
+
+    DEFAULT_CSS = """
+    ConfirmDiscardScreen {
+        align: center middle;
+    }
+    ConfirmDiscardScreen > Vertical {
+        background: $panel;
+        border: round $warning;
+        padding: 1 2;
+        width: 50;
+        height: auto;
+    }
+    ConfirmDiscardScreen Label {
+        width: 100%;
+        content-align: center middle;
+        margin-bottom: 1;
+    }
+    ConfirmDiscardScreen #buttons {
+        layout: horizontal;
+        height: auto;
+        align: center middle;
+    }
+    ConfirmDiscardScreen Button {
+        margin: 0 1;
+    }
+    """
+
+    BINDINGS = [
+        Binding("escape", "cancel", "Cancel"),
+        Binding("y", "discard", "Discard"),
+        Binding("n", "cancel", "Cancel"),
+    ]
+
+    def __init__(self, n_pending: int) -> None:
+        super().__init__()
+        self._n_pending = n_pending
+
+    def compose(self) -> ComposeResult:
+        with Vertical():
+            yield Label(f"Discard {self._n_pending} pending change(s)?")
+            with Horizontal(id="buttons"):
+                yield Button("Discard", variant="warning", id="discard")
+                yield Button("Cancel", variant="primary", id="cancel")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        self.dismiss(event.button.id == "discard")
+
+    def action_discard(self) -> None:
+        self.dismiss(True)
+
+    def action_cancel(self) -> None:
+        self.dismiss(False)
 
 
 class TUIApp(App):
@@ -72,6 +129,19 @@ class TUIApp(App):
         self._refresh_pending_label()
 
     # ----- actions --------------------------------------------------------
+    def action_quit(self) -> None:
+        grid = self.query_one("#asset-grid", AssetGrid)
+        n = len(grid.pending_entries())
+        if n == 0:
+            self.exit()
+            return
+
+        def _on_close(discard: bool | None) -> None:
+            if discard:
+                self.exit()
+
+        self.push_screen(ConfirmDiscardScreen(n), _on_close)
+
     def action_focus_filter(self) -> None:
         from textual.widgets import Input
         try:
