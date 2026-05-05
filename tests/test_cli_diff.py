@@ -42,8 +42,11 @@ def test_diff_unknown_harness_exits_2(env):
     assert "unknown harness 'banana'" in result.stderr
 
 
-def test_diff_mcp_claude_skips_loudly(tmp_path, monkeypatch):
-    """diff against an allow-list containing an MCP for claude shows the loud-skip message."""
+def test_diff_mcp_pi_skips_loudly(tmp_path, monkeypatch):
+    """diff against an allow-list containing an MCP for pi shows the loud-skip message.
+
+    Pi remains UnimplementedAdapter (Pi has no MCP support by design).
+    """
     home = tmp_path / "home"
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))
@@ -62,7 +65,7 @@ def test_diff_mcp_claude_skips_loudly(tmp_path, monkeypatch):
         "---\napiVersion: agent-toolkit/v1alpha2\n"
         "metadata:\n  name: context7\n  description: c.\n  lifecycle: stable\n"
         "spec:\n  origin: third-party\n  vendored_via: none\n"
-        "  upstream: https://example.com\n  harnesses:\n    - claude\n"
+        "  upstream: https://example.com\n  harnesses:\n    - pi\n"
         "  mcp:\n    transport: stdio\n    install_method: npx\n---\n"
     )
 
@@ -73,11 +76,11 @@ def test_diff_mcp_claude_skips_loudly(tmp_path, monkeypatch):
     runner = CliRunner()
     result = runner.invoke(
         main,
-        ["diff", "project", "claude",
+        ["diff", "project", "pi",
          "--toolkit-repo", str(toolkit), "--project", str(project)],
     )
     assert result.exit_code == 0, result.output
-    assert "no MCP adapter for harness claude yet — skipping" in result.output
+    assert "no MCP adapter for harness pi yet — skipping" in result.output
 
 
 def test_diff_mcp_codex_shows_would_create(tmp_path, monkeypatch):
