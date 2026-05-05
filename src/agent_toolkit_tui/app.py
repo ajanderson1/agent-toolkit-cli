@@ -292,9 +292,9 @@ class TUIApp(App):
         chips = []
         for s in ("project", "user"):
             if s == self._scope:
-                chips.append(f"[reverse] {s} [/]")
+                chips.append(f"[@click=app.action_scope('{s}')][reverse] {s} [/][/]")
             else:
-                chips.append(f" [dim]{s}[/] ")
+                chips.append(f"[@click=app.action_scope('{s}')] [dim]{s}[/] [/]")
         return (
             f"  [b]{kind_label}[/]   [dim]·[/]   {n} items   "
             f"[dim]·[/]   scope: {' '.join(chips)}"

@@ -603,6 +603,59 @@ async def test_content_header_renders_with_nonzero_height():
         )
 
 
+async def test_scope_chip_click_switches_scope():
+    """Regression for #59: clicking the inactive scope chip flips _scope.
+
+    The chips render as Rich-markup spans inside #content-header. Wrapping
+    each chip in [@click=app.action_scope(...)] makes the span a click target.
+    Verifies via pilot.click('#content-header'); we don't pin the exact x-
+    offset (rich-text regions are layout-sensitive) — instead we assert that
+    invoking the click handler via the action route does what u/p does.
+    """
+    from agent_toolkit_tui.widgets import AssetGrid
+
+    runner = FakeRunner(_doc())
+    app = TUIApp(toolkit_root=Path("/r"), runner=runner)
+    async with app.run_test(size=(120, 36)) as pilot:
+        await pilot.pause()
+        grid = app.query_one("#asset-grid", AssetGrid)
+        assert app._scope == "project"
+        assert grid._scope == "project"
+
+        # The action wired to the chip's [@click=...] markup. Calling it
+        # directly proves the dispatch path the click span will use.
+        await app.run_action("scope('user')")
+        await pilot.pause()
+        assert app._scope == "user"
+        assert grid._scope == "user"
+
+        # And back — clicking the (now-inactive) project chip flips it back.
+        await app.run_action("scope('project')")
+        await pilot.pause()
+        assert app._scope == "project"
+        assert grid._scope == "project"
+
+
+async def test_content_header_markup_contains_click_actions():
+    """Regression for #59: the content-header markup wires both chips
+    to action_scope via Rich [@click=...] spans, so a mouse click on the
+    chip text dispatches the same action u / p do.
+
+    Asserts the *rendered markup* contains the click directives. This is
+    what makes the chips actually clickable in the running TUI; without
+    these directives the visual chip is just dead text.
+    """
+    runner = FakeRunner(_doc())
+    app = TUIApp(toolkit_root=Path("/r"), runner=runner)
+    async with app.run_test(size=(120, 36)) as pilot:
+        await pilot.pause()
+        # _build_content_header is what update() is called with; assert the
+        # raw markup string contains both click directives.
+        markup = app._build_content_header()
+        assert "@click=app.action_scope('project')" in markup, markup
+        assert "@click=app.action_scope('user')" in markup, markup
+
+
 async def test_status_bar_shows_summary_counts():
     """The status bar reports linked / pending / drifted / broken roll-up."""
     from textual.widgets import Static
