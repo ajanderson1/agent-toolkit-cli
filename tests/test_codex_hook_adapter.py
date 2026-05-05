@@ -86,8 +86,10 @@ def test_codex_hook_can_install_refuses_empty_events(tmp_path):
 
 
 def test_codex_hook_can_install_refuses_command_outside_script_root(monkeypatch, tmp_path):
-    """The handler command must point inside script_root/<slug>/ — that's how
-    the ownership rule (path-prefix) stays reliable."""
+    """can_install does a substring check for `.codex/agent-toolkit-hooks/<slug>/`
+    in the command path. It does NOT anchor to $HOME — that's the dispatcher's
+    job at write time, where scope/project_root are available. This test
+    exercises the truly-bad case (no .codex segment at all)."""
     from agent_toolkit.harness_adapters.codex_hook import CodexHookAdapter
     from agent_toolkit.harness_adapters.base import CannotInstall
 

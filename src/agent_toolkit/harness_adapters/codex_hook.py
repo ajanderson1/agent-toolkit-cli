@@ -12,8 +12,8 @@ import os
 from pathlib import Path
 from typing import Literal
 
-import tomlkit
-from tomlkit import TOMLDocument, table
+import tomlkit  # noqa: F401  # used by Task 4 (diff/render)
+from tomlkit import TOMLDocument, table  # noqa: F401  # used by Task 4
 
 from agent_toolkit.harness_adapters.base import (
     CannotInstall,
@@ -62,11 +62,12 @@ class CodexHookAdapter:
                 f"{entry.name}: unknown codex hook event(s): {unknown!r} "
                 f"(expected subset of {_CODEX_HOOK_EVENTS})"
             )
-        # Verify the command lives under some `.codex/agent-toolkit-hooks/<slug>/`
-        # directory. We check by path components rather than anchoring to $HOME
-        # so the rule holds regardless of whether $HOME is monkeypatched.
-        # The ownership invariant is: path must include the slug-specific
-        # subdirectory, not an arbitrary location on the filesystem.
+        # Defensive sanity check: command path must contain the slug-specific
+        # subdirectory `.codex/agent-toolkit-hooks/<slug>/`. We do NOT anchor
+        # to $HOME here — the real ownership-on-disk guarantee is enforced
+        # by `diff()` (where scope/project_root are available). This check
+        # catches dispatchers that produce wildly wrong paths; it does not
+        # prevent every possible weird path. Sufficient as a boundary guard.
         slug_subdir = f".codex/agent-toolkit-hooks/{entry.name}/"
         if slug_subdir not in str(entry.command) + "/":
             home = Path(os.environ.get("HOME", ""))
@@ -88,7 +89,7 @@ class CodexHookAdapter:
         raise NotImplementedError
 
     # ---- diff (Task 4) ----
-    def render(self, entries) -> dict[Path, bytes]:
+    def render(self, entries: list[HookEntry]) -> dict[Path, bytes]:
         # Implemented in Task 4.
         raise NotImplementedError
 
