@@ -155,8 +155,11 @@ def _do_all(scope, harness, toolkit_root, project_root, dry_run):
 
     removed = 0
     for kind in KINDS_FOR_PROJECTION:
+        from agent_toolkit._support import is_supported  # local import to avoid cycles
+        if not is_supported(harness, kind):
+            continue
         target_dir = harness_target_dir(harness, kind, scope, project_root)
-        if target_dir is None or not target_dir.is_dir():
+        if not target_dir.is_dir():
             continue
         for entry in target_dir.iterdir():
             if not entry.is_symlink():
@@ -254,6 +257,12 @@ def _do_plan(scope, harness, toolkit_root, project_root, allowlist_path, dry_run
             total += 1
             continue
         total += 1
+        # Guard: exit 2 immediately on unsupported (harness, kind) pairs for
+        # symlink-slot kinds. MCP is excluded — it dispatches via adapters and
+        # may be valid for a harness even when absent from SUPPORTED_PAIRS.
+        if kind != "mcp":
+            from agent_toolkit._support import validate_pair  # local import to avoid cycles
+            validate_pair(ctx, harness, kind)
         old_quiet = os.environ.get("AGENT_TOOLKIT_QUIET")
         os.environ["AGENT_TOOLKIT_QUIET"] = "1"
         try:

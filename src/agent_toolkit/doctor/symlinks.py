@@ -4,21 +4,15 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from agent_toolkit._support import _USER_TARGETS
 from agent_toolkit.doctor.result import GroupResult, Status
 from agent_toolkit.walker import discover_assets, extract_frontmatter, frontmatter_path
 
-# Mirror bin/lib/common.sh harness_target_dir() table.
+# Strip the "{home}/" template prefix to get a relative path under $HOME,
+# matching this module's existing convention of joining with `home / rel`.
 _USER_PATHS: dict[tuple[str, str], str] = {
-    ("claude", "skill"):       ".claude/skills",
-    ("claude", "agent"):       ".claude/agents",
-    ("claude", "command"):     ".claude/commands",
-    ("claude", "hook"):        ".claude/hooks",
-    ("claude", "plugin"):      ".claude/plugins",
-    ("codex", "skill"):        ".codex/skills",
-    ("opencode", "skill"):     ".config/opencode/skills",
-    ("pi", "skill"):           ".pi/agent/skills",
-    ("pi", "agent"):           ".pi/agent/agents",
-    ("pi", "pi-extension"):    ".pi/agent/extensions",
+    pair: tmpl.removeprefix("{home}/")
+    for pair, tmpl in _USER_TARGETS.items()
 }
 
 
