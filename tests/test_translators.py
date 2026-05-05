@@ -3,14 +3,22 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 import yaml
 
+from agent_toolkit._repo_resolution import resolve_toolkit_root
 from agent_toolkit._translators import (
     TRANSLATORS,
     _translate_opencode_agent,
     _translate_opencode_command,
 )
-from agent_toolkit.walker import Asset, AssetRecord
+from agent_toolkit.walker import (
+    Asset,
+    AssetRecord,
+    discover_assets,
+    load_asset_record,
+    strip_frontmatter,
+)
 
 
 def _make_record(slug: str, description: str, harnesses: list[str]) -> AssetRecord:
@@ -120,3 +128,39 @@ def test_translate_opencode_command_round_trip_stable():
 def test_translators_dict_has_opencode_command_entry():
     assert ("opencode", "command") in TRANSLATORS
     assert TRANSLATORS[("opencode", "command")] is _translate_opencode_command
+
+
+@pytest.mark.parametrize("kind,harness", [("agent", "opencode"), ("command", "opencode")])
+def test_translator_renders_every_shipping_eligible_asset(kind: str, harness: str):
+    """For each (harness, kind) the translator handles, render every shipping
+    asset in the toolkit repo whose `spec.harnesses` includes the harness.
+    Asserts the output parses as YAML frontmatter + body. Catches
+    metadata-shape bugs against real assets. Skips with no error if no
+    matching assets exist (expected pre-sweep)."""
+    toolkit_root = resolve_toolkit_root(explicit=None)
+    translator = TRANSLATORS[(harness, kind)]
+
+    matching_assets = []
+    for asset in discover_assets(toolkit_root):
+        if asset.kind != kind:
+            continue
+        record = load_asset_record(asset)
+        harnesses = ((record.metadata.get("spec") or {}).get("harnesses") or [])
+        if harness not in harnesses:
+            continue
+        matching_assets.append((asset, record))
+
+    if not matching_assets:
+        pytest.skip(f"no shipping {kind}s declare {harness} yet (pre-sweep)")
+
+    for asset, record in matching_assets:
+        text = asset.path.read_text(encoding="utf-8")
+        body = strip_frontmatter(text)
+        out = translator(record, body)
+        out_text = out.decode("utf-8")
+        # Frontmatter parses
+        end_idx = out_text.find("\n---\n", 4)
+        assert end_idx != -1, f"{asset.slug}: missing closing fence"
+        fm = yaml.safe_load(out_text[4:end_idx])
+        assert isinstance(fm, dict)
+        assert "description" in fm
