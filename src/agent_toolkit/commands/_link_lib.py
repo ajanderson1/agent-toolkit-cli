@@ -449,7 +449,8 @@ def project_from_file(
             mcp_allowed_slugs = list(allowed.get(section, []))
 
             from agent_toolkit.commands._mcp_dispatch import (  # noqa: PLC0415
-                _build_mcp_entries, apply_link,
+                _build_mcp_entries,
+                apply_link as apply_mcp_link,
             )
             from agent_toolkit.harness_adapters import get_adapter  # noqa: PLC0415
             from agent_toolkit.harness_adapters.base import (  # noqa: PLC0415
@@ -474,7 +475,7 @@ def project_from_file(
 
             entries = _build_mcp_entries(toolkit_root, mcp_allowed_slugs)
             try:
-                apply_link(
+                apply_mcp_link(
                     adapter,
                     scope=scope,
                     project_root=project_root,
@@ -493,7 +494,8 @@ def project_from_file(
             hook_allowed_slugs = list(allowed.get(section, []))
 
             from agent_toolkit.commands._hook_dispatch import (  # noqa: PLC0415
-                _build_hook_entries, apply_link,
+                _build_hook_entries,
+                apply_link as apply_hook_link,
             )
             from agent_toolkit.harness_adapters import get_adapter  # noqa: PLC0415
             from agent_toolkit.harness_adapters.base import (  # noqa: PLC0415
@@ -513,7 +515,7 @@ def project_from_file(
 
             entries = _build_hook_entries(toolkit_root, hook_allowed_slugs)
             try:
-                apply_link(
+                apply_hook_link(
                     adapter,
                     scope=scope,
                     project_root=project_root,
