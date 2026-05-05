@@ -22,7 +22,7 @@ def _rendered(markup: str) -> str:
 
 
 def test_linked_glyph_renders_as_ticked_box():
-    assert _rendered(_GLYPH["linked"]) == "☑"
+    assert _rendered(_GLYPH["linked"]) == "✔"
 
 
 def test_unlinked_glyph_renders_as_empty_box():
@@ -39,7 +39,7 @@ def test_broken_glyph_renders_unchanged():
 
 def test_pending_link_renders_as_ticked_box():
     """Pending-link wraps the linked glyph in color markup; plain text == glyph."""
-    assert _rendered(_PENDING_LINK) == "☑"
+    assert _rendered(_PENDING_LINK) == "✔"
 
 
 def test_pending_unlink_renders_as_empty_box():
@@ -47,7 +47,7 @@ def test_pending_unlink_renders_as_empty_box():
 
 
 def test_linked_matches_glyph_renders_as_ticked_box():
-    assert _rendered(_GLYPH["linked-matches"]) == "☑"
+    assert _rendered(_GLYPH["linked-matches"]) == "✔"
 
 
 def test_linked_drifted_glyph_renders_as_tilde_bar():

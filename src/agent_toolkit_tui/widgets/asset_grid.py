@@ -11,11 +11,11 @@ from agent_toolkit_tui.messages import AssetToggled
 from agent_toolkit_tui.state import AssetRow, CellState, InventoryState
 
 _GLYPH = {
-    "linked":                     "☑",
+    "linked":                     "✔",
     "unlinked":                   "☐",
     "unsupported":                "──",
     "broken":                     "⚠ ",
-    "linked-matches":             "☑",
+    "linked-matches":             "✔",
     "linked-drifted":             "≁",
     "unlinked-allowlisted":       "☐",
     "installed-not-allowlisted":  "!",
@@ -24,7 +24,7 @@ _GLYPH = {
 # Pending overlay: same shape as the *target* state, colored to signal
 # "queued, not yet applied". Rich markup runs through DataTable cells, but
 # Textual CSS vars like $warning aren't resolved there — use a literal color.
-_PENDING_LINK   = "[yellow]☑[/]"
+_PENDING_LINK   = "[yellow]✔[/]"
 _PENDING_UNLINK = "[yellow]☐[/]"
 
 
