@@ -294,3 +294,72 @@ def test_claude_re_link_byte_identical_when_already_linked(monkeypatch, tmp_path
     target.write_bytes(first.contents)
     actions = a.diff("user", tmp_path, [entry], previously_allowed={"context7"})
     assert actions == []
+
+
+def test_claude_diff_handles_http_transport(monkeypatch, tmp_path):
+    import json
+    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    a = ClaudeAdapter()
+    entry = _make_entry(
+        name="remote-mcp", transport="http",
+        url="https://example.com/mcp",
+        headers={"Authorization": "Bearer xyz"},
+    )
+    [act] = a.diff("user", tmp_path, [entry])
+    parsed = json.loads(act.contents)
+    server = parsed["mcpServers"]["remote-mcp"]
+    assert server["type"] == "http"
+    assert server["url"] == "https://example.com/mcp"
+    assert server["headers"] == {"Authorization": "Bearer xyz"}
+    # No stdio fields present
+    assert "command" not in server
+    assert "args" not in server
+
+
+def test_claude_diff_handles_sse_transport(monkeypatch, tmp_path):
+    import json
+    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    a = ClaudeAdapter()
+    entry = _make_entry(name="sse-mcp", transport="sse",
+                        url="https://example.com/sse")
+    [act] = a.diff("user", tmp_path, [entry])
+    parsed = json.loads(act.contents)
+    server = parsed["mcpServers"]["sse-mcp"]
+    assert server["type"] == "sse"
+    assert server["url"] == "https://example.com/sse"
+
+
+def test_claude_can_install_refuses_remote_without_url():
+    """spec.transport=http with no spec.url → CannotInstall."""
+    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+    from agent_toolkit.harness_adapters.base import CannotInstall
+
+    a = ClaudeAdapter()
+    # can_install accepts everything — the refusal lives in _build_entry_dict,
+    # surfaced via diff() at render time.
+    entry = _make_entry(name="bad", transport="http")  # no url
+    a.can_install(entry)  # passes
+    with pytest.raises(CannotInstall, match="url"):
+        a.diff("user", Path("/tmp"), [entry])
+
+
+def test_claude_project_scope_round_trip(tmp_path):
+    """Project-scope mutation against `<proj>/.mcp.json`."""
+    import json
+    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+
+    proj = tmp_path / "p"
+    proj.mkdir()
+    (proj / ".mcp.json").write_text("{}\n")
+    a = ClaudeAdapter()
+    entry = _make_entry(args=["-y", "@upstash/context7-mcp"])
+
+    [act] = a.diff("project", proj, [entry])
+    assert act.path == proj / ".mcp.json"
+    assert act.op == "update"
+    parsed = json.loads(act.contents)
+    assert "context7" in parsed["mcpServers"]
