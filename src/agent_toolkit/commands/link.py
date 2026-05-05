@@ -12,6 +12,7 @@ import click
 from agent_toolkit import _ui
 from agent_toolkit._allowlist import SECTIONS, kind_to_section, read_allowlist
 from agent_toolkit._repo_resolution import RepoNotFoundError, resolve_toolkit_root
+from agent_toolkit._support import validate_pair
 from agent_toolkit.commands._link_lib import (
     KINDS_FOR_PROJECTION,
     LinkCounters,
@@ -412,6 +413,11 @@ def _do_plan(
             total += 1
             continue
         total += 1
+        # Guard: exit 2 immediately on unsupported (harness, kind) pairs for
+        # symlink-slot kinds. MCP is excluded — it dispatches via adapters and
+        # may be valid for a harness even when absent from SUPPORTED_PAIRS.
+        if kind != "mcp":
+            validate_pair(ctx, harness, kind)
         # Run per-asset logic inline with quiet=True to suppress chrome
         old_quiet = os.environ.get("AGENT_TOOLKIT_QUIET")
         os.environ["AGENT_TOOLKIT_QUIET"] = "1"

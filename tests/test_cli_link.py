@@ -900,3 +900,38 @@ def test_link_no_warning_when_harness_home_exists(env, seed_skill):
     )
     assert result.exit_code == 0
     assert "home not present" not in (result.stderr or "")
+
+
+# ===========================================================================
+# Issue #30 — link refuses unsupported (harness, kind) loudly
+# ===========================================================================
+
+
+def test_link_plan_with_unsupported_pair_exits_2_with_message(env, tmp_path):
+    """`link project codex --plan -` with `agent:foo` must exit 2 (not 0)
+    and the output names the pair plus the supported kinds for codex."""
+    toolkit = env["toolkit_root"]
+    project = tmp_path / "project"
+    project.mkdir()
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        [
+            "--toolkit-repo", str(toolkit),
+            "link", "project", "codex",
+            "--project", str(project),
+            "--plan", "-",
+        ],
+        input="agent:foo\n",
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 2, (
+        f"expected exit 2, got {result.exit_code}; output:\n{result.output}"
+    )
+    msg = result.output + (result.stderr if hasattr(result, "stderr") else "")
+    assert "unsupported" in msg.lower()
+    assert "codex" in msg
+    assert "agent" in msg
+    # Hint surface: at least one supported kind is named for guidance.
+    assert "skill" in msg
