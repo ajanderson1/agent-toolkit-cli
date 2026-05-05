@@ -15,6 +15,13 @@ The TUI extra:
 uv tool install --from git+https://github.com/ajanderson1/agent-toolkit-cli "agent-toolkit[tui]"
 ```
 
+> **Don't `pip install -e .` into a Python that comes earlier on `$PATH` than `~/.local/bin/`** (e.g., pyenv-managed Pythons). The pip shim will shadow `uv tool install`'s shim, and if you later delete the editable source, every invocation will break with `ModuleNotFoundError: agent_toolkit.cli`. If you must install editable for development, either:
+>
+> - Use a venv that you activate per-session (`python -m venv .venv && source .venv/bin/activate && pip install -e .`), or
+> - First `uv tool uninstall agent-toolkit` to make the precedence explicit, and re-install from uv when you're done.
+>
+> `agent-toolkit doctor` can detect this shadowing symptom (see [#61](https://github.com/ajanderson1/agent-toolkit-cli/issues/61)).
+
 ## Two-flag contract
 
 Every subcommand observes the same two flags:
