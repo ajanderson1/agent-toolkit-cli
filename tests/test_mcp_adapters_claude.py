@@ -363,3 +363,55 @@ def test_claude_project_scope_round_trip(tmp_path):
     assert act.op == "update"
     parsed = json.loads(act.contents)
     assert "context7" in parsed["mcpServers"]
+
+
+def test_claude_diff_raises_cannot_install_when_stdio_command_missing(monkeypatch, tmp_path):
+    """stdio entry with no command in inner_config → CannotInstall via diff()."""
+    from agent_toolkit.harness_adapters.base import CannotInstall, McpEntry
+    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    a = ClaudeAdapter()
+    bad = McpEntry(
+        name="no-command",
+        inner_config={},  # missing command
+        mcp_spec={"transport": "stdio", "install_method": "npx"},
+    )
+    with pytest.raises(CannotInstall, match="command"):
+        a.diff("user", tmp_path, [bad])
+
+
+def test_claude_diff_raises_cannot_install_when_env_not_dict(monkeypatch, tmp_path):
+    """inner_config.env must be a dict — list (or any non-dict) → CannotInstall."""
+    from agent_toolkit.harness_adapters.base import CannotInstall, McpEntry
+    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    a = ClaudeAdapter()
+    bad = McpEntry(
+        name="bad-env",
+        inner_config={"command": "npx", "env": ["FOO=bar"]},
+        mcp_spec={"transport": "stdio", "install_method": "npx"},
+    )
+    with pytest.raises(CannotInstall, match="env"):
+        a.diff("user", tmp_path, [bad])
+
+
+def test_claude_entry_drift_false_when_entry_not_installed(monkeypatch, tmp_path):
+    """entry_drift returns False when the entry's name is absent on disk —
+    callers use list_installed for presence; entry_drift reports drift only."""
+    import json
+    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    target = tmp_path / ".claude.json"
+    target.write_text(json.dumps({
+        "mcpServers": {
+            "preexisting": {"type": "stdio", "command": "node"}
+        },
+        "theme": "dark",
+    }, indent=2, sort_keys=True) + "\n")
+
+    a = ClaudeAdapter()
+    entry = _make_entry(name="not-on-disk", args=["-y", "@upstash/context7-mcp"])
+    assert a.entry_drift("user", tmp_path, entry) is False
