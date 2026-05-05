@@ -38,7 +38,7 @@ def _build_mcp_entries(toolkit_root: Path, slugs: Iterable[str]) -> list[McpEntr
         readme_path = mcp_dir / "README.md"
         if not config_path.is_file() or not readme_path.is_file():
             continue
-        inner = json.loads(config_path.read_text())
+        inner = json.loads(config_path.read_text(encoding="utf-8"))
         fm = extract_frontmatter(readme_path) or {}
         mcp_spec = ((fm.get("spec") or {}).get("mcp")) or {}
         entries.append(McpEntry(name=slug, inner_config=inner, mcp_spec=mcp_spec))
