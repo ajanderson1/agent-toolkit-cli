@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 
 from agent_toolkit._support import _USER_TARGETS
+from agent_toolkit.commands._link_lib import _translated_slot_filename
 from agent_toolkit.doctor.result import GroupResult, Status
 from agent_toolkit.walker import discover_assets, extract_frontmatter, frontmatter_path
 
@@ -31,7 +32,7 @@ def run(toolkit_root: Path, *, harness: str = "claude") -> GroupResult:
         rel = _USER_PATHS.get((harness, asset.kind))
         if rel is None:
             continue
-        link_path = home / rel / asset.slug
+        link_path = home / rel / _translated_slot_filename(asset.slug, asset.kind, harness)
         expected[(asset.kind, asset.slug)] = link_path
 
     for (kind, slug), link_path in expected.items():
