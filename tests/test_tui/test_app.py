@@ -488,27 +488,27 @@ async def test_space_on_unsupported_cell_is_noop():
 # ── Dashboard layout: new keybindings (#43) ───────────────────────────────
 
 async def test_number_key_switches_kind():
-    """Pressing 1-6 changes the active kind in both AssetGrid and KindsTabs."""
-    from agent_toolkit_tui.widgets import AssetGrid, KindsTabs
+    """Pressing 1-6 changes the active kind in AssetGrid and KindsSidebar."""
+    from agent_toolkit_tui.widgets import AssetGrid, KindsSidebar
 
     runner = FakeRunner(_doc())
     app = TUIApp(toolkit_root=Path("/r"), runner=runner)
     async with app.run_test() as pilot:
         await pilot.pause()
         grid = app.query_one("#asset-grid", AssetGrid)
-        tabs = app.query_one("#kinds-tabs", KindsTabs)
+        sidebar = app.query_one("#kinds-sidebar", KindsSidebar)
         assert grid._kind == "skill"
-        assert tabs._active == "skill"
+        assert sidebar._active == "skill"
 
         await pilot.press("2")  # agents
         await pilot.pause()
         assert grid._kind == "agent"
-        assert tabs._active == "agent"
+        assert sidebar._active == "agent"
 
         await pilot.press("3")  # commands
         await pilot.pause()
         assert grid._kind == "command"
-        assert tabs._active == "command"
+        assert sidebar._active == "command"
 
 
 async def test_u_p_keys_switch_scope():
@@ -532,24 +532,27 @@ async def test_u_p_keys_switch_scope():
 
 
 async def test_breadcrumb_reflects_current_kind_and_scope():
-    """The breadcrumb Static updates when kind or scope changes."""
+    """The content header (formerly 'breadcrumb') shows kind + scope only."""
     from textual.widgets import Static
 
     runner = FakeRunner(_doc())
     app = TUIApp(toolkit_root=Path("/r"), runner=runner)
     async with app.run_test() as pilot:
         await pilot.pause()
-        breadcrumb = app.query_one("#breadcrumb", Static)
-        text = str(breadcrumb.render())
+        header = app.query_one("#content-header", Static)
+        text = str(header.render())
         assert "Skill" in text
         assert "project" in text
+        # Regression: V1 Navigator must NOT show global "harnesses:" chips.
+        assert "harnesses" not in text.lower()
 
         await pilot.press("2")  # agent
         await pilot.press("u")  # user scope
         await pilot.pause()
-        text = str(app.query_one("#breadcrumb", Static).render())
+        text = str(app.query_one("#content-header", Static).render())
         assert "Agent" in text
         assert "user" in text
+        assert "harnesses" not in text.lower()
 
 
 async def test_status_bar_shows_summary_counts():
@@ -565,3 +568,42 @@ async def test_status_bar_shows_summary_counts():
         assert "pending" in text
         assert "drifted" in text
         assert "broken" in text
+
+
+# ── V1 Navigator: theme + version + no harness chips ──────────────────────
+
+async def test_default_theme_is_gruvbox():
+    """on_mount sets self.theme = 'gruvbox' (matches claude_tui_tools)."""
+    runner = FakeRunner(_doc())
+    app = TUIApp(toolkit_root=Path("/r"), runner=runner)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        assert app.theme == "gruvbox"
+
+
+async def test_subtitle_shows_version():
+    """Header subtitle exposes the package version, e.g. 'v0.3.0' or 'vunknown'."""
+    runner = FakeRunner(_doc())
+    app = TUIApp(toolkit_root=Path("/r"), runner=runner)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        sub = app.sub_title
+        # Either "v<X.Y.Z>" if installed, or "vunknown" in a non-installed dev shell.
+        assert sub.startswith("v"), f"sub_title should start with 'v', got {sub!r}"
+        assert len(sub) >= 2, "sub_title should include some version text"
+
+
+async def test_no_harness_chips_anywhere_outside_grid():
+    """Regression for #43 reopen — no global 'harnesses: claude codex …' chip row."""
+    from textual.widgets import Static
+
+    runner = FakeRunner(_doc())
+    app = TUIApp(toolkit_root=Path("/r"), runner=runner)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        # Walk every Static and assert none of them render a "harnesses:" chip line.
+        for static in app.query(Static):
+            text = str(static.render()).lower()
+            assert "harnesses:" not in text, (
+                f"unexpected 'harnesses:' chip line in #{static.id}: {text!r}"
+            )

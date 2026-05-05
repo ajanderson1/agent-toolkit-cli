@@ -14,8 +14,9 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
-from textual.widgets import Button, Footer, Header, Input, Label, Static
+from textual.widgets import Button, DataTable, Footer, Header, Input, Label, Static
 
+from agent_toolkit_tui import __version__
 from agent_toolkit_tui.messages import (
     AssetToggled,
     KindChanged,
@@ -23,9 +24,7 @@ from agent_toolkit_tui.messages import (
 )
 from agent_toolkit_tui.runner import CLIRunner, PlanResult, RunnerError
 from agent_toolkit_tui.state import InventoryState, build_state
-from agent_toolkit_tui.widgets import AssetGrid, KindsTabs
-
-HARNESSES_DISPLAY_ORDER = ("claude", "codex", "cursor", "opencode", "pi")
+from agent_toolkit_tui.widgets import AssetGrid, KindsSidebar
 
 
 class ConfirmDiscardScreen(ModalScreen[bool]):
@@ -116,13 +115,16 @@ class TUIApp(App):
         self.state: InventoryState = build_state(self.runner)
         self._scope: str = "project"
         self._kind: str = "skill"
+        self.sub_title = f"v{__version__}"
 
     # ----- composition ----------------------------------------------------
     def compose(self) -> ComposeResult:
         yield Header()
-        yield KindsTabs(self.state, id="kinds-tabs")
-        yield Static(self._build_breadcrumb(), id="breadcrumb")
-        yield AssetGrid(self.state, id="asset-grid")
+        with Horizontal(id="main"):
+            yield KindsSidebar(self.state, id="kinds-sidebar")
+            with Vertical(id="content"):
+                yield Static(self._build_content_header(), id="content-header")
+                yield AssetGrid(self.state, id="asset-grid")
         yield Static("", id="status-bar")
         yield Static("", id="footer-pending")
         yield Footer()
@@ -130,7 +132,7 @@ class TUIApp(App):
     # ----- lifecycle ------------------------------------------------------
     def on_mount(self) -> None:
         try:
-            self.theme = "tokyo-night"
+            self.theme = "gruvbox"
         except Exception:
             pass
         self._refresh_pending_label()
@@ -138,7 +140,6 @@ class TUIApp(App):
         # Default focus on the data table, not the filter Input — `q` and other
         # bindings should fire as bindings, not as text input.
         try:
-            from textual.widgets import DataTable
             self.query_one("#grid-table", DataTable).focus()
         except Exception:
             pass
@@ -147,13 +148,13 @@ class TUIApp(App):
     def on_kind_changed(self, event: KindChanged) -> None:
         self._kind = event.kind
         self.query_one("#asset-grid", AssetGrid).set_kind(event.kind)
-        self._refresh_breadcrumb()
+        self._refresh_content_header()
         self._refresh_status_bar()
 
     def on_scope_changed(self, event: ScopeChanged) -> None:
         self._scope = event.scope
         self.query_one("#asset-grid", AssetGrid).set_scope(event.scope)
-        self._refresh_breadcrumb()
+        self._refresh_content_header()
         self._refresh_status_bar()
 
     def on_asset_toggled(self, event: AssetToggled) -> None:
@@ -185,24 +186,24 @@ class TUIApp(App):
             return
         self._scope = scope
         self.query_one("#asset-grid", AssetGrid).set_scope(scope)
-        self._refresh_breadcrumb()
+        self._refresh_content_header()
         self._refresh_status_bar()
 
     def action_kind(self, kind: str) -> None:
         if kind == self._kind:
             return
         self._kind = kind
-        self.query_one("#kinds-tabs", KindsTabs).set_active(kind)
+        self.query_one("#kinds-sidebar", KindsSidebar).set_active(kind)
         self.query_one("#asset-grid", AssetGrid).set_kind(kind)
-        self._refresh_breadcrumb()
+        self._refresh_content_header()
         self._refresh_status_bar()
 
     def action_refresh(self) -> None:
         self.state = build_state(self.runner)
         self.query_one("#asset-grid", AssetGrid).update_state(self.state)
-        self.query_one("#kinds-tabs", KindsTabs).update_state(self.state)
+        self.query_one("#kinds-sidebar", KindsSidebar).update_state(self.state)
         self._refresh_pending_label()
-        self._refresh_breadcrumb()
+        self._refresh_content_header()
         self._refresh_status_bar()
 
     def action_revert(self) -> None:
@@ -274,33 +275,35 @@ class TUIApp(App):
         n = len(self.query_one("#asset-grid", AssetGrid).pending_entries())
         self.query_one("#footer-pending", Static).update(f"Pending: {n}")
 
-    # ----- breadcrumb + status bar ----------------------------------------
-    def _harnesses_for_display(self) -> tuple[str, ...]:
-        """Order known harnesses first (HARNESSES_DISPLAY_ORDER), then any extras."""
-        seen = set()
-        ordered: list[str] = []
-        for h in HARNESSES_DISPLAY_ORDER:
-            if h in self.state.all_harnesses and h not in seen:
-                ordered.append(h)
-                seen.add(h)
-        for h in self.state.all_harnesses:
-            if h not in seen:
-                ordered.append(h)
-                seen.add(h)
-        return tuple(ordered)
+    # ----- content header + status bar ------------------------------------
+    def _build_content_header(self) -> str:
+        """Header at the top of the content pane — kind label, count, scope chips.
 
-    def _build_breadcrumb(self) -> str:
-        kind_label = self._kind.replace("-", " ").title() if self._kind != "pi-extension" else "Pi Ext"
-        scope_chip = f"[reverse] {self._scope} [/]"
-        harness_chips = "  ".join(f"[reverse] {h} [/]" for h in self._harnesses_for_display())
+        Deliberately does NOT include a global 'harnesses: …' chip line —
+        that was the V3 mistake; harness state lives in the grid columns.
+        """
+        if self._kind == "pi-extension":
+            kind_label = "Pi Ext"
+        else:
+            kind_label = self._kind.replace("-", " ").title()
+        n = sum(1 for r in self.state.rows if r.kind == self._kind)
+        # Scope chips: highlight the active one with [reverse], dim the other.
+        chips = []
+        for s in ("project", "user"):
+            if s == self._scope:
+                chips.append(f"[reverse] {s} [/]")
+            else:
+                chips.append(f" [dim]{s}[/] ")
         return (
-            f"  [dim]agent-toolkit ›[/] [b]{kind_label}[/]   [dim]·[/]   "
-            f"scope: {scope_chip}   [dim]·[/]   harnesses: {harness_chips}"
+            f"  [b]{kind_label}[/]   [dim]·[/]   {n} items   "
+            f"[dim]·[/]   scope: {' '.join(chips)}"
         )
 
-    def _refresh_breadcrumb(self) -> None:
+    def _refresh_content_header(self) -> None:
         try:
-            self.query_one("#breadcrumb", Static).update(self._build_breadcrumb())
+            self.query_one("#content-header", Static).update(
+                self._build_content_header()
+            )
         except Exception:
             pass
 
