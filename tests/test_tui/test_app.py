@@ -645,8 +645,6 @@ async def test_content_header_markup_contains_click_actions():
     what makes the chips actually clickable in the running TUI; without
     these directives the visual chip is just dead text.
     """
-    from textual.widgets import Static
-
     runner = FakeRunner(_doc())
     app = TUIApp(toolkit_root=Path("/r"), runner=runner)
     async with app.run_test(size=(120, 36)) as pilot:
