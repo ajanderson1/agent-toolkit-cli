@@ -61,7 +61,11 @@ class CodexAdapter:
         return set(servers.keys())
 
     def entry_drift(self, scope: Scope, project_root: Path, entry: McpEntry) -> bool:
-        """True iff the on-disk single entry differs from its template render."""
+        """True iff the on-disk single entry differs from its template render.
+
+        Returns False when the entry is not installed — callers check
+        `list_installed` separately for presence.
+        """
         target = self.config_target(scope, project_root)
         if target is None or not target.is_file():
             return False
@@ -96,6 +100,14 @@ class CodexAdapter:
         *,
         previously_allowed: set[str] = frozenset(),
     ) -> list[WriteAction]:
+        """Reconcile on-disk config to the desired entry set.
+
+        `previously_allowed` is the set of names that were in the allow-list
+        before this dispatch's mutation (or empty for first-time link / `fix`
+        reconcile). Together with the names in `entries`, it defines our
+        ownership: any on-disk `[mcp_servers.X]` whose `X` is outside this
+        union is hand-rolled and never touched.
+        """
         target = self.config_target(scope, project_root)
         if target is None:
             return []
