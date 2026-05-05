@@ -161,6 +161,13 @@ def load_asset_record(asset: Asset) -> AssetRecord:
     return AssetRecord(asset=asset, metadata=metadata, body_excerpt=body_excerpt, requires=requires)
 
 
+def strip_frontmatter(text: str) -> str:
+    """Public alias for `_strip_frontmatter` — return the markdown body
+    of a frontmatter-bearing document (or the whole text if no frontmatter).
+    """
+    return _strip_frontmatter(text)
+
+
 def _strip_frontmatter(text: str) -> str:
     if not text.startswith(FRONTMATTER_DELIM + "\n"):
         return text

@@ -15,6 +15,7 @@ from agent_toolkit.commands._link_lib import (
     KINDS_FOR_PROJECTION,
     MALFORMED,
     LinkCounters,
+    _prune_translated_slot,
     format_summary,
     harness_target_dir,
     iter_plan_lines,
@@ -154,7 +155,7 @@ def _do_all(scope, harness, toolkit_root, project_root, dry_run):
             f" pointing into {toolkit_root}..."
         )
 
-    removed = 0
+    counters = LinkCounters()
     for kind in KINDS_FOR_PROJECTION:
         if not is_supported(harness, kind):
             continue
@@ -173,10 +174,19 @@ def _do_all(scope, harness, toolkit_root, project_root, dry_run):
             if raw_target == toolkit_prefix or raw_target.startswith(toolkit_prefix + "/"):
                 if dry_run:
                     print(f"would-unlink: {entry}", file=sys.stdout)
+                    counters.would_unlink += 1
                 else:
                     entry.unlink()
-                removed += 1
+                    counters.removed += 1
+            else:
+                # For translated slots, the symlink points into the per-scope
+                # cache rather than into the toolkit root — sweep those too.
+                _prune_translated_slot(
+                    entry, harness, scope, project_root,
+                    dry_run, counters, sys.stdout,
+                )
 
+    removed = counters.would_unlink if dry_run else counters.removed
     if dry_run:
         _ui.summary(f"{removed} symlinks would be removed.")
     else:

@@ -45,6 +45,34 @@ def _seed_skill_impl(toolkit_root: Path, slug: str, harnesses: list[str]) -> Pat
     return skill_dir
 
 
+AGENT_FRONTMATTER = """\
+---
+apiVersion: agent-toolkit/v1alpha2
+metadata:
+  name: {slug}
+  description: {slug} agent.
+  lifecycle: stable
+spec:
+  origin: first-party
+  vendored_via: none
+  harnesses:
+{harness_lines}
+---
+# {slug} agent body
+"""
+
+
+def _seed_agent_impl(toolkit_root: Path, slug: str, harnesses: list[str]) -> Path:
+    agents_dir = toolkit_root / "agents"
+    agents_dir.mkdir(parents=True, exist_ok=True)
+    lines = "\n".join(f"    - {h}" for h in harnesses)
+    asset_path = agents_dir / f"{slug}.md"
+    asset_path.write_text(
+        AGENT_FRONTMATTER.format(slug=slug, harness_lines=lines)
+    )
+    return asset_path
+
+
 def _seed_pi_extension_impl(toolkit_root: Path, slug: str, harnesses: list[str]) -> Path:
     ext_dir = toolkit_root / "extensions" / slug
     ext_dir.mkdir(parents=True, exist_ok=True)
@@ -80,6 +108,11 @@ def seed_toolkit() -> Callable[[Path], Path]:
 @pytest.fixture
 def seed_skill() -> Callable[[Path, str, list[str]], Path]:
     return _seed_skill_impl
+
+
+@pytest.fixture
+def seed_agent() -> Callable[[Path, str, list[str]], Path]:
+    return _seed_agent_impl
 
 
 @pytest.fixture

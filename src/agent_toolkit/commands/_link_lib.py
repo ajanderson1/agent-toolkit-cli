@@ -22,7 +22,11 @@ from agent_toolkit._support import (
     _USER_TARGETS,
     is_supported,
 )
-from agent_toolkit.walker import Asset, AssetRecord, discover_assets, extract_frontmatter, frontmatter_path, load_asset_record
+from agent_toolkit._translators import TRANSLATORS
+from agent_toolkit.walker import (
+    Asset, AssetRecord, discover_assets, extract_frontmatter,
+    frontmatter_path, load_asset_record, strip_frontmatter,
+)
 
 HARNESS_HOMES: dict[str, str] = {
     "claude":   ".claude",
@@ -47,6 +51,86 @@ def harness_home_path(harness: str, home: Path | None = None) -> Path:
     """Return the absolute path to a harness's home directory under $HOME."""
     h = home if home is not None else Path(os.environ.get("HOME", ""))
     return h / HARNESS_HOMES[harness]
+
+
+CACHE_DIR_NAME = ".agent-toolkit-cache"
+
+
+def _scope_cache_root(harness: str, scope: str, project_root: Path) -> Path:
+    """Return the per-scope cache root for a harness.
+
+    user scope:    $HOME/<harness-home>/<CACHE_DIR_NAME>/
+    project scope: <project_root>/<harness-home>/<CACHE_DIR_NAME>/
+
+    The harness-home for opencode differs between scopes:
+      - user:    .config/opencode/
+      - project: .opencode/
+    Mirrors the path conventions in _support.py (_USER_TARGETS / _PROJECT_TARGETS).
+    """
+    if harness != "opencode":
+        # No other harness has a translate cell yet; defensively raise.
+        raise ValueError(f"no cache layout defined for harness {harness!r}")
+    if scope == "user":
+        home = Path(os.environ.get("HOME", ""))
+        return home / ".config" / "opencode" / CACHE_DIR_NAME
+    return project_root / ".opencode" / CACHE_DIR_NAME
+
+
+def _translated_slot_filename(slug: str, kind: str, harness: str) -> str:
+    """Return the filename used for the slot symlink in this (harness, kind).
+
+    OpenCode requires `.md` extension on agent and command slot files; Claude
+    does not. Today only opencode has translate cells, so this is `<slug>.md`."""
+    if harness == "opencode" and kind in {"agent", "command"}:
+        return f"{slug}.md"
+    return slug
+
+
+def _render_to_cache(
+    *,
+    harness: str,
+    kind: str,
+    slug: str,
+    asset_path: Path,
+    scope: str,
+    project_root: Path,
+    dry_run: bool,
+) -> tuple[Path, bytes]:
+    """Render translated bytes for an asset and return the (cache_path, bytes).
+
+    In dry_run, computes bytes in-memory and returns the would-be cache path
+    without writing. Out of dry_run, writes the bytes atomically (tmp+rename),
+    creating parent directories as needed.
+
+    Raises if `(harness, kind)` has no translator.
+    """
+    translator = TRANSLATORS.get((harness, kind))
+    if translator is None:
+        raise RuntimeError(
+            f"no translator registered for ({harness!r}, {kind!r}) — "
+            "_render_to_cache should not be called for non-translated cells"
+        )
+    record = load_asset_record(Asset(kind=kind, slug=slug, path=asset_path))
+    text = asset_path.read_text(encoding="utf-8").replace("\r\n", "\n")
+    body = strip_frontmatter(text)
+    rendered = translator(record, body)
+
+    cache_dir = _scope_cache_root(harness, scope, project_root) / kind
+    cache_path = cache_dir / f"{slug}.md"
+    if not dry_run:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        tmp = cache_path.with_suffix(cache_path.suffix + ".tmp")
+        tmp.write_bytes(rendered)
+        tmp.replace(cache_path)
+    return cache_path, rendered
+
+
+def _relative_to_toolkit(asset_path: Path, toolkit_root: Path) -> str:
+    """Best-effort relative path for dry-run output. Falls back to absolute."""
+    try:
+        return str(asset_path.resolve().relative_to(toolkit_root.resolve()))
+    except (ValueError, OSError):
+        return str(asset_path)
 
 
 @dataclass
@@ -158,16 +242,31 @@ def maybe_link(
     dry_run: bool,
     counters: LinkCounters,
     stdout: IO[str],
+    scope: str = "user",
+    project_root: Path | None = None,
 ) -> None:
     """Create/replace/skip a symlink for one asset; update counters.
 
-    Direct port of bash _maybe_link in bin/lib/link.sh:430.
+    For (harness, kind) pairs in TRANSLATORS, render to a per-scope cache
+    file and point the slot symlink at the cache. Otherwise symlink the
+    slot directly to the asset source.
     """
     if not is_supported(harness, kind):
         raise UnsupportedPair(harness, kind)
-    source_path = _expected_source(asset_path, kind)
-    link_path = target_dir / slug
+
     declared = _asset_harnesses(asset_path, kind)
+    is_translated = (harness, kind) in TRANSLATORS
+
+    # Translated cells need a project_root to resolve project-scope cache paths.
+    # The user-scope path doesn't actually consult project_root, but we accept
+    # the default cwd here for the rare in-the-wild caller that omits it. Keep
+    # this resolution at function entry so the behaviour is visible at a glance.
+    if is_translated and project_root is None:
+        project_root = Path.cwd()
+
+    slot_filename = _translated_slot_filename(slug, kind, harness) if is_translated else slug
+    link_path = target_dir / slot_filename
+
     if harness not in declared:
         if link_path.is_symlink():
             if dry_run:
@@ -178,14 +277,38 @@ def maybe_link(
                 counters.removed += 1
         return
 
-    if link_path.is_symlink() and Path(os.readlink(link_path)) == source_path:
-        counters.unchanged += 1
-        return
-
-    if dry_run:
-        print(f"would-link: {link_path} -> {source_path}", file=stdout)
-        counters.would_link += 1
-        return
+    if is_translated:
+        cache_path, rendered = _render_to_cache(
+            harness=harness, kind=kind, slug=slug,
+            asset_path=asset_path, scope=scope,
+            project_root=project_root, dry_run=dry_run,
+        )
+        source_path = cache_path
+        # Cache-staleness rule: if the cache exists and its bytes match the
+        # rendered output, AND the slot symlink already points at the cache,
+        # this is unchanged. Any drift counts as updated.
+        cache_in_sync = cache_path.is_file() and cache_path.read_bytes() == rendered
+        slot_correct = link_path.is_symlink() and Path(os.readlink(link_path)) == cache_path
+        if slot_correct and cache_in_sync:
+            counters.unchanged += 1
+            return
+        if dry_run:
+            rel_asset = _relative_to_toolkit(asset_path, toolkit_root)
+            print(
+                f"would-link: {link_path} -> {cache_path} (translated from {rel_asset})",
+                file=stdout,
+            )
+            counters.would_link += 1
+            return
+    else:
+        source_path = _expected_source(asset_path, kind)
+        if link_path.is_symlink() and Path(os.readlink(link_path)) == source_path:
+            counters.unchanged += 1
+            return
+        if dry_run:
+            print(f"would-link: {link_path} -> {source_path}", file=stdout)
+            counters.would_link += 1
+            return
 
     if link_path.is_symlink() or link_path.exists():
         link_path.unlink()
@@ -307,17 +430,37 @@ def project_from_file(
                     dry_run=dry_run,
                     counters=counters,
                     stdout=stdout,
+                    scope=scope,
+                    project_root=project_root,
                 )
             else:
-                _prune_if_into_repo(
-                    target_dir / asset.slug, toolkit_root, dry_run, counters, stdout,
-                )
+                slot_path_translated = target_dir / _translated_slot_filename(asset.slug, kind, harness)
+                slot_path_plain = target_dir / asset.slug
+                # Try translated slot first (path-based detection); fall back to plain.
+                if not _prune_translated_slot(
+                    slot_path_translated, harness, scope, project_root,
+                    dry_run, counters, stdout,
+                ):
+                    _prune_if_into_repo(
+                        slot_path_plain, toolkit_root, dry_run, counters, stdout,
+                    )
         # Sweep orphan symlinks (slug in target dir but no asset in repo)
         if target_dir.is_dir():
             for entry in target_dir.iterdir():
                 if not entry.is_symlink():
                     continue
-                if entry.name in discovered_slugs:
+                # discovered_slugs uses bare slugs; check both naming conventions
+                bare_name = entry.name
+                if bare_name in discovered_slugs:
+                    continue
+                # Strip a `.md` suffix to compare against bare slugs (translated slots
+                # use `<slug>.md` filenames; non-translated use bare `<slug>`)
+                if bare_name.endswith(".md") and bare_name[:-3] in discovered_slugs:
+                    continue
+                if _prune_translated_slot(
+                    entry, harness, scope, project_root,
+                    dry_run, counters, stdout,
+                ):
                     continue
                 _prune_if_into_repo(entry, toolkit_root, dry_run, counters, stdout)
 
@@ -380,3 +523,47 @@ def _prune_if_into_repo(
     else:
         link_path.unlink()
         counters.removed += 1
+
+
+def _prune_translated_slot(
+    link_path: Path,
+    harness: str,
+    scope: str,
+    project_root: Path,
+    dry_run: bool,
+    counters: LinkCounters,
+    stdout: IO[str],
+) -> bool:
+    """If `link_path` is a symlink whose target is inside the per-scope
+    translation cache, remove both the symlink and the cache file. Returns
+    True if it acted (slot was a translated slot), False otherwise so the
+    caller can fall through to other prune paths.
+
+    Edge case: cache file already missing (manual tampering) — silently
+    delete the dangling symlink and return True.
+    """
+    if not link_path.is_symlink():
+        return False
+    try:
+        cache_root = _scope_cache_root(harness, scope, project_root).resolve()
+    except ValueError:
+        return False  # no cache layout for this harness
+    target = Path(os.readlink(str(link_path)))
+    try:
+        target_resolved = target.resolve()
+    except (OSError, RuntimeError):
+        return False
+    try:
+        target_resolved.relative_to(cache_root)
+    except ValueError:
+        return False  # target is outside our cache
+
+    if dry_run:
+        print(f"would-unlink: {link_path}", file=stdout)
+        counters.would_unlink += 1
+    else:
+        link_path.unlink()
+        if target.exists():
+            target.unlink()
+        counters.removed += 1
+    return True
