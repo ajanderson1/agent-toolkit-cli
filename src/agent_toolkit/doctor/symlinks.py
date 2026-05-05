@@ -5,7 +5,8 @@ import os
 from pathlib import Path
 
 from agent_toolkit._support import _USER_TARGETS
-from agent_toolkit.commands._link_lib import _translated_slot_filename
+from agent_toolkit._translators import TRANSLATORS
+from agent_toolkit.commands._link_lib import _translate_slot_layout, _translated_slot_filename
 from agent_toolkit.doctor.result import GroupResult, Status
 from agent_toolkit.walker import discover_assets, extract_frontmatter, frontmatter_path
 
@@ -36,13 +37,27 @@ def run(toolkit_root: Path, *, harness: str = "claude") -> GroupResult:
         expected[(asset.kind, asset.slug)] = link_path
 
     for (kind, slug), link_path in expected.items():
-        if not link_path.exists() and not link_path.is_symlink():
-            warns.append(f"{kind}/{slug}: expected symlink {link_path} missing")
+        # For the "dir-with-file-symlink" translate layout (e.g. opencode skill),
+        # link_path is a real slot directory; the actual symlink lives at
+        # link_path/<inner-file>. Look one level deeper before deciding.
+        check_path = link_path
+        if (
+            (harness, kind) in TRANSLATORS
+            and _translate_slot_layout(harness, kind) == "dir-with-file-symlink"
+            and link_path.is_dir()
+            and not link_path.is_symlink()
+        ):
+            inner_symlinks = [c for c in link_path.iterdir() if c.is_symlink()]
+            if inner_symlinks:
+                check_path = inner_symlinks[0]
+
+        if not check_path.exists() and not check_path.is_symlink():
+            warns.append(f"{kind}/{slug}: expected symlink {check_path} missing")
             continue
-        if link_path.is_symlink():
-            target = Path(os.readlink(link_path))
+        if check_path.is_symlink():
+            target = Path(os.readlink(check_path))
             if not target.is_absolute():
-                target = (link_path.parent / target).resolve()
+                target = (check_path.parent / target).resolve()
             if not target.exists():
                 warns.append(f"{kind}/{slug}: dangling symlink → {target}")
             else:

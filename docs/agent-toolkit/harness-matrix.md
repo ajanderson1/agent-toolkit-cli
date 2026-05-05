@@ -46,7 +46,7 @@ human readers can trace any cache file back to its source asset.
 
 | Kind \\ Harness | Claude | Codex | OpenCode | Pi |
 |---|---|---|---|---|
-| **skill** | symlink → `~/.claude/skills/<slug>/` | translate → `~/.codex/skills/<slug>/SKILL.md` (cache: `~/.codex/.agent-toolkit-cache/skill/<slug>/SKILL.md`) — emits codex-shaped frontmatter with top-level `description` and `agent_toolkit` wrapper block | symlink → `~/.config/opencode/skills/<slug>/` | symlink → `~/.pi/agent/skills/<slug>/` |
+| **skill** | symlink → `~/.claude/skills/<slug>/` | translate → `~/.codex/skills/<slug>/SKILL.md` (cache: `~/.codex/.agent-toolkit-cache/skill/<slug>/SKILL.md`) — emits codex-shaped frontmatter with top-level `description` and `agent_toolkit` wrapper block | translate → `~/.config/opencode/skills/<slug>/SKILL.md` (cache: `~/.config/opencode/.agent-toolkit-cache/skill/<slug>/SKILL.md`) — slot is a real directory containing a file symlink to the cache; emits opencode-shaped frontmatter with top-level `name` and `description` plus `agent_toolkit` wrapper block | symlink → `~/.pi/agent/skills/<slug>/` |
 | **agent** | symlink → `~/.claude/agents/<slug>.md` | unsupported (by design) — Codex has no `~/.codex/agents/` drop-in; agents are plugin-internal, distributed via `codex plugin marketplace add` | translate → `~/.config/opencode/agents/<slug>.md` (cache: `~/.config/opencode/.agent-toolkit-cache/agent/<slug>.md`) — injects `mode: subagent` and strips toolkit wrapper frontmatter | symlink → `~/.pi/agent/agents/<slug>.md` |
 | **command** | symlink → `~/.claude/commands/<slug>.md` | unsupported (by design) — Codex has no `~/.codex/commands/`; commands surface as `$skill` invocations from inside skills | translate → `~/.config/opencode/commands/<slug>.md` (cache: `~/.config/opencode/.agent-toolkit-cache/command/<slug>.md`) — emits OpenCode-shaped frontmatter with `description` and `agent_toolkit` wrapper block | unsupported (by design) — Pi has no command concept |
 | **hook** | symlink → `~/.claude/hooks/<slug>.<ext>` | unsupported (by design) — Codex has no hooks API at the user level | unsupported (by design) — OpenCode hooks live inside TS plugin files (`session.start`, `tool.execute.before`, etc.); not drop-in markdown | unsupported (by design) — Pi has no hooks API at the user level |
@@ -58,9 +58,15 @@ human readers can trace any cache file back to its source asset.
 
 The matrix above shows user-scope paths. Project-scope paths (when an
 allowlist lives at `<repo>/.agent-toolkit.yaml`) drop the `~/` prefix and
-use the same relative paths under the project root, e.g. `.claude/skills/`,
-`.config/opencode/skills/` → `.opencode/skills/` (note: project scope uses
-`.opencode/`, not `.config/opencode/` which is user-scope only).
+use the same relative paths under the project root with two harness-specific
+deviations:
+
+- **OpenCode** project scope uses `.opencode/`, not `.config/opencode/`
+  (which is user-scope only).
+- **Pi** project scope uses `.pi/<kind>/` — no `/agent/` infix, even though
+  user-scope is `~/.pi/agent/<kind>/`. This matches pi's own runtime layout
+  (`globalBaseDir = ~/.pi/agent`, `projectBaseDir = <cwd>/.pi`) — see
+  `@mariozechner/pi-coding-agent` `dist/core/package-manager.js:669-686`.
 
 See `_PROJECT_TARGETS` in `src/agent_toolkit/_support.py` for the canonical
 table.

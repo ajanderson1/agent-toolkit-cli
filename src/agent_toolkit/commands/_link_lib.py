@@ -104,6 +104,25 @@ def _translated_slot_filename(slug: str, kind: str, harness: str) -> str:
     return slug
 
 
+# Translate-cell slot layouts:
+#   "file"                 — the slot path itself is a symlink to the cache file.
+#                            (e.g. opencode agent / opencode command)
+#   "dir-symlink"          — the slot path itself is a symlink to the cache
+#                            directory; the harness reads files inside.
+#                            (e.g. codex skill)
+#   "dir-with-file-symlink" — the slot path is a real directory, and one file
+#                            inside it is a symlink to a cache file.
+#                            (e.g. opencode skill — opencode's directory walk
+#                            does not follow directory symlinks but does follow
+#                            file symlinks within real directories.)
+def _translate_slot_layout(harness: str, kind: str) -> str:
+    if harness == "opencode" and kind == "skill":
+        return "dir-with-file-symlink"
+    if _translated_slot_filename("x", kind, harness).endswith(".md"):
+        return "file"
+    return "dir-symlink"
+
+
 def _render_to_cache(
     *,
     harness: str,
@@ -139,17 +158,25 @@ def _render_to_cache(
     rendered = translator(record, body)
 
     cache_root = _scope_cache_root(harness, scope, project_root) / kind
-    slot_filename = _translated_slot_filename(slug, kind, harness)
-    if slot_filename.endswith(".md"):
-        # File-slot: cache layout is <cache_root>/<kind>/<slug>.md
+    layout = _translate_slot_layout(harness, kind)
+    if layout == "file":
+        # Cache layout: <cache_root>/<kind>/<slug>.md; slot symlinks the file.
         cache_dir = cache_root
         cache_path = cache_dir / f"{slug}.md"
         slot_target = cache_path
-    else:
-        # Directory-slot: cache layout is <cache_root>/<kind>/<slug>/<asset.name>
+    elif layout == "dir-symlink":
+        # Cache layout: <cache_root>/<kind>/<slug>/<asset.name>; slot symlinks
+        # the cache directory.
         cache_dir = cache_root / slug
         cache_path = cache_dir / asset_path.name
         slot_target = cache_dir
+    else:
+        # "dir-with-file-symlink": cache layout same as dir-symlink, but the slot
+        # is a real directory and only the inner file is symlinked. slot_target
+        # is therefore the cache file (not the cache dir).
+        cache_dir = cache_root / slug
+        cache_path = cache_dir / asset_path.name
+        slot_target = cache_path
     if not dry_run:
         cache_dir.mkdir(parents=True, exist_ok=True)
         tmp = cache_path.with_suffix(cache_path.suffix + ".tmp")
@@ -299,14 +326,30 @@ def maybe_link(
 
     slot_filename = _translated_slot_filename(slug, kind, harness) if is_translated else slug
     link_path = target_dir / slot_filename
+    # For "dir-with-file-symlink" layouts the actual symlink lives one level
+    # deeper inside a real slot directory. For all other layouts the slot path
+    # IS the symlink. Computed below once we know whether we're translated.
+    actual_link_path = link_path
+
+    if is_translated:
+        layout = _translate_slot_layout(harness, kind)
+        if layout == "dir-with-file-symlink":
+            actual_link_path = link_path / asset_path.name
 
     if harness not in declared:
-        if link_path.is_symlink():
+        if actual_link_path.is_symlink():
             if dry_run:
-                print(f"would-unlink: {link_path}", file=stdout)
+                print(f"would-unlink: {actual_link_path}", file=stdout)
                 counters.would_unlink += 1
             else:
-                link_path.unlink()
+                actual_link_path.unlink()
+                # If the slot directory was made by us (dir-with-file-symlink
+                # layout) and is now empty, remove it too.
+                if is_translated and link_path != actual_link_path:
+                    try:
+                        link_path.rmdir()
+                    except OSError:
+                        pass
                 counters.removed += 1
         return
 
@@ -318,18 +361,20 @@ def maybe_link(
         )
         source_path = slot_target
         # Cache-staleness rule: if the cache file's bytes match the rendered
-        # output AND the slot symlink already points at the slot_target (the
-        # cache file for file-slot kinds, the cache dir for directory-slot
-        # kinds), this is unchanged. Any drift counts as updated.
+        # output AND the slot symlink already points at the slot_target, this
+        # is unchanged. Any drift counts as updated.
         cache_in_sync = cache_path.is_file() and cache_path.read_bytes() == rendered
-        slot_correct = link_path.is_symlink() and Path(os.readlink(link_path)) == slot_target
+        slot_correct = (
+            actual_link_path.is_symlink()
+            and Path(os.readlink(actual_link_path)) == slot_target
+        )
         if slot_correct and cache_in_sync:
             counters.unchanged += 1
             return
         if dry_run:
             rel_asset = _relative_to_toolkit(asset_path, toolkit_root)
             print(
-                f"would-link: {link_path} -> {slot_target} (translated from {rel_asset})",
+                f"would-link: {actual_link_path} -> {slot_target} (translated from {rel_asset})",
                 file=stdout,
             )
             counters.would_link += 1
@@ -344,12 +389,21 @@ def maybe_link(
             counters.would_link += 1
             return
 
-    if link_path.is_symlink() or link_path.exists():
-        link_path.unlink()
+    # Ensure the real slot directory exists for the dir-with-file-symlink layout.
+    if is_translated and link_path != actual_link_path:
+        # If a previous link existed as a directory symlink (e.g. PR-B's
+        # dir-symlink shape, or pre-translate direct-symlink), remove it so we
+        # can create a real directory in its place.
+        if link_path.is_symlink():
+            link_path.unlink()
+        link_path.mkdir(parents=True, exist_ok=True)
+
+    if actual_link_path.is_symlink() or actual_link_path.exists():
+        actual_link_path.unlink()
         counters.updated += 1
     else:
         counters.created += 1
-    link_path.symlink_to(source_path)
+    actual_link_path.symlink_to(source_path)
 
 
 def project_from_file(
@@ -478,10 +532,12 @@ def project_from_file(
                     _prune_if_into_repo(
                         slot_path_plain, toolkit_root, dry_run, counters, stdout,
                     )
-        # Sweep orphan symlinks (slug in target dir but no asset in repo)
+        # Sweep orphan slots (slug in target dir but no asset in repo).
+        # An entry is "orphan-shaped" if it's a symlink (file/dir-symlink layouts)
+        # OR a real directory (dir-with-file-symlink layout).
         if target_dir.is_dir():
             for entry in target_dir.iterdir():
-                if not entry.is_symlink():
+                if not (entry.is_symlink() or entry.is_dir()):
                     continue
                 # discovered_slugs uses bare slugs; check both naming conventions
                 bare_name = entry.name
@@ -496,7 +552,8 @@ def project_from_file(
                     dry_run, counters, stdout,
                 ):
                     continue
-                _prune_if_into_repo(entry, toolkit_root, dry_run, counters, stdout)
+                if entry.is_symlink():
+                    _prune_if_into_repo(entry, toolkit_root, dry_run, counters, stdout)
 
 
 def _check_requires(
@@ -568,11 +625,19 @@ def _prune_translated_slot(
     counters: LinkCounters,
     stdout: IO[str],
 ) -> bool:
-    """If `link_path` is a symlink whose target is inside the per-scope
-    translation cache, remove both the symlink and the cache content. For
-    file-slot caches (e.g. opencode agents/commands), removes the cache
-    file. For directory-slot caches (e.g. skills), removes the cache files
-    inside the slug directory and rmdir's the directory itself.
+    """If `link_path` corresponds to a translate cell whose target is inside
+    the per-scope translation cache, remove the slot and the cache content.
+
+    Three slot layouts handled (see `_translate_slot_layout`):
+      - "file": link_path itself is a symlink to the cache file. Remove the
+        symlink and the cache file.
+      - "dir-symlink": link_path itself is a symlink to the cache directory.
+        Remove the symlink, every file inside the cache directory, then the
+        cache directory itself.
+      - "dir-with-file-symlink": link_path is a real directory containing a
+        single file symlink whose target is the cache file. Remove the file
+        symlink, the cache file, the empty cache directory, then the empty
+        slot directory.
 
     Returns True if it acted (slot was a translated slot), False otherwise
     so the caller can fall through to other prune paths.
@@ -580,12 +645,71 @@ def _prune_translated_slot(
     Edge case: cache content already missing (manual tampering) — silently
     delete the dangling symlink and return True.
     """
-    if not link_path.is_symlink():
-        return False
     try:
         cache_root = _scope_cache_root(harness, scope, project_root).resolve()
     except ValueError:
         return False  # no cache layout for this harness
+
+    if link_path.is_symlink():
+        return _prune_symlink_slot(
+            link_path, cache_root, dry_run, counters, stdout,
+        )
+    # Possible "dir-with-file-symlink" layout: a real slot directory whose
+    # children are file symlinks into the cache. Identify by finding any child
+    # symlink whose target resolves under cache_root.
+    if not link_path.is_dir():
+        return False
+    inner_symlinks = [
+        child for child in link_path.iterdir()
+        if child.is_symlink() and _target_inside(child, cache_root)
+    ]
+    if not inner_symlinks:
+        return False
+    if dry_run:
+        for child in inner_symlinks:
+            print(f"would-unlink: {child}", file=stdout)
+            counters.would_unlink += 1
+        return True
+    for child in inner_symlinks:
+        cache_file = Path(os.readlink(str(child))).resolve(strict=False)
+        child.unlink()
+        # The cache file lives at <cache>/<kind>/<slug>/<name>; remove the
+        # file then rmdir its <slug>/ parent if it is now empty.
+        if cache_file.is_file():
+            try:
+                cache_file.unlink()
+            except OSError:
+                pass
+        try:
+            cache_file.parent.rmdir()
+        except OSError:
+            pass
+        counters.removed += 1
+    # If we removed all children and the slot dir is now empty, rmdir it.
+    try:
+        link_path.rmdir()
+    except OSError:
+        pass
+    return True
+
+
+def _target_inside(symlink: Path, cache_root: Path) -> bool:
+    try:
+        Path(os.readlink(str(symlink))).resolve().relative_to(cache_root)
+        return True
+    except (ValueError, OSError, RuntimeError):
+        return False
+
+
+def _prune_symlink_slot(
+    link_path: Path,
+    cache_root: Path,
+    dry_run: bool,
+    counters: LinkCounters,
+    stdout: IO[str],
+) -> bool:
+    """Helper: link_path is itself a symlink. Used for "file" and "dir-symlink"
+    layouts. Caller has already resolved cache_root."""
     target = Path(os.readlink(str(link_path)))
     try:
         target_resolved = target.resolve()
@@ -594,7 +718,7 @@ def _prune_translated_slot(
     try:
         target_resolved.relative_to(cache_root)
     except ValueError:
-        return False  # target is outside our cache
+        return False
 
     if dry_run:
         print(f"would-unlink: {link_path}", file=stdout)
@@ -602,9 +726,6 @@ def _prune_translated_slot(
     else:
         link_path.unlink()
         if target_resolved.is_dir():
-            # Directory-slot cache: remove every file in the slug dir, then
-            # rmdir the directory itself. Tolerate missing entries (tampering)
-            # and a non-empty directory (rmdir raises OSError).
             try:
                 for child in target_resolved.iterdir():
                     if child.is_file() or child.is_symlink():

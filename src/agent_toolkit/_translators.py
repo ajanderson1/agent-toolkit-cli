@@ -45,6 +45,10 @@ def _description(record: AssetRecord) -> str:
     return (record.metadata.get("metadata") or {}).get("description") or ""
 
 
+def _name(record: AssetRecord) -> str:
+    return (record.metadata.get("metadata") or {}).get("name") or ""
+
+
 def _translate_opencode_agent(record: AssetRecord, body: str) -> bytes:
     fm = {
         "description": _description(record),
@@ -78,8 +82,27 @@ def _translate_codex_skill(record: AssetRecord, body: str) -> bytes:
     return _render(fm, body)
 
 
+def _translate_opencode_skill(record: AssetRecord, body: str) -> bytes:
+    """OpenCode skills require BOTH `name:` AND `description:` at the YAML top
+    level — `add()` does `z.object({ name, description }).safeParse(md.data)`
+    and silently skips skills that fail validation (#41).
+
+    Output mirrors `_translate_codex_skill` plus a top-level `name` field.
+    Empirically verified against opencode 1.14.30: skills with this shape
+    are loaded by `opencode debug skill`; skills with the raw v1alpha2
+    wrapper (no top-level name/description) are silently dropped.
+    """
+    fm = {
+        "name": _name(record),
+        "description": _description(record),
+        "agent_toolkit": _wrapper_block(record),
+    }
+    return _render(fm, body)
+
+
 TRANSLATORS: dict[tuple[str, str], Callable[[AssetRecord, str], bytes]] = {
     ("opencode", "agent"): _translate_opencode_agent,
     ("opencode", "command"): _translate_opencode_command,
     ("codex", "skill"): _translate_codex_skill,
+    ("opencode", "skill"): _translate_opencode_skill,
 }
