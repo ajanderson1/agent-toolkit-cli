@@ -103,3 +103,13 @@ def test_tui_runner_link_plan_codex_hook(tui_env, monkeypatch):
     if config_path.is_file():
         post = config_path.read_text(encoding="utf-8")
         assert "agent-toolkit-hooks/codex-demo/check.sh" not in post
+
+    # Post-unlink: list_state should report the cell as unlinked-allowlisted
+    # (or unsupported if the harness somehow lost the row — unlikely).
+    state2 = runner.list_state()
+    hooks2 = [a for a in state2["assets"] if a["kind"] == "hook"]
+    user_codex2 = next(
+        c for c in hooks2[0]["cells"]
+        if c["harness"] == "codex" and c["scope"] == "user"
+    )
+    assert user_codex2["status"] in {"unsupported", "unlinked-allowlisted"}

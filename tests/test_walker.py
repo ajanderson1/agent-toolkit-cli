@@ -114,6 +114,40 @@ def test_discover_hooks_via_meta_yaml(tmp_path):
     assert hook_assets[0].path.name == "confirm-rm.meta.yaml"
 
 
+def test_discover_hooks_via_subdir_meta_yaml(tmp_path):
+    """Hook assets in subdirectory layout (hooks/<slug>/.meta.yaml)
+    must be discovered with slug = parent dir name.
+
+    The flat layout (hooks/<slug>.meta.yaml) is also supported (see
+    sibling test). Both layouts coexist because the dispatcher uses
+    the subdirectory layout (script files live alongside the meta).
+    """
+    hook_dir = tmp_path / "hooks" / "subdir-demo"
+    hook_dir.mkdir(parents=True)
+    (hook_dir / ".meta.yaml").write_text(
+        "apiVersion: agent-toolkit/v1alpha2\n"
+        "metadata:\n"
+        "  name: subdir-demo\n"
+        "  description: Demo subdirectory hook.\n"
+        "  kind: hook\n"
+        "  lifecycle: experimental\n"
+        "spec:\n"
+        "  origin: first-party\n"
+        "  vendored_via: none\n"
+        "  harnesses: [codex]\n"
+        "  hook:\n"
+        "    events: [PreToolUse]\n"
+        "    command: check.sh\n",
+        encoding="utf-8",
+    )
+    (hook_dir / "check.sh").write_text("#!/usr/bin/env bash\nexit 0\n")
+
+    assets = list(discover_assets(tmp_path))
+    hook_assets = [a for a in assets if a.kind == "hook"]
+    assert len(hook_assets) == 1
+    assert hook_assets[0].slug == "subdir-demo"
+
+
 def test_discover_walks_deterministically_sorted(tmp_path):
     for name in ["zeta", "alpha", "mu"]:
         (tmp_path / "skills" / name).mkdir(parents=True)

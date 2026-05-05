@@ -225,11 +225,13 @@ under [pi_extensions] or run `agent-toolkit link user pi pi-extension:pi-subagen
 
 ## How to add a new pair
 
-1. Decide the mechanism (symlink, config_file, plugin_folder, translate).
+1. Decide the mechanism (symlink, config_file, config_file+folder, plugin_folder, translate).
 2. For symlink: add to `_USER_TARGETS` and `_PROJECT_TARGETS` in
    `src/agent_toolkit/_support.py`.
-3. For config_file or plugin_folder: implement an adapter under
+3. For config_file, config_file+folder, or plugin_folder: implement an adapter under
    `src/agent_toolkit/harness_adapters/<harness>.py`.
+   - For config_file+folder: also add a `_USER_TARGETS` row pointing to the managed
+     sub-folder path, so the dispatcher knows where to chmod +x the hooks.
 4. Update this matrix.
 5. The parity test (`tests/test_harness_matrix.py`) will fail until both
    sides agree.

@@ -227,7 +227,7 @@ def _build_inventory(
                     if not is_installed:
                         cells.append({
                             "harness": h, "scope": scope,
-                            "status": "unlinked", "target": None,
+                            "status": "unlinked-allowlisted", "target": None,
                             "allowlisted": True,
                         })
                         continue
