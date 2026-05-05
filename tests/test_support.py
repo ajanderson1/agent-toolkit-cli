@@ -145,3 +145,30 @@ def test_slot_dir_unsupported_pair_returns_none(tmp_path):
 
     assert slot_dir("codex", "agent", "user", project_root=tmp_path) is None
     assert slot_dir("codex", "agent", "project", project_root=tmp_path) is None
+
+
+def test_is_supported_back_compat_no_scope_for_pi_agent():
+    """Acceptance #1: is_supported('pi','agent') returns True without a scope arg."""
+    assert is_supported("pi", "agent") is True
+
+
+def test_is_supported_user_scope_for_pi_agent_is_true():
+    """Acceptance #2: pi agents ARE supported at user scope (~/.pi/agent/agents)."""
+    assert is_supported("pi", "agent", scope="user") is True
+
+
+def test_is_supported_project_scope_for_pi_agent_is_false():
+    """Acceptance #3: pi has no project-scope agent discovery — must report unsupported."""
+    assert is_supported("pi", "agent", scope="project") is False
+
+
+def test_is_supported_unknown_scope_returns_false():
+    """Defensive: any scope string other than 'user' or 'project' returns False."""
+    assert is_supported("claude", "skill", scope="bogus") is False
+
+
+def test_slot_dir_pi_agent_project_returns_none(tmp_path):
+    """Acceptance #4: project-scope slot for (pi, agent) is None after the row is removed."""
+    from agent_toolkit._support import slot_dir
+
+    assert slot_dir("pi", "agent", "project", project_root=tmp_path) is None
