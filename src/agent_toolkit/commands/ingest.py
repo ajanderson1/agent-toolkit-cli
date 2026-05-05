@@ -103,6 +103,34 @@ def ingest(
         }))
         return
 
+    if target.input_form == InputForm.DIR:
+        no_manifest = next((n for n in target.notes if n.startswith("dir-no-manifest:")), None)
+        if no_manifest:
+            hint = no_manifest.split(": ", 1)[1] if ": " in no_manifest else no_manifest
+            click.echo(json.dumps({
+                "status": "NEEDS_DISAMBIGUATION",
+                "input_form": target.input_form.value,
+                "directory": target.input_value,
+                "hint": hint,
+                "next": "skill_should_prompt_user_to_identify_asset_type",
+            }))
+            return
+        snap = Path(target.input_value).resolve()
+        proposal = infer_from_snapshot(
+            snapshot_dir=snap,
+            slug=target.slug_guess,
+            upstream=target.upstream_url,
+        )
+        staged = stage_proposal(toolkit_root=root, proposal=proposal, snapshot_dir=snap)
+        click.echo(json.dumps({
+            "status": "STAGED",
+            "staging_dir": str(staged),
+            "proposal": proposal.to_dict(),
+            "target_path": proposal.target_path,
+            "next": "skill_should_run_security_review_then_present_GO_NO_GO_gate",
+        }, indent=2))
+        return
+
     if not snapshot_dir:
         click.echo(json.dumps({
             "status": "NEEDS_SNAPSHOT",

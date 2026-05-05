@@ -9,6 +9,7 @@ class InputForm(str, Enum):
     URL = "url"
     NAME = "name"
     FILE = "file"
+    DIR = "dir"
 
 
 @dataclass

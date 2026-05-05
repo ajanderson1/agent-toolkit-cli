@@ -10,10 +10,21 @@ _GITHUB_URL = re.compile(r"^https?://github\.com/([^/]+)/([^/?#]+?)(?:\.git)?(?:
 _URL_RE = re.compile(r"^https?://", re.IGNORECASE)
 
 
+_DIR_MANIFESTS: list[tuple[str, str]] = [
+    (".claude-plugin/plugin.json", "plugin"),
+    (".claude-plugin/marketplace.json", "plugin"),
+    ("SKILL.md", "skill"),
+    ("extension.meta.yaml", "pi-extension"),
+    ("mcp.json", "mcp"),
+]
+
+
 def classify_input(value: str) -> IngestTarget:
     candidate_path = Path(value)
     if candidate_path.exists() and candidate_path.is_file():
         return _from_file(candidate_path)
+    if candidate_path.exists() and candidate_path.is_dir():
+        return _from_dir(candidate_path)
     if _URL_RE.match(value):
         return _from_url(value)
     return _from_name(value)
@@ -29,6 +40,40 @@ def _from_file(path: Path) -> IngestTarget:
         kind_guess=kind,
         slug_guess=slug,
         vendor_strategy_guess="copy",
+    )
+
+
+def _from_dir(path: Path) -> IngestTarget:
+    slug = path.name.lower().replace("_", "-")
+    for manifest_rel, kind in _DIR_MANIFESTS:
+        if (path / manifest_rel).exists():
+            return IngestTarget(
+                input_value=str(path),
+                input_form=InputForm.DIR,
+                upstream_url=None,
+                kind_guess=kind,
+                slug_guess=slug,
+                vendor_strategy_guess="copy",
+            )
+    # config.json alongside README.md is a recognisable (if ambiguous) layout
+    if (path / "config.json").exists() and (path / "README.md").exists():
+        return IngestTarget(
+            input_value=str(path),
+            input_form=InputForm.DIR,
+            upstream_url=None,
+            kind_guess="skill",
+            slug_guess=slug,
+            vendor_strategy_guess="copy",
+        )
+    looked_for = ", ".join(m for m, _ in _DIR_MANIFESTS) + ", config.json+README.md"
+    return IngestTarget(
+        input_value=str(path),
+        input_form=InputForm.DIR,
+        upstream_url=None,
+        kind_guess="skill",
+        slug_guess=slug,
+        vendor_strategy_guess="copy",
+        notes=[f"dir-no-manifest: looked for {looked_for} in {path}"],
     )
 
 
