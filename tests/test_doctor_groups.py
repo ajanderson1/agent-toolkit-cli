@@ -45,6 +45,7 @@ def test_environment_group_warn_when_tool_missing(monkeypatch):
     from pathlib import Path
     import tempfile
 
+    from agent_toolkit.doctor import environment as env_mod
     from agent_toolkit.doctor.environment import run
 
     real_which = shutil.which
@@ -55,6 +56,9 @@ def test_environment_group_warn_when_tool_missing(monkeypatch):
         return real_which(name, *args, **kwargs)
 
     monkeypatch.setattr(shutil, "which", fake_which)
+    # Suppress PATH-shadow checks so the summary stays predictable
+    monkeypatch.setattr(env_mod, "_cli_entries_on_path", lambda _name: [])
+    monkeypatch.setattr(env_mod, "_stale_editable_installs", lambda: [])
 
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
@@ -273,3 +277,146 @@ def test_duplicates_group_ok_with_no_assets(tmp_path):
     result = run_dupes(tmp_path)
     assert result.status == Status.OK
     assert "0 asset" in result.summary
+
+
+# ---------------------------------------------------------------------------
+# PATH-shadowing checks (environment group)
+# ---------------------------------------------------------------------------
+
+def _make_valid_repo(root):
+    (root / "schemas").mkdir(exist_ok=True)
+    (root / "schemas" / "asset-frontmatter.v1alpha2.json").write_text("{}")
+    (root / "AGENTS.md").write_text("# AGENTS")
+    (root / ".gitmodules").write_text("")
+
+
+def test_environment_warn_multiple_cli_entries_on_path(tmp_path, monkeypatch):
+    """Two different agent-toolkit executables on PATH → WARN with PATH-shadow finding."""
+    import os
+    from agent_toolkit.doctor import environment as env_mod
+    from agent_toolkit.doctor.environment import run
+
+    # Create two fake agent-toolkit shims in separate directories
+    bin_a = tmp_path / "bin_a"
+    bin_b = tmp_path / "bin_b"
+    bin_a.mkdir()
+    bin_b.mkdir()
+    (bin_a / "agent-toolkit").write_text("#!/bin/sh\necho a\n")
+    (bin_a / "agent-toolkit").chmod(0o755)
+    (bin_b / "agent-toolkit").write_text("#!/bin/sh\necho b\n")
+    (bin_b / "agent-toolkit").chmod(0o755)
+
+    monkeypatch.setenv("PATH", f"{bin_a}:{bin_b}")
+
+    _make_valid_repo(tmp_path)
+    result = run(tmp_path)
+
+    assert result.status == Status.WARN
+    assert "PATH-shadow" in result.summary or any("PATH-shadow" in f for f in result.findings)
+    assert any("PATH-shadow" in f and "2 entries" in f for f in result.findings)
+    assert result.fix_hint is not None
+
+
+def test_environment_warn_cli_not_from_uv_tools(tmp_path, monkeypatch):
+    """Single agent-toolkit entry that is NOT under the uv tools prefix → WARN."""
+    import os
+    from pathlib import Path
+    from agent_toolkit.doctor import environment as env_mod
+    from agent_toolkit.doctor.environment import run
+
+    # Place a single agent-toolkit shim somewhere outside uv tools
+    fake_bin = tmp_path / "some_other_bin"
+    fake_bin.mkdir()
+    shim = fake_bin / "agent-toolkit"
+    shim.write_text("#!/bin/sh\necho x\n")
+    shim.chmod(0o755)
+
+    monkeypatch.setenv("PATH", str(fake_bin))
+    # Make _UV_TOOLS_PREFIX point somewhere that doesn't contain our shim
+    monkeypatch.setattr(env_mod, "_UV_TOOLS_PREFIX", tmp_path / "uv_tools" / "agent-toolkit")
+
+    _make_valid_repo(tmp_path)
+    result = run(tmp_path)
+
+    assert result.status == Status.WARN
+    assert any("not from uv tools" in f.lower() or "PATH-shadow" in f for f in result.findings)
+    assert result.fix_hint is not None
+
+
+def test_environment_ok_when_cli_from_uv_tools(tmp_path, monkeypatch):
+    """agent-toolkit entry under the uv tools prefix → no PATH-shadow warning."""
+    import os
+    from agent_toolkit.doctor import environment as env_mod
+    from agent_toolkit.doctor.environment import run
+
+    uv_prefix = tmp_path / "uv_tools" / "agent-toolkit"
+    uv_bin = uv_prefix / "bin"
+    uv_bin.mkdir(parents=True)
+    shim = uv_bin / "agent-toolkit"
+    shim.write_text("#!/bin/sh\necho ok\n")
+    shim.chmod(0o755)
+
+    monkeypatch.setenv("PATH", str(uv_bin))
+    monkeypatch.setattr(env_mod, "_UV_TOOLS_PREFIX", uv_prefix)
+
+    _make_valid_repo(tmp_path)
+    result = run(tmp_path)
+
+    # No PATH-shadow warnings expected
+    assert not any("PATH-shadow" in f for f in result.findings)
+
+
+def test_environment_fail_stale_editable_install(tmp_path, monkeypatch):
+    """direct_url.json pointing at a non-existent directory → FAIL."""
+    import json
+    from pathlib import Path
+    from agent_toolkit.doctor import environment as env_mod
+    from agent_toolkit.doctor.environment import run
+
+    # Build a fake site-packages with a stale editable dist-info
+    site_pkgs = tmp_path / "site-packages"
+    dist_info = site_pkgs / "agent_toolkit-0.1.0.dist-info"
+    dist_info.mkdir(parents=True)
+    missing_source = tmp_path / "deleted_worktree"
+    (dist_info / "direct_url.json").write_text(
+        json.dumps({"url": f"file://{missing_source}", "dir_info": {"editable": True}})
+    )
+
+    def fake_site_packages(python_exe):
+        return site_pkgs
+
+    monkeypatch.setattr(env_mod, "_site_packages_for", fake_site_packages)
+    # Ensure at least one Python is "found" by which()
+    import shutil
+    real_which = shutil.which
+
+    def fake_which(name, *args, **kwargs):
+        if name in ("python3", "python"):
+            return str(tmp_path / "python3")
+        return real_which(name, *args, **kwargs)
+
+    monkeypatch.setattr(shutil, "which", fake_which)
+    # Make the fake python path exist so resolve() works
+    (tmp_path / "python3").write_text("#!/bin/sh\n")
+    (tmp_path / "python3").chmod(0o755)
+
+    _make_valid_repo(tmp_path)
+    result = run(tmp_path)
+
+    assert result.status == Status.FAIL
+    assert any("stale editable" in f for f in result.findings)
+    assert any(str(missing_source) in f for f in result.findings)
+    assert result.fix_hint is not None
+    assert "pip uninstall" in result.fix_hint
+
+
+def test_environment_no_cli_on_path_skips_shadow_checks(tmp_path, monkeypatch):
+    """When agent-toolkit is not on PATH at all, no PATH-shadow findings are emitted."""
+    from agent_toolkit.doctor.environment import run
+
+    monkeypatch.setenv("PATH", str(tmp_path / "empty_bin"))
+
+    _make_valid_repo(tmp_path)
+    result = run(tmp_path)
+
+    assert not any("PATH-shadow" in f for f in result.findings)
