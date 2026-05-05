@@ -34,6 +34,7 @@ VALID_MECHANISMS = frozenset(
     [
         "symlink",
         "config_file",
+        "config_file+folder",
         "plugin_folder",
         "translate",
         "unsupported (gap)",
@@ -243,14 +244,14 @@ class TestAdapterParity:
     def test_config_file_and_plugin_folder_cells_have_real_adapters(self, matrix):
         """Every cell marked config_file or plugin_folder must have an
         implemented adapter (not UnimplementedAdapter)."""
-        adapter_mechanisms = {"config_file", "plugin_folder"}
+        adapter_mechanisms = {"config_file", "plugin_folder", "config_file+folder"}
         bad: list[tuple[str, str, str, str]] = []
         for (harness, kind), cell in sorted(matrix.items()):
             mech = _cell_mechanism(cell)
             if mech not in adapter_mechanisms:
                 continue
             try:
-                adapter = get_adapter(harness)
+                adapter = get_adapter(harness, kind)
             except ValueError as exc:
                 bad.append((harness, kind, cell, f"get_adapter raised: {exc}"))
                 continue
@@ -275,14 +276,14 @@ class TestAdapterParity:
     def test_adapter_strategy_matches_doc_cell(self, matrix):
         """When a real adapter exists, its .strategy attribute must match the
         mechanism string in the doc cell."""
-        adapter_mechanisms = {"config_file", "plugin_folder"}
+        adapter_mechanisms = {"config_file", "plugin_folder", "config_file+folder"}
         bad: list[tuple[str, str, str, str]] = []
         for (harness, kind), cell in sorted(matrix.items()):
             mech = _cell_mechanism(cell)
             if mech not in adapter_mechanisms:
                 continue
             try:
-                adapter = get_adapter(harness)
+                adapter = get_adapter(harness, kind)
             except ValueError:
                 continue  # already caught above
             if isinstance(adapter, UnimplementedAdapter):

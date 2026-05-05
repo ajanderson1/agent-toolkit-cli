@@ -21,14 +21,22 @@ from agent_toolkit.harness_adapters.base import (
 _KNOWN_HARNESSES: tuple[str, ...] = ("claude", "codex", "opencode", "pi")
 
 
-def get_adapter(harness: str):
-    """Return the adapter for `harness`.
+def get_adapter(harness: str, kind: str = "mcp"):
+    """Return the adapter for `(harness, kind)`.
 
-    Raises ValueError on unknown harness names.
-    Returns UnimplementedAdapter for known-but-pending harnesses (currently `pi`).
+    Raises ValueError on unknown harness. Returns UnimplementedAdapter for
+    known-but-pending pairs (currently `pi`).
+
+    The `kind` parameter exists because some harnesses have different
+    adapters for different asset kinds (e.g. codex has a config_file
+    adapter for mcp and a config_file+folder adapter for hook). Defaults
+    to "mcp" for backward compatibility with existing call sites.
     """
     if harness not in _KNOWN_HARNESSES:
         raise ValueError(f"unknown harness {harness!r}")
+    if harness == "codex" and kind == "hook":
+        from agent_toolkit.harness_adapters.codex_hook import CodexHookAdapter
+        return CodexHookAdapter()
     if harness == "codex":
         from agent_toolkit.harness_adapters.codex import CodexAdapter
         return CodexAdapter()
