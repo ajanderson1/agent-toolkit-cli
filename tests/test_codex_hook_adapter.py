@@ -98,3 +98,28 @@ def test_codex_hook_can_install_refuses_command_outside_script_root(monkeypatch,
     bad = _make_entry(command="/usr/local/bin/some-script", home=tmp_path)
     with pytest.raises(CannotInstall, match="must live under"):
         a.can_install(bad)
+
+
+def test_codex_hook_list_installed_returns_empty_when_root_missing(monkeypatch, tmp_path):
+    """No ~/.codex/agent-toolkit-hooks/ directory → empty set."""
+    from agent_toolkit.harness_adapters.codex_hook import CodexHookAdapter
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    a = CodexHookAdapter()
+    assert a.list_installed("user", tmp_path) == set()
+
+
+def test_codex_hook_list_installed_returns_slug_dirs(monkeypatch, tmp_path):
+    """list_installed returns the names of slug subdirectories under script_root."""
+    from agent_toolkit.harness_adapters.codex_hook import CodexHookAdapter
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    root = tmp_path / ".codex" / "agent-toolkit-hooks"
+    root.mkdir(parents=True)
+    (root / "alpha").mkdir()
+    (root / "beta").mkdir()
+    # A regular file at the root must be ignored — only directories count as slugs.
+    (root / "stray.txt").write_text("noise", encoding="utf-8")
+
+    a = CodexHookAdapter()
+    assert a.list_installed("user", tmp_path) == {"alpha", "beta"}
