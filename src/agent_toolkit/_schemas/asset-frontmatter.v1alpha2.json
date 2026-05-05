@@ -54,6 +54,18 @@
             "prerequisites":  { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
             "verify":         { "type": "string" }
           }
+        },
+        "requires": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^(skill|agent|command|hook|plugin|mcp|pi-extension):[a-z0-9][a-z0-9-]*$"
+            },
+            "uniqueItems": true
+          },
+          "propertyNames": { "enum": ["claude", "codex", "opencode", "pi"] }
         }
       },
       "allOf": [

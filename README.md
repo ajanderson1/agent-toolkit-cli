@@ -72,7 +72,7 @@ uv run pytest -q
 bats tests/bats
 ```
 
-The `lefthook.yml` runs lint + tests on pre-commit. Schema drift vs the toolkit-repo SSOT is checked by `.github/workflows/schema-drift.yml`.
+The `lefthook.yml` runs lint + tests on pre-commit, including `schema-vendor-check` which keeps the two vendored schema copies (`schemas/` and `src/agent_toolkit/_schemas/`) in lockstep.
 
 ## License
 
