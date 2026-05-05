@@ -44,15 +44,16 @@ link_path = slot / _translated_slot_filename(slug, kind, harness)
 
 ### 3. Fix `doctor/symlinks.py`
 
-Two substitutions:
+One substitution:
 
 - Line 34 (`link_path = home / rel / asset.slug`) → use `_translated_slot_filename(asset.slug, asset.kind, harness)`.
-- Lines 63-73 stale-sweep (`for entry in user_kind_dir.iterdir():` and the `declared_slugs.get((kind, entry.name))` lookup): strip the `.md` suffix from `entry.name` when the kind is one that uses translated `.md` slot filenames. Cleanest: derive the bare slug as `entry.name[:-3] if _translated_slot_filename("x", kind, harness) == "x.md" else entry.name`. This keeps the conditional in one obvious place.
+
+The stale-sweep loop at lines 63-87 also iterates real filenames (so for opencode agents it sees `foo.md`), but is unreachable for translated cells today: line 70-72's `target.relative_to(toolkit_root)` check short-circuits because translated cells point into the cache dir, not the toolkit. PR-B will change the cache-vs-repo shape and need to add a `.md` strip there; PR-A leaves it alone.
 
 ### 4. Run regression tests + full suite
 
 - `uv run pytest -q tests/test_translate_status_reporting.py` → 2 passed.
-- `uv run pytest -q` → all green (current baseline = 344 on main, expecting 346 after).
+- `uv run pytest -q` → all green (current baseline = 344 on main, expecting 346 after — 2 new tests).
 
 ### 5. Commit
 
