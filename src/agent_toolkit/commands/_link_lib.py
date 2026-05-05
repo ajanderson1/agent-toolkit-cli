@@ -274,10 +274,11 @@ def project_from_file(
             # rather than raise. Direct entrypoints (maybe_link) raise.
             continue
         target_dir = harness_target_dir(harness, kind, scope, project_root)
-        assert target_dir is not None, (
-            f"is_supported({harness!r}, {kind!r}) is True but "
-            f"harness_target_dir returned None — invariant broken"
-        )
+        if target_dir is None:
+            raise RuntimeError(
+                f"is_supported({harness!r}, {kind!r}) is True but "
+                f"harness_target_dir returned None — SSOT invariant broken"
+            )
         if not dry_run:
             target_dir.mkdir(parents=True, exist_ok=True)
         section = kind_to_section(kind)

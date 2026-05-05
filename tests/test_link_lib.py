@@ -242,24 +242,38 @@ def test_maybe_link_raises_unsupported_pair_for_codex_agent(tmp_path):
 def test_project_from_file_skips_unsupported_kinds_silently(tmp_path, monkeypatch):
     """project_from_file iterates only supported kinds for the given harness.
 
-    For `harness=codex` the loop must only touch `kind=skill` (the only
-    supported pair besides MCP). No raise — the loop's pre-filter is the
-    boundary; raises happen at direct entry-points like `maybe_link`.
+    Pin: an agent asset declaring `codex` is allow-listed; running
+    project_from_file with harness=codex must NOT touch it (codex/agent
+    is unsupported). Removing the is_supported filter would surface the
+    pair to harness_target_dir → None → RuntimeError; the filter is the
+    only reason this test passes silently.
     """
+    import io
     from agent_toolkit.commands._link_lib import LinkCounters, project_from_file
 
     monkeypatch.setenv("HOME", str(tmp_path))
     project_root = tmp_path / "project"
     project_root.mkdir()
     allowlist_path = project_root / ".agent-toolkit.yaml"
-    allowlist_path.write_text("skills: []\nagents: [foo]\n")
-    counters = LinkCounters()
-    import io
-    out = io.StringIO()
+    allowlist_path.write_text("agents: [foo-agent]\n")
 
-    # Empty toolkit (no assets) — exercises the loop without I/O.
+    # Build a one-asset toolkit: agents/foo-agent.md declaring [codex].
     toolkit_root = tmp_path / "toolkit"
-    toolkit_root.mkdir()
+    agents_dir = toolkit_root / "agents"
+    agents_dir.mkdir(parents=True)
+    asset_path = agents_dir / "foo-agent.md"
+    asset_path.write_text(
+        "---\n"
+        "kind: agent\n"
+        "slug: foo-agent\n"
+        "spec:\n"
+        "  harnesses: [codex]\n"
+        "---\n"
+        "body\n"
+    )
+
+    counters = LinkCounters()
+    out = io.StringIO()
 
     project_from_file(
         scope="project",
@@ -271,5 +285,9 @@ def test_project_from_file_skips_unsupported_kinds_silently(tmp_path, monkeypatc
         counters=counters,
         stdout=out,
     )
-    # No exception. Counters are zero (no assets discovered).
-    assert counters.created == counters.removed == counters.would_link == 0
+    # Filter is the line that prevents the loop from reaching
+    # harness_target_dir(codex, agent) → None → RuntimeError.
+    assert counters.created == 0
+    assert counters.removed == 0
+    assert counters.would_link == 0
+    assert counters.would_unlink == 0
