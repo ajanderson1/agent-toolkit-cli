@@ -42,8 +42,8 @@ def test_diff_unknown_harness_exits_2(env):
     assert "unknown harness 'banana'" in result.stderr
 
 
-def test_diff_mcp_emits_no_op_message(tmp_path, monkeypatch):
-    """diff against an allow-list containing an MCP shows the no-op projection message."""
+def test_diff_mcp_claude_skips_loudly(tmp_path, monkeypatch):
+    """diff against an allow-list containing an MCP for claude shows the loud-skip message."""
     home = tmp_path / "home"
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))
@@ -62,7 +62,8 @@ def test_diff_mcp_emits_no_op_message(tmp_path, monkeypatch):
         "---\napiVersion: agent-toolkit/v1alpha2\n"
         "metadata:\n  name: context7\n  description: c.\n  lifecycle: stable\n"
         "spec:\n  origin: third-party\n  vendored_via: none\n"
-        "  upstream: https://example.com\n  harnesses:\n    - claude\n---\n"
+        "  upstream: https://example.com\n  harnesses:\n    - claude\n"
+        "  mcp:\n    transport: stdio\n    install_method: npx\n---\n"
     )
 
     project = tmp_path / "project"
@@ -76,4 +77,4 @@ def test_diff_mcp_emits_no_op_message(tmp_path, monkeypatch):
          "--toolkit-repo", str(toolkit), "--project", str(project)],
     )
     assert result.exit_code == 0, result.output
-    assert "MCP install path for claude not yet implemented" in result.output
+    assert "no MCP adapter for harness claude yet — skipping" in result.output

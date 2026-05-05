@@ -230,6 +230,14 @@ def _do_per_asset(
         ctx.exit(2)
         return
 
+    # Capture pre-mutation allow-list snapshot for adapters that need it
+    # (MCP adapters use this as `previously_allowed`).
+    prev_snapshot = (
+        read_allowlist(allowlist_path)
+        if allowlist_path.is_file()
+        else {}
+    )
+
     tmp_path: str | None = None
     target_path = allowlist_path
     if dry_run:
@@ -264,6 +272,7 @@ def _do_per_asset(
         dry_run=dry_run,
         counters=counters,
         stdout=sys.stdout,
+        previous_allowed=prev_snapshot,
     )
     if tmp_path:
         Path(tmp_path).unlink(missing_ok=True)
@@ -333,6 +342,14 @@ def _do_all(
             if harness in _asset_harnesses(asset.path, asset.kind):
                 entries.append((section, asset.slug))
 
+    # Capture pre-mutation allow-list snapshot for adapters that need it
+    # (MCP adapters use this as `previously_allowed`).
+    prev_snapshot = (
+        read_allowlist(allowlist_path)
+        if allowlist_path.is_file()
+        else {}
+    )
+
     # Real run: write to allowlist_path. Dry-run: write to temp file.
     tmp_path: str | None = None
     target_path = allowlist_path
@@ -369,6 +386,7 @@ def _do_all(
         dry_run=dry_run,
         counters=counters,
         stdout=sys.stdout,
+        previous_allowed=prev_snapshot,
     )
     if tmp_path:
         Path(tmp_path).unlink(missing_ok=True)
@@ -455,6 +473,14 @@ def _do_plan_entry(
         error_lines.append(str(exc))
         return False
 
+    # Capture pre-mutation allow-list snapshot for adapters that need it
+    # (MCP adapters use this as `previously_allowed`).
+    prev_snapshot = (
+        read_allowlist(allowlist_path)
+        if allowlist_path.is_file()
+        else {}
+    )
+
     # Mutate YAML
     tmp_path: str | None = None
     target_path = allowlist_path
@@ -476,6 +502,7 @@ def _do_plan_entry(
             dry_run=dry_run,
             counters=counters,
             stdout=sys.stdout,
+            previous_allowed=prev_snapshot,
         )
     except (ValueError, OSError) as exc:
         error_lines.append(f"failed: {kind}:{slug} — {exc}")

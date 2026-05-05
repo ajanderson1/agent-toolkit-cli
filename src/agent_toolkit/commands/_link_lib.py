@@ -198,8 +198,16 @@ def project_from_file(
     dry_run: bool,
     counters: LinkCounters,
     stdout: IO[str],
+    previous_allowed: dict[str, list[str]] | None = None,
 ) -> None:
-    """Walk every asset kind. Project allow-listed slugs, prune the rest."""
+    """Walk every asset kind. Project allow-listed slugs, prune the rest.
+
+    `previous_allowed` is an optional snapshot of the allow-list BEFORE this
+    dispatch's mutation (for link/unlink). Used to compute the
+    `previously_allowed` set passed to MCP adapters so they know which on-disk
+    entries fall under our ownership. None means "use current allow-list as
+    previous" — appropriate for --all snapshot or fix-style callers.
+    """
     allowed = read_allowlist(allowlist_path)
     by_kind: dict[str, list[Asset]] = {
         k: [] for k in KINDS_FOR_PROJECTION if k != "mcp"
@@ -212,14 +220,46 @@ def project_from_file(
         if kind == "mcp":
             section = kind_to_section(kind)
             mcp_allowed_slugs = list(allowed.get(section, []))
-            if not mcp_allowed_slugs:
-                continue
-            slugs_csv = ", ".join(mcp_allowed_slugs)
-            print(
-                f"MCP install path for {harness} not yet implemented; "
-                f"allow-list updated only ({slugs_csv}).",
-                file=stdout,
+
+            from agent_toolkit.commands._mcp_dispatch import (  # noqa: PLC0415
+                _build_mcp_entries, apply_link,
             )
+            from agent_toolkit.harness_adapters import get_adapter  # noqa: PLC0415
+            from agent_toolkit.harness_adapters.base import (  # noqa: PLC0415
+                CannotInstall, UnimplementedAdapter,
+            )
+
+            adapter = get_adapter(harness)
+            if isinstance(adapter, UnimplementedAdapter):
+                # Loud skip: only print if the user has anything allow-listed
+                # for this harness — otherwise stay quiet.
+                if mcp_allowed_slugs:
+                    print(adapter.skip_message(), file=stdout)
+                continue
+
+            # Compute previously_allowed: explicit snapshot if provided,
+            # otherwise fall back to current (= no deletions for adapters
+            # whose allow-list hasn't changed in this dispatch).
+            if previous_allowed is not None:
+                prev_mcps = set(previous_allowed.get(section) or [])
+            else:
+                prev_mcps = set(mcp_allowed_slugs)
+
+            entries = _build_mcp_entries(toolkit_root, mcp_allowed_slugs)
+            try:
+                apply_link(
+                    adapter,
+                    scope=scope,
+                    project_root=project_root,
+                    entries=entries,
+                    dry_run=dry_run,
+                    stdout=stdout,
+                    previously_allowed=prev_mcps,
+                )
+            except CannotInstall as exc:
+                # Per-entry refusal: print a warning and continue with siblings.
+                print(f"warning: {exc}", file=stdout)
+                continue
             continue
         target_dir = harness_target_dir(harness, kind, scope, project_root)
         if target_dir is None:

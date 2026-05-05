@@ -202,7 +202,9 @@ def _do_per_asset(
         return
 
     # Idempotent diagnostic: if slug is absent, say so and exit 0
+    # Also captured as pre-mutation snapshot for MCP adapter dispatch.
     allowed = read_allowlist(allowlist_path)
+    prev_snapshot: dict[str, list[str]] = dict(allowed)
     slugs_in_section = list(allowed.get(section, []))
     if slug not in slugs_in_section:
         click.echo(
@@ -232,6 +234,7 @@ def _do_per_asset(
         dry_run=dry_run,
         counters=counters,
         stdout=sys.stdout,
+        previous_allowed=prev_snapshot,
     )
     _ui.summary(format_summary(counters, dry_run))
 
@@ -291,7 +294,9 @@ def _do_plan_entry(
         error_lines.append(f"no {allowlist_path} — nothing to unlink.")
         return False
 
+    # Also captured as pre-mutation snapshot for MCP adapter dispatch.
     allowed = read_allowlist(allowlist_path)
+    prev_snapshot: dict[str, list[str]] = dict(allowed)
     slugs_in_section = list(allowed.get(section, []))
     if slug not in slugs_in_section:
         # Idempotent — not an error in plan mode
@@ -315,6 +320,7 @@ def _do_plan_entry(
             dry_run=dry_run,
             counters=counters,
             stdout=sys.stdout,
+            previous_allowed=prev_snapshot,
         )
     except (ValueError, OSError) as exc:
         error_lines.append(f"failed: {kind}:{slug} — {exc}")
