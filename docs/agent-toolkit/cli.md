@@ -416,7 +416,7 @@ For scripted use and Layer-3 smoke tests:
 
 ## check
 
-Validate every asset's frontmatter against the v1alpha1 schema and detect AGENTS.md drift.
+Validate every asset's frontmatter against the v1alpha2 schema and detect AGENTS.md drift.
 
 ```
 Usage: uv run agent-toolkit check [--exit-code]
@@ -498,7 +498,7 @@ uv run agent-toolkit doctor --toolkit-repo ~/GitHub/agent-toolkit
 
 ## new
 
-Scaffold a new asset with valid v1alpha1 frontmatter.
+Scaffold a new asset with valid v1alpha2 frontmatter.
 
 ```
 Usage: uv run agent-toolkit new <kind> <slug>
@@ -636,6 +636,6 @@ Idempotent: re-running self-heals stale or missing symlinks.
 
 ## See also
 
-- [`schemas/asset-frontmatter.v1alpha1.json`](../../schemas/asset-frontmatter.v1alpha1.json) — JSON Schema source (2020-12 dialect)
+- [`schemas/asset-frontmatter.v1alpha2.json`](../../schemas/asset-frontmatter.v1alpha2.json) — JSON Schema source (2020-12 dialect)
 - [`docs/agent-toolkit/schema.md`](schema.md) — field reference, cross-field rules, worked examples
 - [`docs/superpowers/specs/2026-04-30-agent-toolkit-foundation-and-wiring-design.md`](../superpowers/specs/2026-04-30-agent-toolkit-foundation-and-wiring-design.md) — design spec (Sections 2, 3, 4, 6)
