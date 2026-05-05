@@ -1,6 +1,7 @@
 """CodexHookAdapter — ConfigFileFolderAdapter for ~/.codex/config.toml [hooks]."""
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 import pytest
@@ -123,9 +124,6 @@ def test_codex_hook_list_installed_returns_slug_dirs(monkeypatch, tmp_path):
 
     a = CodexHookAdapter()
     assert a.list_installed("user", tmp_path) == {"alpha", "beta"}
-
-
-import shutil
 
 
 FIXTURE = Path(__file__).parent / "_fixtures" / "codex_config_realistic_with_hooks.toml"

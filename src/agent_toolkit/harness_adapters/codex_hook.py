@@ -94,10 +94,13 @@ class CodexHookAdapter:
 
     # ---- entry_drift ----
     def entry_drift(self, scope: Scope, project_root: Path, entry: HookEntry) -> bool:
-        """True iff on-disk script bytes OR the [hooks] entries differ.
+        """True iff the on-disk state diverges from the entry's expected state.
 
-        Returns False when the entry is not installed; the dispatcher checks
-        list_installed separately for presence.
+        Returns True if any script file under script_root/<slug>/ is missing
+        or has different bytes, OR if the [hooks] entries do not match.
+        Note: unlike the MCP adapter, this returns True when the entry is
+        not installed at all — callers should still check list_installed()
+        first if they need to distinguish "absent" from "drifted".
         """
         # Script-side drift.
         for path, expected in entry.script_files.items():
