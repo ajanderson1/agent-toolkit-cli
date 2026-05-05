@@ -47,18 +47,16 @@ _PROJECT_TARGETS: dict[tuple[str, str], str] = {
     # Pi project-scope: pi reads from <cwd>/.pi/{skills,extensions} (no /agent/
     # infix at project scope). User-scope keeps the .pi/agent/ prefix because
     # pi's globalBaseDir == ~/.pi/agent. See package-manager.js:669-686.
+    # Pi has no project-scope `agents` discovery (package-manager.js:1788-1794
+    # — only extensions, skills, prompts, themes are auto-discovered at
+    # project scope), so ("pi","agent") is intentionally absent here. Per-
+    # scope `is_supported(..., scope="project")` answers False for this pair.
     ("pi", "skill"):           ".pi/skills",
-    ("pi", "agent"):           ".pi/agent/agents",  # pi has no project-scope
-                                                    # agents discovery; left in
-                                                    # the table to preserve the
-                                                    # _USER/_PROJECT key parity
-                                                    # invariant. Tracked as a
-                                                    # follow-up to #41.
     ("pi", "pi-extension"):    ".pi/extensions",
 }
 
 # Derived: SUPPORTED_PAIRS = the set of (harness, kind) pairs with adapter slots.
-# Both tables MUST share the same key set; tested in tests/test_support.py.
+# Derived from _USER_TARGETS; _PROJECT_TARGETS is a subset (tested in tests/test_support.py).
 SUPPORTED_PAIRS: frozenset[tuple[str, str]] = frozenset(_USER_TARGETS.keys())
 
 
