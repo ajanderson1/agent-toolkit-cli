@@ -104,7 +104,8 @@ class TUIApp(App):
         Binding("3", "kind('command')", "Commands", show=False),
         Binding("4", "kind('hook')", "Hooks", show=False),
         Binding("5", "kind('plugin')", "Plugins", show=False),
-        Binding("6", "kind('pi-extension')", "Pi Ext", show=False),
+        Binding("6", "kind('mcp')", "MCPs", show=False),
+        Binding("7", "kind('pi-extension')", "Pi Ext", show=False),
         Binding("q", "quit", "Quit"),
     ]
 

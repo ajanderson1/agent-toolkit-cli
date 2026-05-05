@@ -19,7 +19,7 @@ from agent_toolkit_tui.messages import KindChanged
 from agent_toolkit_tui.state import InventoryState
 
 KINDS: tuple[str, ...] = (
-    "skill", "agent", "command", "hook", "plugin", "pi-extension",
+    "skill", "agent", "command", "hook", "plugin", "mcp", "pi-extension",
 )
 KIND_LABELS: dict[str, str] = {
     "skill": "Skills",
@@ -27,6 +27,7 @@ KIND_LABELS: dict[str, str] = {
     "command": "Commands",
     "hook": "Hooks",
     "plugin": "Plugins",
+    "mcp": "MCPs",
     "pi-extension": "Pi Ext",
 }
 

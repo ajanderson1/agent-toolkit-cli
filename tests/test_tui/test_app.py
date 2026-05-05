@@ -82,6 +82,21 @@ def _doc(repo: str = "/r") -> dict:
                      "target": None, "allowlisted": False},
                 ],
             },
+            {
+                "kind": "mcp", "slug": "demo-mcp",
+                "origin": "first-party", "description": "Demo MCP.",
+                "path": f"{repo}/mcps/demo-mcp/config.json",
+                "declared_harnesses": ["claude"],
+                # MCPs project as no-ops today (see _link_lib.project_from_file
+                # and _list_json._build_inventory): every cell is "unsupported"
+                # regardless of declared harnesses.
+                "cells": [
+                    {"harness": h, "scope": s, "status": "unsupported",
+                     "target": None, "allowlisted": False}
+                    for h in ["claude", "codex", "opencode", "pi"]
+                    for s in ["user", "project"]
+                ],
+            },
         ],
     }
 
@@ -488,7 +503,7 @@ async def test_space_on_unsupported_cell_is_noop():
 # ── Dashboard layout: new keybindings (#43) ───────────────────────────────
 
 async def test_number_key_switches_kind():
-    """Pressing 1-6 changes the active kind in AssetGrid and KindsSidebar."""
+    """Pressing 1-7 changes the active kind in AssetGrid and KindsSidebar."""
     from agent_toolkit_tui.widgets import AssetGrid, KindsSidebar
 
     runner = FakeRunner(_doc())
@@ -509,6 +524,16 @@ async def test_number_key_switches_kind():
         await pilot.pause()
         assert grid._kind == "command"
         assert sidebar._active == "command"
+
+        await pilot.press("6")  # mcps  (#39)
+        await pilot.pause()
+        assert grid._kind == "mcp"
+        assert sidebar._active == "mcp"
+
+        await pilot.press("7")  # pi-extension (shifted from 6 → 7 by #39)
+        await pilot.pause()
+        assert grid._kind == "pi-extension"
+        assert sidebar._active == "pi-extension"
 
 
 async def test_u_p_keys_switch_scope():
