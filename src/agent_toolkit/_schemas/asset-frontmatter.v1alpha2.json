@@ -55,6 +55,27 @@
             "verify":         { "type": "string" }
           }
         },
+        "hook": {
+          "type": "object",
+          "required": ["events", "command"],
+          "additionalProperties": false,
+          "properties": {
+            "events": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "enum": ["PreToolUse", "PostToolUse", "PermissionRequest",
+                         "SessionStart", "UserPromptSubmit", "Stop"]
+              }
+            },
+            "command":        { "type": "string" },
+            "matcher":        { "type": "string" },
+            "timeout":        { "type": "integer", "minimum": 1 },
+            "async":          { "type": "boolean" },
+            "status_message": { "type": "string" }
+          }
+        },
         "requires": {
           "type": "object",
           "additionalProperties": {
@@ -93,6 +114,13 @@
         "properties": { "metadata": { "properties": { "kind": { "not": { "const": "mcp" } } } } }
       },
       "then": { "properties": { "spec": { "not": { "required": ["mcp"] } } } }
+    },
+    {
+      "if": {
+        "properties": { "metadata": { "properties": { "kind": { "const": "hook" } }, "required": ["kind"] } },
+        "required": ["metadata"]
+      },
+      "then": { "properties": { "spec": { "required": ["hook"] } } }
     }
   ]
 }
