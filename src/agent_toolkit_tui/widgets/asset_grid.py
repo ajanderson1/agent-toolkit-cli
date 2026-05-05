@@ -177,7 +177,7 @@ class AssetGrid(Vertical):
             return
         row = rows[coord.row]
         cell = row.cells.get((harness, self._scope))
-        if cell is None or cell.status == "unsupported":
+        if cell is None or cell.status in {"unsupported", "installed-not-allowlisted"}:
             return
         key = (self._scope, harness, row.kind, row.slug)
         # If there's already a pending op on this cell, toggle it OFF — restore
