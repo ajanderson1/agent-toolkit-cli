@@ -82,6 +82,21 @@ def _doc(repo: str = "/r") -> dict:
                      "target": None, "allowlisted": False},
                 ],
             },
+            {
+                "kind": "mcp", "slug": "demo-mcp",
+                "origin": "first-party", "description": "Demo MCP.",
+                "path": f"{repo}/mcps/demo-mcp/config.json",
+                "declared_harnesses": ["claude"],
+                # MCPs project as no-ops today (see _link_lib.project_from_file
+                # and _list_json._build_inventory): every cell is "unsupported"
+                # regardless of the declared harnesses.
+                "cells": [
+                    {"harness": h, "scope": s, "status": "unsupported",
+                     "target": None, "allowlisted": False}
+                    for h in ["claude", "codex", "opencode", "pi"]
+                    for s in ["user", "project"]
+                ],
+            },
         ],
     }
 
@@ -273,6 +288,29 @@ async def test_kind_change_filters_grid():
             f"Expected only agent rows, got kinds: {[r.kind for r in agent_rows]}"
         )
         assert len(agent_rows) >= 1, "Expected at least one agent asset in fixture"
+
+
+async def test_kind_change_to_mcp_filters_grid():
+    """Posting KindChanged(kind='mcp') filters the grid to MCP rows. Regression for #39."""
+    from agent_toolkit_tui.messages import KindChanged
+    from agent_toolkit_tui.widgets import AssetGrid
+
+    runner = FakeRunner(_doc())
+    app = TUIApp(toolkit_root=Path("/r"), runner=runner)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        grid = app.query_one("#asset-grid", AssetGrid)
+
+        app.post_message(KindChanged(kind="mcp"))
+        await pilot.pause()
+        assert grid._kind == "mcp"
+
+        mcp_rows = grid._rows_for_kind()
+        assert all(r.kind == "mcp" for r in mcp_rows), (
+            f"Expected only mcp rows, got kinds: {[r.kind for r in mcp_rows]}"
+        )
+        assert len(mcp_rows) == 1, f"Expected 1 MCP row from fixture, got {len(mcp_rows)}"
+        assert mcp_rows[0].slug == "demo-mcp"
 
 
 async def test_harness_visibility_toggle_hides_column():

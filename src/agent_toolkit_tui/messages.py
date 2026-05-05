@@ -36,7 +36,7 @@ class ScopeChanged(Message):
 @dataclass
 class KindChanged(Message):
     """Sidebar selection changed."""
-    kind: str   # "skill" | "agent" | "command" | "hook" | "plugin" | "pi-extension"
+    kind: str   # "skill" | "agent" | "command" | "hook" | "plugin" | "mcp" | "pi-extension"
 
 
 @dataclass
