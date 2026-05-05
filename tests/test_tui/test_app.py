@@ -580,6 +580,29 @@ async def test_breadcrumb_reflects_current_kind_and_scope():
         assert "harnesses" not in text.lower()
 
 
+async def test_content_header_renders_with_nonzero_height():
+    """Regression for #52: the content-header must occupy >= 1 row on screen.
+
+    The string built by `_build_content_header` already passes a Static.render()
+    test, but a CSS bug (height: 2 - padding-bottom 1 - border-bottom 1 = 0)
+    silently clipped the content area to zero rows. This test fires the moment
+    the box collapses again.
+    """
+    from textual.widgets import Static
+
+    runner = FakeRunner(_doc())
+    app = TUIApp(toolkit_root=Path("/r"), runner=runner)
+    async with app.run_test(size=(120, 36)) as pilot:
+        await pilot.pause()
+        header = app.query_one("#content-header", Static)
+        # `size.height` is the region Textual actually allocated for the widget
+        # after CSS resolved. A zero-height region is the bug.
+        assert header.size.height >= 1, (
+            f"#content-header collapsed to height={header.size.height}; "
+            f"chips and kind label would be invisible on screen."
+        )
+
+
 async def test_status_bar_shows_summary_counts():
     """The status bar reports linked / pending / drifted / broken roll-up."""
     from textual.widgets import Static
