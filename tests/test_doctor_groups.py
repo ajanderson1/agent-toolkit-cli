@@ -20,7 +20,7 @@ def test_environment_group_ok_in_real_repo(tmp_path):
 
     # Synthesize a "valid enough" repo
     (tmp_path / "schemas").mkdir()
-    (tmp_path / "schemas" / "asset-frontmatter.v1alpha1.json").write_text("{}")
+    (tmp_path / "schemas" / "asset-frontmatter.v1alpha2.json").write_text("{}")
     (tmp_path / "AGENTS.md").write_text("# AGENTS")
     (tmp_path / ".gitmodules").write_text("")
     result = run(tmp_path)
@@ -59,7 +59,7 @@ def test_environment_group_warn_when_tool_missing(monkeypatch):
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         (root / "schemas").mkdir()
-        (root / "schemas" / "asset-frontmatter.v1alpha1.json").write_text("{}")
+        (root / "schemas" / "asset-frontmatter.v1alpha2.json").write_text("{}")
         (root / "AGENTS.md").write_text("# AGENTS")
         (root / ".gitmodules").write_text("")
         result = run(root)
@@ -72,7 +72,7 @@ def test_environment_group_warn_when_tool_missing(monkeypatch):
 def test_frontmatter_group_ok_when_no_assets(tmp_path):
     from agent_toolkit.doctor.frontmatter import run as run_fm
     (tmp_path / "schemas").mkdir()
-    (tmp_path / "schemas" / "asset-frontmatter.v1alpha1.json").write_text(
+    (tmp_path / "schemas" / "asset-frontmatter.v1alpha2.json").write_text(
         '{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object"}'
     )
     result = run_fm(tmp_path)
@@ -87,7 +87,7 @@ def test_frontmatter_group_fail_when_invalid_asset(tmp_path):
     real_schema = (
         '{"$schema":"https://json-schema.org/draft/2020-12/schema",'
         '"type":"object","required":["apiVersion","metadata","spec"],'
-        '"properties":{"apiVersion":{"const":"agent-toolkit/v1alpha1"},'
+        '"properties":{"apiVersion":{"const":"agent-toolkit/v1alpha2"},'
         '"metadata":{"type":"object","required":["name","description","lifecycle"],'
         '"properties":{"name":{"type":"string"},"description":{"type":"string","pattern":"\\\\.$"},'
         '"lifecycle":{"enum":["experimental","stable","deprecated"]}}},'
@@ -96,7 +96,7 @@ def test_frontmatter_group_fail_when_invalid_asset(tmp_path):
         '"vendored_via":{"enum":["none","submodule","clone","symlink"]},'
         '"harnesses":{"type":"array","minItems":1,"items":{"enum":["claude","codex","opencode","pi"]}}}}}}'
     )
-    (schema_dir / "asset-frontmatter.v1alpha1.json").write_text(real_schema)
+    (schema_dir / "asset-frontmatter.v1alpha2.json").write_text(real_schema)
     bad_skill = tmp_path / "skills" / "bad" / "SKILL.md"
     bad_skill.parent.mkdir(parents=True)
     bad_skill.write_text("---\nname: bad\n---\n# bad\n")  # missing required keys
@@ -180,7 +180,7 @@ def _make_skill_with_harnesses(toolkit_root, slug, harnesses):
     skill_dir.mkdir(parents=True, exist_ok=True)
     (skill_dir / "SKILL.md").write_text(
         "---\n"
-        "apiVersion: agent-toolkit/v1alpha1\n"
+        "apiVersion: agent-toolkit/v1alpha2\n"
         f"metadata:\n  name: {slug}\n  description: X.\n  lifecycle: stable\n"
         "spec:\n  origin: first-party\n  vendored_via: none\n  harnesses:\n"
         + "".join(f"    - {h}\n" for h in harnesses)

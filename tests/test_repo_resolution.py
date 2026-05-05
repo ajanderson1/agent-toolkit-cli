@@ -11,7 +11,7 @@ from agent_toolkit._repo_resolution import RepoNotFoundError, resolve_toolkit_ro
 
 def make_toolkit_repo(root: Path) -> Path:
     (root / "schemas").mkdir(parents=True)
-    (root / "schemas" / "asset-frontmatter.v1alpha1.json").write_text("{}")
+    (root / "schemas" / "asset-frontmatter.v1alpha2.json").write_text("{}")
     (root / ".agent-toolkit-source").write_text("tool: agent-toolkit-cli\n")
     return root
 
@@ -86,7 +86,7 @@ def _populate_minimal_repo(root: Path) -> Path:
     skill_dir.mkdir(parents=True)
     (skill_dir / "SKILL.md").write_text(
         "---\n"
-        "apiVersion: agent-toolkit/v1alpha1\n"
+        "apiVersion: agent-toolkit/v1alpha2\n"
         "metadata:\n"
         "  name: alpha\n"
         "  description: minimal test skill for resolution tests.\n"

@@ -7,7 +7,7 @@ Resolution order (first match wins):
   4. ~/GitHub/agent-toolkit/ default
 
 A path is valid iff it is a directory containing both:
-  - schemas/asset-frontmatter.v1alpha1.json
+  - schemas/asset-frontmatter.v1alpha2.json
   - .agent-toolkit-source
 
 If nothing resolves, raise RepoNotFoundError with an actionable message.
@@ -23,7 +23,7 @@ class RepoNotFoundError(RuntimeError):
 
 
 _MARKER = ".agent-toolkit-source"
-_SCHEMA = "schemas/asset-frontmatter.v1alpha1.json"
+_SCHEMA = "schemas/asset-frontmatter.v1alpha2.json"
 
 
 def _is_toolkit_repo(path: Path) -> bool:

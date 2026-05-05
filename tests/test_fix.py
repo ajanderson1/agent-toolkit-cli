@@ -7,12 +7,12 @@ from agent_toolkit.cli import main
 
 def _seed_repo(repo: Path) -> None:
     (repo / "schemas").mkdir()
-    src_schema = Path(__file__).parent.parent / "schemas" / "asset-frontmatter.v1alpha1.json"
-    (repo / "schemas" / "asset-frontmatter.v1alpha1.json").write_text(src_schema.read_text())
+    src_schema = Path(__file__).parent.parent / "schemas" / "asset-frontmatter.v1alpha2.json"
+    (repo / "schemas" / "asset-frontmatter.v1alpha2.json").write_text(src_schema.read_text())
     (repo / "skills" / "alpha").mkdir(parents=True)
     (repo / "skills" / "alpha" / "SKILL.md").write_text(
         "---\n"
-        "apiVersion: agent-toolkit/v1alpha1\n"
+        "apiVersion: agent-toolkit/v1alpha2\n"
         "metadata:\n"
         "  name: alpha\n"
         "  description: Alpha.\n"

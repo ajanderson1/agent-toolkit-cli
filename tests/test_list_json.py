@@ -15,7 +15,7 @@ def _seed(tmp: Path) -> None:
     (tmp / "skills" / "alpha").mkdir(parents=True)
     (tmp / "skills" / "alpha" / "SKILL.md").write_text(
         "---\n"
-        "apiVersion: agent-toolkit/v1alpha1\n"
+        "apiVersion: agent-toolkit/v1alpha2\n"
         "metadata:\n"
         "  name: alpha\n"
         "  description: Alpha skill.\n"
@@ -120,7 +120,7 @@ def test_kind_filter_drops_other_kinds(tmp_path, monkeypatch):
     (tmp_path / "agents").mkdir()
     (tmp_path / "agents" / "beta.md").write_text(
         "---\n"
-        "apiVersion: agent-toolkit/v1alpha1\n"
+        "apiVersion: agent-toolkit/v1alpha2\n"
         "metadata:\n"
         "  name: beta\n"
         "  description: Beta agent.\n"
@@ -152,7 +152,7 @@ def test_mcp_kind_included_without_filter(tmp_path, monkeypatch):
     )
     (tmp_path / "mcps" / "gamma" / "README.md").write_text(
         "---\n"
-        "apiVersion: agent-toolkit/v1alpha1\n"
+        "apiVersion: agent-toolkit/v1alpha2\n"
         "metadata:\n"
         "  name: gamma\n"
         "  description: Gamma mcp.\n"
@@ -201,13 +201,13 @@ def test_list_json_includes_mcps(tmp_path, monkeypatch):
     toolkit.mkdir()
     (toolkit / ".agent-toolkit-source").write_text("")
     (toolkit / "schemas").mkdir()
-    schema_src = Path(__file__).resolve().parents[1] / "schemas" / "asset-frontmatter.v1alpha1.json"
-    (toolkit / "schemas" / "asset-frontmatter.v1alpha1.json").write_text(schema_src.read_text())
+    schema_src = Path(__file__).resolve().parents[1] / "schemas" / "asset-frontmatter.v1alpha2.json"
+    (toolkit / "schemas" / "asset-frontmatter.v1alpha2.json").write_text(schema_src.read_text())
     mcp_dir = toolkit / "mcps" / "context7"
     mcp_dir.mkdir(parents=True)
     (mcp_dir / "config.json").write_text('{"type":"stdio","command":"npx"}\n')
     (mcp_dir / "README.md").write_text(
-        "---\napiVersion: agent-toolkit/v1alpha1\n"
+        "---\napiVersion: agent-toolkit/v1alpha2\n"
         "metadata:\n  name: context7\n  description: c.\n  lifecycle: stable\n"
         "spec:\n  origin: third-party\n  vendored_via: none\n"
         "  upstream: https://example.com\n  harnesses:\n    - claude\n---\n"

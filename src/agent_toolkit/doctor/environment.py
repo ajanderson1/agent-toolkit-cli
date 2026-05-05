@@ -11,11 +11,11 @@ def run(toolkit_root: Path) -> GroupResult:
     findings: list[str] = []
     failures: list[str] = []
 
-    schema = toolkit_root / "schemas" / "asset-frontmatter.v1alpha1.json"
+    schema = toolkit_root / "schemas" / "asset-frontmatter.v1alpha2.json"
     if not schema.exists():
         failures.append(f"schema missing at {schema}")
     else:
-        findings.append("schema present at schemas/asset-frontmatter.v1alpha1.json")
+        findings.append("schema present at schemas/asset-frontmatter.v1alpha2.json")
 
     agents_md = toolkit_root / "AGENTS.md"
     if not agents_md.exists():

@@ -116,7 +116,7 @@ def test_project_from_file_mcp_emits_no_op_message(tmp_path, monkeypatch, capsys
     (mcp_dir / "config.json").write_text('{"type":"stdio","command":"npx"}\n')
     (mcp_dir / "README.md").write_text(
         "---\n"
-        "apiVersion: agent-toolkit/v1alpha1\n"
+        "apiVersion: agent-toolkit/v1alpha2\n"
         "metadata:\n"
         "  name: context7\n"
         "  description: c7.\n"

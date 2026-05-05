@@ -15,7 +15,7 @@ def _write_mcp(toolkit_root: Path, slug: str, *, harnesses: list[str]) -> None:
     harness_lines = "\n".join(f"    - {h}" for h in harnesses)
     (mcp_dir / "README.md").write_text(
         "---\n"
-        "apiVersion: agent-toolkit/v1alpha1\n"
+        "apiVersion: agent-toolkit/v1alpha2\n"
         "metadata:\n"
         f"  name: {slug}\n"
         f"  description: {slug} mcp.\n"
@@ -174,7 +174,7 @@ def test_load_asset_record_returns_metadata_and_body_excerpt(tmp_path):
     (tmp_path / "skills" / "alpha").mkdir(parents=True)
     (tmp_path / "skills" / "alpha" / "SKILL.md").write_text(
         "---\n"
-        "apiVersion: agent-toolkit/v1alpha1\n"
+        "apiVersion: agent-toolkit/v1alpha2\n"
         "metadata:\n"
         "  name: alpha\n"
         "  description: Alpha skill.\n"
@@ -206,7 +206,7 @@ def test_load_asset_record_does_not_eat_paragraphs_starting_with_hash(tmp_path):
     (tmp_path / "skills" / "alpha").mkdir(parents=True)
     (tmp_path / "skills" / "alpha" / "SKILL.md").write_text(
         "---\n"
-        "apiVersion: agent-toolkit/v1alpha1\n"
+        "apiVersion: agent-toolkit/v1alpha2\n"
         "metadata:\n"
         "  name: alpha\n"
         "  description: X.\n"
@@ -234,7 +234,7 @@ def test_load_asset_record_skips_atx_headings_correctly(tmp_path):
     (tmp_path / "skills" / "beta").mkdir(parents=True)
     (tmp_path / "skills" / "beta" / "SKILL.md").write_text(
         "---\n"
-        "apiVersion: agent-toolkit/v1alpha1\n"
+        "apiVersion: agent-toolkit/v1alpha2\n"
         "metadata:\n"
         "  name: beta\n"
         "  description: X.\n"

@@ -290,7 +290,7 @@ def test_link_per_asset_mcp_succeeds(env, tmp_path):
     (mcp_dir / "config.json").write_text('{"type":"stdio","command":"npx"}\n')
     (mcp_dir / "README.md").write_text(
         "---\n"
-        "apiVersion: agent-toolkit/v1alpha1\n"
+        "apiVersion: agent-toolkit/v1alpha2\n"
         "metadata:\n"
         "  name: context7\n"
         "  description: c.\n"

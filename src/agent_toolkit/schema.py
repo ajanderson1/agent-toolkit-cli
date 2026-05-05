@@ -1,4 +1,4 @@
-"""Validate asset frontmatter against the v1alpha1 JSON schema + cross-asset rules."""
+"""Validate asset frontmatter against the v1alpha2 JSON schema + cross-asset rules."""
 from __future__ import annotations
 
 import json
@@ -17,7 +17,7 @@ class Validator:
         # Schema is the contract the CLI enforces; it ships with the CLI.
         # The toolkit repo holds the SSOT for humans, but the validator's runtime
         # source of truth is the bundled copy in the agent_toolkit package.
-        schema_text = (files("agent_toolkit") / "_schemas" / "asset-frontmatter.v1alpha1.json").read_text()
+        schema_text = (files("agent_toolkit") / "_schemas" / "asset-frontmatter.v1alpha2.json").read_text()
         self.schema = json.loads(schema_text)
 
     def validate(self, asset: Asset) -> list[str]:
@@ -25,10 +25,30 @@ class Validator:
         errors: list[str] = []
         if data is None:
             return [f"{asset.path}: no frontmatter / metadata block found"]
+
+        # Cross-check declared metadata.kind against walker-derived kind.
+        declared_kind = ((data.get("metadata") or {}).get("kind"))
+        if declared_kind is not None and declared_kind != asset.kind:
+            errors.append(
+                f"{asset.path}: metadata.kind={declared_kind!r} but walker derived {asset.kind!r}"
+            )
+            # Skip JSON-Schema validation for the mismatched-kind case so
+            # the conditional spec.mcp rule doesn't fire spuriously.
+            return errors
+
+        # Inject walker-derived kind so the JSON-Schema conditional
+        # ("spec.mcp required iff metadata.kind == mcp") fires regardless
+        # of whether frontmatter declared metadata.kind.
+        data_for_schema = dict(data)
+        meta_for_schema = dict(data_for_schema.get("metadata") or {})
+        meta_for_schema.setdefault("kind", asset.kind)
+        data_for_schema["metadata"] = meta_for_schema
+
         try:
-            jsonschema.validate(data, self.schema)
+            jsonschema.validate(data_for_schema, self.schema)
         except jsonschema.ValidationError as e:
             errors.append(f"{asset.path}: schema: {e.message}")
+
         # Cross-asset rule: metadata.name must equal asset.slug
         name = (data.get("metadata") or {}).get("name")
         if name and name != asset.slug:
