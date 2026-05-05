@@ -15,47 +15,15 @@ from agent_toolkit._allowlist import kind_to_section, read_allowlist
 from agent_toolkit._repo_resolution import RepoNotFoundError, resolve_toolkit_root
 from agent_toolkit.walker import discover_assets, load_asset_record
 
-# Kept in lockstep with `_link_lib.ALL_HARNESSES` (defined there to avoid a
-# circular import: `_link_lib` already imports `_USER_TARGETS`/`_PROJECT_TARGETS`
-# from this module). If you add a harness, update both.
-ALL_HARNESSES = ("claude", "codex", "opencode", "pi")
-ALL_KINDS = ("skill", "agent", "command", "hook", "plugin", "mcp", "pi-extension")
-
-# Mirror of bin/lib/common.sh's harness_target_dir / project_target_dir.
-# Kept in lockstep — if the bash table changes, this one MUST change too.
-_USER_TARGETS: dict[tuple[str, str], str] = {
-    ("claude", "skill"):       "{home}/.claude/skills",
-    ("claude", "agent"):       "{home}/.claude/agents",
-    ("claude", "command"):     "{home}/.claude/commands",
-    ("claude", "hook"):        "{home}/.claude/hooks",
-    ("claude", "plugin"):      "{home}/.claude/plugins",
-    ("codex", "skill"):        "{home}/.codex/skills",
-    ("opencode", "skill"):     "{home}/.config/opencode/skills",
-    ("pi", "skill"):           "{home}/.pi/agent/skills",
-    ("pi", "agent"):           "{home}/.pi/agent/agents",
-    ("pi", "pi-extension"):    "{home}/.pi/agent/extensions",
-}
-_PROJECT_TARGETS: dict[tuple[str, str], str] = {
-    ("claude", "skill"):       ".claude/skills",
-    ("claude", "agent"):       ".claude/agents",
-    ("claude", "command"):     ".claude/commands",
-    ("claude", "hook"):        ".claude/hooks",
-    ("claude", "plugin"):      ".claude/plugins",
-    ("codex", "skill"):        ".codex/skills",
-    ("opencode", "skill"):     ".opencode/skills",
-    ("pi", "skill"):           ".pi/agent/skills",
-    ("pi", "agent"):           ".pi/agent/agents",
-    ("pi", "pi-extension"):    ".pi/agent/extensions",
-}
-
-
-def _slot_dir(harness: str, kind: str, scope: str, project_root: Path) -> Path | None:
-    home = Path(os.environ.get("HOME", ""))
-    if scope == "user":
-        tmpl = _USER_TARGETS.get((harness, kind))
-        return Path(tmpl.format(home=str(home))) if tmpl else None
-    rel = _PROJECT_TARGETS.get((harness, kind))
-    return (project_root / rel) if rel else None
+# Re-export from the SSOT module so existing callers (commands/list.py,
+# tests/test_link_lib.py, etc.) keep their import paths working.
+from agent_toolkit._support import (  # noqa: F401  (re-exported)
+    ALL_HARNESSES,
+    ALL_KINDS,
+    _PROJECT_TARGETS,
+    _USER_TARGETS,
+    slot_dir as _slot_dir,
+)
 
 
 def _expected_source(asset_path: Path, kind: str) -> Path:
