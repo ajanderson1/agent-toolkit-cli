@@ -14,6 +14,7 @@ from typing import IO, Iterator
 import click
 
 from agent_toolkit._allowlist import kind_to_section, read_allowlist
+from agent_toolkit._requires import RequiresUnsatisfied, parse_requires_entries
 from agent_toolkit._support import (
     ALL_HARNESSES,
     UnsupportedPair,
@@ -21,7 +22,7 @@ from agent_toolkit._support import (
     _USER_TARGETS,
     is_supported,
 )
-from agent_toolkit.walker import Asset, discover_assets, extract_frontmatter, frontmatter_path
+from agent_toolkit.walker import Asset, AssetRecord, discover_assets, extract_frontmatter, frontmatter_path, load_asset_record
 
 HARNESS_HOMES: dict[str, str] = {
     "claude":   ".claude",
@@ -205,6 +206,7 @@ def project_from_file(
     counters: LinkCounters,
     stdout: IO[str],
     previous_allowed: dict[str, list[str]] | None = None,
+    enforce_requires: bool = False,
 ) -> None:
     """Walk every asset kind. Project allow-listed slugs, prune the rest.
 
@@ -213,6 +215,11 @@ def project_from_file(
     `previously_allowed` set passed to MCP adapters so they know which on-disk
     entries fall under our ownership. None means "use current allow-list as
     previous" — appropriate for --all snapshot or fix-style callers.
+
+    When `enforce_requires` is True, raises RequiresUnsatisfied if an
+    allow-listed asset declares spec.requires peers for `harness` that are not
+    themselves in the allowlist.  Callers in link.py set this to True; unlink
+    callers leave it False so removal is never blocked.
     """
     allowed = read_allowlist(allowlist_path)
     by_kind: dict[str, list[Asset]] = {
@@ -287,6 +294,9 @@ def project_from_file(
         for asset in by_kind[kind]:
             discovered_slugs.add(asset.slug)
             if asset.slug in allowed_slugs:
+                if enforce_requires:
+                    record = load_asset_record(asset)
+                    _check_requires(record, harness, scope, allowed)
                 maybe_link(
                     harness=harness,
                     kind=kind,
@@ -310,6 +320,44 @@ def project_from_file(
                 if entry.name in discovered_slugs:
                     continue
                 _prune_if_into_repo(entry, toolkit_root, dry_run, counters, stdout)
+
+
+def _check_requires(
+    record: AssetRecord,
+    harness: str,
+    scope: str,
+    allowed: dict[str, list[str]],
+) -> None:
+    """Raise RequiresUnsatisfied if spec.requires peers for `harness` are absent.
+
+    Called only when `enforce_requires=True` is set on project_from_file.
+    Raises rather than calling ctx.exit so the projection loop stays pure;
+    link.py callers catch the exception and call ctx.exit(2).
+    """
+    peers_raw = record.requires.get(harness) or []
+    if not peers_raw:
+        return
+
+    missing: list[tuple[str, str]] = []
+    for peer_kind, peer_slug in parse_requires_entries(peers_raw):
+        if not peer_kind:
+            missing.append(("", peer_slug))
+            continue
+        try:
+            section = kind_to_section(peer_kind)
+        except ValueError:
+            missing.append((peer_kind, peer_slug))
+            continue
+        if peer_slug not in set(allowed.get(section) or []):
+            missing.append((peer_kind, peer_slug))
+
+    if missing:
+        raise RequiresUnsatisfied(
+            asset_slug=record.asset.slug,
+            asset_kind=record.asset.kind,
+            harness=harness,
+            missing=missing,
+        )
 
 
 def _prune_if_into_repo(

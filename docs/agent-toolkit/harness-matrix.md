@@ -72,11 +72,22 @@ Example: a Pi agent that needs a paired Pi extension.
 spec:
   harnesses: [pi]
   requires:
-    pi: ["extension:pi-subagents"]
+    pi: ["pi-extension:pi-subagents"]
 ```
 
+The peer strings follow the schema pattern
+`^(skill|agent|command|hook|plugin|mcp|pi-extension):[a-z0-9][a-z0-9-]*$`.
+The kind token MUST be the full schema kind name — `pi-extension`, not the
+shorthand `extension`.
+
 The linker (Phase 2) refuses to project an asset whose `requires` peers
-are absent from the allowlist for that scope.
+are absent from the allowlist for that scope.  Exit code is 2.  The error
+message names the missing peer and provides a fix command:
+
+```
+agent:ceo requires pi-extension:pi-subagents on pi — add it to the allowlist
+under [pi_extensions] or run `agent-toolkit link user pi pi-extension:pi-subagents` first.
+```
 
 ## How to add a new pair
 
