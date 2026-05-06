@@ -47,12 +47,12 @@ human readers can trace any cache file back to its source asset.
 
 | Kind \\ Harness | Claude | Codex | OpenCode | Pi |
 |---|---|---|---|---|
-| **skill** | symlink → `~/.claude/skills/<slug>/` | translate → `~/.codex/skills/<slug>/SKILL.md` (cache: `~/.codex/.agent-toolkit-cache/skill/<slug>/SKILL.md`) — emits codex-shaped frontmatter with top-level `description` and `agent_toolkit` wrapper block | translate → `~/.config/opencode/skills/<slug>/SKILL.md` (cache: `~/.config/opencode/.agent-toolkit-cache/skill/<slug>/SKILL.md`) — slot is a real directory containing a file symlink to the cache; emits opencode-shaped frontmatter with top-level `name` and `description` plus `agent_toolkit` wrapper block | symlink → `~/.pi/agent/skills/<slug>/` |
-| **agent** | symlink → `~/.claude/agents/<slug>.md` | unsupported (by design) — Codex has no `~/.codex/agents/` drop-in; agents are plugin-internal, distributed via `codex plugin marketplace add` | translate → `~/.config/opencode/agents/<slug>.md` (cache: `~/.config/opencode/.agent-toolkit-cache/agent/<slug>.md`) — injects `mode: subagent` and strips toolkit wrapper frontmatter | symlink → `~/.pi/agent/agents/<slug>.md` |
-| **command** | symlink → `~/.claude/commands/<slug>.md` | unsupported (by design) — Codex has no `~/.codex/commands/`; commands surface as `$skill` invocations from inside skills | translate → `~/.config/opencode/commands/<slug>.md` (cache: `~/.config/opencode/.agent-toolkit-cache/command/<slug>.md`) — emits OpenCode-shaped frontmatter with `description` and `agent_toolkit` wrapper block | unsupported (by design) — Pi has no command concept |
-| **hook** | symlink → `~/.claude/hooks/<slug>.<ext>` | unsupported (by design) — Codex has no hooks API at the user level | unsupported (by design) — OpenCode hooks live inside TS plugin files (`session.start`, `tool.execute.before`, etc.); not drop-in markdown | unsupported (by design) — Pi has no hooks API at the user level |
+| **skill** | symlink → `~/.claude/skills/<slug>/` | translate → `~/.codex/skills/<slug>/SKILL.md` (cache: `~/.codex/.agent-toolkit-cache/skill/<slug>/SKILL.md`) — emits codex-shaped frontmatter with top-level `description` and `agent_toolkit` wrapper block. NOTE: `~/.codex/skills/` is the **deprecated-but-loaded** path per `codex-rs/core-skills/src/loader.rs`; the canonical user path is `~/.agents/skills/<slug>/SKILL.md`. CLI migration pending | translate → `~/.config/opencode/skills/<slug>/SKILL.md` (cache: `~/.config/opencode/.agent-toolkit-cache/skill/<slug>/SKILL.md`) — slot is a real directory containing a file symlink to the cache; emits opencode-shaped frontmatter with top-level `name` and `description` plus `agent_toolkit` wrapper block | symlink → `~/.pi/agent/skills/<slug>/` (Pi also auto-discovers `~/.agents/skills/` and ancestor `.agents/skills/` — cross-harness convergence point) |
+| **agent** | symlink → `~/.claude/agents/<slug>.md` | unsupported (gap) — Codex now supports `~/.codex/agents/<name>.toml` (TOML, not Markdown) since `developers.openai.com/codex/subagents`; CLI translate adapter pending | translate → `~/.config/opencode/agents/<slug>.md` (cache: `~/.config/opencode/.agent-toolkit-cache/agent/<slug>.md`) — injects `mode: subagent` and strips toolkit wrapper frontmatter | symlink → `~/.pi/agent/agents/<slug>.md` (also auto-loaded from `~/.agents/<slug>.md` by the `pi-subagents` extension; both paths are read) |
+| **command** | symlink → `~/.claude/commands/<slug>.md` | unsupported (by design) — Codex has no `~/.codex/commands/` drop-in; user "commands" surface as skills invoked via `$skill-name` mention or implicit description match | translate → `~/.config/opencode/commands/<slug>.md` (cache: `~/.config/opencode/.agent-toolkit-cache/command/<slug>.md`) — emits OpenCode-shaped frontmatter (optional `description`, `agent`, `model`, `subtask` — all optional) plus `agent_toolkit` wrapper block | unsupported (by design) — Pi has no command concept |
+| **hook** | symlink → `~/.claude/hooks/<slug>.<ext>` (storage convention only — Claude does not auto-discover this directory; hooks must be referenced from `settings.json` via `$CLAUDE_PROJECT_DIR/.claude/hooks/...`) | unsupported (gap) — stable in Codex v0.125.0 (2026-04-24) via `[hooks]` in `~/.codex/config.toml` or `~/.codex/hooks.json`; CLI config_file adapter pending | unsupported (by design) — OpenCode hooks live inside TS plugin files (`tool.execute.before`, `session.created`, `session.error`, etc.); not drop-in markdown | unsupported (by design) — Pi has no hooks API at the user level |
 | **plugin** | symlink → `~/.claude/plugins/<slug>/` | unsupported (by design) — Codex plugins are bundles with `.codex-plugin/plugin.json` manifests, installed via `codex plugin marketplace add` (different concept and install path from Claude markdown plugins) | unsupported (by design) — OpenCode plugins are TS/JS files at `~/.config/opencode/plugins/` or npm packages declared in `config.json` (different concept entirely) | unsupported (by design) — Pi extends via `pi-extension`, not a plugin concept |
-| **mcp** | config_file → `~/.claude.json` `mcpServers.<name>` | config_file → `~/.codex/config.toml` `[mcp_servers.<name>]` | config_file → `~/.config/opencode/opencode.json` `mcp.<name>` | unsupported (by design) — Pi has no MCP concept |
+| **mcp** | config_file → `~/.claude.json` `mcpServers.<name>` (NOT `~/.claude/settings.json`; user/local servers both stored in `~/.claude.json`; project scope is checked-in `.mcp.json`) | config_file → `~/.codex/config.toml` `[mcp_servers.<name>]` (TOML; stdio fields `command`/`args`/`env`). **Adapter stdio-only** (`codex.py:43-49` raises `CannotInstall` for non-stdio), even though Codex's schema accepts HTTP `url`/`http_headers`/`bearer_token_env_var` | config_file → `~/.config/opencode/opencode.json` `mcp.<name>` (uses `type` discriminator: `local` with `command` as ARRAY and `environment` (NOT `env`); or `remote` with `url`+`headers`) | unsupported (by design) — Pi has no MCP concept |
 | **pi-extension** | unsupported (by design) | unsupported (by design) | unsupported (by design) | symlink → `~/.pi/agent/extensions/<slug>/` |
 
 ## Project-scope target paths
@@ -78,15 +78,34 @@ When a kind is projected via **symlink**, the harness reads the same
 markdown file the toolkit owns. The asset's wrapper frontmatter
 (`apiVersion: agent-toolkit/v1alpha2`, `metadata`, `spec`) is exposed as-is.
 Claude Code, Codex (for skills), and OpenCode (for skills) ignore unknown
-frontmatter fields. Pi reads its own frontmatter shape (`name`,
-`description`, `tools`, `model`, `extensions`) and falls back gracefully on
-extra keys.
+frontmatter fields.
 
-The **translate** mechanism (Phase 3) generates harness-flavored frontmatter
+Pi's frontmatter expectations differ by kind:
+
+- **Skills** (loaded by Pi core, `dist/core/skills.js:212-249`): only
+  `name`, `description`, and `disable-model-invocation` are read. Name must
+  match the parent directory and follow `^[a-z0-9-]+$` (max 64 chars);
+  description max 1024 chars (agentskills.io spec).
+- **Agents** (loaded by the third-party `pi-subagents` extension, NOT Pi
+  core): required `name` and `description`; optional `tools` (CSV;
+  `mcp:<name>` prefix routes to MCP-direct tools), `model`,
+  `fallbackModels`, `thinking`, `systemPromptMode` (`replace`|`append`),
+  `inheritProjectContext`, `inheritSkills`, `skill`/`skills`, `extensions`,
+  `output`, `defaultReads`, `defaultProgress`, `interactive`,
+  `maxSubagentDepth`. Unknown keys captured in `extraFields`. Note: the
+  parser is line-based and does NOT handle YAML lists — use comma-separated
+  strings.
+
+Both fall back gracefully on extra keys, so the toolkit's wrapper
+frontmatter is preserved unharmed.
+
+The **translate** mechanism generates harness-flavored frontmatter
 for kinds where the runtime fields differ materially. For OpenCode agents,
 `mode: subagent` is injected and the toolkit wrapper block is preserved under
-`agent_toolkit:`. For OpenCode commands, a `description`-only frontmatter is
-emitted alongside the `agent_toolkit:` wrapper block.
+`agent_toolkit:`. For OpenCode commands, frontmatter with optional
+`description`, `agent`, `model`, `subtask` (all optional in OpenCode) is
+emitted alongside the `agent_toolkit:` wrapper block. For Codex skills,
+frontmatter with top-level `description` is emitted plus the wrapper.
 
 ## Why some pairs are "by design" unsupported
 
@@ -105,8 +124,8 @@ not meaningful). Per kind:
     install verb — symlinking a markdown file would not register.
   - OpenCode: a TypeScript or JavaScript file at
     `~/.config/opencode/plugins/<slug>.{ts,js}` exporting hook
-    functions (e.g. `session.start`, `tool.execute.before`); or an npm
-    package declared in `config.json`'s `plugin` array. Neither is a
+    functions (e.g. `session.created`, `tool.execute.before`); or an npm
+    package declared in `opencode.json`'s `plugin` array. Neither is a
     markdown file.
   - Pi: extends via the dedicated `pi-extension` kind (TypeScript
     modules using Pi's runtime API), not a "plugin" concept.
@@ -114,23 +133,50 @@ not meaningful). Per kind:
   These are not gaps the toolkit can close — they're four genuinely
   different extension models that happen to share the word "plugin".
 
-- **hook** is Claude-only by design. Codex and Pi have no user-level
-  hooks API. OpenCode does have hook *behavior* but it's expressed
-  inside TypeScript plugin files (`tool.execute.before`,
-  `session.error`, etc.) — not as drop-in markdown.
+- **hook** has by-design and gap flavors mixed:
+  - **By design** for Pi (no hooks API at all) and OpenCode (hook
+    *behavior* exists but is expressed inside TypeScript plugin files,
+    `tool.execute.before`, `session.error`, `session.created`, etc. —
+    not as drop-in markdown).
+  - **Gap** for Codex: hooks went stable in v0.125.0 (2026-04-24).
+    Configured via `[hooks]` table in `~/.codex/config.toml` or via a
+    standalone `~/.codex/hooks.json`. Events: `SessionStart`,
+    `PreToolUse`, `PostToolUse`, `PermissionRequest`,
+    `UserPromptSubmit`, `Stop`. Plugin bundles can also ship
+    `hooks/hooks.json`. CLI config_file adapter pending.
+  - For Claude: hooks ARE user-level but the slot directory
+    `~/.claude/hooks/` is a *script-storage convention*, not an
+    auto-discovery path — Claude reads hooks from JSON in
+    `~/.claude/settings.json` (or settings.local.json, plugin
+    `hooks/hooks.json`, scoped frontmatter in skill/agent files). The
+    toolkit's symlink to `~/.claude/hooks/<slug>.<ext>` only fires if
+    `settings.json` references `$CLAUDE_PROJECT_DIR/.claude/hooks/...`.
 
-- **command** is Claude+(opencode-via-Phase-3) by design. Codex
+- **command** is Claude+OpenCode by design. Codex
   surfaces commands as `$skill-name` invocations from inside skills;
   there is no `~/.codex/commands/` drop-in path. Pi has no command
-  concept at all. OpenCode does support drop-in commands but with a
-  different frontmatter shape than Claude — Phase 3 will bridge.
+  concept at all. OpenCode supports drop-in commands but with
+  different frontmatter (`description`, `agent`, `model`, `subtask` —
+  all optional) — the toolkit translates at link time.
 
-- **agent** is Claude+Pi+(opencode-via-Phase-3) by design. Codex
-  exposes agents only through plugin bundles; there's no
-  `~/.codex/agents/` drop-in. OpenCode supports drop-in markdown
-  agents but defaults missing `mode:` to `all` (primary), which
-  silently mis-classifies our subagents — Phase 3 injects the right
-  mode at link time.
+- **agent** has by-design and gap flavors:
+  - **By design** for Codex's plugin-bundled agents (those ship via
+    plugin marketplace, not drop-in).
+  - **Gap** for Codex's user-level drop-in: `~/.codex/agents/<name>.toml`
+    is supported per `developers.openai.com/codex/subagents`. Required
+    fields: `name`, `description`, `developer_instructions`. Optional:
+    `nickname_candidates[]`, `model`, `model_reasoning_effort`,
+    `sandbox_mode`, `mcp_servers`, `skills.config`. Format is TOML, not
+    Markdown — translation requires a kind→TOML transform, not just
+    frontmatter injection. CLI translate adapter pending.
+  - **Translated** for OpenCode: drop-in markdown agents are supported
+    but missing `mode:` defaults to `all` (primary), which silently
+    mis-classifies subagents — the translator injects `mode: subagent`.
+  - **Symlinked** for Claude and Pi.
+  - **Note for Pi:** the `pi-subagents` extension reads from BOTH
+    `~/.pi/agent/agents/<slug>.md` (legacy) AND `~/.agents/<slug>.md`
+    (new), concatenating results. Project-scope reads both
+    `<root>/.agents/` and `<root>/.pi/agents/`.
 
 - **pi-extension** is Pi-only by definition: TypeScript modules using
   the Pi runtime API. No other harness can load them.
