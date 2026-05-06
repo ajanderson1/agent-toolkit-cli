@@ -37,13 +37,13 @@ def get_adapter(harness: str, kind: str = "mcp"):
     if harness == "codex" and kind == "hook":
         from agent_toolkit.harness_adapters.codex_hook import CodexHookAdapter
         return CodexHookAdapter()
-    if harness == "codex":
+    if harness == "codex" and kind == "mcp":
         from agent_toolkit.harness_adapters.codex import CodexAdapter
         return CodexAdapter()
-    if harness == "claude":
+    if harness == "claude" and kind == "mcp":
         from agent_toolkit.harness_adapters.claude import ClaudeAdapter
         return ClaudeAdapter()
-    if harness == "opencode":
+    if harness == "opencode" and kind == "mcp":
         from agent_toolkit.harness_adapters.opencode import OpenCodeAdapter
         return OpenCodeAdapter()
     return UnimplementedAdapter(harness)
