@@ -78,3 +78,12 @@ def test_non_hook_kind_without_spec_hook_passes(schema):
     doc["metadata"]["kind"] = "skill"
     del doc["spec"]["hook"]
     jsonschema.validate(doc, schema)
+
+
+def test_kind_skill_with_spec_hook_fails(schema):
+    """spec.hook must not appear on non-hook kinds (negative enforcement)."""
+    doc = _base_hook_doc()
+    doc["metadata"]["kind"] = "skill"
+    # Skill doesn't legitimately use spec.hook — schema must reject it.
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(doc, schema)

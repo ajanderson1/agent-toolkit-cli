@@ -121,6 +121,12 @@
         "required": ["metadata"]
       },
       "then": { "properties": { "spec": { "required": ["hook"] } } }
+    },
+    {
+      "if": {
+        "properties": { "metadata": { "properties": { "kind": { "not": { "const": "hook" } } } } }
+      },
+      "then": { "properties": { "spec": { "not": { "required": ["hook"] } } } }
     }
   ]
 }
