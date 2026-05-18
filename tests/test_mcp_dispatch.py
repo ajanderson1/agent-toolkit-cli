@@ -205,7 +205,10 @@ def test_apply_link_unlink_uses_previously_allowed(monkeypatch, tmp_path):
 
 
 def test_apply_link_raises_on_cannot_install(monkeypatch, tmp_path):
-    """Adapter.can_install raising CannotInstall propagates up; caller decides."""
+    """Adapter raising CannotInstall propagates up; caller decides.
+
+    Trigger: SSE transport — codex refuses SSE explicitly (deprecated upstream).
+    """
     from agent_toolkit_cli.commands._mcp_dispatch import _build_mcp_entries, apply_link
     from agent_toolkit_cli.harness_adapters import get_adapter
     from agent_toolkit_cli.harness_adapters.base import CannotInstall
@@ -213,12 +216,12 @@ def test_apply_link_raises_on_cannot_install(monkeypatch, tmp_path):
     monkeypatch.setenv("HOME", str(tmp_path))
     (tmp_path / ".codex").mkdir()
 
-    _seed_mcp(tmp_path, "bad-mcp", transport="http")
+    _seed_mcp(tmp_path, "bad-mcp", transport="sse")
     entries = _build_mcp_entries(tmp_path, ["bad-mcp"])
     a = get_adapter("codex")
 
     buf = io.StringIO()
-    with pytest.raises(CannotInstall, match="stdio"):
+    with pytest.raises(CannotInstall, match="SSE"):
         apply_link(a, scope="user", project_root=tmp_path, entries=entries,
                    dry_run=False, stdout=buf)
 

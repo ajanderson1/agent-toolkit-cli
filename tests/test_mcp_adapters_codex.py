@@ -8,7 +8,9 @@ import pytest
 
 def _make_entry(name: str = "context7", *, transport: str = "stdio",
                 command: str = "npx", args: list[str] | None = None,
-                env: dict[str, str] | None = None):
+                env: dict[str, str] | None = None,
+                url: str | None = None,
+                headers: dict[str, str] | None = None):
     from agent_toolkit_cli.harness_adapters.base import McpEntry
 
     inner: dict = {"command": command}
@@ -16,10 +18,15 @@ def _make_entry(name: str = "context7", *, transport: str = "stdio",
         inner["args"] = args
     if env is not None:
         inner["env"] = env
+    spec: dict = {"transport": transport, "install_method": "npx"}
+    if url is not None:
+        spec["url"] = url
+    if headers is not None:
+        spec["headers"] = headers
     return McpEntry(
         name=name,
         inner_config=inner,
-        mcp_spec={"transport": transport, "install_method": "npx"},
+        mcp_spec=spec,
     )
 
 
@@ -60,13 +67,79 @@ def test_codex_can_install_accepts_stdio():
     a.can_install(_make_entry(transport="stdio"))  # no exception
 
 
-def test_codex_can_install_refuses_http():
+def test_codex_can_install_accepts_http():
+    """#74: http transport is now accepted (was previously refused)."""
+    from agent_toolkit_cli.harness_adapters.codex import CodexAdapter
+
+    a = CodexAdapter()
+    a.can_install(_make_entry(transport="http", url="https://example/mcp"))  # no exception
+
+
+def test_codex_can_install_refuses_sse():
+    """SSE remains refused — deprecated upstream and Codex has no on-disk shape for it."""
     from agent_toolkit_cli.harness_adapters.codex import CodexAdapter
     from agent_toolkit_cli.harness_adapters.base import CannotInstall
 
     a = CodexAdapter()
-    with pytest.raises(CannotInstall, match="stdio"):
-        a.can_install(_make_entry(transport="http"))
+    with pytest.raises(CannotInstall, match="SSE"):
+        a.can_install(_make_entry(transport="sse"))
+
+
+def test_codex_diff_renders_http_entry(monkeypatch, tmp_path):
+    """#74: http entries land with `url` and `http_headers` keys in TOML."""
+    from agent_toolkit_cli.harness_adapters.codex import CodexAdapter
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    a = CodexAdapter()
+    target = tmp_path / ".codex" / "config.toml"
+    target.parent.mkdir()
+    entry = _make_entry(
+        name="remote-mcp",
+        transport="http",
+        url="https://example.com/mcp",
+        headers={"Authorization": "Bearer xyz"},
+    )
+    actions = a.diff("user", tmp_path, [entry])
+    assert len(actions) == 1
+    rendered = actions[0].contents.decode("utf-8")
+    assert "[mcp_servers.remote-mcp]" in rendered
+    assert 'url = "https://example.com/mcp"' in rendered
+    assert "http_headers" in rendered
+    assert 'Authorization = "Bearer xyz"' in rendered
+    # http entries must NOT carry stdio keys
+    assert "command =" not in rendered
+
+
+def test_codex_diff_http_entry_without_url_raises(monkeypatch, tmp_path):
+    from agent_toolkit_cli.harness_adapters.codex import CodexAdapter
+    from agent_toolkit_cli.harness_adapters.base import CannotInstall
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    a = CodexAdapter()
+    (tmp_path / ".codex").mkdir()
+    entry = _make_entry(name="bad", transport="http")  # no url
+    with pytest.raises(CannotInstall, match="spec.mcp.url required"):
+        a.diff("user", tmp_path, [entry])
+
+
+def test_codex_diff_mixed_stdio_and_http_entries(monkeypatch, tmp_path):
+    """Both transports can live in the same config side-by-side."""
+    from agent_toolkit_cli.harness_adapters.codex import CodexAdapter
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    a = CodexAdapter()
+    (tmp_path / ".codex").mkdir()
+    stdio_entry = _make_entry(name="local-mcp", args=["-y", "pkg"])
+    http_entry = _make_entry(
+        name="remote-mcp", transport="http", url="https://x/y",
+    )
+    actions = a.diff("user", tmp_path, [stdio_entry, http_entry])
+    assert len(actions) == 1
+    rendered = actions[0].contents.decode("utf-8")
+    assert "[mcp_servers.local-mcp]" in rendered
+    assert "[mcp_servers.remote-mcp]" in rendered
+    assert 'command = "npx"' in rendered
+    assert 'url = "https://x/y"' in rendered
 
 
 def test_codex_diff_creates_file_when_missing(monkeypatch, tmp_path):
