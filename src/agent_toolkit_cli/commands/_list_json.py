@@ -21,6 +21,7 @@ from agent_toolkit_cli._support import (  # noqa: F401  (re-exported)
     _PROJECT_TARGETS,
     _USER_TARGETS,
     slot_dir as _slot_dir,
+    slot_dirs as _slot_dirs,
 )
 from agent_toolkit_cli._translators import TRANSLATORS
 from agent_toolkit_cli.commands._link_lib import (
@@ -50,9 +51,45 @@ def _cell_status(
     toolkit_root_resolved: Path,
     project_root: Path,
 ) -> tuple[str, str | None]:
-    slot = _slot_dir(harness, kind, scope, project_root)
-    if slot is None:
+    """Report cell status across all slot dirs (primary + aliases).
+
+    A "linked" result from any slot wins immediately. If no slot yields
+    "linked" but at least one yields "broken", report broken (so users see
+    drift instead of a misleading "unlinked"). Only when every slot is
+    "unlinked" do we return unlinked.
+    """
+    slots = _slot_dirs(harness, kind, scope, project_root)
+    if not slots:
         return ("unsupported", None)
+    last_broken: tuple[str, str | None] | None = None
+    last_unlinked: tuple[str, str | None] = ("unlinked", None)
+    for slot in slots:
+        result = _cell_status_one(
+            slot, harness, kind, slug, scope,
+            expected_src, toolkit_root_resolved, project_root,
+        )
+        if result[0] == "linked":
+            return result
+        if result[0] == "broken":
+            last_broken = result
+        # ("unlinked", ...) — keep checking the next slot
+    if last_broken is not None:
+        return last_broken
+    return last_unlinked
+
+
+def _cell_status_one(
+    slot: Path,
+    harness: str,
+    kind: str,
+    slug: str,
+    scope: str,
+    expected_src: Path,
+    toolkit_root_resolved: Path,
+    project_root: Path,
+) -> tuple[str, str | None]:
+    """Compute cell status for ONE slot directory. See `_cell_status` for the
+    multi-slot wrapper."""
     link_path = slot / _translated_slot_filename(slug, kind, harness)
     # For the "dir-with-file-symlink" translate layout (e.g. opencode skill),
     # link_path is a real directory containing a single file symlink whose

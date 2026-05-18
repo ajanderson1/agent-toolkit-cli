@@ -14,6 +14,7 @@ from agent_toolkit_cli.commands._link_lib import (
     KINDS_FOR_PROJECTION,
     _asset_harnesses,
     harness_target_dir,
+    harness_target_dirs,
 )
 from agent_toolkit_cli.commands._list_json import ALL_HARNESSES
 from agent_toolkit_cli.walker import discover_assets
@@ -61,10 +62,11 @@ def _install_state(
     for h in harnesses_to_check:
         if not h:
             continue
-        target_dir = harness_target_dir(h, kind, scope, project_root)
-        if target_dir is None:
+        target_dirs = harness_target_dirs(h, kind, scope, project_root)
+        if not target_dirs:
             continue
-        if (target_dir / slug).is_symlink():
+        # Symlink present in ANY slot (primary or alias) → installed.
+        if any((td / slug).is_symlink() for td in target_dirs):
             return "✓"
     return "—"
 

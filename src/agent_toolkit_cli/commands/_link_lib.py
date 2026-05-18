@@ -18,9 +18,12 @@ from agent_toolkit_cli._requires import RequiresUnsatisfied, parse_requires_entr
 from agent_toolkit_cli._support import (
     ALL_HARNESSES,
     UnsupportedPair,
+    _PROJECT_TARGET_ALIASES,
     _PROJECT_TARGETS,
+    _USER_TARGET_ALIASES,
     _USER_TARGETS,
     is_supported,
+    slot_dirs,
 )
 from agent_toolkit_cli._translators import TRANSLATORS
 from agent_toolkit_cli.walker import (
@@ -248,7 +251,11 @@ KINDS_FOR_PROJECTION: tuple[str, ...] = ("skill", "agent", "command", "hook", "p
 
 
 def harness_target_dir(harness: str, kind: str, scope: str, project_root: Path) -> Path | None:
-    """Mirror of bash harness_target_dir / project_target_dir."""
+    """Return the PRIMARY slot dir for `(harness, kind, scope)`, or None.
+
+    For pairs with alias slots (e.g. `(pi, agent)`), this returns only the
+    primary. Use `harness_target_dirs()` to get the full list.
+    """
     if scope == "user":
         tmpl = _USER_TARGETS.get((harness, kind))
         if not tmpl:
@@ -257,6 +264,16 @@ def harness_target_dir(harness: str, kind: str, scope: str, project_root: Path) 
         return Path(tmpl.format(home=home))
     rel = _PROJECT_TARGETS.get((harness, kind))
     return (project_root / rel) if rel else None
+
+
+def harness_target_dirs(harness: str, kind: str, scope: str, project_root: Path) -> list[Path]:
+    """Return ALL slot dirs for `(harness, kind, scope)` — primary first, then aliases.
+
+    Pairs without aliases return `[primary]`. Pairs that are unsupported at
+    this scope return `[]`. This is the function the linker and unlinker
+    must use when they need to write to or sweep every slot.
+    """
+    return slot_dirs(harness, kind, scope, project_root)
 
 
 def _expected_source(asset_path: Path, kind: str) -> Path:
@@ -537,69 +554,72 @@ def project_from_file(
             # pairs like (pi, agent) at project scope where the user-scope
             # entry exists but the project-scope one doesn't.
             continue
-        target_dir = harness_target_dir(harness, kind, scope, project_root)
-        if target_dir is None:
+        target_dirs = harness_target_dirs(harness, kind, scope, project_root)
+        if not target_dirs:
             raise RuntimeError(
                 f"is_supported({harness!r}, {kind!r}, scope={scope!r}) is True"
-                f" but harness_target_dir returned None — SSOT invariant broken"
+                f" but harness_target_dirs returned [] — SSOT invariant broken"
             )
-        if not dry_run:
-            target_dir.mkdir(parents=True, exist_ok=True)
         section = kind_to_section(kind)
         allowed_slugs = set(allowed.get(section, []))
-        discovered_slugs: set[str] = set()
-        for asset in by_kind[kind]:
-            discovered_slugs.add(asset.slug)
-            if asset.slug in allowed_slugs:
-                if enforce_requires:
-                    record = load_asset_record(asset)
-                    _check_requires(record, harness, scope, allowed)
-                maybe_link(
-                    harness=harness,
-                    kind=kind,
-                    slug=asset.slug,
-                    asset_path=asset.path,
-                    target_dir=target_dir,
-                    toolkit_root=toolkit_root,
-                    dry_run=dry_run,
-                    counters=counters,
-                    stdout=stdout,
-                    scope=scope,
-                    project_root=project_root,
-                )
-            else:
-                slot_path_translated = target_dir / _translated_slot_filename(asset.slug, kind, harness)
-                slot_path_plain = target_dir / asset.slug
-                # Try translated slot first (path-based detection); fall back to plain.
-                if not _prune_translated_slot(
-                    slot_path_translated, harness, scope, project_root,
-                    dry_run, counters, stdout,
-                ):
-                    _prune_if_into_repo(
-                        slot_path_plain, toolkit_root, dry_run, counters, stdout,
+        # Per-pair discovered slugs are shared across all target dirs (the
+        # orphan sweep needs the union to recognise dual-write slugs in each
+        # mirror as "discovered").
+        discovered_slugs: set[str] = {a.slug for a in by_kind[kind]}
+        for target_dir in target_dirs:
+            if not dry_run:
+                target_dir.mkdir(parents=True, exist_ok=True)
+            for asset in by_kind[kind]:
+                if asset.slug in allowed_slugs:
+                    if enforce_requires:
+                        record = load_asset_record(asset)
+                        _check_requires(record, harness, scope, allowed)
+                    maybe_link(
+                        harness=harness,
+                        kind=kind,
+                        slug=asset.slug,
+                        asset_path=asset.path,
+                        target_dir=target_dir,
+                        toolkit_root=toolkit_root,
+                        dry_run=dry_run,
+                        counters=counters,
+                        stdout=stdout,
+                        scope=scope,
+                        project_root=project_root,
                     )
-        # Sweep orphan slots (slug in target dir but no asset in repo).
-        # An entry is "orphan-shaped" if it's a symlink (file/dir-symlink layouts)
-        # OR a real directory (dir-with-file-symlink layout).
-        if target_dir.is_dir():
-            for entry in target_dir.iterdir():
-                if not (entry.is_symlink() or entry.is_dir()):
-                    continue
-                # discovered_slugs uses bare slugs; check both naming conventions
-                bare_name = entry.name
-                if bare_name in discovered_slugs:
-                    continue
-                # Strip a `.md` suffix to compare against bare slugs (translated slots
-                # use `<slug>.md` filenames; non-translated use bare `<slug>`)
-                if bare_name.endswith(".md") and bare_name[:-3] in discovered_slugs:
-                    continue
-                if _prune_translated_slot(
-                    entry, harness, scope, project_root,
-                    dry_run, counters, stdout,
-                ):
-                    continue
-                if entry.is_symlink():
-                    _prune_if_into_repo(entry, toolkit_root, dry_run, counters, stdout)
+                else:
+                    slot_path_translated = target_dir / _translated_slot_filename(asset.slug, kind, harness)
+                    slot_path_plain = target_dir / asset.slug
+                    # Try translated slot first (path-based detection); fall back to plain.
+                    if not _prune_translated_slot(
+                        slot_path_translated, harness, scope, project_root,
+                        dry_run, counters, stdout,
+                    ):
+                        _prune_if_into_repo(
+                            slot_path_plain, toolkit_root, dry_run, counters, stdout,
+                        )
+            # Sweep orphan slots (slug in target dir but no asset in repo).
+            # An entry is "orphan-shaped" if it's a symlink (file/dir-symlink layouts)
+            # OR a real directory (dir-with-file-symlink layout).
+            if target_dir.is_dir():
+                for entry in target_dir.iterdir():
+                    if not (entry.is_symlink() or entry.is_dir()):
+                        continue
+                    # discovered_slugs uses bare slugs; check both naming conventions
+                    bare_name = entry.name
+                    if bare_name in discovered_slugs:
+                        continue
+                    # Strip a `.md` suffix to compare against bare slugs (translated slots
+                    # use `<slug>.md` filenames; non-translated use bare `<slug>`)
+                    if bare_name.endswith(".md") and bare_name[:-3] in discovered_slugs:
+                        continue
+                    if _prune_translated_slot(
+                        entry, harness, scope, project_root,
+                        dry_run, counters, stdout,
+                    ):
+                        continue
+                    if entry.is_symlink():
+                        _prune_if_into_repo(entry, toolkit_root, dry_run, counters, stdout)
 
 
 def _check_requires(

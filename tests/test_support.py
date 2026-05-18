@@ -157,9 +157,11 @@ def test_is_supported_user_scope_for_pi_agent_is_true():
     assert is_supported("pi", "agent", scope="user") is True
 
 
-def test_is_supported_project_scope_for_pi_agent_is_false():
-    """Acceptance #3: pi has no project-scope agent discovery — must report unsupported."""
-    assert is_supported("pi", "agent", scope="project") is False
+def test_is_supported_project_scope_for_pi_agent_is_true():
+    """#75: pi-subagents reads `<root>/.pi/agents/` and `<root>/.agents/` at
+    project scope (it's the extension, not pi core, that loads them). Project
+    scope is now supported with dual-write via alias targets."""
+    assert is_supported("pi", "agent", scope="project") is True
 
 
 def test_is_supported_unknown_scope_returns_false():
@@ -167,8 +169,41 @@ def test_is_supported_unknown_scope_returns_false():
     assert is_supported("claude", "skill", scope="bogus") is False
 
 
-def test_slot_dir_pi_agent_project_returns_none(tmp_path):
-    """Acceptance #4: project-scope slot for (pi, agent) is None after the row is removed."""
+def test_slot_dir_pi_agent_project_returns_primary(tmp_path):
+    """#75: slot_dir returns the PRIMARY (`.pi/agents`) for the project scope."""
     from agent_toolkit_cli._support import slot_dir
 
-    assert slot_dir("pi", "agent", "project", project_root=tmp_path) is None
+    assert slot_dir("pi", "agent", "project", project_root=tmp_path) == tmp_path / ".pi" / "agents"
+
+
+def test_slot_dirs_pi_agent_user_returns_primary_plus_alias(tmp_path, monkeypatch):
+    """#75: slot_dirs at user scope returns BOTH `~/.pi/agent/agents/` (primary)
+    and `~/.agents/` (alias) — pi-subagents reads both."""
+    from agent_toolkit_cli._support import slot_dirs
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    dirs = slot_dirs("pi", "agent", "user", project_root=tmp_path)
+    assert dirs == [
+        tmp_path / ".pi" / "agent" / "agents",
+        tmp_path / ".agents",
+    ]
+
+
+def test_slot_dirs_pi_agent_project_returns_primary_plus_alias(tmp_path):
+    """#75: slot_dirs at project scope returns `.pi/agents/` (primary) and `.agents/`."""
+    from agent_toolkit_cli._support import slot_dirs
+
+    dirs = slot_dirs("pi", "agent", "project", project_root=tmp_path)
+    assert dirs == [
+        tmp_path / ".pi" / "agents",
+        tmp_path / ".agents",
+    ]
+
+
+def test_slot_dirs_pair_without_aliases_returns_singleton(tmp_path, monkeypatch):
+    """Pairs without alias entries return `[primary]` — same as `[slot_dir]`."""
+    from agent_toolkit_cli._support import slot_dirs
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    dirs = slot_dirs("claude", "skill", "user", project_root=tmp_path)
+    assert dirs == [tmp_path / ".claude" / "skills"]

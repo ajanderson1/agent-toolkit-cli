@@ -16,7 +16,7 @@ import os
 from pathlib import Path
 
 from agent_toolkit_cli._allowlist import read_allowlist, section_to_kind
-from agent_toolkit_cli._support import _USER_TARGETS
+from agent_toolkit_cli._support import _USER_TARGET_ALIASES, _USER_TARGETS
 from agent_toolkit_cli.doctor.result import GroupResult, Status
 from agent_toolkit_cli.walker import discover_assets
 
@@ -53,7 +53,15 @@ def _check_cross_toolkit_symlinks(toolkit_root: Path) -> list[str]:
     home = Path(os.environ.get("HOME", str(Path.home())))
     seen_dirs: set[Path] = set()
     configured = toolkit_root.resolve()
-    for (harness, _kind), tmpl in _USER_TARGETS.items():
+    # Walk every primary slot and every alias slot — `(pi, agent)` is
+    # mirrored at `~/.agents/`, so cross-toolkit detection has to look there
+    # too or it misses links a user might have left behind.
+    all_pair_templates: list[tuple[str, str]] = []
+    for (harness, kind), tmpl in _USER_TARGETS.items():
+        all_pair_templates.append((harness, tmpl))
+        for alias_tmpl in _USER_TARGET_ALIASES.get((harness, kind), []):
+            all_pair_templates.append((harness, alias_tmpl))
+    for harness, tmpl in all_pair_templates:
         rel = tmpl.replace("{home}/", "")
         kind_dir = home / rel
         if kind_dir in seen_dirs or not kind_dir.is_dir():

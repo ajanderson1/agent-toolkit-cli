@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from agent_toolkit_cli._support import _USER_TARGETS
+from agent_toolkit_cli._support import _USER_TARGET_ALIASES, _USER_TARGETS
 from agent_toolkit_cli._translators import TRANSLATORS
 from agent_toolkit_cli.commands._link_lib import _translate_slot_layout, _translated_slot_filename
 from agent_toolkit_cli.doctor.result import GroupResult, Status
@@ -12,8 +12,17 @@ from agent_toolkit_cli.walker import discover_assets, extract_frontmatter, front
 
 # Strip the "{home}/" template prefix to get a relative path under $HOME,
 # matching this module's existing convention of joining with `home / rel`.
+# Primary slot only; alias slots (e.g. (pi, agent)'s `~/.agents/`) are handled
+# separately via `_USER_PATHS_ALL` for sweep operations.
 _USER_PATHS: dict[tuple[str, str], str] = {
     pair: tmpl.removeprefix("{home}/")
+    for pair, tmpl in _USER_TARGETS.items()
+}
+# All slots (primary + aliases) per pair, in stable order. Used by stale-link
+# detection so it sees orphans in mirror directories too.
+_USER_PATHS_ALL: dict[tuple[str, str], list[str]] = {
+    pair: [tmpl.removeprefix("{home}/")]
+    + [t.removeprefix("{home}/") for t in _USER_TARGET_ALIASES.get(pair, [])]
     for pair, tmpl in _USER_TARGETS.items()
 }
 
@@ -51,6 +60,16 @@ def run(toolkit_root: Path, *, harness: str = "claude") -> GroupResult:
             if inner_symlinks:
                 check_path = inner_symlinks[0]
 
+        # For pairs with alias slots (e.g. (pi, agent) at `~/.agents/`),
+        # also check each alias for completeness — a missing alias-side
+        # symlink is a warn, not an error, because pi-subagents reads both.
+        alias_rels = [
+            t.removeprefix("{home}/")
+            for t in _USER_TARGET_ALIASES.get((harness, kind), [])
+        ]
+        alias_paths = [home / rel / _translated_slot_filename(slug, kind, harness)
+                       for rel in alias_rels]
+
         if not check_path.exists() and not check_path.is_symlink():
             warns.append(f"{kind}/{slug}: expected symlink {check_path} missing")
             continue
@@ -62,6 +81,10 @@ def run(toolkit_root: Path, *, harness: str = "claude") -> GroupResult:
                 warns.append(f"{kind}/{slug}: dangling symlink → {target}")
             else:
                 findings.append(f"{kind}/{slug}: linked")
+        # Alias slots: warn if missing (dual-write expects both).
+        for ap in alias_paths:
+            if not ap.exists() and not ap.is_symlink():
+                warns.append(f"{kind}/{slug}: alias-slot symlink {ap} missing")
 
     # Stale: a symlink under user dir that points into the repo for an asset that
     # does NOT declare this harness.
@@ -70,37 +93,18 @@ def run(toolkit_root: Path, *, harness: str = "claude") -> GroupResult:
         ("skills", "skill"), ("agents", "agent"), ("commands", "command"),
         ("hooks", "hook"), ("plugins", "plugin"), ("extensions", "pi-extension"),
     ]:
-        rel = _USER_PATHS.get((harness, kind))
-        if rel is None:
+        rels = _USER_PATHS_ALL.get((harness, kind))
+        if not rels:
             continue
-        user_kind_dir = home / rel
-        if not user_kind_dir.is_dir():
-            continue
-        for entry in user_kind_dir.iterdir():
-            if not entry.is_symlink():
+        for rel in rels:
+            user_kind_dir = home / rel
+            if not user_kind_dir.is_dir():
                 continue
-            target = Path(os.readlink(entry))
-            if not target.is_absolute():
-                target = (entry.parent / target).resolve()
-            try:
-                target.relative_to(toolkit_root)
-            except ValueError:
-                continue
-            asset = declared_slugs.get((kind, entry.name))
-            if asset is None:
-                if not target.exists():
-                    warns.append(
-                        f"{kind}/{entry.name}: dangling symlink → {target} (no asset in repo)"
-                    )
-                else:
-                    warns.append(f"{kind}/{entry.name}: stale link (no asset in repo)")
-                continue
-            meta = _meta_for(asset)
-            spec = meta.get("spec") or {}
-            if harness not in (spec.get("harnesses") or []):
-                warns.append(
-                    f"{kind}/{entry.name}: linked but {harness} not in spec.harnesses"
-                )
+            _sweep_stale_in_dir(
+                user_kind_dir, harness, kind, declared_slugs,
+                toolkit_root, warns,
+            )
+
 
     if warns:
         return GroupResult(
@@ -116,6 +120,45 @@ def run(toolkit_root: Path, *, harness: str = "claude") -> GroupResult:
         summary=f"{len(findings)} link(s) all healthy for harness={harness}",
         findings=findings,
     )
+
+
+def _sweep_stale_in_dir(
+    user_kind_dir: Path,
+    harness: str,
+    kind: str,
+    declared_slugs: dict,
+    toolkit_root: Path,
+    warns: list[str],
+) -> None:
+    """Scan one slot directory for symlinks pointing into the toolkit repo
+    whose asset (a) no longer exists, or (b) no longer declares this harness.
+    Mutates `warns` in place. Used for the primary slot AND each alias slot.
+    """
+    for entry in user_kind_dir.iterdir():
+        if not entry.is_symlink():
+            continue
+        target = Path(os.readlink(entry))
+        if not target.is_absolute():
+            target = (entry.parent / target).resolve()
+        try:
+            target.relative_to(toolkit_root)
+        except ValueError:
+            continue
+        asset = declared_slugs.get((kind, entry.name))
+        if asset is None:
+            if not target.exists():
+                warns.append(
+                    f"{kind}/{entry.name}: dangling symlink → {target} (no asset in repo)"
+                )
+            else:
+                warns.append(f"{kind}/{entry.name}: stale link (no asset in repo)")
+            continue
+        meta = _meta_for(asset)
+        spec = meta.get("spec") or {}
+        if harness not in (spec.get("harnesses") or []):
+            warns.append(
+                f"{kind}/{entry.name}: linked but {harness} not in spec.harnesses"
+            )
 
 
 def _meta_for(asset) -> dict:

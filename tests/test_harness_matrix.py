@@ -37,6 +37,7 @@ VALID_MECHANISMS = frozenset(
         "config_file+folder",
         "plugin_folder",
         "translate",
+        "dual-symlink",
         "unsupported (gap)",
         "unsupported (by design)",
     ]
@@ -231,7 +232,7 @@ class TestSymlinkParity:
                 bad.append((harness, kind, "pair not found in matrix at all"))
                 continue
             mech = _cell_mechanism(cell)
-            if mech not in {"symlink", "translate", "config_file+folder"}:
+            if mech not in {"symlink", "translate", "config_file+folder", "dual-symlink"}:
                 bad.append(
                     (
                         harness,
