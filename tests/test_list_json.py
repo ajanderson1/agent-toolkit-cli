@@ -571,9 +571,10 @@ def test_list_json_hook_codex_installed_not_allowlisted(tmp_path, monkeypatch):
     assert user_codex["allowlisted"] is False
 
 
-def test_cell_status_pi_agent_project_scope_is_unsupported(tmp_path):
-    """Acceptance #7: the (pi, agent) project-scope cell reports 'unsupported'
-    after _PROJECT_TARGETS row removal (#49)."""
+def test_cell_status_pi_agent_project_scope_unlinked_when_no_symlink(tmp_path):
+    """#75: pi/agent at project scope is now SUPPORTED (dual-write to
+    `.pi/agents/` AND `.agents/`). With no symlink present in either slot,
+    the cell reports 'unlinked' (not 'unsupported')."""
     from agent_toolkit_cli.commands._list_json import _cell_status
 
     status, target = _cell_status(
@@ -585,5 +586,5 @@ def test_cell_status_pi_agent_project_scope_is_unsupported(tmp_path):
         toolkit_root_resolved=tmp_path / "ignored-toolkit",
         project_root=tmp_path,
     )
-    assert status == "unsupported"
+    assert status == "unlinked"
     assert target is None

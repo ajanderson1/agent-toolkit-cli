@@ -297,14 +297,13 @@ def test_project_from_file_skips_unsupported_kinds_silently(tmp_path, monkeypatc
     assert counters.would_unlink == 0
 
 
-def test_project_from_file_skips_pi_agent_at_project_scope_cleanly(tmp_path, monkeypatch):
-    """Acceptance #5: project_from_file with harness=pi, scope=project must
-    NOT raise when an `agent` asset is allow-listed.
+def test_project_from_file_links_pi_agent_at_project_scope_dual_write(tmp_path, monkeypatch):
+    """#75: pi/agent at project scope dual-writes to `.pi/agents/` AND `.agents/`.
 
-    Pi has no project-scope agent discovery (issue #49). With the per-scope
-    is_supported check at _link_lib.py:488 we skip cleanly; without it we'd
-    fall through to harness_target_dir(pi, agent, "project", ...) → None →
-    RuntimeError("SSOT invariant broken").
+    Previously (issue #49 era) pi/agent at project scope was a clean no-op
+    because pi core didn't load agents. The `pi-subagents` third-party
+    extension DOES load them, and reads both paths — so dual-write is now
+    the right behaviour.
     """
     import io
     from agent_toolkit_cli.commands._link_lib import LinkCounters, project_from_file
@@ -342,8 +341,100 @@ def test_project_from_file_skips_pi_agent_at_project_scope_cleanly(tmp_path, mon
         counters=counters,
         stdout=out,
     )
-    # No symlinks created/would-be-created, no RuntimeError.
+    # Dry-run: would-link reports BOTH paths (one for `.pi/agents/`, one for `.agents/`).
+    assert counters.would_link == 2
     assert counters.created == 0
-    assert counters.would_link == 0
     assert counters.removed == 0
     assert counters.would_unlink == 0
+
+
+def test_pi_agent_user_scope_creates_symlinks_in_both_slots(tmp_path, monkeypatch):
+    """#75: real (non-dry-run) link at user scope creates symlinks in BOTH
+    `~/.pi/agent/agents/` and `~/.agents/` pointing at the same source.
+    Verifies end-to-end dual-write."""
+    import io
+    from agent_toolkit_cli.commands._link_lib import LinkCounters, project_from_file
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    toolkit_root = tmp_path / "toolkit"
+    agents_dir = toolkit_root / "agents"
+    agents_dir.mkdir(parents=True)
+    asset = agents_dir / "dual-test.md"
+    asset.write_text(
+        "---\n"
+        "kind: agent\n"
+        "slug: dual-test\n"
+        "spec:\n"
+        "  harnesses: [pi]\n"
+        "---\n"
+        "body\n"
+    )
+    allowlist = tmp_path / ".agent-toolkit.yaml"
+    allowlist.write_text("agents: [dual-test]\n")
+
+    counters = LinkCounters()
+    project_from_file(
+        scope="user",
+        harness="pi",
+        toolkit_root=toolkit_root,
+        project_root=tmp_path,
+        allowlist_path=allowlist,
+        dry_run=False,
+        counters=counters,
+        stdout=io.StringIO(),
+    )
+    # Pi/agent is non-translated → slot filename is the bare slug.
+    primary = tmp_path / ".pi" / "agent" / "agents" / "dual-test"
+    alias = tmp_path / ".agents" / "dual-test"
+    assert primary.is_symlink()
+    assert alias.is_symlink()
+    # Both resolve to the same source asset
+    assert primary.resolve() == asset.resolve()
+    assert alias.resolve() == asset.resolve()
+
+
+def test_pi_agent_user_scope_unlink_clears_both_slots(tmp_path, monkeypatch):
+    """#75: unlink-via-reproject (removing slug from allowlist) removes BOTH
+    the primary and alias symlinks."""
+    import io
+    from agent_toolkit_cli.commands._link_lib import LinkCounters, project_from_file
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    toolkit_root = tmp_path / "toolkit"
+    agents_dir = toolkit_root / "agents"
+    agents_dir.mkdir(parents=True)
+    asset = agents_dir / "tmp-agent.md"
+    asset.write_text(
+        "---\n"
+        "kind: agent\n"
+        "slug: tmp-agent\n"
+        "spec:\n"
+        "  harnesses: [pi]\n"
+        "---\n"
+        "body\n"
+    )
+    allowlist = tmp_path / ".agent-toolkit.yaml"
+    allowlist.write_text("agents: [tmp-agent]\n")
+
+    counters = LinkCounters()
+    project_from_file(
+        scope="user", harness="pi",
+        toolkit_root=toolkit_root, project_root=tmp_path,
+        allowlist_path=allowlist, dry_run=False,
+        counters=counters, stdout=io.StringIO(),
+    )
+    primary = tmp_path / ".pi" / "agent" / "agents" / "tmp-agent"
+    alias = tmp_path / ".agents" / "tmp-agent"
+    assert primary.is_symlink() and alias.is_symlink()
+
+    # Remove from allowlist + re-project — both symlinks should be pruned.
+    allowlist.write_text("agents: []\n")
+    counters2 = LinkCounters()
+    project_from_file(
+        scope="user", harness="pi",
+        toolkit_root=toolkit_root, project_root=tmp_path,
+        allowlist_path=allowlist, dry_run=False,
+        counters=counters2, stdout=io.StringIO(),
+    )
+    assert not primary.exists()
+    assert not alias.exists()

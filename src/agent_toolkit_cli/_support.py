@@ -46,15 +46,31 @@ _PROJECT_TARGETS: dict[tuple[str, str], str] = {
     ("opencode", "skill"):     ".opencode/skills",
     ("opencode", "agent"):     ".opencode/agents",
     ("opencode", "command"):   ".opencode/commands",
-    # Pi project-scope: pi reads from <cwd>/.pi/{skills,extensions} (no /agent/
-    # infix at project scope). User-scope keeps the .pi/agent/ prefix because
-    # pi's globalBaseDir == ~/.pi/agent. See package-manager.js:669-686.
-    # Pi has no project-scope `agents` discovery (package-manager.js:1788-1794
-    # — only extensions, skills, prompts, themes are auto-discovered at
-    # project scope), so ("pi","agent") is intentionally absent here. Per-
-    # scope `is_supported(..., scope="project")` answers False for this pair.
+    # Pi project-scope: pi core reads from <cwd>/.pi/{skills,extensions} (no
+    # /agent/ infix). User-scope keeps the .pi/agent/ prefix because pi's
+    # globalBaseDir == ~/.pi/agent. See package-manager.js:669-686.
     ("pi", "skill"):           ".pi/skills",
     ("pi", "pi-extension"):    ".pi/extensions",
+    # Pi agents are loaded by the third-party `pi-subagents` extension, not
+    # Pi core. At project scope it reads BOTH `.pi/agents/` and `.agents/`
+    # (no /agent/ infix at project scope). Primary stays under `.pi/`; the
+    # `.agents/` mirror is added via _PROJECT_TARGET_ALIASES.
+    ("pi", "agent"):           ".pi/agents",
+}
+
+# Alias targets: additional slot directories per (harness, kind) that the
+# linker writes to and unlink/list/doctor read from. The primary target in
+# _USER_TARGETS / _PROJECT_TARGETS stays the source of truth for is_supported
+# and the singular `slot_dir` / `harness_target_dir` helpers; alias targets
+# expose secondary slots that some harnesses also auto-discover.
+#
+# Currently used only by `(pi, agent)`: `pi-subagents` reads both the legacy
+# `~/.pi/agent/agents/` and the new `~/.agents/` (and project equivalents).
+_USER_TARGET_ALIASES: dict[tuple[str, str], list[str]] = {
+    ("pi", "agent"): ["{home}/.agents"],
+}
+_PROJECT_TARGET_ALIASES: dict[tuple[str, str], list[str]] = {
+    ("pi", "agent"): [".agents"],
 }
 
 # Derived: SUPPORTED_PAIRS = the set of (harness, kind) pairs with adapter slots.
@@ -137,6 +153,10 @@ def slot_dir(
     """Return the absolute slot directory for a `(harness, kind, scope)` triple,
     or `None` if the pair is unsupported. Mirrors the prior
     `_list_json._slot_dir` helper.
+
+    This returns the PRIMARY slot only. For (harness, kind) pairs with alias
+    targets (e.g. `(pi, agent)` which is mirrored at `~/.agents/`), use
+    `slot_dirs()` instead.
     """
     home = Path(os.environ.get("HOME", ""))
     if scope == "user":
@@ -144,3 +164,30 @@ def slot_dir(
         return Path(tmpl.format(home=str(home))) if tmpl else None
     rel = _PROJECT_TARGETS.get((harness, kind))
     return (project_root / rel) if rel else None
+
+
+def slot_dirs(
+    harness: str,
+    kind: str,
+    scope: str,
+    project_root: Path,
+) -> list[Path]:
+    """Return all slot directories for a `(harness, kind, scope)` triple —
+    the primary first, then any aliases.
+
+    Returns `[]` when the pair is unsupported at this scope. Used by code that
+    must write to / read from EVERY known slot (linker, unlinker, list, doctor)
+    rather than just the primary.
+    """
+    primary = slot_dir(harness, kind, scope, project_root)
+    if primary is None:
+        return []
+    home = Path(os.environ.get("HOME", ""))
+    out: list[Path] = [primary]
+    if scope == "user":
+        for tmpl in _USER_TARGET_ALIASES.get((harness, kind), []):
+            out.append(Path(tmpl.format(home=str(home))))
+    else:
+        for rel in _PROJECT_TARGET_ALIASES.get((harness, kind), []):
+            out.append(project_root / rel)
+    return out

@@ -18,6 +18,7 @@ from agent_toolkit_cli.commands._link_lib import (
     _prune_translated_slot,
     format_summary,
     harness_target_dir,
+    harness_target_dirs,
     iter_plan_lines,
     project_from_file,
     validate_harness,
@@ -159,40 +160,40 @@ def _do_all(scope, harness, toolkit_root, project_root, dry_run):
     for kind in KINDS_FOR_PROJECTION:
         if not is_supported(harness, kind, scope=scope):
             continue
-        target_dir = harness_target_dir(harness, kind, scope, project_root)
-        if not target_dir.is_dir():
-            continue
-        for entry in target_dir.iterdir():
-            if entry.is_symlink():
-                raw_target = os.readlink(entry)
-                # Mirrors bash `case "$target" in "$toolkit_root"/*)` — raw string
-                # prefix match. Intentionally diverges from
-                # _link_lib._prune_if_into_repo, which resolves symlinks; this path
-                # is byte-faithful to the bash version.
-                toolkit_prefix = str(toolkit_root)
-                if raw_target == toolkit_prefix or raw_target.startswith(toolkit_prefix + "/"):
-                    if dry_run:
-                        print(f"would-unlink: {entry}", file=sys.stdout)
-                        counters.would_unlink += 1
+        for target_dir in harness_target_dirs(harness, kind, scope, project_root):
+            if not target_dir.is_dir():
+                continue
+            for entry in target_dir.iterdir():
+                if entry.is_symlink():
+                    raw_target = os.readlink(entry)
+                    # Mirrors bash `case "$target" in "$toolkit_root"/*)` — raw string
+                    # prefix match. Intentionally diverges from
+                    # _link_lib._prune_if_into_repo, which resolves symlinks; this path
+                    # is byte-faithful to the bash version.
+                    toolkit_prefix = str(toolkit_root)
+                    if raw_target == toolkit_prefix or raw_target.startswith(toolkit_prefix + "/"):
+                        if dry_run:
+                            print(f"would-unlink: {entry}", file=sys.stdout)
+                            counters.would_unlink += 1
+                        else:
+                            entry.unlink()
+                            counters.removed += 1
                     else:
-                        entry.unlink()
-                        counters.removed += 1
-                else:
-                    # For translated slots, the symlink points into the per-scope
-                    # cache rather than into the toolkit root — sweep those too.
+                        # For translated slots, the symlink points into the per-scope
+                        # cache rather than into the toolkit root — sweep those too.
+                        _prune_translated_slot(
+                            entry, harness, scope, project_root,
+                            dry_run, counters, sys.stdout,
+                        )
+                elif entry.is_dir():
+                    # The dir-with-file-symlink translate layout (e.g. opencode skill)
+                    # leaves a real directory at the slot whose children include a
+                    # file symlink into the cache. Hand the directory to the prune
+                    # helper; it detects the layout and cleans up.
                     _prune_translated_slot(
                         entry, harness, scope, project_root,
                         dry_run, counters, sys.stdout,
                     )
-            elif entry.is_dir():
-                # The dir-with-file-symlink translate layout (e.g. opencode skill)
-                # leaves a real directory at the slot whose children include a
-                # file symlink into the cache. Hand the directory to the prune
-                # helper; it detects the layout and cleans up.
-                _prune_translated_slot(
-                    entry, harness, scope, project_root,
-                    dry_run, counters, sys.stdout,
-                )
 
     removed = counters.would_unlink if dry_run else counters.removed
     if dry_run:
