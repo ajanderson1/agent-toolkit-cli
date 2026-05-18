@@ -15,8 +15,12 @@ the code disagree.
   `~/.codex/config.toml`). Used for MCPs and any kind that registers via
   config rather than file drop-in.
 - **plugin_folder** — adapter owns a whole subfolder (e.g.
-  `~/.claude/plugins/agent-toolkit/`). Currently unused; reserved for future
-  kinds that own a directory rather than a config file.
+  `~/.claude/plugins/agent-toolkit/`). Currently used for MCPs in Claude.
+- **config_file+folder** — adapter both mutates a single named config file
+  AND owns a managed sub-folder of artefacts. Both surfaces commit or
+  rollback together via one `diff()` call. Used for codex hooks (script
+  files under `~/.codex/agent-toolkit-hooks/<slug>/` plus `[hooks]`
+  entries in `~/.codex/config.toml`).
 - **translate** — generate a per-harness flavored file in a CLI-managed
   cache (`~/.config/opencode/.agent-toolkit-cache/` for user scope), then
   symlink the harness slot to the cache file. Used when the harness expects
@@ -48,9 +52,9 @@ human readers can trace any cache file back to its source asset.
 | Kind \\ Harness | Claude | Codex | OpenCode | Pi |
 |---|---|---|---|---|
 | **skill** | symlink → `~/.claude/skills/<slug>/` | translate → `~/.codex/skills/<slug>/SKILL.md` (cache: `~/.codex/.agent-toolkit-cache/skill/<slug>/SKILL.md`) — emits codex-shaped frontmatter with top-level `description` and `agent_toolkit` wrapper block. NOTE: `~/.codex/skills/` is the **deprecated-but-loaded** path per `codex-rs/core-skills/src/loader.rs`; the canonical user path is `~/.agents/skills/<slug>/SKILL.md`. CLI migration pending | translate → `~/.config/opencode/skills/<slug>/SKILL.md` (cache: `~/.config/opencode/.agent-toolkit-cache/skill/<slug>/SKILL.md`) — slot is a real directory containing a file symlink to the cache; emits opencode-shaped frontmatter with top-level `name` and `description` plus `agent_toolkit` wrapper block | symlink → `~/.pi/agent/skills/<slug>/` (Pi also auto-discovers `~/.agents/skills/` and ancestor `.agents/skills/` — cross-harness convergence point) |
-| **agent** | symlink → `~/.claude/agents/<slug>.md` | unsupported (gap) — Codex now supports `~/.codex/agents/<name>.toml` (TOML, not Markdown) since `developers.openai.com/codex/subagents`; CLI translate adapter pending | translate → `~/.config/opencode/agents/<slug>.md` (cache: `~/.config/opencode/.agent-toolkit-cache/agent/<slug>.md`) — injects `mode: subagent` and strips toolkit wrapper frontmatter | symlink → `~/.pi/agent/agents/<slug>.md` (also auto-loaded from `~/.agents/<slug>.md` by the `pi-subagents` extension; both paths are read) |
+| **agent** | symlink → `~/.claude/agents/<slug>.md` | unsupported (by design) — Codex's `[agents]` config surface (added in CLI 0.128.0) is for harness-internal agent declarations, not toolkit-shape agents (markdown body + frontmatter). Refined per #56. | translate → `~/.config/opencode/agents/<slug>.md` (cache: `~/.config/opencode/.agent-toolkit-cache/agent/<slug>.md`) — injects `mode: subagent` and strips toolkit wrapper frontmatter | symlink → `~/.pi/agent/agents/<slug>.md` (also auto-loaded from `~/.agents/<slug>.md` by the `pi-subagents` extension; both paths are read) |
 | **command** | symlink → `~/.claude/commands/<slug>.md` | unsupported (by design) — Codex has no `~/.codex/commands/` drop-in; user "commands" surface as skills invoked via `$skill-name` mention or implicit description match | translate → `~/.config/opencode/commands/<slug>.md` (cache: `~/.config/opencode/.agent-toolkit-cache/command/<slug>.md`) — emits OpenCode-shaped frontmatter (optional `description`, `agent`, `model`, `subtask` — all optional) plus `agent_toolkit` wrapper block | unsupported (by design) — Pi has no command concept |
-| **hook** | symlink → `~/.claude/hooks/<slug>.<ext>` (storage convention only — Claude does not auto-discover this directory; hooks must be referenced from `settings.json` via `$CLAUDE_PROJECT_DIR/.claude/hooks/...`) | unsupported (gap) — stable in Codex v0.125.0 (2026-04-24) via `[hooks]` in `~/.codex/config.toml` or `~/.codex/hooks.json`; CLI config_file adapter pending | unsupported (by design) — OpenCode hooks live inside TS plugin files (`tool.execute.before`, `session.created`, `session.error`, etc.); not drop-in markdown | unsupported (by design) — Pi has no hooks API at the user level |
+| **hook** | symlink → `~/.claude/hooks/<slug>.<ext>` (storage convention only — Claude does not auto-discover this directory; hooks must be referenced from `settings.json` via `$CLAUDE_PROJECT_DIR/.claude/hooks/...`) | config_file+folder → `~/.codex/config.toml` `[hooks]` + `~/.codex/agent-toolkit-hooks/<slug>/` | unsupported (by design) — OpenCode hooks live inside TS plugin files (`tool.execute.before`, `session.created`, `session.error`, etc.); not drop-in markdown | unsupported (by design) — Pi has no hooks API at the user level |
 | **plugin** | symlink → `~/.claude/plugins/<slug>/` | unsupported (by design) — Codex plugins are bundles with `.codex-plugin/plugin.json` manifests, installed via `codex plugin marketplace add` (different concept and install path from Claude markdown plugins) | unsupported (by design) — OpenCode plugins are TS/JS files at `~/.config/opencode/plugins/` or npm packages declared in `config.json` (different concept entirely) | unsupported (by design) — Pi extends via `pi-extension`, not a plugin concept |
 | **mcp** | config_file → `~/.claude.json` `mcpServers.<name>` (NOT `~/.claude/settings.json`; user/local servers both stored in `~/.claude.json`; project scope is checked-in `.mcp.json`) | config_file → `~/.codex/config.toml` `[mcp_servers.<name>]` (TOML; stdio fields `command`/`args`/`env`). **Adapter stdio-only** (`codex.py:43-49` raises `CannotInstall` for non-stdio), even though Codex's schema accepts HTTP `url`/`http_headers`/`bearer_token_env_var` | config_file → `~/.config/opencode/opencode.json` `mcp.<name>` (uses `type` discriminator: `local` with `command` as ARRAY and `environment` (NOT `env`); or `remote` with `url`+`headers`) | unsupported (by design) — Pi has no MCP concept |
 | **pi-extension** | unsupported (by design) | unsupported (by design) | unsupported (by design) | symlink → `~/.pi/agent/extensions/<slug>/` |
@@ -133,17 +137,20 @@ not meaningful). Per kind:
   These are not gaps the toolkit can close — they're four genuinely
   different extension models that happen to share the word "plugin".
 
-- **hook** has by-design and gap flavors mixed:
+- **hook** has by-design and supported flavors mixed:
   - **By design** for Pi (no hooks API at all) and OpenCode (hook
     *behavior* exists but is expressed inside TypeScript plugin files,
     `tool.execute.before`, `session.error`, `session.created`, etc. —
     not as drop-in markdown).
-  - **Gap** for Codex: hooks went stable in v0.125.0 (2026-04-24).
-    Configured via `[hooks]` table in `~/.codex/config.toml` or via a
-    standalone `~/.codex/hooks.json`. Events: `SessionStart`,
+  - **Supported** for Codex via the `config_file+folder` adapter:
+    hooks went stable in v0.125.0 (2026-04-24). Configured via
+    `[hooks]` table in `~/.codex/config.toml`. Events: `SessionStart`,
     `PreToolUse`, `PostToolUse`, `PermissionRequest`,
-    `UserPromptSubmit`, `Stop`. Plugin bundles can also ship
-    `hooks/hooks.json`. CLI config_file adapter pending.
+    `UserPromptSubmit`, `Stop`. The CLI vendors hook scripts under
+    `~/.codex/agent-toolkit-hooks/<slug>/` and writes corresponding
+    `[hooks]` entries that reference them. Plugin bundles can also ship
+    `hooks/hooks.json` — toolkit-managed hooks live alongside, not
+    inside, plugin bundles.
   - For Claude: hooks ARE user-level but the slot directory
     `~/.claude/hooks/` is a *script-storage convention*, not an
     auto-discovery path — Claude reads hooks from JSON in
@@ -218,11 +225,13 @@ under [pi_extensions] or run `agent-toolkit link user pi pi-extension:pi-subagen
 
 ## How to add a new pair
 
-1. Decide the mechanism (symlink, config_file, plugin_folder, translate).
+1. Decide the mechanism (symlink, config_file, config_file+folder, plugin_folder, translate).
 2. For symlink: add to `_USER_TARGETS` and `_PROJECT_TARGETS` in
    `src/agent_toolkit/_support.py`.
-3. For config_file or plugin_folder: implement an adapter under
+3. For config_file, config_file+folder, or plugin_folder: implement an adapter under
    `src/agent_toolkit/harness_adapters/<harness>.py`.
+   - For config_file+folder: also add a `_USER_TARGETS` row pointing to the managed
+     sub-folder path, so the dispatcher knows where to chmod +x the hooks.
 4. Update this matrix.
 5. The parity test (`tests/test_harness_matrix.py`) will fail until both
    sides agree.

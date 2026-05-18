@@ -1,0 +1,15 @@
+# A hand-rolled config with comments + mcp_servers + hooks (mix of managed + user-owned).
+model = "o4-mini"
+
+[mcp_servers.context7]
+command = "npx"
+args = ["-y", "@upstash/context7-mcp"]
+
+# User-owned hook — adapter must not touch this entry.
+[[hooks.PreToolUse]]
+matcher = "^Bash$"
+
+[[hooks.PreToolUse.hooks]]
+type = "command"
+command = "/usr/local/bin/my-bash-guard.sh"
+timeout = 5

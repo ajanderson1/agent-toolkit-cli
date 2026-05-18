@@ -138,7 +138,10 @@ def _path_is_inside_submodule(path: Path, toolkit_root: Path, submodule_paths: l
 
 def _slug_for(kind: str, path: Path, root: Path) -> str | None:
     if kind == "hook":
-        # hooks/confirm-rm.meta.yaml → "confirm-rm"
+        # Subdirectory layout: hooks/<slug>/.meta.yaml → "<slug>" (from parent dir).
+        # Flat layout: hooks/confirm-rm.meta.yaml → "confirm-rm" (from filename).
+        if path.name == ".meta.yaml":
+            return path.parent.name or None
         return path.name.removesuffix(".meta.yaml") or None
     if kind in {"skill", "mcp", "pi-extension"}:
         # skills/<...>/<slug>/SKILL.md → "<slug>" (last directory component)

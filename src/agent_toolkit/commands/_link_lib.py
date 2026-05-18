@@ -449,7 +449,8 @@ def project_from_file(
             mcp_allowed_slugs = list(allowed.get(section, []))
 
             from agent_toolkit.commands._mcp_dispatch import (  # noqa: PLC0415
-                _build_mcp_entries, apply_link,
+                _build_mcp_entries,
+                apply_link as apply_mcp_link,
             )
             from agent_toolkit.harness_adapters import get_adapter  # noqa: PLC0415
             from agent_toolkit.harness_adapters.base import (  # noqa: PLC0415
@@ -474,7 +475,7 @@ def project_from_file(
 
             entries = _build_mcp_entries(toolkit_root, mcp_allowed_slugs)
             try:
-                apply_link(
+                apply_mcp_link(
                     adapter,
                     scope=scope,
                     project_root=project_root,
@@ -485,6 +486,45 @@ def project_from_file(
                 )
             except CannotInstall as exc:
                 # Per-entry refusal: print a warning and continue with siblings.
+                print(f"warning: {exc}", file=stdout)
+                continue
+            continue
+        if kind == "hook":
+            section = kind_to_section(kind)
+            hook_allowed_slugs = list(allowed.get(section, []))
+
+            from agent_toolkit.commands._hook_dispatch import (  # noqa: PLC0415
+                _build_hook_entries,
+                apply_link as apply_hook_link,
+            )
+            from agent_toolkit.harness_adapters import get_adapter  # noqa: PLC0415
+            from agent_toolkit.harness_adapters.base import (  # noqa: PLC0415
+                CannotInstall, UnimplementedAdapter,
+            )
+
+            adapter = get_adapter(harness, kind="hook")
+            if isinstance(adapter, UnimplementedAdapter):
+                if hook_allowed_slugs:
+                    print(adapter.skip_message(), file=stdout)
+                continue
+
+            if previous_allowed is not None:
+                prev_hooks = set(previous_allowed.get(section) or [])
+            else:
+                prev_hooks = set(hook_allowed_slugs)
+
+            entries = _build_hook_entries(toolkit_root, hook_allowed_slugs)
+            try:
+                apply_hook_link(
+                    adapter,
+                    scope=scope,
+                    project_root=project_root,
+                    entries=entries,
+                    dry_run=dry_run,
+                    stdout=stdout,
+                    previously_allowed=prev_hooks,
+                )
+            except CannotInstall as exc:
                 print(f"warning: {exc}", file=stdout)
                 continue
             continue

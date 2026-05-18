@@ -156,6 +156,90 @@ def _build_inventory(
                     "allowlisted": proj_allowlisted,
                 })
                 continue
+            if asset.kind == "hook":
+                # Status comes from the per-harness hook adapter when available.
+                # Cells for UnimplementedAdapter harnesses keep "unsupported".
+                from agent_toolkit.commands._hook_dispatch import _build_hook_entries  # noqa: PLC0415
+                from agent_toolkit.harness_adapters import get_adapter  # noqa: PLC0415
+                from agent_toolkit.harness_adapters.base import (  # noqa: PLC0415
+                    UnimplementedAdapter,
+                )
+
+                hook_adapter = get_adapter(h, kind="hook")
+                if isinstance(hook_adapter, UnimplementedAdapter):
+                    cells.append({
+                        "harness": h, "scope": "user",
+                        "status": "unsupported", "target": None,
+                        "allowlisted": user_allowlisted,
+                    })
+                    cells.append({
+                        "harness": h, "scope": "project",
+                        "status": "unsupported", "target": None,
+                        "allowlisted": proj_allowlisted,
+                    })
+                    continue
+
+                # Build the HookEntry for this slug; pass to adapter for status checks.
+                resolved_hooks = _build_hook_entries(toolkit_root, [asset.slug])
+                hook_entry = resolved_hooks[0] if resolved_hooks else None
+
+                for scope, allowlisted in (
+                    ("user", user_allowlisted),
+                    ("project", proj_allowlisted),
+                ):
+                    target_path = hook_adapter.config_target(scope, project_root)
+                    if target_path is None:
+                        # Scope not supported by this adapter (e.g. project scope).
+                        cells.append({
+                            "harness": h, "scope": scope,
+                            "status": "unsupported", "target": None,
+                            "allowlisted": allowlisted,
+                        })
+                        continue
+
+                    installed_slugs = hook_adapter.list_installed(scope, project_root)
+                    is_installed = asset.slug in installed_slugs
+
+                    if hook_entry is None:
+                        cells.append({
+                            "harness": h, "scope": scope,
+                            "status": "unsupported", "target": None,
+                            "allowlisted": allowlisted,
+                        })
+                        continue
+
+                    if not allowlisted:
+                        if is_installed:
+                            cells.append({
+                                "harness": h, "scope": scope,
+                                "status": "installed-not-allowlisted",
+                                "target": str(target_path),
+                                "allowlisted": False,
+                            })
+                        else:
+                            cells.append({
+                                "harness": h, "scope": scope,
+                                "status": "unsupported", "target": None,
+                                "allowlisted": False,
+                            })
+                        continue
+
+                    if not is_installed:
+                        cells.append({
+                            "harness": h, "scope": scope,
+                            "status": "unlinked-allowlisted", "target": None,
+                            "allowlisted": True,
+                        })
+                        continue
+
+                    drifted = hook_adapter.entry_drift(scope, project_root, hook_entry)
+                    cells.append({
+                        "harness": h, "scope": scope,
+                        "status": "linked-drifted" if drifted else "linked-matches",
+                        "target": str(target_path),
+                        "allowlisted": True,
+                    })
+                continue
             if asset.kind == "mcp":
                 # Status comes from the per-harness adapter when available.
                 # Cells for UnimplementedAdapter harnesses keep "unsupported".

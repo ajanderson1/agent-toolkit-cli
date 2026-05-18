@@ -27,6 +27,7 @@ _USER_TARGETS: dict[tuple[str, str], str] = {
     ("claude", "hook"):        "{home}/.claude/hooks",
     ("claude", "plugin"):      "{home}/.claude/plugins",
     ("codex", "skill"):        "{home}/.codex/skills",
+    ("codex", "hook"):         "{home}/.codex/agent-toolkit-hooks",  # config_file+folder
     ("opencode", "skill"):     "{home}/.config/opencode/skills",
     ("opencode", "agent"):     "{home}/.config/opencode/agents",
     ("opencode", "command"):   "{home}/.config/opencode/commands",

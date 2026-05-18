@@ -1,14 +1,15 @@
 """Base types and Protocols for harness MCP adapters.
 
-Two strategy Protocols (PluginFolderAdapter, ConfigFileAdapter) plus a common
-base. Adapters implement exactly one strategy.
+Three strategy Protocols (PluginFolderAdapter, ConfigFileAdapter,
+ConfigFileFolderAdapter) plus a common base. Adapters implement exactly
+one strategy.
 
 See docs/superpowers/specs/2026-05-04-mcp-adapters-design.md § "Two Protocols"
 for the rationale.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal, Protocol, runtime_checkable
 
@@ -27,6 +28,26 @@ class McpEntry:
     name: str
     inner_config: dict
     mcp_spec: dict
+
+
+@dataclass(frozen=True)
+class HookEntry:
+    """One hook asset, ready for adapter consumption.
+
+    `name` is the asset slug (the canonical id).
+    `events` is the tuple of Codex hook events this asset binds to.
+    `command` is the absolute path the [hooks] handler will reference
+    (under script_root/<slug>/, materialised by the dispatcher).
+    `script_files` maps absolute destination paths to their byte contents.
+    """
+    name: str
+    events: tuple[str, ...]
+    command: str
+    matcher: str | None = None
+    timeout: int | None = None
+    async_: bool = False
+    status_message: str | None = None
+    script_files: dict[Path, bytes] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -90,6 +111,34 @@ class ConfigFileAdapter(Protocol):
         scope: Scope,
         project_root: Path,
         entries: list[McpEntry],
+        *,
+        previously_allowed: set[str] = frozenset(),
+    ) -> list[WriteAction]: ...
+
+
+@runtime_checkable
+class ConfigFileFolderAdapter(Protocol):
+    """Hybrid strategy: own a folder of artefacts AND mutate a single config file.
+
+    Adapter materialises files under `script_root` and surgically edits
+    `config_target`. Both are mutated in one `diff()` call so they commit
+    or rollback together.
+    """
+
+    name: str
+    strategy: Literal["config_file+folder"]
+
+    def can_install(self, entry: HookEntry) -> None: ...
+    def list_installed(self, scope: Scope, project_root: Path) -> set[str]: ...
+    def entry_drift(self, scope: Scope, project_root: Path, entry: HookEntry) -> bool: ...
+    def config_target(self, scope: Scope, project_root: Path) -> Path | None: ...
+    def script_root(self, scope: Scope, project_root: Path) -> Path | None: ...
+    def render(self, entries: list[HookEntry]) -> dict[Path, bytes]: ...
+    def diff(
+        self,
+        scope: Scope,
+        project_root: Path,
+        entries: list[HookEntry],
         *,
         previously_allowed: set[str] = frozenset(),
     ) -> list[WriteAction]: ...

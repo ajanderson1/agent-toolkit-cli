@@ -266,6 +266,31 @@ def _seed_mcp_toolkit(toolkit: Path, harnesses: list[str], *, has_args: bool = T
     )
 
 
+def _seed_hook_toolkit(toolkit: Path, harnesses: list[str]) -> None:
+    """Set up toolkit dir with demo-hook for the given harnesses."""
+    import shutil
+    (toolkit / "schemas").mkdir(parents=True, exist_ok=True)
+    schema_src = Path(__file__).resolve().parents[1] / "schemas" / "asset-frontmatter.v1alpha2.json"
+    (toolkit / "schemas" / "asset-frontmatter.v1alpha2.json").write_text(schema_src.read_text())
+    (toolkit / ".agent-toolkit-source").write_text("")
+
+    # Copy the demo hook fixture to the toolkit.
+    fixture_src = Path(__file__).resolve().parent / "_fixtures" / "hook_assets" / "codex-demo"
+    hook_dir = toolkit / "hooks" / "demo-hook"
+    hook_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(fixture_src, hook_dir, dirs_exist_ok=True)
+
+    # Create the README.md with frontmatter.
+    harness_lines = "\n".join(f"    - {h}" for h in harnesses)
+    (hook_dir / "README.md").write_text(
+        "---\napiVersion: agent-toolkit/v1alpha2\n"
+        "metadata:\n  name: demo-hook\n  description: Demo hook.\n  kind: hook\n  lifecycle: experimental\n"
+        "spec:\n  origin: first-party\n  vendored_via: none\n  harnesses:\n"
+        f"{harness_lines}\n"
+        "  hook:\n    events: [PreToolUse]\n    command: check.sh\n    matcher: \"^Bash$\"\n    timeout: 10\n---\n"
+    )
+
+
 def test_list_json_mcp_codex_linked_matches_after_link(tmp_path, monkeypatch):
     """After linking, the codex/user cell reports linked-matches with the target path."""
     from agent_toolkit.cli import main
@@ -447,6 +472,103 @@ def test_list_json_mcp_claude_unsupported(tmp_path, monkeypatch):
     user_claude = next(c for c in mcp["cells"]
                        if c["harness"] == "claude" and c["scope"] == "user")
     assert user_claude["status"] == "unsupported"
+
+
+# ---------------------------------------------------------------------------
+# Hook four-glyph status tests (codex adapter)
+# ---------------------------------------------------------------------------
+
+
+def test_list_json_hook_codex_linked_drifted_after_handedit(tmp_path, monkeypatch):
+    """Allow-listed + installed + config/script drift → linked-drifted."""
+    from agent_toolkit.cli import main
+
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / ".codex").mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.delenv("AGENT_TOOLKIT_REPO", raising=False)
+
+    toolkit = tmp_path / "toolkit"
+    _seed_hook_toolkit(toolkit, ["codex"])
+
+    project = tmp_path / "project"
+    project.mkdir()
+
+    runner = CliRunner()
+    # Link first.
+    rl = runner.invoke(
+        main,
+        ["link", "user", "codex", "hook:demo-hook",
+         "--toolkit-repo", str(toolkit), "--project", str(project)],
+    )
+    assert rl.exit_code == 0, rl.output
+
+    # Hand-edit the config to introduce drift (e.g., change the timeout).
+    target = home / ".codex" / "config.toml"
+    text = target.read_text()
+    # Mutate the config to introduce drift: change timeout from 10 to 20.
+    modified_text = text.replace("timeout = 10", "timeout = 20")
+    target.write_text(modified_text)
+
+    # Re-read state.
+    r = runner.invoke(
+        main,
+        ["list", "--format", "json", "--toolkit-repo", str(toolkit), "--project", str(project)],
+    )
+    assert r.exit_code == 0, r.output
+    data = json.loads(r.output)
+    [hook] = [a for a in data["assets"] if a["kind"] == "hook"]
+    user_codex = next(c for c in hook["cells"]
+                      if c["harness"] == "codex" and c["scope"] == "user")
+    assert user_codex["status"] == "linked-drifted"
+
+
+def test_list_json_hook_codex_installed_not_allowlisted(tmp_path, monkeypatch):
+    """Hand-installed hook + absent from allow-list → installed-not-allowlisted."""
+    from agent_toolkit.cli import main
+
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / ".codex").mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.delenv("AGENT_TOOLKIT_REPO", raising=False)
+
+    toolkit = tmp_path / "toolkit"
+    _seed_hook_toolkit(toolkit, ["codex"])
+
+    # Manually install a hook (script under agent-toolkit-hooks and config entry, without allowlisting).
+    scripts_dir = home / ".codex" / "agent-toolkit-hooks" / "demo-hook"
+    scripts_dir.mkdir(parents=True)
+    (scripts_dir / "check.sh").write_text("#!/bin/bash\necho installed\n")
+
+    target = home / ".codex" / "config.toml"
+    target.write_text(
+        "[[hooks.PreToolUse]]\n"
+        "name = \"demo-hook\"\n"
+        "command = \"agent-toolkit-hooks/demo-hook/check.sh\"\n"
+        "matcher = \"^Bash$\"\n"
+        "timeout = 10\n"
+    )
+
+    # No allow-list at all.
+
+    project = tmp_path / "project"
+    project.mkdir()
+
+    runner = CliRunner()
+    r = runner.invoke(
+        main,
+        ["list", "--format", "json", "--toolkit-repo", str(toolkit), "--project", str(project)],
+    )
+    assert r.exit_code == 0, r.output
+    data = json.loads(r.output)
+    [hook] = [a for a in data["assets"] if a["kind"] == "hook"]
+    user_codex = next(c for c in hook["cells"]
+                      if c["harness"] == "codex" and c["scope"] == "user")
+    assert user_codex["status"] == "installed-not-allowlisted"
+    assert user_codex["target"] == str(target)
+    assert user_codex["allowlisted"] is False
 
 
 def test_cell_status_pi_agent_project_scope_is_unsupported(tmp_path):

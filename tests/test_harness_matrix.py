@@ -34,6 +34,7 @@ VALID_MECHANISMS = frozenset(
     [
         "symlink",
         "config_file",
+        "config_file+folder",
         "plugin_folder",
         "translate",
         "unsupported (gap)",
@@ -213,12 +214,15 @@ class TestSymlinkParity:
         )
 
     def test_every_user_target_entry_has_symlink_cell(self, matrix):
-        """Every (harness, kind) in _USER_TARGETS must have a 'symlink' or
-        'translate' cell in the doc.
+        """Every (harness, kind) in _USER_TARGETS must have a 'symlink',
+        'translate', or 'config_file+folder' cell in the doc.
 
         Translate cells land in _USER_TARGETS because they share the same slot
         directories; only the projection mechanism differs (cache + symlink
-        instead of direct symlink). Both mechanism strings are valid here.
+        instead of direct symlink). config_file+folder cells also land in
+        _USER_TARGETS because the adapter manages a sub-folder of artefacts
+        alongside the config file — the folder path is tracked here. All three
+        mechanism strings are valid here.
         """
         bad: list[tuple[str, str, str]] = []
         for (harness, kind) in sorted(_USER_TARGETS.keys()):
@@ -227,12 +231,18 @@ class TestSymlinkParity:
                 bad.append((harness, kind, "pair not found in matrix at all"))
                 continue
             mech = _cell_mechanism(cell)
-            if mech not in {"symlink", "translate"}:
+            if mech not in {"symlink", "translate", "config_file+folder"}:
                 bad.append(
-                    (harness, kind, f"doc says {mech!r}, expected 'symlink' or 'translate'")
+                    (
+                        harness,
+                        kind,
+                        f"doc says {mech!r}, expected 'symlink', 'translate', or "
+                        "'config_file+folder'",
+                    )
                 )
         assert not bad, (
-            "_USER_TARGETS has entries the doc does not mark as 'symlink' or 'translate':\n"
+            "_USER_TARGETS has entries the doc does not mark as 'symlink', 'translate', "
+            "or 'config_file+folder':\n"
             + "\n".join(
                 f"  ({h!r}, {k!r}): {reason}" for h, k, reason in bad
             )
@@ -243,14 +253,14 @@ class TestAdapterParity:
     def test_config_file_and_plugin_folder_cells_have_real_adapters(self, matrix):
         """Every cell marked config_file or plugin_folder must have an
         implemented adapter (not UnimplementedAdapter)."""
-        adapter_mechanisms = {"config_file", "plugin_folder"}
+        adapter_mechanisms = {"config_file", "plugin_folder", "config_file+folder"}
         bad: list[tuple[str, str, str, str]] = []
         for (harness, kind), cell in sorted(matrix.items()):
             mech = _cell_mechanism(cell)
             if mech not in adapter_mechanisms:
                 continue
             try:
-                adapter = get_adapter(harness)
+                adapter = get_adapter(harness, kind)
             except ValueError as exc:
                 bad.append((harness, kind, cell, f"get_adapter raised: {exc}"))
                 continue
@@ -275,14 +285,14 @@ class TestAdapterParity:
     def test_adapter_strategy_matches_doc_cell(self, matrix):
         """When a real adapter exists, its .strategy attribute must match the
         mechanism string in the doc cell."""
-        adapter_mechanisms = {"config_file", "plugin_folder"}
+        adapter_mechanisms = {"config_file", "plugin_folder", "config_file+folder"}
         bad: list[tuple[str, str, str, str]] = []
         for (harness, kind), cell in sorted(matrix.items()):
             mech = _cell_mechanism(cell)
             if mech not in adapter_mechanisms:
                 continue
             try:
-                adapter = get_adapter(harness)
+                adapter = get_adapter(harness, kind)
             except ValueError:
                 continue  # already caught above
             if isinstance(adapter, UnimplementedAdapter):
