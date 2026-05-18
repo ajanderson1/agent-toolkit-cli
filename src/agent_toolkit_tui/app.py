@@ -16,6 +16,7 @@ from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Button, DataTable, Footer, Header, Input, Label, Static
 
+from agent_toolkit_cli._repo_resolution import RepoNotFoundError, resolve_toolkit_root
 from agent_toolkit_tui import __version__
 from agent_toolkit_tui.messages import (
     AssetToggled,
@@ -346,8 +347,10 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         prog="agent-toolkit-tui",
         description="Textual cockpit for agent-toolkit.",
     )
-    p.add_argument("--toolkit-repo", dest="toolkit_repo", type=Path, default=Path.cwd(),
-                   help="Path to the agent-toolkit repo (default: current directory).")
+    p.add_argument("--toolkit-repo", dest="toolkit_repo", type=Path, default=None,
+                   help="Path to the agent-toolkit repo "
+                        "(default: $AGENT_TOOLKIT_REPO, walk-up .agent-toolkit-source, "
+                        "or ~/GitHub/agent-toolkit/).")
     p.add_argument("--headless", action="store_true",
                    help="Don't launch the UI; apply --plan and exit.")
     p.add_argument("--plan", type=Path, default=None,
@@ -383,7 +386,11 @@ def _read_plan(path: Path) -> list[tuple[str, str]]:
 
 def main() -> int:
     args = _parse_args(sys.argv[1:])
-    toolkit_root = args.toolkit_repo.resolve()
+    try:
+        toolkit_root = resolve_toolkit_root(args.toolkit_repo)
+    except RepoNotFoundError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
 
     if args.headless:
         if args.plan is None:

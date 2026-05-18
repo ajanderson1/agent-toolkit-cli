@@ -22,6 +22,9 @@ def test_read_plan_skips_comments_and_blanks(tmp_path: Path):
 
 
 def test_main_headless_dry_run_returns_zero(tmp_path: Path, monkeypatch):
+    (tmp_path / ".agent-toolkit-source").write_text("")
+    (tmp_path / "schemas").mkdir()
+    (tmp_path / "schemas" / "asset-frontmatter.v1alpha2.json").write_text("{}")
     plan = tmp_path / "p.txt"
     plan.write_text("skill:alpha\n")
     fake_argv = ["prog", "--headless", "--toolkit-repo", str(tmp_path),
