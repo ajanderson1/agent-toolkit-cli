@@ -54,7 +54,7 @@ The whole design follows from these:
 
 ### Components
 
-#### Schema (`src/agent_toolkit/_schemas/asset-frontmatter.v1alpha1.json` → bumps to `v1alpha2`)
+#### Schema (`src/agent_toolkit_cli/_schemas/asset-frontmatter.v1alpha1.json` → bumps to `v1alpha2`)
 
 Adds optional `metadata.kind` (with walker-derived fallback when absent — chosen to avoid forcing a migration of every existing skill/command/agent file). When `kind == mcps`, `spec.mcp` is required (added under `properties.spec.properties` in the schema):
 
@@ -77,11 +77,11 @@ Adds optional `metadata.kind` (with walker-derived fallback when absent — chos
 
 Both `transport` and `install_method` are required so adapters can dispatch correctly without inspecting the inner `config.json`. The `env` list is declarative — used by `doctor` for env-var presence checks.
 
-#### Walker (`src/agent_toolkit/walker.py`)
+#### Walker (`src/agent_toolkit_cli/walker.py`)
 
 Adds `mcps` to recognized kinds. Each MCP asset record carries `mcp_spec` (parsed frontmatter under `spec.mcp`) and `inner_config` (the verbatim contents of `mcps/<name>/config.json`).
 
-#### Harness adapters (`src/agent_toolkit/harness_adapters/`)
+#### Harness adapters (`src/agent_toolkit_cli/harness_adapters/`)
 
 New package. One module per harness plus a base `Protocol`:
 

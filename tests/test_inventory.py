@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from agent_toolkit.inventory import render_inventory, render_asset_card
+from agent_toolkit_cli.inventory import render_inventory, render_asset_card
 
 
 def _write_skill(tmp_path: Path, slug: str, *, lifecycle: str = "stable",
@@ -157,7 +157,7 @@ def test_render_asset_card_lists_other_harnesses(tmp_path):
 
 def test_inventory_cli_full_mode(tmp_path):
     from click.testing import CliRunner
-    from agent_toolkit.cli import main
+    from agent_toolkit_cli.cli import main
     _write_skill(tmp_path, "alpha")
     runner = CliRunner()
     result = runner.invoke(main, ["inventory", "--toolkit-repo", str(tmp_path)])
@@ -167,7 +167,7 @@ def test_inventory_cli_full_mode(tmp_path):
 
 def test_inventory_cli_kind_filter(tmp_path):
     from click.testing import CliRunner
-    from agent_toolkit.cli import main
+    from agent_toolkit_cli.cli import main
     _write_skill(tmp_path, "alpha")
     runner = CliRunner()
     result = runner.invoke(main, ["inventory", "skill", "--toolkit-repo", str(tmp_path)])
@@ -177,7 +177,7 @@ def test_inventory_cli_kind_filter(tmp_path):
 
 def test_inventory_cli_slug_zoom(tmp_path):
     from click.testing import CliRunner
-    from agent_toolkit.cli import main
+    from agent_toolkit_cli.cli import main
     _write_skill(tmp_path, "alpha", description="Alpha example.")
     runner = CliRunner()
     result = runner.invoke(main, ["inventory", "alpha", "--toolkit-repo", str(tmp_path)])
@@ -188,7 +188,7 @@ def test_inventory_cli_slug_zoom(tmp_path):
 
 def test_inventory_cli_unknown_slug_exits_nonzero(tmp_path):
     from click.testing import CliRunner
-    from agent_toolkit.cli import main
+    from agent_toolkit_cli.cli import main
     _write_skill(tmp_path, "alpha")
     runner = CliRunner()
     result = runner.invoke(main, ["inventory", "ghost", "--toolkit-repo", str(tmp_path)])

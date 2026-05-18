@@ -6,7 +6,7 @@
 
 ## Background
 
-PR #14 fixed the production-code side of GIT_* env leaks: `agent_toolkit.ingest.finalize._auto_commit` now scrubs `GIT_DIR`/`GIT_INDEX_FILE`/`GIT_WORK_TREE` before `subprocess.run(["git", "commit", ...])`. PR #15 (which closed #9) shipped a band-aid: `pytestmark = pytest.mark.skip(...)` at the top of `tests/test_ingest_finalize.py`, taking both tests out of the suite to stop them corrupting the host repo when run under lefthook pre-commit.
+PR #14 fixed the production-code side of GIT_* env leaks: `agent_toolkit_cli.ingest.finalize._auto_commit` now scrubs `GIT_DIR`/`GIT_INDEX_FILE`/`GIT_WORK_TREE` before `subprocess.run(["git", "commit", ...])`. PR #15 (which closed #9) shipped a band-aid: `pytestmark = pytest.mark.skip(...)` at the top of `tests/test_ingest_finalize.py`, taking both tests out of the suite to stop them corrupting the host repo when run under lefthook pre-commit.
 
 Issue #24 is the follow-up: remove the skip, and make sure removing it is safe.
 

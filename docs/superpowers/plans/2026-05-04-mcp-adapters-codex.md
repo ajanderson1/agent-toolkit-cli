@@ -21,37 +21,37 @@
 
 **New package and modules:**
 
-- `src/agent_toolkit/harness_adapters/__init__.py` — exports `get_adapter(harness)` registry.
-- `src/agent_toolkit/harness_adapters/base.py` — `Scope`, `McpEntry`, `WriteAction`, `CannotInstall`, the two `Protocol`s, and the unimplemented-adapter sentinel `UnimplementedAdapter`.
-- `src/agent_toolkit/harness_adapters/codex.py` — full `ConfigFileAdapter` implementation backed by `tomlkit`.
-- `src/agent_toolkit/harness_adapters/claude.py` — placeholder raising in `__init__`; `get_adapter("claude")` returns `UnimplementedAdapter("claude")`.
-- `src/agent_toolkit/harness_adapters/opencode.py` — same placeholder treatment.
-- `src/agent_toolkit/harness_adapters/pi.py` — same placeholder treatment.
-- `src/agent_toolkit/commands/_mcp_dispatch.py` — `apply_link()`, `_atomic_write_bytes()`, `_atomic_delete()`, the loud-print helpers, and `_build_mcp_entries()` (slug → `McpEntry` resolver).
+- `src/agent_toolkit_cli/harness_adapters/__init__.py` — exports `get_adapter(harness)` registry.
+- `src/agent_toolkit_cli/harness_adapters/base.py` — `Scope`, `McpEntry`, `WriteAction`, `CannotInstall`, the two `Protocol`s, and the unimplemented-adapter sentinel `UnimplementedAdapter`.
+- `src/agent_toolkit_cli/harness_adapters/codex.py` — full `ConfigFileAdapter` implementation backed by `tomlkit`.
+- `src/agent_toolkit_cli/harness_adapters/claude.py` — placeholder raising in `__init__`; `get_adapter("claude")` returns `UnimplementedAdapter("claude")`.
+- `src/agent_toolkit_cli/harness_adapters/opencode.py` — same placeholder treatment.
+- `src/agent_toolkit_cli/harness_adapters/pi.py` — same placeholder treatment.
+- `src/agent_toolkit_cli/commands/_mcp_dispatch.py` — `apply_link()`, `_atomic_write_bytes()`, `_atomic_delete()`, the loud-print helpers, and `_build_mcp_entries()` (slug → `McpEntry` resolver).
 
 **Schema files:**
 
-- Create: `src/agent_toolkit/_schemas/asset-frontmatter.v1alpha2.json` — full replacement schema (see Task 2 for content).
+- Create: `src/agent_toolkit_cli/_schemas/asset-frontmatter.v1alpha2.json` — full replacement schema (see Task 2 for content).
 - Create: `schemas/asset-frontmatter.v1alpha2.json` (repo SSOT alongside the bundled package copy).
-- Delete: `src/agent_toolkit/_schemas/asset-frontmatter.v1alpha1.json`.
+- Delete: `src/agent_toolkit_cli/_schemas/asset-frontmatter.v1alpha1.json`.
 - Delete: `schemas/asset-frontmatter.v1alpha1.json`.
 
 **Modified files:**
 
 - `pyproject.toml` — add `tomlkit>=0.13` to dependencies; bump `force-include` schema entry to v1alpha2.
-- `src/agent_toolkit/schema.py:20` — load v1alpha2 schema; pass walker-derived kind into validator.
-- `src/agent_toolkit/_repo_resolution.py:26` — bump `_SCHEMA` constant.
-- `src/agent_toolkit/doctor/environment.py:14,18` — bump schema-presence check.
-- `src/agent_toolkit/doctor/per_resource.py:46` — update "v1alpha1 valid" finding string to "v1alpha2 valid".
-- `src/agent_toolkit/commands/new.py:24,79,95` — emit `apiVersion: agent-toolkit/v1alpha2` and add `mcp` branch.
-- `src/agent_toolkit/ingest/types.py:46` — bump emitted `apiVersion`.
+- `src/agent_toolkit_cli/schema.py:20` — load v1alpha2 schema; pass walker-derived kind into validator.
+- `src/agent_toolkit_cli/_repo_resolution.py:26` — bump `_SCHEMA` constant.
+- `src/agent_toolkit_cli/doctor/environment.py:14,18` — bump schema-presence check.
+- `src/agent_toolkit_cli/doctor/per_resource.py:46` — update "v1alpha1 valid" finding string to "v1alpha2 valid".
+- `src/agent_toolkit_cli/commands/new.py:24,79,95` — emit `apiVersion: agent-toolkit/v1alpha2` and add `mcp` branch.
+- `src/agent_toolkit_cli/ingest/types.py:46` — bump emitted `apiVersion`.
 - `tests/conftest.py:12,32,34` — bump fixture text and schema path.
-- `src/agent_toolkit/commands/_link_lib.py:212-223` — replace MCP no-op branch with adapter dispatch call.
-- `src/agent_toolkit/commands/_list_json.py:160-179` — replace MCP "unsupported" overload with four-glyph status; add MCP-aware target-resolution.
-- `src/agent_toolkit/commands/diff.py` (or new `_mcp_diff.py` helper) — extend to surface MCP would-writes via the adapter when the diff is on an MCP-capable harness.
-- `src/agent_toolkit/commands/doctor.py:23,90-99` — add `mcps` group.
-- New: `src/agent_toolkit/doctor/mcps.py` — drift/env/prereq/verify checks per allow-listed MCP.
-- `src/agent_toolkit/commands/fix.py` — add MCP-reconcile path (preserves AGENTS.md region-regen behaviour).
+- `src/agent_toolkit_cli/commands/_link_lib.py:212-223` — replace MCP no-op branch with adapter dispatch call.
+- `src/agent_toolkit_cli/commands/_list_json.py:160-179` — replace MCP "unsupported" overload with four-glyph status; add MCP-aware target-resolution.
+- `src/agent_toolkit_cli/commands/diff.py` (or new `_mcp_diff.py` helper) — extend to surface MCP would-writes via the adapter when the diff is on an MCP-capable harness.
+- `src/agent_toolkit_cli/commands/doctor.py:23,90-99` — add `mcps` group.
+- New: `src/agent_toolkit_cli/doctor/mcps.py` — drift/env/prereq/verify checks per allow-listed MCP.
+- `src/agent_toolkit_cli/commands/fix.py` — add MCP-reconcile path (preserves AGENTS.md region-regen behaviour).
 - `src/agent_toolkit_tui/widgets/asset_grid.py:13-18` — extend `_GLYPH` map with the four MCP statuses; treat `installed-not-allowlisted` as non-interactive.
 - `src/agent_toolkit_tui/state.py` — extend `CellStatus` literal with the four MCP states.
 
@@ -174,14 +174,14 @@ git commit -m "chore(deps): add tomlkit + phase-0 round-trip gate against codex 
 ## Task 1: Add the v1alpha2 schema file (additive, before deleting v1alpha1)
 
 **Files:**
-- Create: `src/agent_toolkit/_schemas/asset-frontmatter.v1alpha2.json`
+- Create: `src/agent_toolkit_cli/_schemas/asset-frontmatter.v1alpha2.json`
 - Create: `schemas/asset-frontmatter.v1alpha2.json` (repo-level SSOT copy)
 
 We add v1alpha2 first, switch the loader to it next task, then delete v1alpha1 last. Until the loader switches, both files coexist on disk with no consumer of v1alpha2.
 
 - [ ] **Step 1: Write the v1alpha2 schema**
 
-Create `src/agent_toolkit/_schemas/asset-frontmatter.v1alpha2.json`:
+Create `src/agent_toolkit_cli/_schemas/asset-frontmatter.v1alpha2.json`:
 
 ```json
 {
@@ -279,10 +279,10 @@ Note: The conditional "spec.mcp required iff kind==mcp" uses `metadata.kind`. Th
 Create `schemas/asset-frontmatter.v1alpha2.json` with the **same content** as the package copy.
 
 ```bash
-cp src/agent_toolkit/_schemas/asset-frontmatter.v1alpha2.json schemas/asset-frontmatter.v1alpha2.json
+cp src/agent_toolkit_cli/_schemas/asset-frontmatter.v1alpha2.json schemas/asset-frontmatter.v1alpha2.json
 ```
 
-Verify they match: `diff src/agent_toolkit/_schemas/asset-frontmatter.v1alpha2.json schemas/asset-frontmatter.v1alpha2.json` → no output.
+Verify they match: `diff src/agent_toolkit_cli/_schemas/asset-frontmatter.v1alpha2.json schemas/asset-frontmatter.v1alpha2.json` → no output.
 
 - [ ] **Step 3: Update `pyproject.toml` force-include**
 
@@ -290,8 +290,8 @@ In `pyproject.toml` find the `[tool.hatch.build.targets.wheel.force-include]` se
 
 ```toml
 [tool.hatch.build.targets.wheel.force-include]
-"src/agent_toolkit/_schemas/asset-frontmatter.v1alpha1.json" = "agent_toolkit/_schemas/asset-frontmatter.v1alpha1.json"
-"src/agent_toolkit/_schemas/asset-frontmatter.v1alpha2.json" = "agent_toolkit/_schemas/asset-frontmatter.v1alpha2.json"
+"src/agent_toolkit_cli/_schemas/asset-frontmatter.v1alpha1.json" = "agent_toolkit_cli/_schemas/asset-frontmatter.v1alpha1.json"
+"src/agent_toolkit_cli/_schemas/asset-frontmatter.v1alpha2.json" = "agent_toolkit_cli/_schemas/asset-frontmatter.v1alpha2.json"
 ```
 
 - [ ] **Step 4: Smoke-test schema is loadable**
@@ -302,7 +302,7 @@ Run:
 uv run python -c "
 import json
 from importlib.resources import files
-text = (files('agent_toolkit') / '_schemas' / 'asset-frontmatter.v1alpha2.json').read_text()
+text = (files('agent_toolkit_cli') / '_schemas' / 'asset-frontmatter.v1alpha2.json').read_text()
 schema = json.loads(text)
 print('apiVersion const:', schema['properties']['apiVersion']['const'])
 print('mcp block:', 'mcp' in schema['properties']['spec']['properties'])
@@ -319,7 +319,7 @@ mcp block: True
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/agent_toolkit/_schemas/asset-frontmatter.v1alpha2.json schemas/asset-frontmatter.v1alpha2.json pyproject.toml
+git add src/agent_toolkit_cli/_schemas/asset-frontmatter.v1alpha2.json schemas/asset-frontmatter.v1alpha2.json pyproject.toml
 git commit -m "feat(schema): add v1alpha2 schema (parallel to v1alpha1)"
 ```
 
@@ -328,7 +328,7 @@ git commit -m "feat(schema): add v1alpha2 schema (parallel to v1alpha1)"
 ## Task 2: Switch the validator to v1alpha2 + cross-check walker-derived kind
 
 **Files:**
-- Modify: `src/agent_toolkit/schema.py` (loader + cross-check rule)
+- Modify: `src/agent_toolkit_cli/schema.py` (loader + cross-check rule)
 - Test: `tests/test_validator.py`, `tests/test_schema.py`, `tests/test_validator_schema_path.py`
 
 The validator stops loading v1alpha1, loads v1alpha2 instead, and gains one extra rule: when frontmatter's `metadata.kind` is set, it must equal the walker-derived kind. If absent, the validator injects the walker-derived kind into the data dict before JSON-Schema validation so the conditional `spec.mcp required` rule fires correctly.
@@ -344,7 +344,7 @@ Replace any line containing `agent-toolkit/v1alpha1` with `agent-toolkit/v1alpha
 ```python
 def test_validator_loads_v1alpha2_schema(tmp_path):
     """The bundled schema is v1alpha2."""
-    from agent_toolkit.schema import Validator
+    from agent_toolkit_cli.schema import Validator
 
     v = Validator(toolkit_root=tmp_path)
     assert v.schema["properties"]["apiVersion"]["const"] == "agent-toolkit/v1alpha2"
@@ -353,8 +353,8 @@ def test_validator_loads_v1alpha2_schema(tmp_path):
 
 def test_validator_kind_mismatch_is_error(tmp_path):
     """If frontmatter declares metadata.kind, it must match walker-derived kind."""
-    from agent_toolkit.schema import Validator
-    from agent_toolkit.walker import Asset
+    from agent_toolkit_cli.schema import Validator
+    from agent_toolkit_cli.walker import Asset
 
     skills = tmp_path / "skills" / "alpha"
     skills.mkdir(parents=True)
@@ -380,8 +380,8 @@ def test_validator_kind_mismatch_is_error(tmp_path):
 
 def test_validator_mcp_requires_spec_mcp(tmp_path):
     """An MCP without spec.mcp fails validation."""
-    from agent_toolkit.schema import Validator
-    from agent_toolkit.walker import Asset
+    from agent_toolkit_cli.schema import Validator
+    from agent_toolkit_cli.walker import Asset
 
     mcp_dir = tmp_path / "mcps" / "context7"
     mcp_dir.mkdir(parents=True)
@@ -408,8 +408,8 @@ def test_validator_mcp_requires_spec_mcp(tmp_path):
 
 def test_validator_mcp_with_spec_mcp_passes(tmp_path):
     """An MCP with valid spec.mcp passes."""
-    from agent_toolkit.schema import Validator
-    from agent_toolkit.walker import Asset
+    from agent_toolkit_cli.schema import Validator
+    from agent_toolkit_cli.walker import Asset
 
     mcp_dir = tmp_path / "mcps" / "context7"
     mcp_dir.mkdir(parents=True)
@@ -439,8 +439,8 @@ def test_validator_mcp_with_spec_mcp_passes(tmp_path):
 
 def test_validator_skill_with_spec_mcp_is_error(tmp_path):
     """spec.mcp on a non-MCP asset is forbidden."""
-    from agent_toolkit.schema import Validator
-    from agent_toolkit.walker import Asset
+    from agent_toolkit_cli.schema import Validator
+    from agent_toolkit_cli.walker import Asset
 
     skills = tmp_path / "skills" / "alpha"
     skills.mkdir(parents=True)
@@ -477,7 +477,7 @@ Expected: FAIL — validator still loads v1alpha1.
 
 - [ ] **Step 3: Update `Validator` to load v1alpha2 and cross-check kind**
 
-Replace `src/agent_toolkit/schema.py` entirely:
+Replace `src/agent_toolkit_cli/schema.py` entirely:
 
 ```python
 """Validate asset frontmatter against the v1alpha2 JSON schema + cross-asset rules."""
@@ -490,7 +490,7 @@ from pathlib import Path
 import jsonschema
 import yaml
 
-from agent_toolkit.walker import Asset, extract_frontmatter, frontmatter_path
+from agent_toolkit_cli.walker import Asset, extract_frontmatter, frontmatter_path
 
 
 class Validator:
@@ -498,8 +498,8 @@ class Validator:
         self.toolkit_root = toolkit_root
         # Schema is the contract the CLI enforces; it ships with the CLI.
         # The toolkit repo holds the SSOT for humans, but the validator's runtime
-        # source of truth is the bundled copy in the agent_toolkit package.
-        schema_text = (files("agent_toolkit") / "_schemas" / "asset-frontmatter.v1alpha2.json").read_text()
+        # source of truth is the bundled copy in the agent_toolkit_cli package.
+        schema_text = (files("agent_toolkit_cli") / "_schemas" / "asset-frontmatter.v1alpha2.json").read_text()
         self.schema = json.loads(schema_text)
 
     def validate(self, asset: Asset) -> list[str]:
@@ -551,19 +551,19 @@ class Validator:
             return extract_frontmatter(fm_path)
         if asset.kind == "plugin":
             doc = json.loads(asset.path.read_text())
-            return doc.get("agent_toolkit")
+            return doc.get("agent_toolkit_cli")
         return None
 ```
 
 - [ ] **Step 4: Update `_repo_resolution.py`, `doctor/environment.py`, `doctor/per_resource.py`**
 
-In `src/agent_toolkit/_repo_resolution.py:26`, replace:
+In `src/agent_toolkit_cli/_repo_resolution.py:26`, replace:
 
 ```python
 _SCHEMA = "schemas/asset-frontmatter.v1alpha2.json"
 ```
 
-In `src/agent_toolkit/doctor/environment.py:14,18`, replace:
+In `src/agent_toolkit_cli/doctor/environment.py:14,18`, replace:
 
 ```python
     schema = toolkit_root / "schemas" / "asset-frontmatter.v1alpha2.json"
@@ -573,7 +573,7 @@ In `src/agent_toolkit/doctor/environment.py:14,18`, replace:
         findings.append("schema present at schemas/asset-frontmatter.v1alpha2.json")
 ```
 
-In `src/agent_toolkit/doctor/per_resource.py:46`, replace the `[OK] frontmatter v1alpha1 valid` literal with `[OK]   frontmatter   v1alpha2 valid`.
+In `src/agent_toolkit_cli/doctor/per_resource.py:46`, replace the `[OK] frontmatter v1alpha1 valid` literal with `[OK]   frontmatter   v1alpha2 valid`.
 
 - [ ] **Step 5: Run tests to verify they pass**
 
@@ -583,7 +583,7 @@ Expected: PASS for those files. Other tests (`test_check.py`, `test_cli_*`) will
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/agent_toolkit/schema.py src/agent_toolkit/_repo_resolution.py src/agent_toolkit/doctor/environment.py src/agent_toolkit/doctor/per_resource.py tests/test_validator.py tests/test_validator_schema_path.py tests/test_schema.py
+git add src/agent_toolkit_cli/schema.py src/agent_toolkit_cli/_repo_resolution.py src/agent_toolkit_cli/doctor/environment.py src/agent_toolkit_cli/doctor/per_resource.py tests/test_validator.py tests/test_validator_schema_path.py tests/test_schema.py
 git commit -m "feat(schema): load v1alpha2; cross-check walker-derived kind; require spec.mcp for mcps"
 ```
 
@@ -595,9 +595,9 @@ git commit -m "feat(schema): load v1alpha2; cross-check walker-derived kind; req
 - Modify: `tests/conftest.py:12,32,34` — fixture text + schema path.
 - Modify: `tests/test_walker.py` — fixture text (any v1alpha1 strings → v1alpha2).
 - Modify: `tests/test_cli_link.py`, `tests/test_cli_unlink.py`, `tests/test_cli_list.py`, `tests/test_cli_diff.py`, `tests/test_check.py`, `tests/test_doctor_*.py`, `tests/test_link_lib.py`, `tests/test_list_json.py`, `tests/test_pi_extension.py`, `tests/test_inventory.py`, `tests/test_fix.py`, `tests/test_check_conventions_drift.py` — bump every fixture string `agent-toolkit/v1alpha1` → `agent-toolkit/v1alpha2`.
-- Modify: `src/agent_toolkit/commands/new.py` — emit v1alpha2; add `mcp` branch.
-- Modify: `src/agent_toolkit/ingest/types.py:46` — emit v1alpha2.
-- Delete: `src/agent_toolkit/_schemas/asset-frontmatter.v1alpha1.json`.
+- Modify: `src/agent_toolkit_cli/commands/new.py` — emit v1alpha2; add `mcp` branch.
+- Modify: `src/agent_toolkit_cli/ingest/types.py:46` — emit v1alpha2.
+- Delete: `src/agent_toolkit_cli/_schemas/asset-frontmatter.v1alpha1.json`.
 - Delete: `schemas/asset-frontmatter.v1alpha1.json`.
 - Modify: `pyproject.toml` — drop the v1alpha1 force-include line.
 
@@ -613,9 +613,9 @@ grep -rln 'agent-toolkit/v1alpha1' src tests
 
 Read each match. For each file, replace `agent-toolkit/v1alpha1` with `agent-toolkit/v1alpha2`.
 
-If the file is `src/agent_toolkit/commands/new.py`, also handle the `mcp` branch — see Step 2.
+If the file is `src/agent_toolkit_cli/commands/new.py`, also handle the `mcp` branch — see Step 2.
 
-If the file is `src/agent_toolkit/ingest/types.py`, change `"apiVersion": "agent-toolkit/v1alpha1"` to `"apiVersion": "agent-toolkit/v1alpha2"` at line 46.
+If the file is `src/agent_toolkit_cli/ingest/types.py`, change `"apiVersion": "agent-toolkit/v1alpha1"` to `"apiVersion": "agent-toolkit/v1alpha2"` at line 46.
 
 If the file is `tests/conftest.py`, update **two** things:
 - Line ~12 `apiVersion: agent-toolkit/v1alpha1` in `SKILL_FRONTMATTER` → `agent-toolkit/v1alpha2`.
@@ -623,7 +623,7 @@ If the file is `tests/conftest.py`, update **two** things:
 
 - [ ] **Step 2: Update `commands/new.py` to emit v1alpha2 and add an `mcp` branch**
 
-Read `src/agent_toolkit/commands/new.py` first. Then edit:
+Read `src/agent_toolkit_cli/commands/new.py` first. Then edit:
 
 In `_KIND_LAYOUT` (line ~12), change the `mcp` entry to use `config.json` (matching walker reality, not `mcp.json`):
 
@@ -720,7 +720,7 @@ Read it first. Bump any v1alpha1 strings to v1alpha2. Add a test for the new `mc
 ```python
 def test_new_mcp_writes_readme_and_config(tmp_path):
     from click.testing import CliRunner
-    from agent_toolkit.cli import main
+    from agent_toolkit_cli.cli import main
 
     (tmp_path / "schemas").mkdir()
     src_schema = Path(__file__).parent.parent / "schemas" / "asset-frontmatter.v1alpha2.json"
@@ -756,7 +756,7 @@ If anything else fails, the failure is missed v1alpha1 strings — re-run `grep 
 - [ ] **Step 6: Delete v1alpha1 schema files and force-include line**
 
 ```bash
-rm src/agent_toolkit/_schemas/asset-frontmatter.v1alpha1.json
+rm src/agent_toolkit_cli/_schemas/asset-frontmatter.v1alpha1.json
 rm schemas/asset-frontmatter.v1alpha1.json
 ```
 
@@ -764,7 +764,7 @@ In `pyproject.toml`, delete the v1alpha1 line:
 
 ```toml
 [tool.hatch.build.targets.wheel.force-include]
-"src/agent_toolkit/_schemas/asset-frontmatter.v1alpha2.json" = "agent_toolkit/_schemas/asset-frontmatter.v1alpha2.json"
+"src/agent_toolkit_cli/_schemas/asset-frontmatter.v1alpha2.json" = "agent_toolkit_cli/_schemas/asset-frontmatter.v1alpha2.json"
 ```
 
 - [ ] **Step 7: Confirm no v1alpha1 references remain**
@@ -794,12 +794,12 @@ git commit -m "feat(schema): migrate fixtures + new + ingest to v1alpha2; delete
 ## Task 4: Adapter package skeleton — types, Protocols, registry
 
 **Files:**
-- Create: `src/agent_toolkit/harness_adapters/__init__.py`
-- Create: `src/agent_toolkit/harness_adapters/base.py`
-- Create: `src/agent_toolkit/harness_adapters/codex.py` (stub raising `NotImplementedError`)
-- Create: `src/agent_toolkit/harness_adapters/claude.py` (UnimplementedAdapter)
-- Create: `src/agent_toolkit/harness_adapters/opencode.py` (UnimplementedAdapter)
-- Create: `src/agent_toolkit/harness_adapters/pi.py` (UnimplementedAdapter)
+- Create: `src/agent_toolkit_cli/harness_adapters/__init__.py`
+- Create: `src/agent_toolkit_cli/harness_adapters/base.py`
+- Create: `src/agent_toolkit_cli/harness_adapters/codex.py` (stub raising `NotImplementedError`)
+- Create: `src/agent_toolkit_cli/harness_adapters/claude.py` (UnimplementedAdapter)
+- Create: `src/agent_toolkit_cli/harness_adapters/opencode.py` (UnimplementedAdapter)
+- Create: `src/agent_toolkit_cli/harness_adapters/pi.py` (UnimplementedAdapter)
 - Create: `tests/test_mcp_adapters_base.py`
 
 This task lays out the package shape but ships only types, the registry, and the `UnimplementedAdapter` stub. Codex's full implementation lands in Task 5.
@@ -818,7 +818,7 @@ import pytest
 
 
 def test_get_adapter_returns_codex_adapter():
-    from agent_toolkit.harness_adapters import get_adapter
+    from agent_toolkit_cli.harness_adapters import get_adapter
 
     a = get_adapter("codex")
     assert a.name == "codex"
@@ -826,7 +826,7 @@ def test_get_adapter_returns_codex_adapter():
 
 
 def test_get_adapter_unknown_harness_raises():
-    from agent_toolkit.harness_adapters import get_adapter
+    from agent_toolkit_cli.harness_adapters import get_adapter
 
     with pytest.raises(ValueError, match="unknown harness"):
         get_adapter("nonexistent")
@@ -834,8 +834,8 @@ def test_get_adapter_unknown_harness_raises():
 
 def test_get_adapter_returns_unimplemented_for_pending_harnesses():
     """Claude/OpenCode/Pi return UnimplementedAdapter until their PRs land."""
-    from agent_toolkit.harness_adapters import get_adapter
-    from agent_toolkit.harness_adapters.base import UnimplementedAdapter
+    from agent_toolkit_cli.harness_adapters import get_adapter
+    from agent_toolkit_cli.harness_adapters.base import UnimplementedAdapter
 
     for h in ("claude", "opencode", "pi"):
         a = get_adapter(h)
@@ -845,7 +845,7 @@ def test_get_adapter_returns_unimplemented_for_pending_harnesses():
 
 def test_unimplemented_adapter_skip_message():
     """UnimplementedAdapter exposes a stable message for the loud-skip path."""
-    from agent_toolkit.harness_adapters.base import UnimplementedAdapter
+    from agent_toolkit_cli.harness_adapters.base import UnimplementedAdapter
 
     a = UnimplementedAdapter("claude")
     assert "claude" in a.skip_message()
@@ -854,7 +854,7 @@ def test_unimplemented_adapter_skip_message():
 
 def test_mcp_entry_dataclass_is_frozen():
     """McpEntry must be hashable (frozen) for set membership in callers."""
-    from agent_toolkit.harness_adapters.base import McpEntry
+    from agent_toolkit_cli.harness_adapters.base import McpEntry
 
     e1 = McpEntry(name="x", inner_config={"a": 1}, mcp_spec={"transport": "stdio"})
     with pytest.raises((AttributeError, Exception)):
@@ -863,7 +863,7 @@ def test_mcp_entry_dataclass_is_frozen():
 
 def test_write_action_carries_contents_for_writes():
     """WriteAction for create/update carries `contents` bytes; delete has None."""
-    from agent_toolkit.harness_adapters.base import WriteAction
+    from agent_toolkit_cli.harness_adapters.base import WriteAction
 
     a = WriteAction(
         path=Path("/tmp/x"), op="create", bytes_before=None, bytes_after=10,
@@ -880,7 +880,7 @@ def test_write_action_carries_contents_for_writes():
 
 def test_cannot_install_is_exception():
     """CannotInstall is a regular exception."""
-    from agent_toolkit.harness_adapters.base import CannotInstall
+    from agent_toolkit_cli.harness_adapters.base import CannotInstall
 
     with pytest.raises(CannotInstall, match="bad-mcp"):
         raise CannotInstall("bad-mcp: transport http unsupported")
@@ -889,11 +889,11 @@ def test_cannot_install_is_exception():
 - [ ] **Step 2: Run the test to verify it fails**
 
 Run: `uv run pytest tests/test_mcp_adapters_base.py -v`
-Expected: FAIL — `agent_toolkit.harness_adapters` does not exist.
+Expected: FAIL — `agent_toolkit_cli.harness_adapters` does not exist.
 
 - [ ] **Step 3: Write `harness_adapters/base.py`**
 
-Create `src/agent_toolkit/harness_adapters/base.py`:
+Create `src/agent_toolkit_cli/harness_adapters/base.py`:
 
 ```python
 """Base types and Protocols for harness MCP adapters.
@@ -1002,7 +1002,7 @@ class UnimplementedAdapter:
 
 - [ ] **Step 4: Write each per-harness module stub**
 
-Create `src/agent_toolkit/harness_adapters/codex.py`:
+Create `src/agent_toolkit_cli/harness_adapters/codex.py`:
 
 ```python
 """Codex MCP adapter — ConfigFileAdapter against ~/.codex/config.toml.
@@ -1023,21 +1023,21 @@ class CodexAdapter:
         )
 ```
 
-Create `src/agent_toolkit/harness_adapters/claude.py`:
+Create `src/agent_toolkit_cli/harness_adapters/claude.py`:
 
 ```python
 """Claude MCP adapter — placeholder until CLI-PR-2 ships."""
 # Intentionally empty. get_adapter("claude") returns UnimplementedAdapter.
 ```
 
-Create `src/agent_toolkit/harness_adapters/opencode.py`:
+Create `src/agent_toolkit_cli/harness_adapters/opencode.py`:
 
 ```python
 """OpenCode MCP adapter — placeholder until CLI-PR-3 ships."""
 # Intentionally empty. get_adapter("opencode") returns UnimplementedAdapter.
 ```
 
-Create `src/agent_toolkit/harness_adapters/pi.py`:
+Create `src/agent_toolkit_cli/harness_adapters/pi.py`:
 
 ```python
 """Pi MCP adapter — placeholder until CLI-PR-4 ships."""
@@ -1046,7 +1046,7 @@ Create `src/agent_toolkit/harness_adapters/pi.py`:
 
 - [ ] **Step 5: Write the registry in `__init__.py`**
 
-Create `src/agent_toolkit/harness_adapters/__init__.py`:
+Create `src/agent_toolkit_cli/harness_adapters/__init__.py`:
 
 ```python
 """Registry: get_adapter(harness) → adapter instance.
@@ -1056,7 +1056,7 @@ import individual adapter modules.
 """
 from __future__ import annotations
 
-from agent_toolkit.harness_adapters.base import (
+from agent_toolkit_cli.harness_adapters.base import (
     CannotInstall,
     ConfigFileAdapter,
     McpEntry,
@@ -1081,7 +1081,7 @@ def get_adapter(harness: str):
     if harness == "codex":
         # Lazy import so the dependency on tomlkit (and any future codex deps)
         # only loads when the codex adapter is actually requested.
-        from agent_toolkit.harness_adapters.codex import CodexAdapter
+        from agent_toolkit_cli.harness_adapters.codex import CodexAdapter
         return CodexAdapter()
     return UnimplementedAdapter(harness)
 
@@ -1113,7 +1113,7 @@ Expected: PASS (with the xfail marked).
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/agent_toolkit/harness_adapters tests/test_mcp_adapters_base.py
+git add src/agent_toolkit_cli/harness_adapters tests/test_mcp_adapters_base.py
 git commit -m "feat(adapters): scaffold harness_adapters package + base Protocols + registry"
 ```
 
@@ -1122,7 +1122,7 @@ git commit -m "feat(adapters): scaffold harness_adapters package + base Protocol
 ## Task 5: Codex adapter — full implementation
 
 **Files:**
-- Modify: `src/agent_toolkit/harness_adapters/codex.py` (replace stub)
+- Modify: `src/agent_toolkit_cli/harness_adapters/codex.py` (replace stub)
 - Test: `tests/test_mcp_adapters_codex.py`
 
 The Codex adapter implements `ConfigFileAdapter`. It mutates `[mcp_servers.<name>]` tables in `~/.codex/config.toml` (user) or `<project>/.codex/config.toml` (project, only if dir exists). Round-trip via `tomlkit`. Refuses MCPs with `transport != "stdio"`.
@@ -1144,7 +1144,7 @@ import pytest
 def _make_entry(name: str = "context7", *, transport: str = "stdio",
                 command: str = "npx", args: list[str] | None = None,
                 env: dict[str, str] | None = None) -> "McpEntry":
-    from agent_toolkit.harness_adapters.base import McpEntry
+    from agent_toolkit_cli.harness_adapters.base import McpEntry
 
     inner: dict = {"command": command}
     if args is not None:
@@ -1159,7 +1159,7 @@ def _make_entry(name: str = "context7", *, transport: str = "stdio",
 
 
 def test_codex_adapter_basic_attrs():
-    from agent_toolkit.harness_adapters.codex import CodexAdapter
+    from agent_toolkit_cli.harness_adapters.codex import CodexAdapter
 
     a = CodexAdapter()
     assert a.name == "codex"
@@ -1167,7 +1167,7 @@ def test_codex_adapter_basic_attrs():
 
 
 def test_codex_user_config_target(monkeypatch, tmp_path):
-    from agent_toolkit.harness_adapters.codex import CodexAdapter
+    from agent_toolkit_cli.harness_adapters.codex import CodexAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     a = CodexAdapter()
@@ -1176,7 +1176,7 @@ def test_codex_user_config_target(monkeypatch, tmp_path):
 
 def test_codex_project_config_target_requires_dir(tmp_path):
     """Project target only set when .codex/ exists in project_root."""
-    from agent_toolkit.harness_adapters.codex import CodexAdapter
+    from agent_toolkit_cli.harness_adapters.codex import CodexAdapter
 
     proj = tmp_path / "p"
     proj.mkdir()
@@ -1189,15 +1189,15 @@ def test_codex_project_config_target_requires_dir(tmp_path):
 
 
 def test_codex_can_install_accepts_stdio():
-    from agent_toolkit.harness_adapters.codex import CodexAdapter
+    from agent_toolkit_cli.harness_adapters.codex import CodexAdapter
 
     a = CodexAdapter()
     a.can_install(_make_entry(transport="stdio"))  # no exception
 
 
 def test_codex_can_install_refuses_http():
-    from agent_toolkit.harness_adapters.codex import CodexAdapter
-    from agent_toolkit.harness_adapters.base import CannotInstall
+    from agent_toolkit_cli.harness_adapters.codex import CodexAdapter
+    from agent_toolkit_cli.harness_adapters.base import CannotInstall
 
     a = CodexAdapter()
     with pytest.raises(CannotInstall, match="stdio"):
@@ -1206,7 +1206,7 @@ def test_codex_can_install_refuses_http():
 
 def test_codex_diff_creates_file_when_missing(monkeypatch, tmp_path):
     """No config.toml on disk → one create-action with rendered bytes."""
-    from agent_toolkit.harness_adapters.codex import CodexAdapter
+    from agent_toolkit_cli.harness_adapters.codex import CodexAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     a = CodexAdapter()
@@ -1228,7 +1228,7 @@ def test_codex_diff_creates_file_when_missing(monkeypatch, tmp_path):
 
 def test_codex_diff_updates_existing_file(monkeypatch, tmp_path):
     """Adding a new MCP to a file with existing content yields one update-action."""
-    from agent_toolkit.harness_adapters.codex import CodexAdapter
+    from agent_toolkit_cli.harness_adapters.codex import CodexAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".codex" / "config.toml"
@@ -1256,7 +1256,7 @@ def test_codex_diff_updates_existing_file(monkeypatch, tmp_path):
 
 def test_codex_diff_unchanged_when_aligned(monkeypatch, tmp_path):
     """If on-disk already matches the desired render, diff returns []."""
-    from agent_toolkit.harness_adapters.codex import CodexAdapter
+    from agent_toolkit_cli.harness_adapters.codex import CodexAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".codex" / "config.toml"
@@ -1276,7 +1276,7 @@ def test_codex_diff_unchanged_when_aligned(monkeypatch, tmp_path):
 
 def test_codex_unlink_removes_one_entry_preserving_siblings(monkeypatch, tmp_path):
     """unlink() = re-render with entry absent. Siblings remain byte-equal."""
-    from agent_toolkit.harness_adapters.codex import CodexAdapter
+    from agent_toolkit_cli.harness_adapters.codex import CodexAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".codex" / "config.toml"
@@ -1313,7 +1313,7 @@ def test_codex_link_unlink_round_trip_byte_equal(monkeypatch, tmp_path):
     """AC #8: source with comments + unknown sections + hand-rolled MCP →
     link an unrelated MCP → unlink it → byte-equal to source.
     """
-    from agent_toolkit.harness_adapters.codex import CodexAdapter
+    from agent_toolkit_cli.harness_adapters.codex import CodexAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".codex" / "config.toml"
@@ -1356,7 +1356,7 @@ def test_codex_link_unlink_round_trip_byte_equal(monkeypatch, tmp_path):
 
 def test_codex_list_installed_returns_managed_entry_names(monkeypatch, tmp_path):
     """list_installed enumerates [mcp_servers.X] tables present in the file."""
-    from agent_toolkit.harness_adapters.codex import CodexAdapter
+    from agent_toolkit_cli.harness_adapters.codex import CodexAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".codex" / "config.toml"
@@ -1373,7 +1373,7 @@ def test_codex_list_installed_returns_managed_entry_names(monkeypatch, tmp_path)
 
 
 def test_codex_list_installed_missing_file_returns_empty(monkeypatch, tmp_path):
-    from agent_toolkit.harness_adapters.codex import CodexAdapter
+    from agent_toolkit_cli.harness_adapters.codex import CodexAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     (tmp_path / ".codex").mkdir()
@@ -1382,7 +1382,7 @@ def test_codex_list_installed_missing_file_returns_empty(monkeypatch, tmp_path):
 
 
 def test_codex_entry_drift_false_when_aligned(monkeypatch, tmp_path):
-    from agent_toolkit.harness_adapters.codex import CodexAdapter
+    from agent_toolkit_cli.harness_adapters.codex import CodexAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".codex" / "config.toml"
@@ -1396,7 +1396,7 @@ def test_codex_entry_drift_false_when_aligned(monkeypatch, tmp_path):
 
 
 def test_codex_entry_drift_true_after_hand_edit(monkeypatch, tmp_path):
-    from agent_toolkit.harness_adapters.codex import CodexAdapter
+    from agent_toolkit_cli.harness_adapters.codex import CodexAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".codex" / "config.toml"
@@ -1422,7 +1422,7 @@ Expected: FAIL — `CodexAdapter.__init__` raises `NotImplementedError`.
 
 - [ ] **Step 3: Implement `CodexAdapter`**
 
-Replace `src/agent_toolkit/harness_adapters/codex.py` entirely:
+Replace `src/agent_toolkit_cli/harness_adapters/codex.py` entirely:
 
 ```python
 """Codex MCP adapter — ConfigFileAdapter against ~/.codex/config.toml.
@@ -1443,7 +1443,7 @@ import tomlkit
 from tomlkit import TOMLDocument, table
 from tomlkit.items import Table
 
-from agent_toolkit.harness_adapters.base import (
+from agent_toolkit_cli.harness_adapters.base import (
     CannotInstall,
     McpEntry,
     Scope,
@@ -1646,7 +1646,7 @@ If `test_codex_link_unlink_round_trip_byte_equal` FAILs:
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/agent_toolkit/harness_adapters/codex.py tests/test_mcp_adapters_codex.py tests/test_mcp_adapters_base.py
+git add src/agent_toolkit_cli/harness_adapters/codex.py tests/test_mcp_adapters_codex.py tests/test_mcp_adapters_base.py
 git commit -m "feat(adapters): codex ConfigFileAdapter — tomlkit round-trip, AC#1-3,8"
 ```
 
@@ -1655,7 +1655,7 @@ git commit -m "feat(adapters): codex ConfigFileAdapter — tomlkit round-trip, A
 ## Task 6: Dispatcher — `apply_link`, atomic write, loud-print contract, `_build_mcp_entries`
 
 **Files:**
-- Create: `src/agent_toolkit/commands/_mcp_dispatch.py`
+- Create: `src/agent_toolkit_cli/commands/_mcp_dispatch.py`
 - Test: `tests/test_mcp_dispatch.py`
 
 The dispatcher is the only code that **writes**. Adapters render bytes; the dispatcher writes bytes atomically and emits the loud-print lines.
@@ -1706,7 +1706,7 @@ def _seed_mcp(toolkit_root: Path, slug: str = "context7", *,
 
 
 def test_build_mcp_entries_resolves_slug_to_mcpentry(tmp_path):
-    from agent_toolkit.commands._mcp_dispatch import _build_mcp_entries
+    from agent_toolkit_cli.commands._mcp_dispatch import _build_mcp_entries
 
     _seed_mcp(tmp_path, "context7", args=["-y", "@upstash/context7-mcp"])
     entries = _build_mcp_entries(tmp_path, ["context7"])
@@ -1718,7 +1718,7 @@ def test_build_mcp_entries_resolves_slug_to_mcpentry(tmp_path):
 
 
 def test_build_mcp_entries_skips_unknown_slug(tmp_path):
-    from agent_toolkit.commands._mcp_dispatch import _build_mcp_entries
+    from agent_toolkit_cli.commands._mcp_dispatch import _build_mcp_entries
 
     _seed_mcp(tmp_path, "context7")
     entries = _build_mcp_entries(tmp_path, ["context7", "does-not-exist"])
@@ -1727,8 +1727,8 @@ def test_build_mcp_entries_skips_unknown_slug(tmp_path):
 
 
 def test_apply_link_dry_run_prints_would_op_no_write(monkeypatch, tmp_path):
-    from agent_toolkit.commands._mcp_dispatch import _build_mcp_entries, apply_link
-    from agent_toolkit.harness_adapters import get_adapter
+    from agent_toolkit_cli.commands._mcp_dispatch import _build_mcp_entries, apply_link
+    from agent_toolkit_cli.harness_adapters import get_adapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     (tmp_path / ".codex").mkdir()
@@ -1753,8 +1753,8 @@ def test_apply_link_dry_run_prints_would_op_no_write(monkeypatch, tmp_path):
 
 def test_apply_link_real_run_writes_atomically_and_prints_loud(monkeypatch, tmp_path):
     """Real run: writes bytes, prints `→ creating ...` then `✓ created ...`."""
-    from agent_toolkit.commands._mcp_dispatch import _build_mcp_entries, apply_link
-    from agent_toolkit.harness_adapters import get_adapter
+    from agent_toolkit_cli.commands._mcp_dispatch import _build_mcp_entries, apply_link
+    from agent_toolkit_cli.harness_adapters import get_adapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     (tmp_path / ".codex").mkdir()
@@ -1781,8 +1781,8 @@ def test_apply_link_real_run_writes_atomically_and_prints_loud(monkeypatch, tmp_
 
 
 def test_apply_link_update_prints_byte_delta(monkeypatch, tmp_path):
-    from agent_toolkit.commands._mcp_dispatch import _build_mcp_entries, apply_link
-    from agent_toolkit.harness_adapters import get_adapter
+    from agent_toolkit_cli.commands._mcp_dispatch import _build_mcp_entries, apply_link
+    from agent_toolkit_cli.harness_adapters import get_adapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     (tmp_path / ".codex").mkdir()
@@ -1805,8 +1805,8 @@ def test_apply_link_update_prints_byte_delta(monkeypatch, tmp_path):
 
 def test_apply_link_unchanged_prints_nothing(monkeypatch, tmp_path):
     """When already in sync, no pre/post print, no write."""
-    from agent_toolkit.commands._mcp_dispatch import _build_mcp_entries, apply_link
-    from agent_toolkit.harness_adapters import get_adapter
+    from agent_toolkit_cli.commands._mcp_dispatch import _build_mcp_entries, apply_link
+    from agent_toolkit_cli.harness_adapters import get_adapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     (tmp_path / ".codex").mkdir()
@@ -1834,9 +1834,9 @@ def test_apply_link_unchanged_prints_nothing(monkeypatch, tmp_path):
 def test_apply_link_raises_on_cannot_install(monkeypatch, tmp_path):
     """Adapter.can_install raising CannotInstall propagates up; caller (link.py)
     is responsible for catching to skip just the offending entry."""
-    from agent_toolkit.commands._mcp_dispatch import _build_mcp_entries, apply_link
-    from agent_toolkit.harness_adapters import get_adapter
-    from agent_toolkit.harness_adapters.base import CannotInstall
+    from agent_toolkit_cli.commands._mcp_dispatch import _build_mcp_entries, apply_link
+    from agent_toolkit_cli.harness_adapters import get_adapter
+    from agent_toolkit_cli.harness_adapters.base import CannotInstall
 
     monkeypatch.setenv("HOME", str(tmp_path))
     (tmp_path / ".codex").mkdir()
@@ -1853,7 +1853,7 @@ def test_apply_link_raises_on_cannot_install(monkeypatch, tmp_path):
 
 def test_atomic_write_uses_same_directory_temp_file(monkeypatch, tmp_path):
     """Atomic-write helper writes to a temp file in target.parent then replaces."""
-    from agent_toolkit.commands._mcp_dispatch import _atomic_write_bytes
+    from agent_toolkit_cli.commands._mcp_dispatch import _atomic_write_bytes
 
     target = tmp_path / "out.toml"
     payload = b"hello\n"
@@ -1871,7 +1871,7 @@ Expected: FAIL — module doesn't exist.
 
 - [ ] **Step 3: Implement the dispatcher**
 
-Create `src/agent_toolkit/commands/_mcp_dispatch.py`:
+Create `src/agent_toolkit_cli/commands/_mcp_dispatch.py`:
 
 ```python
 """Dispatcher: orchestrates adapter.diff() output into atomic writes + prints.
@@ -1888,14 +1888,14 @@ import tempfile
 from pathlib import Path
 from typing import IO, Iterable
 
-from agent_toolkit.harness_adapters.base import (
+from agent_toolkit_cli.harness_adapters.base import (
     CannotInstall,
     McpEntry,
     Scope,
     UnimplementedAdapter,
     WriteAction,
 )
-from agent_toolkit.walker import extract_frontmatter
+from agent_toolkit_cli.walker import extract_frontmatter
 
 
 def _build_mcp_entries(toolkit_root: Path, slugs: Iterable[str]) -> list[McpEntry]:
@@ -2035,7 +2035,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/agent_toolkit/commands/_mcp_dispatch.py tests/test_mcp_dispatch.py
+git add src/agent_toolkit_cli/commands/_mcp_dispatch.py tests/test_mcp_dispatch.py
 git commit -m "feat(mcp): dispatcher — apply_link, atomic write, loud-print contract"
 ```
 
@@ -2044,7 +2044,7 @@ git commit -m "feat(mcp): dispatcher — apply_link, atomic write, loud-print co
 ## Task 7: Wire `_link_lib.project_from_file` to dispatch via `apply_link`
 
 **Files:**
-- Modify: `src/agent_toolkit/commands/_link_lib.py:212-223` (replace Plan-A no-op branch)
+- Modify: `src/agent_toolkit_cli/commands/_link_lib.py:212-223` (replace Plan-A no-op branch)
 - Modify: `tests/test_link_lib.py` (replace Plan-A no-op test with adapter-dispatch tests)
 - Modify: `tests/test_cli_link.py`, `tests/test_cli_unlink.py` (update assertions)
 
@@ -2062,7 +2062,7 @@ def test_project_from_file_codex_mcp_dispatches_to_adapter(tmp_path, monkeypatch
     """Codex + allow-listed MCP → adapter writes target file."""
     import io
 
-    from agent_toolkit.commands._link_lib import LinkCounters, project_from_file
+    from agent_toolkit_cli.commands._link_lib import LinkCounters, project_from_file
 
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     (tmp_path / "home" / ".codex").mkdir(parents=True)
@@ -2117,7 +2117,7 @@ def test_project_from_file_claude_mcp_skips_loudly(tmp_path, monkeypatch):
     """Claude + allow-listed MCP → loud skip, exit 0, no file written."""
     import io
 
-    from agent_toolkit.commands._link_lib import LinkCounters, project_from_file
+    from agent_toolkit_cli.commands._link_lib import LinkCounters, project_from_file
 
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     (tmp_path / "home" / ".claude").mkdir(parents=True)
@@ -2171,7 +2171,7 @@ Expected: FAIL — `_link_lib` still emits the Plan-A no-op message.
 
 - [ ] **Step 3: Replace the Plan-A MCP branch in `_link_lib.project_from_file`**
 
-In `src/agent_toolkit/commands/_link_lib.py`, at lines 211-223 the current branch is the Plan-A no-op:
+In `src/agent_toolkit_cli/commands/_link_lib.py`, at lines 211-223 the current branch is the Plan-A no-op:
 
 ```python
         if kind == "mcp":
@@ -2196,11 +2196,11 @@ Replace it with:
             mcp_allowed_slugs = list(allowed.get(section, []))
             if not mcp_allowed_slugs:
                 continue
-            from agent_toolkit.commands._mcp_dispatch import (
+            from agent_toolkit_cli.commands._mcp_dispatch import (
                 _build_mcp_entries, apply_link,
             )
-            from agent_toolkit.harness_adapters import get_adapter
-            from agent_toolkit.harness_adapters.base import (
+            from agent_toolkit_cli.harness_adapters import get_adapter
+            from agent_toolkit_cli.harness_adapters.base import (
                 CannotInstall, UnimplementedAdapter,
             )
 
@@ -2255,7 +2255,7 @@ Expected: PASS overall.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/agent_toolkit/commands/_link_lib.py tests/test_link_lib.py tests/test_cli_link.py tests/test_cli_unlink.py
+git add src/agent_toolkit_cli/commands/_link_lib.py tests/test_link_lib.py tests/test_cli_link.py tests/test_cli_unlink.py
 git commit -m "feat(mcp): wire link/unlink through harness adapter via apply_link"
 ```
 
@@ -2264,7 +2264,7 @@ git commit -m "feat(mcp): wire link/unlink through harness adapter via apply_lin
 ## Task 8: Wire `diff` to surface MCP would-writes
 
 **Files:**
-- Modify: `src/agent_toolkit/commands/diff.py` (no change needed — `diff` is already an alias for `link --dry-run`)
+- Modify: `src/agent_toolkit_cli/commands/diff.py` (no change needed — `diff` is already an alias for `link --dry-run`)
 - Test: `tests/test_cli_diff.py` — add MCP-specific assertions.
 
 `commands/diff.py` is `link --dry-run`. With Task 7, `link --dry-run` already calls `apply_link(..., dry_run=True, ...)` which prints `would-<op>: <path>`. No code change in `diff.py` is needed — only verification that the output reads naturally.
@@ -2287,7 +2287,7 @@ Read `tests/test_cli_diff.py`. Append:
 def test_diff_mcp_codex_shows_would_create(tmp_path, monkeypatch):
     """diff for an allow-listed MCP on codex prints would-create and writes nothing."""
     from click.testing import CliRunner
-    from agent_toolkit.cli import main
+    from agent_toolkit_cli.cli import main
 
     home = tmp_path / "home"
     home.mkdir()
@@ -2348,7 +2348,7 @@ git commit -m "test(diff): pin MCP would-create output for codex"
 ## Task 9: Replace `list`'s MCP "unsupported" overload with four-glyph status
 
 **Files:**
-- Modify: `src/agent_toolkit/commands/_list_json.py:160-179` (replace MCP branch)
+- Modify: `src/agent_toolkit_cli/commands/_list_json.py:160-179` (replace MCP branch)
 - Modify: `src/agent_toolkit_tui/state.py` (extend `CellStatus` literal)
 - Modify: `src/agent_toolkit_tui/widgets/asset_grid.py:13-18,116-249` (extend glyph map + interactivity rule)
 - Modify: `tests/test_list_json.py` (update assertions)
@@ -2374,7 +2374,7 @@ def test_list_json_mcp_codex_linked_matches_after_link(tmp_path, monkeypatch):
     """After linking, the codex cell reports linked-matches with the target path."""
     import json
     from click.testing import CliRunner
-    from agent_toolkit.cli import main
+    from agent_toolkit_cli.cli import main
 
     home = tmp_path / "home"
     home.mkdir()
@@ -2446,7 +2446,7 @@ def test_list_json_mcp_unlinked_allowlisted(tmp_path, monkeypatch):
     """Allow-listed but not installed → unlinked-allowlisted."""
     import json
     from click.testing import CliRunner
-    from agent_toolkit.cli import main
+    from agent_toolkit_cli.cli import main
 
     home = tmp_path / "home"
     home.mkdir()
@@ -2491,7 +2491,7 @@ def test_list_json_mcp_installed_not_allowlisted(tmp_path, monkeypatch):
     """Hand-rolled entry in codex config but absent from allow-list → installed-not-allowlisted."""
     import json
     from click.testing import CliRunner
-    from agent_toolkit.cli import main
+    from agent_toolkit_cli.cli import main
 
     home = tmp_path / "home"
     home.mkdir()
@@ -2539,7 +2539,7 @@ def test_list_json_mcp_claude_unsupported(tmp_path, monkeypatch):
     """Cells for harnesses with UnimplementedAdapter still report 'unsupported'."""
     import json
     from click.testing import CliRunner
-    from agent_toolkit.cli import main
+    from agent_toolkit_cli.cli import main
 
     home = tmp_path / "home"
     home.mkdir()
@@ -2585,15 +2585,15 @@ Expected: FAIL — current code emits status=unsupported uniformly for MCPs.
 
 - [ ] **Step 3: Replace the MCP branch in `_build_inventory`**
 
-In `src/agent_toolkit/commands/_list_json.py`, find the MCP branch around lines 160-179. Replace it with adapter-aware status:
+In `src/agent_toolkit_cli/commands/_list_json.py`, find the MCP branch around lines 160-179. Replace it with adapter-aware status:
 
 ```python
             if asset.kind == "mcp":
                 # Status comes from the per-harness adapter when available.
                 # Cells for UnimplementedAdapter harnesses keep "unsupported".
-                from agent_toolkit.commands._mcp_dispatch import _build_mcp_entries  # noqa: PLC0415
-                from agent_toolkit.harness_adapters import get_adapter  # noqa: PLC0415
-                from agent_toolkit.harness_adapters.base import UnimplementedAdapter  # noqa: PLC0415
+                from agent_toolkit_cli.commands._mcp_dispatch import _build_mcp_entries  # noqa: PLC0415
+                from agent_toolkit_cli.harness_adapters import get_adapter  # noqa: PLC0415
+                from agent_toolkit_cli.harness_adapters.base import UnimplementedAdapter  # noqa: PLC0415
 
                 adapter = get_adapter(h)
                 if isinstance(adapter, UnimplementedAdapter):
@@ -2746,7 +2746,7 @@ If `test_asset_grid_glyphs.py` fails due to the new literals, update its expecte
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/agent_toolkit/commands/_list_json.py src/agent_toolkit_tui/state.py src/agent_toolkit_tui/widgets/asset_grid.py tests/test_list_json.py tests/test_tui
+git add src/agent_toolkit_cli/commands/_list_json.py src/agent_toolkit_tui/state.py src/agent_toolkit_tui/widgets/asset_grid.py tests/test_list_json.py tests/test_tui
 git commit -m "feat(list): replace MCP unsupported overload with four-glyph status (linked-matches/drifted/unlinked-allowlisted/installed-not-allowlisted)"
 ```
 
@@ -2755,8 +2755,8 @@ git commit -m "feat(list): replace MCP unsupported overload with four-glyph stat
 ## Task 10: `doctor` MCP group — drift, env-var presence, prerequisites, verify gate
 
 **Files:**
-- Create: `src/agent_toolkit/doctor/mcps.py`
-- Modify: `src/agent_toolkit/commands/doctor.py:23,90-99` (register the group)
+- Create: `src/agent_toolkit_cli/doctor/mcps.py`
+- Modify: `src/agent_toolkit_cli/commands/doctor.py:23,90-99` (register the group)
 - Test: `tests/test_doctor_mcps.py`
 
 The `mcps` group reports:
@@ -2814,8 +2814,8 @@ def _seed_toolkit_mcp(toolkit_root: Path, *, env: list[str] | None = None,
 
 
 def test_doctor_mcps_ok_when_no_drift(monkeypatch, tmp_path):
-    from agent_toolkit.doctor.mcps import run
-    from agent_toolkit.doctor.result import Status
+    from agent_toolkit_cli.doctor.mcps import run
+    from agent_toolkit_cli.doctor.result import Status
 
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     home = tmp_path / "home"
@@ -2823,8 +2823,8 @@ def test_doctor_mcps_ok_when_no_drift(monkeypatch, tmp_path):
     (home / ".agent-toolkit.yaml").write_text("mcps:\n  - context7\n")
     _seed_toolkit_mcp(tmp_path)
     # Pre-populate the codex config with the canonical render.
-    from agent_toolkit.commands._mcp_dispatch import _build_mcp_entries
-    from agent_toolkit.harness_adapters import get_adapter
+    from agent_toolkit_cli.commands._mcp_dispatch import _build_mcp_entries
+    from agent_toolkit_cli.harness_adapters import get_adapter
     [entry] = _build_mcp_entries(tmp_path, ["context7"])
     a = get_adapter("codex")
     [act] = a.diff("user", tmp_path, [entry])
@@ -2837,8 +2837,8 @@ def test_doctor_mcps_ok_when_no_drift(monkeypatch, tmp_path):
 
 
 def test_doctor_mcps_warn_on_drift(monkeypatch, tmp_path):
-    from agent_toolkit.doctor.mcps import run
-    from agent_toolkit.doctor.result import Status
+    from agent_toolkit_cli.doctor.mcps import run
+    from agent_toolkit_cli.doctor.result import Status
 
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     home = tmp_path / "home"
@@ -2846,8 +2846,8 @@ def test_doctor_mcps_warn_on_drift(monkeypatch, tmp_path):
     (home / ".agent-toolkit.yaml").write_text("mcps:\n  - context7\n")
     _seed_toolkit_mcp(tmp_path)
 
-    from agent_toolkit.commands._mcp_dispatch import _build_mcp_entries
-    from agent_toolkit.harness_adapters import get_adapter
+    from agent_toolkit_cli.commands._mcp_dispatch import _build_mcp_entries
+    from agent_toolkit_cli.harness_adapters import get_adapter
     [entry] = _build_mcp_entries(tmp_path, ["context7"])
     a = get_adapter("codex")
     [act] = a.diff("user", tmp_path, [entry])
@@ -2867,8 +2867,8 @@ def test_doctor_mcps_warn_on_drift(monkeypatch, tmp_path):
 
 
 def test_doctor_mcps_warn_on_missing_env(monkeypatch, tmp_path):
-    from agent_toolkit.doctor.mcps import run
-    from agent_toolkit.doctor.result import Status
+    from agent_toolkit_cli.doctor.mcps import run
+    from agent_toolkit_cli.doctor.result import Status
 
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     monkeypatch.delenv("CONTEXT7_API_KEY", raising=False)
@@ -2884,8 +2884,8 @@ def test_doctor_mcps_warn_on_missing_env(monkeypatch, tmp_path):
 
 
 def test_doctor_mcps_ok_when_env_present(monkeypatch, tmp_path):
-    from agent_toolkit.doctor.mcps import run
-    from agent_toolkit.doctor.result import Status
+    from agent_toolkit_cli.doctor.mcps import run
+    from agent_toolkit_cli.doctor.result import Status
 
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     monkeypatch.setenv("CONTEXT7_API_KEY", "x")
@@ -2895,8 +2895,8 @@ def test_doctor_mcps_ok_when_env_present(monkeypatch, tmp_path):
     _seed_toolkit_mcp(tmp_path, env=["CONTEXT7_API_KEY"])
 
     # Pre-populate codex with canonical content (no drift).
-    from agent_toolkit.commands._mcp_dispatch import _build_mcp_entries
-    from agent_toolkit.harness_adapters import get_adapter
+    from agent_toolkit_cli.commands._mcp_dispatch import _build_mcp_entries
+    from agent_toolkit_cli.harness_adapters import get_adapter
     [entry] = _build_mcp_entries(tmp_path, ["context7"])
     a = get_adapter("codex")
     [act] = a.diff("user", tmp_path, [entry])
@@ -2909,8 +2909,8 @@ def test_doctor_mcps_ok_when_env_present(monkeypatch, tmp_path):
 
 
 def test_doctor_mcps_warn_on_missing_prereq(monkeypatch, tmp_path):
-    from agent_toolkit.doctor.mcps import run
-    from agent_toolkit.doctor.result import Status
+    from agent_toolkit_cli.doctor.mcps import run
+    from agent_toolkit_cli.doctor.result import Status
 
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     home = tmp_path / "home"
@@ -2926,8 +2926,8 @@ def test_doctor_mcps_warn_on_missing_prereq(monkeypatch, tmp_path):
 
 def test_doctor_mcps_skips_unimplemented_harness(monkeypatch, tmp_path):
     """harness=claude → group reports OK with a 'no adapter' note (no writes attempted)."""
-    from agent_toolkit.doctor.mcps import run
-    from agent_toolkit.doctor.result import Status
+    from agent_toolkit_cli.doctor.mcps import run
+    from agent_toolkit_cli.doctor.result import Status
 
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     home = tmp_path / "home"
@@ -2943,7 +2943,7 @@ def test_doctor_mcps_skips_unimplemented_harness(monkeypatch, tmp_path):
 
 - [ ] **Step 2: Implement `doctor/mcps.py`**
 
-Create `src/agent_toolkit/doctor/mcps.py`:
+Create `src/agent_toolkit_cli/doctor/mcps.py`:
 
 ```python
 """Doctor: mcps group — drift, env-var presence, prerequisites, optional verify."""
@@ -2953,11 +2953,11 @@ import os
 import shutil
 from pathlib import Path
 
-from agent_toolkit._allowlist import read_allowlist
-from agent_toolkit.commands._mcp_dispatch import _build_mcp_entries
-from agent_toolkit.doctor.result import GroupResult, Status
-from agent_toolkit.harness_adapters import get_adapter
-from agent_toolkit.harness_adapters.base import UnimplementedAdapter
+from agent_toolkit_cli._allowlist import read_allowlist
+from agent_toolkit_cli.commands._mcp_dispatch import _build_mcp_entries
+from agent_toolkit_cli.doctor.result import GroupResult, Status
+from agent_toolkit_cli.harness_adapters import get_adapter
+from agent_toolkit_cli.harness_adapters.base import UnimplementedAdapter
 
 
 def run(
@@ -3050,7 +3050,7 @@ def run(
 
 - [ ] **Step 3: Register the `mcps` group in `commands/doctor.py`**
 
-In `src/agent_toolkit/commands/doctor.py`, edit `_GROUPS` (line 23):
+In `src/agent_toolkit_cli/commands/doctor.py`, edit `_GROUPS` (line 23):
 
 ```python
 _GROUPS = (
@@ -3063,7 +3063,7 @@ In `_run_global` (line 90-99), append the runner:
 
 ```python
 def _run_global(root: Path, *, harness: str, group_name: str | None) -> list[GroupResult]:
-    from agent_toolkit.doctor import mcps as g_mcps  # noqa: PLC0415
+    from agent_toolkit_cli.doctor import mcps as g_mcps  # noqa: PLC0415
     runners: list[tuple[str, callable]] = [
         ("environment", lambda: g_environment.run(root)),
         ("symlink-integrity", lambda: g_symlinks.run(root, harness=harness)),
@@ -3088,7 +3088,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/agent_toolkit/doctor/mcps.py src/agent_toolkit/commands/doctor.py tests/test_doctor_mcps.py
+git add src/agent_toolkit_cli/doctor/mcps.py src/agent_toolkit_cli/commands/doctor.py tests/test_doctor_mcps.py
 git commit -m "feat(doctor): add mcps group — drift, env, prereq, verify"
 ```
 
@@ -3097,7 +3097,7 @@ git commit -m "feat(doctor): add mcps group — drift, env, prereq, verify"
 ## Task 11: `fix` — MCP reconcile path
 
 **Files:**
-- Modify: `src/agent_toolkit/commands/fix.py`
+- Modify: `src/agent_toolkit_cli/commands/fix.py`
 - Test: `tests/test_fix.py`
 
 The current `fix` regenerates AGENTS.md auto-regions. Per spec, `fix` also reconciles MCP drift to canonical form. Approach: keep the existing region-regen behaviour as the default; add a new `--mcps` flag (or run by default if `--only` is unset) that invokes the dispatch reconcile path for every allow-listed MCP under `(harness, scope)`.
@@ -3112,9 +3112,9 @@ Append to `tests/test_fix.py`:
 def test_fix_reconciles_mcp_drift(tmp_path, monkeypatch):
     """fix reconciles drifted codex MCP entries to canonical form."""
     from click.testing import CliRunner
-    from agent_toolkit.cli import main
-    from agent_toolkit.commands._mcp_dispatch import _build_mcp_entries
-    from agent_toolkit.harness_adapters import get_adapter
+    from agent_toolkit_cli.cli import main
+    from agent_toolkit_cli.commands._mcp_dispatch import _build_mcp_entries
+    from agent_toolkit_cli.harness_adapters import get_adapter
 
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     home = tmp_path / "home"
@@ -3162,7 +3162,7 @@ def test_fix_reconciles_mcp_drift(tmp_path, monkeypatch):
 def test_fix_skips_unimplemented_harness(tmp_path, monkeypatch):
     """fix --harness claude prints skip and does not error."""
     from click.testing import CliRunner
-    from agent_toolkit.cli import main
+    from agent_toolkit_cli.cli import main
 
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     home = tmp_path / "home"
@@ -3194,7 +3194,7 @@ Note: `_seed_repo` is the existing helper in `test_fix.py` from Plan A — bump 
 
 - [ ] **Step 2: Add `--harness` and `--scope` flags + MCP-reconcile path to `fix.py`**
 
-Edit `src/agent_toolkit/commands/fix.py`. Read it first. Then modify:
+Edit `src/agent_toolkit_cli/commands/fix.py`. Read it first. Then modify:
 
 Add `--harness` and `--scope` options; after the existing region-regen block, add a reconcile pass:
 
@@ -3232,10 +3232,10 @@ def _reconcile_mcps(toolkit_root: Path, *, harness: str, scope: str,
                     project_root: Path) -> None:
     """For each allow-listed MCP, run apply_link to bring on-disk → canonical."""
     import sys
-    from agent_toolkit._allowlist import read_allowlist
-    from agent_toolkit.commands._mcp_dispatch import _build_mcp_entries, apply_link
-    from agent_toolkit.harness_adapters import get_adapter
-    from agent_toolkit.harness_adapters.base import CannotInstall, UnimplementedAdapter
+    from agent_toolkit_cli._allowlist import read_allowlist
+    from agent_toolkit_cli.commands._mcp_dispatch import _build_mcp_entries, apply_link
+    from agent_toolkit_cli.harness_adapters import get_adapter
+    from agent_toolkit_cli.harness_adapters.base import CannotInstall, UnimplementedAdapter
 
     if scope == "user":
         allowlist_path = Path(os.environ.get("HOME", "")) / ".agent-toolkit.yaml"
@@ -3279,7 +3279,7 @@ Expected: PASS for all tests in this file.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add src/agent_toolkit/commands/fix.py tests/test_fix.py
+git add src/agent_toolkit_cli/commands/fix.py tests/test_fix.py
 git commit -m "feat(fix): reconcile MCP drift via apply_link (preserves AGENTS.md region regen)"
 ```
 
@@ -3388,7 +3388,7 @@ def test_tui_package_does_not_import_adapters():
     import pkgutil
 
     import agent_toolkit_tui  # noqa: F401
-    forbidden = "agent_toolkit.harness_adapters"
+    forbidden = "agent_toolkit_cli.harness_adapters"
     for finder, name, ispkg in pkgutil.walk_packages(
         path=Path(agent_toolkit_tui.__file__).parent.__fspath__(),
         prefix="agent_toolkit_tui.",

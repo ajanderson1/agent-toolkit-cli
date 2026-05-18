@@ -51,7 +51,7 @@ Probed on the dev machine (`~/.config/opencode/`):
 - Pi reads its own shape (`name`, `description`, `tools`, `model`) — but Phase 3 doesn't touch Pi.
 - No Phase-1-committed agent is currently projected into `~/.pi/agent/agents/` on this machine; Pi-via-symlink is unverified empirically (out of scope here, follow-up).
 
-A prior session verified that dropping a markdown file with `mode: subagent` into `~/.config/opencode/agents/` makes `opencode agent list` register it correctly. Phase 3 re-verifies this with the *full* translator output (native keys + nested `agent_toolkit:` block), since OpenCode's tolerance for extra top-level keys in agent frontmatter is the new bet.
+A prior session verified that dropping a markdown file with `mode: subagent` into `~/.config/opencode/agents/` makes `opencode agent list` register it correctly. Phase 3 re-verifies this with the *full* translator output (native keys + nested `agent_toolkit_cli:` block), since OpenCode's tolerance for extra top-level keys in agent frontmatter is the new bet.
 
 ## Design decisions
 
@@ -71,7 +71,7 @@ Subdirectory by kind, then `<slug>.<ext>` matching the slot extension. Examples:
 
 ### D2. Translator registration: flat dispatch dict
 
-A new module `src/agent_toolkit/_translators.py` exports:
+A new module `src/agent_toolkit_cli/_translators.py` exports:
 
 ```python
 TRANSLATORS: dict[tuple[str, str], Callable[[AssetRecord, str], bytes]] = {
@@ -124,11 +124,11 @@ Mirrors `TestSymlinkParity`. Three tests:
 
 `TRANSLATORS` is exported as a public name from `_translators.py` so the test imports it without reaching into private internals.
 
-### D8. Translator output shape: native keys + `agent_toolkit:` wrapper preservation
+### D8. Translator output shape: native keys + `agent_toolkit_cli:` wrapper preservation
 
 For both OpenCode agent and OpenCode command translators, the output frontmatter contains:
 - The native top-level keys OpenCode reads (description, mode for agents).
-- A nested `agent_toolkit:` key holding the original `apiVersion`/`metadata`/`spec` block verbatim, for SSOT-traceability.
+- A nested `agent_toolkit_cli:` key holding the original `apiVersion`/`metadata`/`spec` block verbatim, for SSOT-traceability.
 
 OpenCode skills already work via direct symlink with our wrapper frontmatter (per the matrix doc § "Frontmatter compatibility"), so tolerance for extra top-level keys is an existing bet for skills. Phase 3 carries it to agents and commands. Empirical re-verification gates (§ Test Plan) cover the new case.
 
@@ -136,17 +136,17 @@ OpenCode skills already work via direct symlink with our wrapper frontmatter (pe
 
 ### New files
 
-- `src/agent_toolkit/_translators.py` — `TRANSLATORS` dict + the two translator functions. Pure functions; no I/O.
+- `src/agent_toolkit_cli/_translators.py` — `TRANSLATORS` dict + the two translator functions. Pure functions; no I/O.
 - `tests/test_translators.py` — unit tests for the translator functions: output validity, round-trip stability, required-key invariants.
 
 ### Modified files
 
-- `src/agent_toolkit/commands/_link_lib.py`
+- `src/agent_toolkit_cli/commands/_link_lib.py`
   - Import `TRANSLATORS` from `_translators`.
   - Add `_render_to_cache(translator, asset_path, kind, slug, scope, project_root, dry_run) → Path`. Reads `asset_path`, splits frontmatter from body using the existing `walker._strip_frontmatter` helper (or equivalent), loads the `AssetRecord` via `walker.load_asset_record`, calls `translator(record, body) → bytes`, and writes atomically (tmp + rename) to the cache path. In `dry_run`, skips the write but still returns the cache path.
   - Modify `maybe_link` to dispatch through `TRANSLATORS` when applicable.
   - Add `_prune_translated_slot` helper used by unlink.
-- `src/agent_toolkit/commands/unlink.py` — call `_prune_translated_slot` when the slot symlink targets the per-scope cache.
+- `src/agent_toolkit_cli/commands/unlink.py` — call `_prune_translated_slot` when the slot symlink targets the per-scope cache.
 - `docs/agent-toolkit/harness-matrix.md`
   - Flip `(opencode, agent)` and `(opencode, command)` cells from `unsupported (gap)` to `translate → <cache-path>`.
   - Add a "Translation" subsection under "Mechanisms" describing the cache layout and the SSOT-traceability property.
@@ -168,7 +168,7 @@ Output frontmatter:
 ---
 description: <metadata.description; "" if absent>
 mode: subagent
-agent_toolkit:
+agent_toolkit_cli:
   apiVersion: agent-toolkit/v1alpha2
   metadata:
     name: <slug>
@@ -184,7 +184,7 @@ agent_toolkit:
 
 - `description` is duplicated from `metadata.description` so OpenCode reads what it expects. Multi-line source descriptions are collapsed to single-line.
 - `mode: subagent` is a literal constant.
-- The `agent_toolkit:` block is a verbatim subset of source frontmatter — drops nothing, doesn't reformat key order.
+- The `agent_toolkit_cli:` block is a verbatim subset of source frontmatter — drops nothing, doesn't reformat key order.
 - Output ends with exactly one `\n` after the body.
 
 ### `(opencode, command)` translator
@@ -217,8 +217,8 @@ Rendering the same input twice MUST produce byte-equal output. Guarded by a unit
 - For each `(harness, kind)` in `TRANSLATORS`, given a sample `AssetRecord`:
   - Output parses as valid YAML frontmatter + body.
   - Required native keys are present (`description` always; `mode: subagent` for agents).
-  - Nested `agent_toolkit.apiVersion` equals `agent-toolkit/v1alpha2`.
-  - Nested `agent_toolkit.metadata.name` equals the source slug.
+  - Nested `agent_toolkit_cli.apiVersion` equals `agent-toolkit/v1alpha2`.
+  - Nested `agent_toolkit_cli.metadata.name` equals the source slug.
   - Round-trip stability: `translator(r, b)` called twice returns byte-equal output.
 - A "render every shipping opencode-eligible asset" smoke test, parameterised over the toolkit repo's actual content. Catches metadata-shape bugs against real assets.
 
@@ -269,7 +269,7 @@ All currently-passing tests must keep passing at every commit. Lefthook (pytest 
 
 ## Risks
 
-- **OpenCode tolerance for extra top-level frontmatter keys on agents/commands.** Empirically verified for skills; gates A and B re-verify for the new cases. Fallback (if a gate fails): drop the nested `agent_toolkit:` wrapper for the offending kind and replace with an HTML comment at body-top for traceability. Spec is revised before sweep proceeds.
+- **OpenCode tolerance for extra top-level frontmatter keys on agents/commands.** Empirically verified for skills; gates A and B re-verify for the new cases. Fallback (if a gate fails): drop the nested `agent_toolkit_cli:` wrapper for the offending kind and replace with an HTML comment at body-top for traceability. Spec is revised before sweep proceeds.
 - **Cache-path drift between matrix doc and code.** Mitigated by `TestTranslateParity::test_translate_cell_path_matches_cache_convention`.
 - **Render output instability** (e.g., dict key order varying across Python versions). Mitigated by `yaml.safe_dump(..., sort_keys=False)` and a round-trip stability test.
 - **Stale cache files after manual slot deletion.** Out of scope for Phase 3 (no `gc` command). Documented as a known follow-up.

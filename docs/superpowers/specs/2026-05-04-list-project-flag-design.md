@@ -15,7 +15,7 @@ A user who reaches for the per-command flag from `link` muscle-memory hits a foo
 
 ## Decision
 
-Add `--project DIR` to `list_cmd` in `src/agent_toolkit/commands/list.py`. Resolution order matches `link.py` and `unlink.py`:
+Add `--project DIR` to `list_cmd` in `src/agent_toolkit_cli/commands/list.py`. Resolution order matches `link.py` and `unlink.py`:
 
 1. `--project DIR` flag (this PR adds it).
 2. Group-level `--project` from `ctx.obj`.
@@ -25,7 +25,7 @@ Add `--project DIR` to `list_cmd` in `src/agent_toolkit/commands/list.py`. Resol
 
 | File | Change |
 |---|---|
-| `src/agent_toolkit/commands/list.py` | Add `@click.option("--project", "project_flag", …)` decorator after the existing `--toolkit-repo`. Add `project_flag` parameter. Replace lines 149-150 (the `(ctx.obj).get("project_root")` block) with the four-step resolution from `link.py:108-113`. |
+| `src/agent_toolkit_cli/commands/list.py` | Add `@click.option("--project", "project_flag", …)` decorator after the existing `--toolkit-repo`. Add `project_flag` parameter. Replace lines 149-150 (the `(ctx.obj).get("project_root")` block) with the four-step resolution from `link.py:108-113`. |
 | `tests/test_cli_list.py` | Add a test asserting `list --project /x` is recognised and the project_root resolves to `/x`. Mirror the existing `test_link_project_flag` test pattern from `tests/test_cli_link.py`. |
 
 ## Tests

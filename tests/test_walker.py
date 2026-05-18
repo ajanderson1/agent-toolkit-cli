@@ -1,9 +1,9 @@
-"""Tests for src/agent_toolkit/walker.py — discovery and metadata loading."""
+"""Tests for src/agent_toolkit_cli/walker.py — discovery and metadata loading."""
 from __future__ import annotations
 
 from pathlib import Path
 
-from agent_toolkit.walker import discover_assets, extract_frontmatter, load_asset_record
+from agent_toolkit_cli.walker import discover_assets, extract_frontmatter, load_asset_record
 
 
 def _write_mcp(toolkit_root: Path, slug: str, *, harnesses: list[str]) -> None:
@@ -203,7 +203,7 @@ def test_discover_skips_assets_inside_submodules(tmp_path):
 
 
 def test_load_asset_record_returns_metadata_and_body_excerpt(tmp_path):
-    from agent_toolkit.walker import discover_assets, load_asset_record
+    from agent_toolkit_cli.walker import discover_assets, load_asset_record
 
     (tmp_path / "skills" / "alpha").mkdir(parents=True)
     (tmp_path / "skills" / "alpha" / "SKILL.md").write_text(
@@ -235,7 +235,7 @@ def test_load_asset_record_returns_metadata_and_body_excerpt(tmp_path):
 
 def test_load_asset_record_does_not_eat_paragraphs_starting_with_hash(tmp_path):
     """A line starting with '#1' (no space after) is body, not a heading."""
-    from agent_toolkit.walker import discover_assets, load_asset_record
+    from agent_toolkit_cli.walker import discover_assets, load_asset_record
 
     (tmp_path / "skills" / "alpha").mkdir(parents=True)
     (tmp_path / "skills" / "alpha" / "SKILL.md").write_text(
@@ -263,7 +263,7 @@ def test_load_asset_record_does_not_eat_paragraphs_starting_with_hash(tmp_path):
 
 def test_load_asset_record_skips_atx_headings_correctly(tmp_path):
     """Multiple ATX heading lines (with required space) are correctly skipped."""
-    from agent_toolkit.walker import discover_assets, load_asset_record
+    from agent_toolkit_cli.walker import discover_assets, load_asset_record
 
     (tmp_path / "skills" / "beta").mkdir(parents=True)
     (tmp_path / "skills" / "beta" / "SKILL.md").write_text(

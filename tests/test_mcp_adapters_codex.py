@@ -9,7 +9,7 @@ import pytest
 def _make_entry(name: str = "context7", *, transport: str = "stdio",
                 command: str = "npx", args: list[str] | None = None,
                 env: dict[str, str] | None = None):
-    from agent_toolkit.harness_adapters.base import McpEntry
+    from agent_toolkit_cli.harness_adapters.base import McpEntry
 
     inner: dict = {"command": command}
     if args is not None:
@@ -24,7 +24,7 @@ def _make_entry(name: str = "context7", *, transport: str = "stdio",
 
 
 def test_codex_adapter_basic_attrs():
-    from agent_toolkit.harness_adapters.codex import CodexAdapter
+    from agent_toolkit_cli.harness_adapters.codex import CodexAdapter
 
     a = CodexAdapter()
     assert a.name == "codex"
@@ -32,7 +32,7 @@ def test_codex_adapter_basic_attrs():
 
 
 def test_codex_user_config_target(monkeypatch, tmp_path):
-    from agent_toolkit.harness_adapters.codex import CodexAdapter
+    from agent_toolkit_cli.harness_adapters.codex import CodexAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     a = CodexAdapter()
@@ -41,7 +41,7 @@ def test_codex_user_config_target(monkeypatch, tmp_path):
 
 def test_codex_project_config_target_requires_dir(tmp_path):
     """Project target only set when .codex/ exists in project_root."""
-    from agent_toolkit.harness_adapters.codex import CodexAdapter
+    from agent_toolkit_cli.harness_adapters.codex import CodexAdapter
 
     proj = tmp_path / "p"
     proj.mkdir()
@@ -54,15 +54,15 @@ def test_codex_project_config_target_requires_dir(tmp_path):
 
 
 def test_codex_can_install_accepts_stdio():
-    from agent_toolkit.harness_adapters.codex import CodexAdapter
+    from agent_toolkit_cli.harness_adapters.codex import CodexAdapter
 
     a = CodexAdapter()
     a.can_install(_make_entry(transport="stdio"))  # no exception
 
 
 def test_codex_can_install_refuses_http():
-    from agent_toolkit.harness_adapters.codex import CodexAdapter
-    from agent_toolkit.harness_adapters.base import CannotInstall
+    from agent_toolkit_cli.harness_adapters.codex import CodexAdapter
+    from agent_toolkit_cli.harness_adapters.base import CannotInstall
 
     a = CodexAdapter()
     with pytest.raises(CannotInstall, match="stdio"):
@@ -71,7 +71,7 @@ def test_codex_can_install_refuses_http():
 
 def test_codex_diff_creates_file_when_missing(monkeypatch, tmp_path):
     """No config.toml on disk → one create-action with rendered bytes."""
-    from agent_toolkit.harness_adapters.codex import CodexAdapter
+    from agent_toolkit_cli.harness_adapters.codex import CodexAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     a = CodexAdapter()
@@ -94,7 +94,7 @@ def test_codex_diff_creates_file_when_missing(monkeypatch, tmp_path):
 def test_codex_diff_updates_existing_file_preserving_other_sections(monkeypatch, tmp_path):
     """Adding an MCP to a file with other sections yields one update-action;
     `[notice.*]` and top-level scalars are preserved."""
-    from agent_toolkit.harness_adapters.codex import CodexAdapter
+    from agent_toolkit_cli.harness_adapters.codex import CodexAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".codex" / "config.toml"
@@ -122,7 +122,7 @@ def test_codex_diff_updates_existing_file_preserving_other_sections(monkeypatch,
 
 def test_codex_diff_unchanged_when_aligned(monkeypatch, tmp_path):
     """If on-disk already matches the desired render, diff returns []."""
-    from agent_toolkit.harness_adapters.codex import CodexAdapter
+    from agent_toolkit_cli.harness_adapters.codex import CodexAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".codex" / "config.toml"
@@ -142,7 +142,7 @@ def test_codex_diff_unchanged_when_aligned(monkeypatch, tmp_path):
 
 def test_codex_unlink_removes_managed_entry_via_previously_allowed(monkeypatch, tmp_path):
     """unlink semantics: entries=[], previously_allowed={'context7'} → removes context7."""
-    from agent_toolkit.harness_adapters.codex import CodexAdapter
+    from agent_toolkit_cli.harness_adapters.codex import CodexAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".codex" / "config.toml"
@@ -165,7 +165,7 @@ def test_codex_unlink_removes_managed_entry_via_previously_allowed(monkeypatch, 
 
 def test_codex_unlink_does_not_touch_handrolled_entries(monkeypatch, tmp_path):
     """Names not in previously_allowed | current_entries are hand-rolled — preserved."""
-    from agent_toolkit.harness_adapters.codex import CodexAdapter
+    from agent_toolkit_cli.harness_adapters.codex import CodexAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".codex" / "config.toml"
@@ -198,7 +198,7 @@ def test_codex_link_unlink_round_trip_byte_equal(monkeypatch, tmp_path):
     """AC #8: source with comments + unknown sections + hand-rolled MCP →
     link an unrelated MCP → unlink it → byte-equal to source.
     """
-    from agent_toolkit.harness_adapters.codex import CodexAdapter
+    from agent_toolkit_cli.harness_adapters.codex import CodexAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".codex" / "config.toml"
@@ -240,7 +240,7 @@ def test_codex_link_unlink_round_trip_byte_equal(monkeypatch, tmp_path):
 
 def test_codex_list_installed_returns_all_mcp_servers_tables(monkeypatch, tmp_path):
     """list_installed enumerates every [mcp_servers.X] in the file (managed or not)."""
-    from agent_toolkit.harness_adapters.codex import CodexAdapter
+    from agent_toolkit_cli.harness_adapters.codex import CodexAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".codex" / "config.toml"
@@ -257,7 +257,7 @@ def test_codex_list_installed_returns_all_mcp_servers_tables(monkeypatch, tmp_pa
 
 
 def test_codex_list_installed_missing_file_returns_empty(monkeypatch, tmp_path):
-    from agent_toolkit.harness_adapters.codex import CodexAdapter
+    from agent_toolkit_cli.harness_adapters.codex import CodexAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     (tmp_path / ".codex").mkdir()
@@ -266,7 +266,7 @@ def test_codex_list_installed_missing_file_returns_empty(monkeypatch, tmp_path):
 
 
 def test_codex_entry_drift_false_when_aligned(monkeypatch, tmp_path):
-    from agent_toolkit.harness_adapters.codex import CodexAdapter
+    from agent_toolkit_cli.harness_adapters.codex import CodexAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".codex" / "config.toml"
@@ -280,7 +280,7 @@ def test_codex_entry_drift_false_when_aligned(monkeypatch, tmp_path):
 
 
 def test_codex_entry_drift_true_after_hand_edit(monkeypatch, tmp_path):
-    from agent_toolkit.harness_adapters.codex import CodexAdapter
+    from agent_toolkit_cli.harness_adapters.codex import CodexAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".codex" / "config.toml"
@@ -301,7 +301,7 @@ def test_codex_entry_drift_true_after_hand_edit(monkeypatch, tmp_path):
 
 def test_codex_re_link_byte_identical_when_already_linked(monkeypatch, tmp_path):
     """AC #2: re-running link with same allow-list yields no write."""
-    from agent_toolkit.harness_adapters.codex import CodexAdapter
+    from agent_toolkit_cli.harness_adapters.codex import CodexAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".codex" / "config.toml"

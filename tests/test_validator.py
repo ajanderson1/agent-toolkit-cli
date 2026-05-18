@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from agent_toolkit.schema import Validator
-from agent_toolkit.walker import Asset
+from agent_toolkit_cli.schema import Validator
+from agent_toolkit_cli.walker import Asset
 
 
 def test_validates_minimal_skill(tmp_path):
@@ -67,7 +67,7 @@ def test_reports_slug_mismatch(tmp_path):
 
 def test_validator_loads_v1alpha2_schema(tmp_path):
     """The bundled schema is v1alpha2."""
-    from agent_toolkit.schema import Validator
+    from agent_toolkit_cli.schema import Validator
 
     v = Validator(toolkit_root=tmp_path)
     assert v.schema["properties"]["apiVersion"]["const"] == "agent-toolkit/v1alpha2"
@@ -76,8 +76,8 @@ def test_validator_loads_v1alpha2_schema(tmp_path):
 
 def test_validator_kind_mismatch_is_error(tmp_path):
     """If frontmatter declares metadata.kind, it must match walker-derived kind."""
-    from agent_toolkit.schema import Validator
-    from agent_toolkit.walker import Asset
+    from agent_toolkit_cli.schema import Validator
+    from agent_toolkit_cli.walker import Asset
 
     skills = tmp_path / "skills" / "alpha"
     skills.mkdir(parents=True)
@@ -103,8 +103,8 @@ def test_validator_kind_mismatch_is_error(tmp_path):
 
 def test_validator_mcp_requires_spec_mcp(tmp_path):
     """An MCP without spec.mcp fails validation."""
-    from agent_toolkit.schema import Validator
-    from agent_toolkit.walker import Asset
+    from agent_toolkit_cli.schema import Validator
+    from agent_toolkit_cli.walker import Asset
 
     mcp_dir = tmp_path / "mcps" / "context7"
     mcp_dir.mkdir(parents=True)
@@ -131,8 +131,8 @@ def test_validator_mcp_requires_spec_mcp(tmp_path):
 
 def test_validator_mcp_with_spec_mcp_passes(tmp_path):
     """An MCP with valid spec.mcp passes."""
-    from agent_toolkit.schema import Validator
-    from agent_toolkit.walker import Asset
+    from agent_toolkit_cli.schema import Validator
+    from agent_toolkit_cli.walker import Asset
 
     mcp_dir = tmp_path / "mcps" / "context7"
     mcp_dir.mkdir(parents=True)
@@ -162,8 +162,8 @@ def test_validator_mcp_with_spec_mcp_passes(tmp_path):
 
 def test_validator_skill_with_spec_mcp_is_error(tmp_path):
     """spec.mcp on a non-MCP asset is forbidden."""
-    from agent_toolkit.schema import Validator
-    from agent_toolkit.walker import Asset
+    from agent_toolkit_cli.schema import Validator
+    from agent_toolkit_cli.walker import Asset
 
     skills = tmp_path / "skills" / "alpha"
     skills.mkdir(parents=True)

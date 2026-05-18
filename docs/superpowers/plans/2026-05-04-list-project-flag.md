@@ -40,7 +40,7 @@ def test_list_project_flag_resolves_correctly(tmp_path, env, seed_skill, monkeyp
 
 ## T2 — Add the flag
 
-Edit `src/agent_toolkit/commands/list.py`:
+Edit `src/agent_toolkit_cli/commands/list.py`:
 
 After the existing `--toolkit-repo` option (around line 91), add:
 

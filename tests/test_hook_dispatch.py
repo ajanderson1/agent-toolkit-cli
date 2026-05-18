@@ -10,12 +10,12 @@ import pytest
 
 
 def _make_adapter():
-    from agent_toolkit.harness_adapters.codex_hook import CodexHookAdapter
+    from agent_toolkit_cli.harness_adapters.codex_hook import CodexHookAdapter
     return CodexHookAdapter()
 
 
 def _make_entry(home: Path, name: str = "demo"):
-    from agent_toolkit.harness_adapters.base import HookEntry
+    from agent_toolkit_cli.harness_adapters.base import HookEntry
 
     script_path = home / ".codex" / "agent-toolkit-hooks" / name / "check.sh"
     return HookEntry(
@@ -27,7 +27,7 @@ def _make_entry(home: Path, name: str = "demo"):
 
 
 def test_apply_link_creates_script_with_executable_mode(monkeypatch, tmp_path):
-    from agent_toolkit.commands._hook_dispatch import apply_link
+    from agent_toolkit_cli.commands._hook_dispatch import apply_link
 
     monkeypatch.setenv("HOME", str(tmp_path))
     (tmp_path / ".codex").mkdir()
@@ -53,7 +53,7 @@ def test_apply_link_creates_script_with_executable_mode(monkeypatch, tmp_path):
 
 
 def test_apply_link_dry_run_prints_would_create(monkeypatch, tmp_path):
-    from agent_toolkit.commands._hook_dispatch import apply_link
+    from agent_toolkit_cli.commands._hook_dispatch import apply_link
 
     monkeypatch.setenv("HOME", str(tmp_path))
     (tmp_path / ".codex").mkdir()
@@ -79,8 +79,8 @@ def test_apply_link_dry_run_prints_would_create(monkeypatch, tmp_path):
 
 
 def test_apply_link_propagates_cannot_install(monkeypatch, tmp_path):
-    from agent_toolkit.commands._hook_dispatch import apply_link
-    from agent_toolkit.harness_adapters.base import CannotInstall, HookEntry
+    from agent_toolkit_cli.commands._hook_dispatch import apply_link
+    from agent_toolkit_cli.harness_adapters.base import CannotInstall, HookEntry
 
     monkeypatch.setenv("HOME", str(tmp_path))
     (tmp_path / ".codex").mkdir()
@@ -107,7 +107,7 @@ def test_apply_link_propagates_cannot_install(monkeypatch, tmp_path):
 
 def test_build_hook_entries_reads_meta_and_script(tmp_path, monkeypatch):
     """_build_hook_entries reads hooks/<slug>/.meta.yaml + the script file."""
-    from agent_toolkit.commands._hook_dispatch import _build_hook_entries
+    from agent_toolkit_cli.commands._hook_dispatch import _build_hook_entries
 
     monkeypatch.setenv("HOME", str(tmp_path))
 
@@ -147,7 +147,7 @@ def test_build_hook_entries_reads_meta_and_script(tmp_path, monkeypatch):
 
 
 def test_build_hook_entries_skips_missing_assets(tmp_path):
-    from agent_toolkit.commands._hook_dispatch import _build_hook_entries
+    from agent_toolkit_cli.commands._hook_dispatch import _build_hook_entries
 
     toolkit = tmp_path / "toolkit"
     (toolkit / "hooks").mkdir(parents=True)

@@ -32,7 +32,7 @@ The parent spec listed four open items deferred to implementation. This design f
 
 ### Adapter package layout
 
-New package: `src/agent_toolkit/harness_adapters/`
+New package: `src/agent_toolkit_cli/harness_adapters/`
 
 ```
 harness_adapters/
@@ -133,7 +133,7 @@ class ConfigFileAdapter(_AdapterCommon, Protocol):
 
 ### Dispatch
 
-New module: `src/agent_toolkit/commands/_mcp_dispatch.py`. Owns:
+New module: `src/agent_toolkit_cli/commands/_mcp_dispatch.py`. Owns:
 
 - The `apply_link` entry point used by both `link` and `unlink` (since both reduce to "reconcile harness state to current allow-list desired set").
 - The atomic-write helper: `tempfile.NamedTemporaryFile(dir=target.parent, delete=False) → os.replace(target)` for writes, `os.unlink` (then optional `os.rmdir`) for deletes.
@@ -175,20 +175,20 @@ def apply_link(
 
 ### Schema bump v1alpha1 → v1alpha2 (full replacement, no dual dispatch)
 
-The current validator (`src/agent_toolkit/schema.py:20`) hard-codes the v1alpha1 schema path. There is no version-dispatch infrastructure, and adding one for a single transitional version would be dead code the moment the catalog finishes migrating.
+The current validator (`src/agent_toolkit_cli/schema.py:20`) hard-codes the v1alpha1 schema path. There is no version-dispatch infrastructure, and adding one for a single transitional version would be dead code the moment the catalog finishes migrating.
 
 We **replace** v1alpha1 with v1alpha2. There is no period where both validate. The CLI ships v1alpha2 only; the catalog migrates in lockstep (PR ordering below).
 
 #### File-level changes
 
-- New: `src/agent_toolkit/_schemas/asset-frontmatter.v1alpha2.json`. Mirrors v1alpha1 with the two changes below.
-- Delete: `src/agent_toolkit/_schemas/asset-frontmatter.v1alpha1.json`.
-- `src/agent_toolkit/schema.py:20` — points at the v1alpha2 file. No `apiVersion` dispatch.
-- `src/agent_toolkit/_repo_resolution.py:26` (`_SCHEMA = "schemas/..."`) — bump the path constant.
-- `src/agent_toolkit/doctor/environment.py:14,18` — bump the schema-presence check.
-- `src/agent_toolkit/doctor/per_resource.py:46` — update the "v1alpha1 valid" finding string.
-- `src/agent_toolkit/commands/new.py:24,79,95` — emit `apiVersion: agent-toolkit/v1alpha2` and add an `mcp` kind branch (see "new mcp scaffold" note below).
-- `src/agent_toolkit/ingest/types.py:46` — bump emitted `apiVersion`.
+- New: `src/agent_toolkit_cli/_schemas/asset-frontmatter.v1alpha2.json`. Mirrors v1alpha1 with the two changes below.
+- Delete: `src/agent_toolkit_cli/_schemas/asset-frontmatter.v1alpha1.json`.
+- `src/agent_toolkit_cli/schema.py:20` — points at the v1alpha2 file. No `apiVersion` dispatch.
+- `src/agent_toolkit_cli/_repo_resolution.py:26` (`_SCHEMA = "schemas/..."`) — bump the path constant.
+- `src/agent_toolkit_cli/doctor/environment.py:14,18` — bump the schema-presence check.
+- `src/agent_toolkit_cli/doctor/per_resource.py:46` — update the "v1alpha1 valid" finding string.
+- `src/agent_toolkit_cli/commands/new.py:24,79,95` — emit `apiVersion: agent-toolkit/v1alpha2` and add an `mcp` kind branch (see "new mcp scaffold" note below).
+- `src/agent_toolkit_cli/ingest/types.py:46` — bump emitted `apiVersion`.
 - `tests/conftest.py:12,32,34` — bump fixture text and schema path.
 - Repo-level `schemas/asset-frontmatter.v1alpha2.json` (the SSOT copy referenced by `doctor/environment.py`) — replace alongside the bundled package copy.
 
@@ -605,8 +605,8 @@ A correct implementation, after all four PRs:
 - Parent spec: [`2026-05-04-mcp-management-design.md`](./2026-05-04-mcp-management-design.md).
 - Plan A implementation plan: [`../plans/2026-05-04-mcp-foundations.md`](../plans/2026-05-04-mcp-foundations.md).
 - Plan A landing commit: `d44a98f` on `main`.
-- Walker MCP discovery rule: `src/agent_toolkit/walker.py:24` (`("mcp", "mcps", "config.json")`) and `frontmatter_path()` at `walker.py:37`.
-- No-op site to replace: `src/agent_toolkit/commands/_link_lib.py:212-223`.
-- TODO marker for status overload: `src/agent_toolkit/commands/_list_json.py:160-179`.
+- Walker MCP discovery rule: `src/agent_toolkit_cli/walker.py:24` (`("mcp", "mcps", "config.json")`) and `frontmatter_path()` at `walker.py:37`.
+- No-op site to replace: `src/agent_toolkit_cli/commands/_link_lib.py:212-223`.
+- TODO marker for status overload: `src/agent_toolkit_cli/commands/_list_json.py:160-179`.
 - TUI write path: `src/agent_toolkit_tui/runner.py:99` (`_plan` method).
 - Toolkit catalog: `~/GitHub/agent-toolkit/mcps/<name>/{config.json, README.md}` — 20+ entries as of 2026-05-04.

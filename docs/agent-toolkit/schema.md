@@ -1,8 +1,8 @@
 # agent-toolkit asset schema
 
-Every asset carries an `agent_toolkit` metadata block.  For Markdown-based
+Every asset carries an `agent_toolkit_cli` metadata block.  For Markdown-based
 kinds the block is YAML frontmatter; for JSON-based kinds it lives under the
-`agent_toolkit` top-level key.
+`agent_toolkit_cli` top-level key.
 
 ## Canonical directory layout
 
@@ -23,7 +23,7 @@ kinds the block is YAML frontmatter; for JSON-based kinds it lives under the
 
 ```json
 {
-  "agent_toolkit": {
+  "agent_toolkit_cli": {
     "apiVersion": "agent-toolkit/v1alpha2",
     "metadata": {
       "name": "my-plugin",
@@ -41,5 +41,5 @@ kinds the block is YAML frontmatter; for JSON-based kinds it lives under the
 
 The walker discovers `plugins/<slug>/.claude-plugin/plugin.json` (or
 `marketplace.json` for a multi-plugin distribution) and reads the
-`agent_toolkit` block for metadata.  `agent-toolkit new plugin <slug>`
+`agent_toolkit_cli` block for metadata.  `agent-toolkit new plugin <slug>`
 scaffolds this layout automatically.

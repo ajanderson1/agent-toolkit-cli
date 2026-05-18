@@ -12,7 +12,7 @@ Make the existing harness/asset support matrix the **single source of truth** fo
 
 ## Background
 
-The current support matrix lives in `src/agent_toolkit/commands/_list_json.py:26-49` (`_USER_TARGETS` / `_PROJECT_TARGETS`):
+The current support matrix lives in `src/agent_toolkit_cli/commands/_list_json.py:26-49` (`_USER_TARGETS` / `_PROJECT_TARGETS`):
 
 |          | skill | agent | command | hook | plugin | mcp | pi-extension |
 |----------|:-----:|:-----:|:-------:|:----:|:------:|:---:|:------------:|
@@ -41,7 +41,7 @@ The current support matrix lives in `src/agent_toolkit/commands/_list_json.py:26
 
 | # | AC | Verification |
 |---|---|---|
-| 1 | A new module `src/agent_toolkit/_support.py` exports `SUPPORTED_PAIRS: frozenset[tuple[str, str]]`, `is_supported(harness, kind) -> bool`, and `UnsupportedPair(Exception)`. | unit test |
+| 1 | A new module `src/agent_toolkit_cli/_support.py` exports `SUPPORTED_PAIRS: frozenset[tuple[str, str]]`, `is_supported(harness, kind) -> bool`, and `UnsupportedPair(Exception)`. | unit test |
 | 2 | `_USER_TARGETS` and `_PROJECT_TARGETS` move to `_support.py`. `_list_json.py` and `_link_lib.py` import from there; the keys of either dict define `SUPPORTED_PAIRS` (no second source of truth). | grep finds one definition, two import sites |
 | 3 | `_link_lib.project_from_file()` no longer does `if target_dir is None: continue` for the supported-pair branch. The branch is unreachable because the loop iterates over `(kind for kind in KINDS_FOR_PROJECTION if is_supported(harness, kind))`. The defensive `assert target_dir is not None` documents the invariant. | unit test |
 | 4 | `_link_lib.maybe_link()` — and any other entry-point that takes `(harness, kind)` directly — call `is_supported(harness, kind)` and `raise UnsupportedPair(harness, kind)` if false. | unit test asserts the raise |

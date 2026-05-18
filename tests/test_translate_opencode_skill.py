@@ -20,12 +20,12 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
-from agent_toolkit.cli import main
-from agent_toolkit.commands._link_lib import (
+from agent_toolkit_cli.cli import main
+from agent_toolkit_cli.commands._link_lib import (
     _render_to_cache,
     _translate_slot_layout,
 )
-from agent_toolkit.commands._list_json import _build_inventory
+from agent_toolkit_cli.commands._list_json import _build_inventory
 
 
 # ---------------------------------------------------------------------------
@@ -128,7 +128,7 @@ def test_link_user_opencode_skill_creates_real_slot_dir_and_file_symlink(
     via_slot = slot_skill_md.read_text()
     assert "name: demo-skill" in via_slot
     assert "description: demo-skill skill." in via_slot
-    assert "agent_toolkit:" in via_slot
+    assert "agent_toolkit_cli:" in via_slot
 
 
 def test_link_user_opencode_skill_idempotent(env, seed_skill):

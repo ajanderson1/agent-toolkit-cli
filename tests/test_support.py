@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from agent_toolkit._support import (
+from agent_toolkit_cli._support import (
     ALL_HARNESSES,
     ALL_KINDS,
     SUPPORTED_PAIRS,
@@ -102,7 +102,7 @@ def test_supported_kinds_for_claude_returns_full_kind_set():
     for the harness given. claude has all five non-MCP, non-pi-extension
     kinds; mcp is intentionally absent from the SSOT (handled separately
     by per-harness MCP adapters)."""
-    from agent_toolkit._support import supported_kinds_for
+    from agent_toolkit_cli._support import supported_kinds_for
 
     assert supported_kinds_for("claude") == (
         "skill", "agent", "command", "hook", "plugin",
@@ -110,7 +110,7 @@ def test_supported_kinds_for_claude_returns_full_kind_set():
 
 
 def test_supported_kinds_for_unknown_harness_is_empty():
-    from agent_toolkit._support import supported_kinds_for
+    from agent_toolkit_cli._support import supported_kinds_for
 
     assert supported_kinds_for("nonsense") == ()
 
@@ -118,7 +118,7 @@ def test_supported_kinds_for_unknown_harness_is_empty():
 def test_slot_dir_user_scope_returns_home_anchored_absolute_path(tmp_path, monkeypatch):
     """`slot_dir` for `scope="user"` expands the `{home}` template and
     returns an absolute path. project_root is unused for user scope."""
-    from agent_toolkit._support import slot_dir
+    from agent_toolkit_cli._support import slot_dir
 
     monkeypatch.setenv("HOME", str(tmp_path))
     p = slot_dir("claude", "skill", "user", project_root=tmp_path / "ignored")
@@ -128,7 +128,7 @@ def test_slot_dir_user_scope_returns_home_anchored_absolute_path(tmp_path, monke
 
 def test_slot_dir_project_scope_returns_project_root_relative(tmp_path):
     """`slot_dir` for project scope returns a path under `project_root`."""
-    from agent_toolkit._support import slot_dir
+    from agent_toolkit_cli._support import slot_dir
 
     project = tmp_path / "myproject"
     p = slot_dir("claude", "skill", "project", project_root=project)
@@ -141,7 +141,7 @@ def test_slot_dir_unsupported_pair_returns_none(tmp_path):
 
     opencode agent is now supported (Phase 3 translate cell); use codex agent
     which remains a known gap."""
-    from agent_toolkit._support import slot_dir
+    from agent_toolkit_cli._support import slot_dir
 
     assert slot_dir("codex", "agent", "user", project_root=tmp_path) is None
     assert slot_dir("codex", "agent", "project", project_root=tmp_path) is None
@@ -169,6 +169,6 @@ def test_is_supported_unknown_scope_returns_false():
 
 def test_slot_dir_pi_agent_project_returns_none(tmp_path):
     """Acceptance #4: project-scope slot for (pi, agent) is None after the row is removed."""
-    from agent_toolkit._support import slot_dir
+    from agent_toolkit_cli._support import slot_dir
 
     assert slot_dir("pi", "agent", "project", project_root=tmp_path) is None

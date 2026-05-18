@@ -2,7 +2,7 @@ from pathlib import Path
 
 from click.testing import CliRunner
 
-from agent_toolkit.cli import main
+from agent_toolkit_cli.cli import main
 
 
 def _seed_repo(repo: Path) -> None:
@@ -115,9 +115,9 @@ def test_fix_reconciles_mcp_drift(tmp_path, monkeypatch):
     """fix reconciles drifted codex MCP entries to canonical form."""
     from click.testing import CliRunner
 
-    from agent_toolkit.cli import main
-    from agent_toolkit.commands._mcp_dispatch import _build_mcp_entries
-    from agent_toolkit.harness_adapters import get_adapter
+    from agent_toolkit_cli.cli import main
+    from agent_toolkit_cli.commands._mcp_dispatch import _build_mcp_entries
+    from agent_toolkit_cli.harness_adapters import get_adapter
 
     home = tmp_path / "home"
     home.mkdir()
@@ -158,7 +158,7 @@ def test_fix_skips_unimplemented_harness(tmp_path, monkeypatch):
     """
     from click.testing import CliRunner
 
-    from agent_toolkit.cli import main
+    from agent_toolkit_cli.cli import main
 
     home = tmp_path / "home"
     home.mkdir()
@@ -183,9 +183,9 @@ def test_fix_mcps_only_skips_agents_md(tmp_path, monkeypatch):
     """--mcps-only skips AGENTS.md region regen; only does MCP reconcile."""
     from click.testing import CliRunner
 
-    from agent_toolkit.cli import main
-    from agent_toolkit.commands._mcp_dispatch import _build_mcp_entries
-    from agent_toolkit.harness_adapters import get_adapter
+    from agent_toolkit_cli.cli import main
+    from agent_toolkit_cli.commands._mcp_dispatch import _build_mcp_entries
+    from agent_toolkit_cli.harness_adapters import get_adapter
 
     home = tmp_path / "home"
     home.mkdir()
@@ -229,9 +229,9 @@ def test_fix_mcp_no_op_when_no_drift(tmp_path, monkeypatch):
     """fix is a no-op (no writes) when MCPs are already aligned."""
     from click.testing import CliRunner
 
-    from agent_toolkit.cli import main
-    from agent_toolkit.commands._mcp_dispatch import _build_mcp_entries
-    from agent_toolkit.harness_adapters import get_adapter
+    from agent_toolkit_cli.cli import main
+    from agent_toolkit_cli.commands._mcp_dispatch import _build_mcp_entries
+    from agent_toolkit_cli.harness_adapters import get_adapter
 
     home = tmp_path / "home"
     home.mkdir()

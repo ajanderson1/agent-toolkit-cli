@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make the existing `(harness, kind)` support matrix the SSOT in a new `agent_toolkit._support` module, and turn every silent-skip on an unsupported pair into a structured `UnsupportedPair` raise — so users cannot queue an allow-list change that exits 0 with nothing written.
+**Goal:** Make the existing `(harness, kind)` support matrix the SSOT in a new `agent_toolkit_cli._support` module, and turn every silent-skip on an unsupported pair into a structured `UnsupportedPair` raise — so users cannot queue an allow-list change that exits 0 with nothing written.
 
-**Architecture:** Extract the matrix tables (`_USER_TARGETS`, `_PROJECT_TARGETS`) plus `ALL_HARNESSES` / `ALL_KINDS` from `commands/_list_json.py` into a new top-level helper module `src/agent_toolkit/_support.py`. Add `is_supported(harness, kind)`, `validate_pair(ctx, harness, kind)` (Click-exit pattern, parallels `validate_harness`), and an `UnsupportedPair` exception. `_link_lib.maybe_link()` raises the exception when given an unsupported pair from a direct caller; `project_from_file` filters its loop by `is_supported` so the dead `if target_dir is None: continue` branch becomes an `assert` invariant. `commands/unlink.py` and `doctor/symlinks.py` (which has its own copy of the table) are migrated to import the SSOT.
+**Architecture:** Extract the matrix tables (`_USER_TARGETS`, `_PROJECT_TARGETS`) plus `ALL_HARNESSES` / `ALL_KINDS` from `commands/_list_json.py` into a new top-level helper module `src/agent_toolkit_cli/_support.py`. Add `is_supported(harness, kind)`, `validate_pair(ctx, harness, kind)` (Click-exit pattern, parallels `validate_harness`), and an `UnsupportedPair` exception. `_link_lib.maybe_link()` raises the exception when given an unsupported pair from a direct caller; `project_from_file` filters its loop by `is_supported` so the dead `if target_dir is None: continue` branch becomes an `assert` invariant. `commands/unlink.py` and `doctor/symlinks.py` (which has its own copy of the table) are migrated to import the SSOT.
 
 **Tech Stack:** Python 3.12, Click, pytest, Textual (TUI tests use `App.run_test()` + Pilot).
 
@@ -14,13 +14,13 @@
 
 | File | Responsibility | Disposition |
 |---|---|---|
-| `src/agent_toolkit/_support.py` | NEW. SSOT for the support matrix; exports `SUPPORTED_PAIRS`, `ALL_HARNESSES`, `ALL_KINDS`, `_USER_TARGETS`, `_PROJECT_TARGETS`, `is_supported`, `validate_pair`, `UnsupportedPair`. | create |
-| `src/agent_toolkit/commands/_list_json.py` | Re-export `ALL_HARNESSES` / `ALL_KINDS` from `_support` (back-compat shim, since `commands/list.py` and tests import from here); drop the local `_USER_TARGETS` / `_PROJECT_TARGETS` definitions and the historical "Mirror of bin/lib/common.sh" comment. | edit |
-| `src/agent_toolkit/commands/_link_lib.py` | Drop local `ALL_HARNESSES`; import from `_support`. `maybe_link` calls `is_supported` and raises `UnsupportedPair` on mismatch. `project_from_file` projection loop filters by `is_supported`; the `if target_dir is None: continue` becomes `assert target_dir is not None`. `harness_target_dir` is unchanged (still returns `None` for unsupported pairs — used by callers like `list.py`'s `--report` that need a "may-fail" lookup). | edit |
-| `src/agent_toolkit/commands/unlink.py` | `_do_all`'s `if target_dir is None or not target_dir.is_dir(): continue` keeps the `not target_dir.is_dir()` branch but uses `is_supported` to short-circuit unsupported pairs (no behavior change — the existing `is_dir()` guard was effectively the same — but now reads from the SSOT). | edit |
-| `src/agent_toolkit/doctor/symlinks.py` | Drop local `_USER_PATHS` table; derive from the SSOT (`_PROJECT_TARGETS` keys + relative paths). Drop the "Mirror bin/lib/common.sh" comment. | edit |
-| `src/agent_toolkit/doctor/allowlist_audit.py` | Update import: `_USER_TARGETS` from `_support` instead of `commands._list_json`. | edit |
-| `src/agent_toolkit/commands/list.py` | Update import: `ALL_HARNESSES` from `_support` (or keep importing from `_list_json` shim — pick one). Loop in `_link_status` already handles `target_dir is None`; no logic change needed. | edit |
+| `src/agent_toolkit_cli/_support.py` | NEW. SSOT for the support matrix; exports `SUPPORTED_PAIRS`, `ALL_HARNESSES`, `ALL_KINDS`, `_USER_TARGETS`, `_PROJECT_TARGETS`, `is_supported`, `validate_pair`, `UnsupportedPair`. | create |
+| `src/agent_toolkit_cli/commands/_list_json.py` | Re-export `ALL_HARNESSES` / `ALL_KINDS` from `_support` (back-compat shim, since `commands/list.py` and tests import from here); drop the local `_USER_TARGETS` / `_PROJECT_TARGETS` definitions and the historical "Mirror of bin/lib/common.sh" comment. | edit |
+| `src/agent_toolkit_cli/commands/_link_lib.py` | Drop local `ALL_HARNESSES`; import from `_support`. `maybe_link` calls `is_supported` and raises `UnsupportedPair` on mismatch. `project_from_file` projection loop filters by `is_supported`; the `if target_dir is None: continue` becomes `assert target_dir is not None`. `harness_target_dir` is unchanged (still returns `None` for unsupported pairs — used by callers like `list.py`'s `--report` that need a "may-fail" lookup). | edit |
+| `src/agent_toolkit_cli/commands/unlink.py` | `_do_all`'s `if target_dir is None or not target_dir.is_dir(): continue` keeps the `not target_dir.is_dir()` branch but uses `is_supported` to short-circuit unsupported pairs (no behavior change — the existing `is_dir()` guard was effectively the same — but now reads from the SSOT). | edit |
+| `src/agent_toolkit_cli/doctor/symlinks.py` | Drop local `_USER_PATHS` table; derive from the SSOT (`_PROJECT_TARGETS` keys + relative paths). Drop the "Mirror bin/lib/common.sh" comment. | edit |
+| `src/agent_toolkit_cli/doctor/allowlist_audit.py` | Update import: `_USER_TARGETS` from `_support` instead of `commands._list_json`. | edit |
+| `src/agent_toolkit_cli/commands/list.py` | Update import: `ALL_HARNESSES` from `_support` (or keep importing from `_list_json` shim — pick one). Loop in `_link_status` already handles `target_dir is None`; no logic change needed. | edit |
 | `tests/test_support.py` | NEW. Cover `SUPPORTED_PAIRS` membership, `is_supported`, `validate_pair`, `UnsupportedPair`. | create |
 | `tests/test_link_lib.py` | Add cases for `maybe_link` raising `UnsupportedPair` and `project_from_file` filtering by `is_supported`. Update import path for `ALL_HARNESSES` if shim is dropped. | edit |
 | `tests/test_cli_link.py` | Add CliRunner case: `link --harness codex --plan -` with `agent: foo` exits 2 with structured message. | edit |
@@ -33,7 +33,7 @@ The historical `bin/lib/common.sh` comment in `commands/_list_json.py` and `doct
 ## Task 1: Add the `_support` SSOT module
 
 **Files:**
-- Create: `src/agent_toolkit/_support.py`
+- Create: `src/agent_toolkit_cli/_support.py`
 - Test: `tests/test_support.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -45,7 +45,7 @@ from __future__ import annotations
 
 import pytest
 
-from agent_toolkit._support import (
+from agent_toolkit_cli._support import (
     ALL_HARNESSES,
     ALL_KINDS,
     SUPPORTED_PAIRS,
@@ -130,12 +130,12 @@ def test_validate_pair_rejects_unsupported_with_exit_2(capsys):
 
 Run: `cd /Users/ajanderson/GitHub/projects/agent-toolkit-cli/.worktrees/fix-30-close-harness-asset-adapter-gaps && uv run pytest tests/test_support.py -v`
 
-Expected: FAIL with `ModuleNotFoundError: No module named 'agent_toolkit._support'`.
+Expected: FAIL with `ModuleNotFoundError: No module named 'agent_toolkit_cli._support'`.
 
 - [ ] **Step 3: Write minimal implementation**
 
 ```python
-# src/agent_toolkit/_support.py
+# src/agent_toolkit_cli/_support.py
 """Single source of truth for the (harness, asset-kind) support matrix.
 
 The matrix encodes which (harness, kind) pairs the toolkit can currently
@@ -260,7 +260,7 @@ Expected: 9 passed.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/agent_toolkit/_support.py tests/test_support.py
+git add src/agent_toolkit_cli/_support.py tests/test_support.py
 git commit -m "feat(_support): SSOT for (harness, kind) matrix + UnsupportedPair"
 ```
 
@@ -269,7 +269,7 @@ git commit -m "feat(_support): SSOT for (harness, kind) matrix + UnsupportedPair
 ## Task 2: Migrate `_list_json.py` to import from `_support`
 
 **Files:**
-- Modify: `src/agent_toolkit/commands/_list_json.py:18-58`
+- Modify: `src/agent_toolkit_cli/commands/_list_json.py:18-58`
 - Test: existing `tests/test_list_json.py` (must keep passing)
 
 - [ ] **Step 1: Read the current state**
@@ -283,7 +283,7 @@ Replace lines 18-58 (everything from the `# Kept in lockstep` comment through th
 ```python
 # Re-export from the SSOT module so existing callers (commands/list.py,
 # tests/test_link_lib.py, etc.) keep their import paths working.
-from agent_toolkit._support import (  # noqa: F401  (re-exported)
+from agent_toolkit_cli._support import (  # noqa: F401  (re-exported)
     ALL_HARNESSES,
     ALL_KINDS,
     _PROJECT_TARGETS,
@@ -307,7 +307,7 @@ Expected: all pass (the TUI consumes `_list_json` JSON, not Python imports).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/agent_toolkit/commands/_list_json.py
+git add src/agent_toolkit_cli/commands/_list_json.py
 git commit -m "refactor(_list_json): import support matrix from _support SSOT"
 ```
 
@@ -316,7 +316,7 @@ git commit -m "refactor(_list_json): import support matrix from _support SSOT"
 ## Task 3: Migrate `_link_lib.py` to import from `_support`; raise `UnsupportedPair` in `maybe_link`
 
 **Files:**
-- Modify: `src/agent_toolkit/commands/_link_lib.py:17-20, 145-188, 264-266`
+- Modify: `src/agent_toolkit_cli/commands/_link_lib.py:17-20, 145-188, 264-266`
 - Test: `tests/test_link_lib.py`
 
 - [ ] **Step 1: Write the failing tests for `maybe_link` raising and `project_from_file` filtering**
@@ -331,8 +331,8 @@ Append to `tests/test_link_lib.py`:
 
 def test_maybe_link_raises_unsupported_pair_for_codex_agent(tmp_path):
     """maybe_link must refuse an unsupported (harness, kind) loudly."""
-    from agent_toolkit._support import UnsupportedPair
-    from agent_toolkit.commands._link_lib import LinkCounters, maybe_link
+    from agent_toolkit_cli._support import UnsupportedPair
+    from agent_toolkit_cli.commands._link_lib import LinkCounters, maybe_link
 
     asset_path = tmp_path / "agent.md"
     asset_path.write_text("---\nspec:\n  harnesses: [codex]\n---\nbody\n")
@@ -364,7 +364,7 @@ def test_project_from_file_skips_unsupported_kinds_silently(tmp_path, monkeypatc
     supported pair besides MCP). No raise — the loop's pre-filter is the
     boundary; raises happen at direct entry-points like `maybe_link`.
     """
-    from agent_toolkit.commands._link_lib import LinkCounters, project_from_file
+    from agent_toolkit_cli.commands._link_lib import LinkCounters, project_from_file
 
     monkeypatch.setenv("HOME", str(tmp_path))
     project_root = tmp_path / "project"
@@ -404,8 +404,8 @@ Expected: FAIL — first test fails with no raise (current `maybe_link` falls th
 Replace:
 
 ```python
-from agent_toolkit.commands._list_json import _PROJECT_TARGETS, _USER_TARGETS
-from agent_toolkit.walker import Asset, discover_assets, extract_frontmatter, frontmatter_path
+from agent_toolkit_cli.commands._list_json import _PROJECT_TARGETS, _USER_TARGETS
+from agent_toolkit_cli.walker import Asset, discover_assets, extract_frontmatter, frontmatter_path
 
 ALL_HARNESSES: tuple[str, ...] = ("claude", "codex", "opencode", "pi")
 ```
@@ -413,14 +413,14 @@ ALL_HARNESSES: tuple[str, ...] = ("claude", "codex", "opencode", "pi")
 With:
 
 ```python
-from agent_toolkit._support import (
+from agent_toolkit_cli._support import (
     ALL_HARNESSES,
     UnsupportedPair,
     _PROJECT_TARGETS,
     _USER_TARGETS,
     is_supported,
 )
-from agent_toolkit.walker import Asset, discover_assets, extract_frontmatter, frontmatter_path
+from agent_toolkit_cli.walker import Asset, discover_assets, extract_frontmatter, frontmatter_path
 ```
 
 - [ ] **Step 4: Edit `maybe_link` to raise `UnsupportedPair` (around line 145-188)**
@@ -491,7 +491,7 @@ Expected: 422+ tests, all green.
 - [ ] **Step 8: Commit**
 
 ```bash
-git add src/agent_toolkit/commands/_link_lib.py tests/test_link_lib.py
+git add src/agent_toolkit_cli/commands/_link_lib.py tests/test_link_lib.py
 git commit -m "fix(_link_lib): raise UnsupportedPair, filter project_from_file by SSOT"
 ```
 
@@ -525,7 +525,7 @@ def test_link_plan_with_unsupported_pair_exits_2_with_message(tmp_path, monkeypa
     and the stderr names the pair plus the supported kinds for codex."""
     from click.testing import CliRunner
 
-    from agent_toolkit.cli import cli
+    from agent_toolkit_cli.cli import cli
 
     monkeypatch.setenv("HOME", str(tmp_path))
     toolkit = tmp_path / "toolkit"
@@ -567,23 +567,23 @@ Expected: FAIL — current behaviour exits 0 (silent skip).
 
 - [ ] **Step 4: Wire the guard into the link command path**
 
-Open `src/agent_toolkit/commands/link.py`. Find the plan-iteration code (uses `iter_plan_lines`, then per-line dispatches). For each `(kind, slug)` from the plan, call `validate_pair(ctx, harness, kind)` before queuing the work.
+Open `src/agent_toolkit_cli/commands/link.py`. Find the plan-iteration code (uses `iter_plan_lines`, then per-line dispatches). For each `(kind, slug)` from the plan, call `validate_pair(ctx, harness, kind)` before queuing the work.
 
 If the link command does not already have a `ctx`, accept it via `@click.pass_context`. Locate the loop that consumes `iter_plan_lines` output; insert the validation just after parsing each line and before any `maybe_link` call.
 
 If the validation lives in `_link_lib` rather than `link.py` (it's the more natural seam), add a tiny helper:
 
 ```python
-# in src/agent_toolkit/commands/_link_lib.py
+# in src/agent_toolkit_cli/commands/_link_lib.py
 def validate_plan_pair(ctx: click.Context, harness: str, kind: str) -> None:
     """Click-shape wrapper: exit 2 if (harness, kind) is unsupported."""
-    from agent_toolkit._support import validate_pair
+    from agent_toolkit_cli._support import validate_pair
     validate_pair(ctx, harness, kind)
 ```
 
 …and call `validate_plan_pair(ctx, harness, kind)` in the link command after each `iter_plan_lines` iteration.
 
-(Implementer: read `src/agent_toolkit/commands/link.py` first to find the right insertion point. The change is one line per plan-iteration site; the spec assumes there are 1 or 2 such sites. If more — apply to all.)
+(Implementer: read `src/agent_toolkit_cli/commands/link.py` first to find the right insertion point. The change is one line per plan-iteration site; the spec assumes there are 1 or 2 such sites. If more — apply to all.)
 
 - [ ] **Step 5: Run the test to verify it passes**
 
@@ -600,7 +600,7 @@ Expected: all pass.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/agent_toolkit/commands/link.py src/agent_toolkit/commands/_link_lib.py tests/test_cli_link.py
+git add src/agent_toolkit_cli/commands/link.py src/agent_toolkit_cli/commands/_link_lib.py tests/test_cli_link.py
 git commit -m "feat(link): exit 2 on unsupported (harness, kind) plan lines"
 ```
 
@@ -609,9 +609,9 @@ git commit -m "feat(link): exit 2 on unsupported (harness, kind) plan lines"
 ## Task 5: Migrate `unlink.py`, `doctor/symlinks.py`, `doctor/allowlist_audit.py` to the SSOT
 
 **Files:**
-- Modify: `src/agent_toolkit/commands/unlink.py:19, 158-160`
-- Modify: `src/agent_toolkit/doctor/symlinks.py:1-22`
-- Modify: `src/agent_toolkit/doctor/allowlist_audit.py:19`
+- Modify: `src/agent_toolkit_cli/commands/unlink.py:19, 158-160`
+- Modify: `src/agent_toolkit_cli/doctor/symlinks.py:1-22`
+- Modify: `src/agent_toolkit_cli/doctor/allowlist_audit.py:19`
 
 - [ ] **Step 1: Read existing test coverage for these files**
 
@@ -635,7 +635,7 @@ The existing line 158-160:
 Replace with:
 
 ```python
-        from agent_toolkit._support import is_supported  # local import to avoid cycles
+        from agent_toolkit_cli._support import is_supported  # local import to avoid cycles
         if not is_supported(harness, kind):
             continue
         target_dir = harness_target_dir(harness, kind, scope, project_root)
@@ -650,7 +650,7 @@ Reasoning: `target_dir is None` becomes unreachable behind the `is_supported` fi
 Replace lines 10-22 (the local `_USER_PATHS` table and the `# Mirror …` comment) with:
 
 ```python
-from agent_toolkit._support import _USER_TARGETS
+from agent_toolkit_cli._support import _USER_TARGETS
 
 # Strip the "{home}/" template prefix to get a relative path under $HOME,
 # matching this module's existing convention of joining with `home / rel`.
@@ -667,13 +667,13 @@ This preserves the existing `_USER_PATHS` shape while sourcing data from the SSO
 Change line 19:
 
 ```python
-from agent_toolkit.commands._list_json import _USER_TARGETS
+from agent_toolkit_cli.commands._list_json import _USER_TARGETS
 ```
 
 to:
 
 ```python
-from agent_toolkit._support import _USER_TARGETS
+from agent_toolkit_cli._support import _USER_TARGETS
 ```
 
 - [ ] **Step 5: Run pytest**
@@ -685,7 +685,7 @@ Expected: 422+ tests pass.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/agent_toolkit/commands/unlink.py src/agent_toolkit/doctor/symlinks.py src/agent_toolkit/doctor/allowlist_audit.py
+git add src/agent_toolkit_cli/commands/unlink.py src/agent_toolkit_cli/doctor/symlinks.py src/agent_toolkit_cli/doctor/allowlist_audit.py
 git commit -m "refactor(doctor, unlink): consume the _support SSOT"
 ```
 

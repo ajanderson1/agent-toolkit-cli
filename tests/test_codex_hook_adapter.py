@@ -13,7 +13,7 @@ def _make_entry(name: str = "demo", *, events: tuple[str, ...] = ("PreToolUse",)
                 status_message: str | None = None,
                 script_files: dict[Path, bytes] | None = None,
                 home: Path | None = None):
-    from agent_toolkit.harness_adapters.base import HookEntry
+    from agent_toolkit_cli.harness_adapters.base import HookEntry
 
     if home is None:
         home = Path("/tmp")  # tests pass home explicitly when relevant
@@ -29,7 +29,7 @@ def _make_entry(name: str = "demo", *, events: tuple[str, ...] = ("PreToolUse",)
 
 
 def test_codex_hook_adapter_basic_attrs():
-    from agent_toolkit.harness_adapters.codex_hook import CodexHookAdapter
+    from agent_toolkit_cli.harness_adapters.codex_hook import CodexHookAdapter
 
     a = CodexHookAdapter()
     assert a.name == "codex"
@@ -37,7 +37,7 @@ def test_codex_hook_adapter_basic_attrs():
 
 
 def test_codex_hook_user_config_target(monkeypatch, tmp_path):
-    from agent_toolkit.harness_adapters.codex_hook import CodexHookAdapter
+    from agent_toolkit_cli.harness_adapters.codex_hook import CodexHookAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     a = CodexHookAdapter()
@@ -45,7 +45,7 @@ def test_codex_hook_user_config_target(monkeypatch, tmp_path):
 
 
 def test_codex_hook_user_script_root(monkeypatch, tmp_path):
-    from agent_toolkit.harness_adapters.codex_hook import CodexHookAdapter
+    from agent_toolkit_cli.harness_adapters.codex_hook import CodexHookAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     a = CodexHookAdapter()
@@ -54,7 +54,7 @@ def test_codex_hook_user_script_root(monkeypatch, tmp_path):
 
 def test_codex_hook_project_scope_returns_none(tmp_path):
     """PR1 is user-scope only — project scope returns None to silently skip."""
-    from agent_toolkit.harness_adapters.codex_hook import CodexHookAdapter
+    from agent_toolkit_cli.harness_adapters.codex_hook import CodexHookAdapter
 
     a = CodexHookAdapter()
     assert a.config_target("project", tmp_path) is None
@@ -62,15 +62,15 @@ def test_codex_hook_project_scope_returns_none(tmp_path):
 
 
 def test_codex_hook_can_install_accepts_known_events(tmp_path):
-    from agent_toolkit.harness_adapters.codex_hook import CodexHookAdapter
+    from agent_toolkit_cli.harness_adapters.codex_hook import CodexHookAdapter
 
     a = CodexHookAdapter()
     a.can_install(_make_entry(events=("PreToolUse", "Stop"), home=tmp_path))  # no exception
 
 
 def test_codex_hook_can_install_refuses_unknown_event(tmp_path):
-    from agent_toolkit.harness_adapters.codex_hook import CodexHookAdapter
-    from agent_toolkit.harness_adapters.base import CannotInstall
+    from agent_toolkit_cli.harness_adapters.codex_hook import CodexHookAdapter
+    from agent_toolkit_cli.harness_adapters.base import CannotInstall
 
     a = CodexHookAdapter()
     with pytest.raises(CannotInstall, match="unknown.*Boom"):
@@ -78,8 +78,8 @@ def test_codex_hook_can_install_refuses_unknown_event(tmp_path):
 
 
 def test_codex_hook_can_install_refuses_empty_events(tmp_path):
-    from agent_toolkit.harness_adapters.codex_hook import CodexHookAdapter
-    from agent_toolkit.harness_adapters.base import CannotInstall
+    from agent_toolkit_cli.harness_adapters.codex_hook import CodexHookAdapter
+    from agent_toolkit_cli.harness_adapters.base import CannotInstall
 
     a = CodexHookAdapter()
     with pytest.raises(CannotInstall, match="at least one event"):
@@ -91,8 +91,8 @@ def test_codex_hook_can_install_refuses_command_outside_script_root(monkeypatch,
     in the command path. It does NOT anchor to $HOME — that's the dispatcher's
     job at write time, where scope/project_root are available. This test
     exercises the truly-bad case (no .codex segment at all)."""
-    from agent_toolkit.harness_adapters.codex_hook import CodexHookAdapter
-    from agent_toolkit.harness_adapters.base import CannotInstall
+    from agent_toolkit_cli.harness_adapters.codex_hook import CodexHookAdapter
+    from agent_toolkit_cli.harness_adapters.base import CannotInstall
 
     monkeypatch.setenv("HOME", str(tmp_path))
     a = CodexHookAdapter()
@@ -103,7 +103,7 @@ def test_codex_hook_can_install_refuses_command_outside_script_root(monkeypatch,
 
 def test_codex_hook_list_installed_returns_empty_when_root_missing(monkeypatch, tmp_path):
     """No ~/.codex/agent-toolkit-hooks/ directory → empty set."""
-    from agent_toolkit.harness_adapters.codex_hook import CodexHookAdapter
+    from agent_toolkit_cli.harness_adapters.codex_hook import CodexHookAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     a = CodexHookAdapter()
@@ -112,7 +112,7 @@ def test_codex_hook_list_installed_returns_empty_when_root_missing(monkeypatch, 
 
 def test_codex_hook_list_installed_returns_slug_dirs(monkeypatch, tmp_path):
     """list_installed returns the names of slug subdirectories under script_root."""
-    from agent_toolkit.harness_adapters.codex_hook import CodexHookAdapter
+    from agent_toolkit_cli.harness_adapters.codex_hook import CodexHookAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     root = tmp_path / ".codex" / "agent-toolkit-hooks"
@@ -138,7 +138,7 @@ def _seed_home(tmp_path: Path, monkeypatch) -> Path:
 
 def test_codex_hook_diff_creates_file_when_missing(monkeypatch, tmp_path):
     """No config.toml on disk → create-action with rendered TOML + create-action per script file."""
-    from agent_toolkit.harness_adapters.codex_hook import CodexHookAdapter
+    from agent_toolkit_cli.harness_adapters.codex_hook import CodexHookAdapter
 
     home = _seed_home(tmp_path, monkeypatch)
     a = CodexHookAdapter()
@@ -157,8 +157,8 @@ def test_codex_hook_diff_creates_file_when_missing(monkeypatch, tmp_path):
 
 def test_codex_hook_diff_round_trip_byte_equal(monkeypatch, tmp_path):
     """link → write → re-diff should be empty."""
-    from agent_toolkit.harness_adapters.codex_hook import CodexHookAdapter
-    from agent_toolkit.commands._mcp_dispatch import _atomic_write_bytes
+    from agent_toolkit_cli.harness_adapters.codex_hook import CodexHookAdapter
+    from agent_toolkit_cli.commands._mcp_dispatch import _atomic_write_bytes
 
     home = _seed_home(tmp_path, monkeypatch)
     a = CodexHookAdapter()
@@ -176,8 +176,8 @@ def test_codex_hook_diff_round_trip_byte_equal(monkeypatch, tmp_path):
 
 def test_codex_hook_diff_unlink_byte_equal_to_original(monkeypatch, tmp_path):
     """link → write → unlink → write should restore byte-equality with the original."""
-    from agent_toolkit.harness_adapters.codex_hook import CodexHookAdapter
-    from agent_toolkit.commands._mcp_dispatch import _atomic_write_bytes
+    from agent_toolkit_cli.harness_adapters.codex_hook import CodexHookAdapter
+    from agent_toolkit_cli.commands._mcp_dispatch import _atomic_write_bytes
 
     home = _seed_home(tmp_path, monkeypatch)
     target = home / ".codex" / "config.toml"
@@ -215,8 +215,8 @@ def test_codex_hook_diff_unlink_byte_equal_to_original(monkeypatch, tmp_path):
 
 def test_codex_hook_diff_preserves_hand_rolled_groups(monkeypatch, tmp_path):
     """A user-authored matcher-group whose command is not under script_root must survive a link."""
-    from agent_toolkit.harness_adapters.codex_hook import CodexHookAdapter
-    from agent_toolkit.commands._mcp_dispatch import _atomic_write_bytes
+    from agent_toolkit_cli.harness_adapters.codex_hook import CodexHookAdapter
+    from agent_toolkit_cli.commands._mcp_dispatch import _atomic_write_bytes
 
     home = _seed_home(tmp_path, monkeypatch)
     target = home / ".codex" / "config.toml"
@@ -238,8 +238,8 @@ def test_codex_hook_diff_preserves_hand_rolled_groups(monkeypatch, tmp_path):
 
 def test_codex_hook_diff_multi_event_produces_one_group_per_event(monkeypatch, tmp_path):
     """An entry with events=(PreToolUse, Stop) appears under both event arrays."""
-    from agent_toolkit.harness_adapters.codex_hook import CodexHookAdapter
-    from agent_toolkit.commands._mcp_dispatch import _atomic_write_bytes
+    from agent_toolkit_cli.harness_adapters.codex_hook import CodexHookAdapter
+    from agent_toolkit_cli.commands._mcp_dispatch import _atomic_write_bytes
 
     home = _seed_home(tmp_path, monkeypatch)
     a = CodexHookAdapter()
@@ -256,8 +256,8 @@ def test_codex_hook_diff_multi_event_produces_one_group_per_event(monkeypatch, t
 
 def test_codex_hook_entry_drift_detects_changed_script(monkeypatch, tmp_path):
     """Drift = on-disk script bytes differ from entry's rendered bytes."""
-    from agent_toolkit.harness_adapters.codex_hook import CodexHookAdapter
-    from agent_toolkit.commands._mcp_dispatch import _atomic_write_bytes
+    from agent_toolkit_cli.harness_adapters.codex_hook import CodexHookAdapter
+    from agent_toolkit_cli.commands._mcp_dispatch import _atomic_write_bytes
 
     home = _seed_home(tmp_path, monkeypatch)
     a = CodexHookAdapter()
@@ -283,8 +283,8 @@ def test_codex_hook_diff_preserves_hand_rolled_unknown_event(monkeypatch, tmp_pa
     keys in the table, not just the six known events. Otherwise a future
     Codex event with user content would be silently destroyed.
     """
-    from agent_toolkit.harness_adapters.codex_hook import CodexHookAdapter
-    from agent_toolkit.commands._mcp_dispatch import _atomic_write_bytes
+    from agent_toolkit_cli.harness_adapters.codex_hook import CodexHookAdapter
+    from agent_toolkit_cli.commands._mcp_dispatch import _atomic_write_bytes
 
     home = _seed_home(tmp_path, monkeypatch)
     target = home / ".codex" / "config.toml"

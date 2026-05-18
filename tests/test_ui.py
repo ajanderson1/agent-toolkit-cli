@@ -2,7 +2,7 @@ import os
 
 import pytest
 
-from agent_toolkit._ui import header, summary
+from agent_toolkit_cli._ui import header, summary
 
 
 def test_header_writes_to_stderr(capsys):

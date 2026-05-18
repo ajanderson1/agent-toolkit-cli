@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
-from agent_toolkit.cli import main
+from agent_toolkit_cli.cli import main
 
 
 # ---------------------------------------------------------------------------
@@ -173,20 +173,20 @@ def _seed_pi_extension(toolkit_root: Path, slug: str) -> Path:
 
 
 def test_parse_requires_entries_normal():
-    from agent_toolkit._requires import parse_requires_entries
+    from agent_toolkit_cli._requires import parse_requires_entries
 
     result = parse_requires_entries(["pi-extension:pi-subagents", "skill:foo"])
     assert result == [("pi-extension", "pi-subagents"), ("skill", "foo")]
 
 
 def test_parse_requires_entries_empty():
-    from agent_toolkit._requires import parse_requires_entries
+    from agent_toolkit_cli._requires import parse_requires_entries
 
     assert parse_requires_entries([]) == []
 
 
 def test_parse_requires_entries_malformed_no_colon():
-    from agent_toolkit._requires import parse_requires_entries
+    from agent_toolkit_cli._requires import parse_requires_entries
 
     result = parse_requires_entries(["no-colon-here"])
     assert result == [("", "no-colon-here")]
@@ -194,7 +194,7 @@ def test_parse_requires_entries_malformed_no_colon():
 
 def test_parse_requires_entries_first_colon_only():
     """Extra colons in slug should not cause problems."""
-    from agent_toolkit._requires import parse_requires_entries
+    from agent_toolkit_cli._requires import parse_requires_entries
 
     result = parse_requires_entries(["skill:foo"])
     assert result == [("skill", "foo")]
@@ -206,7 +206,7 @@ def test_parse_requires_entries_first_colon_only():
 
 
 def test_requires_unsatisfied_carries_fields():
-    from agent_toolkit._requires import RequiresUnsatisfied
+    from agent_toolkit_cli._requires import RequiresUnsatisfied
 
     exc = RequiresUnsatisfied(
         asset_slug="ceo",
@@ -229,7 +229,7 @@ def test_requires_unsatisfied_carries_fields():
 
 def test_load_asset_record_no_requires(tmp_path):
     """Asset without spec.requires → requires == {}."""
-    from agent_toolkit.walker import discover_assets, load_asset_record
+    from agent_toolkit_cli.walker import discover_assets, load_asset_record
 
     _seed_skill(tmp_path, "alpha", ["claude"])
     [asset] = [a for a in discover_assets(tmp_path) if a.kind == "skill"]
@@ -239,7 +239,7 @@ def test_load_asset_record_no_requires(tmp_path):
 
 def test_load_asset_record_with_requires(tmp_path):
     """Asset with spec.requires → requires populated."""
-    from agent_toolkit.walker import discover_assets, load_asset_record
+    from agent_toolkit_cli.walker import discover_assets, load_asset_record
 
     _seed_skill_with_requires(
         tmp_path,
@@ -254,7 +254,7 @@ def test_load_asset_record_with_requires(tmp_path):
 
 def test_load_asset_record_multi_harness_requires(tmp_path):
     """spec.requires with multiple harnesses is fully preserved."""
-    from agent_toolkit.walker import discover_assets, load_asset_record
+    from agent_toolkit_cli.walker import discover_assets, load_asset_record
 
     _seed_skill_with_requires(
         tmp_path,
@@ -278,7 +278,7 @@ def test_load_asset_record_multi_harness_requires(tmp_path):
 
 def test_project_from_file_no_requires_projects_fine(tmp_path, monkeypatch):
     """Asset without spec.requires → projects without error."""
-    from agent_toolkit.commands._link_lib import LinkCounters, project_from_file
+    from agent_toolkit_cli.commands._link_lib import LinkCounters, project_from_file
 
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     (tmp_path / "home" / ".claude" / "skills").mkdir(parents=True)
@@ -307,7 +307,7 @@ def test_project_from_file_no_requires_projects_fine(tmp_path, monkeypatch):
 
 def test_project_from_file_requires_satisfied_projects_fine(tmp_path, monkeypatch):
     """Asset with spec.requires peer in allowlist → projects without error."""
-    from agent_toolkit.commands._link_lib import LinkCounters, project_from_file
+    from agent_toolkit_cli.commands._link_lib import LinkCounters, project_from_file
 
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     (tmp_path / "home" / ".claude" / "skills").mkdir(parents=True)
@@ -346,8 +346,8 @@ def test_project_from_file_requires_satisfied_projects_fine(tmp_path, monkeypatc
 
 def test_project_from_file_requires_not_satisfied_raises(tmp_path, monkeypatch):
     """Asset with spec.requires peer NOT in allowlist → RequiresUnsatisfied raised."""
-    from agent_toolkit._requires import RequiresUnsatisfied
-    from agent_toolkit.commands._link_lib import LinkCounters, project_from_file
+    from agent_toolkit_cli._requires import RequiresUnsatisfied
+    from agent_toolkit_cli.commands._link_lib import LinkCounters, project_from_file
 
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     (tmp_path / "home" / ".pi" / "agent" / "skills").mkdir(parents=True)
@@ -388,7 +388,7 @@ def test_project_from_file_requires_not_satisfied_raises(tmp_path, monkeypatch):
 
 def test_project_from_file_requires_not_enforced_by_default(tmp_path, monkeypatch):
     """enforce_requires defaults to False → missing peer does not block projection."""
-    from agent_toolkit.commands._link_lib import LinkCounters, project_from_file
+    from agent_toolkit_cli.commands._link_lib import LinkCounters, project_from_file
 
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     (tmp_path / "home" / ".pi" / "agent" / "skills").mkdir(parents=True)
@@ -428,7 +428,7 @@ def test_project_from_file_requires_not_enforced_by_default(tmp_path, monkeypatc
 
 def test_requires_only_relevant_harness_checked(tmp_path, monkeypatch):
     """spec.requires with multiple harnesses — projecting for claude only checks claude's peers."""
-    from agent_toolkit.commands._link_lib import LinkCounters, project_from_file
+    from agent_toolkit_cli.commands._link_lib import LinkCounters, project_from_file
 
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     (tmp_path / "home" / ".claude" / "skills").mkdir(parents=True)
@@ -472,8 +472,8 @@ def test_requires_only_relevant_harness_checked(tmp_path, monkeypatch):
 
 def test_requires_pi_harness_fails_when_pi_peer_missing(tmp_path, monkeypatch):
     """Projecting for pi with missing pi peer → RequiresUnsatisfied."""
-    from agent_toolkit._requires import RequiresUnsatisfied
-    from agent_toolkit.commands._link_lib import LinkCounters, project_from_file
+    from agent_toolkit_cli._requires import RequiresUnsatisfied
+    from agent_toolkit_cli.commands._link_lib import LinkCounters, project_from_file
 
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     (tmp_path / "home" / ".pi" / "agent" / "skills").mkdir(parents=True)

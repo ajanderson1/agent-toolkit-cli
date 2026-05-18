@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from agent_toolkit._repo_resolution import RepoNotFoundError, resolve_toolkit_root
+from agent_toolkit_cli._repo_resolution import RepoNotFoundError, resolve_toolkit_root
 
 
 def make_toolkit_repo(root: Path) -> Path:
@@ -109,7 +109,7 @@ def test_cli_inventory_uses_env_var_when_no_flag(
     silently fall back to CWD and return an empty inventory."""
     from click.testing import CliRunner
 
-    from agent_toolkit.cli import main
+    from agent_toolkit_cli.cli import main
 
     repo = _populate_minimal_repo(tmp_path / "repo")
     elsewhere = tmp_path / "elsewhere"
@@ -129,7 +129,7 @@ def test_cli_check_uses_env_var_when_no_flag(
     must validate the env-var repo — not silently report '0 assets'."""
     from click.testing import CliRunner
 
-    from agent_toolkit.cli import main
+    from agent_toolkit_cli.cli import main
 
     repo = _populate_minimal_repo(tmp_path / "repo")
     elsewhere = tmp_path / "elsewhere"
@@ -149,7 +149,7 @@ def test_cli_inventory_walk_up_finds_marker(
     CLI must walk up to the marker."""
     from click.testing import CliRunner
 
-    from agent_toolkit.cli import main
+    from agent_toolkit_cli.cli import main
 
     repo = _populate_minimal_repo(tmp_path / "repo")
     deep = repo / "skills" / "alpha"
@@ -168,7 +168,7 @@ def test_cli_inventory_errors_when_nothing_resolves(
     must error (not silently return an empty inventory)."""
     from click.testing import CliRunner
 
-    from agent_toolkit.cli import main
+    from agent_toolkit_cli.cli import main
 
     home = tmp_path / "empty-home"
     home.mkdir()

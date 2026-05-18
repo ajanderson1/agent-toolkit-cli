@@ -25,8 +25,8 @@ The "broken symlink (target missing)" case is **not duplicated** — `symlinks.p
 
 | File | Change |
 |---|---|
-| `src/agent_toolkit/doctor/allowlist_audit.py` | **Create.** Two-check group: allow-list rot + cross-toolkit symlinks. |
-| `src/agent_toolkit/commands/doctor.py` | Import the new group. Add to `_GROUPS` tuple. Add to `_run_global` runners list. |
+| `src/agent_toolkit_cli/doctor/allowlist_audit.py` | **Create.** Two-check group: allow-list rot + cross-toolkit symlinks. |
+| `src/agent_toolkit_cli/commands/doctor.py` | Import the new group. Add to `_GROUPS` tuple. Add to `_run_global` runners list. |
 | `tests/test_doctor_allowlist_audit.py` | **Create.** Test scenarios per the spec acceptance list. |
 
 ## Tests

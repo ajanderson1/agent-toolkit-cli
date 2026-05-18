@@ -20,7 +20,7 @@ import subprocess
 
 import pytest
 
-from agent_toolkit.ingest.types import Proposal
+from agent_toolkit_cli.ingest.types import Proposal
 
 # These tests run `git init` + `git config user.email/name` + `git commit` in
 # subprocesses with cwd=tmp_path. When the host repo is a parent of tmp_path,
@@ -41,7 +41,7 @@ pytestmark = pytest.mark.skip(
 import os
 import subprocess
 
-from agent_toolkit.ingest.types import Proposal
+from agent_toolkit_cli.ingest.types import Proposal
 ```
 
 `import pytest` is removed too — once the `pytestmark` line is gone, nothing else in the file references `pytest.*`. `os` and `subprocess` stay (used by `_git_env`, `_init_git_repo`, the inline subprocess calls).

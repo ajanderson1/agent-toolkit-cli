@@ -13,9 +13,9 @@ import pytest
 
 @pytest.fixture
 def tui_env(tmp_path, monkeypatch):
-    if shutil.which("agent-toolkit") is None:
+    if shutil.which("agent-toolkit-cli") is None:
         pytest.skip(
-            "agent-toolkit CLI not on PATH; "
+            "agent-toolkit-cli CLI not on PATH; "
             "run `uv pip install -e .` from the project root first"
         )
 
@@ -99,7 +99,7 @@ def test_tui_package_does_not_import_adapters():
 
     import agent_toolkit_tui
 
-    forbidden = "agent_toolkit.harness_adapters"
+    forbidden = "agent_toolkit_cli.harness_adapters"
     tui_path = Path(agent_toolkit_tui.__file__).parent
 
     for _finder, name, _ispkg in pkgutil.walk_packages(

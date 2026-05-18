@@ -446,7 +446,7 @@ For scripted use and Layer-3 smoke tests:
 Validate every asset's frontmatter against the v1alpha2 schema and detect AGENTS.md drift.
 
 ```
-Usage: uv run agent-toolkit check [--exit-code]
+Usage: uv run agent-toolkit-cli check [--exit-code]
 ```
 
 | Flag | Description |
@@ -459,7 +459,7 @@ automatically on every commit.
 
 **Example:**
 ```bash
-uv run agent-toolkit check --exit-code
+uv run agent-toolkit-cli check --exit-code
 ```
 
 > _Header & summary go to stderr; suppress with `--quiet` or `AGENT_TOOLKIT_QUIET=1`._
@@ -471,7 +471,7 @@ uv run agent-toolkit check --exit-code
 Regenerate auto-generated regions in `AGENTS.md` and/or reconcile MCP drift.
 
 ```
-Usage: uv run agent-toolkit fix [--only=<region>] [--to-stdout] [--harness] [--scope] [--mcps-only]
+Usage: uv run agent-toolkit-cli fix [--only=<region>] [--to-stdout] [--harness] [--scope] [--mcps-only]
 ```
 
 | Flag | Description |
@@ -501,13 +501,13 @@ are allowed. When nothing would change, file mtime is preserved.
 **Examples:**
 ```bash
 # Regenerate AGENTS.md component table:
-uv run agent-toolkit fix --only=component-table
+uv run agent-toolkit-cli fix --only=component-table
 
 # Reconcile MCPs for the current user/codex scope:
-uv run agent-toolkit fix --mcps-only
+uv run agent-toolkit-cli fix --mcps-only
 
 # Regenerate AGENTS.md AND reconcile MCPs in one go:
-uv run agent-toolkit fix
+uv run agent-toolkit-cli fix
 ```
 
 > _Header & summary go to stderr; suppress with `--quiet` or `AGENT_TOOLKIT_QUIET=1`._
@@ -519,7 +519,7 @@ uv run agent-toolkit fix
 Run environment, harness, and asset health checks.
 
 ```
-Usage: uv run agent-toolkit doctor [SLUG] [--group GROUP] [--harness H] [--scope S] [--verbose]
+Usage: uv run agent-toolkit-cli doctor [SLUG] [--group GROUP] [--harness H] [--scope S] [--verbose]
 ```
 
 | Argument | Description |
@@ -548,16 +548,16 @@ The `mcps` group skips silently with an OK status if the harness has no adapter 
 **Examples:**
 ```bash
 # Full health check with default harness (claude):
-uv run agent-toolkit doctor
+uv run agent-toolkit-cli doctor
 
 # MCP-specific check for codex/user:
-uv run agent-toolkit doctor --group mcps --harness codex --scope user
+uv run agent-toolkit-cli doctor --group mcps --harness codex --scope user
 
 # Diagnose a single asset:
-uv run agent-toolkit doctor context7
+uv run agent-toolkit-cli doctor context7
 
 # Verbose output:
-uv run agent-toolkit doctor --group mcps --verbose
+uv run agent-toolkit-cli doctor --group mcps --verbose
 ```
 
 > _Header & summary go to stderr; suppress with `--quiet` or `AGENT_TOOLKIT_QUIET=1`._
@@ -569,7 +569,7 @@ uv run agent-toolkit doctor --group mcps --verbose
 Scaffold a new asset with valid v1alpha2 frontmatter.
 
 ```
-Usage: uv run agent-toolkit new <kind> <slug>
+Usage: uv run agent-toolkit-cli new <kind> <slug>
 ```
 
 | Argument | Description |
@@ -593,9 +593,9 @@ description and harnesses, then run `check` before committing.
 
 **Example:**
 ```bash
-uv run agent-toolkit new skill my-research-skill
+uv run agent-toolkit-cli new skill my-research-skill
 $EDITOR skills/my-research-skill/SKILL.md
-uv run agent-toolkit check
+uv run agent-toolkit-cli check
 ```
 
 > _Header & summary go to stderr; suppress with `--quiet` or `AGENT_TOOLKIT_QUIET=1`._

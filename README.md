@@ -15,12 +15,12 @@ The TUI extra:
 uv tool install --from git+https://github.com/ajanderson1/agent-toolkit-cli "agent-toolkit[tui]"
 ```
 
-> **Don't `pip install -e .` into a Python that comes earlier on `$PATH` than `~/.local/bin/`** (e.g., pyenv-managed Pythons). The pip shim will shadow `uv tool install`'s shim, and if you later delete the editable source, every invocation will break with `ModuleNotFoundError: agent_toolkit.cli`. If you must install editable for development, either:
+> **Don't `pip install -e .` into a Python that comes earlier on `$PATH` than `~/.local/bin/`** (e.g., pyenv-managed Pythons). The pip shim will shadow `uv tool install`'s shim, and if you later delete the editable source, every invocation will break with `ModuleNotFoundError: agent_toolkit_cli.cli`. If you must install editable for development, either:
 >
 > - Use a venv that you activate per-session (`python -m venv .venv && source .venv/bin/activate && pip install -e .`), or
 > - First `uv tool uninstall agent-toolkit` to make the precedence explicit, and re-install from uv when you're done.
 >
-> `agent-toolkit doctor` can detect this shadowing symptom (see [#61](https://github.com/ajanderson1/agent-toolkit-cli/issues/61)).
+> `agent-toolkit-cli doctor` can detect this shadowing symptom (see [#61](https://github.com/ajanderson1/agent-toolkit-cli/issues/61)).
 
 ## Two-flag contract
 
@@ -43,17 +43,17 @@ git -C ~/GitHub/agent-toolkit submodule update --init --recursive
 ## Commands
 
 ```text
-agent-toolkit link <user|project> <harness> [<kind>:<slug>] [--all] [-y]
-agent-toolkit unlink <user|project> <harness> (--all | <kind>:<slug>)
-agent-toolkit list [<kind>] [<harness>]      # install state per scope (bash)
-agent-toolkit diff <user|project> <harness>
-agent-toolkit check [--exit-code]
-agent-toolkit fix
-agent-toolkit doctor [<slug>]
-agent-toolkit inventory [<kind>|<slug>]      # asset library catalog (python)
-agent-toolkit ingest [<url|name|file>]
-agent-toolkit new <kind> <slug>
-agent-toolkit tui                    # requires [tui] extra
+agent-toolkit-cli link <user|project> <harness> [<kind>:<slug>] [--all] [-y]
+agent-toolkit-cli unlink <user|project> <harness> (--all | <kind>:<slug>)
+agent-toolkit-cli list [<kind>] [<harness>]      # install state per scope (bash)
+agent-toolkit-cli diff <user|project> <harness>
+agent-toolkit-cli check [--exit-code]
+agent-toolkit-cli fix
+agent-toolkit-cli doctor [<slug>]
+agent-toolkit-cli inventory [<kind>|<slug>]      # asset library catalog (python)
+agent-toolkit-cli ingest [<url|name|file>]
+agent-toolkit-cli new <kind> <slug>
+agent-toolkit-cli tui                    # requires [tui] extra
 ```
 
 `list` vs `inventory`: `list` is project-scoped — shows what's installed for a `<user|project>` scope and harness, with ✓/— install state. `inventory` is library-scoped — browses the SSOT's asset catalog with no notion of install state.
@@ -79,7 +79,7 @@ uv run pytest -q
 bats tests/bats
 ```
 
-The `lefthook.yml` runs lint + tests on pre-commit, including `schema-vendor-check` which keeps the two vendored schema copies (`schemas/` and `src/agent_toolkit/_schemas/`) in lockstep.
+The `lefthook.yml` runs lint + tests on pre-commit, including `schema-vendor-check` which keeps the two vendored schema copies (`schemas/` and `src/agent_toolkit_cli/_schemas/`) in lockstep.
 
 ## License
 

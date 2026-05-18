@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from agent_toolkit.generators.list_report import format_report
+from agent_toolkit_cli.generators.list_report import format_report
 
 
 def _empty_inventory(toolkit: Path) -> dict:

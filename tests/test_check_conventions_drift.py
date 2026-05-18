@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from agent_toolkit.commands.check import _drift_for_conventions_prose
+from agent_toolkit_cli.commands.check import _drift_for_conventions_prose
 
 
 def _write(path: Path, body: str) -> None:
@@ -61,7 +61,7 @@ def test_design_specs_allowed_to_use_old_paths(tmp_path: Path) -> None:
 
 def test_check_module_itself_allowed_to_use_old_paths(tmp_path: Path) -> None:
     _write(
-        tmp_path / "src" / "agent_toolkit" / "commands" / "check.py",
+        tmp_path / "src" / "agent_toolkit_cli" / "commands" / "check.py",
         '_LEAK_PATTERN = re.compile(r"~/.claude/(CONVENTIONS|conventions/)")\n',
     )
     assert _drift_for_conventions_prose(tmp_path) is None

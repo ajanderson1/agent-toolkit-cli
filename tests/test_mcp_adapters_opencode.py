@@ -9,7 +9,7 @@ def _make_entry(name: str = "context7", *, transport: str = "stdio",
                 env: dict[str, str] | None = None,
                 url: str | None = None,
                 headers: dict[str, str] | None = None):
-    from agent_toolkit.harness_adapters.base import McpEntry
+    from agent_toolkit_cli.harness_adapters.base import McpEntry
 
     inner: dict = {"command": command}
     if args is not None:
@@ -31,7 +31,7 @@ def _make_entry(name: str = "context7", *, transport: str = "stdio",
 
 
 def test_opencode_adapter_basic_attrs():
-    from agent_toolkit.harness_adapters.opencode import OpenCodeAdapter
+    from agent_toolkit_cli.harness_adapters.opencode import OpenCodeAdapter
 
     a = OpenCodeAdapter()
     assert a.name == "opencode"
@@ -39,7 +39,7 @@ def test_opencode_adapter_basic_attrs():
 
 
 def test_opencode_user_config_target(monkeypatch, tmp_path):
-    from agent_toolkit.harness_adapters.opencode import OpenCodeAdapter
+    from agent_toolkit_cli.harness_adapters.opencode import OpenCodeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     a = OpenCodeAdapter()
@@ -50,7 +50,7 @@ def test_opencode_user_config_target(monkeypatch, tmp_path):
 
 def test_opencode_project_config_target_requires_dir(tmp_path):
     """Project target only set when .opencode/ exists in project_root."""
-    from agent_toolkit.harness_adapters.opencode import OpenCodeAdapter
+    from agent_toolkit_cli.harness_adapters.opencode import OpenCodeAdapter
 
     proj = tmp_path / "p"
     proj.mkdir()
@@ -63,7 +63,7 @@ def test_opencode_project_config_target_requires_dir(tmp_path):
 
 
 def test_opencode_can_install_accepts_all_transports():
-    from agent_toolkit.harness_adapters.opencode import OpenCodeAdapter
+    from agent_toolkit_cli.harness_adapters.opencode import OpenCodeAdapter
 
     a = OpenCodeAdapter()
     a.can_install(_make_entry(transport="stdio"))
@@ -74,7 +74,7 @@ def test_opencode_can_install_accepts_all_transports():
 def test_opencode_diff_creates_file_when_missing_local_shape(monkeypatch, tmp_path):
     """stdio entry → on-disk {type: 'local', command: [str, ...], environment, enabled}."""
     import json
-    from agent_toolkit.harness_adapters.opencode import OpenCodeAdapter
+    from agent_toolkit_cli.harness_adapters.opencode import OpenCodeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     a = OpenCodeAdapter()
@@ -94,7 +94,7 @@ def test_opencode_diff_creates_file_when_missing_local_shape(monkeypatch, tmp_pa
 
 def test_opencode_diff_remote_shape_for_http(monkeypatch, tmp_path):
     import json
-    from agent_toolkit.harness_adapters.opencode import OpenCodeAdapter
+    from agent_toolkit_cli.harness_adapters.opencode import OpenCodeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     a = OpenCodeAdapter()
@@ -114,7 +114,7 @@ def test_opencode_diff_remote_shape_for_http(monkeypatch, tmp_path):
 def test_opencode_diff_preserves_other_top_level_keys(monkeypatch, tmp_path):
     """theme/model/etc at top level survive link/unlink."""
     import json
-    from agent_toolkit.harness_adapters.opencode import OpenCodeAdapter
+    from agent_toolkit_cli.harness_adapters.opencode import OpenCodeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".config" / "opencode" / "opencode.json"
@@ -135,7 +135,7 @@ def test_opencode_diff_preserves_other_top_level_keys(monkeypatch, tmp_path):
 
 
 def test_opencode_diff_unchanged_when_aligned(monkeypatch, tmp_path):
-    from agent_toolkit.harness_adapters.opencode import OpenCodeAdapter
+    from agent_toolkit_cli.harness_adapters.opencode import OpenCodeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".config" / "opencode" / "opencode.json"
@@ -149,7 +149,7 @@ def test_opencode_diff_unchanged_when_aligned(monkeypatch, tmp_path):
 
 def test_opencode_unlink_removes_managed_entry(monkeypatch, tmp_path):
     import json
-    from agent_toolkit.harness_adapters.opencode import OpenCodeAdapter
+    from agent_toolkit_cli.harness_adapters.opencode import OpenCodeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".config" / "opencode" / "opencode.json"
@@ -166,7 +166,7 @@ def test_opencode_unlink_removes_managed_entry(monkeypatch, tmp_path):
 
 def test_opencode_unlink_does_not_touch_handrolled_entries(monkeypatch, tmp_path):
     import json
-    from agent_toolkit.harness_adapters.opencode import OpenCodeAdapter
+    from agent_toolkit_cli.harness_adapters.opencode import OpenCodeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".config" / "opencode" / "opencode.json"
@@ -193,7 +193,7 @@ def test_opencode_unlink_does_not_touch_handrolled_entries(monkeypatch, tmp_path
 
 def test_opencode_link_unlink_round_trip_idempotent(monkeypatch, tmp_path):
     import json
-    from agent_toolkit.harness_adapters.opencode import OpenCodeAdapter
+    from agent_toolkit_cli.harness_adapters.opencode import OpenCodeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".config" / "opencode" / "opencode.json"
@@ -222,7 +222,7 @@ def test_opencode_link_unlink_round_trip_idempotent(monkeypatch, tmp_path):
 
 def test_opencode_list_installed_returns_all_mcp_names(monkeypatch, tmp_path):
     import json
-    from agent_toolkit.harness_adapters.opencode import OpenCodeAdapter
+    from agent_toolkit_cli.harness_adapters.opencode import OpenCodeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".config" / "opencode" / "opencode.json"
@@ -238,7 +238,7 @@ def test_opencode_list_installed_returns_all_mcp_names(monkeypatch, tmp_path):
 
 
 def test_opencode_list_installed_missing_file_returns_empty(monkeypatch, tmp_path):
-    from agent_toolkit.harness_adapters.opencode import OpenCodeAdapter
+    from agent_toolkit_cli.harness_adapters.opencode import OpenCodeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     a = OpenCodeAdapter()
@@ -246,7 +246,7 @@ def test_opencode_list_installed_missing_file_returns_empty(monkeypatch, tmp_pat
 
 
 def test_opencode_entry_drift_false_when_aligned(monkeypatch, tmp_path):
-    from agent_toolkit.harness_adapters.opencode import OpenCodeAdapter
+    from agent_toolkit_cli.harness_adapters.opencode import OpenCodeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".config" / "opencode" / "opencode.json"
@@ -259,7 +259,7 @@ def test_opencode_entry_drift_false_when_aligned(monkeypatch, tmp_path):
 
 
 def test_opencode_entry_drift_true_after_hand_edit(monkeypatch, tmp_path):
-    from agent_toolkit.harness_adapters.opencode import OpenCodeAdapter
+    from agent_toolkit_cli.harness_adapters.opencode import OpenCodeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".config" / "opencode" / "opencode.json"
@@ -275,7 +275,7 @@ def test_opencode_entry_drift_true_after_hand_edit(monkeypatch, tmp_path):
 
 
 def test_opencode_re_link_is_no_op_when_aligned(monkeypatch, tmp_path):
-    from agent_toolkit.harness_adapters.opencode import OpenCodeAdapter
+    from agent_toolkit_cli.harness_adapters.opencode import OpenCodeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".config" / "opencode" / "opencode.json"
@@ -289,8 +289,8 @@ def test_opencode_re_link_is_no_op_when_aligned(monkeypatch, tmp_path):
 
 def test_opencode_diff_raises_cannot_install_when_stdio_command_missing(monkeypatch, tmp_path):
     """stdio entry with no command in inner_config → CannotInstall via diff()."""
-    from agent_toolkit.harness_adapters.base import CannotInstall, McpEntry
-    from agent_toolkit.harness_adapters.opencode import OpenCodeAdapter
+    from agent_toolkit_cli.harness_adapters.base import CannotInstall, McpEntry
+    from agent_toolkit_cli.harness_adapters.opencode import OpenCodeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     a = OpenCodeAdapter()
@@ -305,8 +305,8 @@ def test_opencode_diff_raises_cannot_install_when_stdio_command_missing(monkeypa
 
 def test_opencode_diff_raises_cannot_install_when_env_not_dict(monkeypatch, tmp_path):
     """inner_config.env must be a dict — list (or any non-dict) → CannotInstall."""
-    from agent_toolkit.harness_adapters.base import CannotInstall, McpEntry
-    from agent_toolkit.harness_adapters.opencode import OpenCodeAdapter
+    from agent_toolkit_cli.harness_adapters.base import CannotInstall, McpEntry
+    from agent_toolkit_cli.harness_adapters.opencode import OpenCodeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     a = OpenCodeAdapter()
@@ -323,7 +323,7 @@ def test_opencode_entry_drift_false_when_entry_not_installed(monkeypatch, tmp_pa
     """entry_drift returns False when the entry's name is absent on disk —
     callers use list_installed for presence; entry_drift reports drift only."""
     import json
-    from agent_toolkit.harness_adapters.opencode import OpenCodeAdapter
+    from agent_toolkit_cli.harness_adapters.opencode import OpenCodeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".config" / "opencode" / "opencode.json"

@@ -1,5 +1,5 @@
 """Tests for per-resource doctor (D2 default)."""
-from agent_toolkit.doctor.result import Status
+from agent_toolkit_cli.doctor.result import Status
 
 
 def _make_skill(toolkit_root, slug, harnesses=("claude",)):
@@ -16,7 +16,7 @@ def _make_skill(toolkit_root, slug, harnesses=("claude",)):
 
 
 def test_per_resource_unknown_slug_returns_fail(tmp_path):
-    from agent_toolkit.doctor.per_resource import diagnose
+    from agent_toolkit_cli.doctor.per_resource import diagnose
     (tmp_path / "schemas").mkdir()
     (tmp_path / "schemas" / "asset-frontmatter.v1alpha2.json").write_text("{}")
     result = diagnose(tmp_path, slug="ghost")
@@ -25,7 +25,7 @@ def test_per_resource_unknown_slug_returns_fail(tmp_path):
 
 
 def test_per_resource_ok_when_linked(tmp_path, monkeypatch):
-    from agent_toolkit.doctor.per_resource import diagnose
+    from agent_toolkit_cli.doctor.per_resource import diagnose
     (tmp_path / "schemas").mkdir()
     # Use the real schema file from the repo we're running in
     real_schema_path = (

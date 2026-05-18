@@ -10,16 +10,16 @@ from pathlib import Path
 
 from click.testing import CliRunner
 
-from agent_toolkit._allowlist import (
+from agent_toolkit_cli._allowlist import (
     SECTIONS,
     kind_to_section,
     read_allowlist,
     section_to_kind,
 )
-from agent_toolkit.cli import main
-from agent_toolkit.commands._link_lib import _asset_harnesses
-from agent_toolkit.ingest.research import infer_from_snapshot
-from agent_toolkit.walker import discover_assets, load_asset_record
+from agent_toolkit_cli.cli import main
+from agent_toolkit_cli.commands._link_lib import _asset_harnesses
+from agent_toolkit_cli.ingest.research import infer_from_snapshot
+from agent_toolkit_cli.walker import discover_assets, load_asset_record
 
 
 # ---------------------------------------------------------------------------

@@ -4,7 +4,7 @@
 
 **Goal:** Replace the four bash subcommands (`link`, `unlink`, `list`, `diff`) with Python Click commands wired into the existing `agent-toolkit` entry point, then delete the bash CLI, the bats suite, and the parity test in the same PR.
 
-**Architecture:** New modules `src/agent_toolkit/commands/{link,unlink,list,diff}.py` plus a shared helper module `commands/_link_lib.py` (pure logic — projection, action counters, summary strings, plan-mode parsing). All four commands reuse existing Python primitives: `walker.discover_assets`, `_allowlist.read_allowlist`, `_repo_resolution.resolve_toolkit_root`, `_yaml_edit._load/_dump/SECTIONS`, `commands/_list_json._USER_TARGETS/_PROJECT_TARGETS/_cell_status`. The TUI runner switches from "find `bin/agent-toolkit`" to `shutil.which("agent-toolkit")` with a worktree fallback. Bash, bats, and the cross-language parity test are deleted in the final commit.
+**Architecture:** New modules `src/agent_toolkit_cli/commands/{link,unlink,list,diff}.py` plus a shared helper module `commands/_link_lib.py` (pure logic — projection, action counters, summary strings, plan-mode parsing). All four commands reuse existing Python primitives: `walker.discover_assets`, `_allowlist.read_allowlist`, `_repo_resolution.resolve_toolkit_root`, `_yaml_edit._load/_dump/SECTIONS`, `commands/_list_json._USER_TARGETS/_PROJECT_TARGETS/_cell_status`. The TUI runner switches from "find `bin/agent-toolkit`" to `shutil.which("agent-toolkit")` with a worktree fallback. Bash, bats, and the cross-language parity test are deleted in the final commit.
 
 **Tech Stack:** Python 3.12+, Click, hatchling, pytest, ruamel.yaml, uv
 
@@ -28,13 +28,13 @@
 
 | Path | Status | Responsibility |
 |---|---|---|
-| `src/agent_toolkit/commands/_link_lib.py` | Create | Pure helpers: `LinkCounters` dataclass, projection algorithm, summary formatter, plan-mode line iterator. No Click. |
-| `src/agent_toolkit/commands/link.py` | Create | Click command for `link`. Wraps `_link_lib`. |
-| `src/agent_toolkit/commands/unlink.py` | Create | Click command for `unlink`. Reuses `_link_lib._link_project_from_file` for re-projection on per-asset. |
-| `src/agent_toolkit/commands/list.py` | Create | Click command for `list`. Text format inline; JSON delegates to existing `_list_json.list_json`. |
-| `src/agent_toolkit/commands/diff.py` | Create | Thin wrapper that calls `link` with `dry_run=True` and the `Previewing` header swap. |
-| `src/agent_toolkit/commands/_conventions.py` | Create | Pure helpers for the conventions Layer 2/3 projection (not a Click command — invoked from `link`/`unlink`/`list`/`diff` when third arg is `conventions`). |
-| `src/agent_toolkit/cli.py` | Modify | Register the four new commands. |
+| `src/agent_toolkit_cli/commands/_link_lib.py` | Create | Pure helpers: `LinkCounters` dataclass, projection algorithm, summary formatter, plan-mode line iterator. No Click. |
+| `src/agent_toolkit_cli/commands/link.py` | Create | Click command for `link`. Wraps `_link_lib`. |
+| `src/agent_toolkit_cli/commands/unlink.py` | Create | Click command for `unlink`. Reuses `_link_lib._link_project_from_file` for re-projection on per-asset. |
+| `src/agent_toolkit_cli/commands/list.py` | Create | Click command for `list`. Text format inline; JSON delegates to existing `_list_json.list_json`. |
+| `src/agent_toolkit_cli/commands/diff.py` | Create | Thin wrapper that calls `link` with `dry_run=True` and the `Previewing` header swap. |
+| `src/agent_toolkit_cli/commands/_conventions.py` | Create | Pure helpers for the conventions Layer 2/3 projection (not a Click command — invoked from `link`/`unlink`/`list`/`diff` when third arg is `conventions`). |
+| `src/agent_toolkit_cli/cli.py` | Modify | Register the four new commands. |
 | `src/agent_toolkit_tui/runner.py` | Modify | `_locate_bash_cli` → `_locate_cli` using `shutil.which("agent-toolkit")` with a worktree-fallback for source checkouts. |
 | `tests/test_link_lib.py` | Create | Unit tests for the pure helpers. |
 | `tests/test_cli_link.py` | Create | Replaces `tests/bats/test_link.bats`, `test_link_per_asset.bats`, `test_link_all_prompt.bats`, `test_link_user_optin.bats`. |
@@ -70,14 +70,14 @@ Decision (encoded in this plan): **port conventions** as Task 5.5 (after `diff`,
 ## Task 1: Scaffold `_link_lib.py` — pure helpers (no Click)
 
 **Files:**
-- Create: `src/agent_toolkit/commands/_link_lib.py`
+- Create: `src/agent_toolkit_cli/commands/_link_lib.py`
 - Test: `tests/test_link_lib.py`
 
 - [ ] **Step 1: Write the failing test for LinkCounters dataclass**
 
 ```python
 # tests/test_link_lib.py
-from agent_toolkit.commands._link_lib import LinkCounters
+from agent_toolkit_cli.commands._link_lib import LinkCounters
 
 def test_counters_default_zero():
     c = LinkCounters()
@@ -89,26 +89,26 @@ def test_counters_default_zero():
     assert c.would_unlink == 0
 
 def test_counters_summary_dry_run_no_changes():
-    from agent_toolkit.commands._link_lib import format_summary
+    from agent_toolkit_cli.commands._link_lib import format_summary
     c = LinkCounters()
     assert format_summary(c, dry_run=True) == "Nothing to change."
 
 def test_counters_summary_dry_run_with_changes():
-    from agent_toolkit.commands._link_lib import format_summary
+    from agent_toolkit_cli.commands._link_lib import format_summary
     c = LinkCounters(would_link=2, would_unlink=1)
     assert format_summary(c, dry_run=True) == (
         "3 changes pending (2 to link, 1 to remove). Re-run without --dry-run to apply."
     )
 
 def test_counters_summary_real_run_already_in_sync():
-    from agent_toolkit.commands._link_lib import format_summary
+    from agent_toolkit_cli.commands._link_lib import format_summary
     c = LinkCounters(unchanged=5)
     assert format_summary(c, dry_run=False) == (
         "Already in sync — 5 assets linked, nothing to change."
     )
 
 def test_counters_summary_real_run_with_changes():
-    from agent_toolkit.commands._link_lib import format_summary
+    from agent_toolkit_cli.commands._link_lib import format_summary
     c = LinkCounters(created=3, updated=1, removed=2, unchanged=4)
     assert format_summary(c, dry_run=False) == (
         "Linked 3 new, updated 1, removed 2 stale (4 already in sync)."
@@ -125,7 +125,7 @@ Expected: ImportError — module does not exist.
 - [ ] **Step 3: Implement `_link_lib.py` skeleton**
 
 ```python
-# src/agent_toolkit/commands/_link_lib.py
+# src/agent_toolkit_cli/commands/_link_lib.py
 """Pure helpers for link/unlink/diff subcommands.
 
 No Click, no I/O orchestration — just projection algorithm, action counting,
@@ -179,14 +179,14 @@ Expected: 5 passed.
 ```python
 # Append to tests/test_link_lib.py
 def test_iter_plan_lines_skips_blanks_and_comments():
-    from agent_toolkit.commands._link_lib import iter_plan_lines
+    from agent_toolkit_cli.commands._link_lib import iter_plan_lines
     text = "\n# leading comment\nskill:alpha\n\nskill:beta # trailing\n# tail\n"
     pairs = list(iter_plan_lines(text))
     # iter_plan_lines yields ("skill", "alpha"), ("skill", "beta") and never raises
     assert pairs == [("skill", "alpha"), ("skill", "beta")]
 
 def test_iter_plan_lines_yields_malformed_marker_for_bad_line():
-    from agent_toolkit.commands._link_lib import iter_plan_lines, MALFORMED
+    from agent_toolkit_cli.commands._link_lib import iter_plan_lines, MALFORMED
     pairs = list(iter_plan_lines("garbage-no-colon\nskill:alpha\n"))
     assert pairs[0] == (MALFORMED, "garbage-no-colon")
     assert pairs[1] == ("skill", "alpha")
@@ -227,7 +227,7 @@ uv run pytest tests/test_link_lib.py -v
 Expected: 7 passed.
 
 ```bash
-git add src/agent_toolkit/commands/_link_lib.py tests/test_link_lib.py
+git add src/agent_toolkit_cli/commands/_link_lib.py tests/test_link_lib.py
 git commit -m "feat(cli): add _link_lib pure helpers (counters, summary, plan parser)"
 ```
 
@@ -236,9 +236,9 @@ git commit -m "feat(cli): add _link_lib pure helpers (counters, summary, plan pa
 ## Task 2: Port `link` subcommand
 
 **Files:**
-- Create: `src/agent_toolkit/commands/link.py`
-- Modify: `src/agent_toolkit/commands/_link_lib.py` (add `project_from_file` and `maybe_link`)
-- Modify: `src/agent_toolkit/cli.py` (register the new command)
+- Create: `src/agent_toolkit_cli/commands/link.py`
+- Modify: `src/agent_toolkit_cli/commands/_link_lib.py` (add `project_from_file` and `maybe_link`)
+- Modify: `src/agent_toolkit_cli/cli.py` (register the new command)
 - Test: `tests/test_cli_link.py`
 
 The pytest file MUST assert every behaviour the four bats files cover. Below, each step lists exactly which bats test (file:line) is replaced and the exact assertion to port.
@@ -290,16 +290,16 @@ The pytest file MUST assert every behaviour the four bats files cover. Below, ea
 
 - [ ] **Step 1: Add the projection-and-maybe-link primitives to `_link_lib`**
 
-Append to `src/agent_toolkit/commands/_link_lib.py`:
+Append to `src/agent_toolkit_cli/commands/_link_lib.py`:
 
 ```python
 import os
 from pathlib import Path
 from typing import Iterable
 
-from agent_toolkit._allowlist import SECTIONS, kind_to_section, read_allowlist
-from agent_toolkit.commands._list_json import _USER_TARGETS, _PROJECT_TARGETS
-from agent_toolkit.walker import discover_assets, extract_frontmatter, Asset
+from agent_toolkit_cli._allowlist import SECTIONS, kind_to_section, read_allowlist
+from agent_toolkit_cli.commands._list_json import _USER_TARGETS, _PROJECT_TARGETS
+from agent_toolkit_cli.walker import discover_assets, extract_frontmatter, Asset
 
 KINDS_FOR_PROJECTION: tuple[str, ...] = ("skill", "agent", "command", "hook", "plugin")
 
@@ -454,7 +454,7 @@ from pathlib import Path
 from click.testing import CliRunner
 import pytest
 
-from agent_toolkit.cli import main
+from agent_toolkit_cli.cli import main
 
 
 SKILL_FRONTMATTER = """\
@@ -532,7 +532,7 @@ Expected: FAIL — `link` is not a registered subcommand.
 - [ ] **Step 4: Implement `commands/link.py`**
 
 ```python
-# src/agent_toolkit/commands/link.py
+# src/agent_toolkit_cli/commands/link.py
 """link — project allow-listed assets as symlinks per (scope, harness)."""
 from __future__ import annotations
 
@@ -544,10 +544,10 @@ from pathlib import Path
 
 import click
 
-from agent_toolkit import _ui
-from agent_toolkit._allowlist import SECTIONS, kind_to_section, read_allowlist
-from agent_toolkit._repo_resolution import RepoNotFoundError, resolve_toolkit_root
-from agent_toolkit.commands._link_lib import (
+from agent_toolkit_cli import _ui
+from agent_toolkit_cli._allowlist import SECTIONS, kind_to_section, read_allowlist
+from agent_toolkit_cli._repo_resolution import RepoNotFoundError, resolve_toolkit_root
+from agent_toolkit_cli.commands._link_lib import (
     KINDS_FOR_PROJECTION,
     LinkCounters,
     MALFORMED,
@@ -556,7 +556,7 @@ from agent_toolkit.commands._link_lib import (
     iter_plan_lines,
     project_from_file,
 )
-from agent_toolkit.walker import discover_assets
+from agent_toolkit_cli.walker import discover_assets
 
 
 @click.command("link")
@@ -704,10 +704,10 @@ Similarly add `add_slug(path, section, slug)` and `remove_slug(path, section, sl
 
 - [ ] **Step 6: Register `link` in `cli.py`**
 
-In `src/agent_toolkit/cli.py` add:
+In `src/agent_toolkit_cli/cli.py` add:
 
 ```python
-from agent_toolkit.commands.link import link
+from agent_toolkit_cli.commands.link import link
 ...
 main.add_command(link)
 ```
@@ -773,8 +773,8 @@ Expected: 37 passed.
 - [ ] **Step 10: Commit**
 
 ```bash
-git add src/agent_toolkit/commands/link.py src/agent_toolkit/commands/_link_lib.py \
-        src/agent_toolkit/commands/_yaml_edit.py src/agent_toolkit/cli.py \
+git add src/agent_toolkit_cli/commands/link.py src/agent_toolkit_cli/commands/_link_lib.py \
+        src/agent_toolkit_cli/commands/_yaml_edit.py src/agent_toolkit_cli/cli.py \
         tests/test_cli_link.py
 git commit -m "feat(cli): port link subcommand to Python (Click)"
 ```
@@ -784,8 +784,8 @@ git commit -m "feat(cli): port link subcommand to Python (Click)"
 ## Task 3: Port `unlink` subcommand
 
 **Files:**
-- Create: `src/agent_toolkit/commands/unlink.py`
-- Modify: `src/agent_toolkit/cli.py`
+- Create: `src/agent_toolkit_cli/commands/unlink.py`
+- Modify: `src/agent_toolkit_cli/cli.py`
 - Test: `tests/test_cli_unlink.py`
 
 ### Bats coverage matrix for `unlink`
@@ -861,7 +861,7 @@ Expected: 13 passed.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/agent_toolkit/commands/unlink.py src/agent_toolkit/cli.py tests/test_cli_unlink.py
+git add src/agent_toolkit_cli/commands/unlink.py src/agent_toolkit_cli/cli.py tests/test_cli_unlink.py
 git commit -m "feat(cli): port unlink subcommand to Python (Click)"
 ```
 
@@ -870,8 +870,8 @@ git commit -m "feat(cli): port unlink subcommand to Python (Click)"
 ## Task 4: Port `list` subcommand
 
 **Files:**
-- Create: `src/agent_toolkit/commands/list.py`
-- Modify: `src/agent_toolkit/cli.py`
+- Create: `src/agent_toolkit_cli/commands/list.py`
+- Modify: `src/agent_toolkit_cli/cli.py`
 - Test: `tests/test_cli_list.py`
 
 Click already has a `list_json` hidden command. The new `list` is a top-level command that, when `--format=json`, calls `list_json` (refactored to be callable via `ctx.invoke` rather than a subprocess).
@@ -940,7 +940,7 @@ Expected: 13 passed.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/agent_toolkit/commands/list.py src/agent_toolkit/cli.py tests/test_cli_list.py
+git add src/agent_toolkit_cli/commands/list.py src/agent_toolkit_cli/cli.py tests/test_cli_list.py
 git commit -m "feat(cli): port list subcommand to Python (Click)"
 ```
 
@@ -949,8 +949,8 @@ git commit -m "feat(cli): port list subcommand to Python (Click)"
 ## Task 5: Port `diff` subcommand
 
 **Files:**
-- Create: `src/agent_toolkit/commands/diff.py`
-- Modify: `src/agent_toolkit/cli.py`
+- Create: `src/agent_toolkit_cli/commands/diff.py`
+- Modify: `src/agent_toolkit_cli/cli.py`
 - Test: `tests/test_cli_diff.py`
 
 ### Bats coverage matrix for `diff`
@@ -991,7 +991,7 @@ def test_diff_previewing_header(env):
 - [ ] **Step 2: Implement `commands/diff.py` as a thin alias**
 
 ```python
-# src/agent_toolkit/commands/diff.py
+# src/agent_toolkit_cli/commands/diff.py
 """diff — preview what `link` would change. Alias for `link --dry-run`."""
 from __future__ import annotations
 
@@ -999,7 +999,7 @@ from pathlib import Path
 
 import click
 
-from agent_toolkit.commands.link import link
+from agent_toolkit_cli.commands.link import link
 
 
 @click.command("diff")
@@ -1036,7 +1036,7 @@ uv run pytest tests/test_cli_diff.py -v
 Expected: 2 passed.
 
 ```bash
-git add src/agent_toolkit/commands/diff.py src/agent_toolkit/cli.py tests/test_cli_diff.py
+git add src/agent_toolkit_cli/commands/diff.py src/agent_toolkit_cli/cli.py tests/test_cli_diff.py
 git commit -m "feat(cli): port diff subcommand to Python (Click)"
 ```
 
@@ -1045,8 +1045,8 @@ git commit -m "feat(cli): port diff subcommand to Python (Click)"
 ## Task 5.5: Port `conventions` projection (link/unlink/list/diff user conventions)
 
 **Files:**
-- Create: `src/agent_toolkit/commands/_conventions.py`
-- Modify: `src/agent_toolkit/commands/{link,unlink,list,diff}.py` (route on `harness == "conventions"`)
+- Create: `src/agent_toolkit_cli/commands/_conventions.py`
+- Modify: `src/agent_toolkit_cli/commands/{link,unlink,list,diff}.py` (route on `harness == "conventions"`)
 - Test: `tests/test_cli_conventions.py`
 
 ### Bats coverage matrix for `conventions`
@@ -1081,7 +1081,7 @@ Every test in `tests/bats/test_conventions.bats` (~25 tests) maps 1:1. Each pyte
 `_conventions.py` has 4 entry points (`do_link`, `do_unlink`, `do_list`, `do_diff`) that mirror the four bash functions. Use the same Layer 2 + Layer 3 symlink table:
 
 ```python
-# src/agent_toolkit/commands/_conventions.py
+# src/agent_toolkit_cli/commands/_conventions.py
 def layer3_slots(home: Path) -> list[tuple[Path, Path]]:
     out: list[tuple[Path, Path]] = []
     if (home / ".claude").is_dir():
@@ -1102,7 +1102,7 @@ In `link.py`'s `link()`, before mode dispatch:
 
 ```python
 if harness == "conventions":
-    from agent_toolkit.commands._conventions import do_link
+    from agent_toolkit_cli.commands._conventions import do_link
     do_link(scope=scope, toolkit_root=toolkit_root, dry_run=dry_run, ctx=ctx)
     return
 ```
@@ -1119,8 +1119,8 @@ Expected: ~22 passed.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add src/agent_toolkit/commands/_conventions.py \
-        src/agent_toolkit/commands/{link,unlink,list,diff}.py \
+git add src/agent_toolkit_cli/commands/_conventions.py \
+        src/agent_toolkit_cli/commands/{link,unlink,list,diff}.py \
         tests/test_cli_conventions.py
 git commit -m "feat(cli): port conventions projection to Python"
 ```
@@ -1328,7 +1328,7 @@ pre-commit:
       run: uv run pytest -q
       stage_fixed: false
     schema-vendor-check:
-      run: diff schemas/asset-frontmatter.v1alpha1.json src/agent_toolkit/_schemas/asset-frontmatter.v1alpha1.json
+      run: diff schemas/asset-frontmatter.v1alpha1.json src/agent_toolkit_cli/_schemas/asset-frontmatter.v1alpha1.json
       stage_fixed: false
 ```
 
@@ -1386,7 +1386,7 @@ Specifically:
 ## Code map
 
 ```
-src/agent_toolkit/                 Python package: validator, walker, generators,
+src/agent_toolkit_cli/                 Python package: validator, walker, generators,
                                    ingest, security, doctor, command implementations.
   _repo_resolution.py              Four-step resolver: resolve_toolkit_root().
   _schemas/                        Bundled v1alpha1 schema (vendored).

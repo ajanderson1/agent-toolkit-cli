@@ -1,8 +1,8 @@
 """Parity test: harness-matrix.md doc must agree with the code.
 
 Parses docs/agent-toolkit/harness-matrix.md and cross-references against:
-  - agent_toolkit._support._USER_TARGETS  (symlink-projected pairs)
-  - agent_toolkit.harness_adapters        (adapter-driven pairs)
+  - agent_toolkit_cli._support._USER_TARGETS  (symlink-projected pairs)
+  - agent_toolkit_cli.harness_adapters        (adapter-driven pairs)
 
 All assertions name the offending (harness, kind) cell, the doc value, and
 the code value so failures are immediately actionable.
@@ -14,10 +14,10 @@ from pathlib import Path
 
 import pytest
 
-from agent_toolkit._support import _USER_TARGETS, ALL_HARNESSES, ALL_KINDS
-from agent_toolkit._translators import TRANSLATORS
-from agent_toolkit.harness_adapters import get_adapter
-from agent_toolkit.harness_adapters.base import UnimplementedAdapter
+from agent_toolkit_cli._support import _USER_TARGETS, ALL_HARNESSES, ALL_KINDS
+from agent_toolkit_cli._translators import TRANSLATORS
+from agent_toolkit_cli.harness_adapters import get_adapter
+from agent_toolkit_cli.harness_adapters.base import UnimplementedAdapter
 
 # ---------------------------------------------------------------------------
 # Locate the doc

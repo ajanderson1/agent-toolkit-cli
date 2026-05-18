@@ -20,15 +20,15 @@
 
 **Files this plan modifies:**
 
-- `src/agent_toolkit/walker.py` — fix `_KIND_RULES` for `mcp`: use `config.json` not `mcp.json`. Update `load_asset_record` to read frontmatter from sibling `README.md` instead of from `config.json`. Update `_slug_for` (already correct for `mcp`, but verify).
-- `src/agent_toolkit/_allowlist.py` — add `"mcps"` to `SECTIONS`, add `"mcp": "mcps"` to `_KIND_TO_SECTION`, drop the `ValueError` for `kind == "mcp"`.
-- `src/agent_toolkit/schema.py` — `_load_metadata` for `kind == "mcp"` reads the sibling README.md frontmatter (matching the new walker behaviour), not the `config.json`'s `agent_toolkit` key.
-- `src/agent_toolkit/commands/_link_lib.py` — extend `KINDS_FOR_PROJECTION` with `"mcp"`. Add a no-op branch in `project_from_file` for `kind == "mcp"`: emits a single "MCP install path for <harness> not yet implemented; allow-list updated only" message per (harness, scope, kind=mcp) and increments no link-counters. No symlinks created.
-- `src/agent_toolkit/commands/link.py` — remove the two `kind == "mcp"` guard blocks (lines 197–204 and 437–442). MCP requests now flow into the regular per-asset / plan paths.
-- `src/agent_toolkit/commands/unlink.py` — remove the two `kind == "mcp"` guard blocks (lines 192–198 and 292–296). Same treatment as link.
-- `src/agent_toolkit/commands/list.py` — drop the MCP short-circuit at lines 203–208. MCPs appear in the inventory like any other kind, with install state read via the same path.
-- `src/agent_toolkit/commands/_list_json.py` — change `ALL_KINDS` to include `"mcp"`. Drop the `if asset.kind == "mcp": continue` skip in `_build_inventory` (line 128). MCP cells emit `status="unsupported"` per harness for now (since no adapter writes anywhere); `allowlisted` reflects the new YAML section.
-- `src/agent_toolkit/commands/_yaml_edit.py` — no code change needed (the writer is section-agnostic; once `_allowlist.SECTIONS` includes `"mcps"`, `add_slug`/`remove_slug`/`write_snapshot` accept it automatically). Verify by test.
+- `src/agent_toolkit_cli/walker.py` — fix `_KIND_RULES` for `mcp`: use `config.json` not `mcp.json`. Update `load_asset_record` to read frontmatter from sibling `README.md` instead of from `config.json`. Update `_slug_for` (already correct for `mcp`, but verify).
+- `src/agent_toolkit_cli/_allowlist.py` — add `"mcps"` to `SECTIONS`, add `"mcp": "mcps"` to `_KIND_TO_SECTION`, drop the `ValueError` for `kind == "mcp"`.
+- `src/agent_toolkit_cli/schema.py` — `_load_metadata` for `kind == "mcp"` reads the sibling README.md frontmatter (matching the new walker behaviour), not the `config.json`'s `agent_toolkit_cli` key.
+- `src/agent_toolkit_cli/commands/_link_lib.py` — extend `KINDS_FOR_PROJECTION` with `"mcp"`. Add a no-op branch in `project_from_file` for `kind == "mcp"`: emits a single "MCP install path for <harness> not yet implemented; allow-list updated only" message per (harness, scope, kind=mcp) and increments no link-counters. No symlinks created.
+- `src/agent_toolkit_cli/commands/link.py` — remove the two `kind == "mcp"` guard blocks (lines 197–204 and 437–442). MCP requests now flow into the regular per-asset / plan paths.
+- `src/agent_toolkit_cli/commands/unlink.py` — remove the two `kind == "mcp"` guard blocks (lines 192–198 and 292–296). Same treatment as link.
+- `src/agent_toolkit_cli/commands/list.py` — drop the MCP short-circuit at lines 203–208. MCPs appear in the inventory like any other kind, with install state read via the same path.
+- `src/agent_toolkit_cli/commands/_list_json.py` — change `ALL_KINDS` to include `"mcp"`. Drop the `if asset.kind == "mcp": continue` skip in `_build_inventory` (line 128). MCP cells emit `status="unsupported"` per harness for now (since no adapter writes anywhere); `allowlisted` reflects the new YAML section.
+- `src/agent_toolkit_cli/commands/_yaml_edit.py` — no code change needed (the writer is section-agnostic; once `_allowlist.SECTIONS` includes `"mcps"`, `add_slug`/`remove_slug`/`write_snapshot` accept it automatically). Verify by test.
 
 **Tests touched:**
 
@@ -47,7 +47,7 @@
 ## Task 1: Add `mcps` to the allow-list section list
 
 **Files:**
-- Modify: `src/agent_toolkit/_allowlist.py`
+- Modify: `src/agent_toolkit_cli/_allowlist.py`
 - Test: `tests/test_allowlist.py`
 
 - [ ] **Step 1: Update the failing test that pins old behaviour, add new tests**
@@ -96,7 +96,7 @@ Expected: FAIL — `kind_to_section("mcp")` raises `ValueError`, `SECTIONS` does
 
 - [ ] **Step 3: Make the change in `_allowlist.py`**
 
-Edit `src/agent_toolkit/_allowlist.py`:
+Edit `src/agent_toolkit_cli/_allowlist.py`:
 
 Replace the `SECTIONS` tuple (line 15):
 
@@ -141,7 +141,7 @@ Expected: some failures elsewhere (test_cli_link, test_cli_unlink expect the "mc
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/agent_toolkit/_allowlist.py tests/test_allowlist.py
+git add src/agent_toolkit_cli/_allowlist.py tests/test_allowlist.py
 git commit -m "feat(allowlist): route kind=mcp to mcps section, remove guard"
 ```
 
@@ -150,11 +150,11 @@ git commit -m "feat(allowlist): route kind=mcp to mcps section, remove guard"
 ## Task 2: Fix walker MCP discovery to match catalog convention
 
 **Files:**
-- Modify: `src/agent_toolkit/walker.py:24` and `src/agent_toolkit/walker.py:115-135`
-- Modify: `src/agent_toolkit/schema.py:45-47`
+- Modify: `src/agent_toolkit_cli/walker.py:24` and `src/agent_toolkit_cli/walker.py:115-135`
+- Modify: `src/agent_toolkit_cli/schema.py:45-47`
 - Create: `tests/test_walker.py`
 
-The catalog at `~/GitHub/agent-toolkit/mcps/<name>/` uses `config.json` (the inner MCP server config, no `mcpServers` wrapper) plus a sibling `README.md` carrying frontmatter (`name`, `description`, `lifecycle`, etc.). The current walker looks for `mcp.json` and tries to read frontmatter from it as JSON with an `agent_toolkit` key — neither matches reality, so MCP discovery silently produces zero results.
+The catalog at `~/GitHub/agent-toolkit/mcps/<name>/` uses `config.json` (the inner MCP server config, no `mcpServers` wrapper) plus a sibling `README.md` carrying frontmatter (`name`, `description`, `lifecycle`, etc.). The current walker looks for `mcp.json` and tries to read frontmatter from it as JSON with an `agent_toolkit_cli` key — neither matches reality, so MCP discovery silently produces zero results.
 
 This task aligns the walker with the catalog: discover via `config.json`, read metadata from sibling `README.md` frontmatter (same shape as skills/agents/commands).
 
@@ -163,12 +163,12 @@ This task aligns the walker with the catalog: discover via `config.json`, read m
 Create `tests/test_walker.py`:
 
 ```python
-"""Tests for src/agent_toolkit/walker.py — discovery and metadata loading."""
+"""Tests for src/agent_toolkit_cli/walker.py — discovery and metadata loading."""
 from __future__ import annotations
 
 from pathlib import Path
 
-from agent_toolkit.walker import discover_assets, load_asset_record
+from agent_toolkit_cli.walker import discover_assets, load_asset_record
 
 
 def _write_mcp(toolkit_root: Path, slug: str, *, harnesses: list[str]) -> None:
@@ -233,7 +233,7 @@ Expected: FAIL — `test_discover_mcp_uses_config_json` finds zero mcps because 
 
 - [ ] **Step 3: Update `_KIND_RULES` in walker.py**
 
-In `src/agent_toolkit/walker.py`, replace line 24:
+In `src/agent_toolkit_cli/walker.py`, replace line 24:
 
 ```python
     ("mcp", "mcps", "config.json"),
@@ -243,7 +243,7 @@ In `src/agent_toolkit/walker.py`, replace line 24:
 
 - [ ] **Step 4: Update `load_asset_record` to read MCP metadata from sibling README.md**
 
-In `src/agent_toolkit/walker.py`, replace the body of `load_asset_record` (lines 115-135). Replace the existing function with:
+In `src/agent_toolkit_cli/walker.py`, replace the body of `load_asset_record` (lines 115-135). Replace the existing function with:
 
 ```python
 def load_asset_record(asset: Asset) -> AssetRecord:
@@ -271,7 +271,7 @@ def load_asset_record(asset: Asset) -> AssetRecord:
             metadata = {}
     elif asset.kind == "plugin":
         doc = _json.loads(asset.path.read_text())
-        metadata = doc.get("agent_toolkit") or {}
+        metadata = doc.get("agent_toolkit_cli") or {}
     else:
         metadata = {}
 
@@ -280,7 +280,7 @@ def load_asset_record(asset: Asset) -> AssetRecord:
 
 - [ ] **Step 5: Update `Validator._load_metadata` for MCPs**
 
-In `src/agent_toolkit/schema.py`, replace lines 40-48 (the whole `_load_metadata` method):
+In `src/agent_toolkit_cli/schema.py`, replace lines 40-48 (the whole `_load_metadata` method):
 
 ```python
     def _load_metadata(self, asset: Asset) -> dict | None:
@@ -295,7 +295,7 @@ In `src/agent_toolkit/schema.py`, replace lines 40-48 (the whole `_load_metadata
             return extract_frontmatter(readme)
         if asset.kind == "plugin":
             doc = json.loads(asset.path.read_text())
-            return doc.get("agent_toolkit")
+            return doc.get("agent_toolkit_cli")
         return None
 ```
 
@@ -309,7 +309,7 @@ If `test_check.py` fails because it had MCP fixtures using `mcp.json`, fix the f
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/agent_toolkit/walker.py src/agent_toolkit/schema.py tests/test_walker.py
+git add src/agent_toolkit_cli/walker.py src/agent_toolkit_cli/schema.py tests/test_walker.py
 git commit -m "fix(walker): discover MCPs via config.json + sibling README.md frontmatter"
 ```
 
@@ -318,7 +318,7 @@ git commit -m "fix(walker): discover MCPs via config.json + sibling README.md fr
 ## Task 3: Add `mcp` to `KINDS_FOR_PROJECTION` with explicit no-op branch
 
 **Files:**
-- Modify: `src/agent_toolkit/commands/_link_lib.py`
+- Modify: `src/agent_toolkit_cli/commands/_link_lib.py`
 - Test: `tests/test_link_lib.py`
 
 The projection algorithm needs to recognise `mcp` as a kind that is allow-list-managed but produces no symlinks. Until per-harness adapters land (Plan B+), the projection step for MCPs is a no-op that emits a single informational line so the user understands why nothing happened on disk.
@@ -334,7 +334,7 @@ def test_project_from_file_mcp_emits_no_op_message(tmp_path, monkeypatch, capsys
     import io
     from pathlib import Path
 
-    from agent_toolkit.commands._link_lib import LinkCounters, project_from_file
+    from agent_toolkit_cli.commands._link_lib import LinkCounters, project_from_file
 
     # Seed a toolkit with one MCP
     toolkit_root = tmp_path / "toolkit"
@@ -391,7 +391,7 @@ Expected: FAIL — currently `mcp` is not in `KINDS_FOR_PROJECTION`, so nothing 
 
 - [ ] **Step 3: Add `mcp` to `KINDS_FOR_PROJECTION`**
 
-In `src/agent_toolkit/commands/_link_lib.py`, replace line 98:
+In `src/agent_toolkit_cli/commands/_link_lib.py`, replace line 98:
 
 ```python
 KINDS_FOR_PROJECTION: tuple[str, ...] = ("skill", "agent", "command", "hook", "plugin", "mcp")
@@ -399,7 +399,7 @@ KINDS_FOR_PROJECTION: tuple[str, ...] = ("skill", "agent", "command", "hook", "p
 
 - [ ] **Step 4: Add MCP no-op branch in `project_from_file`**
 
-In `src/agent_toolkit/commands/_link_lib.py`, modify the `project_from_file` function (lines 171-223). Insert a special-case branch at the top of the per-kind loop:
+In `src/agent_toolkit_cli/commands/_link_lib.py`, modify the `project_from_file` function (lines 171-223). Insert a special-case branch at the top of the per-kind loop:
 
 Replace lines 189-223 (the `for kind in KINDS_FOR_PROJECTION:` block) with:
 
@@ -475,7 +475,7 @@ Expected: PASS — all three test files.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/agent_toolkit/commands/_link_lib.py tests/test_link_lib.py
+git add src/agent_toolkit_cli/commands/_link_lib.py tests/test_link_lib.py
 git commit -m "feat(link): allow-list mcps now project as a documented no-op"
 ```
 
@@ -484,8 +484,8 @@ git commit -m "feat(link): allow-list mcps now project as a documented no-op"
 ## Task 4: Remove the four `mcps are not yet scope-routed` guards in link/unlink
 
 **Files:**
-- Modify: `src/agent_toolkit/commands/link.py:197-204` and `:437-442`
-- Modify: `src/agent_toolkit/commands/unlink.py:192-198` and `:292-296`
+- Modify: `src/agent_toolkit_cli/commands/link.py:197-204` and `:437-442`
+- Modify: `src/agent_toolkit_cli/commands/unlink.py:192-198` and `:292-296`
 - Test: `tests/test_cli_link.py`, `tests/test_cli_unlink.py`
 
 These guards now actively prevent the new code path from running. With Tasks 1–3 in place, removing them lets `link/unlink user|project <harness> mcp:context7` flow through the same logic as other kinds — the YAML mutation succeeds and the projection step emits the no-op message.
@@ -531,7 +531,7 @@ If `tests/test_cli_unlink.py` doesn't already have an MCP guard test, add this t
 def test_unlink_mcp_removes_from_allowlist(tmp_path, monkeypatch):
     """Unlink mcp:slug removes it from the allow-list and prints the no-op message."""
     from click.testing import CliRunner
-    from agent_toolkit.cli import cli
+    from agent_toolkit_cli.cli import cli
 
     home = tmp_path / "home"
     home.mkdir()
@@ -573,7 +573,7 @@ Expected: FAIL — the four guards still trigger and emit the old error.
 
 - [ ] **Step 5: Remove the four guard blocks**
 
-Edit `src/agent_toolkit/commands/link.py`. Delete lines 197-204 (the entire `if kind == "mcp":` block in `_do_per_asset`):
+Edit `src/agent_toolkit_cli/commands/link.py`. Delete lines 197-204 (the entire `if kind == "mcp":` block in `_do_per_asset`):
 
 ```python
     # 1. mcp guard
@@ -599,7 +599,7 @@ Then delete lines 437-442 (the `if kind == "mcp":` block in `_do_plan_entry`):
         return False
 ```
 
-Edit `src/agent_toolkit/commands/unlink.py`. Delete lines 192-198 (the `if kind == "mcp":` block in `_do_per_asset`):
+Edit `src/agent_toolkit_cli/commands/unlink.py`. Delete lines 192-198 (the `if kind == "mcp":` block in `_do_per_asset`):
 
 ```python
     if kind == "mcp":
@@ -631,7 +631,7 @@ If any test still fails, read the failure carefully — it likely depends on the
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/agent_toolkit/commands/link.py src/agent_toolkit/commands/unlink.py tests/test_cli_link.py tests/test_cli_unlink.py
+git add src/agent_toolkit_cli/commands/link.py src/agent_toolkit_cli/commands/unlink.py tests/test_cli_link.py tests/test_cli_unlink.py
 git commit -m "feat(cli): drop mcp scope-routed guard, route through allow-list"
 ```
 
@@ -640,8 +640,8 @@ git commit -m "feat(cli): drop mcp scope-routed guard, route through allow-list"
 ## Task 5: Surface MCPs in `list` and `_list-json` output
 
 **Files:**
-- Modify: `src/agent_toolkit/commands/list.py:18-19`, `:202-208`
-- Modify: `src/agent_toolkit/commands/_list_json.py:22`, `:128-129`
+- Modify: `src/agent_toolkit_cli/commands/list.py:18-19`, `:202-208`
+- Modify: `src/agent_toolkit_cli/commands/_list_json.py:22`, `:128-129`
 - Test: `tests/test_cli_list.py`, `tests/test_list_json.py`
 
 `list --format=json` and the human-readable `list` both currently skip MCPs entirely. Now that MCPs are allow-list-managed, they should appear with the same status structure as other kinds. Install state for any (harness, scope, mcp) is `unsupported` until the per-harness adapters land — that's accurate and informative.
@@ -655,7 +655,7 @@ def test_list_json_includes_mcps(tmp_path, monkeypatch):
     """MCPs appear as kind=mcp entries in JSON output with status=unsupported per cell."""
     import json
     from click.testing import CliRunner
-    from agent_toolkit.cli import cli
+    from agent_toolkit_cli.cli import cli
 
     home = tmp_path / "home"
     home.mkdir()
@@ -706,7 +706,7 @@ Expected: FAIL — `_build_inventory` skips `kind == "mcp"`.
 
 - [ ] **Step 3: Update `_list_json.py`**
 
-In `src/agent_toolkit/commands/_list_json.py` line 22, replace `ALL_KINDS`:
+In `src/agent_toolkit_cli/commands/_list_json.py` line 22, replace `ALL_KINDS`:
 
 ```python
 ALL_KINDS = ("skill", "agent", "command", "hook", "plugin", "mcp")
@@ -804,7 +804,7 @@ Expected: PASS — all tests including the new one.
 
 - [ ] **Step 5: Update text-mode `list` to surface MCPs**
 
-In `src/agent_toolkit/commands/list.py`, delete the MCP short-circuit (lines 202-208):
+In `src/agent_toolkit_cli/commands/list.py`, delete the MCP short-circuit (lines 202-208):
 
 ```python
     # MCP short-circuit: MCPs aren't symlink-managed.
@@ -841,7 +841,7 @@ Append to `tests/test_cli_list.py`:
 def test_list_text_includes_mcps(tmp_path, monkeypatch):
     """Text-mode list shows an MCPs section with allow-listed MCPs."""
     from click.testing import CliRunner
-    from agent_toolkit.cli import cli
+    from agent_toolkit_cli.cli import cli
 
     home = tmp_path / "home"
     home.mkdir()
@@ -888,7 +888,7 @@ Expected: PASS. All tests green.
 - [ ] **Step 9: Commit**
 
 ```bash
-git add src/agent_toolkit/commands/list.py src/agent_toolkit/commands/_list_json.py tests/test_cli_list.py tests/test_list_json.py
+git add src/agent_toolkit_cli/commands/list.py src/agent_toolkit_cli/commands/_list_json.py tests/test_cli_list.py tests/test_list_json.py
 git commit -m "feat(list): surface MCPs in list/JSON output with status=unsupported"
 ```
 
@@ -920,7 +920,7 @@ Append to `tests/test_check.py`:
 def test_check_accepts_v1alpha1_mcp(tmp_path, monkeypatch):
     """Validator accepts a catalog MCP with structured v1alpha1 frontmatter."""
     from click.testing import CliRunner
-    from agent_toolkit.cli import cli
+    from agent_toolkit_cli.cli import cli
 
     home = tmp_path / "home"
     home.mkdir()

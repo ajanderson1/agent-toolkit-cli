@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from agent_toolkit.schema import Validator
+from agent_toolkit_cli.schema import Validator
 
 
 def test_validator_loads_bundled_schema(tmp_path: Path) -> None:

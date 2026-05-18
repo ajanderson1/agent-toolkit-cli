@@ -1,5 +1,5 @@
 """Tests for doctor check-group modules."""
-from agent_toolkit.doctor.result import GroupResult, Status
+from agent_toolkit_cli.doctor.result import GroupResult, Status
 
 
 def test_group_result_overall_status_picks_worst():
@@ -16,7 +16,7 @@ def test_status_ordering():
 
 
 def test_environment_group_ok_in_real_repo(tmp_path):
-    from agent_toolkit.doctor.environment import run
+    from agent_toolkit_cli.doctor.environment import run
 
     # Synthesize a "valid enough" repo
     (tmp_path / "schemas").mkdir()
@@ -31,7 +31,7 @@ def test_environment_group_ok_in_real_repo(tmp_path):
 
 
 def test_environment_group_fails_when_schema_missing(tmp_path):
-    from agent_toolkit.doctor.environment import run
+    from agent_toolkit_cli.doctor.environment import run
     (tmp_path / "AGENTS.md").write_text("# AGENTS")
     (tmp_path / ".gitmodules").write_text("")
     result = run(tmp_path)
@@ -45,8 +45,8 @@ def test_environment_group_warn_when_tool_missing(monkeypatch):
     from pathlib import Path
     import tempfile
 
-    from agent_toolkit.doctor import environment as env_mod
-    from agent_toolkit.doctor.environment import run
+    from agent_toolkit_cli.doctor import environment as env_mod
+    from agent_toolkit_cli.doctor.environment import run
 
     real_which = shutil.which
 
@@ -74,7 +74,7 @@ def test_environment_group_warn_when_tool_missing(monkeypatch):
 
 
 def test_frontmatter_group_ok_when_no_assets(tmp_path):
-    from agent_toolkit.doctor.frontmatter import run as run_fm
+    from agent_toolkit_cli.doctor.frontmatter import run as run_fm
     (tmp_path / "schemas").mkdir()
     (tmp_path / "schemas" / "asset-frontmatter.v1alpha2.json").write_text(
         '{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object"}'
@@ -84,7 +84,7 @@ def test_frontmatter_group_ok_when_no_assets(tmp_path):
 
 
 def test_frontmatter_group_fail_when_invalid_asset(tmp_path):
-    from agent_toolkit.doctor.frontmatter import run as run_fm
+    from agent_toolkit_cli.doctor.frontmatter import run as run_fm
     schema_dir = tmp_path / "schemas"
     schema_dir.mkdir()
     # Use the real schema so validation actually rejects bad frontmatter
@@ -110,14 +110,14 @@ def test_frontmatter_group_fail_when_invalid_asset(tmp_path):
 
 
 def test_submodules_group_ok_when_no_gitmodules(tmp_path):
-    from agent_toolkit.doctor.submodules import run as run_sm
+    from agent_toolkit_cli.doctor.submodules import run as run_sm
     result = run_sm(tmp_path)
     assert result.status == Status.OK
     assert "no .gitmodules" in result.summary.lower() or "0 submodule" in result.summary.lower()
 
 
 def test_submodules_group_warns_when_uninitialised(tmp_path):
-    from agent_toolkit.doctor.submodules import run as run_sm
+    from agent_toolkit_cli.doctor.submodules import run as run_sm
     (tmp_path / ".gitmodules").write_text(
         '[submodule "skills/foo"]\n\tpath = skills/foo\n\turl = https://example.com/x.git\n'
     )
@@ -128,7 +128,7 @@ def test_submodules_group_warns_when_uninitialised(tmp_path):
 
 
 def test_submodules_group_ok_when_initialised(tmp_path):
-    from agent_toolkit.doctor.submodules import run as run_sm
+    from agent_toolkit_cli.doctor.submodules import run as run_sm
     (tmp_path / ".gitmodules").write_text(
         '[submodule "skills/foo"]\n\tpath = skills/foo\n\turl = https://example.com/x.git\n'
     )
@@ -140,7 +140,7 @@ def test_submodules_group_ok_when_initialised(tmp_path):
 
 
 def test_submodules_group_fail_when_gitmodules_malformed(tmp_path):
-    from agent_toolkit.doctor.submodules import run as run_sm
+    from agent_toolkit_cli.doctor.submodules import run as run_sm
     (tmp_path / ".gitmodules").write_text("not a valid ini file at all\n=====\n")
     result = run_sm(tmp_path)
     assert result.status == Status.FAIL
@@ -149,7 +149,7 @@ def test_submodules_group_fail_when_gitmodules_malformed(tmp_path):
 
 def test_submodules_group_handles_path_pointing_to_file(tmp_path):
     """Regression: if .gitmodules path resolves to a regular file, we WARN (not crash)."""
-    from agent_toolkit.doctor.submodules import run as run_sm
+    from agent_toolkit_cli.doctor.submodules import run as run_sm
     (tmp_path / ".gitmodules").write_text(
         '[submodule "broken"]\n\tpath = broken\n\turl = https://example.com/x.git\n'
     )
@@ -161,7 +161,7 @@ def test_submodules_group_handles_path_pointing_to_file(tmp_path):
 
 
 def test_conventions_group_ok_when_correctly_linked(tmp_path, monkeypatch):
-    from agent_toolkit.doctor.conventions import run as run_conv
+    from agent_toolkit_cli.doctor.conventions import run as run_conv
 
     # Build a fake repo that has CONVENTIONS.md and conventions/topic.md
     (tmp_path / "CONVENTIONS.md").write_text("# C")
@@ -193,7 +193,7 @@ def _make_skill_with_harnesses(toolkit_root, slug, harnesses):
 
 
 def test_symlinks_group_ok_when_all_correct(tmp_path, monkeypatch):
-    from agent_toolkit.doctor.symlinks import run as run_sl
+    from agent_toolkit_cli.doctor.symlinks import run as run_sl
     _make_skill_with_harnesses(tmp_path, "alpha", ["claude"])
     fake_home = tmp_path / "home"
     (fake_home / ".claude" / "skills").mkdir(parents=True)
@@ -204,7 +204,7 @@ def test_symlinks_group_ok_when_all_correct(tmp_path, monkeypatch):
 
 
 def test_symlinks_group_warns_on_expected_unlinked(tmp_path, monkeypatch):
-    from agent_toolkit.doctor.symlinks import run as run_sl
+    from agent_toolkit_cli.doctor.symlinks import run as run_sl
     _make_skill_with_harnesses(tmp_path, "alpha", ["claude"])
     fake_home = tmp_path / "home"
     (fake_home / ".claude" / "skills").mkdir(parents=True)
@@ -216,7 +216,7 @@ def test_symlinks_group_warns_on_expected_unlinked(tmp_path, monkeypatch):
 
 
 def test_symlinks_group_flags_dangling(tmp_path, monkeypatch):
-    from agent_toolkit.doctor.symlinks import run as run_sl
+    from agent_toolkit_cli.doctor.symlinks import run as run_sl
     _make_skill_with_harnesses(tmp_path, "alpha", ["claude"])
     fake_home = tmp_path / "home"
     (fake_home / ".claude" / "skills").mkdir(parents=True)
@@ -229,7 +229,7 @@ def test_symlinks_group_flags_dangling(tmp_path, monkeypatch):
 
 
 def test_conventions_group_warn_when_topic_missing(tmp_path, monkeypatch):
-    from agent_toolkit.doctor.conventions import run as run_conv
+    from agent_toolkit_cli.doctor.conventions import run as run_conv
     (tmp_path / "CONVENTIONS.md").write_text("# C")
     (tmp_path / "conventions").mkdir()
     (tmp_path / "conventions" / "git.md").write_text("# git")
@@ -248,7 +248,7 @@ def test_conventions_group_warn_when_topic_missing(tmp_path, monkeypatch):
 
 
 def test_duplicates_group_ok_when_unique(tmp_path):
-    from agent_toolkit.doctor.duplicates import run as run_dupes
+    from agent_toolkit_cli.doctor.duplicates import run as run_dupes
     cmd = tmp_path / "commands" / "alpha.md"
     cmd.parent.mkdir(parents=True)
     cmd.write_text("---\nname: alpha\n---\n# alpha\n")
@@ -259,7 +259,7 @@ def test_duplicates_group_ok_when_unique(tmp_path):
 
 def test_duplicates_group_fails_when_kind_slug_collide(tmp_path):
     """Two files producing the same (kind, slug) — the SSOT-side drift the TUI exposes."""
-    from agent_toolkit.doctor.duplicates import run as run_dupes
+    from agent_toolkit_cli.doctor.duplicates import run as run_dupes
     a = tmp_path / "commands" / "aj" / "session" / "shared.md"
     b = tmp_path / "commands" / "custom_commands" / "session" / "shared.md"
     for p in (a, b):
@@ -273,7 +273,7 @@ def test_duplicates_group_fails_when_kind_slug_collide(tmp_path):
 
 
 def test_duplicates_group_ok_with_no_assets(tmp_path):
-    from agent_toolkit.doctor.duplicates import run as run_dupes
+    from agent_toolkit_cli.doctor.duplicates import run as run_dupes
     result = run_dupes(tmp_path)
     assert result.status == Status.OK
     assert "0 asset" in result.summary
@@ -293,8 +293,8 @@ def _make_valid_repo(root):
 def test_environment_warn_multiple_cli_entries_on_path(tmp_path, monkeypatch):
     """Two different agent-toolkit executables on PATH → WARN with PATH-shadow finding."""
     import os
-    from agent_toolkit.doctor import environment as env_mod
-    from agent_toolkit.doctor.environment import run
+    from agent_toolkit_cli.doctor import environment as env_mod
+    from agent_toolkit_cli.doctor.environment import run
 
     # Create two fake agent-toolkit shims in separate directories
     bin_a = tmp_path / "bin_a"
@@ -321,8 +321,8 @@ def test_environment_warn_cli_not_from_uv_tools(tmp_path, monkeypatch):
     """Single agent-toolkit entry that is NOT under the uv tools prefix → WARN."""
     import os
     from pathlib import Path
-    from agent_toolkit.doctor import environment as env_mod
-    from agent_toolkit.doctor.environment import run
+    from agent_toolkit_cli.doctor import environment as env_mod
+    from agent_toolkit_cli.doctor.environment import run
 
     # Place a single agent-toolkit shim somewhere outside uv tools
     fake_bin = tmp_path / "some_other_bin"
@@ -346,8 +346,8 @@ def test_environment_warn_cli_not_from_uv_tools(tmp_path, monkeypatch):
 def test_environment_ok_when_cli_from_uv_tools(tmp_path, monkeypatch):
     """agent-toolkit entry under the uv tools prefix → no PATH-shadow warning."""
     import os
-    from agent_toolkit.doctor import environment as env_mod
-    from agent_toolkit.doctor.environment import run
+    from agent_toolkit_cli.doctor import environment as env_mod
+    from agent_toolkit_cli.doctor.environment import run
 
     uv_prefix = tmp_path / "uv_tools" / "agent-toolkit"
     uv_bin = uv_prefix / "bin"
@@ -370,12 +370,12 @@ def test_environment_fail_stale_editable_install(tmp_path, monkeypatch):
     """direct_url.json pointing at a non-existent directory → FAIL."""
     import json
     from pathlib import Path
-    from agent_toolkit.doctor import environment as env_mod
-    from agent_toolkit.doctor.environment import run
+    from agent_toolkit_cli.doctor import environment as env_mod
+    from agent_toolkit_cli.doctor.environment import run
 
     # Build a fake site-packages with a stale editable dist-info
     site_pkgs = tmp_path / "site-packages"
-    dist_info = site_pkgs / "agent_toolkit-0.1.0.dist-info"
+    dist_info = site_pkgs / "agent_toolkit_cli-0.1.0.dist-info"
     dist_info.mkdir(parents=True)
     missing_source = tmp_path / "deleted_worktree"
     (dist_info / "direct_url.json").write_text(
@@ -412,7 +412,7 @@ def test_environment_fail_stale_editable_install(tmp_path, monkeypatch):
 
 def test_environment_no_cli_on_path_skips_shadow_checks(tmp_path, monkeypatch):
     """When agent-toolkit is not on PATH at all, no PATH-shadow findings are emitted."""
-    from agent_toolkit.doctor.environment import run
+    from agent_toolkit_cli.doctor.environment import run
 
     monkeypatch.setenv("PATH", str(tmp_path / "empty_bin"))
 

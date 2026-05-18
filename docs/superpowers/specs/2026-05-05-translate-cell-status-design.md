@@ -4,8 +4,8 @@
 
 Two status-reporting paths build slot lookup paths from a bare slug:
 
-- `src/agent_toolkit/commands/_list_json.py:47` — `link_path = slot / slug`
-- `src/agent_toolkit/doctor/symlinks.py:34` — `link_path = home / rel / asset.slug`
+- `src/agent_toolkit_cli/commands/_list_json.py:47` — `link_path = slot / slug`
+- `src/agent_toolkit_cli/doctor/symlinks.py:34` — `link_path = home / rel / asset.slug`
 
 The `_link_lib._translated_slot_filename` helper (`_link_lib.py:79-86`) returns `<slug>.md` for OpenCode agents and commands. So when a user runs `link user opencode`, the slot lands at `~/.config/opencode/agents/<slug>.md`, but `_cell_status` and `doctor/symlinks` look for `~/.config/opencode/agents/<slug>` — and report "unlinked" or "missing" respectively, when the link is in fact present and healthy.
 

@@ -46,8 +46,8 @@ def _seed_toolkit_with_mcp(toolkit_root: Path, *,
 
 
 def test_doctor_mcps_no_allowlist_returns_ok(monkeypatch, tmp_path):
-    from agent_toolkit.doctor.mcps import run
-    from agent_toolkit.doctor.result import Status
+    from agent_toolkit_cli.doctor.mcps import run
+    from agent_toolkit_cli.doctor.result import Status
 
     home = tmp_path / "home"
     home.mkdir()
@@ -63,10 +63,10 @@ def test_doctor_mcps_no_allowlist_returns_ok(monkeypatch, tmp_path):
 
 def test_doctor_mcps_ok_when_no_drift(monkeypatch, tmp_path):
     """Allow-listed and installed and aligned → OK."""
-    from agent_toolkit.commands._mcp_dispatch import _build_mcp_entries
-    from agent_toolkit.doctor.mcps import run
-    from agent_toolkit.doctor.result import Status
-    from agent_toolkit.harness_adapters import get_adapter
+    from agent_toolkit_cli.commands._mcp_dispatch import _build_mcp_entries
+    from agent_toolkit_cli.doctor.mcps import run
+    from agent_toolkit_cli.doctor.result import Status
+    from agent_toolkit_cli.harness_adapters import get_adapter
 
     home = tmp_path / "home"
     home.mkdir()
@@ -88,8 +88,8 @@ def test_doctor_mcps_ok_when_no_drift(monkeypatch, tmp_path):
 
 def test_doctor_mcps_warn_when_not_installed(monkeypatch, tmp_path):
     """Allow-listed but not installed → finding noted (not a hard failure)."""
-    from agent_toolkit.doctor.mcps import run
-    from agent_toolkit.doctor.result import Status
+    from agent_toolkit_cli.doctor.mcps import run
+    from agent_toolkit_cli.doctor.result import Status
 
     home = tmp_path / "home"
     home.mkdir()
@@ -107,10 +107,10 @@ def test_doctor_mcps_warn_when_not_installed(monkeypatch, tmp_path):
 
 def test_doctor_mcps_warn_on_drift(monkeypatch, tmp_path):
     """Drift between installed entry and template → WARN with drift note."""
-    from agent_toolkit.commands._mcp_dispatch import _build_mcp_entries
-    from agent_toolkit.doctor.mcps import run
-    from agent_toolkit.doctor.result import Status
-    from agent_toolkit.harness_adapters import get_adapter
+    from agent_toolkit_cli.commands._mcp_dispatch import _build_mcp_entries
+    from agent_toolkit_cli.doctor.mcps import run
+    from agent_toolkit_cli.doctor.result import Status
+    from agent_toolkit_cli.harness_adapters import get_adapter
 
     home = tmp_path / "home"
     home.mkdir()
@@ -138,10 +138,10 @@ def test_doctor_mcps_warn_on_drift(monkeypatch, tmp_path):
 
 def test_doctor_mcps_warn_on_missing_env(monkeypatch, tmp_path):
     """Required env var not set → WARN with var name in findings."""
-    from agent_toolkit.commands._mcp_dispatch import _build_mcp_entries
-    from agent_toolkit.doctor.mcps import run
-    from agent_toolkit.doctor.result import Status
-    from agent_toolkit.harness_adapters import get_adapter
+    from agent_toolkit_cli.commands._mcp_dispatch import _build_mcp_entries
+    from agent_toolkit_cli.doctor.mcps import run
+    from agent_toolkit_cli.doctor.result import Status
+    from agent_toolkit_cli.harness_adapters import get_adapter
 
     home = tmp_path / "home"
     home.mkdir()
@@ -165,10 +165,10 @@ def test_doctor_mcps_warn_on_missing_env(monkeypatch, tmp_path):
 
 def test_doctor_mcps_ok_when_env_present(monkeypatch, tmp_path):
     """Required env var present → OK."""
-    from agent_toolkit.commands._mcp_dispatch import _build_mcp_entries
-    from agent_toolkit.doctor.mcps import run
-    from agent_toolkit.doctor.result import Status
-    from agent_toolkit.harness_adapters import get_adapter
+    from agent_toolkit_cli.commands._mcp_dispatch import _build_mcp_entries
+    from agent_toolkit_cli.doctor.mcps import run
+    from agent_toolkit_cli.doctor.result import Status
+    from agent_toolkit_cli.harness_adapters import get_adapter
 
     home = tmp_path / "home"
     home.mkdir()
@@ -190,10 +190,10 @@ def test_doctor_mcps_ok_when_env_present(monkeypatch, tmp_path):
 
 def test_doctor_mcps_warn_on_missing_prereq(monkeypatch, tmp_path):
     """Prerequisite not on PATH → WARN with prereq name."""
-    from agent_toolkit.commands._mcp_dispatch import _build_mcp_entries
-    from agent_toolkit.doctor.mcps import run
-    from agent_toolkit.doctor.result import Status
-    from agent_toolkit.harness_adapters import get_adapter
+    from agent_toolkit_cli.commands._mcp_dispatch import _build_mcp_entries
+    from agent_toolkit_cli.doctor.mcps import run
+    from agent_toolkit_cli.doctor.result import Status
+    from agent_toolkit_cli.harness_adapters import get_adapter
 
     home = tmp_path / "home"
     home.mkdir()
@@ -215,8 +215,8 @@ def test_doctor_mcps_warn_on_missing_prereq(monkeypatch, tmp_path):
 
 def test_doctor_mcps_skips_unimplemented_harness(monkeypatch, tmp_path):
     """harness=pi → group reports OK with 'no adapter' note (Pi MCP unsupported by design)."""
-    from agent_toolkit.doctor.mcps import run
-    from agent_toolkit.doctor.result import Status
+    from agent_toolkit_cli.doctor.mcps import run
+    from agent_toolkit_cli.doctor.result import Status
 
     home = tmp_path / "home"
     home.mkdir()
@@ -232,9 +232,9 @@ def test_doctor_mcps_skips_unimplemented_harness(monkeypatch, tmp_path):
 
 def test_doctor_mcps_verify_off_by_default(monkeypatch, tmp_path):
     """`verify:` command is NOT run unless run_verify=True."""
-    from agent_toolkit.commands._mcp_dispatch import _build_mcp_entries
-    from agent_toolkit.doctor.mcps import run
-    from agent_toolkit.harness_adapters import get_adapter
+    from agent_toolkit_cli.commands._mcp_dispatch import _build_mcp_entries
+    from agent_toolkit_cli.doctor.mcps import run
+    from agent_toolkit_cli.harness_adapters import get_adapter
 
     home = tmp_path / "home"
     home.mkdir()
@@ -257,9 +257,9 @@ def test_doctor_mcps_verify_off_by_default(monkeypatch, tmp_path):
 
 def test_doctor_mcps_verify_on_runs_command(monkeypatch, tmp_path):
     """run_verify=True executes the verify command."""
-    from agent_toolkit.commands._mcp_dispatch import _build_mcp_entries
-    from agent_toolkit.doctor.mcps import run
-    from agent_toolkit.harness_adapters import get_adapter
+    from agent_toolkit_cli.commands._mcp_dispatch import _build_mcp_entries
+    from agent_toolkit_cli.doctor.mcps import run
+    from agent_toolkit_cli.harness_adapters import get_adapter
 
     home = tmp_path / "home"
     home.mkdir()

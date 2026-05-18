@@ -10,11 +10,11 @@ from agent_toolkit_tui.runner import CLIRunner, RunnerError, _locate_cli
 
 
 def test_locate_cli_uses_shutil_which(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """After the unification, runner.py must find the installed `agent-toolkit`
-    via PATH, not by walking up to bin/agent-toolkit."""
+    """After the unification, runner.py must find the installed `agent-toolkit-cli`
+    via PATH, not by walking up to bin/agent-toolkit-cli."""
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
-    fake_cli = fake_bin / "agent-toolkit"
+    fake_cli = fake_bin / "agent-toolkit-cli"
     fake_cli.write_text("#!/bin/sh\n")
     fake_cli.chmod(0o755)
     monkeypatch.setenv("PATH", str(fake_bin))

@@ -75,13 +75,13 @@ Add lazy-imported branches for `claude` and `opencode`, structured exactly like 
 
 ```python
 if harness == "codex":
-    from agent_toolkit.harness_adapters.codex import CodexAdapter
+    from agent_toolkit_cli.harness_adapters.codex import CodexAdapter
     return CodexAdapter()
 if harness == "claude":
-    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+    from agent_toolkit_cli.harness_adapters.claude import ClaudeAdapter
     return ClaudeAdapter()
 if harness == "opencode":
-    from agent_toolkit.harness_adapters.opencode import OpenCodeAdapter
+    from agent_toolkit_cli.harness_adapters.opencode import OpenCodeAdapter
     return OpenCodeAdapter()
 return UnimplementedAdapter(harness)
 ```

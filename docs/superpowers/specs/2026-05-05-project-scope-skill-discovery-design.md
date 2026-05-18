@@ -57,7 +57,7 @@ def _translate_opencode_skill(record, body):
     fm = {
         "name": _name(record),
         "description": _description(record),
-        "agent_toolkit": _wrapper_block(record),
+        "agent_toolkit_cli": _wrapper_block(record),
     }
     return _render(fm, body)
 ```

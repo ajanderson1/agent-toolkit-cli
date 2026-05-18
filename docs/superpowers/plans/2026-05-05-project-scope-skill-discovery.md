@@ -77,7 +77,7 @@ Update `_cell_status` (`_list_json.py`):
 ### 4. Matrix doc
 
 **File:** `docs/agent-toolkit/harness-matrix.md`
-- Update the `(opencode, skill)` cell from `symlink → ~/.config/opencode/skills/<slug>/` to `translate → ~/.config/opencode/skills/<slug>/SKILL.md (cache: ~/.config/opencode/.agent-toolkit-cache/skill/<slug>/SKILL.md) — emits opencode-shaped frontmatter with top-level name and description plus agent_toolkit wrapper`.
+- Update the `(opencode, skill)` cell from `symlink → ~/.config/opencode/skills/<slug>/` to `translate → ~/.config/opencode/skills/<slug>/SKILL.md (cache: ~/.config/opencode/.agent-toolkit-cache/skill/<slug>/SKILL.md) — emits opencode-shaped frontmatter with top-level name and description plus agent_toolkit_cli wrapper`.
 - Update the project-scope path table further down to reflect pi changes.
 
 The `_TRANSLATE_PATH_RE` regex (PR-C widened) already covers `skills/<slug>/SKILL.md`, so the parity test passes without regex change.

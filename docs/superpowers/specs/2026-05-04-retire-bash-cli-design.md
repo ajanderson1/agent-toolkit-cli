@@ -20,7 +20,7 @@ The bash side still carries one feature the Python side does not: `agent-toolkit
 2. Delete the entire bats test suite (`tests/bats/`) and its helpers.
 3. Delete the cross-language parity test (`tests/test_target_dir_parity.py`) — the second implementation it polices is gone.
 4. Strip the `bats` job from CI (`.github/workflows/test.yml`) and the `bats` and `schema-vendor-check` (no — keep schema-vendor-check) commands from `lefthook.yml`. Keep `pytest` and `schema-vendor-check`.
-5. Update fix-hint strings in `src/agent_toolkit/inventory.py`, `src/agent_toolkit/doctor/symlinks.py`, `src/agent_toolkit/doctor/conventions.py` from `bin/agent-toolkit link …` to `agent-toolkit link …` (the entry-point name).
+5. Update fix-hint strings in `src/agent_toolkit_cli/inventory.py`, `src/agent_toolkit_cli/doctor/symlinks.py`, `src/agent_toolkit_cli/doctor/conventions.py` from `bin/agent-toolkit link …` to `agent-toolkit link …` (the entry-point name).
 6. Update `tests/test_inventory.py` assertion to match the new fix-hint string.
 7. Update `AGENTS.md` to drop the bash/zero-dep framing and present the project as a single Python CLI.
 8. Update `docs/agent-toolkit/cli.md` similarly — the flag tables themselves are unchanged (the grammar was identical), so the surgical edit is wording, not contracts.
@@ -62,9 +62,9 @@ After deletion, `bin/` and `bin/lib/` are empty — `git rm -r bin/` clears them
 | `.github/workflows/test.yml` | Remove the `bats:` job. Keep the `pytest:` job. |
 | `AGENTS.md` | Strike "bash+Python CLI", rewrite "bash CLI is for filesystem operations (symlinks). Stays zero-dep." in layered contract section, update Code map (drop `bin/agent-toolkit` and `bin/lib/` entries), update Development workflow (drop `bats tests/bats`). |
 | `docs/agent-toolkit/cli.md` | Replace mentions of "bash CLI" or `bin/agent-toolkit` with `agent-toolkit` (the entry point). Flag tables unchanged. |
-| `src/agent_toolkit/inventory.py` (lines 164-165) | `bin/agent-toolkit link` → `agent-toolkit link`. |
-| `src/agent_toolkit/doctor/symlinks.py` (line 101) | `bin/agent-toolkit link user` → `agent-toolkit link user`. |
-| `src/agent_toolkit/doctor/conventions.py` (line 60) | Same. |
+| `src/agent_toolkit_cli/inventory.py` (lines 164-165) | `bin/agent-toolkit link` → `agent-toolkit link`. |
+| `src/agent_toolkit_cli/doctor/symlinks.py` (line 101) | `bin/agent-toolkit link user` → `agent-toolkit link user`. |
+| `src/agent_toolkit_cli/doctor/conventions.py` (line 60) | Same. |
 | `tests/test_inventory.py` (line 66) | Update assertion string to match. |
 
 ## Tests
