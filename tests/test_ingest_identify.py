@@ -143,6 +143,73 @@ def test_identify_directory_never_falls_through_to_name(tmp_path):
     assert t.input_form != InputForm.NAME
 
 
+def test_research_classifies_plugin_from_claude_plugin_manifest(tmp_path):
+    """Regression: #72 — plugin.json under .claude-plugin/ alone (no top-level
+    marketplace.json) must classify as kind=plugin, not fall through to skill."""
+    from agent_toolkit_cli.ingest.research import infer_from_snapshot
+    plugin_dir = tmp_path / ".claude-plugin"
+    plugin_dir.mkdir()
+    (plugin_dir / "plugin.json").write_text('{"name": "x"}\n')
+    proposal = infer_from_snapshot(
+        snapshot_dir=tmp_path, slug="x", upstream=None,
+    )
+    assert proposal.kind == "plugin"
+    assert proposal.target_path == "plugins/x/.claude-plugin/plugin.json"
+
+
+def test_research_reads_embedded_agent_toolkit_block(tmp_path):
+    """Regression: #72 — when plugin.json carries an `agent_toolkit:` block,
+    its metadata/spec values populate the Proposal instead of being clobbered
+    with TODO/copy defaults."""
+    import json as _json
+    from agent_toolkit_cli.ingest.research import infer_from_snapshot
+    plugin_dir = tmp_path / ".claude-plugin"
+    plugin_dir.mkdir()
+    (plugin_dir / "plugin.json").write_text(_json.dumps({
+        "name": "companion-html",
+        "description": "Top-level claude desc — should NOT win",
+        "agent_toolkit": {
+            "apiVersion": "agent-toolkit/v1alpha2",
+            "metadata": {
+                "name": "companion-html",
+                "description": "Embedded description wins.",
+                "lifecycle": "stable",
+            },
+            "spec": {
+                "origin": "first-party",
+                "vendored_via": "none",
+                "harnesses": ["claude"],
+            },
+        },
+    }))
+    proposal = infer_from_snapshot(
+        snapshot_dir=tmp_path, slug="companion-html", upstream=None,
+    )
+    assert proposal.kind == "plugin"
+    assert proposal.description == "Embedded description wins."
+    assert proposal.lifecycle == "stable"
+    assert proposal.origin == "first-party"
+    assert proposal.vendor_via == "none"
+    assert proposal.harnesses == ["claude"]
+    assert proposal.target_path == "plugins/companion-html/.claude-plugin/plugin.json"
+
+
+def test_research_tolerates_malformed_plugin_json(tmp_path):
+    """A broken plugin.json must not crash ingest — fall back to inferred defaults."""
+    from agent_toolkit_cli.ingest.research import infer_from_snapshot
+    plugin_dir = tmp_path / ".claude-plugin"
+    plugin_dir.mkdir()
+    (plugin_dir / "plugin.json").write_text("{ not valid json")
+    proposal = infer_from_snapshot(
+        snapshot_dir=tmp_path, slug="x", upstream=None,
+    )
+    # Still classified as plugin (the file's presence is enough), but
+    # description/lifecycle fall back to defaults.
+    assert proposal.kind == "plugin"
+    assert proposal.description.startswith("TODO:")
+    assert proposal.lifecycle == "experimental"
+
+
 def test_identify_dir_is_snapshot_for_research(tmp_path):
     from agent_toolkit_cli.ingest.identify import classify_input
     from agent_toolkit_cli.ingest.research import infer_from_snapshot
