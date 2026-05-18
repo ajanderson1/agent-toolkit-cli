@@ -9,12 +9,6 @@ uv tool install --from git+https://github.com/ajanderson1/agent-toolkit-cli agen
 # SSH form: git+ssh://git@github.com/ajanderson1/agent-toolkit-cli
 ```
 
-The TUI extra:
-
-```bash
-uv tool install --from git+https://github.com/ajanderson1/agent-toolkit-cli "agent-toolkit[tui]"
-```
-
 > **Don't `pip install -e .` into a Python that comes earlier on `$PATH` than `~/.local/bin/`** (e.g., pyenv-managed Pythons). The pip shim will shadow `uv tool install`'s shim, and if you later delete the editable source, every invocation will break with `ModuleNotFoundError: agent_toolkit_cli.cli`. If you must install editable for development, either:
 >
 > - Use a venv that you activate per-session (`python -m venv .venv && source .venv/bin/activate && pip install -e .`), or
@@ -53,7 +47,7 @@ agent-toolkit-cli doctor [<slug>]
 agent-toolkit-cli inventory [<kind>|<slug>]      # asset library catalog (python)
 agent-toolkit-cli ingest [<url|name|file>]
 agent-toolkit-cli new <kind> <slug>
-agent-toolkit-cli tui                    # requires [tui] extra
+agent-toolkit-cli tui
 ```
 
 `list` vs `inventory`: `list` is project-scoped — shows what's installed for a `<user|project>` scope and harness, with ✓/— install state. `inventory` is library-scoped — browses the SSOT's asset catalog with no notion of install state.

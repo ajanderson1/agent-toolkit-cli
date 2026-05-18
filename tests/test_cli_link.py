@@ -808,7 +808,7 @@ def test_link_subprocess_smoke(env, seed_skill):
 
     cli = shutil.which("agent-toolkit-cli")
     if not cli:
-        pytest.skip("agent-toolkit-cli not on PATH (run `uv sync --extra tui`)")
+        pytest.skip("agent-toolkit-cli not on PATH (run `uv sync`)")
 
     proc = subprocess.run(
         [cli, "--toolkit-repo", str(toolkit), "link", "user", "claude"],
