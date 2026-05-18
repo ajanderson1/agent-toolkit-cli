@@ -12,7 +12,7 @@ effort: L
 
 After the assets/CLI split (`v0.1`), the CLI is bilingual:
 
-- **Python** (`src/agent_toolkit/`) — `check`, `fix`, `doctor`, `new`, `inventory`, `ingest`, `tui` and the hidden helpers `_list-json` / `_yaml-edit`.
+- **Python** (`src/agent_toolkit_cli/`) — `check`, `fix`, `doctor`, `new`, `inventory`, `ingest`, `tui` and the hidden helpers `_list-json` / `_yaml-edit`.
 - **Bash** (`bin/agent-toolkit` + `bin/lib/*.sh`) — `link`, `unlink`, `list`, `diff`.
 
 This split causes three concrete failures, all surfaced during the post-split walkthrough (assets-repo PR #5):
@@ -41,7 +41,7 @@ The original justification for bash ("zero-dep on a Unix box") no longer applies
 
 ### Code shape
 
-Four new modules under `src/agent_toolkit/commands/`:
+Four new modules under `src/agent_toolkit_cli/commands/`:
 
 | New module | Replaces | Notes |
 |---|---|---|
@@ -50,7 +50,7 @@ Four new modules under `src/agent_toolkit/commands/`:
 | `list.py` | `bin/lib/list.sh` | Text by default; `--format=json` already exists as the hidden `_list-json` and is reused as a backend. |
 | `diff.py` | `bin/lib/diff.sh` | Thin alias: invokes `link` with `dry_run=True` and the `Previewing` header swap. |
 
-Each module exposes a Click command, registered in `src/agent_toolkit/cli.py`. They participate in the existing four-step `--toolkit-repo` resolver (flag → env → walk-up `.agent-toolkit-source` → default), via `_repo_resolution.resolve_toolkit_root()` — same as `check`, `doctor`, `inventory`.
+Each module exposes a Click command, registered in `src/agent_toolkit_cli/cli.py`. They participate in the existing four-step `--toolkit-repo` resolver (flag → env → walk-up `.agent-toolkit-source` → default), via `_repo_resolution.resolve_toolkit_root()` — same as `check`, `doctor`, `inventory`.
 
 ### Reused primitives (no rewrite)
 

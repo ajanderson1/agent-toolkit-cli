@@ -38,7 +38,7 @@ def _seed_mcp(toolkit_root: Path, slug: str = "context7", *,
 
 
 def test_build_mcp_entries_resolves_slug_to_mcpentry(tmp_path):
-    from agent_toolkit.commands._mcp_dispatch import _build_mcp_entries
+    from agent_toolkit_cli.commands._mcp_dispatch import _build_mcp_entries
 
     _seed_mcp(tmp_path, "context7", args=["-y", "@upstash/context7-mcp"])
     entries = _build_mcp_entries(tmp_path, ["context7"])
@@ -50,7 +50,7 @@ def test_build_mcp_entries_resolves_slug_to_mcpentry(tmp_path):
 
 
 def test_build_mcp_entries_skips_unknown_slug(tmp_path):
-    from agent_toolkit.commands._mcp_dispatch import _build_mcp_entries
+    from agent_toolkit_cli.commands._mcp_dispatch import _build_mcp_entries
 
     _seed_mcp(tmp_path, "context7")
     entries = _build_mcp_entries(tmp_path, ["context7", "does-not-exist"])
@@ -60,7 +60,7 @@ def test_build_mcp_entries_skips_unknown_slug(tmp_path):
 
 def test_build_mcp_entries_skips_when_readme_missing(tmp_path):
     """A slug whose mcps/<slug>/README.md is missing is skipped (not an error)."""
-    from agent_toolkit.commands._mcp_dispatch import _build_mcp_entries
+    from agent_toolkit_cli.commands._mcp_dispatch import _build_mcp_entries
 
     mcp_dir = tmp_path / "mcps" / "incomplete"
     mcp_dir.mkdir(parents=True)
@@ -72,8 +72,8 @@ def test_build_mcp_entries_skips_when_readme_missing(tmp_path):
 
 
 def test_apply_link_dry_run_prints_would_op_no_write(monkeypatch, tmp_path):
-    from agent_toolkit.commands._mcp_dispatch import _build_mcp_entries, apply_link
-    from agent_toolkit.harness_adapters import get_adapter
+    from agent_toolkit_cli.commands._mcp_dispatch import _build_mcp_entries, apply_link
+    from agent_toolkit_cli.harness_adapters import get_adapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     (tmp_path / ".codex").mkdir()
@@ -98,8 +98,8 @@ def test_apply_link_dry_run_prints_would_op_no_write(monkeypatch, tmp_path):
 
 def test_apply_link_real_run_writes_atomically_and_prints_loud(monkeypatch, tmp_path):
     """Real run: writes bytes, prints `→ creating ...` then `✓ created ...`."""
-    from agent_toolkit.commands._mcp_dispatch import _build_mcp_entries, apply_link
-    from agent_toolkit.harness_adapters import get_adapter
+    from agent_toolkit_cli.commands._mcp_dispatch import _build_mcp_entries, apply_link
+    from agent_toolkit_cli.harness_adapters import get_adapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     (tmp_path / ".codex").mkdir()
@@ -126,8 +126,8 @@ def test_apply_link_real_run_writes_atomically_and_prints_loud(monkeypatch, tmp_
 
 
 def test_apply_link_update_prints_byte_delta(monkeypatch, tmp_path):
-    from agent_toolkit.commands._mcp_dispatch import _build_mcp_entries, apply_link
-    from agent_toolkit.harness_adapters import get_adapter
+    from agent_toolkit_cli.commands._mcp_dispatch import _build_mcp_entries, apply_link
+    from agent_toolkit_cli.harness_adapters import get_adapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     (tmp_path / ".codex").mkdir()
@@ -148,8 +148,8 @@ def test_apply_link_update_prints_byte_delta(monkeypatch, tmp_path):
 
 def test_apply_link_unchanged_prints_nothing(monkeypatch, tmp_path):
     """When already in sync, no pre/post print, no write, mtime preserved."""
-    from agent_toolkit.commands._mcp_dispatch import _build_mcp_entries, apply_link
-    from agent_toolkit.harness_adapters import get_adapter
+    from agent_toolkit_cli.commands._mcp_dispatch import _build_mcp_entries, apply_link
+    from agent_toolkit_cli.harness_adapters import get_adapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     (tmp_path / ".codex").mkdir()
@@ -177,8 +177,8 @@ def test_apply_link_unchanged_prints_nothing(monkeypatch, tmp_path):
 
 def test_apply_link_unlink_uses_previously_allowed(monkeypatch, tmp_path):
     """Unlink semantics: empty entries + previously_allowed → adapter removes the entry."""
-    from agent_toolkit.commands._mcp_dispatch import _build_mcp_entries, apply_link
-    from agent_toolkit.harness_adapters import get_adapter
+    from agent_toolkit_cli.commands._mcp_dispatch import _build_mcp_entries, apply_link
+    from agent_toolkit_cli.harness_adapters import get_adapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     (tmp_path / ".codex").mkdir()
@@ -206,9 +206,9 @@ def test_apply_link_unlink_uses_previously_allowed(monkeypatch, tmp_path):
 
 def test_apply_link_raises_on_cannot_install(monkeypatch, tmp_path):
     """Adapter.can_install raising CannotInstall propagates up; caller decides."""
-    from agent_toolkit.commands._mcp_dispatch import _build_mcp_entries, apply_link
-    from agent_toolkit.harness_adapters import get_adapter
-    from agent_toolkit.harness_adapters.base import CannotInstall
+    from agent_toolkit_cli.commands._mcp_dispatch import _build_mcp_entries, apply_link
+    from agent_toolkit_cli.harness_adapters import get_adapter
+    from agent_toolkit_cli.harness_adapters.base import CannotInstall
 
     monkeypatch.setenv("HOME", str(tmp_path))
     (tmp_path / ".codex").mkdir()
@@ -229,9 +229,9 @@ def test_apply_link_unimplemented_adapter_is_silent_noop(monkeypatch, tmp_path):
 
     Pi remains UnimplementedAdapter (Pi has no MCP support by design).
     """
-    from agent_toolkit.commands._mcp_dispatch import apply_link
-    from agent_toolkit.harness_adapters import get_adapter
-    from agent_toolkit.harness_adapters.base import UnimplementedAdapter
+    from agent_toolkit_cli.commands._mcp_dispatch import apply_link
+    from agent_toolkit_cli.harness_adapters import get_adapter
+    from agent_toolkit_cli.harness_adapters.base import UnimplementedAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
 
@@ -249,7 +249,7 @@ def test_apply_link_unimplemented_adapter_is_silent_noop(monkeypatch, tmp_path):
 
 def test_atomic_write_uses_same_directory_temp_file(tmp_path):
     """Atomic-write helper writes via temp file in target.parent then replaces."""
-    from agent_toolkit.commands._mcp_dispatch import _atomic_write_bytes
+    from agent_toolkit_cli.commands._mcp_dispatch import _atomic_write_bytes
 
     target = tmp_path / "out.toml"
     payload = b"hello\n"
@@ -261,7 +261,7 @@ def test_atomic_write_uses_same_directory_temp_file(tmp_path):
 
 def test_atomic_write_creates_parent_dirs(tmp_path):
     """_atomic_write_bytes creates parent dirs if missing."""
-    from agent_toolkit.commands._mcp_dispatch import _atomic_write_bytes
+    from agent_toolkit_cli.commands._mcp_dispatch import _atomic_write_bytes
 
     target = tmp_path / "deep" / "nested" / "out.toml"
     _atomic_write_bytes(target, b"x\n")
@@ -271,7 +271,7 @@ def test_atomic_write_creates_parent_dirs(tmp_path):
 def test_atomic_write_cleans_up_temp_on_failure(monkeypatch, tmp_path):
     """If os.replace raises, the temp file is cleaned up."""
     import os
-    from agent_toolkit.commands._mcp_dispatch import _atomic_write_bytes
+    from agent_toolkit_cli.commands._mcp_dispatch import _atomic_write_bytes
 
     target = tmp_path / "out.toml"
 

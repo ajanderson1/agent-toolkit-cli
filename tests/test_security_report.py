@@ -1,5 +1,5 @@
 """Tests for security-review type and overall-verdict computation."""
-from agent_toolkit.security.types import Verdict, CategoryResult, OverallReport
+from agent_toolkit_cli.security.types import Verdict, CategoryResult, OverallReport
 
 
 def test_verdict_ordering():
@@ -37,7 +37,7 @@ def test_overall_green_when_at_most_one_amber():
 
 
 def test_report_renders_human_readable():
-    from agent_toolkit.security.report import render_report
+    from agent_toolkit_cli.security.report import render_report
     cats = [
         CategoryResult(category="1. Repo identity & traction", verdict=Verdict.GREEN,
                        evidence="2.4k stars, active, 18 contributors."),

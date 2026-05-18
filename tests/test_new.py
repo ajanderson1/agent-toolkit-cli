@@ -2,7 +2,7 @@ from pathlib import Path
 
 from click.testing import CliRunner
 
-from agent_toolkit.cli import main
+from agent_toolkit_cli.cli import main
 
 
 def test_new_skill_creates_skeleton(tmp_path):

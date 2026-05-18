@@ -2,7 +2,7 @@ from pathlib import Path
 
 from click.testing import CliRunner
 
-from agent_toolkit.cli import main
+from agent_toolkit_cli.cli import main
 
 
 def test_check_passes_on_valid_asset(tmp_path, monkeypatch):

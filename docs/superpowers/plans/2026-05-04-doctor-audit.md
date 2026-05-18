@@ -17,8 +17,8 @@ from pathlib import Path
 
 import pytest
 
-from agent_toolkit.doctor import allowlist_audit
-from agent_toolkit.doctor.result import Status
+from agent_toolkit_cli.doctor import allowlist_audit
+from agent_toolkit_cli.doctor.result import Status
 
 
 @pytest.fixture
@@ -42,7 +42,7 @@ def test_clean_returns_ok(env):
 
 ## T2 — Stub the group module to make T1 pass (green)
 
-`src/agent_toolkit/doctor/allowlist_audit.py`:
+`src/agent_toolkit_cli/doctor/allowlist_audit.py`:
 
 ```python
 """Doctor: allowlist-audit group — slug-existence + cross-toolkit symlinks."""
@@ -50,7 +50,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from agent_toolkit.doctor.result import GroupResult, Status
+from agent_toolkit_cli.doctor.result import GroupResult, Status
 
 
 def run(toolkit_root: Path, *, project_root: Path | None = None) -> GroupResult:
@@ -113,8 +113,8 @@ Edit `allowlist_audit.py`. Add an inner check:
 ```python
 import os
 
-from agent_toolkit._allowlist import SECTIONS, read_allowlist, section_to_kind
-from agent_toolkit.walker import discover_assets
+from agent_toolkit_cli._allowlist import SECTIONS, read_allowlist, section_to_kind
+from agent_toolkit_cli.walker import discover_assets
 
 
 def _check_allowlist(yaml_path: Path, source_label: str, declared_slugs: set[tuple[str, str]]) -> list[str]:
@@ -196,8 +196,8 @@ def test_symlink_into_configured_toolkit_does_not_warn(env, tmp_path):
 Add a helper:
 
 ```python
-from agent_toolkit.commands._link_lib import ALL_HARNESSES, HARNESS_HOMES
-from agent_toolkit.commands._list_json import _USER_TARGETS
+from agent_toolkit_cli.commands._link_lib import ALL_HARNESSES, HARNESS_HOMES
+from agent_toolkit_cli.commands._list_json import _USER_TARGETS
 
 
 def _is_toolkit_dir(p: Path) -> bool:
@@ -258,7 +258,7 @@ Update the OK summary to mention both checks if no warnings.
 ## T7 — Wire into commands/doctor.py
 
 ```python
-from agent_toolkit.doctor import (
+from agent_toolkit_cli.doctor import (
     allowlist_audit as g_allowlist_audit,
     ...
 )

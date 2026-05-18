@@ -63,8 +63,8 @@ Honour `--quiet`: suppresses only the trailing `Done.` summary line on stderr (h
 
 | File | Change |
 |---|---|
-| `src/agent_toolkit/commands/list.py` | Add `--report` flag (mutually exclusive with `--format=json`). When set, build inventory by calling the same data path used for `--format=json`, then dispatch to a new formatter. |
-| `src/agent_toolkit/generators/list_report.py` | **Create.** Pure formatter: `(inventory_dict, project_root) -> str`. Same data shape as `--format=json` output. |
+| `src/agent_toolkit_cli/commands/list.py` | Add `--report` flag (mutually exclusive with `--format=json`). When set, build inventory by calling the same data path used for `--format=json`, then dispatch to a new formatter. |
+| `src/agent_toolkit_cli/generators/list_report.py` | **Create.** Pure formatter: `(inventory_dict, project_root) -> str`. Same data shape as `--format=json` output. |
 | `tests/test_list_report.py` | **Create.** Tests for the formatter against three scenarios from the issue. |
 | `tests/test_cli_list.py` | Add CLI smoke tests for the flag (one per scenario). |
 | `docs/agent-toolkit/cli.md` | One paragraph + example output showing `--report`. |

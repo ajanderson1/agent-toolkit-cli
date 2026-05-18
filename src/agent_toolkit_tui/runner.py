@@ -1,4 +1,4 @@
-"""Subprocess wrapper around the agent-toolkit CLI.
+"""Subprocess wrapper around the agent-toolkit-cli CLI.
 
 The TUI's only writer-of-truth on the filesystem. The widgets and state code
 never call subprocess directly — they go through this class. Mockable: pass
@@ -16,12 +16,12 @@ from pathlib import Path
 
 
 def _locate_cli() -> Path:
-    """Find the installed `agent-toolkit` script.
+    """Find the installed `agent-toolkit-cli` script.
 
     Resolution order:
       1. $AGENT_TOOLKIT_CLI override (escape hatch for tests/installs)
-      2. `shutil.which("agent-toolkit")` — picks up the script installed by
-         `uv tool install` or the dev `.venv/bin/agent-toolkit` entry point
+      2. `shutil.which("agent-toolkit-cli")` — picks up the script installed by
+         `uv tool install` or the dev `.venv/bin/agent-toolkit-cli` entry point
       3. Raise FileNotFoundError with an actionable message
     """
     override = os.environ.get("AGENT_TOOLKIT_CLI")
@@ -31,12 +31,12 @@ def _locate_cli() -> Path:
             return p
         raise FileNotFoundError(f"$AGENT_TOOLKIT_CLI={override} is not a file")
 
-    found = shutil.which("agent-toolkit")
+    found = shutil.which("agent-toolkit-cli")
     if found:
         return Path(found)
 
     raise FileNotFoundError(
-        "Cannot locate `agent-toolkit` on PATH. Run `uv tool install agent-toolkit-cli` "
+        "Cannot locate `agent-toolkit-cli` on PATH. Run `uv tool install agent-toolkit` "
         "or `uv sync --extra tui` from a source checkout, or set $AGENT_TOOLKIT_CLI to "
         "the script's path."
     )
@@ -61,7 +61,7 @@ _SUMMARY_RE = re.compile(r"Plan applied: (\d+) ok, (\d+) failed")
 
 
 class CLIRunner:
-    """Single chokepoint for shelling out to the agent-toolkit CLI.
+    """Single chokepoint for shelling out to the agent-toolkit-cli CLI.
 
     Resolves the CLI script via `_locate_cli()` (PATH lookup + env override).
     Override `cli_path` in tests.

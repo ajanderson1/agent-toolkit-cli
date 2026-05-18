@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
-from agent_toolkit.cli import main
+from agent_toolkit_cli.cli import main
 
 
 @pytest.fixture
@@ -270,7 +270,7 @@ def test_list_subprocess_smoke(env, seed_skill):
     seed_skill(toolkit, "alpha", ["claude"])
     (home / ".agent-toolkit.yaml").write_text("skills:\n  - alpha\n")
 
-    cli = shutil.which("agent-toolkit")
+    cli = shutil.which("agent-toolkit-cli")
     if not cli:
         pytest.skip("agent-toolkit not on PATH (run `uv sync --extra tui`)")
 
@@ -348,7 +348,7 @@ def test_list_report_rejects_format_json(env):
 def test_list_text_includes_mcps(tmp_path, monkeypatch):
     """Text-mode list shows an MCPs section with allow-listed MCPs."""
     from click.testing import CliRunner
-    from agent_toolkit.cli import main
+    from agent_toolkit_cli.cli import main
 
     home = tmp_path / "home"
     home.mkdir()

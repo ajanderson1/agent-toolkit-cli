@@ -19,7 +19,7 @@ Add two tests:
 
 ### T2 — Implement `validate_harness` (green)
 
-**File:** `src/agent_toolkit/commands/_link_lib.py`
+**File:** `src/agent_toolkit_cli/commands/_link_lib.py`
 
 Add at module top (after existing imports):
 
@@ -44,11 +44,11 @@ Add `import click` to the file if not already present (currently `_link_lib.py` 
 
 ### T3 — Consolidate `ALL_HARNESSES` source of truth
 
-**File:** `src/agent_toolkit/commands/_list_json.py`
+**File:** `src/agent_toolkit_cli/commands/_list_json.py`
 
-Replace the local `ALL_HARNESSES = ("claude", "codex", "opencode", "pi")` definition (line ~18) with `from agent_toolkit.commands._link_lib import ALL_HARNESSES`.
+Replace the local `ALL_HARNESSES = ("claude", "codex", "opencode", "pi")` definition (line ~18) with `from agent_toolkit_cli.commands._link_lib import ALL_HARNESSES`.
 
-Keep the existing `ALL_HARNESSES` symbol in the `_list_json` namespace (re-exported via the import) so other importers (e.g. `list.py`, which does `from agent_toolkit.commands._list_json import ALL_HARNESSES`) keep working unchanged.
+Keep the existing `ALL_HARNESSES` symbol in the `_list_json` namespace (re-exported via the import) so other importers (e.g. `list.py`, which does `from agent_toolkit_cli.commands._list_json import ALL_HARNESSES`) keep working unchanged.
 
 **Verify no circular import:** `_link_lib.py` does not import from `_list_json.py`. Confirmed by reading current `_link_lib.py` imports.
 
@@ -86,11 +86,11 @@ def test_link_dry_run_unknown_harness_still_validates(runner, tmp_repo):
 
 ### T5 — Wire validator into `link` (green)
 
-**File:** `src/agent_toolkit/commands/link.py`
+**File:** `src/agent_toolkit_cli/commands/link.py`
 
 Add to imports:
 ```python
-from agent_toolkit.commands._link_lib import (
+from agent_toolkit_cli.commands._link_lib import (
     ...,
     validate_harness,
 )
@@ -116,7 +116,7 @@ Mirror T4 — three tests, swapping `link` for `unlink` and adapting any unlink-
 
 ### T7 — Wire validator into `unlink` (green)
 
-**File:** `src/agent_toolkit/commands/unlink.py`
+**File:** `src/agent_toolkit_cli/commands/unlink.py`
 
 Same change as T5 but in `unlink.py`. Imports + `validate_harness(ctx, harness)` immediately after the `if quiet:` block.
 

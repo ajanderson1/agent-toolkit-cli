@@ -2,13 +2,13 @@
 
 ## Tasks
 
-### 1. Add the translator (`src/agent_toolkit/_translators.py`)
+### 1. Add the translator (`src/agent_toolkit_cli/_translators.py`)
 
 ```python
 def _translate_codex_skill(record: AssetRecord, body: str) -> bytes:
     fm = {
         "description": _description(record),
-        "agent_toolkit": _wrapper_block(record),
+        "agent_toolkit_cli": _wrapper_block(record),
     }
     return _render(fm, body)
 ```
@@ -76,7 +76,7 @@ Codex's skill loader requires `description:` at the YAML top level of
 every SKILL.md and rejects the toolkit's v1alpha2 wrapper at session
 start with `failed to load skill ... missing field 'description'`.
 
-Adds the (codex, skill) translator (description + agent_toolkit
+Adds the (codex, skill) translator (description + agent_toolkit_cli
 wrapper, mirroring _translate_opencode_command). Updates the matrix
 doc to mark codex/skill as translate. Widens _TRANSLATE_PATH_RE to
 match skills/<slug>/SKILL.md.

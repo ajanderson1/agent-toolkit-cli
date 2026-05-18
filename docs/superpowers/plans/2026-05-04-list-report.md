@@ -29,7 +29,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from agent_toolkit.generators.list_report import format_report
+from agent_toolkit_cli.generators.list_report import format_report
 
 
 def _empty_inventory(toolkit: Path) -> dict:
@@ -134,7 +134,7 @@ def test_deterministic_ordering(tmp_path):
 
 ## T3 — Implement the formatter (green)
 
-`src/agent_toolkit/generators/list_report.py` (new):
+`src/agent_toolkit_cli/generators/list_report.py` (new):
 
 ```python
 """Pure formatter for `agent-toolkit list --report`.
@@ -199,7 +199,7 @@ def format_report(inventory: dict, *, project_root: Path) -> str:
 
 ## T4 — CLI flag in `list.py`
 
-Edit `src/agent_toolkit/commands/list.py`:
+Edit `src/agent_toolkit_cli/commands/list.py`:
 
 1. Add `--report` boolean flag.
 2. In `list_cmd` body, after the `--quiet` block: if `report` AND `fmt == "json"` → click error exit 2 with "cannot combine --report with --format=json".
@@ -219,8 +219,8 @@ if report and fmt == "json":
 # (after the existing toolkit_root + project_root resolution)
 
 if report:
-    from agent_toolkit.commands._list_json import _build_inventory
-    from agent_toolkit.generators.list_report import format_report
+    from agent_toolkit_cli.commands._list_json import _build_inventory
+    from agent_toolkit_cli.generators.list_report import format_report
     inv = _build_inventory(toolkit_root, project_root, kind=kind_filter, harness=harness_filter)
     click.echo(format_report(inv, project_root=project_root))
     _ui.summary("Done.")

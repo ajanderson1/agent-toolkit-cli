@@ -1,6 +1,6 @@
 import pytest
 
-from agent_toolkit.commands._link_lib import (
+from agent_toolkit_cli.commands._link_lib import (
     ALL_HARNESSES,
     MALFORMED,
     LinkCounters,
@@ -85,7 +85,7 @@ def test_validate_harness_rejects_unknown_with_message(capsys):
 
 
 def test_harness_home_path_uses_home_env(monkeypatch, tmp_path):
-    from agent_toolkit.commands._link_lib import harness_home_path
+    from agent_toolkit_cli.commands._link_lib import harness_home_path
 
     monkeypatch.setenv("HOME", str(tmp_path))
     assert harness_home_path("claude") == tmp_path / ".claude"
@@ -94,7 +94,7 @@ def test_harness_home_path_uses_home_env(monkeypatch, tmp_path):
 
 def test_harness_home_path_explicit_home_overrides_env(tmp_path):
     from pathlib import Path as _P
-    from agent_toolkit.commands._link_lib import harness_home_path
+    from agent_toolkit_cli.commands._link_lib import harness_home_path
 
     other = tmp_path / "other-home"
     assert harness_home_path("codex", home=other) == other / ".codex"
@@ -105,7 +105,7 @@ def test_project_from_file_codex_mcp_dispatches_to_adapter(tmp_path, monkeypatch
     """Codex + allow-listed MCP → adapter writes target file."""
     import io
 
-    from agent_toolkit.commands._link_lib import LinkCounters, project_from_file
+    from agent_toolkit_cli.commands._link_lib import LinkCounters, project_from_file
 
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     (tmp_path / "home" / ".codex").mkdir(parents=True)
@@ -163,7 +163,7 @@ def test_project_from_file_pi_mcp_skips_loudly(tmp_path, monkeypatch):
     """
     import io
 
-    from agent_toolkit.commands._link_lib import LinkCounters, project_from_file
+    from agent_toolkit_cli.commands._link_lib import LinkCounters, project_from_file
 
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     (tmp_path / "home").mkdir(parents=True)
@@ -216,8 +216,8 @@ def test_project_from_file_pi_mcp_skips_loudly(tmp_path, monkeypatch):
 
 def test_maybe_link_raises_unsupported_pair_for_codex_agent(tmp_path):
     """maybe_link must refuse an unsupported (harness, kind) loudly."""
-    from agent_toolkit._support import UnsupportedPair
-    from agent_toolkit.commands._link_lib import LinkCounters, maybe_link
+    from agent_toolkit_cli._support import UnsupportedPair
+    from agent_toolkit_cli.commands._link_lib import LinkCounters, maybe_link
 
     asset_path = tmp_path / "agent.md"
     asset_path.write_text("---\nspec:\n  harnesses: [codex]\n---\nbody\n")
@@ -252,7 +252,7 @@ def test_project_from_file_skips_unsupported_kinds_silently(tmp_path, monkeypatc
     RuntimeError; the filter is the only reason this test passes silently.
     """
     import io
-    from agent_toolkit.commands._link_lib import LinkCounters, project_from_file
+    from agent_toolkit_cli.commands._link_lib import LinkCounters, project_from_file
 
     monkeypatch.setenv("HOME", str(tmp_path))
     project_root = tmp_path / "project"
@@ -307,7 +307,7 @@ def test_project_from_file_skips_pi_agent_at_project_scope_cleanly(tmp_path, mon
     RuntimeError("SSOT invariant broken").
     """
     import io
-    from agent_toolkit.commands._link_lib import LinkCounters, project_from_file
+    from agent_toolkit_cli.commands._link_lib import LinkCounters, project_from_file
 
     monkeypatch.setenv("HOME", str(tmp_path))
     project_root = tmp_path / "project"

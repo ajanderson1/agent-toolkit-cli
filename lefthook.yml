@@ -5,5 +5,5 @@ pre-commit:
       run: uv run pytest -q
       stage_fixed: false
     schema-vendor-check:
-      run: diff schemas/asset-frontmatter.v1alpha2.json src/agent_toolkit/_schemas/asset-frontmatter.v1alpha2.json
+      run: diff schemas/asset-frontmatter.v1alpha2.json src/agent_toolkit_cli/_schemas/asset-frontmatter.v1alpha2.json
       stage_fixed: false

@@ -41,7 +41,7 @@ then the harness slot symlinks to the cache file. Cache layout:
 | project | `<project>/.<harness>/.agent-toolkit-cache/<kind>/<slug>.md` |
 
 The output preserves the toolkit's wrapper frontmatter under a nested
-`agent_toolkit:` key (with `apiVersion`, `metadata`, `spec`) for SSOT
+`agent_toolkit_cli:` key (with `apiVersion`, `metadata`, `spec`) for SSOT
 traceability — the harness ignores this key, but `agent-toolkit` and
 human readers can trace any cache file back to its source asset.
 
@@ -51,9 +51,9 @@ human readers can trace any cache file back to its source asset.
 
 | Kind \\ Harness | Claude | Codex | OpenCode | Pi |
 |---|---|---|---|---|
-| **skill** | symlink → `~/.claude/skills/<slug>/` | translate → `~/.codex/skills/<slug>/SKILL.md` (cache: `~/.codex/.agent-toolkit-cache/skill/<slug>/SKILL.md`) — emits codex-shaped frontmatter with top-level `description` and `agent_toolkit` wrapper block. NOTE: `~/.codex/skills/` is the **deprecated-but-loaded** path per `codex-rs/core-skills/src/loader.rs`; the canonical user path is `~/.agents/skills/<slug>/SKILL.md`. CLI migration pending | translate → `~/.config/opencode/skills/<slug>/SKILL.md` (cache: `~/.config/opencode/.agent-toolkit-cache/skill/<slug>/SKILL.md`) — slot is a real directory containing a file symlink to the cache; emits opencode-shaped frontmatter with top-level `name` and `description` plus `agent_toolkit` wrapper block | symlink → `~/.pi/agent/skills/<slug>/` (Pi also auto-discovers `~/.agents/skills/` and ancestor `.agents/skills/` — cross-harness convergence point) |
+| **skill** | symlink → `~/.claude/skills/<slug>/` | translate → `~/.codex/skills/<slug>/SKILL.md` (cache: `~/.codex/.agent-toolkit-cache/skill/<slug>/SKILL.md`) — emits codex-shaped frontmatter with top-level `description` and `agent_toolkit_cli` wrapper block. NOTE: `~/.codex/skills/` is the **deprecated-but-loaded** path per `codex-rs/core-skills/src/loader.rs`; the canonical user path is `~/.agents/skills/<slug>/SKILL.md`. CLI migration pending | translate → `~/.config/opencode/skills/<slug>/SKILL.md` (cache: `~/.config/opencode/.agent-toolkit-cache/skill/<slug>/SKILL.md`) — slot is a real directory containing a file symlink to the cache; emits opencode-shaped frontmatter with top-level `name` and `description` plus `agent_toolkit_cli` wrapper block | symlink → `~/.pi/agent/skills/<slug>/` (Pi also auto-discovers `~/.agents/skills/` and ancestor `.agents/skills/` — cross-harness convergence point) |
 | **agent** | symlink → `~/.claude/agents/<slug>.md` | unsupported (by design) — Codex's `[agents]` config surface (added in CLI 0.128.0) is for harness-internal agent declarations, not toolkit-shape agents (markdown body + frontmatter). Refined per #56. | translate → `~/.config/opencode/agents/<slug>.md` (cache: `~/.config/opencode/.agent-toolkit-cache/agent/<slug>.md`) — injects `mode: subagent` and strips toolkit wrapper frontmatter | symlink → `~/.pi/agent/agents/<slug>.md` (also auto-loaded from `~/.agents/<slug>.md` by the `pi-subagents` extension; both paths are read) |
-| **command** | symlink → `~/.claude/commands/<slug>.md` | unsupported (by design) — Codex has no `~/.codex/commands/` drop-in; user "commands" surface as skills invoked via `$skill-name` mention or implicit description match | translate → `~/.config/opencode/commands/<slug>.md` (cache: `~/.config/opencode/.agent-toolkit-cache/command/<slug>.md`) — emits OpenCode-shaped frontmatter (optional `description`, `agent`, `model`, `subtask` — all optional) plus `agent_toolkit` wrapper block | unsupported (by design) — Pi has no command concept |
+| **command** | symlink → `~/.claude/commands/<slug>.md` | unsupported (by design) — Codex has no `~/.codex/commands/` drop-in; user "commands" surface as skills invoked via `$skill-name` mention or implicit description match | translate → `~/.config/opencode/commands/<slug>.md` (cache: `~/.config/opencode/.agent-toolkit-cache/command/<slug>.md`) — emits OpenCode-shaped frontmatter (optional `description`, `agent`, `model`, `subtask` — all optional) plus `agent_toolkit_cli` wrapper block | unsupported (by design) — Pi has no command concept |
 | **hook** | symlink → `~/.claude/hooks/<slug>.<ext>` (storage convention only — Claude does not auto-discover this directory; hooks must be referenced from `settings.json` via `$CLAUDE_PROJECT_DIR/.claude/hooks/...`) | config_file+folder → `~/.codex/config.toml` `[hooks]` + `~/.codex/agent-toolkit-hooks/<slug>/` | unsupported (by design) — OpenCode hooks live inside TS plugin files (`tool.execute.before`, `session.created`, `session.error`, etc.); not drop-in markdown | unsupported (by design) — Pi has no hooks API at the user level |
 | **plugin** | symlink → `~/.claude/plugins/<slug>/` | unsupported (by design) — Codex plugins are bundles with `.codex-plugin/plugin.json` manifests, installed via `codex plugin marketplace add` (different concept and install path from Claude markdown plugins) | unsupported (by design) — OpenCode plugins are TS/JS files at `~/.config/opencode/plugins/` or npm packages declared in `config.json` (different concept entirely) | unsupported (by design) — Pi extends via `pi-extension`, not a plugin concept |
 | **mcp** | config_file → `~/.claude.json` `mcpServers.<name>` (NOT `~/.claude/settings.json`; user/local servers both stored in `~/.claude.json`; project scope is checked-in `.mcp.json`) | config_file → `~/.codex/config.toml` `[mcp_servers.<name>]` (TOML; stdio fields `command`/`args`/`env`). **Adapter stdio-only** (`codex.py:43-49` raises `CannotInstall` for non-stdio), even though Codex's schema accepts HTTP `url`/`http_headers`/`bearer_token_env_var` | config_file → `~/.config/opencode/opencode.json` `mcp.<name>` (uses `type` discriminator: `local` with `command` as ARRAY and `environment` (NOT `env`); or `remote` with `url`+`headers`) | unsupported (by design) — Pi has no MCP concept |
@@ -73,7 +73,7 @@ deviations:
   (`globalBaseDir = ~/.pi/agent`, `projectBaseDir = <cwd>/.pi`) — see
   `@mariozechner/pi-coding-agent` `dist/core/package-manager.js:669-686`.
 
-See `_PROJECT_TARGETS` in `src/agent_toolkit/_support.py` for the canonical
+See `_PROJECT_TARGETS` in `src/agent_toolkit_cli/_support.py` for the canonical
 table.
 
 ## Frontmatter compatibility
@@ -106,9 +106,9 @@ frontmatter is preserved unharmed.
 The **translate** mechanism generates harness-flavored frontmatter
 for kinds where the runtime fields differ materially. For OpenCode agents,
 `mode: subagent` is injected and the toolkit wrapper block is preserved under
-`agent_toolkit:`. For OpenCode commands, frontmatter with optional
+`agent_toolkit_cli:`. For OpenCode commands, frontmatter with optional
 `description`, `agent`, `model`, `subtask` (all optional in OpenCode) is
-emitted alongside the `agent_toolkit:` wrapper block. For Codex skills,
+emitted alongside the `agent_toolkit_cli:` wrapper block. For Codex skills,
 frontmatter with top-level `description` is emitted plus the wrapper.
 
 ## Why some pairs are "by design" unsupported
@@ -227,9 +227,9 @@ under [pi_extensions] or run `agent-toolkit link user pi pi-extension:pi-subagen
 
 1. Decide the mechanism (symlink, config_file, config_file+folder, plugin_folder, translate).
 2. For symlink: add to `_USER_TARGETS` and `_PROJECT_TARGETS` in
-   `src/agent_toolkit/_support.py`.
+   `src/agent_toolkit_cli/_support.py`.
 3. For config_file, config_file+folder, or plugin_folder: implement an adapter under
-   `src/agent_toolkit/harness_adapters/<harness>.py`.
+   `src/agent_toolkit_cli/harness_adapters/<harness>.py`.
    - For config_file+folder: also add a `_USER_TARGETS` row pointing to the managed
      sub-folder path, so the dispatcher knows where to chmod +x the hooks.
 4. Update this matrix.

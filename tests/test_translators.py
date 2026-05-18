@@ -1,4 +1,4 @@
-"""Unit tests for translator functions in agent_toolkit._translators."""
+"""Unit tests for translator functions in agent_toolkit_cli._translators."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -6,15 +6,15 @@ from pathlib import Path
 import pytest
 import yaml
 
-from agent_toolkit._repo_resolution import resolve_toolkit_root
-from agent_toolkit._translators import (
+from agent_toolkit_cli._repo_resolution import resolve_toolkit_root
+from agent_toolkit_cli._translators import (
     TRANSLATORS,
     _translate_codex_skill,
     _translate_opencode_agent,
     _translate_opencode_command,
     _translate_opencode_skill,
 )
-from agent_toolkit.walker import (
+from agent_toolkit_cli.walker import (
     Asset,
     AssetRecord,
     discover_assets,
@@ -66,9 +66,9 @@ def test_translate_opencode_agent_preserves_wrapper_under_agent_toolkit_key():
     end_idx = text.find("\n---\n", 4)
     fm = yaml.safe_load(text[4:end_idx])
 
-    assert fm["agent_toolkit"]["apiVersion"] == "agent-toolkit/v1alpha2"
-    assert fm["agent_toolkit"]["metadata"]["name"] == "foo"
-    assert fm["agent_toolkit"]["spec"]["harnesses"] == ["claude", "opencode"]
+    assert fm["agent_toolkit_cli"]["apiVersion"] == "agent-toolkit/v1alpha2"
+    assert fm["agent_toolkit_cli"]["metadata"]["name"] == "foo"
+    assert fm["agent_toolkit_cli"]["spec"]["harnesses"] == ["claude", "opencode"]
 
 
 def test_translate_opencode_agent_appends_body():
@@ -117,7 +117,7 @@ def test_translate_opencode_command_has_description_and_no_mode():
     fm = yaml.safe_load(text[4:end_idx])
     assert fm["description"] == "Explain something."
     assert "mode" not in fm
-    assert fm["agent_toolkit"]["metadata"]["name"] == "explain"
+    assert fm["agent_toolkit_cli"]["metadata"]["name"] == "explain"
 
 
 def test_translate_opencode_command_round_trip_stable():
@@ -169,9 +169,9 @@ def test_translate_codex_skill_preserves_wrapper_under_agent_toolkit_key():
     end_idx = text.find("\n---\n", 4)
     fm = yaml.safe_load(text[4:end_idx])
 
-    assert fm["agent_toolkit"]["apiVersion"] == "agent-toolkit/v1alpha2"
-    assert fm["agent_toolkit"]["metadata"]["name"] == "demo-skill"
-    assert fm["agent_toolkit"]["spec"]["harnesses"] == ["codex"]
+    assert fm["agent_toolkit_cli"]["apiVersion"] == "agent-toolkit/v1alpha2"
+    assert fm["agent_toolkit_cli"]["metadata"]["name"] == "demo-skill"
+    assert fm["agent_toolkit_cli"]["spec"]["harnesses"] == ["codex"]
 
 
 def test_translate_codex_skill_appends_body():
@@ -233,9 +233,9 @@ def test_translate_opencode_skill_preserves_wrapper_under_agent_toolkit_key():
     end_idx = text.find("\n---\n", 4)
     fm = yaml.safe_load(text[4:end_idx])
 
-    assert fm["agent_toolkit"]["apiVersion"] == "agent-toolkit/v1alpha2"
-    assert fm["agent_toolkit"]["metadata"]["name"] == "demo-skill"
-    assert fm["agent_toolkit"]["spec"]["harnesses"] == ["opencode"]
+    assert fm["agent_toolkit_cli"]["apiVersion"] == "agent-toolkit/v1alpha2"
+    assert fm["agent_toolkit_cli"]["metadata"]["name"] == "demo-skill"
+    assert fm["agent_toolkit_cli"]["spec"]["harnesses"] == ["opencode"]
 
 
 def test_translate_opencode_skill_appends_body():
@@ -274,7 +274,7 @@ def test_translator_renders_every_shipping_eligible_asset(kind: str, harness: st
     metadata-shape bugs against real assets. Skips with no error if no
     matching assets exist (expected pre-sweep) OR if the toolkit repo
     isn't resolvable from the current environment (expected in CI)."""
-    from agent_toolkit._repo_resolution import RepoNotFoundError
+    from agent_toolkit_cli._repo_resolution import RepoNotFoundError
     try:
         toolkit_root = resolve_toolkit_root(explicit=None)
     except RepoNotFoundError:

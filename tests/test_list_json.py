@@ -7,7 +7,7 @@ from pathlib import Path
 
 from click.testing import CliRunner
 
-from agent_toolkit.commands._list_json import list_json
+from agent_toolkit_cli.commands._list_json import list_json
 
 
 def _seed(tmp: Path) -> None:
@@ -194,7 +194,7 @@ def test_list_json_includes_mcps(tmp_path, monkeypatch):
     """
     import json
     from click.testing import CliRunner
-    from agent_toolkit.cli import main
+    from agent_toolkit_cli.cli import main
 
     home = tmp_path / "home"
     home.mkdir()
@@ -293,7 +293,7 @@ def _seed_hook_toolkit(toolkit: Path, harnesses: list[str]) -> None:
 
 def test_list_json_mcp_codex_linked_matches_after_link(tmp_path, monkeypatch):
     """After linking, the codex/user cell reports linked-matches with the target path."""
-    from agent_toolkit.cli import main
+    from agent_toolkit_cli.cli import main
 
     home = tmp_path / "home"
     home.mkdir()
@@ -334,7 +334,7 @@ def test_list_json_mcp_codex_linked_matches_after_link(tmp_path, monkeypatch):
 
 def test_list_json_mcp_codex_unlinked_allowlisted(tmp_path, monkeypatch):
     """Allow-listed but not installed → unlinked-allowlisted, target=None."""
-    from agent_toolkit.cli import main
+    from agent_toolkit_cli.cli import main
 
     home = tmp_path / "home"
     home.mkdir()
@@ -366,7 +366,7 @@ def test_list_json_mcp_codex_unlinked_allowlisted(tmp_path, monkeypatch):
 
 def test_list_json_mcp_codex_installed_not_allowlisted(tmp_path, monkeypatch):
     """Hand-rolled entry in codex config + absent from allow-list → installed-not-allowlisted."""
-    from agent_toolkit.cli import main
+    from agent_toolkit_cli.cli import main
 
     home = tmp_path / "home"
     home.mkdir()
@@ -402,7 +402,7 @@ def test_list_json_mcp_codex_installed_not_allowlisted(tmp_path, monkeypatch):
 
 def test_list_json_mcp_codex_linked_drifted_after_handedit(tmp_path, monkeypatch):
     """Allow-listed + installed + structural drift → linked-drifted."""
-    from agent_toolkit.cli import main
+    from agent_toolkit_cli.cli import main
 
     home = tmp_path / "home"
     home.mkdir()
@@ -447,7 +447,7 @@ def test_list_json_mcp_codex_linked_drifted_after_handedit(tmp_path, monkeypatch
 
 def test_list_json_mcp_claude_unsupported(tmp_path, monkeypatch):
     """Cells for harnesses with UnimplementedAdapter still report 'unsupported'."""
-    from agent_toolkit.cli import main
+    from agent_toolkit_cli.cli import main
 
     home = tmp_path / "home"
     home.mkdir()
@@ -481,7 +481,7 @@ def test_list_json_mcp_claude_unsupported(tmp_path, monkeypatch):
 
 def test_list_json_hook_codex_linked_drifted_after_handedit(tmp_path, monkeypatch):
     """Allow-listed + installed + config/script drift → linked-drifted."""
-    from agent_toolkit.cli import main
+    from agent_toolkit_cli.cli import main
 
     home = tmp_path / "home"
     home.mkdir()
@@ -526,7 +526,7 @@ def test_list_json_hook_codex_linked_drifted_after_handedit(tmp_path, monkeypatc
 
 def test_list_json_hook_codex_installed_not_allowlisted(tmp_path, monkeypatch):
     """Hand-installed hook + absent from allow-list → installed-not-allowlisted."""
-    from agent_toolkit.cli import main
+    from agent_toolkit_cli.cli import main
 
     home = tmp_path / "home"
     home.mkdir()
@@ -574,7 +574,7 @@ def test_list_json_hook_codex_installed_not_allowlisted(tmp_path, monkeypatch):
 def test_cell_status_pi_agent_project_scope_is_unsupported(tmp_path):
     """Acceptance #7: the (pi, agent) project-scope cell reports 'unsupported'
     after _PROJECT_TARGETS row removal (#49)."""
-    from agent_toolkit.commands._list_json import _cell_status
+    from agent_toolkit_cli.commands._list_json import _cell_status
 
     status, target = _cell_status(
         harness="pi",

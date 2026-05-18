@@ -16,9 +16,9 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
-from agent_toolkit.cli import main
-from agent_toolkit.commands._list_json import _build_inventory
-from agent_toolkit.doctor import symlinks as doctor_symlinks
+from agent_toolkit_cli.cli import main
+from agent_toolkit_cli.commands._list_json import _build_inventory
+from agent_toolkit_cli.doctor import symlinks as doctor_symlinks
 
 
 def _link_opencode_agent(env, seed_agent, slug: str = "foo") -> dict:

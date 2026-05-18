@@ -1,6 +1,6 @@
 from click.testing import CliRunner
 
-from agent_toolkit.cli import main
+from agent_toolkit_cli.cli import main
 
 
 def test_top_level_help_explains_what_the_python_cli_does():

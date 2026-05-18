@@ -2,25 +2,25 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace the `claude` and `opencode` adapter stubs in `src/agent_toolkit/harness_adapters/` with real `ConfigFileAdapter` implementations that mutate `~/.claude.json` and `~/.config/opencode/opencode.json`, register them in the harness-adapter registry, and update the `harness-matrix.md` doc + parity test fixtures.
+**Goal:** Replace the `claude` and `opencode` adapter stubs in `src/agent_toolkit_cli/harness_adapters/` with real `ConfigFileAdapter` implementations that mutate `~/.claude.json` and `~/.config/opencode/opencode.json`, register them in the harness-adapter registry, and update the `harness-matrix.md` doc + parity test fixtures.
 
 **Architecture:** Both adapters mirror the existing codex `ConfigFileAdapter` pattern (read → mutate → dump → atomic write via the dispatcher). They differ from codex in (a) JSON instead of TOML — `json.dumps(..., indent=2, sort_keys=True, ensure_ascii=False)` for deterministic output — and (b) the managed key path inside the document (`mcpServers.<name>` for Claude, `mcp.<name>` for OpenCode). Pre-flight `can_install` is permissive: both Claude and OpenCode handle `stdio`, `sse`, and `http` transports natively, so the only entry-shape variation is in how transport maps to the on-disk record. The `force` flag in `_mcp_dispatch.apply_link` stays in the signature for CLI parity but its `noqa` comment is updated since no current adapter wires it.
 
-**Tech Stack:** Python 3.12+, stdlib `json`, pytest, no new third-party dependencies. Same `ConfigFileAdapter` Protocol from `src/agent_toolkit/harness_adapters/base.py`.
+**Tech Stack:** Python 3.12+, stdlib `json`, pytest, no new third-party dependencies. Same `ConfigFileAdapter` Protocol from `src/agent_toolkit_cli/harness_adapters/base.py`.
 
 ---
 
 ## File Structure
 
 **Create:**
-- `src/agent_toolkit/harness_adapters/claude.py` — `ClaudeAdapter(ConfigFileAdapter)`. Single file, ~150 lines (matches codex ~220-line ceiling).
-- `src/agent_toolkit/harness_adapters/opencode.py` — `OpenCodeAdapter(ConfigFileAdapter)`. Single file, similar size.
+- `src/agent_toolkit_cli/harness_adapters/claude.py` — `ClaudeAdapter(ConfigFileAdapter)`. Single file, ~150 lines (matches codex ~220-line ceiling).
+- `src/agent_toolkit_cli/harness_adapters/opencode.py` — `OpenCodeAdapter(ConfigFileAdapter)`. Single file, similar size.
 - `tests/test_mcp_adapters_claude.py` — round-trip suite mirroring `tests/test_mcp_adapters_codex.py`.
 - `tests/test_mcp_adapters_opencode.py` — round-trip suite mirroring same.
 
 **Modify:**
-- `src/agent_toolkit/harness_adapters/__init__.py:25-37` — add lazy-imported branches for `claude` and `opencode` next to the existing `codex` branch.
-- `src/agent_toolkit/commands/_mcp_dispatch.py:57` — update the `force` flag comment.
+- `src/agent_toolkit_cli/harness_adapters/__init__.py:25-37` — add lazy-imported branches for `claude` and `opencode` next to the existing `codex` branch.
+- `src/agent_toolkit_cli/commands/_mcp_dispatch.py:57` — update the `force` flag comment.
 - `docs/agent-toolkit/harness-matrix.md` — three localised edits: line-18 `plugin_folder` prose; line-54 mcp row cells for claude/opencode/pi; lines-137-139 "Why some pairs are by design" mcp bullet.
 - `tests/test_mcp_dispatch.py:226-240` — switch the UnimplementedAdapter probe from `claude` to `pi`.
 - `tests/test_doctor_mcps.py:216-230` — same switch.
@@ -33,9 +33,9 @@ The new adapter files keep one responsibility each; the `__init__.py` registry i
 
 **Read these files first** (paths relative to repo root):
 
-- `src/agent_toolkit/harness_adapters/codex.py` — your reference. Every method on `ClaudeAdapter` and `OpenCodeAdapter` has a same-named counterpart here.
-- `src/agent_toolkit/harness_adapters/base.py` — `ConfigFileAdapter` Protocol, `McpEntry`, `WriteAction`, `CannotInstall`, `Scope`. You implement the Protocol; do not import it as a base class.
-- `src/agent_toolkit/commands/_mcp_dispatch.py` — the dispatcher that calls your `adapter.diff()`. You don't touch this except for the comment on line 57.
+- `src/agent_toolkit_cli/harness_adapters/codex.py` — your reference. Every method on `ClaudeAdapter` and `OpenCodeAdapter` has a same-named counterpart here.
+- `src/agent_toolkit_cli/harness_adapters/base.py` — `ConfigFileAdapter` Protocol, `McpEntry`, `WriteAction`, `CannotInstall`, `Scope`. You implement the Protocol; do not import it as a base class.
+- `src/agent_toolkit_cli/commands/_mcp_dispatch.py` — the dispatcher that calls your `adapter.diff()`. You don't touch this except for the comment on line 57.
 - `tests/test_mcp_adapters_codex.py` — the test pattern. Copy structure verbatim, rename harness, swap paths.
 - `docs/superpowers/specs/2026-05-05-config-file-mcp-adapters-claude-opencode-design.md` — the spec; refer back for entry-shape mapping (§ Entry shape mapping) when writing `_build_entry_dict`.
 
@@ -44,7 +44,7 @@ The new adapter files keep one responsibility each; the `__init__.py` registry i
 - `from __future__ import annotations` at the top of every adapter file.
 - Type hints: `Path`, `Scope`, `set[str]`, `list[McpEntry]`, `list[WriteAction]`, `dict`. No optional dependencies.
 - Module docstring opens with one sentence stating the strategy + target file, followed by the ownership rule and any pre-flight refusal. Look at `codex.py` lines 1-10 for the shape.
-- Tests import inside the function body (`from agent_toolkit.harness_adapters.claude import ClaudeAdapter`) — keeps test collection fast and avoids loading every adapter eagerly.
+- Tests import inside the function body (`from agent_toolkit_cli.harness_adapters.claude import ClaudeAdapter`) — keeps test collection fast and avoids loading every adapter eagerly.
 
 **Tooling commands:**
 - Tests: `uv run pytest tests/test_mcp_adapters_claude.py -x -v` (or `..._opencode.py`).
@@ -57,7 +57,7 @@ The new adapter files keep one responsibility each; the `__init__.py` registry i
 ## Task 1: Set up `ClaudeAdapter` skeleton + the simple introspection methods
 
 **Files:**
-- Modify: `src/agent_toolkit/harness_adapters/claude.py` (currently a 2-line stub — replace it)
+- Modify: `src/agent_toolkit_cli/harness_adapters/claude.py` (currently a 2-line stub — replace it)
 - Test: `tests/test_mcp_adapters_claude.py` (create)
 
 The strategy: write the four "trivial" tests first (basic_attrs, user_target, project_target, can_install) and the methods that satisfy them. Defer `diff` to Task 2.
@@ -78,7 +78,7 @@ def _make_entry(name: str = "context7", *, transport: str = "stdio",
                 env: dict[str, str] | None = None,
                 url: str | None = None,
                 headers: dict[str, str] | None = None):
-    from agent_toolkit.harness_adapters.base import McpEntry
+    from agent_toolkit_cli.harness_adapters.base import McpEntry
 
     inner: dict = {"command": command}
     if args is not None:
@@ -100,7 +100,7 @@ def _make_entry(name: str = "context7", *, transport: str = "stdio",
 
 
 def test_claude_adapter_basic_attrs():
-    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+    from agent_toolkit_cli.harness_adapters.claude import ClaudeAdapter
 
     a = ClaudeAdapter()
     assert a.name == "claude"
@@ -108,7 +108,7 @@ def test_claude_adapter_basic_attrs():
 
 
 def test_claude_user_config_target(monkeypatch, tmp_path):
-    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+    from agent_toolkit_cli.harness_adapters.claude import ClaudeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     a = ClaudeAdapter()
@@ -117,7 +117,7 @@ def test_claude_user_config_target(monkeypatch, tmp_path):
 
 def test_claude_project_config_target_requires_file(tmp_path):
     """Project target only set when .mcp.json exists at project_root."""
-    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+    from agent_toolkit_cli.harness_adapters.claude import ClaudeAdapter
 
     proj = tmp_path / "p"
     proj.mkdir()
@@ -131,7 +131,7 @@ def test_claude_project_config_target_requires_file(tmp_path):
 
 def test_claude_can_install_accepts_all_transports():
     """Claude supports stdio/sse/http natively — adapter does not refuse any."""
-    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+    from agent_toolkit_cli.harness_adapters.claude import ClaudeAdapter
 
     a = ClaudeAdapter()
     a.can_install(_make_entry(transport="stdio"))  # no exception
@@ -142,9 +142,9 @@ def test_claude_can_install_accepts_all_transports():
 - [ ] **Step 2: Run the tests, confirm they fail with ImportError on `ClaudeAdapter`**
 
 Run: `uv run pytest tests/test_mcp_adapters_claude.py -x -v`
-Expected: FAIL — every test errors with `ImportError: cannot import name 'ClaudeAdapter' from 'agent_toolkit.harness_adapters.claude'`.
+Expected: FAIL — every test errors with `ImportError: cannot import name 'ClaudeAdapter' from 'agent_toolkit_cli.harness_adapters.claude'`.
 
-- [ ] **Step 3: Replace the stub at `src/agent_toolkit/harness_adapters/claude.py` with the skeleton**
+- [ ] **Step 3: Replace the stub at `src/agent_toolkit_cli/harness_adapters/claude.py` with the skeleton**
 
 ```python
 """Claude MCP adapter — ConfigFileAdapter against ~/.claude.json.
@@ -165,7 +165,7 @@ import os
 from pathlib import Path
 from typing import Literal
 
-from agent_toolkit.harness_adapters.base import (
+from agent_toolkit_cli.harness_adapters.base import (
     CannotInstall,
     McpEntry,
     Scope,
@@ -219,7 +219,7 @@ Expected: PASS — `test_claude_adapter_basic_attrs`, `test_claude_user_config_t
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/agent_toolkit/harness_adapters/claude.py tests/test_mcp_adapters_claude.py
+git add src/agent_toolkit_cli/harness_adapters/claude.py tests/test_mcp_adapters_claude.py
 git commit -m "feat(#55): claude adapter skeleton — config_target + can_install"
 ```
 
@@ -228,7 +228,7 @@ git commit -m "feat(#55): claude adapter skeleton — config_target + can_instal
 ## Task 2: Implement `ClaudeAdapter.diff` for the create-when-missing case
 
 **Files:**
-- Modify: `src/agent_toolkit/harness_adapters/claude.py` (replace `diff` stub)
+- Modify: `src/agent_toolkit_cli/harness_adapters/claude.py` (replace `diff` stub)
 - Modify: `tests/test_mcp_adapters_claude.py` (add tests)
 
 - [ ] **Step 1: Add the failing tests for `diff` on a missing file and on a file with other top-level keys**
@@ -239,7 +239,7 @@ Append to `tests/test_mcp_adapters_claude.py`:
 def test_claude_diff_creates_file_when_missing(monkeypatch, tmp_path):
     """No .claude.json on disk → one create-action with rendered bytes."""
     import json
-    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+    from agent_toolkit_cli.harness_adapters.claude import ClaudeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     a = ClaudeAdapter()
@@ -267,7 +267,7 @@ def test_claude_diff_preserves_other_top_level_keys(monkeypatch, tmp_path):
     """Adding an MCP to a .claude.json with other settings yields one update;
     the other top-level keys (theme, numStartups) survive."""
     import json
-    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+    from agent_toolkit_cli.harness_adapters.claude import ClaudeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".claude.json"
@@ -290,7 +290,7 @@ def test_claude_diff_preserves_other_top_level_keys(monkeypatch, tmp_path):
 
 def test_claude_diff_unchanged_when_aligned(monkeypatch, tmp_path):
     """If on-disk already matches the desired render, diff returns []."""
-    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+    from agent_toolkit_cli.harness_adapters.claude import ClaudeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".claude.json"
@@ -311,7 +311,7 @@ Expected: FAIL — `NotImplementedError` from the `diff` stub.
 
 - [ ] **Step 3: Implement `diff` and the entry-mapping helper**
 
-Replace the `diff` stub in `src/agent_toolkit/harness_adapters/claude.py` (and add the helper just below it):
+Replace the `diff` stub in `src/agent_toolkit_cli/harness_adapters/claude.py` (and add the helper just below it):
 
 ```python
     # ---- diff (the engine) ----
@@ -464,7 +464,7 @@ Expected: PASS — all seven tests so far (4 from Task 1 + 3 from this task).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/agent_toolkit/harness_adapters/claude.py tests/test_mcp_adapters_claude.py
+git add src/agent_toolkit_cli/harness_adapters/claude.py tests/test_mcp_adapters_claude.py
 git commit -m "feat(#55): claude adapter — diff() + entry-shape mapping for stdio/sse/http"
 ```
 
@@ -473,7 +473,7 @@ git commit -m "feat(#55): claude adapter — diff() + entry-shape mapping for st
 ## Task 3: ClaudeAdapter — `list_installed`, `entry_drift`, unlink + hand-rolled preservation
 
 **Files:**
-- Modify: `src/agent_toolkit/harness_adapters/claude.py` (replace introspection stubs)
+- Modify: `src/agent_toolkit_cli/harness_adapters/claude.py` (replace introspection stubs)
 - Modify: `tests/test_mcp_adapters_claude.py` (add tests)
 
 - [ ] **Step 1: Add the failing tests**
@@ -484,7 +484,7 @@ Append to `tests/test_mcp_adapters_claude.py`:
 def test_claude_unlink_removes_managed_entry_via_previously_allowed(monkeypatch, tmp_path):
     """unlink semantics: entries=[], previously_allowed={'context7'} → removes context7."""
     import json
-    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+    from agent_toolkit_cli.harness_adapters.claude import ClaudeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".claude.json"
@@ -505,7 +505,7 @@ def test_claude_unlink_removes_managed_entry_via_previously_allowed(monkeypatch,
 def test_claude_unlink_does_not_touch_handrolled_entries(monkeypatch, tmp_path):
     """Names not in previously_allowed | desired are hand-rolled — preserved."""
     import json
-    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+    from agent_toolkit_cli.harness_adapters.claude import ClaudeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".claude.json"
@@ -537,7 +537,7 @@ def test_claude_unlink_does_not_touch_handrolled_entries(monkeypatch, tmp_path):
 def test_claude_link_unlink_round_trip_idempotent(monkeypatch, tmp_path):
     """Source with hand-rolled entry → link unrelated MCP → unlink → structurally equal."""
     import json
-    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+    from agent_toolkit_cli.harness_adapters.claude import ClaudeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".claude.json"
@@ -570,7 +570,7 @@ def test_claude_link_unlink_round_trip_idempotent(monkeypatch, tmp_path):
 
 def test_claude_list_installed_returns_all_mcp_server_names(monkeypatch, tmp_path):
     import json
-    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+    from agent_toolkit_cli.harness_adapters.claude import ClaudeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".claude.json"
@@ -585,7 +585,7 @@ def test_claude_list_installed_returns_all_mcp_server_names(monkeypatch, tmp_pat
 
 
 def test_claude_list_installed_missing_file_returns_empty(monkeypatch, tmp_path):
-    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+    from agent_toolkit_cli.harness_adapters.claude import ClaudeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     a = ClaudeAdapter()
@@ -593,7 +593,7 @@ def test_claude_list_installed_missing_file_returns_empty(monkeypatch, tmp_path)
 
 
 def test_claude_entry_drift_false_when_aligned(monkeypatch, tmp_path):
-    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+    from agent_toolkit_cli.harness_adapters.claude import ClaudeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".claude.json"
@@ -606,7 +606,7 @@ def test_claude_entry_drift_false_when_aligned(monkeypatch, tmp_path):
 
 
 def test_claude_entry_drift_true_after_hand_edit(monkeypatch, tmp_path):
-    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+    from agent_toolkit_cli.harness_adapters.claude import ClaudeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".claude.json"
@@ -624,7 +624,7 @@ def test_claude_entry_drift_true_after_hand_edit(monkeypatch, tmp_path):
 
 def test_claude_re_link_byte_identical_when_already_linked(monkeypatch, tmp_path):
     """AC #2 analogue: re-running link with same allow-list yields no write."""
-    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+    from agent_toolkit_cli.harness_adapters.claude import ClaudeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".claude.json"
@@ -644,7 +644,7 @@ Expected: FAIL with NotImplementedError on list_installed, entry_drift, and the 
 
 - [ ] **Step 3: Implement `list_installed` and `entry_drift`**
 
-Replace the two stubs in `src/agent_toolkit/harness_adapters/claude.py`:
+Replace the two stubs in `src/agent_toolkit_cli/harness_adapters/claude.py`:
 
 ```python
     # ---- introspection ----
@@ -684,7 +684,7 @@ Expected: PASS — all 14 tests so far (4 from Task 1 + 3 from Task 2 + 7 from t
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/agent_toolkit/harness_adapters/claude.py tests/test_mcp_adapters_claude.py
+git add src/agent_toolkit_cli/harness_adapters/claude.py tests/test_mcp_adapters_claude.py
 git commit -m "feat(#55): claude adapter — list_installed + entry_drift + ownership round-trip"
 ```
 
@@ -702,7 +702,7 @@ Append to `tests/test_mcp_adapters_claude.py`:
 ```python
 def test_claude_diff_handles_http_transport(monkeypatch, tmp_path):
     import json
-    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+    from agent_toolkit_cli.harness_adapters.claude import ClaudeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     a = ClaudeAdapter()
@@ -724,7 +724,7 @@ def test_claude_diff_handles_http_transport(monkeypatch, tmp_path):
 
 def test_claude_diff_handles_sse_transport(monkeypatch, tmp_path):
     import json
-    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+    from agent_toolkit_cli.harness_adapters.claude import ClaudeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     a = ClaudeAdapter()
@@ -739,8 +739,8 @@ def test_claude_diff_handles_sse_transport(monkeypatch, tmp_path):
 
 def test_claude_can_install_refuses_remote_without_url():
     """spec.transport=http with no spec.url → CannotInstall."""
-    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
-    from agent_toolkit.harness_adapters.base import CannotInstall
+    from agent_toolkit_cli.harness_adapters.claude import ClaudeAdapter
+    from agent_toolkit_cli.harness_adapters.base import CannotInstall
 
     a = ClaudeAdapter()
     # can_install accepts everything — the refusal lives in _build_entry_dict,
@@ -754,7 +754,7 @@ def test_claude_can_install_refuses_remote_without_url():
 def test_claude_project_scope_round_trip(tmp_path):
     """Project-scope mutation against `<proj>/.mcp.json`."""
     import json
-    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+    from agent_toolkit_cli.harness_adapters.claude import ClaudeAdapter
 
     proj = tmp_path / "p"
     proj.mkdir()
@@ -788,7 +788,7 @@ git commit -m "test(#55): claude adapter — http/sse transports + project-scope
 The OpenCode adapter mirrors Claude almost exactly but uses a different managed key path (`mcp.<name>` instead of `mcpServers.<name>`) and a different on-disk entry shape. We can ship it in fewer steps because we just validated the pattern in Tasks 1-4.
 
 **Files:**
-- Modify: `src/agent_toolkit/harness_adapters/opencode.py` (replace the 2-line stub)
+- Modify: `src/agent_toolkit_cli/harness_adapters/opencode.py` (replace the 2-line stub)
 - Test: `tests/test_mcp_adapters_opencode.py` (create)
 
 - [ ] **Step 1: Create `tests/test_mcp_adapters_opencode.py` with the full suite**
@@ -807,7 +807,7 @@ def _make_entry(name: str = "context7", *, transport: str = "stdio",
                 env: dict[str, str] | None = None,
                 url: str | None = None,
                 headers: dict[str, str] | None = None):
-    from agent_toolkit.harness_adapters.base import McpEntry
+    from agent_toolkit_cli.harness_adapters.base import McpEntry
 
     inner: dict = {"command": command}
     if args is not None:
@@ -829,7 +829,7 @@ def _make_entry(name: str = "context7", *, transport: str = "stdio",
 
 
 def test_opencode_adapter_basic_attrs():
-    from agent_toolkit.harness_adapters.opencode import OpenCodeAdapter
+    from agent_toolkit_cli.harness_adapters.opencode import OpenCodeAdapter
 
     a = OpenCodeAdapter()
     assert a.name == "opencode"
@@ -837,7 +837,7 @@ def test_opencode_adapter_basic_attrs():
 
 
 def test_opencode_user_config_target(monkeypatch, tmp_path):
-    from agent_toolkit.harness_adapters.opencode import OpenCodeAdapter
+    from agent_toolkit_cli.harness_adapters.opencode import OpenCodeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     a = OpenCodeAdapter()
@@ -848,7 +848,7 @@ def test_opencode_user_config_target(monkeypatch, tmp_path):
 
 def test_opencode_project_config_target_requires_dir(tmp_path):
     """Project target only set when .opencode/ exists in project_root."""
-    from agent_toolkit.harness_adapters.opencode import OpenCodeAdapter
+    from agent_toolkit_cli.harness_adapters.opencode import OpenCodeAdapter
 
     proj = tmp_path / "p"
     proj.mkdir()
@@ -861,7 +861,7 @@ def test_opencode_project_config_target_requires_dir(tmp_path):
 
 
 def test_opencode_can_install_accepts_all_transports():
-    from agent_toolkit.harness_adapters.opencode import OpenCodeAdapter
+    from agent_toolkit_cli.harness_adapters.opencode import OpenCodeAdapter
 
     a = OpenCodeAdapter()
     a.can_install(_make_entry(transport="stdio"))
@@ -872,7 +872,7 @@ def test_opencode_can_install_accepts_all_transports():
 def test_opencode_diff_creates_file_when_missing_local_shape(monkeypatch, tmp_path):
     """stdio entry → on-disk {type: 'local', command: [str, ...], environment, enabled}."""
     import json
-    from agent_toolkit.harness_adapters.opencode import OpenCodeAdapter
+    from agent_toolkit_cli.harness_adapters.opencode import OpenCodeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     a = OpenCodeAdapter()
@@ -892,7 +892,7 @@ def test_opencode_diff_creates_file_when_missing_local_shape(monkeypatch, tmp_pa
 
 def test_opencode_diff_remote_shape_for_http(monkeypatch, tmp_path):
     import json
-    from agent_toolkit.harness_adapters.opencode import OpenCodeAdapter
+    from agent_toolkit_cli.harness_adapters.opencode import OpenCodeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     a = OpenCodeAdapter()
@@ -912,7 +912,7 @@ def test_opencode_diff_remote_shape_for_http(monkeypatch, tmp_path):
 def test_opencode_diff_preserves_other_top_level_keys(monkeypatch, tmp_path):
     """theme/model/etc at top level survive link/unlink."""
     import json
-    from agent_toolkit.harness_adapters.opencode import OpenCodeAdapter
+    from agent_toolkit_cli.harness_adapters.opencode import OpenCodeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".config" / "opencode" / "opencode.json"
@@ -933,7 +933,7 @@ def test_opencode_diff_preserves_other_top_level_keys(monkeypatch, tmp_path):
 
 
 def test_opencode_diff_unchanged_when_aligned(monkeypatch, tmp_path):
-    from agent_toolkit.harness_adapters.opencode import OpenCodeAdapter
+    from agent_toolkit_cli.harness_adapters.opencode import OpenCodeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".config" / "opencode" / "opencode.json"
@@ -947,7 +947,7 @@ def test_opencode_diff_unchanged_when_aligned(monkeypatch, tmp_path):
 
 def test_opencode_unlink_removes_managed_entry(monkeypatch, tmp_path):
     import json
-    from agent_toolkit.harness_adapters.opencode import OpenCodeAdapter
+    from agent_toolkit_cli.harness_adapters.opencode import OpenCodeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".config" / "opencode" / "opencode.json"
@@ -964,7 +964,7 @@ def test_opencode_unlink_removes_managed_entry(monkeypatch, tmp_path):
 
 def test_opencode_unlink_does_not_touch_handrolled_entries(monkeypatch, tmp_path):
     import json
-    from agent_toolkit.harness_adapters.opencode import OpenCodeAdapter
+    from agent_toolkit_cli.harness_adapters.opencode import OpenCodeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".config" / "opencode" / "opencode.json"
@@ -991,7 +991,7 @@ def test_opencode_unlink_does_not_touch_handrolled_entries(monkeypatch, tmp_path
 
 def test_opencode_link_unlink_round_trip_idempotent(monkeypatch, tmp_path):
     import json
-    from agent_toolkit.harness_adapters.opencode import OpenCodeAdapter
+    from agent_toolkit_cli.harness_adapters.opencode import OpenCodeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".config" / "opencode" / "opencode.json"
@@ -1020,7 +1020,7 @@ def test_opencode_link_unlink_round_trip_idempotent(monkeypatch, tmp_path):
 
 def test_opencode_list_installed_returns_all_mcp_names(monkeypatch, tmp_path):
     import json
-    from agent_toolkit.harness_adapters.opencode import OpenCodeAdapter
+    from agent_toolkit_cli.harness_adapters.opencode import OpenCodeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".config" / "opencode" / "opencode.json"
@@ -1036,7 +1036,7 @@ def test_opencode_list_installed_returns_all_mcp_names(monkeypatch, tmp_path):
 
 
 def test_opencode_list_installed_missing_file_returns_empty(monkeypatch, tmp_path):
-    from agent_toolkit.harness_adapters.opencode import OpenCodeAdapter
+    from agent_toolkit_cli.harness_adapters.opencode import OpenCodeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     a = OpenCodeAdapter()
@@ -1044,7 +1044,7 @@ def test_opencode_list_installed_missing_file_returns_empty(monkeypatch, tmp_pat
 
 
 def test_opencode_entry_drift_false_when_aligned(monkeypatch, tmp_path):
-    from agent_toolkit.harness_adapters.opencode import OpenCodeAdapter
+    from agent_toolkit_cli.harness_adapters.opencode import OpenCodeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".config" / "opencode" / "opencode.json"
@@ -1057,7 +1057,7 @@ def test_opencode_entry_drift_false_when_aligned(monkeypatch, tmp_path):
 
 
 def test_opencode_entry_drift_true_after_hand_edit(monkeypatch, tmp_path):
-    from agent_toolkit.harness_adapters.opencode import OpenCodeAdapter
+    from agent_toolkit_cli.harness_adapters.opencode import OpenCodeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".config" / "opencode" / "opencode.json"
@@ -1073,7 +1073,7 @@ def test_opencode_entry_drift_true_after_hand_edit(monkeypatch, tmp_path):
 
 
 def test_opencode_re_link_is_no_op_when_aligned(monkeypatch, tmp_path):
-    from agent_toolkit.harness_adapters.opencode import OpenCodeAdapter
+    from agent_toolkit_cli.harness_adapters.opencode import OpenCodeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".config" / "opencode" / "opencode.json"
@@ -1090,7 +1090,7 @@ def test_opencode_re_link_is_no_op_when_aligned(monkeypatch, tmp_path):
 Run: `uv run pytest tests/test_mcp_adapters_opencode.py -x -v`
 Expected: FAIL — ImportError on every test.
 
-- [ ] **Step 3: Replace the stub at `src/agent_toolkit/harness_adapters/opencode.py`**
+- [ ] **Step 3: Replace the stub at `src/agent_toolkit_cli/harness_adapters/opencode.py`**
 
 ```python
 """OpenCode MCP adapter — ConfigFileAdapter against ~/.config/opencode/opencode.json.
@@ -1119,7 +1119,7 @@ import os
 from pathlib import Path
 from typing import Literal
 
-from agent_toolkit.harness_adapters.base import (
+from agent_toolkit_cli.harness_adapters.base import (
     CannotInstall,
     McpEntry,
     Scope,
@@ -1307,7 +1307,7 @@ Expected: PASS — all 16 opencode tests green.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/agent_toolkit/harness_adapters/opencode.py tests/test_mcp_adapters_opencode.py
+git add src/agent_toolkit_cli/harness_adapters/opencode.py tests/test_mcp_adapters_opencode.py
 git commit -m "feat(#55): opencode adapter — config_file against ~/.config/opencode/opencode.json"
 ```
 
@@ -1316,7 +1316,7 @@ git commit -m "feat(#55): opencode adapter — config_file against ~/.config/ope
 ## Task 6: Wire both adapters into the registry
 
 **Files:**
-- Modify: `src/agent_toolkit/harness_adapters/__init__.py:25-37`
+- Modify: `src/agent_toolkit_cli/harness_adapters/__init__.py:25-37`
 
 - [ ] **Step 1: Run the existing parity tests, confirm they FAIL because doc says `unsupported (gap)` and code is about to claim `config_file`**
 
@@ -1329,8 +1329,8 @@ Append to `tests/test_mcp_adapters_base.py`:
 
 ```python
 def test_get_adapter_returns_real_claude_adapter():
-    from agent_toolkit.harness_adapters import get_adapter
-    from agent_toolkit.harness_adapters.base import UnimplementedAdapter
+    from agent_toolkit_cli.harness_adapters import get_adapter
+    from agent_toolkit_cli.harness_adapters.base import UnimplementedAdapter
 
     a = get_adapter("claude")
     assert not isinstance(a, UnimplementedAdapter)
@@ -1339,8 +1339,8 @@ def test_get_adapter_returns_real_claude_adapter():
 
 
 def test_get_adapter_returns_real_opencode_adapter():
-    from agent_toolkit.harness_adapters import get_adapter
-    from agent_toolkit.harness_adapters.base import UnimplementedAdapter
+    from agent_toolkit_cli.harness_adapters import get_adapter
+    from agent_toolkit_cli.harness_adapters.base import UnimplementedAdapter
 
     a = get_adapter("opencode")
     assert not isinstance(a, UnimplementedAdapter)
@@ -1350,8 +1350,8 @@ def test_get_adapter_returns_real_opencode_adapter():
 
 def test_get_adapter_pi_remains_unimplemented():
     """Pi MCP is unsupported by design; adapter stays UnimplementedAdapter."""
-    from agent_toolkit.harness_adapters import get_adapter
-    from agent_toolkit.harness_adapters.base import UnimplementedAdapter
+    from agent_toolkit_cli.harness_adapters import get_adapter
+    from agent_toolkit_cli.harness_adapters.base import UnimplementedAdapter
 
     a = get_adapter("pi")
     assert isinstance(a, UnimplementedAdapter)
@@ -1364,7 +1364,7 @@ Expected: FAIL on `test_get_adapter_returns_real_claude_adapter` and `test_get_a
 
 - [ ] **Step 4: Wire the adapters into the registry**
 
-Edit `src/agent_toolkit/harness_adapters/__init__.py`. Replace:
+Edit `src/agent_toolkit_cli/harness_adapters/__init__.py`. Replace:
 
 ```python
 def get_adapter(harness: str):
@@ -1378,7 +1378,7 @@ def get_adapter(harness: str):
     if harness == "codex":
         # Lazy import so the dependency on tomlkit (and any future codex deps)
         # only loads when the codex adapter is actually requested.
-        from agent_toolkit.harness_adapters.codex import CodexAdapter
+        from agent_toolkit_cli.harness_adapters.codex import CodexAdapter
         return CodexAdapter()
     return UnimplementedAdapter(harness)
 ```
@@ -1395,13 +1395,13 @@ def get_adapter(harness: str):
     if harness not in _KNOWN_HARNESSES:
         raise ValueError(f"unknown harness {harness!r}")
     if harness == "codex":
-        from agent_toolkit.harness_adapters.codex import CodexAdapter
+        from agent_toolkit_cli.harness_adapters.codex import CodexAdapter
         return CodexAdapter()
     if harness == "claude":
-        from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+        from agent_toolkit_cli.harness_adapters.claude import ClaudeAdapter
         return ClaudeAdapter()
     if harness == "opencode":
-        from agent_toolkit.harness_adapters.opencode import OpenCodeAdapter
+        from agent_toolkit_cli.harness_adapters.opencode import OpenCodeAdapter
         return OpenCodeAdapter()
     return UnimplementedAdapter(harness)
 ```
@@ -1414,7 +1414,7 @@ Expected: PASS — all adapter tests green.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/agent_toolkit/harness_adapters/__init__.py tests/test_mcp_adapters_base.py
+git add src/agent_toolkit_cli/harness_adapters/__init__.py tests/test_mcp_adapters_base.py
 git commit -m "feat(#55): registry wires claude + opencode ConfigFileAdapter instances"
 ```
 
@@ -1424,7 +1424,7 @@ git commit -m "feat(#55): registry wires claude + opencode ConfigFileAdapter ins
 
 **Files:**
 - Modify: `docs/agent-toolkit/harness-matrix.md` (three localised edits)
-- Modify: `src/agent_toolkit/commands/_mcp_dispatch.py:57`
+- Modify: `src/agent_toolkit_cli/commands/_mcp_dispatch.py:57`
 
 - [ ] **Step 1: Run the matrix-parity test as a baseline — should still PASS**
 
@@ -1483,7 +1483,7 @@ with:
 
 - [ ] **Step 5: Update the `_mcp_dispatch.py` force-flag comment**
 
-Edit `src/agent_toolkit/commands/_mcp_dispatch.py`. On line 57, replace:
+Edit `src/agent_toolkit_cli/commands/_mcp_dispatch.py`. On line 57, replace:
 
 ```python
     force: bool = False,  # noqa: ARG001 — CLI-PR-2 wires this for Claude; ignored here
@@ -1503,7 +1503,7 @@ Expected: PASS — every config_file cell now has a real adapter (codex, claude,
 - [ ] **Step 7: Commit**
 
 ```bash
-git add docs/agent-toolkit/harness-matrix.md src/agent_toolkit/commands/_mcp_dispatch.py
+git add docs/agent-toolkit/harness-matrix.md src/agent_toolkit_cli/commands/_mcp_dispatch.py
 git commit -m "docs(#55): matrix — claude/opencode MCP supported, pi by design; clean force-flag comment"
 ```
 
@@ -1533,8 +1533,8 @@ Replace the test:
 def test_apply_link_unimplemented_adapter_is_silent_noop(monkeypatch, tmp_path):
     """Unimplemented adapter returns []; caller is responsible for the skip-print
     (apply_link itself does nothing — caller should detect and print skip_message)."""
-    from agent_toolkit.commands._mcp_dispatch import apply_link
-    from agent_toolkit.harness_adapters import get_adapter
+    from agent_toolkit_cli.commands._mcp_dispatch import apply_link
+    from agent_toolkit_cli.harness_adapters import get_adapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
 
@@ -1556,9 +1556,9 @@ def test_apply_link_unimplemented_adapter_is_silent_noop(monkeypatch, tmp_path):
 
     Pi remains UnimplementedAdapter (Pi has no MCP support by design).
     """
-    from agent_toolkit.commands._mcp_dispatch import apply_link
-    from agent_toolkit.harness_adapters import get_adapter
-    from agent_toolkit.harness_adapters.base import UnimplementedAdapter
+    from agent_toolkit_cli.commands._mcp_dispatch import apply_link
+    from agent_toolkit_cli.harness_adapters import get_adapter
+    from agent_toolkit_cli.harness_adapters.base import UnimplementedAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
 
@@ -1581,8 +1581,8 @@ Replace:
 ```python
 def test_doctor_mcps_skips_unimplemented_harness(monkeypatch, tmp_path):
     """harness=claude → group reports OK with 'no adapter' note (no checks attempted)."""
-    from agent_toolkit.doctor.mcps import run
-    from agent_toolkit.doctor.result import Status
+    from agent_toolkit_cli.doctor.mcps import run
+    from agent_toolkit_cli.doctor.result import Status
 
     home = tmp_path / "home"
     home.mkdir()
@@ -1601,8 +1601,8 @@ with:
 ```python
 def test_doctor_mcps_skips_unimplemented_harness(monkeypatch, tmp_path):
     """harness=pi → group reports OK with 'no adapter' note (Pi MCP unsupported by design)."""
-    from agent_toolkit.doctor.mcps import run
-    from agent_toolkit.doctor.result import Status
+    from agent_toolkit_cli.doctor.mcps import run
+    from agent_toolkit_cli.doctor.result import Status
 
     home = tmp_path / "home"
     home.mkdir()

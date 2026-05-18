@@ -4,7 +4,7 @@ Closes #49. Follow-up to #41.
 
 ## Problem
 
-The `(harness, kind)` support matrix in `src/agent_toolkit/_support.py` has one
+The `(harness, kind)` support matrix in `src/agent_toolkit_cli/_support.py` has one
 key set, derived from `_USER_TARGETS`. To preserve the
 `_USER_TARGETS.keys() == _PROJECT_TARGETS.keys()` parity invariant,
 `_PROJECT_TARGETS[("pi", "agent")]` is set to `.pi/agent/agents` — a path **pi
@@ -48,7 +48,7 @@ From #49, verbatim:
 
 ## Design
 
-### Support API surface (`src/agent_toolkit/_support.py`)
+### Support API surface (`src/agent_toolkit_cli/_support.py`)
 
 `is_supported` gains an optional `scope` parameter:
 
@@ -80,8 +80,8 @@ fixed (harness, scope) pair, so both must pass `scope=scope`:
 
 | Site | Current | After |
 |---|---|---|
-| `src/agent_toolkit/commands/_link_lib.py:488` | `if not is_supported(harness, kind):` | `if not is_supported(harness, kind, scope=scope):` |
-| `src/agent_toolkit/commands/unlink.py:160` | `if not is_supported(harness, kind):` | `if not is_supported(harness, kind, scope=scope):` |
+| `src/agent_toolkit_cli/commands/_link_lib.py:488` | `if not is_supported(harness, kind):` | `if not is_supported(harness, kind, scope=scope):` |
+| `src/agent_toolkit_cli/commands/unlink.py:160` | `if not is_supported(harness, kind):` | `if not is_supported(harness, kind, scope=scope):` |
 
 The `RuntimeError` guard at `_link_lib.py:495-499` ("`is_supported(...)` is
 True but `harness_target_dir` returned None — SSOT invariant broken") was
@@ -111,9 +111,9 @@ That's a deliberate split:
 
 ### Doctor / list paths
 
-- `src/agent_toolkit/doctor/symlinks.py` and `doctor/allowlist_audit.py` both
+- `src/agent_toolkit_cli/doctor/symlinks.py` and `doctor/allowlist_audit.py` both
   iterate `_USER_TARGETS` directly — unaffected.
-- `src/agent_toolkit/commands/_list_json.py:_cell_status` already returns
+- `src/agent_toolkit_cli/commands/_list_json.py:_cell_status` already returns
   `("unsupported", None)` when `_slot_dir` returns `None`. Removing
   `_PROJECT_TARGETS[("pi","agent")]` means the project cell for that pair
   becomes `unsupported` automatically — acceptance #7.

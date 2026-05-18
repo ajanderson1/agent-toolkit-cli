@@ -25,13 +25,13 @@ The check is **warning, not error** because users may legitimately stage symlink
 | opencode | `~/.opencode` |
 | pi | `~/.pi` |
 
-These match the prefixes already in `_USER_TARGETS` (`src/agent_toolkit/commands/_list_json.py:27-37`). New tuple `HARNESS_HOMES` lives next to `ALL_HARNESSES` in `_link_lib.py`.
+These match the prefixes already in `_USER_TARGETS` (`src/agent_toolkit_cli/commands/_list_json.py:27-37`). New tuple `HARNESS_HOMES` lives next to `ALL_HARNESSES` in `_link_lib.py`.
 
 ## Approach
 
 ### Helper
 
-Add to `src/agent_toolkit/commands/_link_lib.py`:
+Add to `src/agent_toolkit_cli/commands/_link_lib.py`:
 
 ```python
 HARNESS_HOMES: dict[str, str] = {
@@ -50,7 +50,7 @@ def harness_home_path(harness: str, home: Path | None = None) -> Path:
 
 ### Doctor group
 
-New file `src/agent_toolkit/doctor/harness_homes.py`:
+New file `src/agent_toolkit_cli/doctor/harness_homes.py`:
 
 - Iterate `ALL_HARNESSES`. For each, check `harness_home_path(h).exists()` and `is_dir()`.
 - A missing home is a WARN finding with `"<harness> home not present at <path> — install the harness or stage the symlinks anyway"`.
@@ -63,7 +63,7 @@ The doctor check is **harness-agnostic** — it runs once for all four, regardle
 
 ### Link warning
 
-In `src/agent_toolkit/commands/link.py`, after `validate_harness(ctx, harness)` (line 73), insert:
+In `src/agent_toolkit_cli/commands/link.py`, after `validate_harness(ctx, harness)` (line 73), insert:
 
 ```python
 quiet_env = os.environ.get("AGENT_TOOLKIT_QUIET") == "1"

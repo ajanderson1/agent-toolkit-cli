@@ -2,7 +2,7 @@
 import os
 import subprocess
 
-from agent_toolkit.ingest.types import Proposal
+from agent_toolkit_cli.ingest.types import Proposal
 
 
 def _git_env():
@@ -30,7 +30,7 @@ def _proposal(slug="alpha"):
 
 
 def _seed_staging(tmp_path, slug="alpha"):
-    from agent_toolkit.ingest.stage import stage_proposal
+    from agent_toolkit_cli.ingest.stage import stage_proposal
     snap = tmp_path / "snap"
     snap.mkdir()
     (snap / "SKILL.md").write_text("---\nname: alpha\ndescription: Alpha test ingest.\n---\n# alpha\n")
@@ -38,7 +38,7 @@ def _seed_staging(tmp_path, slug="alpha"):
 
 
 def test_finalize_moves_files_to_canonical_path(tmp_path):
-    from agent_toolkit.ingest.finalize import finalize
+    from agent_toolkit_cli.ingest.finalize import finalize
     _init_git_repo(tmp_path)
     # Provide a working schema so check succeeds
     schemas_dir = tmp_path / "schemas"
@@ -57,7 +57,7 @@ def test_finalize_moves_files_to_canonical_path(tmp_path):
 
 
 def test_finalize_writes_commit_when_not_skipped(tmp_path):
-    from agent_toolkit.ingest.finalize import finalize
+    from agent_toolkit_cli.ingest.finalize import finalize
     _init_git_repo(tmp_path)
     schemas_dir = tmp_path / "schemas"
     schemas_dir.mkdir()

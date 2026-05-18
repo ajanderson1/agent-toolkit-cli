@@ -11,20 +11,20 @@ Add to `tests/test_link_lib.py`:
 
 ```python
 def test_harness_home_path_uses_home_env(monkeypatch, tmp_path):
-    from agent_toolkit.commands._link_lib import harness_home_path
+    from agent_toolkit_cli.commands._link_lib import harness_home_path
     monkeypatch.setenv("HOME", str(tmp_path))
     assert harness_home_path("claude") == tmp_path / ".claude"
     assert harness_home_path("pi") == tmp_path / ".pi"
 
 def test_harness_home_path_explicit_home_overrides_env(tmp_path):
-    from agent_toolkit.commands._link_lib import harness_home_path
+    from agent_toolkit_cli.commands._link_lib import harness_home_path
     other = tmp_path / "other-home"
     assert harness_home_path("codex", home=other) == other / ".codex"
 ```
 
 **Run:** `uv run pytest tests/test_link_lib.py -x` → expect ImportError on the helper.
 
-Then add to `src/agent_toolkit/commands/_link_lib.py` (after `ALL_HARNESSES`):
+Then add to `src/agent_toolkit_cli/commands/_link_lib.py` (after `ALL_HARNESSES`):
 
 ```python
 import os
@@ -59,8 +59,8 @@ from pathlib import Path
 
 import pytest
 
-from agent_toolkit.doctor import harness_homes
-from agent_toolkit.doctor.result import Status
+from agent_toolkit_cli.doctor import harness_homes
+from agent_toolkit_cli.doctor.result import Status
 
 
 @pytest.fixture
@@ -99,14 +99,14 @@ def test_all_missing_returns_warn(home):
 
 ## T3 — Implement `harness_homes` group (green)
 
-New file `src/agent_toolkit/doctor/harness_homes.py`:
+New file `src/agent_toolkit_cli/doctor/harness_homes.py`:
 
 ```python
 """Doctor: harness_homes group — checks ~/.{harness}/ exists per harness."""
 from __future__ import annotations
 
-from agent_toolkit.commands._link_lib import ALL_HARNESSES, harness_home_path
-from agent_toolkit.doctor.result import GroupResult, Status
+from agent_toolkit_cli.commands._link_lib import ALL_HARNESSES, harness_home_path
+from agent_toolkit_cli.doctor.result import GroupResult, Status
 
 
 def run() -> GroupResult:
@@ -143,9 +143,9 @@ def run() -> GroupResult:
 
 ## T4 — Wire into `commands/doctor.py`
 
-Edit `src/agent_toolkit/commands/doctor.py`:
+Edit `src/agent_toolkit_cli/commands/doctor.py`:
 
-1. Add `harness_homes as g_harness_homes` to the `from agent_toolkit.doctor import …` block.
+1. Add `harness_homes as g_harness_homes` to the `from agent_toolkit_cli.doctor import …` block.
 2. Add `"harness-homes"` to `_GROUPS` tuple.
 3. Add `("harness-homes", lambda: g_harness_homes.run()),` to `_run_global`'s `runners` list (at the end, just before `duplicates` for grouping by concept).
 
@@ -202,7 +202,7 @@ def test_link_no_warning_when_harness_home_exists(env, seed_skill):
 
 ## T6 — Wire warning into `link.py` (green)
 
-Edit `src/agent_toolkit/commands/link.py`:
+Edit `src/agent_toolkit_cli/commands/link.py`:
 
 After `validate_harness(ctx, harness)` (line 73), insert:
 
@@ -217,7 +217,7 @@ After `validate_harness(ctx, harness)` (line 73), insert:
             )
 ```
 
-Add `harness_home_path` to the existing `from agent_toolkit.commands._link_lib import (…)` block.
+Add `harness_home_path` to the existing `from agent_toolkit_cli.commands._link_lib import (…)` block.
 
 **Run:** `uv run pytest tests/test_cli_link.py -k home -x` → green.
 

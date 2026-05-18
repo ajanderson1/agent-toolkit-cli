@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from agent_toolkit.generators.component_table import render_component_table
-from agent_toolkit.walker import Asset
+from agent_toolkit_cli.generators.component_table import render_component_table
+from agent_toolkit_cli.walker import Asset
 
 
 def test_renders_component_table_sorted_by_kind(tmp_path):
@@ -30,7 +30,7 @@ def test_renders_component_table_sorted_by_kind(tmp_path):
     assert "1 first-party · 1 third-party" in out  # Skills
 
 
-from agent_toolkit.generators.submodule_table import render_submodule_table
+from agent_toolkit_cli.generators.submodule_table import render_submodule_table
 
 
 def test_renders_submodule_table_from_gitmodules(tmp_path):
@@ -51,7 +51,7 @@ def test_renders_submodule_table_from_gitmodules(tmp_path):
     assert "| Submodule path |" in out
 
 
-from agent_toolkit.generators.markers import inject_region
+from agent_toolkit_cli.generators.markers import inject_region
 
 
 def test_inject_region_replaces_existing_block():

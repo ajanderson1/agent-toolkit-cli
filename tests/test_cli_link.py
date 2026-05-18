@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
-from agent_toolkit.cli import main
+from agent_toolkit_cli.cli import main
 
 
 # ===========================================================================
@@ -806,9 +806,9 @@ def test_link_subprocess_smoke(env, seed_skill):
     (home / ".agent-toolkit.yaml").write_text("skills:\n  - alpha\n")
     (home / ".claude").mkdir()
 
-    cli = shutil.which("agent-toolkit")
+    cli = shutil.which("agent-toolkit-cli")
     if not cli:
-        pytest.skip("agent-toolkit not on PATH (run `uv sync --extra tui`)")
+        pytest.skip("agent-toolkit-cli not on PATH (run `uv sync --extra tui`)")
 
     proc = subprocess.run(
         [cli, "--toolkit-repo", str(toolkit), "link", "user", "claude"],
@@ -970,7 +970,7 @@ def test_link_user_opencode_agent_translates_and_symlinks(env, seed_agent):
     assert text.startswith("---\n")
     assert "mode: subagent\n" in text
     assert "description: foo agent." in text
-    assert "agent_toolkit:" in text
+    assert "agent_toolkit_cli:" in text
     assert "# foo agent body\n" in text
 
 

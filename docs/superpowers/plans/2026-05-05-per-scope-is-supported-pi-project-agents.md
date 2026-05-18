@@ -10,7 +10,7 @@
 3. Update the two iteration sites in the linker / unlinker to pass `scope=scope` so they pre-check per-scope support before calling `harness_target_dir`.
 4. Remove `_PROJECT_TARGETS[("pi","agent")]`. The `_list_json._cell_status` "unsupported" branch already handles the resulting `slot_dir → None`.
 
-**Tech Stack:** Python 3.12, click, pytest, uv. Source at `src/agent_toolkit/`. Tests at `tests/`.
+**Tech Stack:** Python 3.12, click, pytest, uv. Source at `src/agent_toolkit_cli/`. Tests at `tests/`.
 
 **Spec:** `docs/superpowers/specs/2026-05-05-per-scope-is-supported-pi-project-agents-design.md`
 
@@ -48,7 +48,7 @@ def test_is_supported_unknown_scope_returns_false():
 
 def test_slot_dir_pi_agent_project_returns_none(tmp_path):
     """Acceptance #4: project-scope slot for (pi, agent) is None after the row is removed."""
-    from agent_toolkit._support import slot_dir
+    from agent_toolkit_cli._support import slot_dir
 
     assert slot_dir("pi", "agent", "project", project_root=tmp_path) is None
 ```
@@ -109,11 +109,11 @@ git commit -m "test(#49): relax _USER/_PROJECT key-set invariant to subset"
 ### Task 3: Implement per-scope `is_supported`
 
 **Files:**
-- Modify: `src/agent_toolkit/_support.py:81-83`
+- Modify: `src/agent_toolkit_cli/_support.py:81-83`
 
 - [ ] **Step 1: Replace `is_supported` with the per-scope version**
 
-In `src/agent_toolkit/_support.py`, replace the current `is_supported` definition:
+In `src/agent_toolkit_cli/_support.py`, replace the current `is_supported` definition:
 
 ```python
 def is_supported(harness: str, kind: str, scope: str | None = None) -> bool:
@@ -150,7 +150,7 @@ Expected: `test_is_supported_back_compat_no_scope_for_pi_agent` PASS, `test_is_s
 - [ ] **Step 3: Commit**
 
 ```bash
-git add src/agent_toolkit/_support.py
+git add src/agent_toolkit_cli/_support.py
 git commit -m "feat(#49): add scope parameter to is_supported"
 ```
 
@@ -159,11 +159,11 @@ git commit -m "feat(#49): add scope parameter to is_supported"
 ### Task 4: Remove the dead `_PROJECT_TARGETS[("pi","agent")]` row
 
 **Files:**
-- Modify: `src/agent_toolkit/_support.py:51-56`
+- Modify: `src/agent_toolkit_cli/_support.py:51-56`
 
 - [ ] **Step 1: Delete the row and its multi-line comment**
 
-In `src/agent_toolkit/_support.py`, remove the `("pi", "agent")` entry from `_PROJECT_TARGETS` and the explanatory comment block above it. After this edit the dict's pi rows look like:
+In `src/agent_toolkit_cli/_support.py`, remove the `("pi", "agent")` entry from `_PROJECT_TARGETS` and the explanatory comment block above it. After this edit the dict's pi rows look like:
 
 ```python
     # Pi project-scope: pi reads from <cwd>/.pi/{skills,extensions} (no /agent/
@@ -195,12 +195,12 @@ Expected: PASS. `SUPPORTED_PAIRS` is still derived from `_USER_TARGETS.keys()`, 
 
 Run: `uv run pytest -q`
 
-Expected: at least one failure related to `harness_target_dir(pi, agent, "project", ...) → None → RuntimeError`. Specifically: any test that exercises `_link_lib.project_from_file` or `unlink._do_all` against `harness=pi, scope=project` with an allow-listed agent will now hit the `RuntimeError("is_supported(...) is True but harness_target_dir returned None — SSOT invariant broken")` at `src/agent_toolkit/commands/_link_lib.py:495-499`. If no existing test exercises that path, the suite passes — Task 5's new test will surface it.
+Expected: at least one failure related to `harness_target_dir(pi, agent, "project", ...) → None → RuntimeError`. Specifically: any test that exercises `_link_lib.project_from_file` or `unlink._do_all` against `harness=pi, scope=project` with an allow-listed agent will now hit the `RuntimeError("is_supported(...) is True but harness_target_dir returned None — SSOT invariant broken")` at `src/agent_toolkit_cli/commands/_link_lib.py:495-499`. If no existing test exercises that path, the suite passes — Task 5's new test will surface it.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/agent_toolkit/_support.py
+git add src/agent_toolkit_cli/_support.py
 git commit -m "feat(#49): remove dead _PROJECT_TARGETS[(pi, agent)] row"
 ```
 
@@ -226,7 +226,7 @@ def test_project_from_file_skips_pi_agent_at_project_scope_cleanly(tmp_path, mon
     RuntimeError("SSOT invariant broken").
     """
     import io
-    from agent_toolkit.commands._link_lib import LinkCounters, project_from_file
+    from agent_toolkit_cli.commands._link_lib import LinkCounters, project_from_file
 
     monkeypatch.setenv("HOME", str(tmp_path))
     project_root = tmp_path / "project"
@@ -286,12 +286,12 @@ git commit -m "test(#49): pin pi/agent project-scope clean-skip behaviour"
 ### Task 6: Update linker iteration to use per-scope `is_supported`
 
 **Files:**
-- Modify: `src/agent_toolkit/commands/_link_lib.py:488-499`
-- Modify: `src/agent_toolkit/commands/unlink.py:160`
+- Modify: `src/agent_toolkit_cli/commands/_link_lib.py:488-499`
+- Modify: `src/agent_toolkit_cli/commands/unlink.py:160`
 
 - [ ] **Step 1: Update `_link_lib.project_from_file` filter and rewrite the RuntimeError guard**
 
-In `src/agent_toolkit/commands/_link_lib.py`, find lines 488-499 (the loop body inside `project_from_file` that filters by support and resolves `target_dir`). Replace:
+In `src/agent_toolkit_cli/commands/_link_lib.py`, find lines 488-499 (the loop body inside `project_from_file` that filters by support and resolves `target_dir`). Replace:
 
 ```python
         if not is_supported(harness, kind):
@@ -330,7 +330,7 @@ with:
 
 - [ ] **Step 2: Update `unlink._do_all` filter**
 
-In `src/agent_toolkit/commands/unlink.py`, find line 160 inside `_do_all`:
+In `src/agent_toolkit_cli/commands/unlink.py`, find line 160 inside `_do_all`:
 
 ```python
     for kind in KINDS_FOR_PROJECTION:
@@ -367,7 +367,7 @@ Expected: 545+ tests, all PASS. (We've added 5 new tests in Task 1 + 1 in Task 5
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/agent_toolkit/commands/_link_lib.py src/agent_toolkit/commands/unlink.py
+git add src/agent_toolkit_cli/commands/_link_lib.py src/agent_toolkit_cli/commands/unlink.py
 git commit -m "fix(#49): linker iteration uses per-scope is_supported"
 ```
 
@@ -390,7 +390,7 @@ If the file exists, append:
 def test_cell_status_pi_agent_project_scope_is_unsupported(tmp_path):
     """Acceptance #7: the (pi, agent) project-scope cell reports 'unsupported'
     after _PROJECT_TARGETS row removal (#49)."""
-    from agent_toolkit.commands._list_json import _cell_status
+    from agent_toolkit_cli.commands._list_json import _cell_status
 
     status, target = _cell_status(
         harness="pi",

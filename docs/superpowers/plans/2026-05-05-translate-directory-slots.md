@@ -52,7 +52,7 @@ if (harness, kind) in TRANSLATORS:
 
 Falls through to the existing toolkit-repo check if not in cache (so a manually-tampered slot symlink to the toolkit still verifies via the existing path).
 
-Imports needed: `from agent_toolkit._translators import TRANSLATORS` and `from agent_toolkit.commands._link_lib import _scope_cache_root`.
+Imports needed: `from agent_toolkit_cli._translators import TRANSLATORS` and `from agent_toolkit_cli.commands._link_lib import _scope_cache_root`.
 
 ### 5. Run full suite
 

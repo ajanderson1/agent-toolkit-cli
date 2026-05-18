@@ -1,5 +1,5 @@
 """Tests for ingest.identify and shared types."""
-from agent_toolkit.ingest.types import IngestTarget, Proposal, InputForm
+from agent_toolkit_cli.ingest.types import IngestTarget, Proposal, InputForm
 
 
 def test_ingest_target_records_input_form():
@@ -30,7 +30,7 @@ def test_proposal_serializable_to_dict():
 
 
 def test_identify_github_url():
-    from agent_toolkit.ingest.identify import classify_input
+    from agent_toolkit_cli.ingest.identify import classify_input
     t = classify_input("https://github.com/obra/superpowers")
     assert t.input_form == InputForm.URL
     assert t.owner == "obra"
@@ -39,7 +39,7 @@ def test_identify_github_url():
 
 
 def test_identify_local_file(tmp_path):
-    from agent_toolkit.ingest.identify import classify_input
+    from agent_toolkit_cli.ingest.identify import classify_input
     skill = tmp_path / "myskill.md"
     skill.write_text("# Skill\n")
     t = classify_input(str(skill))
@@ -48,21 +48,21 @@ def test_identify_local_file(tmp_path):
 
 
 def test_identify_treats_bare_token_as_name():
-    from agent_toolkit.ingest.identify import classify_input
+    from agent_toolkit_cli.ingest.identify import classify_input
     t = classify_input("superpowers")
     assert t.input_form == InputForm.NAME
     assert t.upstream_url is None  # name needs research to resolve
 
 
 def test_identify_kind_guess_for_url_from_path():
-    from agent_toolkit.ingest.identify import classify_input
+    from agent_toolkit_cli.ingest.identify import classify_input
     t = classify_input("https://github.com/owner/some-mcp-server")
     # 'mcp' in name biases the kind guess
     assert t.kind_guess == "mcp"
 
 
 def test_research_infers_skill_from_skill_md(tmp_path):
-    from agent_toolkit.ingest.research import infer_from_snapshot
+    from agent_toolkit_cli.ingest.research import infer_from_snapshot
     (tmp_path / "SKILL.md").write_text("# A skill\n")
     proposal = infer_from_snapshot(
         snapshot_dir=tmp_path,
@@ -74,7 +74,7 @@ def test_research_infers_skill_from_skill_md(tmp_path):
 
 
 def test_research_narrows_to_pi_when_extension_layout(tmp_path):
-    from agent_toolkit.ingest.research import infer_from_snapshot
+    from agent_toolkit_cli.ingest.research import infer_from_snapshot
     (tmp_path / "package.json").write_text('{"keywords": ["pi-extension"]}')
     proposal = infer_from_snapshot(
         snapshot_dir=tmp_path, slug="pi-thing", upstream="https://github.com/x/pi-thing",
@@ -85,7 +85,7 @@ def test_research_narrows_to_pi_when_extension_layout(tmp_path):
 
 
 def test_research_marks_third_party_when_upstream_present(tmp_path):
-    from agent_toolkit.ingest.research import infer_from_snapshot
+    from agent_toolkit_cli.ingest.research import infer_from_snapshot
     (tmp_path / "SKILL.md").write_text("# x\n")
     proposal = infer_from_snapshot(
         snapshot_dir=tmp_path, slug="x", upstream="https://github.com/owner/x"
@@ -94,8 +94,8 @@ def test_research_marks_third_party_when_upstream_present(tmp_path):
 
 
 def test_identify_directory_with_skill_md(tmp_path):
-    from agent_toolkit.ingest.identify import classify_input
-    from agent_toolkit.ingest.types import InputForm
+    from agent_toolkit_cli.ingest.identify import classify_input
+    from agent_toolkit_cli.ingest.types import InputForm
     (tmp_path / "SKILL.md").write_text("# A skill\n")
     t = classify_input(str(tmp_path))
     assert t.input_form == InputForm.DIR
@@ -105,8 +105,8 @@ def test_identify_directory_with_skill_md(tmp_path):
 
 
 def test_identify_directory_with_claude_plugin_manifest(tmp_path):
-    from agent_toolkit.ingest.identify import classify_input
-    from agent_toolkit.ingest.types import InputForm
+    from agent_toolkit_cli.ingest.identify import classify_input
+    from agent_toolkit_cli.ingest.types import InputForm
     plugin_dir = tmp_path / ".claude-plugin"
     plugin_dir.mkdir()
     (plugin_dir / "plugin.json").write_text('{"name": "companion-html"}\n')
@@ -118,8 +118,8 @@ def test_identify_directory_with_claude_plugin_manifest(tmp_path):
 
 
 def test_identify_directory_with_mcp_json(tmp_path):
-    from agent_toolkit.ingest.identify import classify_input
-    from agent_toolkit.ingest.types import InputForm
+    from agent_toolkit_cli.ingest.identify import classify_input
+    from agent_toolkit_cli.ingest.types import InputForm
     (tmp_path / "mcp.json").write_text('{"name": "my-mcp"}\n')
     t = classify_input(str(tmp_path))
     assert t.input_form == InputForm.DIR
@@ -127,8 +127,8 @@ def test_identify_directory_with_mcp_json(tmp_path):
 
 
 def test_identify_directory_no_manifest_returns_disambiguation_hint(tmp_path):
-    from agent_toolkit.ingest.identify import classify_input
-    from agent_toolkit.ingest.types import InputForm
+    from agent_toolkit_cli.ingest.identify import classify_input
+    from agent_toolkit_cli.ingest.types import InputForm
     (tmp_path / "some_random_file.txt").write_text("nothing\n")
     t = classify_input(str(tmp_path))
     assert t.input_form == InputForm.DIR
@@ -136,17 +136,17 @@ def test_identify_directory_no_manifest_returns_disambiguation_hint(tmp_path):
 
 
 def test_identify_directory_never_falls_through_to_name(tmp_path):
-    from agent_toolkit.ingest.identify import classify_input
-    from agent_toolkit.ingest.types import InputForm
+    from agent_toolkit_cli.ingest.identify import classify_input
+    from agent_toolkit_cli.ingest.types import InputForm
     # Even with no manifest, a directory must not be classified as NAME
     t = classify_input(str(tmp_path))
     assert t.input_form != InputForm.NAME
 
 
 def test_identify_dir_is_snapshot_for_research(tmp_path):
-    from agent_toolkit.ingest.identify import classify_input
-    from agent_toolkit.ingest.research import infer_from_snapshot
-    from agent_toolkit.ingest.types import InputForm
+    from agent_toolkit_cli.ingest.identify import classify_input
+    from agent_toolkit_cli.ingest.research import infer_from_snapshot
+    from agent_toolkit_cli.ingest.types import InputForm
     plugin_dir = tmp_path / ".claude-plugin"
     plugin_dir.mkdir()
     (plugin_dir / "plugin.json").write_text('{"name": "companion-html"}\n')

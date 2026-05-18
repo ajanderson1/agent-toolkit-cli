@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from agent_toolkit._support import slot_dir
+from agent_toolkit_cli._support import slot_dir
 
 
 def test_pi_project_skill_path_is_under_dot_pi(tmp_path: Path) -> None:

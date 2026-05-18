@@ -42,7 +42,7 @@ Validate `<harness>` against the canonical set `(claude, codex, opencode, pi)` a
 
 ## Approach
 
-Add a thin helper to `src/agent_toolkit/commands/_link_lib.py`:
+Add a thin helper to `src/agent_toolkit_cli/commands/_link_lib.py`:
 
 ```python
 ALL_HARNESSES = ("claude", "codex", "opencode", "pi")
@@ -88,10 +88,10 @@ Add to `tests/test_link_lib.py`:
 
 | File | Change |
 |---|---|
-| `src/agent_toolkit/commands/_link_lib.py` | Add `ALL_HARNESSES` tuple + `validate_harness` function. |
-| `src/agent_toolkit/commands/link.py` | Import + call `validate_harness` first thing in `link()`. |
-| `src/agent_toolkit/commands/unlink.py` | Import + call `validate_harness` first thing in `unlink()`. |
-| `src/agent_toolkit/commands/_list_json.py` | Re-export `ALL_HARNESSES` from `_link_lib` to keep one source of truth (or leave both and add a comment). Decision made during plan. |
+| `src/agent_toolkit_cli/commands/_link_lib.py` | Add `ALL_HARNESSES` tuple + `validate_harness` function. |
+| `src/agent_toolkit_cli/commands/link.py` | Import + call `validate_harness` first thing in `link()`. |
+| `src/agent_toolkit_cli/commands/unlink.py` | Import + call `validate_harness` first thing in `unlink()`. |
+| `src/agent_toolkit_cli/commands/_list_json.py` | Re-export `ALL_HARNESSES` from `_link_lib` to keep one source of truth (or leave both and add a comment). Decision made during plan. |
 | `tests/test_cli_link.py` | + 3 tests. |
 | `tests/test_cli_unlink.py` | + 3 tests. |
 | `tests/test_cli_diff.py` | + 1 test. |

@@ -11,7 +11,7 @@ def _make_entry(name: str = "context7", *, transport: str = "stdio",
                 env: dict[str, str] | None = None,
                 url: str | None = None,
                 headers: dict[str, str] | None = None):
-    from agent_toolkit.harness_adapters.base import McpEntry
+    from agent_toolkit_cli.harness_adapters.base import McpEntry
 
     inner: dict = {"command": command}
     if args is not None:
@@ -33,7 +33,7 @@ def _make_entry(name: str = "context7", *, transport: str = "stdio",
 
 
 def test_claude_adapter_basic_attrs():
-    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+    from agent_toolkit_cli.harness_adapters.claude import ClaudeAdapter
 
     a = ClaudeAdapter()
     assert a.name == "claude"
@@ -41,7 +41,7 @@ def test_claude_adapter_basic_attrs():
 
 
 def test_claude_user_config_target(monkeypatch, tmp_path):
-    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+    from agent_toolkit_cli.harness_adapters.claude import ClaudeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     a = ClaudeAdapter()
@@ -50,7 +50,7 @@ def test_claude_user_config_target(monkeypatch, tmp_path):
 
 def test_claude_project_config_target_requires_file(tmp_path):
     """Project target only set when .mcp.json exists at project_root."""
-    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+    from agent_toolkit_cli.harness_adapters.claude import ClaudeAdapter
 
     proj = tmp_path / "p"
     proj.mkdir()
@@ -64,7 +64,7 @@ def test_claude_project_config_target_requires_file(tmp_path):
 
 def test_claude_can_install_accepts_all_transports():
     """Claude supports stdio/sse/http natively — adapter does not refuse any."""
-    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+    from agent_toolkit_cli.harness_adapters.claude import ClaudeAdapter
 
     a = ClaudeAdapter()
     a.can_install(_make_entry(transport="stdio"))  # no exception
@@ -75,7 +75,7 @@ def test_claude_can_install_accepts_all_transports():
 def test_claude_diff_creates_file_when_missing(monkeypatch, tmp_path):
     """No .claude.json on disk → one create-action with rendered bytes."""
     import json
-    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+    from agent_toolkit_cli.harness_adapters.claude import ClaudeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     a = ClaudeAdapter()
@@ -103,7 +103,7 @@ def test_claude_diff_preserves_other_top_level_keys(monkeypatch, tmp_path):
     """Adding an MCP to a .claude.json with other settings yields one update;
     the other top-level keys (theme, numStartups) survive."""
     import json
-    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+    from agent_toolkit_cli.harness_adapters.claude import ClaudeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".claude.json"
@@ -126,7 +126,7 @@ def test_claude_diff_preserves_other_top_level_keys(monkeypatch, tmp_path):
 
 def test_claude_diff_unchanged_when_aligned(monkeypatch, tmp_path):
     """If on-disk already matches the desired render, diff returns []."""
-    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+    from agent_toolkit_cli.harness_adapters.claude import ClaudeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".claude.json"
@@ -143,7 +143,7 @@ def test_claude_diff_unchanged_when_aligned(monkeypatch, tmp_path):
 def test_claude_unlink_removes_managed_entry_via_previously_allowed(monkeypatch, tmp_path):
     """unlink semantics: entries=[], previously_allowed={'context7'} → removes context7."""
     import json
-    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+    from agent_toolkit_cli.harness_adapters.claude import ClaudeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".claude.json"
@@ -164,7 +164,7 @@ def test_claude_unlink_removes_managed_entry_via_previously_allowed(monkeypatch,
 def test_claude_unlink_does_not_touch_handrolled_entries(monkeypatch, tmp_path):
     """Names not in previously_allowed | desired are hand-rolled — preserved."""
     import json
-    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+    from agent_toolkit_cli.harness_adapters.claude import ClaudeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".claude.json"
@@ -196,7 +196,7 @@ def test_claude_unlink_does_not_touch_handrolled_entries(monkeypatch, tmp_path):
 def test_claude_link_unlink_round_trip_idempotent(monkeypatch, tmp_path):
     """Source with hand-rolled entry → link unrelated MCP → unlink → structurally equal."""
     import json
-    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+    from agent_toolkit_cli.harness_adapters.claude import ClaudeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".claude.json"
@@ -229,7 +229,7 @@ def test_claude_link_unlink_round_trip_idempotent(monkeypatch, tmp_path):
 
 def test_claude_list_installed_returns_all_mcp_server_names(monkeypatch, tmp_path):
     import json
-    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+    from agent_toolkit_cli.harness_adapters.claude import ClaudeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".claude.json"
@@ -244,7 +244,7 @@ def test_claude_list_installed_returns_all_mcp_server_names(monkeypatch, tmp_pat
 
 
 def test_claude_list_installed_missing_file_returns_empty(monkeypatch, tmp_path):
-    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+    from agent_toolkit_cli.harness_adapters.claude import ClaudeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     a = ClaudeAdapter()
@@ -252,7 +252,7 @@ def test_claude_list_installed_missing_file_returns_empty(monkeypatch, tmp_path)
 
 
 def test_claude_entry_drift_false_when_aligned(monkeypatch, tmp_path):
-    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+    from agent_toolkit_cli.harness_adapters.claude import ClaudeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".claude.json"
@@ -265,7 +265,7 @@ def test_claude_entry_drift_false_when_aligned(monkeypatch, tmp_path):
 
 
 def test_claude_entry_drift_true_after_hand_edit(monkeypatch, tmp_path):
-    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+    from agent_toolkit_cli.harness_adapters.claude import ClaudeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".claude.json"
@@ -283,7 +283,7 @@ def test_claude_entry_drift_true_after_hand_edit(monkeypatch, tmp_path):
 
 def test_claude_re_link_byte_identical_when_already_linked(monkeypatch, tmp_path):
     """AC #2 analogue: re-running link with same allow-list yields no write."""
-    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+    from agent_toolkit_cli.harness_adapters.claude import ClaudeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".claude.json"
@@ -298,7 +298,7 @@ def test_claude_re_link_byte_identical_when_already_linked(monkeypatch, tmp_path
 
 def test_claude_diff_handles_http_transport(monkeypatch, tmp_path):
     import json
-    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+    from agent_toolkit_cli.harness_adapters.claude import ClaudeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     a = ClaudeAdapter()
@@ -320,7 +320,7 @@ def test_claude_diff_handles_http_transport(monkeypatch, tmp_path):
 
 def test_claude_diff_handles_sse_transport(monkeypatch, tmp_path):
     import json
-    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+    from agent_toolkit_cli.harness_adapters.claude import ClaudeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     a = ClaudeAdapter()
@@ -335,8 +335,8 @@ def test_claude_diff_handles_sse_transport(monkeypatch, tmp_path):
 
 def test_claude_can_install_refuses_remote_without_url():
     """spec.transport=http with no spec.url → CannotInstall."""
-    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
-    from agent_toolkit.harness_adapters.base import CannotInstall
+    from agent_toolkit_cli.harness_adapters.claude import ClaudeAdapter
+    from agent_toolkit_cli.harness_adapters.base import CannotInstall
 
     a = ClaudeAdapter()
     # can_install accepts everything — the refusal lives in _build_entry_dict,
@@ -350,7 +350,7 @@ def test_claude_can_install_refuses_remote_without_url():
 def test_claude_project_scope_round_trip(tmp_path):
     """Project-scope mutation against `<proj>/.mcp.json`."""
     import json
-    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+    from agent_toolkit_cli.harness_adapters.claude import ClaudeAdapter
 
     proj = tmp_path / "p"
     proj.mkdir()
@@ -367,8 +367,8 @@ def test_claude_project_scope_round_trip(tmp_path):
 
 def test_claude_diff_raises_cannot_install_when_stdio_command_missing(monkeypatch, tmp_path):
     """stdio entry with no command in inner_config → CannotInstall via diff()."""
-    from agent_toolkit.harness_adapters.base import CannotInstall, McpEntry
-    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+    from agent_toolkit_cli.harness_adapters.base import CannotInstall, McpEntry
+    from agent_toolkit_cli.harness_adapters.claude import ClaudeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     a = ClaudeAdapter()
@@ -383,8 +383,8 @@ def test_claude_diff_raises_cannot_install_when_stdio_command_missing(monkeypatc
 
 def test_claude_diff_raises_cannot_install_when_env_not_dict(monkeypatch, tmp_path):
     """inner_config.env must be a dict — list (or any non-dict) → CannotInstall."""
-    from agent_toolkit.harness_adapters.base import CannotInstall, McpEntry
-    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+    from agent_toolkit_cli.harness_adapters.base import CannotInstall, McpEntry
+    from agent_toolkit_cli.harness_adapters.claude import ClaudeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     a = ClaudeAdapter()
@@ -401,7 +401,7 @@ def test_claude_entry_drift_false_when_entry_not_installed(monkeypatch, tmp_path
     """entry_drift returns False when the entry's name is absent on disk —
     callers use list_installed for presence; entry_drift reports drift only."""
     import json
-    from agent_toolkit.harness_adapters.claude import ClaudeAdapter
+    from agent_toolkit_cli.harness_adapters.claude import ClaudeAdapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / ".claude.json"

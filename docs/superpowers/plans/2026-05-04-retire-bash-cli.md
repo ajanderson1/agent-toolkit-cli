@@ -11,9 +11,9 @@
 
 Three files, mechanical replace `bin/agent-toolkit` → `agent-toolkit`:
 
-- `src/agent_toolkit/inventory.py` lines 164-165
-- `src/agent_toolkit/doctor/symlinks.py` line 101
-- `src/agent_toolkit/doctor/conventions.py` line 60
+- `src/agent_toolkit_cli/inventory.py` lines 164-165
+- `src/agent_toolkit_cli/doctor/symlinks.py` line 101
+- `src/agent_toolkit_cli/doctor/conventions.py` line 60
 
 **Run:** `pytest tests/test_inventory.py tests/doctor -q` → expect `test_inventory.py` line 66 to fail (asserts the old string). Good.
 
@@ -53,7 +53,7 @@ Remove the `bats:` job (lines 17-24). Keep the `pytest:` job.
 
 Three substantive changes:
 
-1. **Opening paragraph** (line 3): `"The bash+Python CLI (\`bin/agent-toolkit\`, \`src/agent_toolkit\`) and the Textual TUI ..."` → `"The Python CLI (\`src/agent_toolkit\`) and the Textual TUI ..."`.
+1. **Opening paragraph** (line 3): `"The bash+Python CLI (\`bin/agent-toolkit\`, \`src/agent_toolkit_cli\`) and the Textual TUI ..."` → `"The Python CLI (\`src/agent_toolkit_cli\`) and the Textual TUI ..."`.
 2. **Code map** (lines 31-50): drop the `bin/agent-toolkit` and `bin/lib/` entries. Keep everything else.
 3. **Layered contract** rule 6 (line 59): delete the `"6. **Bash CLI** is for filesystem operations (symlinks). Stays zero-dep."` line entirely.
 4. **Development workflow** (lines 64-67): drop the `bats tests/bats` line.

@@ -23,11 +23,11 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
-from agent_toolkit._translators import TRANSLATORS, _description, _render, _wrapper_block
-from agent_toolkit.cli import main
-from agent_toolkit.commands._link_lib import _render_to_cache, _scope_cache_root
-from agent_toolkit.commands._list_json import _build_inventory
-from agent_toolkit.walker import AssetRecord
+from agent_toolkit_cli._translators import TRANSLATORS, _description, _render, _wrapper_block
+from agent_toolkit_cli.cli import main
+from agent_toolkit_cli.commands._link_lib import _render_to_cache, _scope_cache_root
+from agent_toolkit_cli.commands._list_json import _build_inventory
+from agent_toolkit_cli.walker import AssetRecord
 
 
 # ---------------------------------------------------------------------------
@@ -39,7 +39,7 @@ def _stub_codex_skill_translator(record: AssetRecord, body: str) -> bytes:
     """Stub: PR-C will replace with the real codex/skill translator."""
     fm = {
         "description": _description(record),
-        "agent_toolkit": _wrapper_block(record),
+        "agent_toolkit_cli": _wrapper_block(record),
     }
     return _render(fm, body)
 
@@ -183,7 +183,7 @@ def test_link_user_codex_skill_translates_and_directory_symlinks(
     # Read SKILL.md through the slot — the harness's view.
     via_slot = (slot / "SKILL.md").read_text()
     assert "description: demo-skill skill." in via_slot
-    assert "agent_toolkit:" in via_slot
+    assert "agent_toolkit_cli:" in via_slot
 
 
 def test_unlink_user_codex_skill_removes_slot_and_cache_directory(

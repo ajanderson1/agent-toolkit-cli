@@ -1,6 +1,6 @@
 from click.testing import CliRunner
 
-from agent_toolkit.cli import main
+from agent_toolkit_cli.cli import main
 
 
 def test_doctor_runs_and_groups_appear(tmp_path):

@@ -19,7 +19,7 @@ See `assets/verification/40-c/codex-frontmatter-empirical.md`. Three SKILL.md sh
 | Shape | Loads | Registered |
 |---|---|---|
 | Bare (`description:` only) | ✓ | ✓ |
-| Translated (`description:` + `agent_toolkit:` wrapper) | ✓ | ✓ |
+| Translated (`description:` + `agent_toolkit_cli:` wrapper) | ✓ | ✓ |
 | Original v1alpha2 (no top-level `description`) | ✗ — `missing field 'description'` | ✗ |
 
 The translated shape is the right target: minimal codex requirement met, full toolkit wrapper preserved for round-tripping.
@@ -29,7 +29,7 @@ The translated shape is the right target: minimal codex requirement met, full to
 ```yaml
 ---
 description: <metadata.description>
-agent_toolkit:
+agent_toolkit_cli:
   apiVersion: <apiVersion>
   metadata: <metadata>
   spec: <spec>

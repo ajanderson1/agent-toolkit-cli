@@ -1,5 +1,5 @@
 """Tests for ingest STAGE."""
-from agent_toolkit.ingest.types import Proposal
+from agent_toolkit_cli.ingest.types import Proposal
 
 
 def _proposal(slug="alpha"):
@@ -12,7 +12,7 @@ def _proposal(slug="alpha"):
 
 
 def test_stage_creates_staging_dir(tmp_path):
-    from agent_toolkit.ingest.stage import stage_proposal
+    from agent_toolkit_cli.ingest.stage import stage_proposal
     snap = tmp_path / "snap"
     snap.mkdir()
     (snap / "SKILL.md").write_text("---\nname: alpha\n---\n# alpha\n")
@@ -24,7 +24,7 @@ def test_stage_creates_staging_dir(tmp_path):
 
 
 def test_stage_md_records_metadata(tmp_path):
-    from agent_toolkit.ingest.stage import stage_proposal
+    from agent_toolkit_cli.ingest.stage import stage_proposal
     snap = tmp_path / "snap"
     snap.mkdir()
     (snap / "SKILL.md").write_text("# x\n")
@@ -37,7 +37,7 @@ def test_stage_md_records_metadata(tmp_path):
 
 
 def test_stage_overwrite_clears_previous(tmp_path):
-    from agent_toolkit.ingest.stage import stage_proposal, abort_staging
+    from agent_toolkit_cli.ingest.stage import stage_proposal, abort_staging
     snap = tmp_path / "snap"
     snap.mkdir()
     (snap / "SKILL.md").write_text("# x\n")

@@ -1,6 +1,6 @@
 """agent-toolkit-tui — Textual cockpit for the agent-toolkit CLI.
 
-Sister to bin/agent-toolkit. Read side imports agent_toolkit; write side shells
+Sister to bin/agent-toolkit. Read side imports agent_toolkit_cli; write side shells
 out to the bash CLI. Never touches the filesystem directly.
 """
 from __future__ import annotations

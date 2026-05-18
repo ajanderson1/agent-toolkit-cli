@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import pytest
 
-from agent_toolkit.doctor import allowlist_audit
-from agent_toolkit.doctor.result import Status
+from agent_toolkit_cli.doctor import allowlist_audit
+from agent_toolkit_cli.doctor.result import Status
 
 
 @pytest.fixture

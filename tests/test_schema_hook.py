@@ -7,7 +7,7 @@ from pathlib import Path
 import jsonschema
 import pytest
 
-SCHEMA_PATH = Path(__file__).parent.parent / "src/agent_toolkit/_schemas/asset-frontmatter.v1alpha2.json"
+SCHEMA_PATH = Path(__file__).parent.parent / "src/agent_toolkit_cli/_schemas/asset-frontmatter.v1alpha2.json"
 
 
 @pytest.fixture

@@ -6,7 +6,7 @@
 
 **Goal:** Add a fourth projection mechanism (`translate`) so the CLI can render per-harness flavored markdown into a per-scope cache, then symlink the harness slot to the cache. Wire up `(opencode, agent)` and `(opencode, command)` cells.
 
-**Architecture:** Flat dispatch dict (`TRANSLATORS: dict[(harness, kind), Callable]`) consulted inside `maybe_link`. When a translator exists, render bytes → write cache atomically → symlink slot to cache. On `unlink`, when the slot's symlink target is inside `<scope>/.agent-toolkit-cache/`, delete the cache file alongside the slot symlink. Translator output is native top-level keys (`description`, `mode: subagent`) plus a nested `agent_toolkit:` block preserving the SSOT wrapper.
+**Architecture:** Flat dispatch dict (`TRANSLATORS: dict[(harness, kind), Callable]`) consulted inside `maybe_link`. When a translator exists, render bytes → write cache atomically → symlink slot to cache. On `unlink`, when the slot's symlink target is inside `<scope>/.agent-toolkit-cache/`, delete the cache file alongside the slot symlink. Translator output is native top-level keys (`description`, `mode: subagent`) plus a nested `agent_toolkit_cli:` block preserving the SSOT wrapper.
 
 **Tech Stack:** Python 3.13, Click 8.x, PyYAML, pytest, lefthook (pytest + schema-vendor-check pre-commit). No new dependencies.
 
@@ -16,7 +16,7 @@
 
 **Existing behavior to preserve:**
 
-- `_link_lib.maybe_link` (current `src/agent_toolkit/commands/_link_lib.py:150-195`) creates a symlink named `target_dir / slug` (no extension) pointing at the source asset path computed by `_expected_source(asset_path, kind)`. This works for Claude (slot `~/.claude/agents/<slug>` symlinks to source `<slug>.md`) because Claude reads through the symlink. The translator path will need to **diverge from this convention** — see CC1 below.
+- `_link_lib.maybe_link` (current `src/agent_toolkit_cli/commands/_link_lib.py:150-195`) creates a symlink named `target_dir / slug` (no extension) pointing at the source asset path computed by `_expected_source(asset_path, kind)`. This works for Claude (slot `~/.claude/agents/<slug>` symlinks to source `<slug>.md`) because Claude reads through the symlink. The translator path will need to **diverge from this convention** — see CC1 below.
 - `_link_lib._asset_harnesses(asset_path, kind)` resolves what harnesses an asset declares; this gates whether `maybe_link` proceeds at all. Translators must run AFTER this gate, never before.
 - Counters (`created`/`updated`/`unchanged`/`would_link`/`would_unlink`/`removed`) are incremented based on symlink-equality checks. The translator path must keep these correct.
 - `_PROJECT_TARGETS` in `_support.py` uses `.opencode/skills` (no `.config/`) for project-scope OpenCode. Project-scope cache must follow the same rule.
@@ -45,13 +45,13 @@ Subdirectory by kind, then `<slug>.md`. Note: project-scope drops the `.config/`
 
 - Use `yaml.safe_dump(..., sort_keys=False, default_flow_style=False)` to ensure stable, human-readable output.
 - Wrap output as `---\n<yaml>---\n<body>` — body comes from the source asset with its own frontmatter stripped.
-- Body extraction: reuse the existing `walker._strip_frontmatter` (private, lives in `src/agent_toolkit/walker.py:164`). It handles `\r\n` normalisation and tolerates absent frontmatter. Re-export it as `strip_frontmatter` from walker for translator use.
+- Body extraction: reuse the existing `walker._strip_frontmatter` (private, lives in `src/agent_toolkit_cli/walker.py:164`). It handles `\r\n` normalisation and tolerates absent frontmatter. Re-export it as `strip_frontmatter` from walker for translator use.
 - The output bytes MUST be byte-identical when rendered twice from the same input (round-trip stability) — this is what makes the `unchanged` symlink-equality check work.
 - Trailing newline: the body extracted by `_strip_frontmatter` already ends with whatever the source ended with. Don't add a second `\n`. Just concatenate.
 
 ### CC4 — module placement
 
-Translator module: `src/agent_toolkit/_translators.py` (leading underscore = internal-to-the-package). The `TRANSLATORS` symbol is the public surface within the package; tests and `_link_lib` import it directly.
+Translator module: `src/agent_toolkit_cli/_translators.py` (leading underscore = internal-to-the-package). The `TRANSLATORS` symbol is the public surface within the package; tests and `_link_lib` import it directly.
 
 ---
 
@@ -59,14 +59,14 @@ Translator module: `src/agent_toolkit/_translators.py` (leading underscore = int
 
 **New files:**
 
-- `src/agent_toolkit/_translators.py` — `TRANSLATORS` dict, two translator functions, one private render helper.
+- `src/agent_toolkit_cli/_translators.py` — `TRANSLATORS` dict, two translator functions, one private render helper.
 - `tests/test_translators.py` — unit tests for translator output and round-trip stability.
 
 **Modified files:**
 
-- `src/agent_toolkit/walker.py` — re-export `_strip_frontmatter` as `strip_frontmatter` (one-line alias).
-- `src/agent_toolkit/commands/_link_lib.py` — add `_render_to_cache`, `_translated_slot_filename`, `_prune_translated_slot`; modify `maybe_link` to dispatch through `TRANSLATORS`.
-- `src/agent_toolkit/commands/unlink.py` — call `_prune_translated_slot` for slots whose symlink target is inside the per-scope cache.
+- `src/agent_toolkit_cli/walker.py` — re-export `_strip_frontmatter` as `strip_frontmatter` (one-line alias).
+- `src/agent_toolkit_cli/commands/_link_lib.py` — add `_render_to_cache`, `_translated_slot_filename`, `_prune_translated_slot`; modify `maybe_link` to dispatch through `TRANSLATORS`.
+- `src/agent_toolkit_cli/commands/unlink.py` — call `_prune_translated_slot` for slots whose symlink target is inside the per-scope cache.
 - `docs/agent-toolkit/harness-matrix.md` — flip `(opencode, agent)` and `(opencode, command)` cells to `translate`; add Translation subsection under Mechanisms.
 - `tests/test_harness_matrix.py` — add `TestTranslateParity` class.
 
@@ -90,21 +90,21 @@ uv sync --all-extras   # ensure TUI extras are installed so pytest collects clea
 ### Task 1: Re-export `strip_frontmatter` from walker (prep)
 
 **Files:**
-- Modify: `src/agent_toolkit/walker.py:164`
+- Modify: `src/agent_toolkit_cli/walker.py:164`
 
 This is a tiny prep step: the translator module needs to extract markdown body from a source asset. The walker already has `_strip_frontmatter`; we just expose it as a public name.
 
 - [ ] **Step 1: Read the existing helper**
 
 ```bash
-grep -n "_strip_frontmatter" src/agent_toolkit/walker.py
+grep -n "_strip_frontmatter" src/agent_toolkit_cli/walker.py
 ```
 
 Confirm it's at line 164 with signature `def _strip_frontmatter(text: str) -> str:`.
 
 - [ ] **Step 2: Add the alias just above it**
 
-In `src/agent_toolkit/walker.py`, immediately before the `def _strip_frontmatter(...)` definition (around line 163), add:
+In `src/agent_toolkit_cli/walker.py`, immediately before the `def _strip_frontmatter(...)` definition (around line 163), add:
 
 ```python
 def strip_frontmatter(text: str) -> str:
@@ -125,7 +125,7 @@ Expected: green, same count as before.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add src/agent_toolkit/walker.py
+git add src/agent_toolkit_cli/walker.py
 git commit -m "refactor(walker): expose strip_frontmatter as public helper"
 ```
 
@@ -143,13 +143,13 @@ Drive the translator function from a test that asserts the required output shape
 Create `tests/test_translators.py`:
 
 ```python
-"""Unit tests for translator functions in agent_toolkit._translators."""
+"""Unit tests for translator functions in agent_toolkit_cli._translators."""
 from __future__ import annotations
 
 import yaml
 
-from agent_toolkit._translators import TRANSLATORS, _translate_opencode_agent
-from agent_toolkit.walker import Asset, AssetRecord
+from agent_toolkit_cli._translators import TRANSLATORS, _translate_opencode_agent
+from agent_toolkit_cli.walker import Asset, AssetRecord
 
 
 def _make_record(slug: str, description: str, harnesses: list[str]) -> AssetRecord:
@@ -195,9 +195,9 @@ def test_translate_opencode_agent_preserves_wrapper_under_agent_toolkit_key():
     end_idx = text.find("\n---\n", 4)
     fm = yaml.safe_load(text[4:end_idx])
 
-    assert fm["agent_toolkit"]["apiVersion"] == "agent-toolkit/v1alpha2"
-    assert fm["agent_toolkit"]["metadata"]["name"] == "foo"
-    assert fm["agent_toolkit"]["spec"]["harnesses"] == ["claude", "opencode"]
+    assert fm["agent_toolkit_cli"]["apiVersion"] == "agent-toolkit/v1alpha2"
+    assert fm["agent_toolkit_cli"]["metadata"]["name"] == "foo"
+    assert fm["agent_toolkit_cli"]["spec"]["harnesses"] == ["claude", "opencode"]
 
 
 def test_translate_opencode_agent_appends_body():
@@ -230,18 +230,18 @@ def test_translators_dict_has_opencode_agent_entry():
 uv run pytest tests/test_translators.py -x -q
 ```
 
-Expected: collection error or 5 failures — `agent_toolkit._translators` doesn't exist yet.
+Expected: collection error or 5 failures — `agent_toolkit_cli._translators` doesn't exist yet.
 
 ---
 
 ### Task 3: Minimal `_translators.py` with the agent translator (green)
 
 **Files:**
-- Create: `src/agent_toolkit/_translators.py`
+- Create: `src/agent_toolkit_cli/_translators.py`
 
 - [ ] **Step 1: Write the minimal implementation**
 
-Create `src/agent_toolkit/_translators.py`:
+Create `src/agent_toolkit_cli/_translators.py`:
 
 ```python
 """Per-(harness, kind) translators producing harness-flavored markdown bytes.
@@ -260,7 +260,7 @@ from typing import Callable
 
 import yaml
 
-from agent_toolkit.walker import AssetRecord
+from agent_toolkit_cli.walker import AssetRecord
 
 
 def _render(frontmatter: dict, body: str) -> bytes:
@@ -277,7 +277,7 @@ def _render(frontmatter: dict, body: str) -> bytes:
 
 
 def _wrapper_block(record: AssetRecord) -> dict:
-    """Verbatim subset of the source frontmatter, preserved under `agent_toolkit:`."""
+    """Verbatim subset of the source frontmatter, preserved under `agent_toolkit_cli:`."""
     md = record.metadata
     block: dict = {"apiVersion": md.get("apiVersion")}
     if "metadata" in md:
@@ -295,7 +295,7 @@ def _translate_opencode_agent(record: AssetRecord, body: str) -> bytes:
     fm = {
         "description": _description(record),
         "mode": "subagent",
-        "agent_toolkit": _wrapper_block(record),
+        "agent_toolkit_cli": _wrapper_block(record),
     }
     return _render(fm, body)
 
@@ -316,7 +316,7 @@ Expected: 5 passes.
 - [ ] **Step 3: Commit**
 
 ```bash
-git add src/agent_toolkit/_translators.py tests/test_translators.py
+git add src/agent_toolkit_cli/_translators.py tests/test_translators.py
 git commit -m "feat(translators): add opencode agent translator (red→green)"
 ```
 
@@ -332,7 +332,7 @@ git commit -m "feat(translators): add opencode agent translator (red→green)"
 Append to `tests/test_translators.py`:
 
 ```python
-from agent_toolkit._translators import _translate_opencode_command
+from agent_toolkit_cli._translators import _translate_opencode_command
 
 
 def _make_command_record(slug: str, description: str) -> AssetRecord:
@@ -357,7 +357,7 @@ def test_translate_opencode_command_has_description_and_no_mode():
     fm = yaml.safe_load(text[4:end_idx])
     assert fm["description"] == "Explain something."
     assert "mode" not in fm
-    assert fm["agent_toolkit"]["metadata"]["name"] == "explain"
+    assert fm["agent_toolkit_cli"]["metadata"]["name"] == "explain"
 
 
 def test_translate_opencode_command_round_trip_stable():
@@ -385,17 +385,17 @@ Expected: 3 failures (`_translate_opencode_command` not defined, key not in `TRA
 ### Task 5: Implement `_translate_opencode_command` (green)
 
 **Files:**
-- Modify: `src/agent_toolkit/_translators.py`
+- Modify: `src/agent_toolkit_cli/_translators.py`
 
 - [ ] **Step 1: Add the function**
 
-In `src/agent_toolkit/_translators.py`, add **before** the `TRANSLATORS` definition:
+In `src/agent_toolkit_cli/_translators.py`, add **before** the `TRANSLATORS` definition:
 
 ```python
 def _translate_opencode_command(record: AssetRecord, body: str) -> bytes:
     fm = {
         "description": _description(record),
-        "agent_toolkit": _wrapper_block(record),
+        "agent_toolkit_cli": _wrapper_block(record),
     }
     return _render(fm, body)
 ```
@@ -420,7 +420,7 @@ Expected: 8 passes (5 from Task 3 + 3 from Task 4).
 - [ ] **Step 3: Commit**
 
 ```bash
-git add src/agent_toolkit/_translators.py tests/test_translators.py
+git add src/agent_toolkit_cli/_translators.py tests/test_translators.py
 git commit -m "feat(translators): add opencode command translator"
 ```
 
@@ -440,8 +440,8 @@ Append to `tests/test_translators.py`:
 ```python
 import pytest
 
-from agent_toolkit._repo_resolution import resolve_toolkit_root
-from agent_toolkit.walker import discover_assets, load_asset_record, strip_frontmatter
+from agent_toolkit_cli._repo_resolution import resolve_toolkit_root
+from agent_toolkit_cli.walker import discover_assets, load_asset_record, strip_frontmatter
 
 
 @pytest.mark.parametrize("kind,harness", [("agent", "opencode"), ("command", "opencode")])
@@ -550,7 +550,7 @@ def test_link_user_opencode_agent_translates_and_symlinks(tmp_path, monkeypatch)
     allowlist.write_text("[agents]\nfoo\n", encoding="utf-8")
 
     from click.testing import CliRunner
-    from agent_toolkit.cli import main
+    from agent_toolkit_cli.cli import main
 
     runner = CliRunner()
     result = runner.invoke(
@@ -569,7 +569,7 @@ def test_link_user_opencode_agent_translates_and_symlinks(tmp_path, monkeypatch)
     assert text.startswith("---\n")
     assert "mode: subagent\n" in text
     assert "description: Foo description." in text
-    assert "agent_toolkit:" in text
+    assert "agent_toolkit_cli:" in text
     assert text.endswith("# Foo agent body\n")
 ```
 
@@ -588,8 +588,8 @@ Expected: failure — `(opencode, agent)` is currently `unsupported (gap)`, so `
 ### Task 8: Wire translation into `_support.py` and `maybe_link`
 
 **Files:**
-- Modify: `src/agent_toolkit/_support.py:23-46`
-- Modify: `src/agent_toolkit/commands/_link_lib.py:150-195`
+- Modify: `src/agent_toolkit_cli/_support.py:23-46`
+- Modify: `src/agent_toolkit_cli/commands/_link_lib.py:150-195`
 
 This is the largest task. It does three things in one logical step (they're tightly coupled — splitting them creates an inconsistent intermediate state):
 
@@ -617,11 +617,11 @@ These additions place the translated slots into `SUPPORTED_PAIRS`, which `maybe_
 
 - [ ] **Step 2: Add helpers to `_link_lib.py`**
 
-Near the top of `src/agent_toolkit/commands/_link_lib.py`, after the existing imports and `HARNESS_HOMES` constant, add:
+Near the top of `src/agent_toolkit_cli/commands/_link_lib.py`, after the existing imports and `HARNESS_HOMES` constant, add:
 
 ```python
-from agent_toolkit._translators import TRANSLATORS
-from agent_toolkit.walker import load_asset_record, strip_frontmatter
+from agent_toolkit_cli._translators import TRANSLATORS
+from agent_toolkit_cli.walker import load_asset_record, strip_frontmatter
 
 
 CACHE_DIR_NAME = ".agent-toolkit-cache"
@@ -699,7 +699,7 @@ def _asset_for_record(asset_path: Path, kind: str, slug: str) -> Asset:
     return Asset(kind=kind, slug=slug, path=asset_path)
 ```
 
-(The `Asset` import is already present at the existing `from agent_toolkit.walker import Asset, AssetRecord, ...` line.)
+(The `Asset` import is already present at the existing `from agent_toolkit_cli.walker import Asset, AssetRecord, ...` line.)
 
 - [ ] **Step 3: Modify `maybe_link` to dispatch through `TRANSLATORS`**
 
@@ -837,7 +837,7 @@ Expected: all green. If any test in `tests/test_link*.py` regressed, it's likely
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/agent_toolkit/_support.py src/agent_toolkit/commands/_link_lib.py tests/test_link.py
+git add src/agent_toolkit_cli/_support.py src/agent_toolkit_cli/commands/_link_lib.py tests/test_link.py
 git commit -m "feat(linker): wire translate mechanism into maybe_link
 
 Adds (opencode, agent) and (opencode, command) to _USER_TARGETS /
@@ -1041,8 +1041,8 @@ Expected: failure — the slot symlink is removed but the cache file lingers.
 ### Task 13: Implement `_prune_translated_slot` and wire into unlink
 
 **Files:**
-- Modify: `src/agent_toolkit/commands/_link_lib.py`
-- Modify: `src/agent_toolkit/commands/unlink.py`
+- Modify: `src/agent_toolkit_cli/commands/_link_lib.py`
+- Modify: `src/agent_toolkit_cli/commands/unlink.py`
 
 - [ ] **Step 1: Add the helper to `_link_lib.py`**
 
@@ -1154,7 +1154,7 @@ Expected: all green. The orphan-sweep change touches the symlink-projected path 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/agent_toolkit/commands/_link_lib.py
+git add src/agent_toolkit_cli/commands/_link_lib.py
 git commit -m "feat(unlink): prune translated cache files alongside slots"
 ```
 
@@ -1177,8 +1177,8 @@ Current:
 
 Replace with:
 ```
-| **agent** | symlink → `~/.claude/agents/<slug>.md` | unsupported (by design) — Codex has no `~/.codex/agents/` drop-in; agents are plugin-internal, distributed via `codex plugin marketplace add` | translate → `~/.config/opencode/.agent-toolkit-cache/agent/<slug>.md` (slot at `~/.config/opencode/agents/<slug>.md` symlinks to cache; renderer injects `mode: subagent` and preserves wrapper under `agent_toolkit:`) | symlink → `~/.pi/agent/agents/<slug>.md` |
-| **command** | symlink → `~/.claude/commands/<slug>.md` | unsupported (by design) — Codex has no `~/.codex/commands/`; commands surface as `$skill` invocations from inside skills | translate → `~/.config/opencode/.agent-toolkit-cache/command/<slug>.md` (slot at `~/.config/opencode/commands/<slug>.md` symlinks to cache; renderer emits native `description` and preserves wrapper under `agent_toolkit:`) | unsupported (by design) — Pi has no command concept |
+| **agent** | symlink → `~/.claude/agents/<slug>.md` | unsupported (by design) — Codex has no `~/.codex/agents/` drop-in; agents are plugin-internal, distributed via `codex plugin marketplace add` | translate → `~/.config/opencode/.agent-toolkit-cache/agent/<slug>.md` (slot at `~/.config/opencode/agents/<slug>.md` symlinks to cache; renderer injects `mode: subagent` and preserves wrapper under `agent_toolkit_cli:`) | symlink → `~/.pi/agent/agents/<slug>.md` |
+| **command** | symlink → `~/.claude/commands/<slug>.md` | unsupported (by design) — Codex has no `~/.codex/commands/`; commands surface as `$skill` invocations from inside skills | translate → `~/.config/opencode/.agent-toolkit-cache/command/<slug>.md` (slot at `~/.config/opencode/commands/<slug>.md` symlinks to cache; renderer emits native `description` and preserves wrapper under `agent_toolkit_cli:`) | unsupported (by design) — Pi has no command concept |
 ```
 
 - [ ] **Step 2: Add a Translation subsection under Mechanisms**
@@ -1197,7 +1197,7 @@ then the harness slot symlinks to the cache file. Cache layout:
 | project | `<project>/.<harness>/.agent-toolkit-cache/<kind>/<slug>.md` |
 
 The output preserves the toolkit's wrapper frontmatter under a nested
-`agent_toolkit:` key (with `apiVersion`, `metadata`, `spec`) for SSOT
+`agent_toolkit_cli:` key (with `apiVersion`, `metadata`, `spec`) for SSOT
 traceability — the harness ignores this key, but `agent-toolkit` and
 human readers can trace any cache file back to its source asset.
 
@@ -1239,7 +1239,7 @@ At the end of `tests/test_harness_matrix.py`, add:
 ```python
 import re as _re
 
-from agent_toolkit._translators import TRANSLATORS
+from agent_toolkit_cli._translators import TRANSLATORS
 
 
 _TRANSLATE_PATH_RE = _re.compile(
@@ -1335,7 +1335,7 @@ Expected: `OK`.
 - [ ] **Step 3: Run schema-vendor-check explicitly**
 
 ```bash
-diff schemas/asset-frontmatter.v1alpha2.json src/agent_toolkit/_schemas/asset-frontmatter.v1alpha2.json
+diff schemas/asset-frontmatter.v1alpha2.json src/agent_toolkit_cli/_schemas/asset-frontmatter.v1alpha2.json
 ```
 
 Expected: no output (schemas in sync — we didn't touch them).
@@ -1359,8 +1359,8 @@ Quick recipe:
 # From the worktree
 uv run python -c "
 from pathlib import Path
-from agent_toolkit._translators import _translate_opencode_agent
-from agent_toolkit.walker import Asset, AssetRecord, strip_frontmatter
+from agent_toolkit_cli._translators import _translate_opencode_agent
+from agent_toolkit_cli.walker import Asset, AssetRecord, strip_frontmatter
 
 src = Path('/Users/ajanderson/GitHub/agent-toolkit/agents/surface.md')
 text = src.read_text()
@@ -1384,7 +1384,7 @@ opencode agent list
 rm ~/.config/opencode/agents/__phase3_probe_surface.md
 ```
 
-If any error or wrong classification: STOP, document the failure, revise the spec (probably drop the nested `agent_toolkit:` block per the spec's risk fallback) before proceeding.
+If any error or wrong classification: STOP, document the failure, revise the spec (probably drop the nested `agent_toolkit_cli:` block per the spec's risk fallback) before proceeding.
 
 - [ ] **Gate B: OpenCode command surfacing**
 
@@ -1393,8 +1393,8 @@ Same recipe but for a command:
 ```bash
 uv run python -c "
 from pathlib import Path
-from agent_toolkit._translators import _translate_opencode_command
-from agent_toolkit.walker import Asset, AssetRecord, strip_frontmatter
+from agent_toolkit_cli._translators import _translate_opencode_command
+from agent_toolkit_cli.walker import Asset, AssetRecord, strip_frontmatter
 
 src = Path('/Users/ajanderson/GitHub/agent-toolkit/commands/explain.md')
 text = src.read_text()
@@ -1449,7 +1449,7 @@ gh pr create --title "feat: Phase 3 — translate projection mechanism for OpenC
 - Wires up `(opencode, agent)` and `(opencode, command)` cells. Both flip
   from `unsupported (gap)` to `translate` in the matrix doc.
 - Translator output is native top-level keys (`description`, `mode: subagent`)
-  plus a nested `agent_toolkit:` block preserving the SSOT wrapper.
+  plus a nested `agent_toolkit_cli:` block preserving the SSOT wrapper.
 - `unlink` removes both the slot symlink and the cache file together.
 - Pi is **deferred** to a follow-up — its symlink projection remains as-is
   pending empirical verification.

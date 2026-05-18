@@ -1,11 +1,11 @@
-"""Tests for src/agent_toolkit/_allowlist.py — section routing and YAML read helpers."""
+"""Tests for src/agent_toolkit_cli/_allowlist.py — section routing and YAML read helpers."""
 from __future__ import annotations
 
 from pathlib import Path
 
 import pytest
 
-from agent_toolkit._allowlist import (
+from agent_toolkit_cli._allowlist import (
     SECTIONS,
     kind_to_section,
     section_to_kind,
