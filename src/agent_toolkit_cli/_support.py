@@ -6,7 +6,8 @@ adapter slot needs declaring; consumers (`_link_lib`, `_list_json`,
 `commands/unlink`, `doctor/*`) read from here.
 
 Issue #30: silent-skip on unsupported pairs is now a structured raise.
-Issue #32 tracks closing remaining matrix gaps (e.g. opencode agents).
+Remaining matrix gaps tracked individually: #74 (codex MCP HTTP transport),
+#75 (pi/agent dual-target), #53 (Gemini CLI as fifth harness).
 """
 from __future__ import annotations
 
