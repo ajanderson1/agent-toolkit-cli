@@ -37,7 +37,7 @@ def _locate_cli() -> Path:
 
     raise FileNotFoundError(
         "Cannot locate `agent-toolkit-cli` on PATH. Run `uv tool install agent-toolkit` "
-        "or `uv sync --extra tui` from a source checkout, or set $AGENT_TOOLKIT_CLI to "
+        "or `uv sync` from a source checkout, or set $AGENT_TOOLKIT_CLI to "
         "the script's path."
     )
 

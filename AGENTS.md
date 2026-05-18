@@ -39,7 +39,7 @@ src/agent_toolkit_cli/                 Python package: validator, walker, genera
   commands/                        check, fix, doctor, new, inventory, ingest,
                                    link, unlink, list, diff, _list_json, _yaml_edit.
   generators/                      Pure functions: (assets, repo_state) → string.
-src/agent_toolkit_tui/             Textual TUI (sibling package, [tui] extra).
+src/agent_toolkit_tui/             Textual TUI (sibling package).
 schemas/                           Top-level vendored schema (mirrors _schemas;
                                    pre-commit `schema-vendor-check` keeps both copies in lockstep).
 docs/agent-toolkit/cli.md          Command reference (human-readable).

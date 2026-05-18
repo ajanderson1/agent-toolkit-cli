@@ -408,14 +408,10 @@ agent-toolkit diff project opencode
 
 Launch the Textual cockpit:
 
-    agent-toolkit tui
-
-Requires the optional `tui` extra:
-
-    pip install agent-toolkit[tui]
+    agent-toolkit-cli tui
 
 The TUI is a visual cockpit over `link`/`unlink`/`list`. It never writes to the
-filesystem directly — every mutation goes through `agent-toolkit`. See the
+filesystem directly — every mutation goes through `agent-toolkit-cli`. See the
 TUI design spec at `docs/superpowers/specs/2026-05-03-agent-toolkit-tui-design.md`
 for the full contract.
 

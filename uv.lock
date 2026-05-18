@@ -11,12 +11,8 @@ dependencies = [
     { name = "jsonschema" },
     { name = "pyyaml" },
     { name = "ruamel-yaml" },
-    { name = "tomlkit" },
-]
-
-[package.optional-dependencies]
-tui = [
     { name = "textual" },
+    { name = "tomlkit" },
 ]
 
 [package.dev-dependencies]
@@ -32,10 +28,9 @@ requires-dist = [
     { name = "jsonschema", specifier = ">=4.21" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "ruamel-yaml", specifier = ">=0.18" },
-    { name = "textual", marker = "extra == 'tui'", specifier = ">=0.79" },
+    { name = "textual", specifier = ">=0.79" },
     { name = "tomlkit", specifier = ">=0.13" },
 ]
-provides-extras = ["tui"]
 
 [package.metadata.requires-dev]
 dev = [
