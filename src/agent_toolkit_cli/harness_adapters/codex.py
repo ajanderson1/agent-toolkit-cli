@@ -6,7 +6,10 @@ Ownership rule (manage by name; spec § "five rules"): we own every name in
 `previously_allowed ∪ {e.name for e in entries}`. On-disk tables whose names
 fall outside that union are hand-rolled and preserved verbatim.
 
-Refuses MCPs with `transport != "stdio"` — Codex MCP support is stdio-only.
+Codex MCP supports both stdio and streamable HTTP transports. The toolkit's
+`spec.mcp.transport` ∈ {stdio, http, sse}; stdio maps to `command`/`args`/`env`
+and http maps to `url`/`http_headers` (Codex's TOML field name — toolkit's
+`spec.mcp.headers` is renamed on render). SSE is refused — deprecated upstream.
 """
 from __future__ import annotations
 
@@ -41,11 +44,11 @@ class CodexAdapter:
 
     # ---- pre-flight ----
     def can_install(self, entry: McpEntry) -> None:
-        transport = (entry.mcp_spec or {}).get("transport")
-        if transport != "stdio":
+        transport = (entry.mcp_spec or {}).get("transport") or "stdio"
+        if transport == "sse":
             raise CannotInstall(
-                f"{entry.name}: codex MCP support is stdio-only "
-                f"(spec.mcp.transport={transport!r})"
+                f"{entry.name}: codex does not support SSE transport "
+                f"(use transport=http for streamable HTTP MCPs)"
             )
 
     # ---- introspection ----
@@ -199,12 +202,37 @@ class CodexAdapter:
 
     @staticmethod
     def _build_entry_table(t, entry: McpEntry) -> None:
-        """Populate `t` with the inner-config translated to Codex shape."""
+        """Populate `t` with the inner-config translated to Codex shape.
+
+        stdio → command/args/env keys.
+        http  → url/http_headers keys (Codex's TOML field name for headers).
+        """
         cfg = entry.inner_config or {}
+        spec = entry.mcp_spec or {}
+        transport = spec.get("transport") or "stdio"
+
+        if transport == "http":
+            url = spec.get("url")
+            if not url:
+                raise CannotInstall(
+                    f"{entry.name}: spec.mcp.url required for transport='http'"
+                )
+            t["url"] = url
+            headers = spec.get("headers")
+            if headers:
+                if not isinstance(headers, dict):
+                    raise CannotInstall(
+                        f"{entry.name}: spec.mcp.headers must be a dict, "
+                        f"got {type(headers).__name__}"
+                    )
+                t["http_headers"] = {str(k): str(v) for k, v in headers.items()}
+            return
+
+        # stdio
         cmd = cfg.get("command")
         if cmd is None:
             raise CannotInstall(
-                f"{entry.name}: inner_config.command missing — required for Codex"
+                f"{entry.name}: inner_config.command missing — required for Codex stdio"
             )
         t["command"] = cmd
         if "args" in cfg and cfg["args"]:

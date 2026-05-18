@@ -49,6 +49,8 @@
             "transport":      { "enum": ["stdio", "http", "sse"] },
             "install_method": { "enum": ["npx", "uvx", "docker", "local", "remote"] },
             "command":        { "type": "string" },
+            "url":            { "type": "string", "format": "uri" },
+            "headers":        { "type": "object", "additionalProperties": { "type": "string" } },
             "env":            { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
             "optional_env":   { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
             "prerequisites":  { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
