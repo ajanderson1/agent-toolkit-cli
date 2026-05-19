@@ -18,6 +18,7 @@ from agent_toolkit_cli._repo_resolution import RepoNotFoundError, resolve_toolki
 from agent_toolkit_cli._support import (  # noqa: F401  (re-exported)
     ALL_HARNESSES,
     ALL_KINDS,
+    USER_LINKED_STATUSES,
     _PROJECT_TARGETS,
     _USER_TARGETS,
     slot_dir as _slot_dir,
@@ -429,9 +430,6 @@ def list_json(
     click.echo(json.dumps(out, indent=2))
 
 
-_USER_LINKED_STATUSES = frozenset({"linked", "linked-matches", "linked-drifted"})
-
-
 def user_scope_covered(inventory: dict, *, slug: str, harness: str) -> bool:
     """Return True iff the (slug, harness) user-scope cell is in a linked state.
 
@@ -445,5 +443,5 @@ def user_scope_covered(inventory: dict, *, slug: str, harness: str) -> bool:
                 continue
             if cell.get("scope") != "user":
                 continue
-            return cell.get("status") in _USER_LINKED_STATUSES
+            return cell.get("status") in USER_LINKED_STATUSES
     return False
