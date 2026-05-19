@@ -76,7 +76,7 @@ def test_scope_cache_root_preserves_opencode(tmp_path, monkeypatch):
 
 def test_scope_cache_root_unknown_harness_raises(tmp_path):
     with pytest.raises(ValueError):
-        _scope_cache_root("pi", "user", project_root=tmp_path)
+        _scope_cache_root("unknown-harness", "user", project_root=tmp_path)
 
 
 # ---------------------------------------------------------------------------
