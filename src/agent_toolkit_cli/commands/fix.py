@@ -8,6 +8,7 @@ from pathlib import Path
 import click
 
 from agent_toolkit_cli._repo_resolution import RepoNotFoundError, resolve_toolkit_root
+from agent_toolkit_cli._support import ALL_HARNESSES
 from agent_toolkit_cli._ui import header, summary
 from agent_toolkit_cli.generators.component_table import render_component_table
 from agent_toolkit_cli.generators.markers import inject_region
@@ -40,7 +41,7 @@ _REGION_GENERATORS = ("component-table", "submodule-table")
 )
 @click.option(
     "--harness",
-    type=click.Choice(["claude", "codex", "opencode", "pi"]),
+    type=click.Choice(list(ALL_HARNESSES)),
     default="codex",
     help="Harness for MCP reconcile (default: codex).",
 )

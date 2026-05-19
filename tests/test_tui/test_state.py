@@ -25,7 +25,7 @@ class FakeRunner:
 def _doc(repo: str = "/r") -> dict:
     return {
         "toolkit_root": repo,
-        "harnesses": ["claude", "codex", "opencode", "pi"],
+        "harnesses": ["claude", "codex", "opencode", "gemini", "pi"],
         "assets": [
             {
                 "kind": "skill", "slug": "alpha",
@@ -45,6 +45,10 @@ def _doc(repo: str = "/r") -> dict:
                     {"harness": "opencode", "scope": "user",    "status": "unsupported",
                      "target": None, "allowlisted": False},
                     {"harness": "opencode", "scope": "project", "status": "unsupported",
+                     "target": None, "allowlisted": False},
+                    {"harness": "gemini",   "scope": "user",    "status": "unsupported",
+                     "target": None, "allowlisted": False},
+                    {"harness": "gemini",   "scope": "project", "status": "unsupported",
                      "target": None, "allowlisted": False},
                     {"harness": "pi",       "scope": "user",    "status": "unsupported",
                      "target": None, "allowlisted": False},
@@ -74,7 +78,7 @@ def test_cells_keyed_by_harness_scope():
 
 def test_all_harnesses_populated_from_doc():
     state = build_state(FakeRunner(_doc()))
-    assert state.all_harnesses == ("claude", "codex", "opencode", "pi")
+    assert state.all_harnesses == ("claude", "codex", "opencode", "gemini", "pi")
 
 
 def test_rows_filter_by_kind():

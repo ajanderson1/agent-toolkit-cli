@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-_HARNESSES = ("claude", "codex", "opencode", "pi")
+from agent_toolkit_cli._support import ALL_HARNESSES as _HARNESSES
 _SCOPES = ("user", "project")
 _KINDS = ("skill", "agent", "command", "hook", "plugin", "pi-extension")
 
