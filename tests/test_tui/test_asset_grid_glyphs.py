@@ -13,6 +13,7 @@ from agent_toolkit_tui.widgets.asset_grid import (
     _GLYPH,
     _PENDING_LINK,
     _PENDING_UNLINK,
+    _USER_SCOPE_GLYPH,
 )
 
 
@@ -44,6 +45,10 @@ def test_pending_link_renders_as_ticked_box():
 
 def test_pending_unlink_renders_as_empty_box():
     assert _rendered(_PENDING_UNLINK) == "☐"
+
+
+def test_user_scope_glyph_survives_rich_markup():
+    assert _rendered(_USER_SCOPE_GLYPH) == _USER_SCOPE_GLYPH
 
 
 def test_linked_matches_glyph_renders_as_ticked_box():

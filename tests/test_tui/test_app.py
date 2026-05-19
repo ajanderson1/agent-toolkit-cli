@@ -127,6 +127,73 @@ async def test_space_toggles_cell_and_cursor_stays_in_place():
         assert grid.pending_entries(), "space should have queued a pending toggle"
 
 
+def _long_doc(row_count: int = 50, repo: str = "/r") -> dict:
+    """Build a doc with *row_count* skills so the DataTable overflows a 24-row terminal."""
+    assets = []
+    for i in range(row_count):
+        slug = f"skill-{i:03d}"
+        assets.append({
+            "kind": "skill", "slug": slug,
+            "origin": "first-party", "description": f"Skill {i}.",
+            "path": f"{repo}/skills/{slug}/SKILL.md",
+            "declared_harnesses": ["claude"],
+            "cells": [
+                {"harness": "claude", "scope": "user", "status": "unlinked",
+                 "target": None, "allowlisted": False},
+                {"harness": "claude", "scope": "project", "status": "unlinked",
+                 "target": None, "allowlisted": False},
+            ],
+        })
+    return {
+        "toolkit_root": repo,
+        "harnesses": ["claude"],
+        "assets": assets,
+    }
+
+
+async def test_toggle_preserves_scroll_position_and_cursor():
+    runner = FakeRunner(_long_doc(50))
+    app = TUIApp(toolkit_root=Path("/r"), runner=runner)
+    async with app.run_test(size=(80, 24)) as pilot:
+        await pilot.pause()
+        from agent_toolkit_tui.widgets import AssetGrid
+        from textual.coordinate import Coordinate
+        from textual.widgets import DataTable
+        grid = app.query_one("#asset-grid", AssetGrid)
+        table = grid.query_one("#grid-table", DataTable)
+        table.focus()
+        await pilot.pause()
+        # Place cursor on a harness column partway down, then scroll past it so
+        # the cursor sits near the top of the viewport (scroll_y > 0 and the
+        # cursor would NOT be at the minimal scroll-into-view position).
+        # This exposes the bug: _rebuild clears → scroll resets → cursor restore
+        # scrolls back to the cursor's minimal position, not the user's position.
+        table.cursor_coordinate = Coordinate(row=20, column=1)
+        await pilot.pause()
+        # Scroll so cursor row 20 appears near the top (scroll_y=10 means rows
+        # 10-16 are visible, but cursor is at row 20 which is NOT visible →
+        # Textual will scroll-to-cursor on the next interaction, so instead
+        # scroll so cursor IS visible but not at the viewport minimum).
+        # Use scroll_to to set a specific offset: put row 18 at the top so
+        # cursor (row 20) is 2 rows from top — well within viewport.
+        table.scroll_to(0, 18, animate=False)
+        await pilot.pause()
+        before_scroll = table.scroll_y
+        assert before_scroll > 0, (
+            f"fixture did not scroll (scroll_y={before_scroll}); "
+            "check scroll_to call"
+        )
+        before_cursor = table.cursor_coordinate
+        await pilot.press("space")
+        await pilot.pause()
+        assert table.scroll_y == before_scroll, (
+            f"scroll_y changed after toggle: {before_scroll} -> {table.scroll_y}"
+        )
+        assert table.cursor_coordinate == before_cursor, (
+            f"cursor jumped after toggle: {before_cursor} -> {table.cursor_coordinate}"
+        )
+
+
 async def test_second_space_clears_pending():
     runner = FakeRunner(_doc())
     app = TUIApp(toolkit_root=Path("/r"), runner=runner)
@@ -540,8 +607,8 @@ async def test_number_key_switches_kind():
         assert sidebar._active == "pi-extension"
 
 
-async def test_u_p_keys_switch_scope():
-    """Pressing u / p switches between user and project scopes."""
+async def test_s_key_toggles_scope():
+    """Pressing s toggles between project and user scopes."""
     from agent_toolkit_tui.widgets import AssetGrid
 
     runner = FakeRunner(_doc())
@@ -551,11 +618,11 @@ async def test_u_p_keys_switch_scope():
         grid = app.query_one("#asset-grid", AssetGrid)
         assert grid._scope == "project"
 
-        await pilot.press("u")
+        await pilot.press("s")
         await pilot.pause()
         assert grid._scope == "user"
 
-        await pilot.press("p")
+        await pilot.press("s")
         await pilot.pause()
         assert grid._scope == "project"
 
@@ -576,7 +643,7 @@ async def test_breadcrumb_reflects_current_kind_and_scope():
         assert "harnesses" not in text.lower()
 
         await pilot.press("2")  # agent
-        await pilot.press("u")  # user scope
+        await pilot.press("s")  # toggle scope → user
         await pilot.pause()
         text = str(app.query_one("#content-header", Static).render())
         assert "Agent" in text

@@ -98,12 +98,12 @@ def _scope_cache_root(harness: str, scope: str, project_root: Path) -> Path:
     return project_root.joinpath(*segments)
 
 
-def _translated_slot_filename(slug: str, kind: str, harness: str) -> str:
+def _slot_filename(slug: str, kind: str, harness: str) -> str:
     """Return the filename used for the slot symlink in this (harness, kind).
 
     File-slot kinds get an extension matching the harness:
-      - opencode agents/commands → `<slug>.md`
-      - gemini commands → `<slug>.toml`
+      - `(opencode|claude, agent|command)` → `<slug>.md`
+      - `(gemini, command)` → `<slug>.toml`
     Directory-slot kinds — and any unsupported pair — get the bare `<slug>`.
 
     Callers can detect the slot shape from the result: any extension ⇒
@@ -111,7 +111,7 @@ def _translated_slot_filename(slug: str, kind: str, harness: str) -> str:
     """
     if harness == "gemini" and kind == "command":
         return f"{slug}.toml"
-    if harness == "opencode" and kind in {"agent", "command"}:
+    if kind in {"agent", "command"} and harness in {"opencode", "claude"}:
         return f"{slug}.md"
     return slug
 
@@ -132,7 +132,7 @@ def _translate_slot_layout(harness: str, kind: str) -> str:
         return "dir-with-file-symlink"
     if harness == "gemini" and kind == "command":
         return "file"
-    if _translated_slot_filename("x", kind, harness).endswith(".md"):
+    if _slot_filename("x", kind, harness).endswith(".md"):
         return "file"
     return "dir-symlink"
 
@@ -355,7 +355,7 @@ def maybe_link(
     if is_translated and project_root is None:
         project_root = Path.cwd()
 
-    slot_filename = _translated_slot_filename(slug, kind, harness) if is_translated else slug
+    slot_filename = _slot_filename(slug, kind, harness)
     link_path = target_dir / slot_filename
     # For "dir-with-file-symlink" layouts the actual symlink lives one level
     # deeper inside a real slot directory. For all other layouts the slot path
@@ -599,7 +599,7 @@ def project_from_file(
                         project_root=project_root,
                     )
                 else:
-                    slot_path_translated = target_dir / _translated_slot_filename(asset.slug, kind, harness)
+                    slot_path_translated = target_dir / _slot_filename(asset.slug, kind, harness)
                     slot_path_plain = target_dir / asset.slug
                     # Try translated slot first (path-based detection); fall back to plain.
                     if not _prune_translated_slot(
@@ -616,14 +616,22 @@ def project_from_file(
                 for entry in target_dir.iterdir():
                     if not (entry.is_symlink() or entry.is_dir()):
                         continue
-                    # discovered_slugs uses bare slugs; check both naming conventions
                     bare_name = entry.name
+                    # Compute the canonical slot filename for this slug, if it
+                    # corresponds to a known asset. Mismatch = legacy layout
+                    # left over from an earlier version; prune it.
+                    canonical_slug: str | None = None
                     if bare_name in discovered_slugs:
-                        continue
-                    # Strip a `.md` suffix to compare against bare slugs (translated slots
-                    # use `<slug>.md` filenames; non-translated use bare `<slug>`)
-                    if bare_name.endswith(".md") and bare_name[:-3] in discovered_slugs:
-                        continue
+                        canonical_slug = bare_name
+                    elif bare_name.endswith(".md") and bare_name[:-3] in discovered_slugs:
+                        canonical_slug = bare_name[:-3]
+                    if canonical_slug is not None:
+                        expected_name = _slot_filename(canonical_slug, kind, harness)
+                        if bare_name == expected_name:
+                            continue
+                        # Entry corresponds to a known slug but uses the wrong
+                        # name (legacy bare-slug after a `.md`-suffix change).
+                        # Fall through to prune.
                     if _prune_translated_slot(
                         entry, harness, scope, project_root,
                         dry_run, counters, stdout,

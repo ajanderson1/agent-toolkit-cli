@@ -27,6 +27,9 @@ _GLYPH = {
 _PENDING_LINK   = "[yellow]✔[/]"
 _PENDING_UNLINK = "[yellow]☐[/]"
 
+_USER_SCOPE_GLYPH = "🌐"
+_USER_LINKED_STATUSES = frozenset({"linked", "linked-matches", "linked-drifted"})
+
 
 class AssetGrid(Vertical):
     """One row per asset, one column per visible harness, per current scope."""
@@ -121,7 +124,7 @@ class AssetGrid(Vertical):
                 continue
             key = (self._scope, harness, row.kind, row.slug)
             pending = self._pending.get(key)
-            _is_linked = cell.status in {"linked", "linked-matches", "linked-drifted"}
+            _is_linked = cell.status in _USER_LINKED_STATUSES
             effective_linked = (
                 (_is_linked and pending != "unlink")
                 or pending == "link"
@@ -137,7 +140,7 @@ class AssetGrid(Vertical):
                 continue
             key = (self._scope, harness, row.kind, row.slug)
             pending = self._pending.get(key)
-            _is_linked = cell.status in {"linked", "linked-matches", "linked-drifted"}
+            _is_linked = cell.status in _USER_LINKED_STATUSES
             already = (
                 (_is_linked and pending != "unlink")
                 or pending == "link"
@@ -186,7 +189,7 @@ class AssetGrid(Vertical):
             del self._pending[key]
             op = "clear"
         else:
-            _is_linked = cell.status in {"linked", "linked-matches", "linked-drifted"}
+            _is_linked = cell.status in _USER_LINKED_STATUSES
             op = "unlink" if _is_linked else "link"
             self._pending[key] = op
         self.post_message(AssetToggled(kind=row.kind, slug=row.slug,
@@ -206,6 +209,7 @@ class AssetGrid(Vertical):
         except Exception:
             return
         saved_cursor = table.cursor_coordinate
+        saved_scroll_y = table.scroll_y
         table.clear(columns=True)
         table.add_column(self._kind.upper(), width=32)
         for h in self._visible_harnesses:
@@ -215,14 +219,7 @@ class AssetGrid(Vertical):
         for row in rows:
             cells = [row.slug]
             for h in self._visible_harnesses:
-                cell = row.cells.get((h, self._scope))
-                glyph = _GLYPH.get(cell.status, "  ") if cell else "  "
-                pending = self._pending.get((self._scope, h, row.kind, row.slug))
-                if pending == "link":
-                    glyph = _PENDING_LINK
-                elif pending == "unlink":
-                    glyph = _PENDING_UNLINK
-                cells.append(glyph)
+                cells.append(self._cell_glyph(row=row, harness=h))
             # Schema allows duplicate (kind, slug) pairs at distinct paths
             # (see commands/aj/journal/* vs commands/custom_commands/*). Use
             # the asset path to disambiguate the row key so DataTable doesn't
@@ -239,6 +236,24 @@ class AssetGrid(Vertical):
                 row=min(saved_cursor.row, max_row),
                 column=min(saved_cursor.column, max_col),
             )
+            table.scroll_to(0, saved_scroll_y, animate=False)
+
+    def _cell_glyph(self, *, row: AssetRow, harness: str) -> str:
+        """Pending overlays short-circuit before the user-scope indicator so
+        queued ops stay visible; the 🌐 suffix only applies in project view
+        when the matching user-scope cell is linked."""
+        cell = row.cells.get((harness, self._scope))
+        glyph = _GLYPH.get(cell.status, "  ") if cell else "  "
+        pending = self._pending.get((self._scope, harness, row.kind, row.slug))
+        if pending == "link":
+            return _PENDING_LINK
+        if pending == "unlink":
+            return _PENDING_UNLINK
+        if self._scope == "project":
+            user_cell = row.cells.get((harness, "user"))
+            if user_cell is not None and user_cell.status in _USER_LINKED_STATUSES:
+                return f"{glyph} {_USER_SCOPE_GLYPH}"
+        return glyph
 
     def _matches_state(self, key: tuple[str, str, str, str], op: str) -> bool:
         scope, harness, kind, slug = key
@@ -247,7 +262,7 @@ class AssetGrid(Vertical):
                 cell = r.cells.get((harness, scope))
                 if cell is None:
                     return True   # cell vanished — pending is moot
-                if op == "link" and cell.status in {"linked", "linked-matches", "linked-drifted"}:
+                if op == "link" and cell.status in _USER_LINKED_STATUSES:
                     return True
                 if op == "unlink" and cell.status in {
                     "unlinked", "unsupported", "unlinked-allowlisted", "installed-not-allowlisted",

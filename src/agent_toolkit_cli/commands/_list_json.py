@@ -27,7 +27,7 @@ from agent_toolkit_cli._translators import TRANSLATORS
 from agent_toolkit_cli.commands._link_lib import (
     _scope_cache_root,
     _translate_slot_layout,
-    _translated_slot_filename,
+    _slot_filename,
 )
 from agent_toolkit_cli.walker import discover_assets, load_asset_record
 
@@ -90,7 +90,7 @@ def _cell_status_one(
 ) -> tuple[str, str | None]:
     """Compute cell status for ONE slot directory. See `_cell_status` for the
     multi-slot wrapper."""
-    link_path = slot / _translated_slot_filename(slug, kind, harness)
+    link_path = slot / _slot_filename(slug, kind, harness)
     # For the "dir-with-file-symlink" translate layout (e.g. opencode skill),
     # link_path is a real directory containing a single file symlink whose
     # target is in the cache. Look one level deeper for the actual symlink.
@@ -427,3 +427,23 @@ def list_json(
 
     out = _build_inventory(toolkit_root, project_root, kind=kind, harness=harness)
     click.echo(json.dumps(out, indent=2))
+
+
+_USER_LINKED_STATUSES = frozenset({"linked", "linked-matches", "linked-drifted"})
+
+
+def user_scope_covered(inventory: dict, *, slug: str, harness: str) -> bool:
+    """Return True iff the (slug, harness) user-scope cell is in a linked state.
+
+    Pure function over the inventory dict produced by `_build_inventory()`.
+    """
+    for asset in inventory.get("assets", []):
+        if asset.get("slug") != slug:
+            continue
+        for cell in asset.get("cells", []):
+            if cell.get("harness") != harness:
+                continue
+            if cell.get("scope") != "user":
+                continue
+            return cell.get("status") in _USER_LINKED_STATUSES
+    return False
