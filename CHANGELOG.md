@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.1](https://github.com/ajanderson1/agent-toolkit-cli/compare/v0.7.0...v0.7.1) (2026-05-19)
+
+
+### Bug Fixes
+
+* **mcp:** create project-scope target when absent ([#125](https://github.com/ajanderson1/agent-toolkit-cli/issues/125)) ([#133](https://github.com/ajanderson1/agent-toolkit-cli/issues/133)) ([fb0a7b1](https://github.com/ajanderson1/agent-toolkit-cli/commit/fb0a7b1faba6841fb0b7f3b616d3b52f03eb58ee))
+
 ## [0.7.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v0.6.0...v0.7.0) (2026-05-19)
 
 
