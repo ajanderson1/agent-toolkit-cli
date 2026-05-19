@@ -499,13 +499,18 @@ def project_from_file(
                     print(adapter.skip_message(), file=stdout)
                 continue
 
-            # Compute previously_allowed: explicit snapshot if provided,
-            # otherwise fall back to current (= no deletions for adapters
-            # whose allow-list hasn't changed in this dispatch).
+            # Compute previously_allowed: explicit snapshot if provided
+            # (link/unlink mutate the allowlist and pass the pre-mutation
+            # snapshot). Otherwise — reconcile-from-disk — union the current
+            # allowlist with what the adapter reports installed on disk so
+            # hand-edit removals from .agent-toolkit.yaml still get pruned
+            # (#120). The on-disk set is the authoritative ownership record.
             if previous_allowed is not None:
                 prev_mcps = set(previous_allowed.get(section) or [])
             else:
-                prev_mcps = set(mcp_allowed_slugs)
+                prev_mcps = set(mcp_allowed_slugs) | set(
+                    adapter.list_installed(scope, project_root)
+                )
 
             entries = _build_mcp_entries(toolkit_root, mcp_allowed_slugs)
             try:
@@ -542,10 +547,15 @@ def project_from_file(
                     print(adapter.skip_message(), file=stdout)
                 continue
 
+            # Same shape as the MCP branch above — see #120. Reconcile-from-
+            # disk must union the current allowlist with the on-disk set so
+            # hand-edit removals are pruned.
             if previous_allowed is not None:
                 prev_hooks = set(previous_allowed.get(section) or [])
             else:
-                prev_hooks = set(hook_allowed_slugs)
+                prev_hooks = set(hook_allowed_slugs) | set(
+                    adapter.list_installed(scope, project_root)
+                )
 
             entries = _build_hook_entries(toolkit_root, hook_allowed_slugs)
             try:
@@ -605,26 +615,28 @@ def project_from_file(
                         project_root=project_root,
                     )
                 else:
-                    slot_path_translated = target_dir / _slot_filename(asset.slug, kind, harness)
+                    slot_name = _slot_filename(asset.slug, kind, harness)
+                    slot_path_translated = target_dir / slot_name
                     slot_path_plain = target_dir / asset.slug
                     # Try translated slot first (path-based detection); fall back to
                     # pruning the on-disk slot. For harnesses without a translation
                     # cache (e.g. claude), `_prune_translated_slot` is a no-op, so we
                     # must also try the `_slot_filename` path with `_prune_if_into_repo`
                     # — the slot is `<slug>.md` for claude agents/commands but
-                    # `<slug>` (no extension) for skills/plugins. See #119.
+                    # `<slug>` (no extension) for skills/plugins. See #119, #120.
                     if not _prune_translated_slot(
                         slot_path_translated, harness, scope, project_root,
                         dry_run, counters, stdout,
                     ):
-                        if slot_path_translated != slot_path_plain:
+                        _prune_if_into_repo(
+                            slot_path_translated, toolkit_root,
+                            dry_run, counters, stdout,
+                        )
+                        if slot_path_plain != slot_path_translated:
                             _prune_if_into_repo(
-                                slot_path_translated, toolkit_root,
+                                slot_path_plain, toolkit_root,
                                 dry_run, counters, stdout,
                             )
-                        _prune_if_into_repo(
-                            slot_path_plain, toolkit_root, dry_run, counters, stdout,
-                        )
             # Sweep orphan slots (slug in target dir but no asset in repo).
             # An entry is "orphan-shaped" if it's a symlink (file/dir-symlink layouts)
             # OR a real directory (dir-with-file-symlink layout).

@@ -1042,3 +1042,128 @@ def test_link_dry_run_opencode_agent_prints_translated_line_no_writes(env, seed_
     # Nothing on disk
     assert not cache_dir.exists()
     assert not slot_dir.exists() or not any(slot_dir.iterdir())
+
+
+# ===========================================================================
+# Issue #120 — Stale projections aren't pruned on reconcile after allowlist
+# edit. After removing an asset from .agent-toolkit.yaml by hand and
+# re-running `link user <harness>` (no selector), the previously-projected
+# artefact must be pruned.
+# ===========================================================================
+
+
+def _write_yaml(path: Path, body: str) -> None:
+    path.write_text(body)
+
+
+def test_link_bare_prunes_stale_claude_agent_after_yaml_handedit(env, seed_agent):
+    """Issue #120 — symlink-kind (agent × claude) reconcile after hand-edit."""
+    home = env["home"]
+    toolkit = env["toolkit_root"]
+    seed_agent(toolkit, "demo-agent", ["claude"])
+    allow = home / ".agent-toolkit.yaml"
+    _write_yaml(allow, "agents:\n  - demo-agent\n")
+    runner = CliRunner()
+    # Initial link.
+    r1 = runner.invoke(main, ["--toolkit-repo", str(toolkit), "link", "user", "claude"])
+    assert r1.exit_code == 0, r1.output
+    slot = home / ".claude" / "agents" / "demo-agent.md"
+    assert slot.is_symlink(), f"expected slot symlink, got: {list((home/'.claude'/'agents').iterdir())}"
+
+    # User edits allowlist by hand, dropping demo-agent.
+    _write_yaml(allow, "agents: []\n")
+
+    # Reconcile.
+    r2 = runner.invoke(main, ["--toolkit-repo", str(toolkit), "link", "user", "claude"])
+    assert r2.exit_code == 0, r2.output
+    assert not slot.exists() and not slot.is_symlink(), (
+        f"stale symlink still present after hand-edit reconcile: {slot}"
+    )
+
+
+def test_link_bare_prunes_stale_claude_command_after_yaml_handedit(env, toolkit_root=None):
+    """Issue #120 — symlink-kind (command × claude) reconcile after hand-edit."""
+    home = env["home"]
+    toolkit = env["toolkit_root"]
+    # Seed a command asset inline (no fixture exists).
+    commands_dir = toolkit / "commands"
+    commands_dir.mkdir(parents=True, exist_ok=True)
+    (commands_dir / "demo-cmd.md").write_text(
+        "---\n"
+        "apiVersion: agent-toolkit/v1alpha2\n"
+        "metadata:\n"
+        "  name: demo-cmd\n"
+        "  description: demo-cmd command.\n"
+        "  lifecycle: stable\n"
+        "spec:\n"
+        "  origin: first-party\n"
+        "  vendored_via: none\n"
+        "  harnesses:\n"
+        "    - claude\n"
+        "---\n"
+        "# demo-cmd body\n"
+    )
+    allow = home / ".agent-toolkit.yaml"
+    _write_yaml(allow, "commands:\n  - demo-cmd\n")
+    runner = CliRunner()
+    r1 = runner.invoke(main, ["--toolkit-repo", str(toolkit), "link", "user", "claude"])
+    assert r1.exit_code == 0, r1.output
+    slot = home / ".claude" / "commands" / "demo-cmd.md"
+    assert slot.is_symlink(), list((home/'.claude'/'commands').iterdir())
+
+    _write_yaml(allow, "commands: []\n")
+
+    r2 = runner.invoke(main, ["--toolkit-repo", str(toolkit), "link", "user", "claude"])
+    assert r2.exit_code == 0, r2.output
+    assert not slot.exists() and not slot.is_symlink(), (
+        f"stale command symlink still present: {slot}"
+    )
+
+
+def test_link_bare_prunes_stale_mcp_codex_after_yaml_handedit(env):
+    """Issue #120 — config-file-kind (mcp × codex) reconcile after hand-edit."""
+    home = env["home"]
+    toolkit = env["toolkit_root"]
+    (home / ".codex").mkdir(parents=True, exist_ok=True)
+
+    mcp_dir = toolkit / "mcps" / "demo-mcp"
+    mcp_dir.mkdir(parents=True)
+    (mcp_dir / "config.json").write_text(
+        '{"type":"stdio","command":"npx","args":["-y","@modelcontextprotocol/server-everything"]}\n'
+    )
+    (toolkit / "mcps" / "demo-mcp.toolkit.yaml").write_text(
+        "apiVersion: agent-toolkit/v1alpha2\n"
+        "metadata:\n"
+        "  name: demo-mcp\n"
+        "  description: demo mcp.\n"
+        "  lifecycle: stable\n"
+        "spec:\n"
+        "  origin: third-party\n"
+        "  vendored_via: none\n"
+        "  upstream: https://example.com\n"
+        "  harnesses:\n"
+        "    - codex\n"
+        "  mcp:\n"
+        "    transport: stdio\n"
+        "    install_method: npx\n"
+    )
+
+    runner = CliRunner()
+    # Initial link via per-asset form (also writes allowlist).
+    r1 = runner.invoke(
+        main, ["--toolkit-repo", str(toolkit), "link", "user", "codex", "mcp:demo-mcp"],
+    )
+    assert r1.exit_code == 0, r1.output
+    config_toml = home / ".codex" / "config.toml"
+    assert config_toml.is_file()
+    assert "[mcp_servers.demo-mcp]" in config_toml.read_text()
+
+    # User edits allowlist by hand, dropping demo-mcp.
+    (home / ".agent-toolkit.yaml").write_text("mcps: []\n")
+
+    r2 = runner.invoke(main, ["--toolkit-repo", str(toolkit), "link", "user", "codex"])
+    assert r2.exit_code == 0, r2.output
+    txt = config_toml.read_text()
+    assert "demo-mcp" not in txt, (
+        f"stale [mcp_servers.demo-mcp] stanza still present after hand-edit reconcile:\n{txt}"
+    )
