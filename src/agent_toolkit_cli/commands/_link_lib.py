@@ -93,16 +93,16 @@ def _scope_cache_root(harness: str, scope: str, project_root: Path) -> Path:
     return project_root.joinpath(*segments)
 
 
-def _translated_slot_filename(slug: str, kind: str, harness: str) -> str:
+def _slot_filename(slug: str, kind: str, harness: str) -> str:
     """Return the filename used for the slot symlink in this (harness, kind).
 
     File-slot kinds get `<slug>.md` — these are slots where the harness
     discovers content by globbing `*.md` files in the slot directory.
     Currently that's `(opencode, agent|command)` and `(claude, agent|command)`.
-    Directory-slot kinds — and any unsupported pair — get the bare `<slug>`.
+    All other pairs get the bare `<slug>`.
 
     Callers can detect the slot shape from the result: `endswith(".md")` ⇒
-    file-slot; otherwise directory-slot or non-translated.
+    file-slot; otherwise directory-slot or direct-symlink.
     """
     if kind in {"agent", "command"} and harness in {"opencode", "claude"}:
         return f"{slug}.md"
@@ -123,7 +123,7 @@ def _translated_slot_filename(slug: str, kind: str, harness: str) -> str:
 def _translate_slot_layout(harness: str, kind: str) -> str:
     if harness == "opencode" and kind == "skill":
         return "dir-with-file-symlink"
-    if _translated_slot_filename("x", kind, harness).endswith(".md"):
+    if _slot_filename("x", kind, harness).endswith(".md"):
         return "file"
     return "dir-symlink"
 
@@ -346,7 +346,7 @@ def maybe_link(
     if is_translated and project_root is None:
         project_root = Path.cwd()
 
-    slot_filename = _translated_slot_filename(slug, kind, harness)
+    slot_filename = _slot_filename(slug, kind, harness)
     link_path = target_dir / slot_filename
     # For "dir-with-file-symlink" layouts the actual symlink lives one level
     # deeper inside a real slot directory. For all other layouts the slot path
@@ -590,7 +590,7 @@ def project_from_file(
                         project_root=project_root,
                     )
                 else:
-                    slot_path_translated = target_dir / _translated_slot_filename(asset.slug, kind, harness)
+                    slot_path_translated = target_dir / _slot_filename(asset.slug, kind, harness)
                     slot_path_plain = target_dir / asset.slug
                     # Try translated slot first (path-based detection); fall back to plain.
                     if not _prune_translated_slot(
@@ -617,7 +617,7 @@ def project_from_file(
                     elif bare_name.endswith(".md") and bare_name[:-3] in discovered_slugs:
                         canonical_slug = bare_name[:-3]
                     if canonical_slug is not None:
-                        expected_name = _translated_slot_filename(canonical_slug, kind, harness)
+                        expected_name = _slot_filename(canonical_slug, kind, harness)
                         if bare_name == expected_name:
                             continue
                         # Entry corresponds to a known slug but uses the wrong

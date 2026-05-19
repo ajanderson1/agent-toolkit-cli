@@ -6,7 +6,7 @@ from pathlib import Path
 
 from agent_toolkit_cli._support import _USER_TARGET_ALIASES, _USER_TARGETS
 from agent_toolkit_cli._translators import TRANSLATORS
-from agent_toolkit_cli.commands._link_lib import _translate_slot_layout, _translated_slot_filename
+from agent_toolkit_cli.commands._link_lib import _translate_slot_layout, _slot_filename
 from agent_toolkit_cli.doctor.result import GroupResult, Status
 from agent_toolkit_cli.walker import discover_assets, extract_frontmatter, frontmatter_path
 
@@ -42,7 +42,7 @@ def run(toolkit_root: Path, *, harness: str = "claude") -> GroupResult:
         rel = _USER_PATHS.get((harness, asset.kind))
         if rel is None:
             continue
-        link_path = home / rel / _translated_slot_filename(asset.slug, asset.kind, harness)
+        link_path = home / rel / _slot_filename(asset.slug, asset.kind, harness)
         expected[(asset.kind, asset.slug)] = link_path
 
     for (kind, slug), link_path in expected.items():
@@ -67,7 +67,7 @@ def run(toolkit_root: Path, *, harness: str = "claude") -> GroupResult:
             t.removeprefix("{home}/")
             for t in _USER_TARGET_ALIASES.get((harness, kind), [])
         ]
-        alias_paths = [home / rel / _translated_slot_filename(slug, kind, harness)
+        alias_paths = [home / rel / _slot_filename(slug, kind, harness)
                        for rel in alias_rels]
 
         if not check_path.exists() and not check_path.is_symlink():

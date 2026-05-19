@@ -27,7 +27,7 @@ from agent_toolkit_cli._translators import TRANSLATORS
 from agent_toolkit_cli.commands._link_lib import (
     _scope_cache_root,
     _translate_slot_layout,
-    _translated_slot_filename,
+    _slot_filename,
 )
 from agent_toolkit_cli.walker import discover_assets, load_asset_record
 
@@ -90,7 +90,7 @@ def _cell_status_one(
 ) -> tuple[str, str | None]:
     """Compute cell status for ONE slot directory. See `_cell_status` for the
     multi-slot wrapper."""
-    link_path = slot / _translated_slot_filename(slug, kind, harness)
+    link_path = slot / _slot_filename(slug, kind, harness)
     # For the "dir-with-file-symlink" translate layout (e.g. opencode skill),
     # link_path is a real directory containing a single file symlink whose
     # target is in the cache. Look one level deeper for the actual symlink.
