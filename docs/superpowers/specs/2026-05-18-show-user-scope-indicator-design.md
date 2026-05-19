@@ -160,3 +160,5 @@ None blocking. All design choices above are recorded with rationale. The "option
 4. New `doctor/user_scope_coverage.py` returning `GroupResult`; register in `commands/doctor.py._GROUPS`. Add doctor test.
 5. Update `docs/agent-toolkit/cli.md` (one paragraph + an example row).
 6. Verify against `.claude/testing.md` recipes (if present) or the verify menu.
+
+**Follow-up filed:** [#90](https://github.com/ajanderson1/agent-toolkit-cli/issues/90) — unify `at list` text mode with `_build_inventory()`; consolidate the now-triplicated `_USER_LINKED_STATUSES` constant.
