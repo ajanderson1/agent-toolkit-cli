@@ -570,10 +570,7 @@ Apply mechanical autofixes for sidecar-related issues:
 - **Orphan body** (body exists with no metadata anywhere) — emits a stub
   `<slug>.toolkit.yaml` for the operator to complete.
 
-`--dry-run` reports what would change without writing. `--yes` no-prompts.
-
-In PR 1, only `--dry-run` is functional; the actual write path activates
-in PR 3 (after MCP migration is complete in the content repo).
+`--dry-run` reports what would change without writing. `--yes` no-prompts and always favours the sidecar on mutex violations. Without `--yes`, doctor prompts per finding.
 
 **Examples:**
 ```bash

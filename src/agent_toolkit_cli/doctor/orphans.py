@@ -45,7 +45,7 @@ def run(toolkit_root: Path) -> GroupResult:
                 findings.append(
                     f"Legacy MCP frontmatter: {inline.relative_to(toolkit_root)} "
                     f"contains toolkit frontmatter but no sidecar exists. "
-                    f"Run `agent-toolkit-cli migrate-mcps-to-sidecar` to migrate."
+                    f"Add a sidecar <slug>.toolkit.yaml to migrate."
                 )
     count = len(findings)
     return GroupResult(

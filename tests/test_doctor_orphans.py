@@ -79,7 +79,7 @@ def test_legacy_mcp_with_readme_frontmatter_is_advisory(tmp_path: Path) -> None:
     )
     result = diagnose_orphans(tmp_path)
     assert result.status == Status.ADVISORY
-    assert any("legacy" in f.lower() and "migrate-mcps-to-sidecar" in f for f in result.findings)
+    assert any("legacy" in f.lower() and "sidecar" in f.lower() for f in result.findings)
 
 
 def test_mcp_with_sidecar_only_is_not_legacy(tmp_path: Path) -> None:
