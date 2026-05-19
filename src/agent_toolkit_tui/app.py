@@ -89,9 +89,10 @@ class ConfirmDiscardScreen(ModalScreen[bool]):
 
 
 class PiTabScreen(ModalScreen[None]):
-    """Modal screen that hosts the read-only Pi inventory view.
+    """Modal screen that hosts the Pi inventory view with u/p toggles.
 
-    Press ``escape`` or ``q`` to dismiss.
+    Press ``escape`` or ``q`` to dismiss. With a row highlighted, press
+    ``u`` to toggle user-scope load state and ``p`` for project-scope.
     """
 
     DEFAULT_CSS = """
@@ -109,24 +110,99 @@ class PiTabScreen(ModalScreen[None]):
         text-style: bold;
         margin-bottom: 1;
     }
+    PiTabScreen #pi-tab-footer {
+        margin-top: 1;
+        color: $warning;
+    }
     """
 
     BINDINGS = [
         Binding("escape", "close", "Close"),
         Binding("q", "close", "Close"),
+        Binding("u", "toggle_user", "User load/unload"),
+        Binding("p", "toggle_project", "Project load/unload"),
     ]
 
-    def __init__(self, records: list[dict]) -> None:
+    def __init__(self, records: list[dict], runner: "CLIRunner") -> None:
         super().__init__()
         self._records = records
+        self._runner = runner
 
     def compose(self) -> ComposeResult:
         with Vertical():
             yield Label(f"Pi extension inventory — {len(self._records)} record(s)")
             yield PiTab(records=self._records, id="pi-tab")
+            yield Static("", id="pi-tab-footer")
 
     def action_close(self) -> None:
         self.dismiss(None)
+
+    def action_toggle_user(self) -> None:
+        self._toggle("user")
+
+    def action_toggle_project(self) -> None:
+        self._toggle("project")
+
+    def _toggle(self, scope: str) -> None:
+        try:
+            table = self.query_one("#pi-tab-table", DataTable)
+        except Exception:
+            self._set_footer("no table to act on")
+            return
+        cursor = table.cursor_row
+        if cursor is None or cursor < 0 or cursor >= len(self._records):
+            self._set_footer("select a row first")
+            return
+        record = self._records[cursor]
+        slug = record.get("slug", "")
+        if not slug:
+            self._set_footer("row has no slug")
+            return
+        flag = "user_loaded" if scope == "user" else "project_loaded"
+        try:
+            if record.get(flag):
+                self._runner.pi_unload(slug, scope)
+            else:
+                self._runner.pi_load(slug, scope)
+        except Exception as exc:
+            # Show only the first line so multi-line stderr doesn't blow up the footer.
+            msg = str(exc).splitlines()[0] if str(exc) else "unknown error"
+            self._set_footer(f"pi {scope} toggle error: {msg}")
+            return
+        # Refresh inventory and rebuild the table in place.
+        try:
+            new_records = self._runner.pi_inventory()
+        except Exception as exc:
+            msg = str(exc).splitlines()[0] if str(exc) else "unknown error"
+            self._set_footer(f"refresh error: {msg}")
+            return
+        self._records = new_records
+        self._rebuild_table(table, prefer_slug=slug)
+        self._set_footer("")
+
+    def _rebuild_table(self, table: DataTable, prefer_slug: str) -> None:
+        table.clear()
+        new_cursor = 0
+        for idx, r in enumerate(self._records):
+            badge = "1P" if r.get("origin") == "first-party" else "3P"
+            table.add_row(
+                r.get("slug", ""),
+                badge,
+                "✓" if r.get("user_loaded") else " ",
+                "✓" if r.get("project_loaded") else " ",
+                r.get("toolkit_intent", ""),
+                r.get("source", ""),
+            )
+            if r.get("slug") == prefer_slug:
+                new_cursor = idx
+        if self._records:
+            table.move_cursor(row=new_cursor)
+
+    def _set_footer(self, msg: str) -> None:
+        try:
+            self.query_one("#pi-tab-footer", Static).update(msg)
+        except Exception:
+            pass
 
 
 class TUIApp(App):
@@ -256,15 +332,15 @@ class TUIApp(App):
         """Open the Pi extension inventory modal.
 
         Shells out to `agent-toolkit-cli pi inventory --format json` via the
-        runner and displays the records in a `PiTab` widget. Read-only —
-        toggle bindings (`u`/`p`) are deferred to a follow-up commit.
+        runner and displays the records in a `PiTab` widget. Press ``u``/``p``
+        inside the modal to toggle user/project load state for the cursor row.
         """
         try:
             records = self.runner.pi_inventory()
         except RunnerError as exc:
             self.query_one("#footer-pending", Static).update(f"pi inventory error: {exc}")
             return
-        self.push_screen(PiTabScreen(records=records))
+        self.push_screen(PiTabScreen(records=records, runner=self.runner))
 
     def action_refresh(self) -> None:
         self.state = build_state(self.runner)

@@ -68,3 +68,59 @@ def test_pi_load_nonzero_exit_raises_runner_error(monkeypatch, tmp_path):
     with pytest.raises(RunnerError) as excinfo:
         runner.pi_load("nope", "user")
     assert "boom: missing slug" in str(excinfo.value)
+
+
+# --- PiTabScreen Pilot ------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_pressing_u_loads_under_user_scope_and_refreshes(monkeypatch, tmp_path):
+    from agent_toolkit_tui.app import TUIApp
+    from agent_toolkit_tui.runner import CLIRunner
+
+    # Two inventory snapshots: before and after the user-scope load.
+    record_before = {
+        "slug": "status-bar",
+        "origin": "first-party",
+        "source": "extension:status-bar",
+        "user_loaded": False,
+        "project_loaded": False,
+        "toolkit_intent": "user",
+    }
+    record_after = dict(record_before, user_loaded=True)
+
+    inventories = iter([[record_before], [record_after]])
+
+    load_calls: list[tuple[str, str]] = []
+
+    def fake_pi_inventory(self):
+        return next(inventories)
+
+    def fake_pi_load(self, slug, scope):
+        load_calls.append((slug, scope))
+
+    monkeypatch.setattr(CLIRunner, "pi_inventory", fake_pi_inventory)
+    monkeypatch.setattr(CLIRunner, "pi_load", fake_pi_load)
+    # Minimal list_state stub so TUIApp.__init__ doesn't fail.
+    monkeypatch.setattr(
+        CLIRunner, "list_state",
+        lambda self: {"assets": [], "links": {"user": {}, "project": {}}},
+    )
+
+    app = TUIApp(toolkit_root=tmp_path)
+    async with app.run_test() as pilot:
+        # Open the Pi modal.
+        await pilot.press("8")
+        await pilot.pause()
+        # Highlight row 0 is the default cursor position; press u.
+        await pilot.press("u")
+        await pilot.pause()
+
+        assert load_calls == [("status-bar", "user")]
+
+        # The table should now show ✓ in the U column for the only row.
+        from textual.widgets import DataTable
+        table = app.screen.query_one("#pi-tab-table", DataTable)
+        row = table.get_row_at(0)
+        # Column order: Slug, Origin, U, P, Intent, Source.
+        assert row[0] == "status-bar"
+        assert row[2] == "✓"
