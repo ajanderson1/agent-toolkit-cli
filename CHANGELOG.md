@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v0.7.4...v0.8.0) (2026-05-19)
+
+
+### Features
+
+* **codex:** (codex, agent) adapter — per-asset TOML translator ([#146](https://github.com/ajanderson1/agent-toolkit-cli/issues/146)) ([d80ea10](https://github.com/ajanderson1/agent-toolkit-cli/commit/d80ea10482b3c86cdf42f44374ddeebbeea6f2c8))
+
 ## [0.7.4](https://github.com/ajanderson1/agent-toolkit-cli/compare/v0.7.3...v0.7.4) (2026-05-19)
 
 
