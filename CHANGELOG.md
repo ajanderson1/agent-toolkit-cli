@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.7.4](https://github.com/ajanderson1/agent-toolkit-cli/compare/v0.7.3...v0.7.4) (2026-05-19)
+
+
+### Bug Fixes
+
+* **list-json:** report 'unlinked' for declared-but-unwired MCP/hook cells ([#145](https://github.com/ajanderson1/agent-toolkit-cli/issues/145)) ([395342f](https://github.com/ajanderson1/agent-toolkit-cli/commit/395342f7d0b634d628fbfa480c613cd489813e3a)), closes [#141](https://github.com/ajanderson1/agent-toolkit-cli/issues/141)
+* **unlink:** prune stale projections in per-asset path when slug absent ([#142](https://github.com/ajanderson1/agent-toolkit-cli/issues/142)) ([#143](https://github.com/ajanderson1/agent-toolkit-cli/issues/143)) ([02771f6](https://github.com/ajanderson1/agent-toolkit-cli/commit/02771f6c51f068f131efcaa77193f7ee9d727c5d))
+
 ## [0.7.3](https://github.com/ajanderson1/agent-toolkit-cli/compare/v0.7.2...v0.7.3) (2026-05-19)
 
 
