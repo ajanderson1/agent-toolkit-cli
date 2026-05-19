@@ -25,6 +25,7 @@ from agent_toolkit_cli._pi_inventory import slug_from_source
 from agent_toolkit_cli._pi_paths import PiPaths
 from agent_toolkit_cli._pi_settings import read_packages
 from agent_toolkit_cli.doctor.result import GroupResult, Status
+from agent_toolkit_cli.harness_adapters.base import Scope
 
 
 @dataclass(frozen=True)
@@ -59,7 +60,7 @@ def _hand_authored(pp: PiPaths) -> list[PiAdvisory]:
 
 def _drift(
     *,
-    scope: str,
+    scope: Scope,
     declared_packages: list[str],
     settings_json: Path,
     node_modules_dir: Path,
