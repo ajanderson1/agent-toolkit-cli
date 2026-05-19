@@ -129,10 +129,16 @@ def inventory_cmd(ctx: click.Context, scope: str, fmt: str) -> None:
         return
     click.echo(f"{'SLUG':<24} {'ORIGIN':<12} {'U':<3} {'P':<3} {'INTENT':<8} SOURCE")
     for r in records:
+        u = "✓" if r.user_loaded and r.user_enabled else ("~" if r.user_loaded else "—")
+        p = (
+            "✓"
+            if r.project_loaded and r.project_enabled
+            else ("~" if r.project_loaded else "—")
+        )
         click.echo(
             f"{r.slug:<24} {r.origin:<12} "
-            f"{'✓' if r.user_loaded else '—':<3} "
-            f"{'✓' if r.project_loaded else '—':<3} "
+            f"{u:<3} "
+            f"{p:<3} "
             f"{r.toolkit_intent:<8} {r.source}"
         )
 

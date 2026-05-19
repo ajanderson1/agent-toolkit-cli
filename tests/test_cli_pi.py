@@ -74,6 +74,27 @@ def test_pi_inventory_text_format(tmp_path: Path, monkeypatch):
     assert "first-party" in result.output
 
 
+def test_pi_inventory_text_format_dims_disabled(tmp_path: Path, monkeypatch):
+    """Loaded-but-disabled extensions render with `~` in the text view, not `✓`."""
+    home = tmp_path / "home"
+    project = tmp_path / "proj"
+    project.mkdir()
+    (home / ".pi/agent/extensions/status-bar").mkdir(parents=True)
+    (home / ".pi/agent/settings.json").write_text(
+        json.dumps({"extensions": ["!status-bar"]})
+    )
+    monkeypatch.setenv("HOME", str(home))
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["--project", str(project), "pi", "inventory"])
+    assert result.exit_code == 0, result.output
+    # Find the data row (not the header).
+    rows = [line for line in result.output.splitlines() if "status-bar" in line]
+    assert rows, result.output
+    assert "~" in rows[0]
+    assert "✓" not in rows[0]
+
+
 def test_pi_inventory_scope_filter(tmp_path: Path, monkeypatch):
     """`--scope user` hides project-only records; `--scope project` shows them."""
     home = tmp_path / "home"

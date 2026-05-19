@@ -205,7 +205,7 @@ def run(*, home: Path, project_root: Path) -> GroupResult:
         return GroupResult(
             name="pi-advisories",
             status=Status.OK,
-            summary="no hand-authored extensions, drift, or slug collisions",
+            summary="no hand-authored extensions, drift, slug collisions, or orphaned overrides",
         )
     return GroupResult(
         name="pi-advisories",
