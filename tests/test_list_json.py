@@ -5,9 +5,10 @@ import json
 import os
 from pathlib import Path
 
+import pytest
 from click.testing import CliRunner
 
-from agent_toolkit_cli.commands._list_json import list_json
+from agent_toolkit_cli.commands._list_json import list_json, user_scope_covered
 
 
 def _seed(tmp: Path) -> None:
@@ -588,11 +589,6 @@ def test_cell_status_pi_agent_project_scope_unlinked_when_no_symlink(tmp_path):
     )
     assert status == "unlinked"
     assert target is None
-
-
-import pytest
-
-from agent_toolkit_cli.commands._list_json import user_scope_covered
 
 
 _LINKED_STATUSES = ("linked", "linked-matches", "linked-drifted")
