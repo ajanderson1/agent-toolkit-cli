@@ -95,10 +95,6 @@
         {
           "if": { "properties": { "origin": { "const": "third-party" } } },
           "then": { "required": ["upstream"] }
-        },
-        {
-          "if": { "properties": { "vendored_via": { "const": "submodule" } } },
-          "then": { "required": ["fork"] }
         }
       ]
     }

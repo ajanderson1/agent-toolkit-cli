@@ -6,12 +6,18 @@ from enum import IntEnum
 
 
 class Status(IntEnum):
+    ADVISORY = -1  # informational; never blocks check
     OK = 0
     WARN = 1
     FAIL = 2
 
     def label(self) -> str:
-        return {Status.OK: "OK", Status.WARN: "WARN", Status.FAIL: "FAIL"}[self]
+        return {
+            Status.ADVISORY: "INFO",
+            Status.OK: "OK",
+            Status.WARN: "WARN",
+            Status.FAIL: "FAIL",
+        }[self]
 
 
 @dataclass

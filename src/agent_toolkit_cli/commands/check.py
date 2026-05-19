@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import difflib
 import re
+import sys
 from pathlib import Path
 
 import click
@@ -31,6 +32,37 @@ _LEAK_ALLOWED_PREFIXES = (
 
 # File extensions to scan. Stay narrow — we don't grep binaries.
 _LEAK_SCAN_EXTENSIONS = {".md", ".py", ".sh", ".bash", ".yaml", ".yml", ".toml", ".json"}
+
+
+def _detect_mutex_violations(toolkit_root: Path) -> list[str]:
+    """Return error messages for any (kind, slug) with both sidecar AND inline."""
+    from agent_toolkit_cli.walker import (
+        _SIDECAR_KINDS,
+        _KIND_ROOT,
+        extract_frontmatter,
+        _inline_body_path,
+    )
+
+    errors: list[str] = []
+    for kind in _SIDECAR_KINDS:
+        root = toolkit_root / _KIND_ROOT[kind]
+        if not root.exists():
+            continue
+        for sidecar in sorted(root.glob("*.toolkit.yaml")):
+            slug = sidecar.name[: -len(".toolkit.yaml")]
+            # Mutex is a STRUCTURAL violation (both files exist), not a
+            # parseability one. A malformed sidecar still counts — schema
+            # validation will catch its content errors separately, but the
+            # mutex condition is independent.
+            inline = _inline_body_path(kind, slug, toolkit_root)
+            if inline.is_file() and extract_frontmatter(inline) is not None:
+                errors.append(
+                    f"MutexViolation: {kind}/{slug}: both "
+                    f"{sidecar.relative_to(toolkit_root)} and "
+                    f"{inline.relative_to(toolkit_root)} exist. "
+                    f"Delete one, or run `agent-toolkit-cli doctor --fix`."
+                )
+    return errors
 
 
 @click.command(short_help="Validate asset frontmatter and AGENTS.md auto-regions.")
@@ -65,6 +97,15 @@ def check(ctx: click.Context, toolkit_root: Path | None, use_exit_code: bool) ->
     else:
         toolkit_root = Path(toolkit_root).resolve()
     root = toolkit_root
+
+    # Mutex check — fail fast before per-asset schema validation
+    mutex_errors = _detect_mutex_violations(root)
+    if mutex_errors:
+        for msg in mutex_errors:
+            click.echo(msg, err=True)
+        if use_exit_code:
+            sys.exit(2)
+
     validator = Validator(toolkit_root=root)
     errors: list[str] = []
     asset_count = 0

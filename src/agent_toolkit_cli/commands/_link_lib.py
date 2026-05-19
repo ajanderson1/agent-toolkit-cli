@@ -27,7 +27,7 @@ from agent_toolkit_cli._support import (
 )
 from agent_toolkit_cli._translators import TRANSLATORS
 from agent_toolkit_cli.walker import (
-    Asset, AssetRecord, discover_assets, extract_frontmatter,
+    Asset, AssetRecord, discover_assets, extract_metadata,
     frontmatter_path, load_asset_record, strip_frontmatter,
 )
 
@@ -303,11 +303,12 @@ def _expected_source(asset_path: Path, kind: str) -> Path:
 def _asset_harnesses(asset_path: Path, kind: str | None = None) -> list[str]:
     """Return spec.harnesses declared by the asset.
 
-    For markdown-frontmatter kinds (skill/agent/command), parses `---` frontmatter.
+    For markdown-frontmatter kinds (skill/agent/command), reads via extract_metadata()
+    so both inline frontmatter and bare-YAML sidecars are supported.
     For pure-YAML kinds (hook/pi-extension), parses the whole file.
-    For mcp, reads markdown frontmatter from sibling README.md.
+    For mcp, reads metadata from sibling README.md or sidecar via frontmatter_path().
     For plugin (JSON manifest), reads the agent_toolkit_cli block.
-    Falls back to markdown-frontmatter when kind is unknown (legacy callers).
+    Falls back to extract_metadata() when kind is unknown (legacy callers).
     """
     fm: dict | None
     if kind in {"hook", "pi-extension"}:
@@ -319,9 +320,10 @@ def _asset_harnesses(asset_path: Path, kind: str | None = None) -> list[str]:
         fm = doc.get("agent_toolkit_cli") or {}
     elif kind == "mcp" or asset_path.name == "config.json":
         fm_path = frontmatter_path(asset_path, "mcp")
-        fm = (extract_frontmatter(fm_path) if fm_path.is_file() else None) or {}
+        fm = (extract_metadata(fm_path) if fm_path.is_file() else None) or {}
     else:
-        fm = extract_frontmatter(asset_path) or {}
+        fm_path = frontmatter_path(asset_path, kind) if kind else asset_path
+        fm = extract_metadata(fm_path) or {}
     spec = (fm or {}).get("spec") or {}
     return list(spec.get("harnesses") or [])
 

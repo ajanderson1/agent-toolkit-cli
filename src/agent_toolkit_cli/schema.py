@@ -8,7 +8,7 @@ from pathlib import Path
 import jsonschema
 import yaml
 
-from agent_toolkit_cli.walker import Asset, extract_frontmatter, frontmatter_path
+from agent_toolkit_cli.walker import Asset, extract_metadata, frontmatter_path
 
 
 class Validator:
@@ -59,14 +59,15 @@ class Validator:
 
     def _load_metadata(self, asset: Asset) -> dict | None:
         if asset.kind in {"skill", "agent", "command"}:
-            return extract_frontmatter(asset.path)
+            fm_path = frontmatter_path(asset.path, asset.kind)
+            return extract_metadata(fm_path)
         if asset.kind in {"hook", "pi-extension"}:
             return yaml.safe_load(asset.path.read_text())
         if asset.kind == "mcp":
             fm_path = frontmatter_path(asset.path, asset.kind)
             if not fm_path.is_file():
                 return None
-            return extract_frontmatter(fm_path)
+            return extract_metadata(fm_path)
         if asset.kind == "plugin":
             doc = json.loads(asset.path.read_text())
             return doc.get("agent_toolkit_cli")

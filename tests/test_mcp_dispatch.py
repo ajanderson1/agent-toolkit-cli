@@ -58,17 +58,24 @@ def test_build_mcp_entries_skips_unknown_slug(tmp_path):
     assert entries[0].name == "context7"
 
 
-def test_build_mcp_entries_skips_when_readme_missing(tmp_path):
-    """A slug whose mcps/<slug>/README.md is missing is skipped (not an error)."""
+def test_build_mcp_entries_no_metadata_yields_empty_mcp_spec(tmp_path):
+    """A slug with config.json but no metadata source produces an entry with empty mcp_spec.
+
+    Previously README.md was required; now only config.json is required.
+    Metadata can come from README.md frontmatter or a bare-YAML sidecar;
+    if neither exists the entry is still returned (with an empty mcp_spec).
+    """
     from agent_toolkit_cli.commands._mcp_dispatch import _build_mcp_entries
 
     mcp_dir = tmp_path / "mcps" / "incomplete"
     mcp_dir.mkdir(parents=True)
     (mcp_dir / "config.json").write_text('{"command":"npx"}\n')
-    # No README.md.
+    # No README.md and no sidecar — metadata will be empty.
 
     entries = _build_mcp_entries(tmp_path, ["incomplete"])
-    assert entries == []
+    assert len(entries) == 1
+    assert entries[0].name == "incomplete"
+    assert entries[0].mcp_spec == {}
 
 
 def test_apply_link_dry_run_prints_would_op_no_write(monkeypatch, tmp_path):

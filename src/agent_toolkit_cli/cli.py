@@ -17,6 +17,7 @@ from agent_toolkit_cli.commands.inventory import inventory
 from agent_toolkit_cli.commands.link import link
 from agent_toolkit_cli.commands.list import list_cmd
 from agent_toolkit_cli.commands.new import new
+from agent_toolkit_cli.commands.migrate_mcps_to_sidecar import migrate_mcps_to_sidecar
 from agent_toolkit_cli.commands.unlink import unlink
 
 
@@ -66,6 +67,7 @@ main.add_command(inventory)
 main.add_command(link)
 main.add_command(list_cmd)
 main.add_command(new)
+main.add_command(migrate_mcps_to_sidecar)
 main.add_command(unlink)
 main.add_command(yaml_edit)
 main.add_command(list_json)
