@@ -10,19 +10,20 @@ from pathlib import Path
 from agent_toolkit_cli.commands._list_json import _build_inventory, user_scope_covered
 from agent_toolkit_cli.doctor.result import GroupResult, Status
 
+_USER_LINKED_STATUSES = frozenset({"linked", "linked-matches", "linked-drifted"})
+
 
 def run(toolkit_root: Path, *, project_root: Path | None = None) -> GroupResult:
     project_root = Path(project_root) if project_root is not None else Path.cwd()
     inventory = _build_inventory(toolkit_root, project_root)
 
     overlaps: list[str] = []
-    _LINKED = frozenset({"linked", "linked-matches", "linked-drifted"})
     for asset in inventory.get("assets", []):
         slug = asset.get("slug", "?")
         for cell in asset.get("cells", []):
             if cell.get("scope") != "project":
                 continue
-            if cell.get("status") not in _LINKED:
+            if cell.get("status") not in _USER_LINKED_STATUSES:
                 continue
             harness = cell.get("harness")
             if user_scope_covered(inventory, slug=slug, harness=harness):
