@@ -710,8 +710,6 @@ async def test_scope_keyboard_toggle_still_works():
     """Regression for #99: the 's' keybinding still toggles scope after the
     chips were replaced by the ScopeToggle widget. Keyboard path is unchanged.
     """
-    from agent_toolkit_tui.widgets import AssetGrid  # noqa: F401
-
     runner = FakeRunner(_doc())
     app = TUIApp(toolkit_root=Path("/r"), runner=runner)
     async with app.run_test(size=(120, 36)) as pilot:
@@ -736,7 +734,7 @@ async def test_content_header_markup_is_kind_and_count_only():
         await pilot.pause()
         markup = app._build_content_header()
         assert "@click" not in markup, markup
-        assert "[dim]" not in markup or markup.count("[dim]") <= 1, markup
+        assert markup.count("[dim]") == 1, markup  # the · separator only
         # The kind label and count must still be present.
         assert "items" in markup
 

@@ -13,6 +13,7 @@ from pathlib import Path
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
+from textual.css.query import NoMatches
 from textual.screen import ModalScreen
 from textual.widgets import Button, DataTable, Footer, Header, Input, Label, Static
 
@@ -191,7 +192,7 @@ class TUIApp(App):
         self.query_one("#asset-grid", AssetGrid).set_scope(scope)
         try:
             self.query_one("#scope-toggle", ScopeToggle).set_active(scope)
-        except Exception:
+        except NoMatches:
             pass
         self._refresh_content_header()
         self._refresh_status_bar()
