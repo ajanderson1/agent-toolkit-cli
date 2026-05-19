@@ -18,7 +18,7 @@ from agent_toolkit_cli.harness_adapters.base import (
 )
 
 
-_KNOWN_HARNESSES: tuple[str, ...] = ("claude", "codex", "opencode", "pi")
+_KNOWN_HARNESSES: tuple[str, ...] = ("claude", "codex", "opencode", "gemini", "pi")
 
 
 def get_adapter(harness: str, kind: str = "mcp"):
@@ -46,6 +46,9 @@ def get_adapter(harness: str, kind: str = "mcp"):
     if harness == "opencode" and kind == "mcp":
         from agent_toolkit_cli.harness_adapters.opencode import OpenCodeAdapter
         return OpenCodeAdapter()
+    if harness == "gemini" and kind == "mcp":
+        from agent_toolkit_cli.harness_adapters.gemini import GeminiAdapter
+        return GeminiAdapter()
     return UnimplementedAdapter(harness)
 
 
