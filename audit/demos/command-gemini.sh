@@ -26,12 +26,14 @@ source "$REPO_ROOT/audit/lib/narrate.sh"
 source "$REPO_ROOT/audit/lib/assert.sh"
 sandbox::init
 
-# Projection shape for (gemini, command) — per _support.py:
-#   User target:    ~/.gemini/commands/<slug>.md   (raw file symlink)
-#   Project target: .gemini/commands/<slug>.md     (raw file symlink)
+# Projection shape for (gemini, command) — translated cell:
+#   User target:    ~/.gemini/commands/<slug>.toml   (symlink → cache)
+#   Project target: .gemini/commands/<slug>.toml     (symlink → cache)
+# The cache lives under ~/.gemini/.agent-toolkit-cache/command/<slug>.toml
+# (project scope: .gemini/.agent-toolkit-cache/command/<slug>.toml).
 
-TARGET="$HOME/.gemini/commands/demo-command.md"
-EXPECTED_TARGET="$AGENT_TOOLKIT_REPO/commands/demo-command.md"
+TARGET="$HOME/.gemini/commands/demo-command.toml"
+EXPECTED_TARGET="$HOME/.gemini/.agent-toolkit-cache/command/demo-command.toml"
 ALLOWLIST="$HOME/.agent-toolkit.yaml"
 
 # ---------- Lifecycle ----------
@@ -55,10 +57,12 @@ pause 1
 
 step "Lifecycle 4/4 — project-scope link"
 mkdir -p "$HOME/proj" && cd "$HOME/proj"
+PROJ_REAL="$(pwd -P)"
 git init -q
 run "agent-toolkit-cli --project . link project gemini command:demo-command"
 assert_exit_code 0 -- agent-toolkit-cli --project . link project gemini command:demo-command
-assert_symlink_exists ".gemini/commands/demo-command.md"
+assert_symlink_exists ".gemini/commands/demo-command.toml"
+assert_symlink_target ".gemini/commands/demo-command.toml" "$PROJ_REAL/.gemini/.agent-toolkit-cache/command/demo-command.toml"
 cd - >/dev/null
 
 # ---------- Validation ----------
