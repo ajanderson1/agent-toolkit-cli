@@ -37,7 +37,7 @@ def _doc(repo: str = "/r") -> dict:
     def _unsupported_cells(repo: str, slug: str, kind_dir: str) -> list[dict]:
         """Generate cells for all 5 harnesses x 2 scopes where only claude is supported."""
         cells = []
-        for harness in ["claude", "codex", "opencode", "pi"]:
+        for harness in ["claude", "codex", "opencode", "gemini", "pi"]:
             for scope in ["user", "project"]:
                 if harness == "claude":
                     cells.append({"harness": harness, "scope": scope, "status": "unlinked",
@@ -49,7 +49,7 @@ def _doc(repo: str = "/r") -> dict:
 
     return {
         "toolkit_root": repo,
-        "harnesses": ["claude", "codex", "opencode", "pi"],
+        "harnesses": ["claude", "codex", "opencode", "gemini", "pi"],
         "assets": [
             {
                 "kind": "skill", "slug": "alpha",
@@ -76,6 +76,10 @@ def _doc(repo: str = "/r") -> dict:
                      "target": None, "allowlisted": False},
                     {"harness": "opencode", "scope": "project", "status": "unsupported",
                      "target": None, "allowlisted": False},
+                    {"harness": "gemini", "scope": "user", "status": "unsupported",
+                     "target": None, "allowlisted": False},
+                    {"harness": "gemini", "scope": "project", "status": "unsupported",
+                     "target": None, "allowlisted": False},
                     {"harness": "pi", "scope": "user", "status": "unsupported",
                      "target": None, "allowlisted": False},
                     {"harness": "pi", "scope": "project", "status": "unsupported",
@@ -93,7 +97,7 @@ def _doc(repo: str = "/r") -> dict:
                 "cells": [
                     {"harness": h, "scope": s, "status": "unsupported",
                      "target": None, "allowlisted": False}
-                    for h in ["claude", "codex", "opencode", "pi"]
+                    for h in ["claude", "codex", "opencode", "gemini", "pi"]
                     for s in ["user", "project"]
                 ],
             },
@@ -285,7 +289,7 @@ async def test_a_key_links_all_in_column_then_unlinks_all():
              "target": None, "allowlisted": False},
             *[{"harness": h, "scope": s, "status": "unsupported",
                "target": None, "allowlisted": False}
-              for h in ("codex", "opencode", "pi") for s in ("user", "project")],
+              for h in ("codex", "opencode", "gemini", "pi") for s in ("user", "project")],
         ],
     })
     runner = FakeRunner(doc)
