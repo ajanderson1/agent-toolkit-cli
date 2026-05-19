@@ -264,6 +264,43 @@ def test_unlink_plan_multi(env, seed_skill):
 
 
 # ===========================================================================
+# issue #135 — unlink --plan must reconcile disk when slug is absent from
+# the allowlist but a stale projection (e.g. orphan symlink + cache entry)
+# still exists. Previously the plan path short-circuited as "idempotent"
+# without touching disk, leaving stale symlinks under ~/.codex/skills/ etc.
+# ===========================================================================
+
+
+def test_unlink_plan_prunes_orphan_when_not_in_allowlist(env, seed_skill):
+    home = env["home"]
+    toolkit = env["toolkit_root"]
+    seed_skill(toolkit, "android-termux", ["codex"])
+    # Allowlist is empty — slug is NOT present.
+    (home / ".agent-toolkit.yaml").write_text(
+        "skills: []\nagents: []\ncommands: []\nhooks: []\n"
+        "plugins: []\nmcps: []\npi_extensions: []\npi_packages: []\n"
+    )
+    # But a stale projection (symlink into the toolkit repo) is on disk.
+    target_dir = home / ".codex" / "skills"
+    target_dir.mkdir(parents=True)
+    stale = target_dir / "android-termux"
+    stale.symlink_to(toolkit / "skills" / "android-termux")
+    assert stale.is_symlink()
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        ["--toolkit-repo", str(toolkit), "unlink", "user", "codex", "--plan", "-"],
+        input="skill:android-termux\n",
+    )
+
+    assert result.exit_code == 0, (result.output, result.stderr)
+    assert not stale.exists() and not stale.is_symlink(), (
+        "stale projection must be pruned even when slug is absent from allowlist"
+    )
+
+
+# ===========================================================================
 # test_unlink_grammar.bats:122-125 — --plan rejects combination with --all
 # ===========================================================================
 

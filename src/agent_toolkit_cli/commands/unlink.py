@@ -325,11 +325,10 @@ def _do_plan_entry(
     allowed = read_allowlist(allowlist_path)
     prev_snapshot: dict[str, list[str]] = dict(allowed)
     slugs_in_section = list(allowed.get(section, []))
-    if slug not in slugs_in_section:
-        # Idempotent — not an error in plan mode
-        return True
 
-    if not dry_run:
+    # If slug is in the allowlist, drop it; otherwise still fall through to
+    # project_from_file so stale projections on disk get swept (#135).
+    if slug in slugs_in_section and not dry_run:
         try:
             remove_slug(allowlist_path, section, slug)
         except (ValueError, OSError) as exc:
