@@ -47,7 +47,7 @@ def get_adapter(harness: str, kind: str = "mcp"):
     if harness == "gemini" and kind == "mcp":
         from agent_toolkit_cli.harness_adapters.gemini import GeminiAdapter
         return GeminiAdapter()
-    return UnimplementedAdapter(harness)
+    return UnimplementedAdapter(harness, kind=kind)
 
 
 __all__ = [

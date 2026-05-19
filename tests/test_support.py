@@ -41,7 +41,8 @@ def test_supported_pairs_known_members():
     assert ("claude", "skill") in SUPPORTED_PAIRS
     assert ("claude", "agent") in SUPPORTED_PAIRS
     assert ("claude", "command") in SUPPORTED_PAIRS
-    assert ("claude", "hook") in SUPPORTED_PAIRS
+    # ("claude", "hook"): unsupported until ClaudeHookAdapter lands (#123).
+    assert ("claude", "hook") not in SUPPORTED_PAIRS
     assert ("claude", "plugin") in SUPPORTED_PAIRS
     assert ("codex", "skill") in SUPPORTED_PAIRS
     assert ("opencode", "skill") in SUPPORTED_PAIRS
@@ -122,9 +123,21 @@ def test_supported_kinds_for_claude_returns_full_kind_set():
     by per-harness MCP adapters)."""
     from agent_toolkit_cli._support import supported_kinds_for
 
+    # "hook" intentionally omitted — no ClaudeHookAdapter exists yet (#123).
     assert supported_kinds_for("claude") == (
-        "skill", "agent", "command", "hook", "plugin",
+        "skill", "agent", "command", "plugin",
     )
+
+
+def test_claude_hook_unsupported_until_adapter_lands():
+    """Regression guard for #123: (claude, hook) is intentionally absent from
+    the support matrix until a ClaudeHookAdapter exists. Re-add the row in
+    _USER_TARGETS / _PROJECT_TARGETS at the same time as the adapter.
+    """
+    assert ("claude", "hook") not in SUPPORTED_PAIRS
+    assert is_supported("claude", "hook") is False
+    assert is_supported("claude", "hook", scope="user") is False
+    assert is_supported("claude", "hook", scope="project") is False
 
 
 def test_supported_kinds_for_unknown_harness_is_empty():

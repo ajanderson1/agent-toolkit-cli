@@ -25,69 +25,55 @@ source "$REPO_ROOT/audit/lib/assert.sh"
 sandbox::init
 
 # Projection shape for (claude, hook):
-#   UNIMPLEMENTED — no ClaudeHookAdapter exists yet.
+#   UNSUPPORTED (gap) — no ClaudeHookAdapter exists yet. Fixed via #123:
+#   the pair was removed from `_USER_TARGETS` / `_PROJECT_TARGETS` so the
+#   CLI no longer silently no-ops. `link user claude hook:<slug>` now exits
+#   with the structured "unsupported (harness, kind) pair" error (exit 2)
+#   and the allowlist is NOT mutated.
 #
-#   `get_adapter("claude", kind="hook")` returns UnimplementedAdapter.
-#   The link command therefore:
-#     1. Adds the slug to the allowlist (.agent-toolkit.yaml under [hooks]).
-#     2. Skips the config_file+folder materialisation entirely, printing:
-#        "no MCP adapter for harness claude yet — skipping"
-#     3. Does NOT create any file under $HOME/.claude/hooks/<slug>/.
-#     4. Does NOT mutate $HOME/.claude/settings.json.
-#
-#   This is the primary finding of this cell. All lifecycle assertions below
-#   verify the allowlist side (what DOES happen) and confirm the on-disk
-#   materialisation gap (what DOESN'T happen).
+#   Re-introduce the row in `_support.py` once `ClaudeHookAdapter` lands.
 
 ALLOWLIST="$HOME/.agent-toolkit.yaml"
 HOOKS_SLOT="$CLAUDE_CONFIG_DIR/hooks/demo-hook"
 SETTINGS_JSON="$CLAUDE_CONFIG_DIR/settings.json"
 
 # ---------- Lifecycle ----------
-step "Lifecycle 1/4 — link user claude hook:demo-hook"
-run "agent-toolkit-cli link user claude hook:demo-hook"
-# Allowlist IS written — the slug lands in [hooks].
-assert_file_contains "$ALLOWLIST" "demo-hook"
-# On-disk materialisation does NOT happen — no file under ~/.claude/hooks/demo-hook/.
+step "Lifecycle 1/4 — link user claude hook:demo-hook is rejected (unsupported pair)"
+run "agent-toolkit-cli link user claude hook:demo-hook || true"
+# Exit code is non-zero (validate_pair → exit 2).
+assert_exit_code 2 -- agent-toolkit-cli link user claude hook:demo-hook
+# Allowlist is NOT mutated: no `demo-hook` entry under hooks:.
+if [[ -f "$ALLOWLIST" ]]; then
+  assert_exit_code 1 -- grep -qF "demo-hook" "$ALLOWLIST"
+fi
+# On-disk materialisation does NOT happen.
 assert_exit_code 1 -- test -e "$HOOKS_SLOT"
 # settings.json is NOT created.
 assert_exit_code 1 -- test -f "$SETTINGS_JSON"
-# FINDING: (claude, hook) is allowlist-only; the hook script is never materialised
-# and settings.json is never edited because ClaudeHookAdapter does not exist.
-_assert_record 1 "FINDING: claude hook materialisation unimplemented — allowlist written, no files on disk"
+_assert_record 1 "FINDING: (claude, hook) is unsupported (gap) until ClaudeHookAdapter lands — link rejected at validate_pair"
 pause 1
 
-step "Lifecycle 2/4 — re-running link is a no-op (idempotency)"
-run "agent-toolkit-cli link user claude hook:demo-hook"
-# Still in allowlist.
-assert_file_contains "$ALLOWLIST" "demo-hook"
-# Still no on-disk slot.
-assert_exit_code 1 -- test -e "$HOOKS_SLOT"
+step "Lifecycle 2/4 — re-running rejected link is still rejected (idempotency)"
+assert_exit_code 2 -- agent-toolkit-cli link user claude hook:demo-hook
+if [[ -f "$ALLOWLIST" ]]; then
+  assert_exit_code 1 -- grep -qF "demo-hook" "$ALLOWLIST"
+fi
 pause 1
 
-step "Lifecycle 3/4 — unlink user claude hook:demo-hook"
-run "agent-toolkit-cli unlink user claude hook:demo-hook"
-# Unlink removes slug from allowlist.
-assert_exit_code 1 -- grep -qF "demo-hook" "$ALLOWLIST"
-# Nothing to remove on disk — no slot existed.
-# FINDING: unlink is a clean no-op on-disk (nothing to remove; allowlist is authoritative).
-_assert_record 1 "FINDING: unlink is clean no-op on-disk (no slot was ever materialised)"
+step "Lifecycle 3/4 — unlink is also rejected (same validate_pair gate)"
+assert_exit_code 2 -- agent-toolkit-cli unlink user claude hook:demo-hook
+_assert_record 1 "FINDING: unlink mirrors link — unsupported pair refused with exit 2"
 pause 1
 
-step "Lifecycle 4/4 — project-scope link"
+step "Lifecycle 4/4 — project-scope link is also rejected"
 mkdir -p "$HOME/proj" && cd "$HOME/proj"
 git init -q
-run "agent-toolkit-cli --project . link project claude hook:demo-hook"
-# Project-scope allowlist written.
-assert_file_contains ".agent-toolkit.yaml" "demo-hook"
-# Project-scope on-disk slot also absent (same unimplemented adapter).
+assert_exit_code 2 -- agent-toolkit-cli --project . link project claude hook:demo-hook
+if [[ -f ".agent-toolkit.yaml" ]]; then
+  assert_exit_code 1 -- grep -qF "demo-hook" ".agent-toolkit.yaml"
+fi
 assert_exit_code 1 -- test -e ".claude/hooks/demo-hook"
-run "agent-toolkit-cli --project . unlink project claude hook:demo-hook"
-assert_exit_code 1 -- grep -qF "demo-hook" ".agent-toolkit.yaml"
 cd - >/dev/null
-
-# Re-establish user-scope link so the remaining ops have something to inspect.
-run "agent-toolkit-cli link user claude hook:demo-hook"
 
 # ---------- Validation ----------
 step "Validation 1/3 — check passes on the projected state"
@@ -116,7 +102,7 @@ assert_exit_code 0 -- agent-toolkit-cli --help
 
 # ---------- Inspection ----------
 step "Inspection 1/3 — list"
-run "agent-toolkit-cli list hook claude"
+run "agent-toolkit-cli list hook claude || true"
 
 step "Inspection 2/3 — diff"
 run "agent-toolkit-cli --toolkit-repo \"$AGENT_TOOLKIT_REPO\" diff user claude || true"
@@ -124,49 +110,15 @@ run "agent-toolkit-cli --toolkit-repo \"$AGENT_TOOLKIT_REPO\" diff user claude |
 step "Inspection 3/3 — inventory"
 run "agent-toolkit-cli --toolkit-repo \"$AGENT_TOOLKIT_REPO\" inventory"
 
-# ---------- Human-edit robustness ----------
-step "Robustness 1/3 — drop demo-hook from allowlist, re-run link, confirm absent"
-# Use uv run python3 so PyYAML is available.
-uv run python3 -c "
-import yaml, sys
-p='$ALLOWLIST'
-d=yaml.safe_load(open(p))
-d['hooks']=[s for s in (d.get('hooks') or []) if s!='demo-hook']
-open(p,'w').write(yaml.safe_dump(d))
-"
-run "agent-toolkit-cli link user claude"
-assert_exit_code 1 -- grep -qF "demo-hook" "$ALLOWLIST"
-
-step "Robustness 2/3 — doctor blind-spot: no on-disk slot to inspect"
-# Re-link to have the slug in the allowlist.
-run "agent-toolkit-cli link user claude hook:demo-hook"
-# With no ClaudeHookAdapter, doctor has no materialised artefact to check.
-# symlink-integrity only walks the slot dir; if the slot dir doesn't exist
-# (which it won't for unimplemented adapters), all hooks are silently absent
-# from the report.
-run "agent-toolkit-cli doctor --group symlink-integrity || true"
-assert_exit_code 0 -- agent-toolkit-cli doctor --group symlink-integrity --exit-code
-if uv run python3 -c "
-import subprocess, sys
-r = subprocess.run(
-    ['agent-toolkit-cli', 'doctor', '--group', 'symlink-integrity'],
-    capture_output=True, text=True
-)
-if 'demo-hook' not in r.stdout + r.stderr:
-    sys.exit(0)  # not mentioned = blind spot confirmed
-sys.exit(1)  # mentioned = doctor caught it
-"; then
-  _assert_record 1 "FINDING: doctor blind to hook:demo-hook (no slot exists; adapter unimplemented)"
-else
-  _assert_record 1 "doctor surfaced hook:demo-hook (better than expected)"
-fi
-
-step "Robustness 3/3 — settings.json never written; no stale-prune scenario"
-# Since settings.json is never written, there is no stale-prune scenario.
-# This is a structural gap: if a user manually adds a hook to settings.json
-# and then unlinks the toolkit, the stale entry is invisible to the CLI.
+# ---------- Robustness ----------
+step "Robustness 1/2 — settings.json is never written for (claude, hook)"
 assert_exit_code 1 -- test -f "$SETTINGS_JSON"
-_assert_record 1 "FINDING: settings.json never written; stale-prune path is unreachable"
+_assert_record 1 "FINDING: settings.json never written (no adapter yet); stale-prune path is unreachable"
+
+step "Robustness 2/2 — once ClaudeHookAdapter lands, re-enable this cell"
+# Marker for future audit work: when the adapter is implemented, this cell
+# should be rewritten to exercise the materialise + settings.json edit path.
+_assert_record 1 "FOLLOWUP: re-author this audit cell when ClaudeHookAdapter exists (#123)"
 
 assertions::finish
 rc=$?
