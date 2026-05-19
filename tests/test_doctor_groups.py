@@ -228,6 +228,119 @@ def test_symlinks_group_flags_dangling(tmp_path, monkeypatch):
     assert any("ghost" in f and "dangl" in f.lower() for f in result.findings)
 
 
+def _make_agent_with_harnesses(toolkit_root, slug, harnesses):
+    """Write a toolkit-shape agent at agents/<slug>/<slug>.md."""
+    agent_dir = toolkit_root / "agents" / slug
+    agent_dir.mkdir(parents=True, exist_ok=True)
+    (agent_dir / f"{slug}.md").write_text(
+        "---\n"
+        "apiVersion: agent-toolkit/v1alpha2\n"
+        f"metadata:\n  name: {slug}\n  description: X.\n  lifecycle: stable\n"
+        "spec:\n  origin: first-party\n  vendored_via: none\n  harnesses:\n"
+        + "".join(f"    - {h}\n" for h in harnesses)
+        + "---\n# x\n"
+    )
+
+
+def _make_command_with_harnesses(toolkit_root, slug, harnesses):
+    """Write a toolkit-shape command at commands/<slug>.md."""
+    commands_dir = toolkit_root / "commands"
+    commands_dir.mkdir(parents=True, exist_ok=True)
+    (commands_dir / f"{slug}.md").write_text(
+        "---\n"
+        "apiVersion: agent-toolkit/v1alpha2\n"
+        f"metadata:\n  name: {slug}\n  description: X.\n  lifecycle: stable\n"
+        "spec:\n  origin: first-party\n  vendored_via: none\n  harnesses:\n"
+        + "".join(f"    - {h}\n" for h in harnesses)
+        + "---\n# x\n"
+    )
+
+
+def _make_plugin_with_harnesses(toolkit_root, slug, harnesses):
+    """Write a toolkit-shape plugin at plugins/<slug>/.claude-plugin/plugin.json."""
+    import json
+    cp_dir = toolkit_root / "plugins" / slug / ".claude-plugin"
+    cp_dir.mkdir(parents=True, exist_ok=True)
+    (cp_dir / "plugin.json").write_text(json.dumps({
+        "name": slug,
+        "version": "0.0.1",
+        "agent_toolkit_cli": {
+            "spec": {
+                "origin": "first-party",
+                "vendored_via": "none",
+                "harnesses": list(harnesses),
+            },
+            "metadata": {"name": slug, "lifecycle": "stable"},
+        },
+    }))
+
+
+def test_symlinks_group_fails_when_skill_slot_replaced_by_dir(tmp_path, monkeypatch):
+    """Regression: doctor must report FAIL when a skill symlink is replaced
+    by a real directory (#121)."""
+    from agent_toolkit_cli.doctor.symlinks import run as run_sl
+    _make_skill_with_harnesses(tmp_path, "alpha", ["claude"])
+    fake_home = tmp_path / "home"
+    skill_slot = fake_home / ".claude" / "skills" / "alpha"
+    skill_slot.mkdir(parents=True)  # real dir where a symlink should be
+    monkeypatch.setenv("HOME", str(fake_home))
+    result = run_sl(tmp_path, harness="claude")
+    assert result.status == Status.FAIL
+    assert any(
+        "alpha" in f and "not a symlink" in f for f in result.findings
+    ), result.findings
+
+
+def test_symlinks_group_fails_when_agent_slot_replaced_by_file(tmp_path, monkeypatch):
+    """Regression: doctor must report FAIL when an agent symlink is replaced
+    by a regular file (#121)."""
+    from agent_toolkit_cli.doctor.symlinks import run as run_sl
+    _make_agent_with_harnesses(tmp_path, "bravo", ["claude"])
+    fake_home = tmp_path / "home"
+    agent_dir = fake_home / ".claude" / "agents"
+    agent_dir.mkdir(parents=True)
+    (agent_dir / "bravo.md").write_text("hi")  # real file, not a symlink
+    monkeypatch.setenv("HOME", str(fake_home))
+    result = run_sl(tmp_path, harness="claude")
+    assert result.status == Status.FAIL
+    assert any(
+        "bravo" in f and "not a symlink" in f for f in result.findings
+    ), result.findings
+
+
+def test_symlinks_group_fails_when_command_slot_replaced_by_dir(tmp_path, monkeypatch):
+    """Regression: doctor must report FAIL when a command symlink is replaced
+    by a directory (#121)."""
+    from agent_toolkit_cli.doctor.symlinks import run as run_sl
+    _make_command_with_harnesses(tmp_path, "charlie", ["claude"])
+    fake_home = tmp_path / "home"
+    cmd_dir = fake_home / ".claude" / "commands"
+    cmd_dir.mkdir(parents=True)
+    (cmd_dir / "charlie.md").mkdir()  # a directory at the .md slot — replaced
+    monkeypatch.setenv("HOME", str(fake_home))
+    result = run_sl(tmp_path, harness="claude")
+    assert result.status == Status.FAIL
+    assert any(
+        "charlie" in f and "not a symlink" in f for f in result.findings
+    ), result.findings
+
+
+def test_symlinks_group_fails_when_plugin_slot_replaced_by_dir(tmp_path, monkeypatch):
+    """Regression: doctor must report FAIL when a plugin symlink is replaced
+    by a real directory (#121)."""
+    from agent_toolkit_cli.doctor.symlinks import run as run_sl
+    _make_plugin_with_harnesses(tmp_path, "delta", ["claude"])
+    fake_home = tmp_path / "home"
+    plugin_slot = fake_home / ".claude" / "plugins" / "delta"
+    plugin_slot.mkdir(parents=True)  # real dir at the plugin slot
+    monkeypatch.setenv("HOME", str(fake_home))
+    result = run_sl(tmp_path, harness="claude")
+    assert result.status == Status.FAIL
+    assert any(
+        "delta" in f and "not a symlink" in f for f in result.findings
+    ), result.findings
+
+
 def test_conventions_group_warn_when_topic_missing(tmp_path, monkeypatch):
     from agent_toolkit_cli.doctor.conventions import run as run_conv
     (tmp_path / "CONVENTIONS.md").write_text("# C")
