@@ -438,3 +438,11 @@ def test_pi_agent_user_scope_unlink_clears_both_slots(tmp_path, monkeypatch):
     )
     assert not primary.exists()
     assert not alias.exists()
+
+
+def test_harness_home_path_gemini(monkeypatch, tmp_path):
+    """harness_home_path returns ~/.gemini for gemini."""
+    from agent_toolkit_cli.commands._link_lib import harness_home_path
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    assert harness_home_path("gemini") == tmp_path / ".gemini"

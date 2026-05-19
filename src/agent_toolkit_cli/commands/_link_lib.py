@@ -35,6 +35,7 @@ HARNESS_HOMES: dict[str, str] = {
     "claude":   ".claude",
     "codex":    ".codex",
     "opencode": ".config/opencode",
+    "gemini":   ".gemini",
     "pi":       ".pi",
 }
 
