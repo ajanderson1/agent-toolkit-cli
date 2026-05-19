@@ -445,7 +445,10 @@ def test_list_json_mcp_codex_linked_drifted_after_handedit(tmp_path, monkeypatch
 
 
 def test_list_json_mcp_claude_unsupported(tmp_path, monkeypatch):
-    """Cells for harnesses with UnimplementedAdapter still report 'unsupported'."""
+    """Cells for declared harnesses that are unallowlisted at the queried scope and
+    not installed report 'unlinked' (#141). Project-allowlisted asset on user scope
+    surfaces user-scope as 'unlinked', not 'unsupported'.
+    """
     from agent_toolkit_cli.cli import main
 
     home = tmp_path / "home"
@@ -470,7 +473,8 @@ def test_list_json_mcp_claude_unsupported(tmp_path, monkeypatch):
     [mcp] = [a for a in data["assets"] if a["kind"] == "mcp"]
     user_claude = next(c for c in mcp["cells"]
                        if c["harness"] == "claude" and c["scope"] == "user")
-    assert user_claude["status"] == "unsupported"
+    assert user_claude["status"] == "unlinked"
+    assert user_claude["allowlisted"] is False
 
 
 # ---------------------------------------------------------------------------
@@ -567,6 +571,70 @@ def test_list_json_hook_codex_installed_not_allowlisted(tmp_path, monkeypatch):
                       if c["harness"] == "codex" and c["scope"] == "user")
     assert user_codex["status"] == "installed-not-allowlisted"
     assert user_codex["target"] == str(target)
+    assert user_codex["allowlisted"] is False
+
+
+def test_list_json_mcp_codex_unlinked_when_declared_not_allowlisted(tmp_path, monkeypatch):
+    """#141: MCP declares codex but is unallowlisted + uninstalled → 'unlinked', not 'unsupported'."""
+    from agent_toolkit_cli.cli import main
+
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / ".codex").mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.delenv("AGENT_TOOLKIT_REPO", raising=False)
+    # No allow-list, nothing installed.
+
+    toolkit = tmp_path / "toolkit"
+    _seed_mcp_toolkit(toolkit, ["codex"])
+
+    project = tmp_path / "project"
+    project.mkdir()
+
+    runner = CliRunner()
+    r = runner.invoke(
+        main,
+        ["list", "--format", "json", "--toolkit-repo", str(toolkit), "--project", str(project)],
+    )
+    assert r.exit_code == 0, r.output
+    data = json.loads(r.output)
+    [mcp] = [a for a in data["assets"] if a["kind"] == "mcp"]
+    user_codex = next(c for c in mcp["cells"]
+                      if c["harness"] == "codex" and c["scope"] == "user")
+    assert user_codex["status"] == "unlinked"
+    assert user_codex["target"] is None
+    assert user_codex["allowlisted"] is False
+
+
+def test_list_json_hook_codex_unlinked_when_declared_not_allowlisted(tmp_path, monkeypatch):
+    """#141: hook declares codex but is unallowlisted + uninstalled → 'unlinked', not 'unsupported'."""
+    from agent_toolkit_cli.cli import main
+
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / ".codex").mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.delenv("AGENT_TOOLKIT_REPO", raising=False)
+    # No allow-list, nothing installed.
+
+    toolkit = tmp_path / "toolkit"
+    _seed_hook_toolkit(toolkit, ["codex"])
+
+    project = tmp_path / "project"
+    project.mkdir()
+
+    runner = CliRunner()
+    r = runner.invoke(
+        main,
+        ["list", "--format", "json", "--toolkit-repo", str(toolkit), "--project", str(project)],
+    )
+    assert r.exit_code == 0, r.output
+    data = json.loads(r.output)
+    [hook] = [a for a in data["assets"] if a["kind"] == "hook"]
+    user_codex = next(c for c in hook["cells"]
+                      if c["harness"] == "codex" and c["scope"] == "user")
+    assert user_codex["status"] == "unlinked"
+    assert user_codex["target"] is None
     assert user_codex["allowlisted"] is False
 
 
