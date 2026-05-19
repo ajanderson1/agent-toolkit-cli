@@ -73,3 +73,26 @@ def remove_package(path: Path, source: str) -> None:
     if source not in current:
         return
     write_packages(path, [s for s in current if s != source])
+
+
+def read_extensions_overrides(path: Path) -> list[str]:
+    """Return `extensions[]` from settings.json (override-pattern list).
+
+    Schema-tolerant: missing file -> [], missing key -> [], non-list -> [].
+    Raises ValueError on malformed JSON, mentioning the path.
+    """
+    if not path.exists():
+        return []
+    text = path.read_text(encoding="utf-8")
+    if not text.strip():
+        return []
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"malformed settings.json at {path}: {exc}") from exc
+    if not isinstance(parsed, dict):
+        return []
+    extensions = parsed.get("extensions") or []
+    if not isinstance(extensions, list):
+        return []
+    return [str(e) for e in extensions if e]
