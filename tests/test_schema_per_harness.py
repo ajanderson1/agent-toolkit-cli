@@ -5,14 +5,17 @@ Spec: docs/superpowers/specs/2026-05-20-skill-sidecar-shape-design.md
 from __future__ import annotations
 
 import json
-from importlib.resources import files
+from pathlib import Path
 
 import jsonschema
+import pytest
+
+SCHEMA_PATH = Path(__file__).parent.parent / "src/agent_toolkit_cli/_schemas/asset-frontmatter.v1alpha2.json"
 
 
-def _schema():
-    text = (files("agent_toolkit_cli") / "_schemas" / "asset-frontmatter.v1alpha2.json").read_text()
-    return json.loads(text)
+@pytest.fixture
+def schema() -> dict:
+    return json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
 
 
 def _base_skill_doc() -> dict:
@@ -31,18 +34,25 @@ def _base_skill_doc() -> dict:
     }
 
 
-def test_per_harness_accepts_pi_argument_hint():
+def test_per_harness_accepts_pi_argument_hint(schema):
     doc = _base_skill_doc()
     doc["spec"]["per_harness"] = {"pi": {"argument_hint": "<filename>"}}
-    jsonschema.validate(doc, _schema())
+    jsonschema.validate(doc, schema)
 
 
-def test_per_harness_accepts_unknown_harness_block():
+def test_per_harness_accepts_unknown_harness_block(schema):
     doc = _base_skill_doc()
     doc["spec"]["per_harness"] = {"future_harness": {"any_key": "any_value"}}
-    jsonschema.validate(doc, _schema())
+    jsonschema.validate(doc, schema)
 
 
-def test_per_harness_absent_is_valid():
+def test_per_harness_absent_is_valid(schema):
     doc = _base_skill_doc()
-    jsonschema.validate(doc, _schema())
+    jsonschema.validate(doc, schema)
+
+
+def test_per_harness_rejects_non_object_value(schema):
+    doc = _base_skill_doc()
+    doc["spec"]["per_harness"] = {"pi": "string_not_object"}
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(doc, schema)
