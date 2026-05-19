@@ -25,6 +25,25 @@ _KIND_RULES = (
     ("pi-extension", "extensions", "extension.meta.yaml"),
 )
 
+# Kinds for which sidecar metadata discovery is supported.
+_SIDECAR_KINDS = frozenset({"skill", "mcp"})
+
+# Per-kind root directory (matches _KIND_RULES but indexed for lookup).
+_KIND_ROOT = {kind: root_name for kind, root_name, _ in _KIND_RULES}
+
+
+def _sidecar_path(kind: str, slug: str, toolkit_root: Path) -> Path:
+    """Return the sidecar path for a given kind + slug.
+
+    Raises ValueError if the kind does not support sidecars.
+    """
+    if kind not in _SIDECAR_KINDS:
+        raise ValueError(
+            f"sidecar not supported for kind {kind!r} (only: {sorted(_SIDECAR_KINDS)})"
+        )
+    return toolkit_root / _KIND_ROOT[kind] / f"{slug}.toolkit.yaml"
+
+
 # Plugin discovery uses a separate two-step walk because the canonical layout
 # places either plugin.json or marketplace.json inside a .claude-plugin/
 # subdirectory, and we want exactly one Asset per plugin directory regardless
