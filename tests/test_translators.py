@@ -404,7 +404,7 @@ def _make_gemini_agent_record(slug: str, metadata: dict) -> AssetRecord:
 
 
 def test_translate_gemini_agent_minimum():
-    """Minimum: top-level name + description, body preserved, wrapper present."""
+    """Minimum: top-level name + description, body preserved, no wrapper."""
     import yaml
 
     record = _make_gemini_agent_record(
@@ -424,8 +424,12 @@ def test_translate_gemini_agent_minimum():
     assert body_out == body
 
 
-def test_translate_gemini_agent_round_trips_wrapper():
-    """metadata + spec preserved verbatim under agent_toolkit_cli."""
+def test_translate_gemini_agent_omits_wrapper():
+    """Gemini's agent loader uses zod `.strict()` and silently drops any
+    frontmatter with extra top-level keys (#97). Lock in: the translator
+    must NOT emit `agent_toolkit_cli` or any other key beyond name +
+    description, even when the source asset has rich metadata + spec.
+    """
     import yaml
 
     md = {
@@ -437,9 +441,9 @@ def test_translate_gemini_agent_round_trips_wrapper():
     out = _translate_gemini_agent(record, "body\n").decode("utf-8")
     fm_text, _, _ = out[4:].partition("\n---\n")
     fm = yaml.safe_load(fm_text)
-    assert fm["agent_toolkit_cli"]["apiVersion"] == "agent-toolkit/v1alpha2"
-    assert fm["agent_toolkit_cli"]["metadata"]["tags"] == ["x", "y"]
-    assert fm["agent_toolkit_cli"]["spec"]["harnesses"] == ["gemini"]
+    assert set(fm.keys()) == {"name", "description"}, (
+        f"Gemini agent frontmatter must be name+description only; got {sorted(fm.keys())}"
+    )
 
 
 def test_translators_dict_includes_gemini_agent():

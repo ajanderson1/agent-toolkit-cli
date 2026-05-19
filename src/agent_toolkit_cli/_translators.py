@@ -102,21 +102,25 @@ def _translate_opencode_skill(record: AssetRecord, body: str) -> bytes:
 
 
 def _translate_gemini_agent(record: AssetRecord, body: str) -> bytes:
-    """Gemini's loader requires top-level `name` and `description` in the YAML
-    frontmatter. The toolkit's v1alpha2 wrapper nests these under metadata.*,
-    so the loader either rejects the agent or loads it with an empty
-    name/description (#97).
+    """Gemini's loader (packages/core/src/agents/agentLoader.ts) validates
+    frontmatter with zod `.strict()` — extra top-level keys cause silent
+    rejection. The toolkit's v1alpha2 wrapper, when emitted as a frontmatter
+    key, makes every linked agent invisible to Gemini's `/agents` registry.
 
-    Output mirrors `_translate_opencode_skill` — top-level `name` and
-    `description` plus `agent_toolkit_cli` wrapper block for round-trip
-    traceability. Empirically verified against gemini 0.40.1
-    (`docs/core/subagents.md` requires `*.md` files with top-level name +
-    description; bare-named files or wrapper-only frontmatter are dropped).
+    Output is therefore minimal: top-level `name` and `description` only —
+    no `agent_toolkit_cli` wrapper. The wrapper's metadata still lives in
+    the source asset and is recoverable via the toolkit's walker; the cache
+    file is a one-way render for Gemini's runtime, not a round-trip carrier.
+
+    This is a deliberate departure from `_translate_opencode_agent` /
+    `_translate_opencode_skill`, which both keep the wrapper because OpenCode
+    uses non-strict zod validation. Empirically verified against gemini
+    0.40.1: wrapper-bearing frontmatter is dropped from `/agents list`;
+    minimal frontmatter loads cleanly (#97).
     """
     fm = {
         "name": _name(record),
         "description": _description(record),
-        "agent_toolkit_cli": _wrapper_block(record),
     }
     return _render(fm, body)
 
