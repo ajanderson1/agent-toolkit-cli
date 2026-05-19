@@ -85,6 +85,18 @@ def extract_frontmatter(path: Path) -> dict | None:
     return parsed if isinstance(parsed, dict) else None
 
 
+def read_sidecar(path: Path) -> dict | None:
+    """Read a sidecar YAML file. Returns None if missing, unparseable, or not a dict."""
+    if not path.is_file():
+        return None
+    try:
+        text = path.read_text(encoding="utf-8")
+        parsed = yaml.safe_load(text)
+    except (OSError, UnicodeDecodeError, yaml.YAMLError):
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
 def discover_assets(toolkit_root: Path) -> list[Asset]:
     submodule_paths = _read_submodule_paths(toolkit_root)
     assets: list[Asset] = []
