@@ -2,5 +2,6 @@
 
 from agent_toolkit_tui.widgets.asset_grid import AssetGrid
 from agent_toolkit_tui.widgets.kinds_sidebar import KindsSidebar
+from agent_toolkit_tui.widgets.scope_toggle import ScopeToggle
 
-__all__ = ["AssetGrid", "KindsSidebar"]
+__all__ = ["AssetGrid", "KindsSidebar", "ScopeToggle"]
