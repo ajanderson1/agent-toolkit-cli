@@ -97,6 +97,53 @@ def read_sidecar(path: Path) -> dict | None:
     return parsed if isinstance(parsed, dict) else None
 
 
+class BothMetadataLocationsExist(Exception):
+    """Raised when both sidecar AND inline frontmatter exist for the same slug."""
+
+    def __init__(self, kind: str, slug: str, sidecar_path: Path, inline_path: Path) -> None:
+        self.kind = kind
+        self.slug = slug
+        self.sidecar_path = sidecar_path
+        self.inline_path = inline_path
+        super().__init__(
+            f"{kind}/{slug}: both {sidecar_path} and {inline_path} exist. Delete one."
+        )
+
+
+def _inline_body_path(kind: str, slug: str, toolkit_root: Path) -> Path:
+    """Return the file that carries inline frontmatter for sidecar-supporting kinds."""
+    if kind == "skill":
+        return toolkit_root / "skills" / slug / "SKILL.md"
+    if kind == "mcp":
+        return toolkit_root / "mcps" / slug / "README.md"
+    raise ValueError(f"inline body path not defined for kind {kind!r}")
+
+
+def resolve_metadata(
+    kind: str,
+    slug: str,
+    toolkit_root: Path,
+) -> tuple[dict | None, Path | None]:
+    """Resolve asset metadata for a sidecar-supporting kind.
+
+    Returns (metadata_dict, source_path) on success; (None, None) if neither
+    location exists. Raises BothMetadataLocationsExist if both exist.
+    """
+    if kind not in _SIDECAR_KINDS:
+        raise ValueError(f"resolve_metadata called for non-sidecar kind {kind!r}")
+    sidecar = _sidecar_path(kind, slug, toolkit_root)
+    inline_path = _inline_body_path(kind, slug, toolkit_root)
+    sidecar_meta = read_sidecar(sidecar)
+    inline_meta = extract_frontmatter(inline_path) if inline_path.is_file() else None
+    if sidecar_meta is not None and inline_meta is not None:
+        raise BothMetadataLocationsExist(kind, slug, sidecar, inline_path)
+    if sidecar_meta is not None:
+        return sidecar_meta, sidecar
+    if inline_meta is not None:
+        return inline_meta, inline_path
+    return None, None
+
+
 def discover_assets(toolkit_root: Path) -> list[Asset]:
     submodule_paths = _read_submodule_paths(toolkit_root)
     assets: list[Asset] = []

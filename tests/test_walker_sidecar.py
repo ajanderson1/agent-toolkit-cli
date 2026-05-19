@@ -5,7 +5,12 @@ from pathlib import Path
 
 import pytest
 
-from agent_toolkit_cli.walker import _sidecar_path, read_sidecar
+from agent_toolkit_cli.walker import (
+    BothMetadataLocationsExist,
+    _sidecar_path,
+    read_sidecar,
+    resolve_metadata,
+)
 
 
 class TestSidecarPath:
@@ -59,3 +64,71 @@ class TestReadSidecar:
         sidecar.write_bytes(b"\xff\xfe\x00not-utf-8\xc3\x28")
         result = read_sidecar(sidecar)
         assert result is None
+
+
+def _make_skill_with_inline(root: Path, slug: str) -> Path:
+    """Helper: create skills/<slug>/SKILL.md with inline frontmatter."""
+    skill_dir = root / "skills" / slug
+    skill_dir.mkdir(parents=True)
+    skill_path = skill_dir / "SKILL.md"
+    skill_path.write_text(
+        "---\n"
+        "apiVersion: agent-toolkit/v1alpha2\n"
+        f"metadata:\n  name: {slug}\n"
+        "spec:\n  origin: first-party\n"
+        "---\n\nbody\n"
+    )
+    return skill_path
+
+
+def _make_skill_with_sidecar(root: Path, slug: str) -> Path:
+    """Helper: create skills/<slug>/SKILL.md (body only) + skills/<slug>.toolkit.yaml."""
+    skill_dir = root / "skills" / slug
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text("body\n")
+    sidecar = root / "skills" / f"{slug}.toolkit.yaml"
+    sidecar.write_text(
+        "apiVersion: agent-toolkit/v1alpha2\n"
+        f"metadata:\n  name: {slug}\n"
+        "spec:\n  origin: third-party\n"
+    )
+    return sidecar
+
+
+class TestResolveMetadata:
+    def test_sidecar_only(self, tmp_path: Path) -> None:
+        _make_skill_with_sidecar(tmp_path, "foo")
+        metadata, source = resolve_metadata("skill", "foo", tmp_path)
+        assert metadata is not None
+        assert metadata["metadata"]["name"] == "foo"
+        assert source.name == "foo.toolkit.yaml"
+
+    def test_inline_only(self, tmp_path: Path) -> None:
+        _make_skill_with_inline(tmp_path, "bar")
+        metadata, source = resolve_metadata("skill", "bar", tmp_path)
+        assert metadata is not None
+        assert metadata["metadata"]["name"] == "bar"
+        assert source.name == "SKILL.md"
+
+    def test_both_raises_mutex(self, tmp_path: Path) -> None:
+        _make_skill_with_inline(tmp_path, "dup")
+        # Now also add a sidecar at skills/dup.toolkit.yaml
+        sidecar = tmp_path / "skills" / "dup.toolkit.yaml"
+        sidecar.write_text(
+            "apiVersion: agent-toolkit/v1alpha2\n"
+            "metadata:\n  name: dup\n"
+            "spec:\n  origin: third-party\n"
+        )
+        with pytest.raises(BothMetadataLocationsExist) as exc:
+            resolve_metadata("skill", "dup", tmp_path)
+        assert exc.value.slug == "dup"
+        assert exc.value.kind == "skill"
+        assert exc.value.sidecar_path.name == "dup.toolkit.yaml"
+        assert exc.value.inline_path.name == "SKILL.md"
+
+    def test_neither_returns_none(self, tmp_path: Path) -> None:
+        (tmp_path / "skills" / "empty").mkdir(parents=True)
+        (tmp_path / "skills" / "empty" / "SKILL.md").write_text("just a body\n")
+        metadata, source = resolve_metadata("skill", "empty", tmp_path)
+        assert metadata is None
+        assert source is None
