@@ -107,6 +107,34 @@ class CLIRunner:
             )
         return doc
 
+    def pi_load(self, slug: str, scope: str) -> None:
+        """Invoke `pi load <slug> --scope <scope>`. Raise RunnerError on non-zero exit."""
+        proc = subprocess.run(
+            [str(self.cli_path), "pi", "load", slug,
+             "--scope", scope,
+             "--toolkit-repo", str(self.toolkit_root)],
+            capture_output=True, text=True, check=False,
+        )
+        if proc.returncode != 0:
+            raise RunnerError(
+                f"pi load {slug} --scope {scope} exited {proc.returncode}: "
+                f"{proc.stderr.strip()}"
+            )
+
+    def pi_unload(self, slug: str, scope: str) -> None:
+        """Invoke `pi unload <slug> --scope <scope>`. Raise RunnerError on non-zero exit."""
+        proc = subprocess.run(
+            [str(self.cli_path), "pi", "unload", slug,
+             "--scope", scope,
+             "--toolkit-repo", str(self.toolkit_root)],
+            capture_output=True, text=True, check=False,
+        )
+        if proc.returncode != 0:
+            raise RunnerError(
+                f"pi unload {slug} --scope {scope} exited {proc.returncode}: "
+                f"{proc.stderr.strip()}"
+            )
+
     # ----- writes ---------------------------------------------------------
     def link_plan(self, *, scope: str, harness: str,
                   entries: list[tuple[str, str]], dry_run: bool = False) -> PlanResult:
