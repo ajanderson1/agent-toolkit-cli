@@ -364,11 +364,11 @@ def test_list_text_includes_mcps(tmp_path, monkeypatch):
     mcp_dir = toolkit / "mcps" / "context7"
     mcp_dir.mkdir(parents=True)
     (mcp_dir / "config.json").write_text('{"type":"stdio","command":"npx"}\n')
-    (mcp_dir / "README.md").write_text(
-        "---\napiVersion: agent-toolkit/v1alpha2\n"
+    (toolkit / "mcps" / "context7.toolkit.yaml").write_text(
+        "apiVersion: agent-toolkit/v1alpha2\n"
         "metadata:\n  name: context7\n  description: c.\n  lifecycle: stable\n"
         "spec:\n  origin: third-party\n  vendored_via: none\n"
-        "  upstream: https://example.com\n  harnesses:\n    - claude\n---\n"
+        "  upstream: https://example.com\n  harnesses:\n    - claude\n"
     )
 
     project = tmp_path / "project"
@@ -385,7 +385,7 @@ def test_list_text_includes_mcps(tmp_path, monkeypatch):
     assert "context7" in result.output
     # Issue 1 regression guard: bracket must show declared harnesses, not "[]"
     assert "[claude]" in result.output, f"expected bracket containing 'claude', got:\n{result.output}"
-    assert "[]" not in result.output, f"bracket was empty — _asset_harnesses not reading README.md frontmatter:\n{result.output}"
+    assert "[]" not in result.output, f"bracket was empty — sidecar not read:\n{result.output}"
 
 
 def test_at_list_marks_project_segment_when_user_scope_linked(env, seed_skill, tmp_path):
@@ -492,12 +492,12 @@ def test_list_text_shows_user_check_for_mcp(tmp_path, monkeypatch):
     (mcp_dir / "config.json").write_text(
         '{"type":"stdio","command":"npx","args":["-y","@upstash/context7-mcp"]}\n'
     )
-    (mcp_dir / "README.md").write_text(
-        "---\napiVersion: agent-toolkit/v1alpha2\n"
+    (toolkit / "mcps" / "context7.toolkit.yaml").write_text(
+        "apiVersion: agent-toolkit/v1alpha2\n"
         "metadata:\n  name: context7\n  description: c.\n  lifecycle: stable\n"
         "spec:\n  origin: third-party\n  vendored_via: none\n"
         "  upstream: https://example.com\n  harnesses:\n    - codex\n"
-        "  mcp:\n    transport: stdio\n    install_method: npx\n---\n"
+        "  mcp:\n    transport: stdio\n    install_method: npx\n"
     )
 
     project = tmp_path / "project"

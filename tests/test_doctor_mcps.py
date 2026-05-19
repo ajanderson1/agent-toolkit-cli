@@ -35,13 +35,13 @@ def _seed_toolkit_with_mcp(toolkit_root: Path, *,
     if verify:
         # YAML strings need quoting; use double quotes since we control content.
         extra += f'    verify: "{verify}"\n'
-    (mcp_dir / "README.md").write_text(
-        "---\napiVersion: agent-toolkit/v1alpha2\n"
+    (toolkit_root / "mcps" / "context7.toolkit.yaml").write_text(
+        "apiVersion: agent-toolkit/v1alpha2\n"
         "metadata:\n  name: context7\n  description: c.\n  lifecycle: stable\n"
         "spec:\n  origin: third-party\n  vendored_via: none\n"
         "  upstream: https://example.com\n  harnesses:\n    - codex\n"
         "  mcp:\n    transport: stdio\n    install_method: npx\n"
-        f"{extra}---\n"
+        f"{extra}"
     )
 
 

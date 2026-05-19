@@ -146,13 +146,12 @@ def test_kind_filter_drops_other_kinds(tmp_path, monkeypatch):
 def test_mcp_kind_included_without_filter(tmp_path, monkeypatch):
     """MCPs appear in JSON output alongside other kinds (no longer excluded)."""
     _seed(tmp_path)
-    # Walker discovers MCPs via config.json; frontmatter is read from sibling README.md.
+    # MCPs are now sidecar-only; frontmatter is read from <slug>.toolkit.yaml.
     (tmp_path / "mcps" / "gamma").mkdir(parents=True)
     (tmp_path / "mcps" / "gamma" / "config.json").write_text(
         '{"type":"stdio","command":"npx"}\n'
     )
-    (tmp_path / "mcps" / "gamma" / "README.md").write_text(
-        "---\n"
+    (tmp_path / "mcps" / "gamma.toolkit.yaml").write_text(
         "apiVersion: agent-toolkit/v1alpha2\n"
         "metadata:\n"
         "  name: gamma\n"
@@ -163,7 +162,6 @@ def test_mcp_kind_included_without_filter(tmp_path, monkeypatch):
         "  vendored_via: none\n"
         "  harnesses:\n"
         "    - claude\n"
-        "---\n"
     )
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     (tmp_path / "home").mkdir()
@@ -211,11 +209,11 @@ def test_list_json_includes_mcps(tmp_path, monkeypatch):
     mcp_dir = toolkit / "mcps" / "context7"
     mcp_dir.mkdir(parents=True)
     (mcp_dir / "config.json").write_text('{"type":"stdio","command":"npx"}\n')
-    (mcp_dir / "README.md").write_text(
-        "---\napiVersion: agent-toolkit/v1alpha2\n"
+    (toolkit / "mcps" / "context7.toolkit.yaml").write_text(
+        "apiVersion: agent-toolkit/v1alpha2\n"
         "metadata:\n  name: context7\n  description: c.\n  lifecycle: stable\n"
         "spec:\n  origin: third-party\n  vendored_via: none\n"
-        "  upstream: https://example.com\n  harnesses:\n    - pi\n---\n"
+        "  upstream: https://example.com\n  harnesses:\n    - pi\n"
     )
 
     project = tmp_path / "project"
@@ -257,13 +255,13 @@ def _seed_mcp_toolkit(toolkit: Path, harnesses: list[str], *, has_args: bool = T
     config = '{"type":"stdio","command":"npx","args":["-y","@upstash/context7-mcp"]}' if has_args else '{"type":"stdio","command":"npx"}'
     (mcp_dir / "config.json").write_text(config + "\n")
     harness_lines = "\n".join(f"    - {h}" for h in harnesses)
-    (mcp_dir / "README.md").write_text(
-        "---\napiVersion: agent-toolkit/v1alpha2\n"
+    (toolkit / "mcps" / "context7.toolkit.yaml").write_text(
+        "apiVersion: agent-toolkit/v1alpha2\n"
         "metadata:\n  name: context7\n  description: c.\n  lifecycle: stable\n"
         "spec:\n  origin: third-party\n  vendored_via: none\n"
         "  upstream: https://example.com\n  harnesses:\n"
         f"{harness_lines}\n"
-        "  mcp:\n    transport: stdio\n    install_method: npx\n---\n"
+        "  mcp:\n    transport: stdio\n    install_method: npx\n"
     )
 
 

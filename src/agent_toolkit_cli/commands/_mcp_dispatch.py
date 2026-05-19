@@ -29,8 +29,9 @@ def _build_mcp_entries(toolkit_root: Path, slugs: Iterable[str]) -> list[McpEntr
     """Resolve a list of slugs to McpEntry instances.
 
     Skips slugs whose `mcps/<slug>/config.json` is absent.
-    Metadata is read via frontmatter_path() so both inline README.md frontmatter
-    and bare-YAML sidecars (*.toolkit.yaml) are supported.
+    Metadata is read via frontmatter_path() from the sidecar at
+    `mcps/<slug>.toolkit.yaml`. Legacy README.md frontmatter is no longer
+    recognized; see `agent-toolkit-cli doctor` for migration guidance.
     Returns entries in the order slugs were requested (skipped slugs simply absent).
     """
     entries: list[McpEntry] = []

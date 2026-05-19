@@ -17,8 +17,8 @@ def _seed_mcp(toolkit_root: Path, slug: str = "context7", *,
     if args:
         inner["args"] = args
     (mcp_dir / "config.json").write_text(json.dumps(inner) + "\n")
-    (mcp_dir / "README.md").write_text(
-        "---\n"
+    (mcp_dir / "README.md").write_text(f"# {slug}\n\nNo frontmatter — metadata lives in sidecar.\n")
+    (toolkit_root / "mcps" / f"{slug}.toolkit.yaml").write_text(
         "apiVersion: agent-toolkit/v1alpha2\n"
         "metadata:\n"
         f"  name: {slug}\n"
@@ -33,7 +33,6 @@ def _seed_mcp(toolkit_root: Path, slug: str = "context7", *,
         "  mcp:\n"
         f"    transport: {transport}\n"
         "    install_method: npx\n"
-        "---\n"
     )
 
 
@@ -59,11 +58,11 @@ def test_build_mcp_entries_skips_unknown_slug(tmp_path):
 
 
 def test_build_mcp_entries_no_metadata_yields_empty_mcp_spec(tmp_path):
-    """A slug with config.json but no metadata source produces an entry with empty mcp_spec.
+    """A slug with config.json but no sidecar produces an entry with empty mcp_spec.
 
-    Previously README.md was required; now only config.json is required.
-    Metadata can come from README.md frontmatter or a bare-YAML sidecar;
-    if neither exists the entry is still returned (with an empty mcp_spec).
+    Only config.json is required for _build_mcp_entries to return an entry.
+    Metadata comes from the sidecar (*.toolkit.yaml); if no sidecar exists
+    the entry is still returned (with an empty mcp_spec).
     """
     from agent_toolkit_cli.commands._mcp_dispatch import _build_mcp_entries
 
