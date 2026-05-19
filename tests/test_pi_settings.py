@@ -5,6 +5,7 @@ import pytest
 
 from agent_toolkit_cli._pi_settings import (
     add_package,
+    read_extensions_overrides,
     read_packages,
     remove_package,
     write_packages,
@@ -79,3 +80,36 @@ def test_remove_package_idempotent(tmp_path: Path):
     remove_package(p, "npm:foo")
     parsed = json.loads(p.read_text())
     assert parsed["packages"] == []
+
+
+def test_read_extensions_overrides_missing_file(tmp_path: Path):
+    assert read_extensions_overrides(tmp_path / "nope.json") == []
+
+
+def test_read_extensions_overrides_missing_key(tmp_path: Path):
+    p = tmp_path / "s.json"
+    p.write_text(json.dumps({"packages": ["npm:foo"]}), encoding="utf-8")
+    assert read_extensions_overrides(p) == []
+
+
+def test_read_extensions_overrides_returns_list(tmp_path: Path):
+    p = tmp_path / "s.json"
+    p.write_text(json.dumps({"extensions": ["!foo", "+bar"]}), encoding="utf-8")
+    assert read_extensions_overrides(p) == ["!foo", "+bar"]
+
+
+def test_read_extensions_overrides_non_list_returns_empty(tmp_path: Path):
+    p = tmp_path / "s.json"
+    p.write_text(json.dumps({"extensions": "huh"}), encoding="utf-8")
+    assert read_extensions_overrides(p) == []
+
+
+def test_read_extensions_overrides_malformed_raises(tmp_path: Path):
+    p = tmp_path / "s.json"
+    p.write_text("{not-json", encoding="utf-8")
+    try:
+        read_extensions_overrides(p)
+    except ValueError as exc:
+        assert "malformed settings.json" in str(exc)
+    else:
+        raise AssertionError("expected ValueError")

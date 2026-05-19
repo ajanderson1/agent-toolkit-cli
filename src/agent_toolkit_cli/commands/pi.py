@@ -24,6 +24,7 @@ from agent_toolkit_cli._pi_inventory import (
 from agent_toolkit_cli._pi_paths import PiPaths
 from agent_toolkit_cli._pi_settings import (
     add_package,
+    read_extensions_overrides,
     read_packages,
     remove_package,
     write_packages,
@@ -53,6 +54,9 @@ def _gather_inventory(home: Path, project_root: Path) -> list[PiRecord]:
     user_pi_pkgs = list(user_allow.get("pi_packages", []) or [])
     project_pi_pkgs = list(project_allow.get("pi_packages", []) or [])
 
+    user_overrides = read_extensions_overrides(pp.user_settings_json)
+    project_overrides = read_extensions_overrides(pp.project_settings_json)
+
     return build_pi_inventory(
         paths=pp,
         user_packages=user_packages,
@@ -63,6 +67,8 @@ def _gather_inventory(home: Path, project_root: Path) -> list[PiRecord]:
         project_allowlist_pi_extensions=project_pi_exts,
         user_allowlist_pi_packages=user_pi_pkgs,
         project_allowlist_pi_packages=project_pi_pkgs,
+        user_extensions_overrides=user_overrides,
+        project_extensions_overrides=project_overrides,
     )
 
 
@@ -123,10 +129,16 @@ def inventory_cmd(ctx: click.Context, scope: str, fmt: str) -> None:
         return
     click.echo(f"{'SLUG':<24} {'ORIGIN':<12} {'U':<3} {'P':<3} {'INTENT':<8} SOURCE")
     for r in records:
+        u = "✓" if r.user_loaded and r.user_enabled else ("~" if r.user_loaded else "—")
+        p = (
+            "✓"
+            if r.project_loaded and r.project_enabled
+            else ("~" if r.project_loaded else "—")
+        )
         click.echo(
             f"{r.slug:<24} {r.origin:<12} "
-            f"{'✓' if r.user_loaded else '—':<3} "
-            f"{'✓' if r.project_loaded else '—':<3} "
+            f"{u:<3} "
+            f"{p:<3} "
             f"{r.toolkit_intent:<8} {r.source}"
         )
 

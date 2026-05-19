@@ -14,6 +14,12 @@ from textual.widget import Widget
 from textual.widgets import DataTable, Static
 
 
+def _glyph(loaded: bool, enabled: bool) -> str:
+    if not loaded:
+        return " "
+    return "✓" if enabled else "~"
+
+
 class PiTab(Widget):
     """Pi extension inventory display (pure rendering)."""
 
@@ -33,10 +39,11 @@ class PiTab(Widget):
         out: list[str] = []
         for r in self._records:
             badge = "1P" if r.get("origin") == "first-party" else "3P"
+            u = _glyph(bool(r.get("user_loaded")), bool(r.get("user_enabled", True)))
+            p = _glyph(bool(r.get("project_loaded")), bool(r.get("project_enabled", True)))
             out.append(
                 f"{r.get('slug', ''):<24} {badge:<3} "
-                f"{'✓' if r.get('user_loaded') else ' ':<3} "
-                f"{'✓' if r.get('project_loaded') else ' ':<3} "
+                f"{u:<3} {p:<3} "
                 f"{r.get('toolkit_intent', ''):<8} {r.get('source', '')}"
             )
         return out
@@ -49,11 +56,13 @@ class PiTab(Widget):
         table.add_columns("Slug", "Origin", "U", "P", "Intent", "Source")
         for r in self._records:
             badge = "1P" if r.get("origin") == "first-party" else "3P"
+            u = _glyph(bool(r.get("user_loaded")), bool(r.get("user_enabled", True)))
+            p = _glyph(bool(r.get("project_loaded")), bool(r.get("project_enabled", True)))
             table.add_row(
                 r.get("slug", ""),
                 badge,
-                "✓" if r.get("user_loaded") else " ",
-                "✓" if r.get("project_loaded") else " ",
+                u,
+                p,
                 r.get("toolkit_intent", ""),
                 r.get("source", ""),
             )

@@ -152,3 +152,44 @@ def test_clean_repo_yields_no_warnings(tmp_path):
 
     results = audit_pi(home=home, project_root=project)
     assert results == []
+
+
+def test_orphaned_override_advisory(tmp_path):
+    home = tmp_path / "home"
+    project = tmp_path / "proj"
+    (home / ".pi/agent").mkdir(parents=True)
+    # `+foo` references a slug that doesn't exist as an auto-discovered dir.
+    (home / ".pi/agent/settings.json").write_text(
+        '{"extensions": ["+missing-slug"]}', encoding="utf-8"
+    )
+    project.mkdir()
+
+    advisories = audit_pi(home=home, project_root=project)
+    messages = [a.message for a in advisories]
+    assert any("orphaned" in m and "missing-slug" in m for m in messages)
+
+
+def test_orphaned_override_skipped_for_globs(tmp_path):
+    home = tmp_path / "home"
+    project = tmp_path / "proj"
+    (home / ".pi/agent").mkdir(parents=True)
+    (home / ".pi/agent/settings.json").write_text(
+        '{"extensions": ["status-*"]}', encoding="utf-8"
+    )
+    project.mkdir()
+
+    advisories = audit_pi(home=home, project_root=project)
+    assert not any("orphaned" in a.message for a in advisories)
+
+
+def test_orphaned_override_skipped_when_dir_present(tmp_path):
+    home = tmp_path / "home"
+    project = tmp_path / "proj"
+    (home / ".pi/agent/extensions/status-bar").mkdir(parents=True)
+    (home / ".pi/agent/settings.json").write_text(
+        '{"extensions": ["!status-bar"]}', encoding="utf-8"
+    )
+    project.mkdir()
+
+    advisories = audit_pi(home=home, project_root=project)
+    assert not any("orphaned" in a.message for a in advisories)

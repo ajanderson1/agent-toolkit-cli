@@ -19,6 +19,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Literal
 
+from agent_toolkit_cli._pi_overrides import is_enabled
 from agent_toolkit_cli._pi_paths import PiPaths
 
 
@@ -36,6 +37,8 @@ class PiRecord:
     user_installed_at: str | None
     project_installed_at: str | None
     toolkit_intent: Intent
+    user_enabled: bool = True
+    project_enabled: bool = True
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -79,11 +82,16 @@ def build_pi_inventory(
     project_allowlist_pi_extensions: list[str],
     user_allowlist_pi_packages: list[str],
     project_allowlist_pi_packages: list[str],
+    user_extensions_overrides: list[str] | None = None,
+    project_extensions_overrides: list[str] | None = None,
 ) -> list[PiRecord]:
     """Build the unified inventory across both Pi extension channels.
 
     See module docstring for slug derivation rules.
     """
+    user_overrides = user_extensions_overrides or []
+    project_overrides = project_extensions_overrides or []
+
     # Resolve filesystem state for first-party (auto-discovery dirs).
     user_ext_dir = paths.user_extensions_dir
     project_ext_dir = paths.project_extensions_dir
@@ -138,6 +146,8 @@ def build_pi_inventory(
     for slug in sorted(all_first_party):
         user_loaded = slug in user_ext_slugs
         project_loaded = slug in project_ext_slugs
+        user_enabled = is_enabled(slug=slug, overrides=user_overrides)
+        project_enabled = is_enabled(slug=slug, overrides=project_overrides)
         intent = _intent_for(
             in_user=slug in user_allow_first_party_slugs,
             in_project=slug in project_allow_first_party_slugs,
@@ -154,6 +164,8 @@ def build_pi_inventory(
                 if project_loaded
                 else None,
                 toolkit_intent=intent,
+                user_enabled=user_enabled,
+                project_enabled=project_enabled,
             )
         )
 
