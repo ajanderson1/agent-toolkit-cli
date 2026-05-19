@@ -85,6 +85,27 @@ class CLIRunner:
         except json.JSONDecodeError as e:
             raise RunnerError(f"list --format=json returned invalid JSON: {e}") from e
 
+    def pi_inventory(self) -> list[dict]:
+        """Invoke `pi inventory --format json` and return the parsed list of records."""
+        proc = subprocess.run(
+            [str(self.cli_path), "pi", "inventory", "--format", "json"],
+            capture_output=True, text=True, check=False,
+        )
+        if proc.returncode != 0:
+            raise RunnerError(
+                f"pi inventory --format json exited {proc.returncode}: {proc.stderr.strip()}"
+            )
+        try:
+            doc = json.loads(proc.stdout)
+        except json.JSONDecodeError as e:
+            raise RunnerError(f"pi inventory --format json returned invalid JSON: {e}") from e
+        # CLI returns a list of records.
+        if not isinstance(doc, list):
+            raise RunnerError(
+                f"pi inventory --format json: expected list, got {type(doc).__name__}"
+            )
+        return doc
+
     # ----- writes ---------------------------------------------------------
     def link_plan(self, *, scope: str, harness: str,
                   entries: list[tuple[str, str]], dry_run: bool = False) -> PlanResult:
