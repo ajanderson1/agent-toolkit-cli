@@ -257,7 +257,7 @@ def _build_inventory(
                         else:
                             cells.append({
                                 "harness": h, "scope": scope,
-                                "status": "unsupported", "target": None,
+                                "status": "unlinked", "target": None,
                                 "allowlisted": False,
                             })
                         continue
@@ -333,7 +333,7 @@ def _build_inventory(
                         else:
                             cells.append({
                                 "harness": h, "scope": scope,
-                                "status": "unsupported", "target": None,
+                                "status": "unlinked", "target": None,
                                 "allowlisted": False,
                             })
                         continue

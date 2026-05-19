@@ -85,10 +85,9 @@ def test_tui_runner_link_plan_then_list_state_codex(tui_env, monkeypatch):
     mcps2 = [a for a in state2["assets"] if a["kind"] == "mcp"]
     user_codex2 = next(c for c in mcps2[0]["cells"]
                        if c["harness"] == "codex" and c["scope"] == "user")
-    # After unlink: not allow-listed, not installed → either unsupported or
-    # unlinked-allowlisted is acceptable. The plan removes context7 from the
-    # YAML entirely, so it's not allowlisted any more.
-    assert user_codex2["status"] in {"unsupported", "unlinked-allowlisted"}
+    # After unlink: declared, not allow-listed, not installed → 'unlinked' (#141).
+    # The plan removes context7 from the YAML entirely, so it's not allowlisted any more.
+    assert user_codex2["status"] == "unlinked"
 
 
 def test_tui_package_does_not_import_adapters():
