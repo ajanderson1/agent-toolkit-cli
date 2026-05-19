@@ -548,3 +548,77 @@ def test_claude_skill_slot_remains_bare_slug(tmp_path):
     )
     assert expected.resolve() == root.resolve()
     assert not (target_dir / "demo-skill.md").exists()
+
+
+def test_orphan_sweep_prunes_legacy_bare_slug_for_claude_command(tmp_path, monkeypatch):
+    """After upgrading from the pre-#82 version, an existing bare-slug
+    `<slug>` symlink for a claude command should be pruned on the next
+    `project_from_file` run (it's superseded by the `<slug>.md` symlink)."""
+    toolkit = tmp_path / "toolkit"
+    (toolkit / "commands" / "legacy-cmd").mkdir(parents=True)
+    asset = toolkit / "commands" / "legacy-cmd" / "legacy-cmd.md"
+    asset.write_text(
+        "---\nspec:\n  harnesses: [claude]\n---\n# legacy\n",
+        encoding="utf-8",
+    )
+    project = tmp_path / "project"
+    project.mkdir()
+    allowlist = project / ".agent-toolkit.yaml"
+    allowlist.write_text(
+        "skills: []\nagents: []\ncommands:\n- legacy-cmd\n"
+        "hooks: []\nplugins: []\nmcps: []\npi_extensions: []\n",
+        encoding="utf-8",
+    )
+    target_dir = project / ".claude" / "commands"
+    target_dir.mkdir(parents=True)
+    legacy = target_dir / "legacy-cmd"
+    legacy.symlink_to(asset)
+
+    from agent_toolkit_cli.commands._link_lib import project_from_file
+
+    counters = LinkCounters()
+    stdout = StringIO()
+    project_from_file(
+        scope="project",
+        harness="claude",
+        toolkit_root=toolkit,
+        project_root=project,
+        allowlist_path=allowlist,
+        dry_run=False,
+        counters=counters,
+        stdout=stdout,
+    )
+
+    assert (target_dir / "legacy-cmd.md").is_symlink()
+    assert not (target_dir / "legacy-cmd").exists(), (
+        "legacy bare-slug symlink should have been pruned on upgrade; "
+        f"dir contents: {sorted(p.name for p in target_dir.iterdir())}"
+    )
+
+
+def test_doctor_symlinks_no_false_stale_for_claude_command_md(tmp_path, monkeypatch):
+    """doctor symlink-integrity check should NOT report a stale-link warning
+    for a properly-linked claude command (which now lives at `<slug>.md`)."""
+    toolkit = tmp_path / "toolkit"
+    (toolkit / "commands" / "live-cmd").mkdir(parents=True)
+    asset = toolkit / "commands" / "live-cmd" / "live-cmd.md"
+    asset.write_text(
+        "---\nspec:\n  harnesses: [claude]\n---\n# live\n",
+        encoding="utf-8",
+    )
+
+    fake_home = tmp_path / "home"
+    user_cmds = fake_home / ".claude" / "commands"
+    user_cmds.mkdir(parents=True)
+    (user_cmds / "live-cmd.md").symlink_to(asset)
+
+    monkeypatch.setenv("HOME", str(fake_home))
+
+    from agent_toolkit_cli.doctor.symlinks import run as check_symlink_integrity
+
+    result = check_symlink_integrity(toolkit, harness="claude")
+    bad = [
+        f for f in (result.findings or [])
+        if "stale link" in f or "dangling" in f or "not in spec.harnesses" in f
+    ]
+    assert not bad, f"expected no stale-link findings, got: {bad}"

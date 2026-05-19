@@ -607,14 +607,22 @@ def project_from_file(
                 for entry in target_dir.iterdir():
                     if not (entry.is_symlink() or entry.is_dir()):
                         continue
-                    # discovered_slugs uses bare slugs; check both naming conventions
                     bare_name = entry.name
+                    # Compute the canonical slot filename for this slug, if it
+                    # corresponds to a known asset. Mismatch = legacy layout
+                    # left over from an earlier version; prune it.
+                    canonical_slug: str | None = None
                     if bare_name in discovered_slugs:
-                        continue
-                    # Strip a `.md` suffix to compare against bare slugs (translated slots
-                    # use `<slug>.md` filenames; non-translated use bare `<slug>`)
-                    if bare_name.endswith(".md") and bare_name[:-3] in discovered_slugs:
-                        continue
+                        canonical_slug = bare_name
+                    elif bare_name.endswith(".md") and bare_name[:-3] in discovered_slugs:
+                        canonical_slug = bare_name[:-3]
+                    if canonical_slug is not None:
+                        expected_name = _translated_slot_filename(canonical_slug, kind, harness)
+                        if bare_name == expected_name:
+                            continue
+                        # Entry corresponds to a known slug but uses the wrong
+                        # name (legacy bare-slug after a `.md`-suffix change).
+                        # Fall through to prune.
                     if _prune_translated_slot(
                         entry, harness, scope, project_root,
                         dry_run, counters, stdout,
