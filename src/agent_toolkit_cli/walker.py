@@ -103,6 +103,18 @@ def read_sidecar(path: Path) -> dict | None:
     return parsed if isinstance(parsed, dict) else None
 
 
+def is_toolkit_frontmatter(metadata: dict | None) -> bool:
+    """True iff the parsed frontmatter looks like a toolkit asset descriptor.
+
+    Used to distinguish toolkit-shape frontmatter (apiVersion: agent-toolkit/...)
+    from upstream/agentskills.io frontmatter (just name + description).
+    """
+    if not isinstance(metadata, dict):
+        return False
+    api = metadata.get("apiVersion")
+    return isinstance(api, str) and api.startswith("agent-toolkit/")
+
+
 def extract_metadata(path: Path) -> dict | None:
     """Read metadata from either an inline-frontmatter file or a bare-YAML sidecar.
 
@@ -151,7 +163,11 @@ def resolve_metadata(
     sidecar = _sidecar_path(kind, slug, toolkit_root)
     inline_path = _inline_body_path(kind, slug, toolkit_root)
     sidecar_meta = read_sidecar(sidecar)
-    inline_meta = extract_frontmatter(inline_path) if inline_path.is_file() else None
+    raw_inline_meta = extract_frontmatter(inline_path) if inline_path.is_file() else None
+    # Only treat inline frontmatter as toolkit metadata if it has the toolkit
+    # apiVersion — upstream-shape frontmatter (name+description only) is not
+    # a collision with the sidecar.
+    inline_meta = raw_inline_meta if is_toolkit_frontmatter(raw_inline_meta) else None
     if sidecar_meta is not None and inline_meta is not None:
         raise BothMetadataLocationsExist(kind, slug, sidecar, inline_path)
     if sidecar_meta is not None:
@@ -207,10 +223,12 @@ def discover_assets(toolkit_root: Path) -> list[Asset]:
                 primary = body_dir / "config.json"
             if not primary.is_file():
                 continue
-            # Skip if inline frontmatter ALSO exists at primary — the mutex
-            # case. We don't raise here; check.py raises with a better message.
+            # Skip if toolkit-shape inline frontmatter ALSO exists at primary —
+            # the mutex case. Upstream-shape frontmatter (no apiVersion) is not
+            # a conflict; those bodies are exactly the submoduled-skill use case.
+            # We don't raise here; check.py raises with a better message.
             # The walker just skips, so duplicate Assets aren't yielded.
-            if extract_frontmatter(primary) is not None:
+            if is_toolkit_frontmatter(extract_frontmatter(primary)):
                 continue
             assets.append(Asset(kind=kind, slug=slug, path=primary))
 
