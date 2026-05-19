@@ -3,8 +3,6 @@ from __future__ import annotations
 
 import json
 
-import pytest
-
 
 def _make_entry(name: str = "context7", *, transport: str = "stdio",
                 command: str = "npx", args: list[str] | None = None,
