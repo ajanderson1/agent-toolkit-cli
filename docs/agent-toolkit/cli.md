@@ -37,12 +37,13 @@ The four supported harnesses and their per-harness skills directories:
 | `opencode` | `~/.config/opencode/skills/` |
 | `pi` | `~/.pi/agent/skills/` |
 
-Claude also supports `agents/`, `commands/`, `hooks/`, and `plugins/`. Pi additionally
-supports `agents/` and TypeScript-based extensions at `~/.pi/agent/extensions/`
-(asset kind `pi-extension`, sourced from `extensions/<slug>/extension.meta.yaml` in the
-toolkit repo — distinct from Claude Code's `plugins/`). Codex and OpenCode
-support MCPs via their own config files. The CLI silently skips asset-type / harness
-combinations that have no target slot.
+Claude also supports `agents/`, `commands/`, `hooks/`, and `plugins/`. Codex
+supports `agents/` (via `~/.codex/agents/<slug>.toml` — Codex subagents TOML format)
+and MCPs via `~/.codex/config.toml`. Pi additionally supports `agents/` and
+TypeScript-based extensions at `~/.pi/agent/extensions/` (asset kind `pi-extension`,
+sourced from `extensions/<slug>/extension.meta.yaml` in the toolkit repo — distinct
+from Claude Code's `plugins/`). OpenCode also supports MCPs via its own config file.
+The CLI silently skips asset-type / harness combinations that have no target slot.
 
 ## Output conventions
 

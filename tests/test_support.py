@@ -37,7 +37,7 @@ def test_supported_pairs_match_target_keys():
 
 
 def test_supported_pairs_known_members():
-    # Spot-check: claude has the full kind set; codex/opencode have only skill.
+    # Spot-check: claude has the full kind set; codex has skill + agent + hook.
     assert ("claude", "skill") in SUPPORTED_PAIRS
     assert ("claude", "agent") in SUPPORTED_PAIRS
     assert ("claude", "command") in SUPPORTED_PAIRS
@@ -45,6 +45,7 @@ def test_supported_pairs_known_members():
     assert ("claude", "hook") not in SUPPORTED_PAIRS
     assert ("claude", "plugin") in SUPPORTED_PAIRS
     assert ("codex", "skill") in SUPPORTED_PAIRS
+    assert ("codex", "agent") in SUPPORTED_PAIRS   # added in #140
     assert ("opencode", "skill") in SUPPORTED_PAIRS
     assert ("pi", "pi-extension") in SUPPORTED_PAIRS
 
@@ -71,16 +72,16 @@ def test_supported_pairs_known_holes():
     """The matrix gaps that issue #32 will close.
 
     opencode agent and command are now supported (translate cells added in
-    Phase 3 — T8). The remaining holes are codex agent and pi command.
+    Phase 3 — T8). codex agent is now supported (#140). The remaining hole
+    is pi command.
     """
-    assert ("codex", "agent") not in SUPPORTED_PAIRS
     assert ("pi", "command") not in SUPPORTED_PAIRS
 
 
 def test_is_supported_matches_set_membership():
     assert is_supported("claude", "skill") is True
     assert is_supported("opencode", "agent") is True   # translate cell added in Phase 3
-    assert is_supported("codex", "agent") is False
+    assert is_supported("codex", "agent") is True      # translate cell added in #140
     assert is_supported("nonsense", "skill") is False
 
 
@@ -100,15 +101,15 @@ def test_validate_pair_accepts_supported():
 def test_validate_pair_rejects_unsupported_with_exit_2(capsys):
     import click
 
-    # opencode agent is now supported (Phase 3 translate cell); use codex agent
-    # which remains a known gap.
+    # opencode agent is now supported (Phase 3 translate cell); codex agent is
+    # now supported (#140). Use pi command which remains a known gap.
     ctx = click.Context(click.Command("noop"))
     with pytest.raises(click.exceptions.Exit) as exc:
-        validate_pair(ctx, "codex", "agent")
+        validate_pair(ctx, "pi", "command")
     assert exc.value.exit_code == 2
     captured = capsys.readouterr()
-    assert "codex" in captured.err
-    assert "agent" in captured.err
+    assert "pi" in captured.err
+    assert "command" in captured.err
     # The error names supported kinds for the given harness as a hint.
     assert "skill" in captured.err
 
@@ -170,12 +171,12 @@ def test_slot_dir_unsupported_pair_returns_none(tmp_path):
     """Unsupported (harness, kind) returns None for both scopes — caller's
     responsibility to fail loudly via UnsupportedPair, not slot_dir.
 
-    opencode agent is now supported (Phase 3 translate cell); use codex agent
-    which remains a known gap."""
+    opencode agent is now supported (Phase 3 translate cell); codex agent is
+    now supported (#140). Use pi command which remains a known gap."""
     from agent_toolkit_cli._support import slot_dir
 
-    assert slot_dir("codex", "agent", "user", project_root=tmp_path) is None
-    assert slot_dir("codex", "agent", "project", project_root=tmp_path) is None
+    assert slot_dir("pi", "command", "user", project_root=tmp_path) is None
+    assert slot_dir("pi", "command", "project", project_root=tmp_path) is None
 
 
 def test_is_supported_back_compat_no_scope_for_pi_agent():

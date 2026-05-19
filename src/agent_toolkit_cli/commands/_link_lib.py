@@ -112,7 +112,8 @@ def _slot_filename(slug: str, kind: str, harness: str) -> str:
     Callers can detect the slot shape from the result: any extension ⇒
     file-slot; otherwise directory-slot or non-translated.
     """
-    if harness == "gemini" and kind == "command":
+    if (harness == "gemini" and kind == "command") \
+       or (harness == "codex" and kind == "agent"):
         return f"{slug}.toml"
     if (kind in {"agent", "command"} and harness in {"opencode", "claude"}) \
        or (harness == "gemini" and kind == "agent"):
@@ -134,7 +135,8 @@ def _slot_filename(slug: str, kind: str, harness: str) -> str:
 def _translate_slot_layout(harness: str, kind: str) -> str:
     if harness == "opencode" and kind == "skill":
         return "dir-with-file-symlink"
-    if harness == "gemini" and kind == "command":
+    if (harness == "gemini" and kind == "command") \
+       or (harness == "codex" and kind == "agent"):
         return "file"
     if _slot_filename("x", kind, harness).endswith(".md"):
         return "file"
