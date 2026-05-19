@@ -37,7 +37,52 @@ def test_drift_warns_when_pi_packages_declares_missing_resolution(tmp_path):
 
     results = audit_pi(home=home, project_root=project)
 
-    assert any("phantom" in r.message and "drift" in r.message.lower() for r in results)
+    assert any(
+        "phantom" in r.message
+        and "drift" in r.message.lower()
+        and "(user)" in r.message
+        for r in results
+    )
+
+
+def test_drift_warns_for_project_scope(tmp_path):
+    home = tmp_path / "home"
+    project = tmp_path / "proj"
+    home.mkdir()
+    project.mkdir()
+    (project / ".agent-toolkit.yaml").write_text("pi_packages:\n  - npm:phantom\n")
+    (project / ".pi").mkdir(parents=True)
+    (project / ".pi/settings.json").write_text(json.dumps({"packages": []}))
+
+    results = audit_pi(home=home, project_root=project)
+
+    assert any(
+        "phantom" in r.message
+        and "drift" in r.message.lower()
+        and "(project)" in r.message
+        and "--scope project" in r.message
+        for r in results
+    )
+
+
+def test_drift_independent_scopes_both_emit(tmp_path):
+    home = tmp_path / "home"
+    project = tmp_path / "proj"
+    home.mkdir()
+    project.mkdir()
+    (home / ".agent-toolkit.yaml").write_text("pi_packages:\n  - npm:alpha\n")
+    (home / ".pi/agent").mkdir(parents=True)
+    (home / ".pi/agent/settings.json").write_text(json.dumps({"packages": []}))
+    (project / ".agent-toolkit.yaml").write_text("pi_packages:\n  - npm:beta\n")
+    (project / ".pi").mkdir(parents=True)
+    (project / ".pi/settings.json").write_text(json.dumps({"packages": []}))
+
+    results = audit_pi(home=home, project_root=project)
+    drift_msgs = [r.message for r in results if "drift" in r.message.lower()]
+
+    assert any("alpha" in m and "(user)" in m for m in drift_msgs)
+    assert any("beta" in m and "(project)" in m for m in drift_msgs)
+    assert len(drift_msgs) == 2
 
 
 def test_slug_collision_warns(tmp_path):

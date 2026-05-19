@@ -57,14 +57,19 @@ def _hand_authored(pp: PiPaths) -> list[PiAdvisory]:
     return out
 
 
-def _drift(pp: PiPaths, *, declared_packages: list[str]) -> list[PiAdvisory]:
+def _drift(
+    *,
+    scope: str,
+    declared_packages: list[str],
+    settings_json: Path,
+    node_modules_dir: Path,
+) -> list[PiAdvisory]:
     out: list[PiAdvisory] = []
-    resolved = read_packages(pp.user_settings_json)
-    node_modules_present: set[str]
-    if pp.user_node_modules_dir.is_dir():
+    resolved = read_packages(settings_json)
+    if node_modules_dir.is_dir():
         node_modules_present = {
             p.name
-            for p in pp.user_node_modules_dir.iterdir()
+            for p in node_modules_dir.iterdir()
             if p.is_dir() or p.is_symlink()
         }
     else:
@@ -85,9 +90,9 @@ def _drift(pp: PiPaths, *, declared_packages: list[str]) -> list[PiAdvisory]:
             PiAdvisory(
                 level="warn",
                 message=(
-                    f"drift: pi_packages declares {source!r} but missing from "
+                    f"drift ({scope}): pi_packages declares {source!r} but missing from "
                     f"{', '.join(missing)}. "
-                    f"Run `agent-toolkit-cli pi load {source} --scope user` to reconcile."
+                    f"Run `agent-toolkit-cli pi load {source} --scope {scope}` to reconcile."
                 ),
             )
         )
@@ -119,12 +124,29 @@ def audit_pi(*, home: Path, project_root: Path) -> list[PiAdvisory]:
     out.extend(_hand_authored(pp))
 
     user_allow = read_allowlist(home / ".agent-toolkit.yaml")
-    declared_packages = list(user_allow.get("pi_packages", []))
+    project_allow = read_allowlist(project_root / ".agent-toolkit.yaml")
+    user_packages = list(user_allow.get("pi_packages", []))
+    project_packages = list(project_allow.get("pi_packages", []))
     first_party = list(user_allow.get("pi_extensions", []))
 
-    out.extend(_drift(pp, declared_packages=declared_packages))
     out.extend(
-        _slug_collisions(first_party=first_party, declared_packages=declared_packages)
+        _drift(
+            scope="user",
+            declared_packages=user_packages,
+            settings_json=pp.user_settings_json,
+            node_modules_dir=pp.user_node_modules_dir,
+        )
+    )
+    out.extend(
+        _drift(
+            scope="project",
+            declared_packages=project_packages,
+            settings_json=pp.project_settings_json,
+            node_modules_dir=pp.project_node_modules_dir,
+        )
+    )
+    out.extend(
+        _slug_collisions(first_party=first_party, declared_packages=user_packages)
     )
     return out
 
