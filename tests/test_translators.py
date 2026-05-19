@@ -368,3 +368,28 @@ def test_translate_gemini_command_handles_triple_quoted_body():
     out = _translate_gemini_command(record, body)
     parsed = tomllib.loads(out.decode("utf-8"))
     assert parsed["prompt"] == body
+
+
+@pytest.mark.parametrize(
+    "trailing",
+    ['"', '""'],
+    ids=["single-trailing-quote", "double-trailing-quote"],
+)
+def test_translate_gemini_command_handles_trailing_quotes(trailing):
+    """Bodies ending in 1 or 2 `"` butt against the closing `\"\"\"` fence —
+    TOML's lexer is greedy about the closing fence and allows up to 2 trailing
+    quotes inside, so this MUST round-trip cleanly. Lock-in test to prevent a
+    future refactor of `_toml_multiline_string` from regressing this case."""
+    import tomllib
+
+    record = _make_gemini_command_record(
+        "q",
+        {
+            "apiVersion": "agent-toolkit/v1alpha2",
+            "metadata": {"name": "q", "description": "d"},
+        },
+    )
+    body = f"foo{trailing}"
+    out = _translate_gemini_command(record, body)
+    parsed = tomllib.loads(out.decode("utf-8"))
+    assert parsed["prompt"] == body

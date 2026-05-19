@@ -11,6 +11,12 @@ No transport refusal — Gemini's MCP loader supports stdio, sse, http natively
 `mcp_spec.transport` to the on-disk `type` field. The Gemini on-disk shape
 mirrors Claude's: `{"type": "stdio", "command", "args"?, "env"?}` for stdio,
 `{"type": "sse"|"http", "url", "headers"?}` for remote transports.
+
+Reference docs:
+  - https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/enterprise.md
+    (user/workspace settings.json layout)
+  - https://github.com/google-gemini/gemini-cli/blob/main/docs/core/remote-agents.md
+    (subagents and MCP entry shape)
 """
 from __future__ import annotations
 

@@ -10,6 +10,7 @@ symlink targets the cache file. See
 """
 from __future__ import annotations
 
+import json
 from typing import Callable
 
 import yaml
@@ -115,8 +116,6 @@ def _translate_gemini_command(record: AssetRecord, body: str) -> bytes:
     free-form shape, and we'd rather have a stable text-string than risk a
     schema-versioning footgun by inventing a half-flattened TOML structure.
     """
-    import json
-
     md = record.metadata
     description = (md.get("metadata") or {}).get("description") or ""
     api_version = md.get("apiVersion") or ""
@@ -128,6 +127,8 @@ def _translate_gemini_command(record: AssetRecord, body: str) -> bytes:
     parts.append(f"prompt = {_toml_multiline_string(body)}\n")
     parts.append("\n[agent_toolkit_cli]\n")
     parts.append(f"apiVersion = {_toml_basic_string(api_version)}\n")
+    # metadata/spec are always JSON-serializable: the walker parses YAML
+    # frontmatter (scalars, lists, dicts) — no datetime/Path/custom types.
     parts.append(
         f"metadata = {_toml_basic_string(json.dumps(metadata_block, sort_keys=True))}\n"
     )

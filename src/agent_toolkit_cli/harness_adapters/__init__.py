@@ -5,6 +5,7 @@ import individual adapter modules.
 """
 from __future__ import annotations
 
+from agent_toolkit_cli._support import ALL_HARNESSES as _KNOWN_HARNESSES
 from agent_toolkit_cli.harness_adapters.base import (
     CannotInstall,
     ConfigFileAdapter,
@@ -16,9 +17,6 @@ from agent_toolkit_cli.harness_adapters.base import (
     UnimplementedAdapter,
     WriteAction,
 )
-
-
-_KNOWN_HARNESSES: tuple[str, ...] = ("claude", "codex", "opencode", "gemini", "pi")
 
 
 def get_adapter(harness: str, kind: str = "mcp"):
