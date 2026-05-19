@@ -834,7 +834,7 @@ def test_link_unknown_harness_exits_2_with_message(env):
     )
     assert result.exit_code == 2
     assert "unknown harness 'banana'" in result.stderr
-    assert "claude codex opencode pi" in result.stderr
+    assert "claude codex opencode gemini pi" in result.stderr
 
 
 def test_link_unknown_harness_does_not_touch_filesystem(env):

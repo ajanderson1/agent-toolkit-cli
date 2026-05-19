@@ -1,6 +1,6 @@
 # agent-toolkit-cli
 
-Bash + Python CLI and Textual TUI for managing the [`agent-toolkit`](https://github.com/ajanderson1/agent-toolkit) asset library across Claude Code, Codex, OpenCode, and Pi.
+Bash + Python CLI and Textual TUI for managing the [`agent-toolkit`](https://github.com/ajanderson1/agent-toolkit) asset library across Claude Code, Codex, OpenCode, Gemini CLI, and Pi.
 
 ## Install
 
@@ -52,7 +52,7 @@ agent-toolkit-cli tui
 
 `list` vs `inventory`: `list` is project-scoped — shows what's installed for a `<user|project>` scope and harness, with ✓/— install state. `inventory` is library-scoped — browses the SSOT's asset catalog with no notion of install state.
 
-**MCPs** (Codex shipped; Claude / OpenCode / Pi pending follow-up PRs).
+**MCPs** (Claude, Codex, OpenCode, and Gemini shipped via `config_file` adapters; Pi has no MCP concept — see harness-matrix.md).
 `link mcp:<name>` writes `[mcp_servers.<name>]` to `~/.codex/config.toml` via a
 round-trip parser; sibling sections and comments are preserved. The four-glyph
 status `[☑] [≁] [☐] [!]` appears in `list` (and the TUI) for MCPs. Run

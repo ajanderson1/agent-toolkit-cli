@@ -110,7 +110,7 @@ def test_top_level_toolkit_root_and_harnesses(tmp_path, monkeypatch):
     # toolkit_root is the resolved argv path so callers comparing against
     # their own resolved path see a stable value across platforms.
     assert doc["toolkit_root"] == str(tmp_path.resolve())
-    assert doc["harnesses"] == ["claude", "codex", "opencode", "pi"]
+    assert doc["harnesses"] == ["claude", "codex", "opencode", "gemini", "pi"]
     assert isinstance(doc["assets"], list)
 
 
