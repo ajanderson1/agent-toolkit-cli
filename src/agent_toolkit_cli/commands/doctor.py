@@ -45,7 +45,18 @@ _GROUPS = (
 @click.option("--group", "group_name", type=click.Choice(_GROUPS), default=None)
 @click.option("--harness", type=click.Choice(list(ALL_HARNESSES)), default="claude")
 @click.option("--scope", type=click.Choice(["user", "project"]), default="user")
-@click.option("--exit-code", "use_exit_code", is_flag=True)
+@click.option(
+    "--exit-code",
+    "use_exit_code",
+    is_flag=True,
+    help="Exit 1 on FAIL only. See --strict for WARN-or-FAIL.",
+)
+@click.option(
+    "--strict",
+    "strict",
+    is_flag=True,
+    help="Exit 1 on WARN or FAIL. Implies --exit-code.",
+)
 @click.option("--deep", is_flag=True, help="Reserved for future behavioural probes.")
 @click.option("--fix", is_flag=True, help="Apply mechanical autofixes (writes!).")
 @click.option("--dry-run", is_flag=True, help="With --fix: show what would change; do not write.")
@@ -60,6 +71,7 @@ def doctor(
     harness: str,
     scope: str,
     use_exit_code: bool,
+    strict: bool,
     deep: bool,
     fix: bool,
     dry_run: bool,
@@ -81,7 +93,7 @@ def doctor(
         result = diagnose(root, slug=slug, deep=deep)
         _print_result(result, verbose=True)
         summary(f"{result.status.label()}: {result.summary}")
-        if use_exit_code and result.status == Status.FAIL:
+        if _should_trip(result.status, use_exit_code=use_exit_code, strict=strict):
             raise SystemExit(1)
         return
 
@@ -98,7 +110,7 @@ def doctor(
         f"{counts[Status.ADVISORY]} INFO. "
         f"Worst: {worst.label()}."
     )
-    if use_exit_code and worst == Status.FAIL:
+    if _should_trip(worst, use_exit_code=use_exit_code, strict=strict):
         raise SystemExit(1)
 
     if fix:
@@ -118,6 +130,19 @@ def doctor(
                     apply_fixable(item)
                 except NotImplementedError as e:
                     click.echo(f"    Skipped: {e}", err=True)
+
+
+def _should_trip(worst: Status, *, use_exit_code: bool, strict: bool) -> bool:
+    """Return True if --exit-code / --strict semantics should exit 1.
+
+    --exit-code: trip on FAIL only (preserves historical contract).
+    --strict:    trip on WARN or FAIL (implies --exit-code).
+    """
+    if not (use_exit_code or strict):
+        return False
+    if strict:
+        return worst >= Status.WARN
+    return worst >= Status.FAIL
 
 
 def _run_global(
