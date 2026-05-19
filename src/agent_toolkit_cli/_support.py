@@ -77,6 +77,17 @@ _PROJECT_TARGET_ALIASES: dict[tuple[str, str], list[str]] = {
 # Derived from _USER_TARGETS; _PROJECT_TARGETS is a subset (tested in tests/test_support.py).
 SUPPORTED_PAIRS: frozenset[tuple[str, str]] = frozenset(_USER_TARGETS.keys())
 
+# Cell statuses that count as "linked at this (scope, harness)" — the union
+# of the three states the inventory builder emits when an asset has a real
+# slot occupation (symlink, hook entry, or MCP entry). Imported by:
+#   - commands/_list_json.py        (user_scope_covered)
+#   - commands/list.py              (text-mode render)
+#   - doctor/user_scope_coverage.py
+#   - agent_toolkit_tui/widgets/asset_grid.py
+USER_LINKED_STATUSES: frozenset[str] = frozenset(
+    {"linked", "linked-matches", "linked-drifted"}
+)
+
 
 class UnsupportedPair(Exception):
     """Raised when an apply path is asked to act on a (harness, kind) pair

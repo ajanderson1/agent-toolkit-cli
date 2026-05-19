@@ -207,3 +207,14 @@ def test_slot_dirs_pair_without_aliases_returns_singleton(tmp_path, monkeypatch)
     monkeypatch.setenv("HOME", str(tmp_path))
     dirs = slot_dirs("claude", "skill", "user", project_root=tmp_path)
     assert dirs == [tmp_path / ".claude" / "skills"]
+
+
+def test_user_linked_statuses_constant():
+    """USER_LINKED_STATUSES enumerates the cell statuses that count as 'this
+    asset is linked at this scope for this harness'."""
+    from agent_toolkit_cli._support import USER_LINKED_STATUSES
+
+    assert USER_LINKED_STATUSES == frozenset(
+        {"linked", "linked-matches", "linked-drifted"}
+    )
+    assert isinstance(USER_LINKED_STATUSES, frozenset)
