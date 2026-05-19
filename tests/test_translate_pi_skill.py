@@ -6,7 +6,11 @@ from __future__ import annotations
 
 import yaml
 
-from agent_toolkit_cli._translators import _translate_pi_skill
+from agent_toolkit_cli._translators import (
+    _translate_codex_skill,
+    _translate_opencode_skill,
+    _translate_pi_skill,
+)
 from agent_toolkit_cli.walker import Asset, AssetRecord
 
 
@@ -73,3 +77,45 @@ def test_includes_agent_toolkit_cli_wrapper_for_traceability():
     fm = _parse_frontmatter(out)
     assert "agent_toolkit_cli" in fm
     assert fm["agent_toolkit_cli"]["apiVersion"] == "agent-toolkit/v1alpha2"
+
+
+def _legacy_inline_record() -> AssetRecord:
+    """Mimic what the walker produces for a legacy inline-shape skill.
+
+    Legacy skills have no sidecar, so the walker passes the v1alpha2
+    wrapper as `metadata` and leaves harness_description/cli_description
+    as None. Translators must fall back to the wrapper's metadata.description.
+    """
+    metadata = {
+        "apiVersion": "agent-toolkit/v1alpha2",
+        "metadata": {
+            "name": "demo",
+            "description": "Legacy combined description.",
+            "lifecycle": "experimental",
+        },
+        "spec": {"origin": "first-party", "vendored_via": "none", "harnesses": ["pi"]},
+    }
+    return AssetRecord(
+        asset=Asset(kind="skill", slug="demo", path=None),
+        metadata=metadata,
+        body_excerpt="",
+        requires={},
+        harness_description=None,
+        cli_description=None,
+    )
+
+
+def test_legacy_fallback_pi():
+    fm = _parse_frontmatter(_translate_pi_skill(_legacy_inline_record(), body=""))
+    assert fm["description"] == "Legacy combined description."
+
+
+def test_legacy_fallback_codex():
+    fm = _parse_frontmatter(_translate_codex_skill(_legacy_inline_record(), body=""))
+    assert fm["description"] == "Legacy combined description."
+
+
+def test_legacy_fallback_opencode():
+    fm = _parse_frontmatter(_translate_opencode_skill(_legacy_inline_record(), body=""))
+    assert fm["description"] == "Legacy combined description."
+    assert fm["name"] == "demo"
