@@ -15,6 +15,7 @@ from agent_toolkit_cli.doctor import (
     environment as g_environment,
     frontmatter as g_frontmatter,
     harness_homes as g_harness_homes,
+    orphans as g_orphans,
     submodules as g_submodules,
     symlinks as g_symlinks,
     user_scope_coverage as g_user_scope_coverage,
@@ -25,7 +26,7 @@ from agent_toolkit_cli.doctor.result import GroupResult, Status
 _GROUPS = (
     "environment", "symlink-integrity", "conventions", "submodule-health",
     "frontmatter", "duplicates", "harness-homes", "allowlist-audit", "mcps",
-    "user-scope-coverage",
+    "user-scope-coverage", "orphans",
 )
 
 
@@ -81,11 +82,12 @@ def doctor(
     for r in results:
         _print_result(r, verbose=verbose)
     worst = max((r.status for r in results), default=Status.OK)
-    counts = {Status.OK: 0, Status.WARN: 0, Status.FAIL: 0}
+    counts = {Status.ADVISORY: 0, Status.OK: 0, Status.WARN: 0, Status.FAIL: 0}
     for r in results:
         counts[r.status] += 1
     summary(
-        f"{counts[Status.OK]} OK, {counts[Status.WARN]} WARN, {counts[Status.FAIL]} FAIL. "
+        f"{counts[Status.OK]} OK, {counts[Status.WARN]} WARN, {counts[Status.FAIL]} FAIL, "
+        f"{counts[Status.ADVISORY]} INFO. "
         f"Worst: {worst.label()}."
     )
     if use_exit_code and worst == Status.FAIL:
@@ -107,6 +109,7 @@ def _run_global(
         ("allowlist-audit", lambda: g_allowlist_audit.run(root, project_root=Path.cwd())),
         ("mcps", lambda: g_mcps.run(root, harness=harness, scope=scope, project_root=Path.cwd())),
         ("user-scope-coverage", lambda: g_user_scope_coverage.run(root, project_root=Path.cwd())),
+        ("orphans", lambda: g_orphans.run(root)),
     ]
     if group_name:
         runners = [(n, fn) for (n, fn) in runners if n == group_name]
