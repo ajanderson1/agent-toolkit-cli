@@ -9,9 +9,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from agent_toolkit_cli._support import ALL_HARNESSES
 from agent_toolkit_cli.ingest.types import Proposal
-
-_ALL_HARNESSES = ["claude", "codex", "opencode", "pi"]
 
 
 def infer_from_snapshot(
@@ -131,7 +130,7 @@ def _infer_harnesses(d: Path, *, kind: str) -> list[str]:
     if kind == "pi-extension":
         return ["pi"]
     if kind == "skill":
-        return list(_ALL_HARNESSES)
+        return list(ALL_HARNESSES)
     if kind in ("agent",):
         return ["claude", "pi"]  # agent kind supported by both
     return ["claude"]

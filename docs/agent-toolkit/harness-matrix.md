@@ -151,7 +151,7 @@ not meaningful). Per kind:
     *behavior* exists but is expressed inside TypeScript plugin files,
     `tool.execute.before`, `session.error`, `session.created`, etc. —
     not as drop-in markdown).
-  - **By design** for Gemini: Gemini's hooks are shell scripts keyed by event in `~/.gemini/hooks/`, configured via stdin/exit-code semantics, not toolkit-shape markdown.
+  - **By design** for Gemini: Gemini's hooks are configured in `~/.gemini/settings.json` under a `hooks` key, operating on tool-call events (`PreToolUse`, `PostToolUse`) via stdin/exit-code semantics — not toolkit-shape markdown drop-ins.
   - **Supported** for Codex via the `config_file+folder` adapter:
     hooks went stable in v0.125.0 (2026-04-24). Configured via
     `[hooks]` table in `~/.codex/config.toml`. Events: `SessionStart`,

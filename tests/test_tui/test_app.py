@@ -35,7 +35,7 @@ class FakeRunner:
 
 def _doc(repo: str = "/r") -> dict:
     def _unsupported_cells(repo: str, slug: str, kind_dir: str) -> list[dict]:
-        """Generate cells for all 4 harnesses x 2 scopes where only claude is supported."""
+        """Generate cells for all 5 harnesses x 2 scopes where only claude is supported."""
         cells = []
         for harness in ["claude", "codex", "opencode", "pi"]:
             for scope in ["user", "project"]:

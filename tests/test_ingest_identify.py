@@ -70,7 +70,19 @@ def test_research_infers_skill_from_skill_md(tmp_path):
         upstream="https://github.com/x/alpha",
     )
     assert proposal.kind == "skill"
-    assert proposal.harnesses == ["claude", "codex", "opencode", "pi"]
+    assert proposal.harnesses == ["claude", "codex", "opencode", "gemini", "pi"]
+
+
+def test_default_harnesses_for_skill_includes_gemini(tmp_path):
+    """Skill kind defaults to ALL_HARNESSES — must include gemini after #53."""
+    from agent_toolkit_cli.ingest.research import infer_from_snapshot
+    (tmp_path / "SKILL.md").write_text("# A skill\n")
+    proposal = infer_from_snapshot(
+        snapshot_dir=tmp_path,
+        slug="x",
+        upstream=None,
+    )
+    assert "gemini" in proposal.harnesses
 
 
 def test_research_narrows_to_pi_when_extension_layout(tmp_path):
