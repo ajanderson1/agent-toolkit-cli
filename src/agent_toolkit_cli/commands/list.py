@@ -32,6 +32,8 @@ _KIND_TITLE: dict[str, str] = {
     "pi-extension": "PI EXTENSIONS",
 }
 
+_USER_SCOPE_GLYPH = "🌐"
+
 
 def _install_state(
     yaml_path: Path,
@@ -232,7 +234,13 @@ def list_cmd(
             else:
                 h_display = f"[{' '.join(declared)}]"
 
-            row = f"  {asset.slug:<20} {h_display:<30} user:{user_state} project:{project_state}"
+            # Only mark project segment when *both* scopes are linked; user-only
+            # is already obvious from user:✓, so a globe there would be noise.
+            project_suffix = f" {_USER_SCOPE_GLYPH}" if user_state == "✓" and project_state == "✓" else ""
+            row = (
+                f"  {asset.slug:<20} {h_display:<30} "
+                f"user:{user_state} project:{project_state}{project_suffix}"
+            )
             rows.append(row)
 
         if rows:

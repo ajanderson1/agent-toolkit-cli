@@ -5,9 +5,10 @@ import json
 import os
 from pathlib import Path
 
+import pytest
 from click.testing import CliRunner
 
-from agent_toolkit_cli.commands._list_json import list_json
+from agent_toolkit_cli.commands._list_json import list_json, user_scope_covered
 
 
 def _seed(tmp: Path) -> None:
@@ -588,3 +589,62 @@ def test_cell_status_pi_agent_project_scope_unlinked_when_no_symlink(tmp_path):
     )
     assert status == "unlinked"
     assert target is None
+
+
+_LINKED_STATUSES = ("linked", "linked-matches", "linked-drifted")
+_NOT_LINKED_STATUSES = (
+    "unlinked", "unsupported", "broken",
+    "unlinked-allowlisted", "installed-not-allowlisted",
+)
+
+
+def _inv(*cells):
+    """Build a minimal inventory dict containing one asset with given cells."""
+    return {
+        "assets": [
+            {
+                "slug": "foo",
+                "kind": "skill",
+                "cells": list(cells),
+            }
+        ]
+    }
+
+
+@pytest.mark.parametrize("status", _LINKED_STATUSES)
+def test_user_scope_covered_true_for_linked_user_cell(status):
+    inv = _inv({"harness": "claude", "scope": "user", "status": status})
+    assert user_scope_covered(inv, slug="foo", harness="claude") is True
+
+
+@pytest.mark.parametrize("status", _NOT_LINKED_STATUSES)
+def test_user_scope_covered_false_for_non_linked_user_cell(status):
+    inv = _inv({"harness": "claude", "scope": "user", "status": status})
+    assert user_scope_covered(inv, slug="foo", harness="claude") is False
+
+
+def test_user_scope_covered_ignores_project_scope_cells():
+    inv = _inv(
+        {"harness": "claude", "scope": "project", "status": "linked"},
+        {"harness": "claude", "scope": "user", "status": "unlinked"},
+    )
+    assert user_scope_covered(inv, slug="foo", harness="claude") is False
+
+
+def test_user_scope_covered_per_harness():
+    inv = _inv(
+        {"harness": "claude", "scope": "user", "status": "linked"},
+        {"harness": "codex",  "scope": "user", "status": "unlinked"},
+    )
+    assert user_scope_covered(inv, slug="foo", harness="claude") is True
+    assert user_scope_covered(inv, slug="foo", harness="codex") is False
+
+
+def test_user_scope_covered_unknown_slug_returns_false():
+    inv = _inv({"harness": "claude", "scope": "user", "status": "linked"})
+    assert user_scope_covered(inv, slug="missing", harness="claude") is False
+
+
+def test_user_scope_covered_unknown_harness_returns_false():
+    inv = _inv({"harness": "claude", "scope": "user", "status": "linked"})
+    assert user_scope_covered(inv, slug="foo", harness="opencode") is False
