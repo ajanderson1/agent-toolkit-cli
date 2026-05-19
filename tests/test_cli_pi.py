@@ -240,3 +240,289 @@ def test_pi_sync_idempotent(tmp_path: Path, monkeypatch):
     assert r2.exit_code == 0
     after_second = (home / ".pi/agent/settings.json").read_text()
     assert before == after_first == after_second
+
+
+# ---------------------------------------------------------------------------
+# `pi load` / `pi unload` (commit 3)
+# ---------------------------------------------------------------------------
+
+import subprocess  # noqa: E402
+
+
+def _fake_run_factory(calls: list[list[str]], simulate_fetch: Path | None = None):
+    def fake_run(cmd, *args, **kwargs):
+        calls.append(list(cmd))
+        if simulate_fetch is not None:
+            simulate_fetch.mkdir(parents=True, exist_ok=True)
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+    return fake_run
+
+
+def test_pi_load_third_party_writes_allowlist_and_settings_then_fetches(
+    tmp_path: Path, monkeypatch
+):
+    home = tmp_path / "home"
+    project = tmp_path / "proj"
+    project.mkdir()
+    (home / ".pi/agent").mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(home))
+
+    calls: list[list[str]] = []
+    nm = home / ".pi/agent/npm/node_modules/pi-subagents"
+    monkeypatch.setattr(subprocess, "run", _fake_run_factory(calls, nm))
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        ["--project", str(project), "pi", "load", "npm:pi-subagents",
+         "--scope", "user"],
+    )
+    assert result.exit_code == 0, result.output
+
+    # 1. Allowlist gained the entry under pi_packages.
+    allow = yaml.safe_load((home / ".agent-toolkit.yaml").read_text())
+    assert "npm:pi-subagents" in (allow.get("pi_packages") or [])
+    # 2. settings.json has the entry.
+    settings = json.loads((home / ".pi/agent/settings.json").read_text())
+    assert "npm:pi-subagents" in settings["packages"]
+    # 3. pi install was invoked.
+    assert any(
+        "install" in c and "npm:pi-subagents" in c for c in calls
+    ), calls
+    # 4. node_modules dir exists (simulated by fake).
+    assert nm.is_dir()
+
+
+def test_pi_load_idempotent_no_second_install(tmp_path: Path, monkeypatch):
+    home = tmp_path / "home"
+    project = tmp_path / "proj"
+    project.mkdir()
+    (home / ".pi/agent/npm/node_modules/pi-subagents").mkdir(parents=True)
+    (home / ".pi/agent").mkdir(parents=True, exist_ok=True)
+    (home / ".pi/agent/settings.json").write_text(
+        json.dumps({"packages": ["npm:pi-subagents"]})
+    )
+    (home / ".agent-toolkit.yaml").write_text(
+        yaml.safe_dump({"pi_packages": ["npm:pi-subagents"]})
+    )
+    monkeypatch.setenv("HOME", str(home))
+
+    calls: list[list[str]] = []
+    monkeypatch.setattr(subprocess, "run", _fake_run_factory(calls))
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        ["--project", str(project), "pi", "load", "npm:pi-subagents",
+         "--scope", "user"],
+    )
+    assert result.exit_code == 0, result.output
+    # No `pi install` call — already loaded.
+    assert not any("install" in c for c in calls), calls
+
+
+def test_pi_load_first_party_creates_symlink(tmp_path: Path, monkeypatch):
+    home = tmp_path / "home"
+    project = tmp_path / "proj"
+    project.mkdir()
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+
+    # Stage a fake toolkit repo with an extension/<slug>/extension.meta.yaml.
+    toolkit = tmp_path / "toolkit"
+    (toolkit / "extensions" / "status-bar").mkdir(parents=True)
+    (toolkit / "extensions" / "status-bar" / "extension.meta.yaml").write_text(
+        "kind: pi-extension\nslug: status-bar\nname: status-bar\n"
+    )
+    # Make resolve_toolkit_root accept this fake repo: drop the two required
+    # marker files (see `_repo_resolution._is_toolkit_repo`).
+    (toolkit / ".agent-toolkit-source").write_text("")
+    (toolkit / "schemas").mkdir()
+    (toolkit / "schemas" / "asset-frontmatter.v1alpha2.json").write_text("{}")
+    monkeypatch.setenv("AGENT_TOOLKIT_REPO", str(toolkit))
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        ["--project", str(project), "pi", "load", "status-bar",
+         "--scope", "user"],
+    )
+    assert result.exit_code == 0, result.output
+
+    slot = home / ".pi/agent/extensions/status-bar"
+    assert slot.is_symlink(), f"expected symlink at {slot}"
+    # Allowlist gained entry under pi_extensions, not pi_packages.
+    allow = yaml.safe_load((home / ".agent-toolkit.yaml").read_text())
+    assert "status-bar" in (allow.get("pi_extensions") or [])
+    assert "status-bar" not in (allow.get("pi_packages") or [])
+
+
+def test_pi_load_pi_missing_surfaces_actionable_error(
+    tmp_path: Path, monkeypatch
+):
+    home = tmp_path / "home"
+    project = tmp_path / "proj"
+    project.mkdir()
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+
+    def fake_run(cmd, *args, **kwargs):
+        raise FileNotFoundError("pi")
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        ["--project", str(project), "pi", "load", "npm:pi-subagents",
+         "--scope", "user"],
+    )
+    assert result.exit_code != 0
+    out = result.output.lower()
+    assert "pi" in out
+    assert "path" in out or "not on" in out
+
+
+def test_pi_unload_third_party_removes_config_and_calls_pi_remove(
+    tmp_path: Path, monkeypatch
+):
+    home = tmp_path / "home"
+    project = tmp_path / "proj"
+    project.mkdir()
+    (home / ".pi/agent").mkdir(parents=True)
+    (home / ".pi/agent/settings.json").write_text(
+        json.dumps({"packages": ["npm:pi-subagents"]})
+    )
+    (home / ".agent-toolkit.yaml").write_text(
+        yaml.safe_dump({"pi_packages": ["npm:pi-subagents"]})
+    )
+    monkeypatch.setenv("HOME", str(home))
+
+    calls: list[list[str]] = []
+    monkeypatch.setattr(subprocess, "run", _fake_run_factory(calls))
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        ["--project", str(project), "pi", "unload", "npm:pi-subagents",
+         "--scope", "user"],
+    )
+    assert result.exit_code == 0, result.output
+
+    # settings.json no longer lists the source.
+    settings = json.loads((home / ".pi/agent/settings.json").read_text())
+    assert "npm:pi-subagents" not in settings.get("packages", [])
+    # Allowlist no longer lists the source.
+    allow = yaml.safe_load((home / ".agent-toolkit.yaml").read_text()) or {}
+    assert "npm:pi-subagents" not in (allow.get("pi_packages") or [])
+    # `pi remove` was invoked.
+    assert any(
+        "remove" in c and "npm:pi-subagents" in c for c in calls
+    ), calls
+
+
+def test_pi_unload_third_party_pi_missing_is_non_fatal(
+    tmp_path: Path, monkeypatch
+):
+    home = tmp_path / "home"
+    project = tmp_path / "proj"
+    project.mkdir()
+    (home / ".pi/agent").mkdir(parents=True)
+    (home / ".pi/agent/settings.json").write_text(
+        json.dumps({"packages": ["npm:pi-subagents"]})
+    )
+    (home / ".agent-toolkit.yaml").write_text(
+        yaml.safe_dump({"pi_packages": ["npm:pi-subagents"]})
+    )
+    monkeypatch.setenv("HOME", str(home))
+
+    def fake_run(cmd, *args, **kwargs):
+        raise FileNotFoundError("pi")
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        ["--project", str(project), "pi", "unload", "npm:pi-subagents",
+         "--scope", "user"],
+    )
+    # Toolkit removed its records; `pi remove` failure was swallowed.
+    assert result.exit_code == 0, result.output
+    settings = json.loads((home / ".pi/agent/settings.json").read_text())
+    assert "npm:pi-subagents" not in settings.get("packages", [])
+
+
+def test_pi_unload_first_party_removes_symlink_only(
+    tmp_path: Path, monkeypatch
+):
+    home = tmp_path / "home"
+    project = tmp_path / "proj"
+    project.mkdir()
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+
+    # Stage an existing symlink (as if `pi load status-bar` had run).
+    src_dir = tmp_path / "toolkit-source" / "status-bar"
+    src_dir.mkdir(parents=True)
+    ext_dir = home / ".pi/agent/extensions"
+    ext_dir.mkdir(parents=True)
+    slot = ext_dir / "status-bar"
+    slot.symlink_to(src_dir)
+    (home / ".agent-toolkit.yaml").write_text(
+        yaml.safe_dump({"pi_extensions": ["status-bar"]})
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        ["--project", str(project), "pi", "unload", "status-bar",
+         "--scope", "user"],
+    )
+    assert result.exit_code == 0, result.output
+    assert not slot.exists() and not slot.is_symlink()
+    allow = yaml.safe_load((home / ".agent-toolkit.yaml").read_text()) or {}
+    assert "status-bar" not in (allow.get("pi_extensions") or [])
+
+
+def test_pi_unload_first_party_refuses_to_delete_real_dir(
+    tmp_path: Path, monkeypatch
+):
+    home = tmp_path / "home"
+    project = tmp_path / "proj"
+    project.mkdir()
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+
+    real = home / ".pi/agent/extensions/handmade"
+    real.mkdir(parents=True)
+    (real / "extension.yaml").write_text("kind: pi-extension\n")
+    (home / ".agent-toolkit.yaml").write_text(
+        yaml.safe_dump({"pi_extensions": ["handmade"]})
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        ["--project", str(project), "pi", "unload", "handmade",
+         "--scope", "user"],
+    )
+    assert result.exit_code != 0
+    out = result.output.lower()
+    assert "not a symlink" in out
+    # Real dir is preserved.
+    assert real.is_dir()
+
+
+def test_pi_load_requires_scope_flag(tmp_path: Path, monkeypatch):
+    home = tmp_path / "home"
+    project = tmp_path / "proj"
+    project.mkdir()
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        ["--project", str(project), "pi", "load", "npm:pi-subagents"],
+    )
+    assert result.exit_code != 0
+    assert "scope" in result.output.lower()

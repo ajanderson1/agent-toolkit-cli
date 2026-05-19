@@ -11,9 +11,24 @@ from pathlib import Path
 import click
 
 from agent_toolkit_cli._allowlist import read_allowlist
-from agent_toolkit_cli._pi_inventory import PiRecord, build_pi_inventory
+from agent_toolkit_cli._pi_fetch import (
+    PiNotFoundError,
+    fetch_package,
+    remove_package_fetched,
+)
+from agent_toolkit_cli._pi_inventory import (
+    PiRecord,
+    build_pi_inventory,
+    slug_from_source,
+)
 from agent_toolkit_cli._pi_paths import PiPaths
-from agent_toolkit_cli._pi_settings import read_packages, write_packages
+from agent_toolkit_cli._pi_settings import (
+    add_package,
+    read_packages,
+    remove_package,
+    write_packages,
+)
+from agent_toolkit_cli.commands._yaml_edit import add_slug, remove_slug
 
 
 def _read_node_modules_dir(d: Path) -> set[str]:
@@ -155,3 +170,206 @@ def sync_cmd(ctx: click.Context, scope: str) -> None:
         if current == desired:
             continue
         write_packages(settings_path, desired)
+
+
+def _allowlist_path(scope: str, home: Path, project_root: Path) -> Path:
+    return (
+        home / ".agent-toolkit.yaml"
+        if scope == "user"
+        else project_root / ".agent-toolkit.yaml"
+    )
+
+
+def _is_third_party_source(target: str) -> bool:
+    """``npm:``/``git:`` prefix → third-party. Bare slug → first-party."""
+    return target.startswith("npm:") or target.startswith("git:")
+
+
+def _resolve_first_party_asset(
+    slug: str, ctx: click.Context
+) -> tuple[Path, Path] | None:
+    """Return (toolkit_root, asset_dir) for a first-party pi-extension slug.
+
+    Looks up the toolkit repo via the same resolution path as the rest of the
+    CLI (``--toolkit-repo`` flag / ``AGENT_TOOLKIT_REPO`` env / walk-up). Returns
+    None if the toolkit repo can't be resolved or the slug isn't present.
+    """
+    from agent_toolkit_cli._repo_resolution import (  # noqa: PLC0415
+        RepoNotFoundError,
+        resolve_toolkit_root,
+    )
+    from agent_toolkit_cli.walker import discover_assets  # noqa: PLC0415
+
+    toolkit_root: Path | None = (ctx.obj or {}).get("toolkit_root")
+    if toolkit_root is None:
+        try:
+            toolkit_root = resolve_toolkit_root(None)
+        except RepoNotFoundError:
+            return None
+    for asset in discover_assets(toolkit_root):
+        if asset.kind == "pi-extension" and asset.slug == slug:
+            return toolkit_root, asset.path
+    return None
+
+
+@pi.command(name="load")
+@click.argument("target")
+@click.option(
+    "--scope",
+    type=click.Choice(["user", "project"]),
+    required=True,
+    help="Which scope to load into. Required (no implicit default).",
+)
+@click.pass_context
+def load_cmd(ctx: click.Context, target: str, scope: str) -> None:
+    """Make TARGET loaded in SCOPE.
+
+    TARGET is either a bare slug (first-party pi-extension) or a
+    ``npm:``/``git:`` source string (third-party). The toolkit writes its
+    config (allowlist + settings.json for third-party) directly, then for
+    third-party invokes ``pi install`` only to populate node_modules.
+    """
+    home = Path.home()
+    project_root = (ctx.obj or {}).get("project_root")
+    if project_root is None:
+        project_root = Path.cwd()
+
+    allow_path = _allowlist_path(scope, home, project_root)
+    pp = PiPaths(home=home, project_root=project_root)
+
+    if _is_third_party_source(target):
+        settings_path = (
+            pp.user_settings_json if scope == "user" else pp.project_settings_json
+        )
+        node_modules_dir = (
+            pp.user_node_modules_dir
+            if scope == "user"
+            else pp.project_node_modules_dir
+        )
+        slug = slug_from_source(target)
+        already_in_settings = target in read_packages(settings_path)
+        already_fetched = (node_modules_dir / slug).is_dir()
+        # Idempotency: if every artifact is already in place, ensure the
+        # allowlist also lists it and stop — no `pi install` call.
+        if already_in_settings and already_fetched:
+            add_slug(allow_path, "pi_packages", target)
+            return
+
+        # 1. Toolkit writes its records first.
+        add_slug(allow_path, "pi_packages", target)
+        add_package(settings_path, target)
+        # 2. Toolkit invokes `pi install` for the fetch only.
+        try:
+            fetch_package(
+                target, scope=scope, home=home, project_root=project_root
+            )
+        except PiNotFoundError as exc:
+            raise click.ClickException(
+                "`pi` binary not on PATH — third-party fetch requires Pi installed."
+            ) from exc
+        except RuntimeError as exc:
+            raise click.ClickException(str(exc)) from exc
+        return
+
+    # First-party path: allowlist entry + symlink under
+    # ~/.pi/agent/extensions/<slug>/ (user) or <project>/.pi/extensions/<slug>/
+    # (project). We resolve the asset via the same walker the linker uses and
+    # symlink the asset directory directly — `link_one_asset` doesn't exist
+    # in _link_lib.py, the linker uses a full projection sweep
+    # (`project_from_file`). A single-asset symlink is the smallest correct
+    # operation here; doctor/link can still reconcile the full state later.
+    target_dir = (
+        pp.user_extensions_dir if scope == "user" else pp.project_extensions_dir
+    )
+    slot_path = target_dir / target
+
+    add_slug(allow_path, "pi_extensions", target)
+
+    if slot_path.is_symlink():
+        # Already linked — idempotent no-op.
+        return
+    if slot_path.exists():
+        raise click.ClickException(
+            f"{slot_path} already exists and is not a symlink — refusing to "
+            "overwrite. Run `agent-toolkit-cli doctor` for context."
+        )
+
+    resolved = _resolve_first_party_asset(target, ctx)
+    if resolved is None:
+        raise click.ClickException(
+            f"first-party pi-extension {target!r} not found in toolkit repo "
+            "(checked --toolkit-repo / AGENT_TOOLKIT_REPO / walk-up)."
+        )
+    _toolkit_root, asset_path = resolved
+    # discover_assets returns the asset's `extension.meta.yaml` file path for
+    # pi-extension; the slot symlink should point at its parent directory.
+    source_dir = asset_path.parent if asset_path.is_file() else asset_path
+    target_dir.mkdir(parents=True, exist_ok=True)
+    slot_path.symlink_to(source_dir)
+
+
+@pi.command(name="unload")
+@click.argument("target")
+@click.option(
+    "--scope",
+    type=click.Choice(["user", "project"]),
+    required=True,
+    help="Which scope to unload from. Required (no implicit default).",
+)
+@click.pass_context
+def unload_cmd(ctx: click.Context, target: str, scope: str) -> None:
+    """Make TARGET not-loaded in SCOPE.
+
+    Toolkit removes its config first, then for third-party invokes
+    ``pi remove`` to purge node_modules. First-party removes the symlink
+    (refusing to delete hand-authored real directories).
+    """
+    home = Path.home()
+    project_root = (ctx.obj or {}).get("project_root")
+    if project_root is None:
+        project_root = Path.cwd()
+
+    allow_path = _allowlist_path(scope, home, project_root)
+    pp = PiPaths(home=home, project_root=project_root)
+
+    if _is_third_party_source(target):
+        settings_path = (
+            pp.user_settings_json if scope == "user" else pp.project_settings_json
+        )
+        # 1. Toolkit removes its records first.
+        try:
+            remove_slug(allow_path, "pi_packages", target)
+        except FileNotFoundError:
+            pass
+        remove_package(settings_path, target)
+        # 2. Toolkit invokes `pi remove` to purge node_modules. Failure is
+        # non-fatal: the config is gone; doctor will surface any drift.
+        try:
+            remove_package_fetched(
+                target, scope=scope, home=home, project_root=project_root
+            )
+        except PiNotFoundError:
+            pass
+        except RuntimeError:
+            pass
+        return
+
+    # First-party.
+    try:
+        remove_slug(allow_path, "pi_extensions", target)
+    except FileNotFoundError:
+        pass
+
+    target_dir = (
+        pp.user_extensions_dir if scope == "user" else pp.project_extensions_dir
+    )
+    slot_path = target_dir / target
+    if slot_path.is_symlink():
+        slot_path.unlink()
+        return
+    if slot_path.is_dir():
+        raise click.ClickException(
+            f"{slot_path} is not a symlink — refusing to delete. "
+            "Run `agent-toolkit-cli doctor` for context."
+        )
+    # Nothing on disk → no-op (allowlist entry already removed).
