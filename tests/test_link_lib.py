@@ -1,3 +1,6 @@
+from io import StringIO
+from pathlib import Path
+
 import pytest
 
 from agent_toolkit_cli.commands._link_lib import (
@@ -6,6 +9,7 @@ from agent_toolkit_cli.commands._link_lib import (
     LinkCounters,
     format_summary,
     iter_plan_lines,
+    maybe_link,
     validate_harness,
 )
 
@@ -440,15 +444,6 @@ def test_pi_agent_user_scope_unlink_clears_both_slots(tmp_path, monkeypatch):
     assert not alias.exists()
 
 
-from pathlib import Path
-from io import StringIO
-
-from agent_toolkit_cli.commands._link_lib import (
-    LinkCounters,
-    maybe_link,
-)
-
-
 def _make_md_asset(tmp_path: Path, kind_dir: str, slug: str) -> Path:
     """Create a minimal asset file with `claude` declared in spec.harnesses."""
     root = tmp_path / "toolkit" / kind_dir / slug
@@ -515,6 +510,7 @@ def test_claude_agent_slot_uses_md_suffix(tmp_path):
     expected = target_dir / "demo-agent.md"
     assert expected.is_symlink()
     assert expected.resolve() == asset.resolve()
+    assert not (target_dir / "demo-agent").exists()
 
 
 def test_claude_skill_slot_remains_bare_slug(tmp_path):
