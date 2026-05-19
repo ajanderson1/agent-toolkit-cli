@@ -457,3 +457,150 @@ def test_at_list_no_marker_when_only_user_scope_linked(env, seed_skill, tmp_path
     assert "user:✓" in alpha_row
     assert "project:—" in alpha_row
     assert "🌐" not in alpha_row
+
+
+def test_list_text_shows_user_check_for_mcp(tmp_path, monkeypatch):
+    """Regression for #90: a Codex MCP installed at user scope must render
+    `user:✓` in plain `at list` text output (previously `_install_state` only
+    checked symlinks and missed adapter-backed installs)."""
+    from pathlib import Path
+
+    from click.testing import CliRunner
+
+    from agent_toolkit_cli.cli import main
+
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / ".codex").mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.delenv("AGENT_TOOLKIT_REPO", raising=False)
+
+    toolkit = tmp_path / "toolkit"
+    toolkit.mkdir()
+    (toolkit / ".agent-toolkit-source").write_text("")
+    (toolkit / "schemas").mkdir()
+    schema_src = (
+        Path(__file__).resolve().parents[1]
+        / "schemas"
+        / "asset-frontmatter.v1alpha2.json"
+    )
+    (toolkit / "schemas" / "asset-frontmatter.v1alpha2.json").write_text(
+        schema_src.read_text()
+    )
+    mcp_dir = toolkit / "mcps" / "context7"
+    mcp_dir.mkdir(parents=True)
+    (mcp_dir / "config.json").write_text(
+        '{"type":"stdio","command":"npx","args":["-y","@upstash/context7-mcp"]}\n'
+    )
+    (mcp_dir / "README.md").write_text(
+        "---\napiVersion: agent-toolkit/v1alpha2\n"
+        "metadata:\n  name: context7\n  description: c.\n  lifecycle: stable\n"
+        "spec:\n  origin: third-party\n  vendored_via: none\n"
+        "  upstream: https://example.com\n  harnesses:\n    - codex\n"
+        "  mcp:\n    transport: stdio\n    install_method: npx\n---\n"
+    )
+
+    project = tmp_path / "project"
+    project.mkdir()
+
+    runner = CliRunner()
+    rl = runner.invoke(
+        main,
+        [
+            "link",
+            "user",
+            "codex",
+            "mcp:context7",
+            "--toolkit-repo",
+            str(toolkit),
+            "--project",
+            str(project),
+        ],
+    )
+    assert rl.exit_code == 0, rl.output
+
+    r = runner.invoke(
+        main,
+        ["list", "--toolkit-repo", str(toolkit), "--project", str(project)],
+    )
+    assert r.exit_code == 0, r.output
+    mcp_row = next(
+        (line for line in r.output.splitlines() if "context7" in line), None
+    )
+    assert mcp_row is not None, r.output
+    assert "user:✓" in mcp_row, (
+        f"expected 'user:✓' in MCP row (adapter-backed user-scope install), got:\n{mcp_row}"
+    )
+
+
+def test_list_text_shows_user_check_for_hook(tmp_path, monkeypatch):
+    """Regression for #90: a Codex hook installed at user scope must render
+    `user:✓` in plain `at list` text output.
+
+    Uses codex harness because the demo-hook fixture's `.meta.yaml` declares
+    `harnesses: [codex]`. Either harness exercises the same adapter-backed
+    install code path that text mode previously failed to surface."""
+    import shutil
+    from pathlib import Path
+
+    from click.testing import CliRunner
+
+    from agent_toolkit_cli.cli import main
+
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / ".codex").mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.delenv("AGENT_TOOLKIT_REPO", raising=False)
+
+    toolkit = tmp_path / "toolkit"
+    toolkit.mkdir()
+    (toolkit / ".agent-toolkit-source").write_text("")
+    (toolkit / "schemas").mkdir()
+    schema_src = (
+        Path(__file__).resolve().parents[1]
+        / "schemas"
+        / "asset-frontmatter.v1alpha2.json"
+    )
+    (toolkit / "schemas" / "asset-frontmatter.v1alpha2.json").write_text(
+        schema_src.read_text()
+    )
+
+    fixture_src = (
+        Path(__file__).resolve().parent / "_fixtures" / "hook_assets" / "codex-demo"
+    )
+    hook_dir = toolkit / "hooks" / "demo-hook"
+    hook_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(fixture_src, hook_dir, dirs_exist_ok=True)
+
+    project = tmp_path / "project"
+    project.mkdir()
+
+    runner = CliRunner()
+    rl = runner.invoke(
+        main,
+        [
+            "link",
+            "user",
+            "codex",
+            "hook:demo-hook",
+            "--toolkit-repo",
+            str(toolkit),
+            "--project",
+            str(project),
+        ],
+    )
+    assert rl.exit_code == 0, rl.output
+
+    r = runner.invoke(
+        main,
+        ["list", "--toolkit-repo", str(toolkit), "--project", str(project)],
+    )
+    assert r.exit_code == 0, r.output
+    hook_row = next(
+        (line for line in r.output.splitlines() if "demo-hook" in line), None
+    )
+    assert hook_row is not None, r.output
+    assert "user:✓" in hook_row, (
+        f"expected 'user:✓' in hook row (adapter-backed user-scope install), got:\n{hook_row}"
+    )

@@ -8,16 +8,10 @@ from pathlib import Path
 import click
 
 from agent_toolkit_cli import _ui
-from agent_toolkit_cli._allowlist import kind_to_section, read_allowlist
 from agent_toolkit_cli._repo_resolution import RepoNotFoundError, resolve_toolkit_root
-from agent_toolkit_cli.commands._link_lib import (
-    KINDS_FOR_PROJECTION,
-    _asset_harnesses,
-    harness_target_dir,
-    harness_target_dirs,
-)
-from agent_toolkit_cli.commands._list_json import ALL_HARNESSES
-from agent_toolkit_cli.walker import discover_assets
+from agent_toolkit_cli._support import USER_LINKED_STATUSES
+from agent_toolkit_cli.commands._link_lib import KINDS_FOR_PROJECTION
+from agent_toolkit_cli.commands._list_json import ALL_HARNESSES, _build_inventory
 
 _KNOWN_KINDS = frozenset(KINDS_FOR_PROJECTION)
 _KNOWN_HARNESSES = frozenset(ALL_HARNESSES)
@@ -33,44 +27,6 @@ _KIND_TITLE: dict[str, str] = {
 }
 
 _USER_SCOPE_GLYPH = "🌐"
-
-
-def _install_state(
-    yaml_path: Path,
-    kind: str,
-    slug: str,
-    declared_harnesses: list[str],
-    harness_filter: str | None,
-    scope: str,
-    project_root: Path,
-) -> str:
-    """Return '✓' or '—' for one asset/scope combination.
-
-    Logic mirrors bin/lib/list.sh _list_install_state:
-    - If the YAML doesn't exist or slug isn't listed: '—'
-    - If slug is listed: check symlink existence across harnesses
-    """
-    if not yaml_path.is_file():
-        return "—"
-    try:
-        section = kind_to_section(kind)
-    except ValueError:
-        return "—"
-    allow = read_allowlist(yaml_path)
-    if slug not in (allow.get(section) or []):
-        return "—"
-    # Slug is in the allowlist — now check for a symlink.
-    harnesses_to_check = [harness_filter] if harness_filter else declared_harnesses
-    for h in harnesses_to_check:
-        if not h:
-            continue
-        target_dirs = harness_target_dirs(h, kind, scope, project_root)
-        if not target_dirs:
-            continue
-        # Symlink present in ANY slot (primary or alias) → installed.
-        if any((td / slug).is_symlink() for td in target_dirs):
-            return "✓"
-    return "—"
 
 
 @click.command("list")
@@ -178,7 +134,6 @@ def list_cmd(
 
     # Report format: grouped human-readable view via the same inventory builder.
     if report:
-        from agent_toolkit_cli.commands._list_json import _build_inventory  # noqa: PLC0415
         from agent_toolkit_cli.generators.list_report import format_report  # noqa: PLC0415
 
         inv = _build_inventory(
@@ -206,39 +161,58 @@ def list_cmd(
         f" harness={harness_filter or 'any'}):"
     )
 
-    user_yaml = Path(os.environ.get("HOME", "")) / ".agent-toolkit.yaml"
-    project_yaml = project_root / ".agent-toolkit.yaml"
+    inv = _build_inventory(
+        toolkit_root, project_root, kind=kind_filter, harness=harness_filter
+    )
+
+    def _scope_glyph(cells: list[dict], scope: str) -> str:  # type: ignore[type-arg]
+        """Return '✓' iff any cell at this scope is in a linked state, else '—'.
+
+        For text mode we collapse all harnesses/aliases for the scope into
+        one glyph — the bracket already discloses which harnesses declared it.
+        """
+        for c in cells:
+            if c.get("scope") != scope:
+                continue
+            if c.get("status") in USER_LINKED_STATUSES:
+                return "✓"
+        return "—"
+
+    # Group inventory assets by kind to preserve the previous "KIND (N)" headers.
+    by_kind: dict[str, list[dict]] = {}  # type: ignore[type-arg]
+    for asset in inv.get("assets", []):
+        by_kind.setdefault(asset["kind"], []).append(asset)
 
     for kind in KINDS_FOR_PROJECTION:
         if kind_filter and kind_filter != kind:
             continue
-
+        assets_for_kind = by_kind.get(kind, [])
         rows: list[str] = []
-        for asset in discover_assets(toolkit_root):
-            if asset.kind != kind:
-                continue
-            declared = _asset_harnesses(asset.path, asset.kind)
+        for asset in assets_for_kind:
+            declared = asset.get("declared_harnesses") or []
+            # When a harness filter is active, _build_inventory has already
+            # narrowed cells to that harness; declared_harnesses is unfiltered
+            # (it's the on-disk frontmatter) so respect the filter here for
+            # the bracket display as well.
             if harness_filter and harness_filter not in declared:
                 continue
 
-            user_state = _install_state(
-                user_yaml, kind, asset.slug, declared, harness_filter, "user", project_root
-            )
-            project_state = _install_state(
-                project_yaml, kind, asset.slug, declared, harness_filter, "project", project_root
-            )
+            cells = asset.get("cells", [])
+            user_state = _scope_glyph(cells, "user")
+            project_state = _scope_glyph(cells, "project")
 
-            # Harness bracket: show all declared harnesses unless filtered.
             if harness_filter:
                 h_display = ""
             else:
                 h_display = f"[{' '.join(declared)}]"
 
-            # Only mark project segment when *both* scopes are linked; user-only
-            # is already obvious from user:✓, so a globe there would be noise.
-            project_suffix = f" {_USER_SCOPE_GLYPH}" if user_state == "✓" and project_state == "✓" else ""
+            project_suffix = (
+                f" {_USER_SCOPE_GLYPH}"
+                if user_state == "✓" and project_state == "✓"
+                else ""
+            )
             row = (
-                f"  {asset.slug:<20} {h_display:<30} "
+                f"  {asset['slug']:<20} {h_display:<30} "
                 f"user:{user_state} project:{project_state}{project_suffix}"
             )
             rows.append(row)
