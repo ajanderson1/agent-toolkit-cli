@@ -7,10 +7,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from agent_toolkit_cli._support import USER_LINKED_STATUSES
 from agent_toolkit_cli.commands._list_json import _build_inventory, user_scope_covered
 from agent_toolkit_cli.doctor.result import GroupResult, Status
-
-_USER_LINKED_STATUSES = frozenset({"linked", "linked-matches", "linked-drifted"})
 
 
 def run(toolkit_root: Path, *, project_root: Path | None = None) -> GroupResult:
@@ -23,7 +22,7 @@ def run(toolkit_root: Path, *, project_root: Path | None = None) -> GroupResult:
         for cell in asset.get("cells", []):
             if cell.get("scope") != "project":
                 continue
-            if cell.get("status") not in _USER_LINKED_STATUSES:
+            if cell.get("status") not in USER_LINKED_STATUSES:
                 continue
             harness = cell.get("harness")
             if user_scope_covered(inventory, slug=slug, harness=harness):
