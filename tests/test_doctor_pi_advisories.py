@@ -155,8 +155,6 @@ def test_clean_repo_yields_no_warnings(tmp_path):
 
 
 def test_orphaned_override_advisory(tmp_path):
-    from pathlib import Path
-
     home = tmp_path / "home"
     project = tmp_path / "proj"
     (home / ".pi/agent").mkdir(parents=True)

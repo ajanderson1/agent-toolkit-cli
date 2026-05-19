@@ -5,6 +5,7 @@ import pytest
 
 from agent_toolkit_cli._pi_settings import (
     add_package,
+    read_extensions_overrides,
     read_packages,
     remove_package,
     write_packages,
@@ -79,9 +80,6 @@ def test_remove_package_idempotent(tmp_path: Path):
     remove_package(p, "npm:foo")
     parsed = json.loads(p.read_text())
     assert parsed["packages"] == []
-
-
-from agent_toolkit_cli._pi_settings import read_extensions_overrides
 
 
 def test_read_extensions_overrides_missing_file(tmp_path: Path):
