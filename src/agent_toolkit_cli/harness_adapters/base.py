@@ -145,17 +145,28 @@ class ConfigFileFolderAdapter(Protocol):
 
 
 class UnimplementedAdapter:
-    """Returned by `get_adapter()` for harnesses whose adapter has not landed.
+    """Returned by `get_adapter()` for (harness, kind) pairs whose adapter
+    has not landed.
 
     Loud-skip semantics: callers detect this via `isinstance(...,
     UnimplementedAdapter)` and print `skip_message()` before continuing.
-    Currently used for claude/opencode/pi until CLI-PR-2/3/4 ship.
+
+    The `kind` attribute (defaults to `"mcp"` for back-compat) is what the
+    sentinel was asked for. It shapes the skip message so the user isn't
+    told "no MCP adapter" when they actually asked for a different adapter
+    kind (issue #123).
     """
     name: str
+    kind: str
     strategy: Literal["unimplemented"] = "unimplemented"
 
-    def __init__(self, name: str) -> None:
+    def __init__(self, name: str, kind: str = "mcp") -> None:
         self.name = name
+        self.kind = kind
 
     def skip_message(self) -> str:
-        return f"no MCP adapter for harness {self.name} yet — skipping"
+        # Preserve the historical "MCP" capitalisation for the default kind so
+        # existing log greps and tests continue to match. Other kinds get the
+        # lowercase canonical name as it appears in `ALL_KINDS`.
+        label = "MCP" if self.kind == "mcp" else self.kind
+        return f"no {label} adapter for harness {self.name} yet — skipping"

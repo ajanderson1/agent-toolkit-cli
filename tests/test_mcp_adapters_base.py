@@ -37,8 +37,35 @@ def test_unimplemented_adapter_skip_message():
     from agent_toolkit_cli.harness_adapters.base import UnimplementedAdapter
 
     a = UnimplementedAdapter("claude")
-    assert "claude" in a.skip_message()
-    assert "not yet" in a.skip_message().lower() or "no MCP adapter" in a.skip_message()
+    msg = a.skip_message()
+    assert "claude" in msg
+    # Defaults to MCP for back-compat with existing callers; the "MCP"
+    # capitalisation is preserved so existing log-greps still match.
+    assert "MCP adapter" in msg
+
+
+def test_unimplemented_adapter_skip_message_kind_aware():
+    """#123: when the sentinel is constructed for a non-mcp kind, the skip
+    message names that kind rather than mis-labelling it as an MCP adapter.
+    """
+    from agent_toolkit_cli.harness_adapters.base import UnimplementedAdapter
+
+    a = UnimplementedAdapter("claude", kind="hook")
+    assert "hook adapter" in a.skip_message()
+    assert "MCP" not in a.skip_message()
+
+
+def test_get_adapter_unimplemented_propagates_kind():
+    """get_adapter('<harness>', kind='hook') for a pair with no adapter must
+    return an UnimplementedAdapter whose skip message names the hook kind.
+    """
+    from agent_toolkit_cli.harness_adapters import get_adapter
+    from agent_toolkit_cli.harness_adapters.base import UnimplementedAdapter
+
+    a = get_adapter("claude", kind="hook")
+    assert isinstance(a, UnimplementedAdapter)
+    assert a.kind == "hook"
+    assert "hook adapter" in a.skip_message()
 
 
 def test_mcp_entry_dataclass_is_frozen():

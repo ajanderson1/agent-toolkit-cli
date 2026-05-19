@@ -25,7 +25,10 @@ _USER_TARGETS: dict[tuple[str, str], str] = {
     ("claude", "skill"):       "{home}/.claude/skills",
     ("claude", "agent"):       "{home}/.claude/agents",
     ("claude", "command"):     "{home}/.claude/commands",
-    ("claude", "hook"):        "{home}/.claude/hooks",
+    # ("claude", "hook"): intentionally absent — no ClaudeHookAdapter exists
+    # yet (see #123). Leaving the row would advertise a supported pair while
+    # `link` silently no-ops (allowlist gets edited but no script is
+    # materialised and ~/.claude/settings.json is never written).
     ("claude", "plugin"):      "{home}/.claude/plugins",
     ("codex", "skill"):        "{home}/.codex/skills",
     ("codex", "hook"):         "{home}/.codex/agent-toolkit-hooks",  # config_file+folder
@@ -43,7 +46,7 @@ _PROJECT_TARGETS: dict[tuple[str, str], str] = {
     ("claude", "skill"):       ".claude/skills",
     ("claude", "agent"):       ".claude/agents",
     ("claude", "command"):     ".claude/commands",
-    ("claude", "hook"):        ".claude/hooks",
+    # ("claude", "hook"): see _USER_TARGETS — unsupported until adapter lands (#123).
     ("claude", "plugin"):      ".claude/plugins",
     ("codex", "skill"):        ".codex/skills",
     ("opencode", "skill"):     ".opencode/skills",
