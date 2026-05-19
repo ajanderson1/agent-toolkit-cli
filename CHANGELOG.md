@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.7.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v0.6.0...v0.7.0) (2026-05-19)
+
+
+### Features
+
+* toolkit audit process (helpers + 20 demos + findings doc) ([#118](https://github.com/ajanderson1/agent-toolkit-cli/issues/118)) ([f2d1d0c](https://github.com/ajanderson1/agent-toolkit-cli/commit/f2d1d0c5c43383417ad3dfd7158ffa7d519c0d27))
+
+
+### Bug Fixes
+
+* **doctor:** add --strict flag tripping on WARN or FAIL ([#127](https://github.com/ajanderson1/agent-toolkit-cli/issues/127)) ([77c959d](https://github.com/ajanderson1/agent-toolkit-cli/commit/77c959d16c2c0ffc749d34fdfbba5bae2414a971))
+* **doctor:** detect symlink slots replaced by file or directory under claude ([#129](https://github.com/ajanderson1/agent-toolkit-cli/issues/129)) ([f9b85e5](https://github.com/ajanderson1/agent-toolkit-cli/commit/f9b85e564d3b60435100a79591f27f4087206aa0))
+* **doctor:** handle broken codex TOML without crashing ([#122](https://github.com/ajanderson1/agent-toolkit-cli/issues/122)) ([#128](https://github.com/ajanderson1/agent-toolkit-cli/issues/128)) ([9d58cc8](https://github.com/ajanderson1/agent-toolkit-cli/commit/9d58cc8125feb2671206f2034a0aae9109280c50))
+* **link:** prune stale projections on reconcile after hand-edit ([#120](https://github.com/ajanderson1/agent-toolkit-cli/issues/120)) ([#131](https://github.com/ajanderson1/agent-toolkit-cli/issues/131)) ([968d66d](https://github.com/ajanderson1/agent-toolkit-cli/commit/968d66ddb74da80bfc8ff949d97aa6edb4b767ff))
+* **support:** drop (claude, hook) from matrix until adapter exists ([#132](https://github.com/ajanderson1/agent-toolkit-cli/issues/132)) ([3b27f09](https://github.com/ajanderson1/agent-toolkit-cli/commit/3b27f0923c2277223262e85723c675deffd9df17))
+* **unlink:** prune `.md`-suffixed claude slots in per-asset path ([#119](https://github.com/ajanderson1/agent-toolkit-cli/issues/119)) ([#130](https://github.com/ajanderson1/agent-toolkit-cli/issues/130)) ([046b94a](https://github.com/ajanderson1/agent-toolkit-cli/commit/046b94a125588b9ac017b319e86d796aa69023fa))
+
 ## [0.6.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v0.5.1...v0.6.0) (2026-05-19)
 
 
