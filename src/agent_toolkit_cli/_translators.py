@@ -101,6 +101,30 @@ def _translate_opencode_skill(record: AssetRecord, body: str) -> bytes:
     return _render(fm, body)
 
 
+def _translate_gemini_agent(record: AssetRecord, body: str) -> bytes:
+    """Gemini's loader (packages/core/src/agents/agentLoader.ts) validates
+    frontmatter with zod `.strict()` — extra top-level keys cause silent
+    rejection. The toolkit's v1alpha2 wrapper, when emitted as a frontmatter
+    key, makes every linked agent invisible to Gemini's `/agents` registry.
+
+    Output is therefore minimal: top-level `name` and `description` only —
+    no `agent_toolkit_cli` wrapper. The wrapper's metadata still lives in
+    the source asset and is recoverable via the toolkit's walker; the cache
+    file is a one-way render for Gemini's runtime, not a round-trip carrier.
+
+    This is a deliberate departure from `_translate_opencode_agent` /
+    `_translate_opencode_skill`, which both keep the wrapper because OpenCode
+    uses non-strict zod validation. Empirically verified against gemini
+    0.40.1: wrapper-bearing frontmatter is dropped from `/agents list`;
+    minimal frontmatter loads cleanly (#97).
+    """
+    fm = {
+        "name": _name(record),
+        "description": _description(record),
+    }
+    return _render(fm, body)
+
+
 def _translate_gemini_command(record: AssetRecord, body: str) -> bytes:
     """Emit a Gemini-flavored TOML command file.
 
@@ -178,4 +202,5 @@ TRANSLATORS: dict[tuple[str, str], Callable[[AssetRecord, str], bytes]] = {
     ("codex", "skill"): _translate_codex_skill,
     ("opencode", "skill"): _translate_opencode_skill,
     ("gemini", "command"): _translate_gemini_command,
+    ("gemini", "agent"): _translate_gemini_agent,
 }

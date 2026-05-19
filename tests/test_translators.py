@@ -10,6 +10,7 @@ from agent_toolkit_cli._repo_resolution import resolve_toolkit_root
 from agent_toolkit_cli._translators import (
     TRANSLATORS,
     _translate_codex_skill,
+    _translate_gemini_agent,
     _translate_gemini_command,
     _translate_opencode_agent,
     _translate_opencode_command,
@@ -393,3 +394,61 @@ def test_translate_gemini_command_handles_trailing_quotes(trailing):
     out = _translate_gemini_command(record, body)
     parsed = tomllib.loads(out.decode("utf-8"))
     assert parsed["prompt"] == body
+
+
+def _make_gemini_agent_record(slug: str, metadata: dict) -> AssetRecord:
+    """Build an AssetRecord for an agent with the given raw metadata dict."""
+    from agent_toolkit_cli.walker import Asset, AssetRecord
+    asset = Asset(kind="agent", slug=slug, path=Path(f"/fake/agents/{slug}.md"))
+    return AssetRecord(asset=asset, metadata=metadata, body_excerpt="", requires={})
+
+
+def test_translate_gemini_agent_minimum():
+    """Minimum: top-level name + description, body preserved, no wrapper."""
+    import yaml
+
+    record = _make_gemini_agent_record(
+        "demo-agent",
+        {
+            "apiVersion": "agent-toolkit/v1alpha2",
+            "metadata": {"name": "demo-agent", "description": "Verify cross-harness."},
+        },
+    )
+    body = "You are DemoBot.\n"
+    out = _translate_gemini_agent(record, body).decode("utf-8")
+    assert out.startswith("---\n")
+    fm_text, _, body_out = out[4:].partition("\n---\n")
+    fm = yaml.safe_load(fm_text)
+    assert fm["name"] == "demo-agent"
+    assert fm["description"] == "Verify cross-harness."
+    assert body_out == body
+
+
+def test_translate_gemini_agent_omits_wrapper():
+    """Gemini's agent loader uses zod `.strict()` and silently drops any
+    frontmatter with extra top-level keys (#97). Lock in: the translator
+    must NOT emit `agent_toolkit_cli` or any other key beyond name +
+    description, even when the source asset has rich metadata + spec.
+    """
+    import yaml
+
+    md = {
+        "apiVersion": "agent-toolkit/v1alpha2",
+        "metadata": {"name": "a", "description": "d", "tags": ["x", "y"]},
+        "spec": {"harnesses": ["gemini"], "origin": "first-party"},
+    }
+    record = _make_gemini_agent_record("a", md)
+    out = _translate_gemini_agent(record, "body\n").decode("utf-8")
+    fm_text, _, _ = out[4:].partition("\n---\n")
+    fm = yaml.safe_load(fm_text)
+    assert set(fm.keys()) == {"name", "description"}, (
+        f"Gemini agent frontmatter must be name+description only; got {sorted(fm.keys())}"
+    )
+
+
+def test_translators_dict_includes_gemini_agent():
+    """Regression guard: (gemini, agent) must be in TRANSLATORS."""
+    from agent_toolkit_cli._translators import TRANSLATORS
+
+    assert ("gemini", "agent") in TRANSLATORS
+    assert TRANSLATORS[("gemini", "agent")] is _translate_gemini_agent

@@ -103,6 +103,9 @@ def _slot_filename(slug: str, kind: str, harness: str) -> str:
 
     File-slot kinds get an extension matching the harness:
       - `(opencode|claude, agent|command)` → `<slug>.md`
+      - `(gemini, agent)` → `<slug>.md` — Gemini's loader globs `*.md` for
+        agents and requires top-level name/description (#97); the toolkit's
+        `_translate_gemini_agent` lifts those out of the v1alpha2 wrapper.
       - `(gemini, command)` → `<slug>.toml`
     Directory-slot kinds — and any unsupported pair — get the bare `<slug>`.
 
@@ -111,7 +114,8 @@ def _slot_filename(slug: str, kind: str, harness: str) -> str:
     """
     if harness == "gemini" and kind == "command":
         return f"{slug}.toml"
-    if kind in {"agent", "command"} and harness in {"opencode", "claude"}:
+    if (kind in {"agent", "command"} and harness in {"opencode", "claude"}) \
+       or (harness == "gemini" and kind == "agent"):
         return f"{slug}.md"
     return slug
 

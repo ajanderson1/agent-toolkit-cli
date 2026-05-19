@@ -481,6 +481,18 @@ def test_scope_cache_root_gemini_project(tmp_path):
     assert root == proj / ".gemini" / ".agent-toolkit-cache"
 
 
+def test_slot_filename_gemini_agent_uses_md_extension():
+    from agent_toolkit_cli.commands._link_lib import _slot_filename
+
+    assert _slot_filename("demo", "agent", "gemini") == "demo.md"
+
+
+def test_translate_slot_layout_gemini_agent_is_file():
+    from agent_toolkit_cli.commands._link_lib import _translate_slot_layout
+
+    assert _translate_slot_layout("gemini", "agent") == "file"
+
+
 def _make_md_asset(tmp_path: Path, kind_dir: str, slug: str) -> Path:
     """Create a minimal asset file with `claude` declared in spec.harnesses."""
     root = tmp_path / "toolkit" / kind_dir / slug
