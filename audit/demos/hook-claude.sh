@@ -19,11 +19,6 @@ fi
 
 # --- inside tmux ---
 
-# Override AGENT_TOOLKIT_REPO to point at the companion PR worktree where
-# demo-hook lives. PR #17 is open at https://github.com/ajanderson1/agent-toolkit/pull/17.
-# TODO: drop this override once PR #17 merges to main.
-export AGENT_TOOLKIT_REPO="/Users/ajanderson/GitHub/agent-toolkit/.worktrees/audit-demos-1779206947"
-
 source "$REPO_ROOT/audit/lib/sandbox.sh"
 source "$REPO_ROOT/audit/lib/narrate.sh"
 source "$REPO_ROOT/audit/lib/assert.sh"
