@@ -98,8 +98,7 @@ class TUIApp(App):
         Binding("ctrl+r", "refresh", "Refresh", priority=True),
         Binding("ctrl+z", "revert", "Revert", priority=True),
         Binding("slash", "focus_filter", "Filter", priority=True),
-        Binding("u", "scope('user')", "user scope"),
-        Binding("p", "scope('project')", "project scope"),
+        Binding("s", "scope_toggle", "toggle scope"),
         Binding("1", "kind('skill')", "Skills", show=False),
         Binding("2", "kind('agent')", "Agents", show=False),
         Binding("3", "kind('command')", "Commands", show=False),
@@ -190,6 +189,9 @@ class TUIApp(App):
         self.query_one("#asset-grid", AssetGrid).set_scope(scope)
         self._refresh_content_header()
         self._refresh_status_bar()
+
+    def action_scope_toggle(self) -> None:
+        self.action_scope("user" if self._scope == "project" else "project")
 
     def action_kind(self, kind: str) -> None:
         if kind == self._kind:
