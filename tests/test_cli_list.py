@@ -391,9 +391,6 @@ def test_list_text_includes_mcps(tmp_path, monkeypatch):
 def test_at_list_marks_project_segment_when_user_scope_linked(env, seed_skill, tmp_path):
     """When an asset is linked at both user and project scope, the row's
     `project:✓` segment is suffixed with 🌐 to flag user-scope coverage."""
-    from click.testing import CliRunner
-    from agent_toolkit_cli.cli import main
-
     toolkit_root = env["toolkit_root"]
     seed_skill(toolkit_root, "alpha", harnesses=["claude"])
     user_yaml = env["home"] / ".agent-toolkit.yaml"
@@ -420,9 +417,6 @@ def test_at_list_marks_project_segment_when_user_scope_linked(env, seed_skill, t
 
 def test_at_list_no_marker_when_user_scope_not_linked(env, seed_skill, tmp_path):
     """Same asset, only project-scope linked → no 🌐 suffix."""
-    from click.testing import CliRunner
-    from agent_toolkit_cli.cli import main
-
     toolkit_root = env["toolkit_root"]
     seed_skill(toolkit_root, "alpha", harnesses=["claude"])
     project_yaml = tmp_path / ".agent-toolkit.yaml"
@@ -438,4 +432,28 @@ def test_at_list_no_marker_when_user_scope_not_linked(env, seed_skill, tmp_path)
     assert result.exit_code == 0, result.output
     alpha_row = next((l for l in result.output.splitlines() if "alpha" in l), None)
     assert alpha_row is not None, result.output
+    assert "🌐" not in alpha_row
+
+
+def test_at_list_no_marker_when_only_user_scope_linked(env, seed_skill, tmp_path):
+    """User-scope linked but project-scope unlinked → no 🌐 (predicate is AND).
+    The user:✓ column already signals user-scope coverage; a globe in the
+    project segment without a project-scope link would be misleading."""
+    toolkit_root = env["toolkit_root"]
+    seed_skill(toolkit_root, "alpha", harnesses=["claude"])
+    user_yaml = env["home"] / ".agent-toolkit.yaml"
+    user_yaml.write_text("skills:\n  - alpha\n")
+    user_slot = env["home"] / ".claude" / "skills"
+    user_slot.mkdir(parents=True, exist_ok=True)
+    (user_slot / "alpha").symlink_to(toolkit_root / "skills" / "alpha")
+
+    result = CliRunner().invoke(
+        main, ["--toolkit-repo", str(toolkit_root), "list",
+               "--project", str(tmp_path), "skill"],
+    )
+    assert result.exit_code == 0, result.output
+    alpha_row = next((l for l in result.output.splitlines() if "alpha" in l), None)
+    assert alpha_row is not None, result.output
+    assert "user:✓" in alpha_row
+    assert "project:—" in alpha_row
     assert "🌐" not in alpha_row

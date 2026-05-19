@@ -234,6 +234,8 @@ def list_cmd(
             else:
                 h_display = f"[{' '.join(declared)}]"
 
+            # Only mark project segment when *both* scopes are linked; user-only
+            # is already obvious from user:✓, so a globe there would be noise.
             project_suffix = f" {_USER_SCOPE_GLYPH}" if user_state == "✓" and project_state == "✓" else ""
             row = (
                 f"  {asset.slug:<20} {h_display:<30} "
