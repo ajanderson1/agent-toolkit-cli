@@ -206,6 +206,7 @@ class AssetGrid(Vertical):
         except Exception:
             return
         saved_cursor = table.cursor_coordinate
+        saved_scroll_y = table.scroll_y
         table.clear(columns=True)
         table.add_column(self._kind.upper(), width=32)
         for h in self._visible_harnesses:
@@ -239,6 +240,7 @@ class AssetGrid(Vertical):
                 row=min(saved_cursor.row, max_row),
                 column=min(saved_cursor.column, max_col),
             )
+            table.scroll_to(0, saved_scroll_y, animate=False)
 
     def _matches_state(self, key: tuple[str, str, str, str], op: str) -> bool:
         scope, harness, kind, slug = key
