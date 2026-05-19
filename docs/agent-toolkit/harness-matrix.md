@@ -122,9 +122,11 @@ for kinds where the runtime fields differ materially. For OpenCode agents,
 `description`, `agent`, `model`, `subtask` (all optional in OpenCode) is
 emitted alongside the `agent_toolkit_cli:` wrapper block. For Codex skills,
 frontmatter with top-level `description` is emitted plus the wrapper. For
-Gemini agents, top-level `name` and `description` are emitted (required by
-Gemini's loader per `docs/core/subagents.md`) plus the `agent_toolkit_cli:`
-wrapper block (#97).
+Gemini agents, **only** top-level `name` and `description` are emitted
+(required by Gemini's loader per `docs/core/subagents.md`); the
+`agent_toolkit_cli:` wrapper is intentionally **omitted** because Gemini's
+loader validates frontmatter with zod `.strict()` and silently rejects any
+extra top-level key (#97).
 
 ## Why some pairs are "by design" unsupported
 
@@ -199,8 +201,11 @@ not meaningful). Per kind:
   - **Translated** for Gemini: Gemini's loader globs `*.md` files and
     requires top-level `name` and `description` in the frontmatter (#97).
     The toolkit's v1alpha2 wrapper nests these under `metadata.*`, so the
-    translator lifts them to top-level and preserves the wrapper under
-    `agent_toolkit_cli:` for traceability.
+    translator lifts them to top-level. Unlike the other translate cells,
+    the `agent_toolkit_cli:` wrapper is **omitted** from the emitted
+    frontmatter — Gemini's `agentLoader.ts` uses zod `.strict()` and
+    silently rejects any extra top-level key. Round-trip metadata lives
+    in the source asset; the cache file is a one-way render.
   - **Symlinked** for Claude and Pi.
   - **Note for Pi:** the `pi-subagents` extension reads from BOTH
     `~/.pi/agent/agents/<slug>.md` (legacy) AND `~/.agents/<slug>.md`
