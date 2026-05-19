@@ -23,3 +23,7 @@ assets/verification/
 .uv-cache/
 .claude/
 .mcp.json
+
+# Audit run artifacts
+audit/.last-run.tsv
+audit/.*.log
