@@ -438,3 +438,117 @@ def test_pi_agent_user_scope_unlink_clears_both_slots(tmp_path, monkeypatch):
     )
     assert not primary.exists()
     assert not alias.exists()
+
+
+from pathlib import Path
+from io import StringIO
+
+from agent_toolkit_cli.commands._link_lib import (
+    LinkCounters,
+    maybe_link,
+)
+
+
+def _make_md_asset(tmp_path: Path, kind_dir: str, slug: str) -> Path:
+    """Create a minimal asset file with `claude` declared in spec.harnesses."""
+    root = tmp_path / "toolkit" / kind_dir / slug
+    root.mkdir(parents=True)
+    p = root / f"{slug}.md"
+    p.write_text(
+        "---\nspec:\n  harnesses: [claude]\n---\n# body\n",
+        encoding="utf-8",
+    )
+    return p
+
+
+def test_claude_command_slot_uses_md_suffix(tmp_path):
+    asset = _make_md_asset(tmp_path, "commands", "demo-cmd")
+    target_dir = tmp_path / ".claude" / "commands"
+    target_dir.mkdir(parents=True)
+    counters = LinkCounters()
+    stdout = StringIO()
+
+    maybe_link(
+        harness="claude",
+        kind="command",
+        slug="demo-cmd",
+        asset_path=asset,
+        target_dir=target_dir,
+        toolkit_root=tmp_path / "toolkit",
+        dry_run=False,
+        counters=counters,
+        stdout=stdout,
+        scope="project",
+        project_root=tmp_path,
+    )
+
+    expected = target_dir / "demo-cmd.md"
+    assert expected.is_symlink(), (
+        f"expected {expected} to exist as a symlink; "
+        f"dir contents: {sorted(p.name for p in target_dir.iterdir())}"
+    )
+    assert expected.resolve() == asset.resolve()
+    assert not (target_dir / "demo-cmd").exists()
+
+
+def test_claude_agent_slot_uses_md_suffix(tmp_path):
+    asset = _make_md_asset(tmp_path, "agents", "demo-agent")
+    target_dir = tmp_path / ".claude" / "agents"
+    target_dir.mkdir(parents=True)
+    counters = LinkCounters()
+    stdout = StringIO()
+
+    maybe_link(
+        harness="claude",
+        kind="agent",
+        slug="demo-agent",
+        asset_path=asset,
+        target_dir=target_dir,
+        toolkit_root=tmp_path / "toolkit",
+        dry_run=False,
+        counters=counters,
+        stdout=stdout,
+        scope="project",
+        project_root=tmp_path,
+    )
+
+    expected = target_dir / "demo-agent.md"
+    assert expected.is_symlink()
+    assert expected.resolve() == asset.resolve()
+
+
+def test_claude_skill_slot_remains_bare_slug(tmp_path):
+    """Regression: skills are directory-shaped and must NOT get a .md suffix."""
+    root = tmp_path / "toolkit" / "skills" / "demo-skill"
+    root.mkdir(parents=True)
+    sk = root / "SKILL.md"
+    sk.write_text(
+        "---\nspec:\n  harnesses: [claude]\n---\n# body\n",
+        encoding="utf-8",
+    )
+    target_dir = tmp_path / ".claude" / "skills"
+    target_dir.mkdir(parents=True)
+    counters = LinkCounters()
+    stdout = StringIO()
+
+    maybe_link(
+        harness="claude",
+        kind="skill",
+        slug="demo-skill",
+        asset_path=sk,
+        target_dir=target_dir,
+        toolkit_root=tmp_path / "toolkit",
+        dry_run=False,
+        counters=counters,
+        stdout=stdout,
+        scope="project",
+        project_root=tmp_path,
+    )
+
+    expected = target_dir / "demo-skill"
+    assert expected.is_symlink(), (
+        f"expected bare-slug symlink at {expected}; "
+        f"dir contents: {sorted(p.name for p in target_dir.iterdir())}"
+    )
+    assert expected.resolve() == root.resolve()
+    assert not (target_dir / "demo-skill.md").exists()

@@ -96,13 +96,15 @@ def _scope_cache_root(harness: str, scope: str, project_root: Path) -> Path:
 def _translated_slot_filename(slug: str, kind: str, harness: str) -> str:
     """Return the filename used for the slot symlink in this (harness, kind).
 
-    File-slot kinds get `<slug>.md` (OpenCode agents/commands). Directory-slot
-    kinds — and any unsupported pair — get the bare `<slug>`.
+    File-slot kinds get `<slug>.md` — these are slots where the harness
+    discovers content by globbing `*.md` files in the slot directory.
+    Currently that's `(opencode, agent|command)` and `(claude, agent|command)`.
+    Directory-slot kinds — and any unsupported pair — get the bare `<slug>`.
 
     Callers can detect the slot shape from the result: `endswith(".md")` ⇒
     file-slot; otherwise directory-slot or non-translated.
     """
-    if harness == "opencode" and kind in {"agent", "command"}:
+    if kind in {"agent", "command"} and harness in {"opencode", "claude"}:
         return f"{slug}.md"
     return slug
 
@@ -344,7 +346,7 @@ def maybe_link(
     if is_translated and project_root is None:
         project_root = Path.cwd()
 
-    slot_filename = _translated_slot_filename(slug, kind, harness) if is_translated else slug
+    slot_filename = _translated_slot_filename(slug, kind, harness)
     link_path = target_dir / slot_filename
     # For "dir-with-file-symlink" layouts the actual symlink lives one level
     # deeper inside a real slot directory. For all other layouts the slot path
