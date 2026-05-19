@@ -7,8 +7,6 @@ action-link parsing inside a Static.
 """
 from __future__ import annotations
 
-from typing import ClassVar
-
 from textual import events
 from textual.app import ComposeResult
 from textual.containers import Horizontal
@@ -20,16 +18,16 @@ SCOPES: tuple[str, ...] = ("project", "user")
 class ScopeToggle(Horizontal):
     """Two-state toggle between 'project' and 'user' scopes.
 
-    Composition: a Horizontal of two Labels, one per scope value. Active state
-    is signalled via CSS class names (-active / -inactive) — both labels share
-    the same shape and padding; only colour distinguishes them.
+    Composition: a Horizontal of three Labels — a leading 'scope:' prefix
+    label plus one option Label per scope value. Option Labels carry the
+    'scope-option' class and one of '-active' / '-inactive' to drive CSS;
+    both share the same shape and padding so only colour distinguishes them.
 
-    Click handling: each Label's on_click handler dispatches to
-    `self.app.action_scope(scope)`. The host app owns the scope state machine;
-    this widget is a pure view + click-source.
+    Click handling: clicks on an option Label bubble to this widget's
+    `on_click`, which dispatches `self.app.action_scope(scope)`. The host
+    app owns the scope state machine; this widget is a pure view +
+    click-source.
     """
-
-    DEFAULT_CSS: ClassVar[str] = ""
 
     def __init__(self, *, active: str = "project", id: str | None = None) -> None:
         super().__init__(id=id)
@@ -53,11 +51,10 @@ class ScopeToggle(Horizontal):
         if scope not in SCOPES:
             raise ValueError(f"scope must be one of {SCOPES}, got {scope!r}")
         self._active = scope
+        if not self.is_mounted:
+            return
         for s in SCOPES:
-            try:
-                label = self.query_one(f"#{self._toggle_id}-{s}", Label)
-            except Exception:
-                continue
+            label = self.query_one(f"#{self._toggle_id}-{s}", Label)
             label.remove_class("-active")
             label.remove_class("-inactive")
             label.add_class("-active" if s == scope else "-inactive")
@@ -75,7 +72,7 @@ class ScopeToggle(Horizontal):
         widget_id = getattr(target, "id", None)
         if not widget_id or not widget_id.startswith(f"{self._toggle_id}-"):
             return
-        scope = widget_id[len(self._toggle_id) + 1 :]
+        scope = widget_id.removeprefix(f"{self._toggle_id}-")
         if scope not in SCOPES:
             return
         event.stop()
