@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.6.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v0.5.1...v0.6.0) (2026-05-19)
+
+
+### Features
+
+* **doctor:** pi-advisories — drift audits project scope ([#108](https://github.com/ajanderson1/agent-toolkit-cli/issues/108)) ([#110](https://github.com/ajanderson1/agent-toolkit-cli/issues/110)) ([f857450](https://github.com/ajanderson1/agent-toolkit-cli/commit/f857450860fefd4df2679e9887cf1c25c594e1ce))
+* **pi:** surface settings.json extensions[] overrides in inventory ([#116](https://github.com/ajanderson1/agent-toolkit-cli/issues/116)) ([1f05cca](https://github.com/ajanderson1/agent-toolkit-cli/commit/1f05cca24636dc49f27ad28841f834b5f55c5e49))
+* **pi:** unified extension inventory + load/unload across both channels ([#106](https://github.com/ajanderson1/agent-toolkit-cli/issues/106)) ([77734a2](https://github.com/ajanderson1/agent-toolkit-cli/commit/77734a2d10779c44d594c61cd3d65f93ee8dd7b5))
+* **sidecar:** metadata discovery for skill + mcp (PR 1 of 2) ([#104](https://github.com/ajanderson1/agent-toolkit-cli/issues/104)) ([aee34b4](https://github.com/ajanderson1/agent-toolkit-cli/commit/aee34b4ceb7189874c68c9148b63495226651676))
+* **sidecar:** remove legacy MCP path + activate doctor --fix writes (PR 3 of 2) ([#114](https://github.com/ajanderson1/agent-toolkit-cli/issues/114)) ([a990fa1](https://github.com/ajanderson1/agent-toolkit-cli/commit/a990fa158f7e4028d58f9ef654e8b55be4911b8b))
+* **tui:** pi tab u/p toggle bindings ([#107](https://github.com/ajanderson1/agent-toolkit-cli/issues/107)) ([#115](https://github.com/ajanderson1/agent-toolkit-cli/issues/115)) ([3aa7add](https://github.com/ajanderson1/agent-toolkit-cli/commit/3aa7add79ea6783d4aa11d3e94d0c3c24a879f26))
+
+
+### Bug Fixes
+
+* **walker:** mutex predicate requires toolkit-shape frontmatter ([#117](https://github.com/ajanderson1/agent-toolkit-cli/issues/117)) ([600a3cc](https://github.com/ajanderson1/agent-toolkit-cli/commit/600a3cc34f0046d7270e9042342ebaf5d3067cc6))
+
 ## [0.5.1](https://github.com/ajanderson1/agent-toolkit-cli/compare/v0.5.0...v0.5.1) (2026-05-19)
 
 
