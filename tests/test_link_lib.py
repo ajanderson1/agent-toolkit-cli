@@ -550,7 +550,7 @@ def test_claude_skill_slot_remains_bare_slug(tmp_path):
     assert not (target_dir / "demo-skill.md").exists()
 
 
-def test_orphan_sweep_prunes_legacy_bare_slug_for_claude_command(tmp_path, monkeypatch):
+def test_orphan_sweep_prunes_legacy_bare_slug_for_claude_command(tmp_path):
     """After upgrading from the pre-#82 version, an existing bare-slug
     `<slug>` symlink for a claude command should be pruned on the next
     `project_from_file` run (it's superseded by the `<slug>.md` symlink)."""
