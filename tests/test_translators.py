@@ -422,3 +422,29 @@ def test_translate_gemini_agent_minimum():
     assert fm["name"] == "demo-agent"
     assert fm["description"] == "Verify cross-harness."
     assert body_out == body
+
+
+def test_translate_gemini_agent_round_trips_wrapper():
+    """metadata + spec preserved verbatim under agent_toolkit_cli."""
+    import yaml
+
+    md = {
+        "apiVersion": "agent-toolkit/v1alpha2",
+        "metadata": {"name": "a", "description": "d", "tags": ["x", "y"]},
+        "spec": {"harnesses": ["gemini"], "origin": "first-party"},
+    }
+    record = _make_gemini_agent_record("a", md)
+    out = _translate_gemini_agent(record, "body\n").decode("utf-8")
+    fm_text, _, _ = out[4:].partition("\n---\n")
+    fm = yaml.safe_load(fm_text)
+    assert fm["agent_toolkit_cli"]["apiVersion"] == "agent-toolkit/v1alpha2"
+    assert fm["agent_toolkit_cli"]["metadata"]["tags"] == ["x", "y"]
+    assert fm["agent_toolkit_cli"]["spec"]["harnesses"] == ["gemini"]
+
+
+def test_translators_dict_includes_gemini_agent():
+    """Regression guard: (gemini, agent) must be in TRANSLATORS."""
+    from agent_toolkit_cli._translators import TRANSLATORS
+
+    assert ("gemini", "agent") in TRANSLATORS
+    assert TRANSLATORS[("gemini", "agent")] is _translate_gemini_agent
