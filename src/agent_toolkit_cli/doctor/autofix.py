@@ -1,6 +1,9 @@
 """Doctor autofix — mechanical resolutions for sidecar/inline mutex etc.
 
-PR 1: dry-run scaffolding only. Actual write logic activates in PR 3.
+Currently implements the mutex case (strip inline frontmatter, sidecar wins).
+Refuses to edit files inside submodule paths. The orphan-body case is
+scaffolded but not yet wired through find_fixables; calling it raises
+NotImplementedError.
 """
 from __future__ import annotations
 
@@ -72,10 +75,41 @@ def find_fixables(toolkit_root: Path) -> list[Fixable]:
 
 
 def apply_fixable(item: Fixable) -> None:
-    """Apply a fix. PR 1: not implemented — raises NotImplementedError."""
-    raise NotImplementedError(
-        "Autofix writes activate in PR 3. Run `doctor --fix --dry-run` for now."
-    )
+    """Apply a mechanical autofix."""
+    if item.issue == "mutex":
+        path = item.target_path
+        # Defense in depth: never edit files in submodule paths
+        toolkit_root = _find_toolkit_root(path)
+        submods = _submodule_paths(toolkit_root)
+        if _path_under(path, submods):
+            raise NotImplementedError(
+                f"refused: {path} is under a submodule path; "
+                f"toolkit must not edit upstream content"
+            )
+        text = path.read_text(encoding="utf-8").replace("\r\n", "\n")
+        if not text.startswith("---\n"):
+            return
+        end = text.find("\n---\n", 4)
+        if end == -1:
+            return
+        stripped = text[end + len("\n---\n") :].lstrip("\n")
+        path.write_text(stripped, encoding="utf-8")
+        return
+    if item.issue == "orphan-body":
+        raise NotImplementedError(
+            "orphan-body autofix not yet wired through find_fixables. "
+            "Until the discovery side emits orphan-body Fixables, this "
+            "branch is unreachable; manually create the sidecar from the "
+            "template in `agent-toolkit-cli new skill <slug>` for now."
+        )
+
+
+def _find_toolkit_root(path: Path) -> Path:
+    """Walk up from a path to find the toolkit root (parent containing skills/ or mcps/)."""
+    for ancestor in path.resolve().parents:
+        if (ancestor / "skills").is_dir() or (ancestor / "mcps").is_dir():
+            return ancestor
+    raise RuntimeError(f"could not find toolkit root above {path}")
 
 
 def _submodule_paths(toolkit_root: Path) -> list[Path]:
