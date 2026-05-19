@@ -64,7 +64,7 @@ human readers can trace any cache file back to its source asset.
 | Kind \\ Harness | Claude | Codex | OpenCode | Gemini | Pi |
 |---|---|---|---|---|---|
 | **skill** | symlink → `~/.claude/skills/<slug>/` | translate → `~/.codex/skills/<slug>/SKILL.md` (cache: `~/.codex/.agent-toolkit-cache/skill/<slug>/SKILL.md`) — emits codex-shaped frontmatter with top-level `description` and `agent_toolkit_cli` wrapper block. NOTE: `~/.codex/skills/` is the **deprecated-but-loaded** path per `codex-rs/core-skills/src/loader.rs`; the canonical user path is `~/.agents/skills/<slug>/SKILL.md`. CLI migration pending | translate → `~/.config/opencode/skills/<slug>/SKILL.md` (cache: `~/.config/opencode/.agent-toolkit-cache/skill/<slug>/SKILL.md`) — slot is a real directory containing a file symlink to the cache; emits opencode-shaped frontmatter with top-level `name` and `description` plus `agent_toolkit_cli` wrapper block | symlink → `~/.gemini/skills/<slug>/` | symlink → `~/.pi/agent/skills/<slug>/` (Pi also auto-discovers `~/.agents/skills/` and ancestor `.agents/skills/` — cross-harness convergence point) |
-| **agent** | symlink → `~/.claude/agents/<slug>.md` | unsupported (by design) — Codex's `[agents]` config surface (added in CLI 0.128.0) is for harness-internal agent declarations, not toolkit-shape agents (markdown body + frontmatter). Refined per #56. | translate → `~/.config/opencode/agents/<slug>.md` (cache: `~/.config/opencode/.agent-toolkit-cache/agent/<slug>.md`) — injects `mode: subagent` and strips toolkit wrapper frontmatter | symlink → `~/.gemini/agents/<slug>.md` | dual-symlink → `~/.pi/agent/agents/<slug>.md` AND `~/.agents/<slug>.md`. The `pi-subagents` extension reads both paths (concatenates results); toolkit dual-writes so a future drop of either path keeps assets discoverable. Project scope mirrors `.pi/agents/` + `.agents/`. See #75. |
+| **agent** | symlink → `~/.claude/agents/<slug>.md` | unsupported (by design) — Codex's `[agents]` config surface (added in CLI 0.128.0) is for harness-internal agent declarations, not toolkit-shape agents (markdown body + frontmatter). Refined per #56. | translate → `~/.config/opencode/agents/<slug>.md` (cache: `~/.config/opencode/.agent-toolkit-cache/agent/<slug>.md`) — injects `mode: subagent` and strips toolkit wrapper frontmatter | translate → `~/.gemini/agents/<slug>.md` (cache: `~/.gemini/.agent-toolkit-cache/agent/<slug>.md`) — emits gemini-shaped frontmatter with top-level `name` and `description` plus `agent_toolkit_cli` wrapper block (mirrors OpenCode skill shape). #97 | dual-symlink → `~/.pi/agent/agents/<slug>.md` AND `~/.agents/<slug>.md`. The `pi-subagents` extension reads both paths (concatenates results); toolkit dual-writes so a future drop of either path keeps assets discoverable. Project scope mirrors `.pi/agents/` + `.agents/`. See #75. |
 | **command** | symlink → `~/.claude/commands/<slug>.md` | unsupported (by design) — Codex has no `~/.codex/commands/` drop-in; user "commands" surface as skills invoked via `$skill-name` mention or implicit description match | translate → `~/.config/opencode/commands/<slug>.md` (cache: `~/.config/opencode/.agent-toolkit-cache/command/<slug>.md`) — emits OpenCode-shaped frontmatter (optional `description`, `agent`, `model`, `subtask` — all optional) plus `agent_toolkit_cli` wrapper block | translate → `~/.gemini/commands/<slug>.toml` (cache: `~/.gemini/.agent-toolkit-cache/command/<slug>.toml`) — emits Gemini TOML schema (description + prompt) plus a `[agent_toolkit_cli]` table with JSON-encoded wrapper for round-trip traceability | unsupported (by design) — Pi has no command concept |
 | **hook** | symlink → `~/.claude/hooks/<slug>.<ext>` (storage convention only — Claude does not auto-discover this directory; hooks must be referenced from `settings.json` via `$CLAUDE_PROJECT_DIR/.claude/hooks/...`) | config_file+folder → `~/.codex/config.toml` `[hooks]` + `~/.codex/agent-toolkit-hooks/<slug>/` | unsupported (by design) — OpenCode hooks live inside TS plugin files (`tool.execute.before`, `session.created`, `session.error`, etc.); not drop-in markdown | unsupported (by design) — Gemini hooks are shell-script entries under .gemini/hooks/ keyed by stdin/exit-code, not toolkit drop-in markdown | unsupported (by design) — Pi has no hooks API at the user level |
 | **plugin** | symlink → `~/.claude/plugins/<slug>/` | unsupported (by design) — Codex plugins are bundles with `.codex-plugin/plugin.json` manifests, installed via `codex plugin marketplace add` (different concept and install path from Claude markdown plugins) | unsupported (by design) — OpenCode plugins are TS/JS files at `~/.config/opencode/plugins/` or npm packages declared in `opencode.json` (different concept entirely) | unsupported (by design) — Gemini extends via "extensions" (npm-installed packages with gemini-extension.json), not markdown plugins | unsupported (by design) — Pi extends via `pi-extension`, not a plugin concept |
@@ -121,7 +121,10 @@ for kinds where the runtime fields differ materially. For OpenCode agents,
 `agent_toolkit_cli:`. For OpenCode commands, frontmatter with optional
 `description`, `agent`, `model`, `subtask` (all optional in OpenCode) is
 emitted alongside the `agent_toolkit_cli:` wrapper block. For Codex skills,
-frontmatter with top-level `description` is emitted plus the wrapper.
+frontmatter with top-level `description` is emitted plus the wrapper. For
+Gemini agents, top-level `name` and `description` are emitted (required by
+Gemini's loader per `docs/core/subagents.md`) plus the `agent_toolkit_cli:`
+wrapper block (#97).
 
 ## Why some pairs are "by design" unsupported
 
@@ -193,6 +196,11 @@ not meaningful). Per kind:
   - **Translated** for OpenCode: drop-in markdown agents are supported
     but missing `mode:` defaults to `all` (primary), which silently
     mis-classifies subagents — the translator injects `mode: subagent`.
+  - **Translated** for Gemini: Gemini's loader globs `*.md` files and
+    requires top-level `name` and `description` in the frontmatter (#97).
+    The toolkit's v1alpha2 wrapper nests these under `metadata.*`, so the
+    translator lifts them to top-level and preserves the wrapper under
+    `agent_toolkit_cli:` for traceability.
   - **Symlinked** for Claude and Pi.
   - **Note for Pi:** the `pi-subagents` extension reads from BOTH
     `~/.pi/agent/agents/<slug>.md` (legacy) AND `~/.agents/<slug>.md`

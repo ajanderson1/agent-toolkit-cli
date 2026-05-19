@@ -101,6 +101,26 @@ def _translate_opencode_skill(record: AssetRecord, body: str) -> bytes:
     return _render(fm, body)
 
 
+def _translate_gemini_agent(record: AssetRecord, body: str) -> bytes:
+    """Gemini's loader requires top-level `name` and `description` in the YAML
+    frontmatter. The toolkit's v1alpha2 wrapper nests these under metadata.*,
+    so the loader either rejects the agent or loads it with an empty
+    name/description (#97).
+
+    Output mirrors `_translate_opencode_skill` — top-level `name` and
+    `description` plus `agent_toolkit_cli` wrapper block for round-trip
+    traceability. Empirically verified against gemini 0.40.1
+    (`docs/core/subagents.md` requires `*.md` files with top-level name +
+    description; bare-named files or wrapper-only frontmatter are dropped).
+    """
+    fm = {
+        "name": _name(record),
+        "description": _description(record),
+        "agent_toolkit_cli": _wrapper_block(record),
+    }
+    return _render(fm, body)
+
+
 def _translate_gemini_command(record: AssetRecord, body: str) -> bytes:
     """Emit a Gemini-flavored TOML command file.
 
@@ -178,4 +198,5 @@ TRANSLATORS: dict[tuple[str, str], Callable[[AssetRecord, str], bytes]] = {
     ("codex", "skill"): _translate_codex_skill,
     ("opencode", "skill"): _translate_opencode_skill,
     ("gemini", "command"): _translate_gemini_command,
+    ("gemini", "agent"): _translate_gemini_agent,
 }

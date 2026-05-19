@@ -10,6 +10,7 @@ from agent_toolkit_cli._repo_resolution import resolve_toolkit_root
 from agent_toolkit_cli._translators import (
     TRANSLATORS,
     _translate_codex_skill,
+    _translate_gemini_agent,
     _translate_gemini_command,
     _translate_opencode_agent,
     _translate_opencode_command,
@@ -393,3 +394,31 @@ def test_translate_gemini_command_handles_trailing_quotes(trailing):
     out = _translate_gemini_command(record, body)
     parsed = tomllib.loads(out.decode("utf-8"))
     assert parsed["prompt"] == body
+
+
+def _make_gemini_agent_record(slug: str, metadata: dict) -> AssetRecord:
+    """Build an AssetRecord for an agent with the given raw metadata dict."""
+    from agent_toolkit_cli.walker import Asset, AssetRecord
+    asset = Asset(kind="agent", slug=slug, path=Path(f"/fake/agents/{slug}.md"))
+    return AssetRecord(asset=asset, metadata=metadata, body_excerpt="", requires={})
+
+
+def test_translate_gemini_agent_minimum():
+    """Minimum: top-level name + description, body preserved, wrapper present."""
+    import yaml
+
+    record = _make_gemini_agent_record(
+        "demo-agent",
+        {
+            "apiVersion": "agent-toolkit/v1alpha2",
+            "metadata": {"name": "demo-agent", "description": "Verify cross-harness."},
+        },
+    )
+    body = "You are DemoBot.\n"
+    out = _translate_gemini_agent(record, body).decode("utf-8")
+    assert out.startswith("---\n")
+    fm_text, _, body_out = out[4:].partition("\n---\n")
+    fm = yaml.safe_load(fm_text)
+    assert fm["name"] == "demo-agent"
+    assert fm["description"] == "Verify cross-harness."
+    assert body_out == body
