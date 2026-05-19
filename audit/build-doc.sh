@@ -109,6 +109,7 @@ render_cell_stub() {
 EOF
 }
 
+TMP_NEW="$(mktemp)"
 {
   printf '# Toolkit Audit — %s\n\n' "$(date +%F)"
 
@@ -132,6 +133,76 @@ EOF
     | sort -u | while IFS=$'\t' read -r k h; do
         render_cell_stub "$k" "$h"
       done
-} > "$OUT"
+} > "$TMP_NEW"
+
+if [ -f "$OUT" ]; then
+  python3 - "$OUT" "$TMP_NEW" "$OUT" <<'PYEOF'
+import re, sys, pathlib
+
+old_path, new_path, out_path = map(pathlib.Path, sys.argv[1:4])
+old = old_path.read_text()
+new = new_path.read_text()
+
+def extract_regions(text, prefix):
+    pat = re.compile(
+        rf"<!-- BEGIN_AUDIT:{prefix} ([^ ]+) -->\n(.*?)<!-- END_AUDIT:{prefix} \1 -->",
+        re.DOTALL,
+    )
+    return {m.group(1): m.group(2) for m in pat.finditer(text)}
+
+def extract_single(text, region):
+    pat = re.compile(
+        rf"<!-- BEGIN_AUDIT:{region} -->\n(.*?)<!-- END_AUDIT:{region} -->",
+        re.DOTALL,
+    )
+    m = pat.search(text)
+    return m.group(1) if m else None
+
+old_cells = extract_regions(old, "cell")
+new_cells = extract_regions(new, "cell")
+old_rollup = extract_single(old, "rollup")
+
+def splice_cells(text):
+    def repl(m):
+        cell_id = m.group(1)
+        if cell_id in old_cells:
+            return f"<!-- BEGIN_AUDIT:cell {cell_id} -->\n{old_cells[cell_id]}<!-- END_AUDIT:cell {cell_id} -->"
+        return m.group(0)
+    return re.sub(
+        r"<!-- BEGIN_AUDIT:cell ([^ ]+) -->\n.*?<!-- END_AUDIT:cell \1 -->",
+        repl, text, flags=re.DOTALL,
+    )
+
+result = splice_cells(new)
+
+default_marker = "_Prioritized issues list — hand-curate below._"
+if old_rollup is not None and default_marker not in old_rollup:
+    result = re.sub(
+        r"<!-- BEGIN_AUDIT:rollup -->\n.*?<!-- END_AUDIT:rollup -->",
+        f"<!-- BEGIN_AUDIT:rollup -->\n{old_rollup}<!-- END_AUDIT:rollup -->",
+        result, flags=re.DOTALL,
+    )
+
+deprecated_ids = set(old_cells) - set(new_cells)
+if deprecated_ids:
+    banner_block = "\n## Deprecated cells (no longer in support matrix)\n\n"
+    for cid in sorted(deprecated_ids):
+        kind, _, harness = cid.rpartition('-')
+        heading = f"{kind} × {harness}"
+        banner_block += (
+            f"### {heading}\n\n"
+            f"<!-- BEGIN_AUDIT:cell {cid} -->\n"
+            f"⚠️ NO LONGER SUPPORTED — review and remove.\n\n"
+            f"{old_cells[cid]}"
+            f"<!-- END_AUDIT:cell {cid} -->\n\n"
+        )
+    result += banner_block
+
+out_path.write_text(result)
+PYEOF
+  rm -f "$TMP_NEW"
+else
+  mv "$TMP_NEW" "$OUT"
+fi
 
 printf 'wrote %s\n' "$OUT"

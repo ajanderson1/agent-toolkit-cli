@@ -3,7 +3,7 @@
 ## Rollup
 
 <!-- BEGIN_AUDIT:rollup -->
-Last scaffolded: 2026-05-19T16:29:51Z
+Last scaffolded: 2026-05-19T16:48:23Z
 
 _Prioritized issues list — hand-curate below._
 <!-- END_AUDIT:rollup -->
