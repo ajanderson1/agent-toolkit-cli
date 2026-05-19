@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.2](https://github.com/ajanderson1/agent-toolkit-cli/compare/v0.7.1...v0.7.2) (2026-05-19)
+
+
+### Bug Fixes
+
+* **unlink:** prune stale projections when slug absent from allowlist ([#135](https://github.com/ajanderson1/agent-toolkit-cli/issues/135)) ([11702ed](https://github.com/ajanderson1/agent-toolkit-cli/commit/11702ed9d720f1e601543028ab9d91a1eb420909))
+
 ## [0.7.1](https://github.com/ajanderson1/agent-toolkit-cli/compare/v0.7.0...v0.7.1) (2026-05-19)
 
 
