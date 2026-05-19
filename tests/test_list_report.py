@@ -9,7 +9,7 @@ from agent_toolkit_cli.generators.list_report import format_report
 def _empty_inventory(toolkit: Path) -> dict:
     return {
         "toolkit_root": str(toolkit),
-        "harnesses": ["claude", "codex", "opencode", "pi"],
+        "harnesses": ["claude", "codex", "opencode", "gemini", "pi"],
         "assets": [],
     }
 
@@ -24,7 +24,7 @@ def test_empty_inventory(tmp_path):
 def test_single_harness_linked(tmp_path):
     inv = {
         "toolkit_root": str(tmp_path / "toolkit"),
-        "harnesses": ["claude", "codex", "opencode", "pi"],
+        "harnesses": ["claude", "codex", "opencode", "gemini", "pi"],
         "assets": [
             {
                 "kind": "skill",
@@ -41,7 +41,7 @@ def test_single_harness_linked(tmp_path):
                      "target": None, "allowlisted": False},
                     *[{"harness": h, "scope": s, "status": "unsupported",
                        "target": None, "allowlisted": False}
-                      for h in ("codex", "opencode", "pi") for s in ("user", "project")],
+                      for h in ("codex", "opencode", "gemini", "pi") for s in ("user", "project")],
                 ],
             }
         ],
@@ -57,7 +57,7 @@ def test_single_harness_linked(tmp_path):
 def test_multi_harness_multi_scope_grouping(tmp_path):
     inv = {
         "toolkit_root": str(tmp_path / "toolkit"),
-        "harnesses": ["claude", "codex", "opencode", "pi"],
+        "harnesses": ["claude", "codex", "opencode", "gemini", "pi"],
         "assets": [
             {
                 "kind": "skill", "slug": "alpha",
@@ -75,7 +75,7 @@ def test_multi_harness_multi_scope_grouping(tmp_path):
                      "target": None, "allowlisted": False},
                     *[{"harness": h, "scope": s, "status": "unsupported",
                        "target": None, "allowlisted": False}
-                      for h in ("opencode", "pi") for s in ("user", "project")],
+                      for h in ("opencode", "gemini", "pi") for s in ("user", "project")],
                 ],
             },
         ],

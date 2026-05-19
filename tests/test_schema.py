@@ -107,6 +107,27 @@ def test_harnesses_closed_enum():
         jsonschema.validate(data, schema)
 
 
+def test_harnesses_enum_matches_all_harnesses():
+    """Schema enum must include every entry in ALL_HARNESSES — otherwise a
+    user declaring a newly-supported harness in `spec.harnesses` would fail
+    frontmatter validation even though the registry says the pair is
+    supported. Regression guard for #53 (gemini was added to ALL_HARNESSES
+    but the schema enum was a separate literal that drifted)."""
+    from agent_toolkit_cli._support import ALL_HARNESSES
+
+    schema = _load_schema()
+    enum = set(schema["properties"]["spec"]["properties"]["harnesses"]["items"]["enum"])
+    assert set(ALL_HARNESSES) == enum, (
+        f"schema enum {enum} drifted from ALL_HARNESSES {set(ALL_HARNESSES)}"
+    )
+
+    # Smoke: each ALL_HARNESSES member individually passes schema validation.
+    for h in ALL_HARNESSES:
+        data = _base()
+        data["spec"]["harnesses"] = [h]
+        jsonschema.validate(data, schema)
+
+
 def test_metadata_no_extra_keys():
     schema = _load_schema()
     data = _base()

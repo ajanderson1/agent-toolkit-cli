@@ -4,12 +4,11 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from agent_toolkit_cli._support import ALL_HARNESSES as _HARNESSES
 from agent_toolkit_cli.doctor.result import GroupResult, Status
 from agent_toolkit_cli.doctor.symlinks import _USER_PATHS, _meta_for
 from agent_toolkit_cli.schema import Validator
 from agent_toolkit_cli.walker import discover_assets
-
-_HARNESSES = ("claude", "codex", "opencode", "pi")
 
 
 def diagnose(toolkit_root: Path, *, slug: str, deep: bool = False) -> GroupResult:

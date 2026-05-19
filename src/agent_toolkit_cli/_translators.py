@@ -10,6 +10,7 @@ symlink targets the cache file. See
 """
 from __future__ import annotations
 
+import json
 from typing import Callable
 
 import yaml
@@ -100,9 +101,81 @@ def _translate_opencode_skill(record: AssetRecord, body: str) -> bytes:
     return _render(fm, body)
 
 
+def _translate_gemini_command(record: AssetRecord, body: str) -> bytes:
+    """Emit a Gemini-flavored TOML command file.
+
+    Gemini's custom commands live at `~/.gemini/commands/<name>.toml` (and
+    `<project>/.gemini/commands/<name>.toml`). The v1 TOML schema requires
+    `prompt` and accepts an optional `description`.
+
+    We additionally emit an `[agent_toolkit_cli]` table so the rendered file
+    can be traced back to its toolkit source. The wrapper's `metadata` and
+    `spec` blocks (free-form dicts) are JSON-encoded as TOML strings —
+    lossless round-trip via `tomllib.loads(...)` + `json.loads(...)`. This is
+    deliberately ugly: TOML cannot natively represent the wrapper's nested
+    free-form shape, and we'd rather have a stable text-string than risk a
+    schema-versioning footgun by inventing a half-flattened TOML structure.
+    """
+    md = record.metadata
+    description = (md.get("metadata") or {}).get("description") or ""
+    api_version = md.get("apiVersion") or ""
+    metadata_block = md.get("metadata") or {}
+    spec_block = md.get("spec")
+
+    parts: list[str] = []
+    parts.append(f"description = {_toml_basic_string(description)}\n")
+    parts.append(f"prompt = {_toml_multiline_string(body)}\n")
+    parts.append("\n[agent_toolkit_cli]\n")
+    parts.append(f"apiVersion = {_toml_basic_string(api_version)}\n")
+    # metadata/spec are always JSON-serializable: the walker parses YAML
+    # frontmatter (scalars, lists, dicts) — no datetime/Path/custom types.
+    parts.append(
+        f"metadata = {_toml_basic_string(json.dumps(metadata_block, sort_keys=True))}\n"
+    )
+    if spec_block is not None:
+        parts.append(
+            f"spec = {_toml_basic_string(json.dumps(spec_block, sort_keys=True))}\n"
+        )
+    return "".join(parts).encode("utf-8")
+
+
+def _toml_basic_string(s: str) -> str:
+    """Render a TOML basic string with `"` and `\\` escaped.
+
+    Spec: https://toml.io/en/v1.0.0#string . Basic strings use `"..."`;
+    inside them, `\\` and `"` must be escaped, as must control characters.
+    Newlines force the multiline form — callers that may include newlines
+    must use `_toml_multiline_string` instead.
+    """
+    if "\n" in s or "\r" in s:
+        # Defensive: callers should pick the multiline variant for these.
+        # Fall through to the multiline emitter rather than risk an
+        # invalid one-liner.
+        return _toml_multiline_string(s)
+    escaped = s.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
+def _toml_multiline_string(s: str) -> str:
+    r"""Render a TOML multi-line basic string (`\"\"\"...\"\"\"`).
+
+    The only character that breaks this form is a `\"\"\"` substring inside the
+    payload — escape the third `"` so the lexer stops at two `"`s.
+    Backslashes must also be escaped. A leading newline is omitted by the
+    spec when it's the first character after the opening `\"\"\"`, but we
+    explicitly insert one so the rendered file is human-friendly.
+    """
+    # Escape backslashes first to avoid double-escaping our own escape.
+    escaped = s.replace("\\", "\\\\")
+    # Then break any internal `"""` by escaping the third quote.
+    escaped = escaped.replace('"""', '""\\"')
+    return f'"""\n{escaped}"""'
+
+
 TRANSLATORS: dict[tuple[str, str], Callable[[AssetRecord, str], bytes]] = {
     ("opencode", "agent"): _translate_opencode_agent,
     ("opencode", "command"): _translate_opencode_command,
     ("codex", "skill"): _translate_codex_skill,
     ("opencode", "skill"): _translate_opencode_skill,
+    ("gemini", "command"): _translate_gemini_command,
 }

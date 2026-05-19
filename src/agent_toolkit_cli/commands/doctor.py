@@ -6,6 +6,7 @@ from pathlib import Path
 import click
 
 from agent_toolkit_cli._repo_resolution import RepoNotFoundError, resolve_toolkit_root
+from agent_toolkit_cli._support import ALL_HARNESSES
 from agent_toolkit_cli._ui import header, summary
 from agent_toolkit_cli.doctor import (
     allowlist_audit as g_allowlist_audit,
@@ -39,7 +40,7 @@ _GROUPS = (
 )
 @click.option("--verbose", is_flag=True, help="Expand each group's evidence.")
 @click.option("--group", "group_name", type=click.Choice(_GROUPS), default=None)
-@click.option("--harness", type=click.Choice(["claude", "codex", "opencode", "pi"]), default="claude")
+@click.option("--harness", type=click.Choice(list(ALL_HARNESSES)), default="claude")
 @click.option("--scope", type=click.Choice(["user", "project"]), default="user")
 @click.option("--exit-code", "use_exit_code", is_flag=True)
 @click.option("--deep", is_flag=True, help="Reserved for future behavioural probes.")

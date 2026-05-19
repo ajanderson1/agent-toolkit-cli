@@ -16,7 +16,7 @@ from agent_toolkit_cli._support import (
 
 
 def test_all_harnesses_is_canonical():
-    assert ALL_HARNESSES == ("claude", "codex", "opencode", "pi")
+    assert ALL_HARNESSES == ("claude", "codex", "opencode", "gemini", "pi")
 
 
 def test_all_kinds_is_canonical():
@@ -46,6 +46,24 @@ def test_supported_pairs_known_members():
     assert ("codex", "skill") in SUPPORTED_PAIRS
     assert ("opencode", "skill") in SUPPORTED_PAIRS
     assert ("pi", "pi-extension") in SUPPORTED_PAIRS
+
+
+def test_gemini_pairs_supported():
+    """Gemini supports skill, agent, command, and (via adapter) mcp."""
+    assert ("gemini", "skill") in SUPPORTED_PAIRS
+    assert ("gemini", "agent") in SUPPORTED_PAIRS
+    assert ("gemini", "command") in SUPPORTED_PAIRS
+    # mcp is not in SUPPORTED_PAIRS — it's adapter-managed, not slot-projected.
+    assert ("gemini", "mcp") not in SUPPORTED_PAIRS
+
+
+def test_is_supported_gemini_kinds_at_both_scopes():
+    assert is_supported("gemini", "skill", scope="user") is True
+    assert is_supported("gemini", "skill", scope="project") is True
+    assert is_supported("gemini", "agent", scope="user") is True
+    assert is_supported("gemini", "agent", scope="project") is True
+    assert is_supported("gemini", "command", scope="user") is True
+    assert is_supported("gemini", "command", scope="project") is True
 
 
 def test_supported_pairs_known_holes():

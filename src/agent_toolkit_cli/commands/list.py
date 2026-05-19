@@ -146,7 +146,8 @@ def list_cmd(
         else:
             msg = (
                 f"unknown filter '{arg}' — expected one of: "
-                "skill agent command hook plugin mcp or claude codex opencode pi"
+                "skill agent command hook plugin mcp or "
+                + " ".join(ALL_HARNESSES)
             )
             click.echo(msg, err=True)
             ctx.exit(2)

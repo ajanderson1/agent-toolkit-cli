@@ -16,7 +16,7 @@ from pathlib import Path
 
 import click
 
-ALL_HARNESSES: tuple[str, ...] = ("claude", "codex", "opencode", "pi")
+ALL_HARNESSES: tuple[str, ...] = ("claude", "codex", "opencode", "gemini", "pi")
 ALL_KINDS: tuple[str, ...] = (
     "skill", "agent", "command", "hook", "plugin", "mcp", "pi-extension",
 )
@@ -32,6 +32,9 @@ _USER_TARGETS: dict[tuple[str, str], str] = {
     ("opencode", "skill"):     "{home}/.config/opencode/skills",
     ("opencode", "agent"):     "{home}/.config/opencode/agents",
     ("opencode", "command"):   "{home}/.config/opencode/commands",
+    ("gemini", "skill"):       "{home}/.gemini/skills",
+    ("gemini", "agent"):       "{home}/.gemini/agents",
+    ("gemini", "command"):     "{home}/.gemini/commands",
     ("pi", "skill"):           "{home}/.pi/agent/skills",
     ("pi", "agent"):           "{home}/.pi/agent/agents",
     ("pi", "pi-extension"):    "{home}/.pi/agent/extensions",
@@ -46,6 +49,9 @@ _PROJECT_TARGETS: dict[tuple[str, str], str] = {
     ("opencode", "skill"):     ".opencode/skills",
     ("opencode", "agent"):     ".opencode/agents",
     ("opencode", "command"):   ".opencode/commands",
+    ("gemini", "skill"):       ".gemini/skills",
+    ("gemini", "agent"):       ".gemini/agents",
+    ("gemini", "command"):     ".gemini/commands",
     # Pi project-scope: pi core reads from <cwd>/.pi/{skills,extensions} (no
     # /agent/ infix). User-scope keeps the .pi/agent/ prefix because pi's
     # globalBaseDir == ~/.pi/agent. See package-manager.js:669-686.

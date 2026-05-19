@@ -16,7 +16,7 @@ def home(tmp_path, monkeypatch):
 
 
 def test_all_present_returns_ok(home):
-    for d in (".claude", ".codex", ".config/opencode", ".pi"):
+    for d in (".claude", ".codex", ".config/opencode", ".gemini", ".pi"):
         (home / d).mkdir(parents=True)
     result = harness_homes.run()
     assert result.status == Status.OK
@@ -35,5 +35,5 @@ def test_one_missing_returns_warn(home):
 def test_all_missing_returns_warn(home):
     result = harness_homes.run()
     assert result.status == Status.WARN
-    for h in ("claude", "codex", "opencode", "pi"):
+    for h in ("claude", "codex", "opencode", "gemini", "pi"):
         assert any(h in f and "not present" in f for f in result.findings)

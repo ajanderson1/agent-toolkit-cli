@@ -444,6 +444,43 @@ def test_pi_agent_user_scope_unlink_clears_both_slots(tmp_path, monkeypatch):
     assert not alias.exists()
 
 
+def test_harness_home_path_gemini(monkeypatch, tmp_path):
+    """harness_home_path returns ~/.gemini for gemini."""
+    from agent_toolkit_cli.commands._link_lib import harness_home_path
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    assert harness_home_path("gemini") == tmp_path / ".gemini"
+
+
+def test_slot_filename_gemini_command_uses_toml_extension():
+    from agent_toolkit_cli.commands._link_lib import _slot_filename
+
+    assert _slot_filename("hello", "command", "gemini") == "hello.toml"
+
+
+def test_translate_slot_layout_gemini_command_is_file():
+    from agent_toolkit_cli.commands._link_lib import _translate_slot_layout
+
+    assert _translate_slot_layout("gemini", "command") == "file"
+
+
+def test_scope_cache_root_gemini_user(monkeypatch, tmp_path):
+    from agent_toolkit_cli.commands._link_lib import _scope_cache_root
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    root = _scope_cache_root("gemini", "user", project_root=tmp_path / "ignored")
+    assert root == tmp_path / ".gemini" / ".agent-toolkit-cache"
+
+
+def test_scope_cache_root_gemini_project(tmp_path):
+    from agent_toolkit_cli.commands._link_lib import _scope_cache_root
+
+    proj = tmp_path / "p"
+    proj.mkdir()
+    root = _scope_cache_root("gemini", "project", project_root=proj)
+    assert root == proj / ".gemini" / ".agent-toolkit-cache"
+
+
 def _make_md_asset(tmp_path: Path, kind_dir: str, slug: str) -> Path:
     """Create a minimal asset file with `claude` declared in spec.harnesses."""
     root = tmp_path / "toolkit" / kind_dir / slug

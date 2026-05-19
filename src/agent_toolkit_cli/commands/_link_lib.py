@@ -35,6 +35,7 @@ HARNESS_HOMES: dict[str, str] = {
     "claude":   ".claude",
     "codex":    ".codex",
     "opencode": ".config/opencode",
+    "gemini":   ".gemini",
     "pi":       ".pi",
 }
 
@@ -71,6 +72,10 @@ _CACHE_LAYOUT: dict[str, dict[str, tuple[str, ...]]] = {
         "user":    (".codex", CACHE_DIR_NAME),
         "project": (".codex", CACHE_DIR_NAME),
     },
+    "gemini": {
+        "user":    (".gemini", CACHE_DIR_NAME),
+        "project": (".gemini", CACHE_DIR_NAME),
+    },
 }
 
 
@@ -96,14 +101,16 @@ def _scope_cache_root(harness: str, scope: str, project_root: Path) -> Path:
 def _slot_filename(slug: str, kind: str, harness: str) -> str:
     """Return the filename used for the slot symlink in this (harness, kind).
 
-    File-slot kinds get `<slug>.md` — these are slots where the harness
-    discovers content by globbing `*.md` files in the slot directory.
-    Currently that's `(opencode, agent|command)` and `(claude, agent|command)`.
-    All other pairs get the bare `<slug>`.
+    File-slot kinds get an extension matching the harness:
+      - `(opencode|claude, agent|command)` → `<slug>.md`
+      - `(gemini, command)` → `<slug>.toml`
+    Directory-slot kinds — and any unsupported pair — get the bare `<slug>`.
 
-    Callers can detect the slot shape from the result: `endswith(".md")` ⇒
-    file-slot; otherwise directory-slot or direct-symlink.
+    Callers can detect the slot shape from the result: any extension ⇒
+    file-slot; otherwise directory-slot or non-translated.
     """
+    if harness == "gemini" and kind == "command":
+        return f"{slug}.toml"
     if kind in {"agent", "command"} and harness in {"opencode", "claude"}:
         return f"{slug}.md"
     return slug
@@ -123,6 +130,8 @@ def _slot_filename(slug: str, kind: str, harness: str) -> str:
 def _translate_slot_layout(harness: str, kind: str) -> str:
     if harness == "opencode" and kind == "skill":
         return "dir-with-file-symlink"
+    if harness == "gemini" and kind == "command":
+        return "file"
     if _slot_filename("x", kind, harness).endswith(".md"):
         return "file"
     return "dir-symlink"

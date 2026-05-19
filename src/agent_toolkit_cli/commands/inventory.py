@@ -6,6 +6,7 @@ from pathlib import Path
 import click
 
 from agent_toolkit_cli._repo_resolution import RepoNotFoundError, resolve_toolkit_root
+from agent_toolkit_cli._support import ALL_HARNESSES
 from agent_toolkit_cli.inventory import render_asset_card, render_inventory
 
 _KINDS = ("skill", "agent", "command", "hook", "mcp", "plugin", "pi-extension")
@@ -20,7 +21,7 @@ _KINDS = ("skill", "agent", "command", "hook", "mcp", "plugin", "pi-extension")
     type=click.Path(file_okay=False, path_type=Path),
     help="Path to the agent-toolkit repo (defaults to group --toolkit-repo / env / walk-up / ~/GitHub/agent-toolkit).",
 )
-@click.option("--harness", type=click.Choice(["claude", "codex", "opencode", "pi"]))
+@click.option("--harness", type=click.Choice(list(ALL_HARNESSES)))
 @click.option("--origin", type=click.Choice(["first-party", "third-party"]))
 @click.option("--lifecycle", type=click.Choice(["experimental", "stable", "deprecated"]))
 @click.option("--format", "fmt", type=click.Choice(["md", "json"]), default="md")

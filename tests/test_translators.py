@@ -10,6 +10,7 @@ from agent_toolkit_cli._repo_resolution import resolve_toolkit_root
 from agent_toolkit_cli._translators import (
     TRANSLATORS,
     _translate_codex_skill,
+    _translate_gemini_command,
     _translate_opencode_agent,
     _translate_opencode_command,
     _translate_opencode_skill,
@@ -305,3 +306,90 @@ def test_translator_renders_every_shipping_eligible_asset(kind: str, harness: st
         fm = yaml.safe_load(out_text[4:end_idx])
         assert isinstance(fm, dict)
         assert "description" in fm
+
+
+def _make_gemini_command_record(slug: str, metadata: dict) -> AssetRecord:
+    """Build an AssetRecord for a command with the given raw metadata dict."""
+    asset = Asset(kind="command", slug=slug, path=Path(f"/fake/commands/{slug}.md"))
+    return AssetRecord(asset=asset, metadata=metadata, body_excerpt="", requires={})
+
+
+def test_translate_gemini_command_minimum():
+    """Minimum: description + prompt, no spec block."""
+    import tomllib
+
+    record = _make_gemini_command_record(
+        "noop",
+        {
+            "apiVersion": "agent-toolkit/v1alpha2",
+            "metadata": {"name": "noop", "description": "Do nothing."},
+        },
+    )
+    body = "Just chill.\n"
+    out = _translate_gemini_command(record, body)
+    parsed = tomllib.loads(out.decode("utf-8"))
+    assert parsed["description"] == "Do nothing."
+    assert parsed["prompt"].strip() == "Just chill."
+    assert "agent_toolkit_cli" in parsed
+    assert parsed["agent_toolkit_cli"]["apiVersion"] == "agent-toolkit/v1alpha2"
+
+
+def test_translate_gemini_command_round_trips_wrapper():
+    """metadata + spec encoded as JSON strings under [agent_toolkit_cli]."""
+    import json
+    import tomllib
+
+    md = {
+        "apiVersion": "agent-toolkit/v1alpha2",
+        "metadata": {"name": "n", "description": "d", "tags": ["a", "b"]},
+        "spec": {"harnesses": ["gemini"]},
+    }
+    record = _make_gemini_command_record("n", md)
+    out = _translate_gemini_command(record, "body\n")
+    parsed = tomllib.loads(out.decode("utf-8"))
+    wrapper = parsed["agent_toolkit_cli"]
+    assert wrapper["apiVersion"] == "agent-toolkit/v1alpha2"
+    assert json.loads(wrapper["metadata"]) == md["metadata"]
+    assert json.loads(wrapper["spec"]) == md["spec"]
+
+
+def test_translate_gemini_command_handles_triple_quoted_body():
+    """Bodies containing triple-quotes must round-trip safely."""
+    import tomllib
+
+    record = _make_gemini_command_record(
+        "q",
+        {
+            "apiVersion": "agent-toolkit/v1alpha2",
+            "metadata": {"name": "q", "description": "d"},
+        },
+    )
+    body = 'before """ in middle """ end\n'
+    out = _translate_gemini_command(record, body)
+    parsed = tomllib.loads(out.decode("utf-8"))
+    assert parsed["prompt"] == body
+
+
+@pytest.mark.parametrize(
+    "trailing",
+    ['"', '""'],
+    ids=["single-trailing-quote", "double-trailing-quote"],
+)
+def test_translate_gemini_command_handles_trailing_quotes(trailing):
+    """Bodies ending in 1 or 2 `"` butt against the closing `\"\"\"` fence —
+    TOML's lexer is greedy about the closing fence and allows up to 2 trailing
+    quotes inside, so this MUST round-trip cleanly. Lock-in test to prevent a
+    future refactor of `_toml_multiline_string` from regressing this case."""
+    import tomllib
+
+    record = _make_gemini_command_record(
+        "q",
+        {
+            "apiVersion": "agent-toolkit/v1alpha2",
+            "metadata": {"name": "q", "description": "d"},
+        },
+    )
+    body = f"foo{trailing}"
+    out = _translate_gemini_command(record, body)
+    parsed = tomllib.loads(out.decode("utf-8"))
+    assert parsed["prompt"] == body
