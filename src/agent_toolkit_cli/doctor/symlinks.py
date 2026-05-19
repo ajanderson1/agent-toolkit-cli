@@ -32,6 +32,7 @@ def run(toolkit_root: Path, *, harness: str = "claude") -> GroupResult:
 
     findings: list[str] = []
     warns: list[str] = []
+    fails: list[str] = []
 
     expected: dict[tuple[str, str], Path] = {}
     for asset in discover_assets(toolkit_root):
@@ -81,6 +82,14 @@ def run(toolkit_root: Path, *, harness: str = "claude") -> GroupResult:
                 warns.append(f"{kind}/{slug}: dangling symlink → {target}")
             else:
                 findings.append(f"{kind}/{slug}: linked")
+        elif check_path.exists():
+            # Slot is occupied by a real file or directory rather than a symlink.
+            # This is "replaced symlink" tampering — doctor must FAIL loudly so
+            # the user runs `agent-toolkit link user <harness>` to reconcile.
+            fails.append(
+                f"{kind}/{slug}: slot exists but is not a symlink: {check_path}"
+            )
+            continue
         # Alias slots: warn if missing (dual-write expects both).
         for ap in alias_paths:
             if not ap.exists() and not ap.is_symlink():
@@ -106,6 +115,18 @@ def run(toolkit_root: Path, *, harness: str = "claude") -> GroupResult:
             )
 
 
+    if fails:
+        summary = (
+            f"{len(fails)} replaced symlink(s), {len(warns)} other issue(s) "
+            f"for harness={harness}"
+        )
+        return GroupResult(
+            name="symlink-integrity",
+            status=Status.FAIL,
+            summary=summary,
+            findings=findings + warns + fails,
+            fix_hint=f"`agent-toolkit link user {harness}` to reconcile",
+        )
     if warns:
         return GroupResult(
             name="symlink-integrity",
