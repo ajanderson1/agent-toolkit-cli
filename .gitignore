@@ -27,6 +27,3 @@ assets/verification/
 # Audit run artifacts
 audit/.last-run.tsv
 audit/.*.log
-
-# flow verification artifacts
-assets/verification/
