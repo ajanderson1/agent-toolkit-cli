@@ -3,12 +3,8 @@
 Pure-data widget: receives records via constructor, exposes `rows()` for
 testing without spinning up the whole Textual app. The app shells out to
 ``agent-toolkit-cli pi inventory --format json`` and passes the parsed
-records into this widget for display.
-
-Toggle key bindings (``u``/``p``) are intentionally not wired in this commit
-— the spec ranks the read-only inventory view higher than toggle behaviour,
-and a later commit can add them once the broader binding plumbing is in
-place. See plan: docs/superpowers/plans/2026-05-19-pi-unified-extension-inventory.md.
+records into this widget for display. Load/unload toggles live on the
+hosting `PiTabScreen` (`u` / `p`); this widget remains pure rendering.
 """
 from __future__ import annotations
 
@@ -19,10 +15,7 @@ from textual.widgets import DataTable, Static
 
 
 class PiTab(Widget):
-    """Pi extension inventory display.
-
-    Read-only for now — toggle bindings deferred to a follow-up commit.
-    """
+    """Pi extension inventory display (pure rendering)."""
 
     def __init__(
         self,
