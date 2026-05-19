@@ -223,19 +223,17 @@ def _do_per_asset(
         ctx.exit(1)
         return
 
-    # Idempotent diagnostic: if slug is absent, say so and exit 0
-    # Also captured as pre-mutation snapshot for MCP adapter dispatch.
+    # Snapshot the allowlist before mutation so the MCP adapter dispatch in
+    # project_from_file knows the slug *was* projected, even when it has
+    # since been removed from disk-state. Also drives the sweep below.
     allowed = read_allowlist(allowlist_path)
     prev_snapshot: dict[str, list[str]] = dict(allowed)
     slugs_in_section = list(allowed.get(section, []))
-    if slug not in slugs_in_section:
-        click.echo(
-            f"{kind}:{slug} not in {allowlist_path} — nothing to remove.", err=True
-        )
-        return  # exit 0
 
-    # Remove from YAML (real run only)
-    if not dry_run:
+    # If slug is in the allowlist, drop it; otherwise still fall through to
+    # project_from_file so stale projections on disk get swept (#142, mirrors
+    # the #135 fix in _do_plan_entry).
+    if slug in slugs_in_section and not dry_run:
         try:
             remove_slug(allowlist_path, section, slug)
         except (ValueError, OSError) as exc:
