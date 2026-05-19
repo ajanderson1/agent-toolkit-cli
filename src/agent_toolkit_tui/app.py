@@ -146,11 +146,11 @@ class PiTabScreen(ModalScreen[None]):
     def _toggle(self, scope: str) -> None:
         try:
             table = self.query_one("#pi-tab-table", DataTable)
-        except Exception:
+        except NoMatches:
             self._set_footer("no table to act on")
             return
         cursor = table.cursor_row
-        if cursor is None or cursor < 0 or cursor >= len(self._records):
+        if cursor < 0 or cursor >= len(self._records):
             self._set_footer("select a row first")
             return
         record = self._records[cursor]
@@ -164,7 +164,7 @@ class PiTabScreen(ModalScreen[None]):
                 self._runner.pi_unload(slug, scope)
             else:
                 self._runner.pi_load(slug, scope)
-        except Exception as exc:
+        except RunnerError as exc:
             # Show only the first line so multi-line stderr doesn't blow up the footer.
             msg = str(exc).splitlines()[0] if str(exc) else "unknown error"
             self._set_footer(f"pi {scope} toggle error: {msg}")
@@ -172,7 +172,7 @@ class PiTabScreen(ModalScreen[None]):
         # Refresh inventory and rebuild the table in place.
         try:
             new_records = self._runner.pi_inventory()
-        except Exception as exc:
+        except RunnerError as exc:
             msg = str(exc).splitlines()[0] if str(exc) else "unknown error"
             self._set_footer(f"refresh error: {msg}")
             return
