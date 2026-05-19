@@ -291,6 +291,19 @@ agent-toolkit list claude               # claude-compatible assets
 agent-toolkit list skill claude         # both filters
 ```
 
+### Cross-scope coverage indicator
+
+When the same asset is linked at both user and project scope, the project
+segment of the row carries a 🌐 suffix to flag the redundancy. Example:
+
+    alpha                [claude]                       user:✓ project:✓ 🌐
+
+The indicator is informational only — it does not block or warn. (Policy
+enforcement of cross-scope installs is tracked separately in
+[#69](https://github.com/ajanderson1/agent-toolkit-cli/issues/69).) The same
+marker appears in the TUI's project-scope grid view and is summarised in the
+`agent-toolkit doctor user-scope-coverage` group.
+
 ### JSON output (`--format=json`)
 
 Machine-readable view of the same inventory data the human-formatted output
