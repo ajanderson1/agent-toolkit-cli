@@ -12,6 +12,11 @@ No transport refusal — Gemini's MCP loader supports stdio, sse, http natively
 mirrors Claude's: `{"type": "stdio", "command", "args"?, "env"?}` for stdio,
 `{"type": "sse"|"http", "url", "headers"?}` for remote transports.
 
+Per-kind behavior for drop-in file paths (not MCP):
+  - (gemini, agent): translate (per #97) — top-level name+description required.
+  - (gemini, command): translate — TOML schema (description + prompt).
+  - (gemini, skill): symlink (raw wrapper; loader ignores unknown keys).
+
 Reference docs:
   - https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/enterprise.md
     (user/workspace settings.json layout)
