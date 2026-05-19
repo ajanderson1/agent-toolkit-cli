@@ -8,7 +8,7 @@ from agent_toolkit_cli._support import _USER_TARGET_ALIASES, _USER_TARGETS
 from agent_toolkit_cli._translators import TRANSLATORS
 from agent_toolkit_cli.commands._link_lib import _translate_slot_layout, _slot_filename
 from agent_toolkit_cli.doctor.result import GroupResult, Status
-from agent_toolkit_cli.walker import discover_assets, extract_frontmatter, frontmatter_path
+from agent_toolkit_cli.walker import discover_assets, extract_metadata, frontmatter_path
 
 # Strip the "{home}/" template prefix to get a relative path under $HOME,
 # matching this module's existing convention of joining with `home / rel`.
@@ -164,7 +164,8 @@ def _sweep_stale_in_dir(
 
 def _meta_for(asset) -> dict:
     if asset.kind in {"skill", "agent", "command"}:
-        return extract_frontmatter(asset.path) or {}
+        fm = frontmatter_path(asset.path, asset.kind)
+        return extract_metadata(fm) or {}
     if asset.kind == "hook":
         import yaml
         return yaml.safe_load(asset.path.read_text()) or {}
@@ -176,5 +177,5 @@ def _meta_for(asset) -> dict:
         fm = frontmatter_path(asset.path, asset.kind)
         if not fm.is_file():
             return {}
-        return extract_frontmatter(fm) or {}
+        return extract_metadata(fm) or {}
     return {}
