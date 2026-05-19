@@ -1,3 +1,4 @@
+import os
 from io import StringIO
 from pathlib import Path
 
@@ -535,6 +536,54 @@ def test_claude_command_slot_uses_md_suffix(tmp_path):
     assert not (target_dir / "demo-cmd").exists()
 
 
+def test_gemini_command_slot_uses_toml_suffix(tmp_path):
+    """(gemini, command) is a translated cell: slot is <slug>.toml
+    pointing at the per-scope cache file, NOT at the source asset.
+    Regression for #137 (cache filename must match slot filename).
+    """
+    toolkit = tmp_path / "toolkit"
+    (toolkit / "commands" / "demo-cmd").mkdir(parents=True)
+    asset = toolkit / "commands" / "demo-cmd" / "demo-cmd.md"
+    asset.write_text(
+        "---\nname: demo-cmd\ndescription: demo\n"
+        "spec:\n  harnesses: [gemini]\n---\n# body\n",
+        encoding="utf-8",
+    )
+    target_dir = tmp_path / ".gemini" / "commands"
+    target_dir.mkdir(parents=True)
+    counters = LinkCounters()
+    stdout = StringIO()
+
+    maybe_link(
+        harness="gemini",
+        kind="command",
+        slug="demo-cmd",
+        asset_path=asset,
+        target_dir=target_dir,
+        toolkit_root=toolkit,
+        dry_run=False,
+        counters=counters,
+        stdout=stdout,
+        scope="project",
+        project_root=tmp_path,
+    )
+
+    expected = target_dir / "demo-cmd.toml"
+    assert expected.is_symlink(), (
+        f"expected {expected} to exist as a symlink; "
+        f"dir contents: {sorted(p.name for p in target_dir.iterdir())}"
+    )
+    # Translated cell: target is the cache file, with a .toml extension.
+    cache_target = Path(os.readlink(expected))
+    assert cache_target.name == "demo-cmd.toml"
+    assert cache_target.is_file()
+    # And the legacy/bug-shape (.md slot) must NOT exist.
+    assert not (target_dir / "demo-cmd.md").exists()
+    assert not (target_dir / "demo-cmd").exists()
+    assert counters.created == 1
+    assert counters.removed == 0
+
+
 def test_claude_agent_slot_uses_md_suffix(tmp_path):
     asset = _make_md_asset(tmp_path, "agents", "demo-agent")
     target_dir = tmp_path / ".claude" / "agents"
@@ -645,6 +694,57 @@ def test_orphan_sweep_prunes_legacy_bare_slug_for_claude_command(tmp_path):
     )
 
 
+def test_orphan_sweep_prunes_legacy_gemini_command_bare_slug(tmp_path):
+    """After upgrading from a pre-#137 layout, an existing bare-slug
+    `<slug>` (or `<slug>.md`) symlink for a gemini command must be
+    pruned on the next projection — superseded by the correct
+    `<slug>.toml` slot pointing into the translation cache.
+    """
+    toolkit = tmp_path / "toolkit"
+    (toolkit / "commands" / "legacy-cmd").mkdir(parents=True)
+    asset = toolkit / "commands" / "legacy-cmd" / "legacy-cmd.md"
+    asset.write_text(
+        "---\nname: legacy-cmd\ndescription: legacy\n"
+        "spec:\n  harnesses: [gemini]\n---\n# body\n",
+        encoding="utf-8",
+    )
+    project = tmp_path / "project"
+    project.mkdir()
+    allowlist = project / ".agent-toolkit.yaml"
+    allowlist.write_text(
+        "skills: []\nagents: []\ncommands:\n- legacy-cmd\n"
+        "hooks: []\nplugins: []\nmcps: []\npi_extensions: []\n",
+        encoding="utf-8",
+    )
+    target_dir = project / ".gemini" / "commands"
+    target_dir.mkdir(parents=True)
+    # Pre-existing legacy slot: bare-slug raw symlink to the source asset
+    # (shape produced by versions before the translation cache existed).
+    legacy = target_dir / "legacy-cmd"
+    legacy.symlink_to(asset)
+
+    from agent_toolkit_cli.commands._link_lib import project_from_file
+
+    counters = LinkCounters()
+    stdout = StringIO()
+    project_from_file(
+        scope="project",
+        harness="gemini",
+        toolkit_root=toolkit,
+        project_root=project,
+        allowlist_path=allowlist,
+        dry_run=False,
+        counters=counters,
+        stdout=stdout,
+    )
+
+    assert (target_dir / "legacy-cmd.toml").is_symlink()
+    assert not (target_dir / "legacy-cmd").exists(), (
+        "legacy bare-slug symlink should have been pruned on upgrade; "
+        f"dir contents: {sorted(p.name for p in target_dir.iterdir())}"
+    )
+
+
 def test_doctor_symlinks_no_false_stale_for_claude_command_md(tmp_path, monkeypatch):
     """doctor symlink-integrity check should NOT report a stale-link warning
     for a properly-linked claude command (which now lives at `<slug>.md`)."""
@@ -671,3 +771,64 @@ def test_doctor_symlinks_no_false_stale_for_claude_command_md(tmp_path, monkeypa
         if "stale link" in f or "dangling" in f or "not in spec.harnesses" in f
     ]
     assert not bad, f"expected no stale-link findings, got: {bad}"
+
+
+def test_orphan_sweep_keeps_fresh_gemini_command_toml_link(tmp_path):
+    """Regression for #137: a freshly-linked (gemini, command) slot must
+    not be pruned by the same projection pass that just created it.
+
+    Before the fix, _render_to_cache hardcodes `<slug>.md` while
+    _slot_filename returns `<slug>.toml`, so the cache file and slot
+    name disagree; and the orphan sweep only strips `.md` so the
+    `<slug>.toml` entry is unrecognised and gets pruned.
+    """
+    toolkit = tmp_path / "toolkit"
+    (toolkit / "commands" / "demo-cmd").mkdir(parents=True)
+    asset = toolkit / "commands" / "demo-cmd" / "demo-cmd.md"
+    asset.write_text(
+        "---\nname: demo-cmd\ndescription: demo\n"
+        "spec:\n  harnesses: [gemini]\n---\n# body\n",
+        encoding="utf-8",
+    )
+    project = tmp_path / "project"
+    project.mkdir()
+    allowlist = project / ".agent-toolkit.yaml"
+    allowlist.write_text(
+        "skills: []\nagents: []\ncommands:\n- demo-cmd\n"
+        "hooks: []\nplugins: []\nmcps: []\npi_extensions: []\n",
+        encoding="utf-8",
+    )
+    target_dir = project / ".gemini" / "commands"
+    target_dir.mkdir(parents=True)
+
+    from agent_toolkit_cli.commands._link_lib import project_from_file
+
+    counters = LinkCounters()
+    stdout = StringIO()
+    project_from_file(
+        scope="project",
+        harness="gemini",
+        toolkit_root=toolkit,
+        project_root=project,
+        allowlist_path=allowlist,
+        dry_run=False,
+        counters=counters,
+        stdout=stdout,
+    )
+
+    expected = target_dir / "demo-cmd.toml"
+    assert expected.is_symlink(), (
+        f"expected fresh symlink at {expected}; "
+        f"dir contents: {sorted(p.name for p in target_dir.iterdir())}; "
+        f"counters: created={counters.created} removed={counters.removed}"
+    )
+    # The slot must point at the cache, not the source asset.
+    cache_target = Path(os.readlink(expected))
+    assert cache_target.name == "demo-cmd.toml", (
+        f"slot target should end in .toml; got {cache_target}"
+    )
+    # And the bug-signature: link-then-prune is gone.
+    assert counters.removed == 0, (
+        f"sweep should not prune the slot it just created; "
+        f"counters: created={counters.created} removed={counters.removed}"
+    )

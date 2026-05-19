@@ -178,9 +178,12 @@ def _render_to_cache(
     cache_root = _scope_cache_root(harness, scope, project_root) / kind
     layout = _translate_slot_layout(harness, kind)
     if layout == "file":
-        # Cache layout: <cache_root>/<kind>/<slug>.md; slot symlinks the file.
+        # Cache layout: <cache_root>/<kind>/<_slot_filename>; slot symlinks the
+        # file. The cache filename must agree with the slot filename computed
+        # in maybe_link (`_slot_filename(slug, kind, harness)`), otherwise the
+        # orphan sweep will not recognise the slot. See #137.
         cache_dir = cache_root
-        cache_path = cache_dir / f"{slug}.md"
+        cache_path = cache_dir / _slot_filename(slug, kind, harness)
         slot_target = cache_path
     elif layout == "dir-symlink":
         # Cache layout: <cache_root>/<kind>/<slug>/<asset.name>; slot symlinks
@@ -651,8 +654,16 @@ def project_from_file(
                     canonical_slug: str | None = None
                     if bare_name in discovered_slugs:
                         canonical_slug = bare_name
-                    elif bare_name.endswith(".md") and bare_name[:-3] in discovered_slugs:
-                        canonical_slug = bare_name[:-3]
+                    else:
+                        # Any single-extension stem that matches a known slug
+                        # (e.g. `<slug>.md`, `<slug>.toml`) is a valid slot
+                        # filename for some (harness, kind). The downstream
+                        # `expected_name` check below will still prune entries
+                        # whose extension doesn't match _slot_filename for this
+                        # cell. See #137.
+                        stem = Path(bare_name).stem
+                        if stem and stem in discovered_slugs:
+                            canonical_slug = stem
                     if canonical_slug is not None:
                         expected_name = _slot_filename(canonical_slug, kind, harness)
                         if bare_name == expected_name:
