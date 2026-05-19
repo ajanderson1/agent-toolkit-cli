@@ -25,10 +25,6 @@ set -euo pipefail
 SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
 REPO_ROOT="$(cd "$(dirname "$SCRIPT_PATH")/../.." && pwd)"
 
-# TODO: remove this override once PR #17 (demo-hook asset) merges to
-# agent-toolkit main and demo-hook is available on the default repo path.
-export AGENT_TOOLKIT_REPO="/Users/ajanderson/GitHub/agent-toolkit/.worktrees/audit-demos-1779206947"
-
 if [[ -z "${AUDIT_INSIDE_TMUX:-}" ]]; then
   session="audit-hook-codex"
   tmux kill-session -t "$session" 2>/dev/null || true

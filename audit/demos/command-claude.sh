@@ -141,30 +141,11 @@ run "agent-toolkit-cli link user claude command:demo-command"
 rm "$LINK_PATH"
 echo "hand-edited" > "$LINK_PATH"
 run "agent-toolkit-cli doctor --group symlink-integrity || true"
-# Findings:
-# 1. doctor's symlink-integrity group does NOT flag the replaced-symlink slot:
-#    - check_path.exists() is True (regular file) → skips "missing" warn
-#    - check_path.is_symlink() is False → skips the "linked" recording
-#    - net result: demo-command is silently absent from the report
-# 2. --exit-code only fires on FAIL status, not WARN status, so even the
-#    other unlinked assets (all WARN) do not trigger a non-zero exit.
-#    Both of these are bugs / blind spots in doctor; recorded here as findings.
-assert_exit_code 0 -- agent-toolkit-cli doctor --group symlink-integrity --exit-code
-# Confirm demo-command is not mentioned (blind spot confirmed).
-if uv run python3 -c "
-import subprocess, sys
-r = subprocess.run(
-    ['agent-toolkit-cli', 'doctor', '--group', 'symlink-integrity'],
-    capture_output=True, text=True
-)
-if 'command/demo-command' not in r.stdout + r.stderr:
-    sys.exit(0)  # not mentioned = blind spot confirmed
-sys.exit(1)  # mentioned = doctor caught it (better than expected)
-"; then
-  _assert_record 1 "FINDING: doctor blind to symlink-replaced-by-regular-file (expected blind spot)"
-else
-  _assert_record 1 "doctor detected replaced symlink (better than expected)"
-fi
+# Since #129, doctor's symlink-integrity group correctly flags a slot whose
+# symlink has been replaced by a regular file and exits non-zero under
+# --exit-code. The earlier blind-spot behavior is gone.
+assert_exit_code 1 -- agent-toolkit-cli doctor --group symlink-integrity --exit-code
+_assert_record 1 "doctor detected replaced symlink (post-#129 behavior)"
 
 assertions::finish
 rc=$?
