@@ -13,6 +13,7 @@ from agent_toolkit_cli.walker import (
     _inline_body_path,
     _sidecar_path,
     extract_frontmatter,
+    is_toolkit_frontmatter,
     read_sidecar,
 )
 
@@ -31,7 +32,8 @@ def run(toolkit_root: Path) -> GroupResult:
                 continue
             inline = _inline_body_path(kind, slug, toolkit_root)
             sidecar = _sidecar_path(kind, slug, toolkit_root)
-            has_inline = inline.is_file() and extract_frontmatter(inline) is not None
+            inline_meta = extract_frontmatter(inline) if inline.is_file() else None
+            has_inline = is_toolkit_frontmatter(inline_meta)
             has_sidecar = read_sidecar(sidecar) is not None
             if not has_inline and not has_sidecar:
                 findings.append(

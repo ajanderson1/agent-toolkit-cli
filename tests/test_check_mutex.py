@@ -55,6 +55,36 @@ def test_check_fails_on_mutex_violation(tmp_path: Path) -> None:
     assert "doctor --fix" in output
 
 
+def test_check_passes_with_upstream_frontmatter_plus_sidecar(tmp_path: Path) -> None:
+    """The headline use case: submoduled skill with upstream-shape frontmatter
+    plus a toolkit-shape sidecar must NOT trip the mutex check."""
+    _seed_toolkit_root(tmp_path)
+    skill_dir = tmp_path / "skills" / "vendored"
+    skill_dir.mkdir(parents=True)
+    # Upstream's frontmatter — just name + description, no apiVersion
+    (skill_dir / "SKILL.md").write_text(
+        "---\n"
+        "name: vendored\n"
+        "description: Upstream skill description.\n"
+        "---\n\nUpstream body text.\n"
+    )
+    # Toolkit's sidecar — outside the body dir
+    (tmp_path / "skills" / "vendored.toolkit.yaml").write_text(
+        "apiVersion: agent-toolkit/v1alpha2\n"
+        "metadata:\n  name: vendored\n  description: x.\n  lifecycle: experimental\n"
+        "spec:\n  origin: third-party\n  vendored_via: submodule\n"
+        "  upstream: https://example.com\n  harnesses: [claude]\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-m", "agent_toolkit_cli", "--toolkit-repo", str(tmp_path),
+         "check", "--exit-code"],
+        capture_output=True, text=True,
+    )
+    output = result.stdout + result.stderr
+    assert "MutexViolation" not in output, output
+    assert result.returncode == 0, output
+
+
 def test_check_passes_when_only_sidecar(tmp_path: Path) -> None:
     """Negative case: sidecar-only is fine, no mutex."""
     _seed_toolkit_root(tmp_path)

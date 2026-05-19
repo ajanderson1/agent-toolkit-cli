@@ -16,6 +16,7 @@ from agent_toolkit_cli.walker import (
     _KIND_ROOT,
     _inline_body_path,
     extract_frontmatter,
+    is_toolkit_frontmatter,
     read_sidecar,
 )
 
@@ -44,7 +45,8 @@ def find_fixables(toolkit_root: Path) -> list[Fixable]:
             if read_sidecar(sidecar) is None:
                 continue
             inline = _inline_body_path(kind, slug, toolkit_root)
-            if inline.is_file() and extract_frontmatter(inline) is not None:
+            inline_meta = extract_frontmatter(inline) if inline.is_file() else None
+            if is_toolkit_frontmatter(inline_meta):
                 # Mutex violation: prefer sidecar. If body is under a submodule
                 # path, we can't safely strip its frontmatter; refuse to autofix
                 # that case (operator must intervene).

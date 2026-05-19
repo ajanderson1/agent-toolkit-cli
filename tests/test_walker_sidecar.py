@@ -16,6 +16,29 @@ from agent_toolkit_cli.walker import (
 )
 
 
+class TestIsToolkitFrontmatter:
+    def test_toolkit_shape_returns_true(self) -> None:
+        from agent_toolkit_cli.walker import is_toolkit_frontmatter
+        assert is_toolkit_frontmatter({"apiVersion": "agent-toolkit/v1alpha2"})
+
+    def test_upstream_shape_returns_false(self) -> None:
+        """Upstream agentskills.io style: name + description, no apiVersion."""
+        from agent_toolkit_cli.walker import is_toolkit_frontmatter
+        assert not is_toolkit_frontmatter({"name": "deep-research", "description": "x."})
+
+    def test_other_apiversion_returns_false(self) -> None:
+        from agent_toolkit_cli.walker import is_toolkit_frontmatter
+        assert not is_toolkit_frontmatter({"apiVersion": "v1"})
+
+    def test_none_returns_false(self) -> None:
+        from agent_toolkit_cli.walker import is_toolkit_frontmatter
+        assert not is_toolkit_frontmatter(None)
+
+    def test_non_dict_returns_false(self) -> None:
+        from agent_toolkit_cli.walker import is_toolkit_frontmatter
+        assert not is_toolkit_frontmatter(["just", "a", "list"])
+
+
 class TestSidecarPath:
     def test_skill_sidecar_path(self, tmp_path: Path) -> None:
         result = _sidecar_path("skill", "deep-research", tmp_path)

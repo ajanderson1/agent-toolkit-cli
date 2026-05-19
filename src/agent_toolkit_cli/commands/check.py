@@ -40,6 +40,7 @@ def _detect_mutex_violations(toolkit_root: Path) -> list[str]:
         _SIDECAR_KINDS,
         _KIND_ROOT,
         extract_frontmatter,
+        is_toolkit_frontmatter,
         _inline_body_path,
     )
 
@@ -54,8 +55,13 @@ def _detect_mutex_violations(toolkit_root: Path) -> list[str]:
             # parseability one. A malformed sidecar still counts — schema
             # validation will catch its content errors separately, but the
             # mutex condition is independent.
+            # Tightened: only flag when inline frontmatter is toolkit-shape
+            # (apiVersion: agent-toolkit/...). Upstream/agentskills.io-style
+            # frontmatter (name + description only) is NOT a violation — that
+            # is the headline submoduled-skill use case.
             inline = _inline_body_path(kind, slug, toolkit_root)
-            if inline.is_file() and extract_frontmatter(inline) is not None:
+            inline_meta = extract_frontmatter(inline) if inline.is_file() else None
+            if is_toolkit_frontmatter(inline_meta):
                 errors.append(
                     f"MutexViolation: {kind}/{slug}: both "
                     f"{sidecar.relative_to(toolkit_root)} and "
