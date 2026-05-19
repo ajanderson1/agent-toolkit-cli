@@ -47,15 +47,16 @@ VALID_MECHANISMS = frozenset(
 # Parser
 # ---------------------------------------------------------------------------
 
-# Column order matches the matrix header: Claude | Codex | OpenCode | Pi
-_HARNESS_ORDER = ("claude", "codex", "opencode", "pi")
+# Column order matches the matrix header: Claude | Codex | OpenCode | Gemini | Pi
+_HARNESS_ORDER = ("claude", "codex", "opencode", "gemini", "pi")
 
-# Row pattern: | **<kind>** | <claude_cell> | <codex_cell> | <opencode_cell> | <pi_cell> |
+# Row pattern: | **<kind>** | <claude_cell> | <codex_cell> | <opencode_cell> | <gemini_cell> | <pi_cell> |
 _ROW_RE = re.compile(
     r"^\|\s*\*\*(?P<kind>[a-z][a-z0-9-]*)\*\*\s*\|"
     r"(?P<claude>[^|]+)\|"
     r"(?P<codex>[^|]+)\|"
     r"(?P<opencode>[^|]+)\|"
+    r"(?P<gemini>[^|]+)\|"
     r"(?P<pi>[^|]+)\|"
 )
 
@@ -316,7 +317,8 @@ class TestAdapterParity:
 
 
 _TRANSLATE_PATH_RE = re.compile(
-    r"(agents/<slug>\.md|commands/<slug>\.md|skills/<slug>/SKILL\.md)\s*$"
+    r"(agents/<slug>\.md|commands/<slug>\.md|commands/<slug>\.toml|"
+    r"skills/<slug>/SKILL\.md)\s*$"
 )
 
 
