@@ -41,7 +41,7 @@ class PiTab(Widget):
         for r in self._records:
             badge = "1P" if r.get("origin") == "first-party" else "3P"
             out.append(
-                f"{r['slug']:<24} {badge:<3} "
+                f"{r.get('slug', ''):<24} {badge:<3} "
                 f"{'✓' if r.get('user_loaded') else ' ':<3} "
                 f"{'✓' if r.get('project_loaded') else ' ':<3} "
                 f"{r.get('toolkit_intent', ''):<8} {r.get('source', '')}"
@@ -57,7 +57,7 @@ class PiTab(Widget):
         for r in self._records:
             badge = "1P" if r.get("origin") == "first-party" else "3P"
             table.add_row(
-                r["slug"],
+                r.get("slug", ""),
                 badge,
                 "✓" if r.get("user_loaded") else " ",
                 "✓" if r.get("project_loaded") else " ",

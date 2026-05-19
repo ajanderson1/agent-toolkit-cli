@@ -115,10 +115,12 @@ A new tab/screen consuming `pi inventory --format json`:
 |---|---|
 | Slug | record.slug |
 | Origin | record.origin (badge: 1P / 3P) |
-| Source | record.source (truncated) |
-| Loaded (user) | record.user_loaded ✓ / ✗ |
-| Loaded (project) | record.project_loaded ✓ / ✗ |
+| U | record.user_loaded ✓ / ' ' |
+| P | record.project_loaded ✓ / ' ' |
 | Intent | record.toolkit_intent |
+| Source | record.source (truncated) |
+
+Column order rationale: short fixed-width fields (Slug, Origin, U, P, Intent) come first so the scannable glyph columns line up vertically; the long free-text Source column trails to absorb truncation gracefully.
 
 Toggle key bindings:
 - `u` → `pi load --scope user <slug>` (or `unload` if already loaded under user)

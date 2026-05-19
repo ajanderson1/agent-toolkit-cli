@@ -88,7 +88,8 @@ class CLIRunner:
     def pi_inventory(self) -> list[dict]:
         """Invoke `pi inventory --format json` and return the parsed list of records."""
         proc = subprocess.run(
-            [str(self.cli_path), "pi", "inventory", "--format", "json"],
+            [str(self.cli_path), "pi", "inventory", "--format", "json",
+             "--toolkit-repo", str(self.toolkit_root)],
             capture_output=True, text=True, check=False,
         )
         if proc.returncode != 0:
