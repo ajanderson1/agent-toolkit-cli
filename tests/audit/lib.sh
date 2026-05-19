@@ -9,7 +9,17 @@ T_CURRENT=""
 t::run() {
   local name="$1" body="$2"
   T_CURRENT="$name"
-  if ( eval "$body" ); then
+  # Use a tmp file as a failure marker so t::assert failures propagate out of
+  # the subshell even when the body's final command exits 0 (masking bug fix).
+  local fail_marker; fail_marker="$(mktemp)"
+  export T_FAIL_MARKER="$fail_marker"
+  local rc=0
+  ( eval "$body" ) || rc=$?
+  local body_failed=0
+  if [ -s "$fail_marker" ]; then body_failed=1; fi
+  rm -f "$fail_marker"
+  unset T_FAIL_MARKER
+  if [ "$rc" -eq 0 ] && [ "$body_failed" -eq 0 ]; then
     printf '  ok  %s\n' "$name"
     T_PASS=$((T_PASS + 1))
   else
@@ -31,6 +41,8 @@ t::assert() {
   else
     printf '    assert failed: %s (cond: %s)\n' "$msg" "$cond" >&2
   fi
+  # Signal failure to the enclosing t::run via the marker file (survives subshells).
+  if [ -n "${T_FAIL_MARKER:-}" ]; then echo fail >> "$T_FAIL_MARKER"; fi
   return 1
 }
 

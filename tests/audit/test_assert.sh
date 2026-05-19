@@ -27,7 +27,7 @@ t::run "one-fail case exits non-zero but reports all results" '
             assert_exit_code 0 -- true     # pass — must still run
             assertions::finish ) 2>&1 || true )"
   rc=$?
-  t::assert "third assertion ran" "[[ \"$out\" == *3* ]]"
+  t::assert "third assertion ran" "[[ \"$out\" == *\"2 PASS\"* ]]"
   t::assert "summary mentions failure" "[[ \"$out\" == *FAIL* || \"$out\" == *failed* ]]"
 '
 

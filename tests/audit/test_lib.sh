@@ -9,7 +9,11 @@ t::run "passes a true assertion" '
 '
 
 t::run "fails a false assertion" '
-  if t::assert "1 equals 2" "[ 1 = 2 ]" 2>/dev/null; then
+  # Isolate the inner assert from the outer t::run failure-tracking
+  # by clearing T_FAIL_MARKER inside a subshell.
+  local rc=0
+  ( unset T_FAIL_MARKER; t::assert "1 equals 2" "[ 1 = 2 ]" 2>/dev/null ) || rc=$?
+  if [ "$rc" -eq 0 ]; then
     echo "expected failure but assertion passed" >&2
     return 1
   fi
