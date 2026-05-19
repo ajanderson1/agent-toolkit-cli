@@ -72,6 +72,10 @@ _CACHE_LAYOUT: dict[str, dict[str, tuple[str, ...]]] = {
         "user":    (".codex", CACHE_DIR_NAME),
         "project": (".codex", CACHE_DIR_NAME),
     },
+    "gemini": {
+        "user":    (".gemini", CACHE_DIR_NAME),
+        "project": (".gemini", CACHE_DIR_NAME),
+    },
 }
 
 
@@ -97,12 +101,16 @@ def _scope_cache_root(harness: str, scope: str, project_root: Path) -> Path:
 def _translated_slot_filename(slug: str, kind: str, harness: str) -> str:
     """Return the filename used for the slot symlink in this (harness, kind).
 
-    File-slot kinds get `<slug>.md` (OpenCode agents/commands). Directory-slot
-    kinds — and any unsupported pair — get the bare `<slug>`.
+    File-slot kinds get an extension matching the harness:
+      - opencode agents/commands → `<slug>.md`
+      - gemini commands → `<slug>.toml`
+    Directory-slot kinds — and any unsupported pair — get the bare `<slug>`.
 
-    Callers can detect the slot shape from the result: `endswith(".md")` ⇒
+    Callers can detect the slot shape from the result: any extension ⇒
     file-slot; otherwise directory-slot or non-translated.
     """
+    if harness == "gemini" and kind == "command":
+        return f"{slug}.toml"
     if harness == "opencode" and kind in {"agent", "command"}:
         return f"{slug}.md"
     return slug
@@ -122,6 +130,8 @@ def _translated_slot_filename(slug: str, kind: str, harness: str) -> str:
 def _translate_slot_layout(harness: str, kind: str) -> str:
     if harness == "opencode" and kind == "skill":
         return "dir-with-file-symlink"
+    if harness == "gemini" and kind == "command":
+        return "file"
     if _translated_slot_filename("x", kind, harness).endswith(".md"):
         return "file"
     return "dir-symlink"
