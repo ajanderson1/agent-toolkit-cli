@@ -19,12 +19,18 @@ t::run() {
   T_CURRENT=""
 }
 
+# Note: calling t::assert outside a t::run body means a failing assert returns 1,
+# which under set -euo pipefail will abort the sourcing script silently.
 t::assert() {
   local msg="$1" cond="$2"
   if eval "$cond"; then
     return 0
   fi
-  printf '    assert failed: %s (cond: %s)\n' "$msg" "$cond" >&2
+  if [ -n "$T_CURRENT" ]; then
+    printf '    [%s] assert failed: %s (cond: %s)\n' "$T_CURRENT" "$msg" "$cond" >&2
+  else
+    printf '    assert failed: %s (cond: %s)\n' "$msg" "$cond" >&2
+  fi
   return 1
 }
 
