@@ -307,6 +307,8 @@ class AssetRecord:
     metadata: dict
     body_excerpt: str  # first paragraph or first 400 chars, whichever is shorter; "" if no body
     requires: dict[str, list[str]]  # harness → list of "kind:slug" strings; {} if absent
+    harness_description: str | None = None  # NEW: from SKILL.md top-level frontmatter
+    cli_description: str | None = None      # NEW: from sidecar metadata.description
 
 
 def load_asset_record(asset: Asset) -> AssetRecord:
@@ -315,8 +317,31 @@ def load_asset_record(asset: Asset) -> AssetRecord:
 
     metadata: dict
     body_excerpt: str = ""
+    harness_description: str | None = None
+    cli_description: str | None = None
 
-    if asset.kind in {"skill", "agent", "command"}:
+    if asset.kind == "skill":
+        toolkit_root = asset.path.parent.parent.parent
+        sidecar = _sidecar_path("skill", asset.slug, toolkit_root)
+        skill_md_fm = extract_metadata(asset.path) or {}
+        if sidecar.is_file():
+            # New shape: sidecar carries v1alpha2 metadata; SKILL.md has its own frontmatter.
+            metadata = read_sidecar(sidecar) or {}
+            harness_description = skill_md_fm.get("description")
+            cli_description = (metadata.get("metadata") or {}).get("description")
+            # Body: asset.path (SKILL.md) has non-toolkit frontmatter; read it and strip.
+            text = asset.path.read_text(encoding="utf-8").replace("\r\n", "\n")
+            body = _strip_frontmatter(text)
+        else:
+            # Legacy inline shape: all metadata is in SKILL.md frontmatter.
+            metadata = skill_md_fm
+            legacy_desc = (metadata.get("metadata") or {}).get("description")
+            harness_description = legacy_desc
+            cli_description = legacy_desc
+            text = asset.path.read_text(encoding="utf-8").replace("\r\n", "\n")
+            body = _strip_frontmatter(text)
+        body_excerpt = _first_paragraph(body, max_chars=400)
+    elif asset.kind in {"agent", "command"}:
         fm_path = frontmatter_path(asset.path, asset.kind)
         metadata = extract_metadata(fm_path) or {}
         # Body excerpt comes from the asset's primary file, not the sidecar.
@@ -345,7 +370,14 @@ def load_asset_record(asset: Asset) -> AssetRecord:
 
     requires: dict[str, list[str]] = (metadata.get("spec") or {}).get("requires") or {}
 
-    return AssetRecord(asset=asset, metadata=metadata, body_excerpt=body_excerpt, requires=requires)
+    return AssetRecord(
+        asset=asset,
+        metadata=metadata,
+        body_excerpt=body_excerpt,
+        requires=requires,
+        harness_description=harness_description,
+        cli_description=cli_description,
+    )
 
 
 def strip_frontmatter(text: str) -> str:
