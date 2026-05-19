@@ -536,8 +536,8 @@ async def test_number_key_switches_kind():
         assert sidebar._active == "pi-extension"
 
 
-async def test_u_p_keys_switch_scope():
-    """Pressing u / p switches between user and project scopes."""
+async def test_s_key_toggles_scope():
+    """Pressing s toggles between project and user scopes."""
     from agent_toolkit_tui.widgets import AssetGrid
 
     runner = FakeRunner(_doc())
@@ -547,11 +547,11 @@ async def test_u_p_keys_switch_scope():
         grid = app.query_one("#asset-grid", AssetGrid)
         assert grid._scope == "project"
 
-        await pilot.press("u")
+        await pilot.press("s")
         await pilot.pause()
         assert grid._scope == "user"
 
-        await pilot.press("p")
+        await pilot.press("s")
         await pilot.pause()
         assert grid._scope == "project"
 
@@ -572,7 +572,7 @@ async def test_breadcrumb_reflects_current_kind_and_scope():
         assert "harnesses" not in text.lower()
 
         await pilot.press("2")  # agent
-        await pilot.press("u")  # user scope
+        await pilot.press("s")  # toggle scope → user
         await pilot.pause()
         text = str(app.query_one("#content-header", Static).render())
         assert "Agent" in text
