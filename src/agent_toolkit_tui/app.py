@@ -27,6 +27,7 @@ from agent_toolkit_tui.messages import (
 from agent_toolkit_tui.runner import CLIRunner, PlanResult, RunnerError
 from agent_toolkit_tui.state import InventoryState, build_state
 from agent_toolkit_tui.widgets import AssetGrid, KindsSidebar, ScopeToggle
+from agent_toolkit_tui.widgets.pi_tab import PiTab
 
 
 class ConfirmDiscardScreen(ModalScreen[bool]):
@@ -87,6 +88,47 @@ class ConfirmDiscardScreen(ModalScreen[bool]):
         self.dismiss(False)
 
 
+class PiTabScreen(ModalScreen[None]):
+    """Modal screen that hosts the read-only Pi inventory view.
+
+    Press ``escape`` or ``q`` to dismiss.
+    """
+
+    DEFAULT_CSS = """
+    PiTabScreen {
+        align: center middle;
+    }
+    PiTabScreen > Vertical {
+        background: $panel;
+        border: thick $primary;
+        padding: 1 2;
+        width: 90%;
+        height: 80%;
+    }
+    PiTabScreen Label {
+        text-style: bold;
+        margin-bottom: 1;
+    }
+    """
+
+    BINDINGS = [
+        Binding("escape", "close", "Close"),
+        Binding("q", "close", "Close"),
+    ]
+
+    def __init__(self, records: list[dict]) -> None:
+        super().__init__()
+        self._records = records
+
+    def compose(self) -> ComposeResult:
+        with Vertical():
+            yield Label(f"Pi extension inventory — {len(self._records)} record(s)")
+            yield PiTab(records=self._records, id="pi-tab")
+
+    def action_close(self) -> None:
+        self.dismiss(None)
+
+
 class TUIApp(App):
     """agent-toolkit-tui — Textual cockpit over bin/agent-toolkit."""
 
@@ -107,6 +149,7 @@ class TUIApp(App):
         Binding("5", "kind('plugin')", "Plugins", show=False),
         Binding("6", "kind('mcp')", "MCPs", show=False),
         Binding("7", "kind('pi-extension')", "Pi Ext", show=False),
+        Binding("8", "show_pi_tab", "Pi", show=False),
         Binding("q", "quit", "Quit"),
     ]
 
@@ -208,6 +251,20 @@ class TUIApp(App):
         self.query_one("#asset-grid", AssetGrid).set_kind(kind)
         self._refresh_content_header()
         self._refresh_status_bar()
+
+    def action_show_pi_tab(self) -> None:
+        """Open the Pi extension inventory modal.
+
+        Shells out to `agent-toolkit-cli pi inventory --format json` via the
+        runner and displays the records in a `PiTab` widget. Read-only —
+        toggle bindings (`u`/`p`) are deferred to a follow-up commit.
+        """
+        try:
+            records = self.runner.pi_inventory()
+        except RunnerError as exc:
+            self.query_one("#footer-pending", Static).update(f"pi inventory error: {exc}")
+            return
+        self.push_screen(PiTabScreen(records=records))
 
     def action_refresh(self) -> None:
         self.state = build_state(self.runner)

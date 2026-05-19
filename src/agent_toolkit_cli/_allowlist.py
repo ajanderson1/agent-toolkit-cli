@@ -12,7 +12,16 @@ from pathlib import Path
 import yaml
 
 # Order matches the order sections appear when we materialise an empty file.
-SECTIONS: tuple[str, ...] = ("skills", "agents", "commands", "hooks", "plugins", "mcps", "pi_extensions")
+SECTIONS: tuple[str, ...] = (
+    "skills",
+    "agents",
+    "commands",
+    "hooks",
+    "plugins",
+    "mcps",
+    "pi_extensions",
+    "pi_packages",
+)
 
 _KIND_TO_SECTION: dict[str, str] = {
     "skill":         "skills",

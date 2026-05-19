@@ -38,7 +38,12 @@ def _check_allowlist(
         return warns
     parsed = read_allowlist(yaml_path)
     for section, slugs in parsed.items():
-        kind = section_to_kind(section)
+        # Some sections (e.g. ``pi_packages``) are not validated assets and
+        # have no kind mapping — they live in the allowlist as raw sources.
+        try:
+            kind = section_to_kind(section)
+        except ValueError:
+            continue
         for slug in slugs:
             if (kind, slug) not in declared_slugs:
                 warns.append(
