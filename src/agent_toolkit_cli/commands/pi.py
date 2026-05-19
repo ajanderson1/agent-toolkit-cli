@@ -198,6 +198,9 @@ def _resolve_first_party_asset(
         RepoNotFoundError,
         resolve_toolkit_root,
     )
+    from agent_toolkit_cli.commands._link_lib import (  # noqa: PLC0415
+        _asset_harnesses,
+    )
     from agent_toolkit_cli.walker import discover_assets  # noqa: PLC0415
 
     toolkit_root: Path | None = (ctx.obj or {}).get("toolkit_root")
@@ -207,8 +210,14 @@ def _resolve_first_party_asset(
         except RepoNotFoundError:
             return None
     for asset in discover_assets(toolkit_root):
-        if asset.kind == "pi-extension" and asset.slug == slug:
-            return toolkit_root, asset.path
+        if asset.kind != "pi-extension" or asset.slug != slug:
+            continue
+        # Mirror `_link_lib.maybe_link`'s harness-declaration check: a
+        # `pi-extension` asset that doesn't declare `pi` in `spec.harnesses`
+        # would be refused by the linker, so refuse here too.
+        if "pi" not in _asset_harnesses(asset.path, asset.kind):
+            continue
+        return toolkit_root, asset.path
     return None
 
 
@@ -273,11 +282,12 @@ def load_cmd(ctx: click.Context, target: str, scope: str) -> None:
 
     # First-party path: allowlist entry + symlink under
     # ~/.pi/agent/extensions/<slug>/ (user) or <project>/.pi/extensions/<slug>/
-    # (project). We resolve the asset via the same walker the linker uses and
-    # symlink the asset directory directly — `link_one_asset` doesn't exist
-    # in _link_lib.py, the linker uses a full projection sweep
-    # (`project_from_file`). A single-asset symlink is the smallest correct
-    # operation here; doctor/link can still reconcile the full state later.
+    # (project). We deliberately bypass `_link_lib.maybe_link` here to avoid
+    # pulling in projection/translation machinery for the single-slug case.
+    # `pi-extension` assets are non-translated, so a bare
+    # `symlink_to(asset_path.parent)` reproduces the on-disk shape
+    # `maybe_link` would have produced. We replicate `maybe_link`'s
+    # harness-declaration check inline (see `_resolve_first_party_asset`).
     target_dir = (
         pp.user_extensions_dir if scope == "user" else pp.project_extensions_dir
     )
@@ -355,21 +365,28 @@ def unload_cmd(ctx: click.Context, target: str, scope: str) -> None:
         return
 
     # First-party.
+    target_dir = (
+        pp.user_extensions_dir if scope == "user" else pp.project_extensions_dir
+    )
+    slot_path = target_dir / target
+
+    # Check the slot BEFORE touching the allowlist so a refusal leaves no
+    # drift between yaml ("unloaded") and disk (real dir still present).
+    if (
+        slot_path.exists()
+        and not slot_path.is_symlink()
+        and slot_path.is_dir()
+    ):
+        raise click.ClickException(
+            f"{slot_path} is not a symlink — refusing to delete. "
+            "Run `agent-toolkit-cli doctor` for context."
+        )
+
     try:
         remove_slug(allow_path, "pi_extensions", target)
     except FileNotFoundError:
         pass
 
-    target_dir = (
-        pp.user_extensions_dir if scope == "user" else pp.project_extensions_dir
-    )
-    slot_path = target_dir / target
     if slot_path.is_symlink():
         slot_path.unlink()
-        return
-    if slot_path.is_dir():
-        raise click.ClickException(
-            f"{slot_path} is not a symlink — refusing to delete. "
-            "Run `agent-toolkit-cli doctor` for context."
-        )
-    # Nothing on disk → no-op (allowlist entry already removed).
+    # Else: nothing on disk → no-op (allowlist entry already removed).

@@ -14,9 +14,11 @@ from agent_toolkit_cli._pi_fetch import (
 
 def test_fetch_package_invokes_pi_install(tmp_path, monkeypatch):
     calls: list[list[str]] = []
+    cwds: list[str | None] = []
 
     def fake_run(cmd, *args, **kwargs):
         calls.append(list(cmd))
+        cwds.append(kwargs.get("cwd"))
         return subprocess.CompletedProcess(cmd, 0, "", "")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
@@ -33,13 +35,17 @@ def test_fetch_package_invokes_pi_install(tmp_path, monkeypatch):
     assert "npm:pi-subagents" in calls[0]
     # No `--local` flag at user scope.
     assert "--local" not in calls[0]
+    # User scope → cwd is the home dir.
+    assert cwds[0] == str(home)
 
 
 def test_fetch_package_project_scope_uses_local_flag(tmp_path, monkeypatch):
     calls: list[list[str]] = []
+    cwds: list[str | None] = []
 
     def fake_run(cmd, *args, **kwargs):
         calls.append(list(cmd))
+        cwds.append(kwargs.get("cwd"))
         return subprocess.CompletedProcess(cmd, 0, "", "")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
@@ -53,6 +59,8 @@ def test_fetch_package_project_scope_uses_local_flag(tmp_path, monkeypatch):
 
     assert calls[0][:2] == ["pi", "install"]
     assert "--local" in calls[0]
+    # Project scope → cwd is the project root.
+    assert cwds[0] == str(proj)
 
 
 def test_fetch_package_raises_on_pi_missing(tmp_path, monkeypatch):
@@ -88,9 +96,11 @@ def test_fetch_package_raises_on_nonzero(tmp_path, monkeypatch):
 
 def test_remove_package_fetched_invokes_pi_remove(tmp_path, monkeypatch):
     calls: list[list[str]] = []
+    cwds: list[str | None] = []
 
     def fake_run(cmd, *args, **kwargs):
         calls.append(list(cmd))
+        cwds.append(kwargs.get("cwd"))
         return subprocess.CompletedProcess(cmd, 0, "", "")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
@@ -107,3 +117,5 @@ def test_remove_package_fetched_invokes_pi_remove(tmp_path, monkeypatch):
     assert calls[0][:2] == ["pi", "remove"]
     assert "npm:pi-subagents" in calls[0]
     assert "--local" in calls[0]
+    # Project scope → cwd is the project root.
+    assert cwds[0] == str(proj)

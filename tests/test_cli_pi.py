@@ -332,7 +332,12 @@ def test_pi_load_first_party_creates_symlink(tmp_path: Path, monkeypatch):
     toolkit = tmp_path / "toolkit"
     (toolkit / "extensions" / "status-bar").mkdir(parents=True)
     (toolkit / "extensions" / "status-bar" / "extension.meta.yaml").write_text(
-        "kind: pi-extension\nslug: status-bar\nname: status-bar\n"
+        "kind: pi-extension\n"
+        "slug: status-bar\n"
+        "name: status-bar\n"
+        "spec:\n"
+        "  harnesses:\n"
+        "    - pi\n"
     )
     # Make resolve_toolkit_root accept this fake repo: drop the two required
     # marker files (see `_repo_resolution._is_toolkit_repo`).
@@ -510,6 +515,131 @@ def test_pi_unload_first_party_refuses_to_delete_real_dir(
     assert "not a symlink" in out
     # Real dir is preserved.
     assert real.is_dir()
+
+
+def test_pi_unload_first_party_real_dir_preserves_allowlist(
+    tmp_path: Path, monkeypatch
+):
+    """Important #1: refusal must NOT remove the allowlist entry.
+
+    If a real (non-symlink) dir sits at the slot, we refuse to delete it —
+    and we must do so BEFORE touching the allowlist, otherwise the yaml
+    flips to "unloaded" while disk still has the dir (drift).
+    """
+    home = tmp_path / "home"
+    project = tmp_path / "proj"
+    project.mkdir()
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+
+    real = home / ".pi/agent/extensions/handmade"
+    real.mkdir(parents=True)
+    (real / "extension.yaml").write_text("kind: pi-extension\n")
+    (home / ".agent-toolkit.yaml").write_text(
+        yaml.safe_dump({"pi_extensions": ["handmade"]})
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        ["--project", str(project), "pi", "unload", "handmade",
+         "--scope", "user"],
+    )
+    assert result.exit_code != 0
+    assert "not a symlink" in result.output.lower()
+    # The slug must STILL be in the allowlist — refusal happened before any
+    # config mutation.
+    allow = yaml.safe_load((home / ".agent-toolkit.yaml").read_text()) or {}
+    assert "handmade" in (allow.get("pi_extensions") or [])
+    # Real dir is preserved (also covered in the older test).
+    assert real.is_dir()
+
+
+def test_pi_load_first_party_refuses_asset_without_pi_harness(
+    tmp_path: Path, monkeypatch
+):
+    """Important #2: a pi-extension asset that doesn't declare `pi` in
+    spec.harnesses must NOT be silently linked.
+    """
+    home = tmp_path / "home"
+    project = tmp_path / "proj"
+    project.mkdir()
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+
+    toolkit = tmp_path / "toolkit"
+    ext_dir = toolkit / "extensions" / "claude-only-ext"
+    ext_dir.mkdir(parents=True)
+    # spec.harnesses: ["claude"] — explicitly excludes pi.
+    (ext_dir / "extension.meta.yaml").write_text(
+        "kind: pi-extension\n"
+        "slug: claude-only-ext\n"
+        "name: claude-only-ext\n"
+        "spec:\n"
+        "  harnesses:\n"
+        "    - claude\n"
+    )
+    (toolkit / ".agent-toolkit-source").write_text("")
+    (toolkit / "schemas").mkdir()
+    (toolkit / "schemas" / "asset-frontmatter.v1alpha2.json").write_text("{}")
+    monkeypatch.setenv("AGENT_TOOLKIT_REPO", str(toolkit))
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        ["--project", str(project), "pi", "load", "claude-only-ext",
+         "--scope", "user"],
+    )
+    assert result.exit_code != 0, result.output
+    assert "not found" in result.output.lower() or "harness" in result.output.lower()
+    # No symlink was created.
+    slot = home / ".pi/agent/extensions/claude-only-ext"
+    assert not slot.exists() and not slot.is_symlink()
+
+
+def test_pi_load_writes_config_before_invoking_pi_install(
+    tmp_path: Path, monkeypatch
+):
+    """Important #3: allowlist + settings.json must be written BEFORE
+    `pi install` is invoked. The fake `subprocess.run` reads both files
+    and fails the test if either lacks the entry at call time.
+    """
+    home = tmp_path / "home"
+    project = tmp_path / "proj"
+    project.mkdir()
+    (home / ".pi/agent").mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(home))
+
+    allow_path = home / ".agent-toolkit.yaml"
+    settings_path = home / ".pi/agent/settings.json"
+    target = "npm:pi-subagents"
+    observed: dict[str, bool] = {"allow_written": False, "settings_written": False}
+
+    def fake_run(cmd, *args, **kwargs):
+        # Capture state of toolkit-owned config files at the moment `pi`
+        # is invoked. Both must already contain the entry.
+        if allow_path.exists():
+            allow = yaml.safe_load(allow_path.read_text()) or {}
+            observed["allow_written"] = target in (allow.get("pi_packages") or [])
+        if settings_path.exists():
+            settings = json.loads(settings_path.read_text())
+            observed["settings_written"] = target in (settings.get("packages") or [])
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        ["--project", str(project), "pi", "load", target, "--scope", "user"],
+    )
+    assert result.exit_code == 0, result.output
+    assert observed["allow_written"], (
+        "allowlist did not contain the entry when `pi install` was invoked"
+    )
+    assert observed["settings_written"], (
+        "settings.json did not contain the entry when `pi install` was invoked"
+    )
 
 
 def test_pi_load_requires_scope_flag(tmp_path: Path, monkeypatch):
