@@ -427,3 +427,23 @@ def list_json(
 
     out = _build_inventory(toolkit_root, project_root, kind=kind, harness=harness)
     click.echo(json.dumps(out, indent=2))
+
+
+_USER_LINKED_STATUSES = frozenset({"linked", "linked-matches", "linked-drifted"})
+
+
+def user_scope_covered(inventory: dict, *, slug: str, harness: str) -> bool:
+    """Return True iff the (slug, harness) user-scope cell is in a linked state.
+
+    Pure function over the inventory dict produced by `_build_inventory()`.
+    """
+    for asset in inventory.get("assets", []):
+        if asset.get("slug") != slug:
+            continue
+        for cell in asset.get("cells", []):
+            if cell.get("harness") != harness:
+                continue
+            if cell.get("scope") != "user":
+                continue
+            return cell.get("status") in _USER_LINKED_STATUSES
+    return False
