@@ -25,7 +25,7 @@ from agent_toolkit_tui.messages import (
 )
 from agent_toolkit_tui.runner import CLIRunner, PlanResult, RunnerError
 from agent_toolkit_tui.state import InventoryState, build_state
-from agent_toolkit_tui.widgets import AssetGrid, KindsSidebar
+from agent_toolkit_tui.widgets import AssetGrid, KindsSidebar, ScopeToggle
 
 
 class ConfirmDiscardScreen(ModalScreen[bool]):
@@ -124,7 +124,9 @@ class TUIApp(App):
         with Horizontal(id="main"):
             yield KindsSidebar(self.state, id="kinds-sidebar")
             with Vertical(id="content"):
-                yield Static(self._build_content_header(), id="content-header")
+                with Horizontal(id="content-header-row"):
+                    yield Static(self._build_content_header(), id="content-header")
+                    yield ScopeToggle(active=self._scope, id="scope-toggle")
                 yield AssetGrid(self.state, id="asset-grid")
         yield Static("", id="status-bar")
         yield Static("", id="footer-pending")
@@ -187,6 +189,10 @@ class TUIApp(App):
             return
         self._scope = scope
         self.query_one("#asset-grid", AssetGrid).set_scope(scope)
+        try:
+            self.query_one("#scope-toggle", ScopeToggle).set_active(scope)
+        except Exception:
+            pass
         self._refresh_content_header()
         self._refresh_status_bar()
 
@@ -281,27 +287,18 @@ class TUIApp(App):
 
     # ----- content header + status bar ------------------------------------
     def _build_content_header(self) -> str:
-        """Header at the top of the content pane — kind label, count, scope chips.
+        """Header at the top of the content pane — kind label and count only.
 
         Deliberately does NOT include a global 'harnesses: …' chip line —
         that was the V3 mistake; harness state lives in the grid columns.
+        Scope toggle is a sibling widget (ScopeToggle), not Rich markup.
         """
         if self._kind == "pi-extension":
             kind_label = "Pi Ext"
         else:
             kind_label = self._kind.replace("-", " ").title()
         n = sum(1 for r in self.state.rows if r.kind == self._kind)
-        # Scope chips: highlight the active one with [reverse], dim the other.
-        chips = []
-        for s in ("project", "user"):
-            if s == self._scope:
-                chips.append(f"[@click=app.action_scope('{s}')][reverse] {s} [/][/]")
-            else:
-                chips.append(f"[@click=app.action_scope('{s}')] [dim]{s}[/] [/]")
-        return (
-            f"  [b]{kind_label}[/]   [dim]·[/]   {n} items   "
-            f"[dim]·[/]   scope: {' '.join(chips)}"
-        )
+        return f"  [b]{kind_label}[/]   [dim]·[/]   {n} items"
 
     def _refresh_content_header(self) -> None:
         try:

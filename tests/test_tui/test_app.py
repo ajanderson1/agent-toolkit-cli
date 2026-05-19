@@ -628,7 +628,7 @@ async def test_s_key_toggles_scope():
 
 
 async def test_breadcrumb_reflects_current_kind_and_scope():
-    """The content header (formerly 'breadcrumb') shows kind + scope only."""
+    """The content header shows the kind; scope lives in the ScopeToggle sibling."""
     from textual.widgets import Static
 
     runner = FakeRunner(_doc())
@@ -638,7 +638,7 @@ async def test_breadcrumb_reflects_current_kind_and_scope():
         header = app.query_one("#content-header", Static)
         text = str(header.render())
         assert "Skill" in text
-        assert "project" in text
+        assert app._scope == "project"
         # Regression: V1 Navigator must NOT show global "harnesses:" chips.
         assert "harnesses" not in text.lower()
 
@@ -647,7 +647,7 @@ async def test_breadcrumb_reflects_current_kind_and_scope():
         await pilot.pause()
         text = str(app.query_one("#content-header", Static).render())
         assert "Agent" in text
-        assert "user" in text
+        assert app._scope == "user"
         assert "harnesses" not in text.lower()
 
 
@@ -674,14 +674,13 @@ async def test_content_header_renders_with_nonzero_height():
         )
 
 
-async def test_scope_chip_click_switches_scope():
-    """Regression for #59: clicking the inactive scope chip flips _scope.
+async def test_scope_toggle_click_switches_scope():
+    """Regression for #99: clicking the inactive scope label flips _scope.
 
-    The chips render as Rich-markup spans inside #content-header. Wrapping
-    each chip in [@click=app.action_scope(...)] makes the span a click target.
-    Verifies via pilot.click('#content-header'); we don't pin the exact x-
-    offset (rich-text regions are layout-sensitive) — instead we assert that
-    invoking the click handler via the action route does what u/p does.
+    Previously the chips were Rich-markup spans with [@click=...] action
+    links; in practice these did not receive mouse clicks reliably. Now
+    each scope is a Label widget inside ScopeToggle with an explicit
+    on_click handler — verified here by pilot.click on the label id.
     """
     from agent_toolkit_tui.widgets import AssetGrid
 
@@ -693,38 +692,53 @@ async def test_scope_chip_click_switches_scope():
         assert app._scope == "project"
         assert grid._scope == "project"
 
-        # The action wired to the chip's [@click=...] markup. Calling it
-        # directly proves the dispatch path the click span will use.
-        await app.run_action("scope('user')")
+        # Mouse-click the inactive (user) label. This exercises the real
+        # hit-test path, not just the action dispatch.
+        await pilot.click("#scope-toggle-user")
         await pilot.pause()
         assert app._scope == "user"
         assert grid._scope == "user"
 
-        # And back — clicking the (now-inactive) project chip flips it back.
-        await app.run_action("scope('project')")
+        # Click the (now-inactive) project label to flip back.
+        await pilot.click("#scope-toggle-project")
         await pilot.pause()
         assert app._scope == "project"
         assert grid._scope == "project"
 
 
-async def test_content_header_markup_contains_click_actions():
-    """Regression for #59: the content-header markup wires both chips
-    to action_scope via Rich [@click=...] spans, so a mouse click on the
-    chip text dispatches the same action u / p do.
+async def test_scope_keyboard_toggle_still_works():
+    """Regression for #99: the 's' keybinding still toggles scope after the
+    chips were replaced by the ScopeToggle widget. Keyboard path is unchanged.
+    """
+    from agent_toolkit_tui.widgets import AssetGrid  # noqa: F401
 
-    Asserts the *rendered markup* contains the click directives. This is
-    what makes the chips actually clickable in the running TUI; without
-    these directives the visual chip is just dead text.
+    runner = FakeRunner(_doc())
+    app = TUIApp(toolkit_root=Path("/r"), runner=runner)
+    async with app.run_test(size=(120, 36)) as pilot:
+        await pilot.pause()
+        assert app._scope == "project"
+        await pilot.press("s")
+        await pilot.pause()
+        assert app._scope == "user"
+        await pilot.press("s")
+        await pilot.pause()
+        assert app._scope == "project"
+
+
+async def test_content_header_markup_is_kind_and_count_only():
+    """Regression for #99: scope chips moved out of the Static markup into a
+    sibling ScopeToggle widget. The content-header markup is now just the
+    kind label + item count — no Rich [@click=...] action links.
     """
     runner = FakeRunner(_doc())
     app = TUIApp(toolkit_root=Path("/r"), runner=runner)
     async with app.run_test(size=(120, 36)) as pilot:
         await pilot.pause()
-        # _build_content_header is what update() is called with; assert the
-        # raw markup string contains both click directives.
         markup = app._build_content_header()
-        assert "@click=app.action_scope('project')" in markup, markup
-        assert "@click=app.action_scope('user')" in markup, markup
+        assert "@click" not in markup, markup
+        assert "[dim]" not in markup or markup.count("[dim]") <= 1, markup
+        # The kind label and count must still be present.
+        assert "items" in markup
 
 
 async def test_status_bar_shows_summary_counts():

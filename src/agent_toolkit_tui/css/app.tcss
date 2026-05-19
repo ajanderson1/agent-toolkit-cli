@@ -134,3 +134,14 @@ ScopeToggle Label.scope-option.-inactive {
     color: $text;
     text-style: none;
 }
+
+#content-header-row {
+    height: auto;
+    width: 100%;
+    layout: horizontal;
+    align: left middle;
+}
+
+#content-header-row #content-header {
+    width: 1fr;
+}
