@@ -144,7 +144,8 @@ def _sweep_stale_in_dir(
             target.relative_to(toolkit_root)
         except ValueError:
             continue
-        asset = declared_slugs.get((kind, entry.name))
+        lookup_name = entry.name[:-3] if entry.name.endswith(".md") else entry.name
+        asset = declared_slugs.get((kind, lookup_name))
         if asset is None:
             if not target.exists():
                 warns.append(
