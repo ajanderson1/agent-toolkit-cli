@@ -607,11 +607,21 @@ def project_from_file(
                 else:
                     slot_path_translated = target_dir / _slot_filename(asset.slug, kind, harness)
                     slot_path_plain = target_dir / asset.slug
-                    # Try translated slot first (path-based detection); fall back to plain.
+                    # Try translated slot first (path-based detection); fall back to
+                    # pruning the on-disk slot. For harnesses without a translation
+                    # cache (e.g. claude), `_prune_translated_slot` is a no-op, so we
+                    # must also try the `_slot_filename` path with `_prune_if_into_repo`
+                    # — the slot is `<slug>.md` for claude agents/commands but
+                    # `<slug>` (no extension) for skills/plugins. See #119.
                     if not _prune_translated_slot(
                         slot_path_translated, harness, scope, project_root,
                         dry_run, counters, stdout,
                     ):
+                        if slot_path_translated != slot_path_plain:
+                            _prune_if_into_repo(
+                                slot_path_translated, toolkit_root,
+                                dry_run, counters, stdout,
+                            )
                         _prune_if_into_repo(
                             slot_path_plain, toolkit_root, dry_run, counters, stdout,
                         )
