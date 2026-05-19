@@ -59,3 +59,26 @@ def test_pi_tab_user_loaded_glyph() -> None:
     ]
     rows = PiTab(records=records).rows()
     assert "✓" in rows[0]
+
+
+def test_pi_tab_disabled_glyph_for_loaded_but_disabled():
+    from agent_toolkit_tui.widgets.pi_tab import PiTab
+
+    records = [
+        {
+            "slug": "status-bar",
+            "origin": "first-party",
+            "source": "extension:status-bar",
+            "user_loaded": True,
+            "project_loaded": False,
+            "user_enabled": False,
+            "project_enabled": True,
+            "toolkit_intent": "user",
+        }
+    ]
+    tab = PiTab(records=records)
+    rows = tab.rows()
+    assert len(rows) == 1
+    # Loaded but disabled => `~` in the U column, not `✓`.
+    assert "~" in rows[0]
+    assert "✓" not in rows[0]
