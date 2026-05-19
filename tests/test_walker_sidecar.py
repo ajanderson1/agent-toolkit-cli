@@ -6,8 +6,11 @@ from pathlib import Path
 import pytest
 
 from agent_toolkit_cli.walker import (
+    Asset,
     BothMetadataLocationsExist,
     _sidecar_path,
+    discover_assets,
+    load_asset_record,
     read_sidecar,
     resolve_metadata,
 )
@@ -132,3 +135,67 @@ class TestResolveMetadata:
         metadata, source = resolve_metadata("skill", "empty", tmp_path)
         assert metadata is None
         assert source is None
+
+
+class TestDiscoverAssetsSidecar:
+    def test_sidecar_skill_is_discovered(self, tmp_path: Path) -> None:
+        _make_skill_with_sidecar(tmp_path, "deep-research")
+        assets = discover_assets(tmp_path)
+        slugs = {a.slug for a in assets if a.kind == "skill"}
+        assert "deep-research" in slugs
+
+    def test_inline_skill_still_discovered(self, tmp_path: Path) -> None:
+        _make_skill_with_inline(tmp_path, "agent-toolkit")
+        assets = discover_assets(tmp_path)
+        slugs = {a.slug for a in assets if a.kind == "skill"}
+        assert "agent-toolkit" in slugs
+
+    def test_orphan_sidecar_not_discovered(self, tmp_path: Path) -> None:
+        # Sidecar exists but body directory does not — should NOT yield an Asset
+        # (this gets surfaced by check, not walker).
+        (tmp_path / "skills").mkdir()
+        sidecar = tmp_path / "skills" / "orphan.toolkit.yaml"
+        sidecar.write_text(
+            "apiVersion: agent-toolkit/v1alpha2\n"
+            "metadata:\n  name: orphan\n"
+            "spec:\n  origin: third-party\n"
+        )
+        assets = discover_assets(tmp_path)
+        slugs = {a.slug for a in assets if a.kind == "skill"}
+        assert "orphan" not in slugs
+
+    def test_load_asset_record_reads_sidecar_metadata(self, tmp_path: Path) -> None:
+        """Regression: load_asset_record must read metadata from sidecar.
+
+        Was a bug where extract_frontmatter (which requires ---) was called
+        on bare-YAML sidecars, silently dropping metadata.
+        """
+        _make_skill_with_sidecar(tmp_path, "ssot")
+        assets = [a for a in discover_assets(tmp_path) if a.slug == "ssot"]
+        assert len(assets) == 1
+        record = load_asset_record(assets[0])
+        assert record.metadata != {}
+        assert record.metadata.get("metadata", {}).get("name") == "ssot"
+        assert record.metadata.get("spec", {}).get("origin") == "third-party"
+
+    def test_sidecar_for_submoduled_body(self, tmp_path: Path) -> None:
+        """The point of the whole feature: sidecar outside submodule path."""
+        skill_dir = tmp_path / "skills" / "vendored"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text("upstream body, no frontmatter\n")
+        # Pretend this directory is submoduled
+        (tmp_path / ".gitmodules").write_text(
+            '[submodule "skills/vendored"]\n'
+            "    path = skills/vendored\n"
+            "    url = https://example.com/upstream.git\n"
+        )
+        # Sidecar lives OUTSIDE the submoduled directory
+        sidecar = tmp_path / "skills" / "vendored.toolkit.yaml"
+        sidecar.write_text(
+            "apiVersion: agent-toolkit/v1alpha2\n"
+            "metadata:\n  name: vendored\n"
+            "spec:\n  origin: third-party\n  vendored_via: submodule\n"
+        )
+        assets = discover_assets(tmp_path)
+        slugs = {a.slug for a in assets if a.kind == "skill"}
+        assert "vendored" in slugs
