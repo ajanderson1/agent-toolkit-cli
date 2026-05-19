@@ -29,7 +29,9 @@ No single command answers "what will Pi load right now?" The TUI cannot offer to
 
 One command, `agent-toolkit-cli pi inventory`, returns **one record per extension Pi could load**, regardless of channel of origin. Four sibling verbs (`load`, `unload`, `sync`) let the operator change loaded state without leaving the toolkit. The TUI gains a Pi tab that consumes the same inventory and routes its toggles through the verbs.
 
-**Non-goal:** re-implementing `pi install`. Pi owns npm/git resolution, lockfiles, and scope merging. The toolkit owns *intent* (allowlist) and *view* (inventory).
+**Design stance — toolkit owns every config edit; Pi is reduced to a fetcher.** The toolkit edits `~/.pi/agent/settings.json` directly (same pattern as Codex hooks, MCP entries, etc.). `pi install` is only invoked for the fetch step — populating `~/.pi/agent/npm/node_modules/` for `npm:`/`git:` sources — because we don't want to become a package manager (npm/git resolution, lockfiles, transitive deps). One mental model for the **write to declared intent**; Pi only does what only Pi can do.
+
+**Non-goal:** re-implementing npm/git resolution. We do not become a package manager.
 
 ## 3. Acceptance criteria
 
@@ -97,8 +99,8 @@ The slug is derived per channel:
 | Command | Purpose | Read/Write |
 |---|---|---|
 | `agent-toolkit-cli pi inventory [--scope user\|project\|both] [--format json\|text]` | Emit one record per extension Pi could load. | Read |
-| `agent-toolkit-cli pi load <slug> [--scope user\|project]` | Make loaded. Dispatches to symlink (first-party) or `pi install` (third-party). | Write |
-| `agent-toolkit-cli pi unload <slug> [--scope user\|project]` | Make not-loaded. Dispatches to symlink-remove or `pi remove`. | Write |
+| `agent-toolkit-cli pi load <slug> [--scope user\|project]` | Make loaded. Toolkit edits `settings.json` (third-party) or places symlink (first-party); shells to `pi install` only to populate `node_modules/` for `npm:`/`git:` sources. | Write |
+| `agent-toolkit-cli pi unload <slug> [--scope user\|project]` | Make not-loaded. Toolkit edits `settings.json` (third-party) or removes symlink (first-party); shells to `pi` only if a fetched directory needs purging. | Write |
 | `agent-toolkit-cli pi sync [--scope user\|project\|both]` | Reconcile allowlist intent → Pi's actual state. Idempotent. | Write |
 
 All four obey the standard two-flag contract (`--toolkit-repo`, `--project`).
@@ -134,10 +136,24 @@ Refresh after each toggle by re-invoking `pi inventory`.
 
 Each advisory states the slug, the channel(s) involved, and a one-line remediation.
 
+### 4.7 Write model — toolkit-owned config edits
+
+Mirror of the existing Codex-hooks / MCP-entries pattern. For each `load`/`unload`:
+
+1. **Toolkit edits config directly.** Same YAML/JSON edit primitives used elsewhere in `_yaml_edit.py` / hook-dispatch / mcp-dispatch.
+   - First-party: place or remove the symlink under `~/.pi/agent/extensions/<slug>/`.
+   - Third-party: add or remove the `packages[]` entry in `~/.pi/agent/settings.json`.
+2. **Toolkit invokes `pi` only for the fetch step**, and only when adding a third-party source that requires it (npm/git). The toolkit calls a fetch-only mode — preferred shape `pi install --no-config-update <source>` (or equivalent flag determined during build); if Pi does not expose a fetch-only mode, the toolkit pre-edits `settings.json`, runs `pi install`, then verifies the post-condition matches its pre-edit (any divergence is a doctor advisory).
+3. **Unload** removes the toolkit's intent first, then purges `node_modules/<pkg>/` if Pi did not clean it up.
+
+This keeps the allowlist (toolkit) → settings.json (toolkit) → node_modules (Pi) chain in one direction. The toolkit is the SSOT for *what should be present*; Pi is the worker for *the fetch only Pi can do*.
+
+**Verification of the `pi install` flag.** The exact fetch-only flag is identified in the build phase by reading `@earendil-works/pi-coding-agent`'s `dist/core/package-manager.js` (the source already referenced in the brainstorm) and the CLI's help output. If no fetch-only flag exists, the build phase records that finding and the toolkit falls back to the pre-edit + diff-verify pattern described above. Either way, the toolkit owns the config write.
+
 ## 5. Non-goals
 
 - Querying registries (`npm view`, `pi.dev/packages`, GitHub). Inventory only describes installed-or-claimed state.
-- Re-implementing `pi install` / `pi remove`. The toolkit shells out.
+- Re-implementing npm/git resolution. Pi (or whichever fetcher Pi delegates to) does the fetch.
 - Schema-validating third-party packages. They're declared, not validated.
 - v1alpha2 → v1alpha3 schema bump. The change is purely additive.
 
@@ -148,7 +164,8 @@ Each advisory states the slug, the channel(s) involved, and a one-line remediati
 | Pi pins move (`@earendil-works/pi-coding-agent@x.y.z` paths shift) | CI snapshot test against a known-good Pi version; path-resolution mirror is a single module that's easy to update. |
 | Race: operator runs `pi install` in another terminal while inventory is reading | Each read is one snapshot; sync runs idempotently. No global lock. |
 | Slug collisions across channels | First-party wins; doctor advisory surfaces conflict. |
-| `pi` CLI not on PATH | `load`/`unload` for third-party fail loudly with an actionable message. `inventory` continues to work (it doesn't invoke `pi`). |
+| `pi` CLI not on PATH | `load`/`unload` for third-party fail loudly with an actionable message at the fetch step. The config edit may have already landed — doctor's "drift" advisory surfaces this. `inventory` continues to work (it doesn't invoke `pi`). |
+| Pi has no fetch-only flag | Build phase verifies; if absent, toolkit pre-edits settings.json, runs `pi install`, diff-verifies the post-state matches the pre-edit. Documented in commit message. |
 | Folding `extensions[]` settings-array entries into `pi_packages` | Defer — current spec treats `extensions[]` as out of scope. If Pi changes shape, add a `local:` source entry later. |
 
 ## 7. Internal commit slicing (single PR, five logical commits)
@@ -159,7 +176,7 @@ Even though all five slices ship in one PR per operator choice, the plan will ke
 |---|---|
 | 1 — inventory read | `pi inventory` subcommand + path-resolution module + record shape. No schema change. |
 | 2 — schema + sync | `pi_packages:` added to `SECTIONS`; `pi sync` subcommand. |
-| 3 — load/unload | `pi load` / `pi unload` verbs (shell to `pi install` / `pi remove`). |
+| 3 — load/unload | `pi load` / `pi unload` verbs. Toolkit edits `settings.json` directly (Codex-hook pattern); `pi install` invoked only for the fetch step. Includes the fetch-flag investigation finding. |
 | 4 — TUI Pi tab | New tab consuming `pi inventory --format json`. |
 | 5 — doctor advisories | Three new advisory checks. |
 
