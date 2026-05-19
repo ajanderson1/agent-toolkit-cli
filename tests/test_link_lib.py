@@ -219,13 +219,16 @@ def test_project_from_file_pi_mcp_skips_loudly(tmp_path, monkeypatch):
 # ===========================================================================
 
 
-def test_maybe_link_raises_unsupported_pair_for_codex_agent(tmp_path):
-    """maybe_link must refuse an unsupported (harness, kind) loudly."""
+def test_maybe_link_raises_unsupported_pair_for_pi_command(tmp_path):
+    """maybe_link must refuse an unsupported (harness, kind) loudly.
+
+    (codex, agent) is now supported (#140); pi command remains a gap.
+    """
     from agent_toolkit_cli._support import UnsupportedPair
     from agent_toolkit_cli.commands._link_lib import LinkCounters, maybe_link
 
-    asset_path = tmp_path / "agent.md"
-    asset_path.write_text("---\nspec:\n  harnesses: [codex]\n---\nbody\n")
+    asset_path = tmp_path / "cmd.md"
+    asset_path.write_text("---\nspec:\n  harnesses: [pi]\n---\nbody\n")
     target = tmp_path / "target"
     target.mkdir()
     counters = LinkCounters()
@@ -233,8 +236,8 @@ def test_maybe_link_raises_unsupported_pair_for_codex_agent(tmp_path):
 
     with pytest.raises(UnsupportedPair) as exc:
         maybe_link(
-            harness="codex",
-            kind="agent",
+            harness="pi",
+            kind="command",
             slug="foo",
             asset_path=asset_path,
             target_dir=target,
@@ -243,18 +246,21 @@ def test_maybe_link_raises_unsupported_pair_for_codex_agent(tmp_path):
             counters=counters,
             stdout=io.StringIO(),
         )
-    assert exc.value.harness == "codex"
-    assert exc.value.kind == "agent"
+    assert exc.value.harness == "pi"
+    assert exc.value.kind == "command"
 
 
 def test_project_from_file_skips_unsupported_kinds_silently(tmp_path, monkeypatch):
     """project_from_file iterates only supported kinds for the given (harness, scope).
 
-    Pin: an agent asset declaring `codex` is allow-listed; running
-    project_from_file with harness=codex must NOT touch it (codex/agent
+    Pin: a command asset declaring `pi` is allow-listed; running
+    project_from_file with harness=pi must NOT touch it (pi/command
     is unsupported at every scope). Removing the per-scope is_supported
     filter would surface the pair to harness_target_dir → None →
     RuntimeError; the filter is the only reason this test passes silently.
+
+    Note: (codex, agent) is now supported (#140), so this test uses
+    (pi, command) which remains a known gap.
     """
     import io
     from agent_toolkit_cli.commands._link_lib import LinkCounters, project_from_file
@@ -263,19 +269,19 @@ def test_project_from_file_skips_unsupported_kinds_silently(tmp_path, monkeypatc
     project_root = tmp_path / "project"
     project_root.mkdir()
     allowlist_path = project_root / ".agent-toolkit.yaml"
-    allowlist_path.write_text("agents: [foo-agent]\n")
+    allowlist_path.write_text("commands: [foo-cmd]\n")
 
-    # Build a one-asset toolkit: agents/foo-agent.md declaring [codex].
+    # Build a one-asset toolkit: commands/foo-cmd.md declaring [pi].
     toolkit_root = tmp_path / "toolkit"
-    agents_dir = toolkit_root / "agents"
-    agents_dir.mkdir(parents=True)
-    asset_path = agents_dir / "foo-agent.md"
+    cmds_dir = toolkit_root / "commands"
+    cmds_dir.mkdir(parents=True)
+    asset_path = cmds_dir / "foo-cmd.md"
     asset_path.write_text(
         "---\n"
-        "kind: agent\n"
-        "slug: foo-agent\n"
+        "kind: command\n"
+        "slug: foo-cmd\n"
         "spec:\n"
-        "  harnesses: [codex]\n"
+        "  harnesses: [pi]\n"
         "---\n"
         "body\n"
     )
@@ -285,7 +291,7 @@ def test_project_from_file_skips_unsupported_kinds_silently(tmp_path, monkeypatc
 
     project_from_file(
         scope="project",
-        harness="codex",
+        harness="pi",
         toolkit_root=toolkit_root,
         project_root=project_root,
         allowlist_path=allowlist_path,
@@ -294,7 +300,7 @@ def test_project_from_file_skips_unsupported_kinds_silently(tmp_path, monkeypatc
         stdout=out,
     )
     # The per-scope is_supported filter (#49) is the line that prevents the
-    # loop from reaching harness_target_dir(codex, agent, ...) → None →
+    # loop from reaching harness_target_dir(pi, command, ...) → None →
     # RuntimeError.
     assert counters.created == 0
     assert counters.removed == 0
@@ -463,6 +469,22 @@ def test_translate_slot_layout_gemini_command_is_file():
     from agent_toolkit_cli.commands._link_lib import _translate_slot_layout
 
     assert _translate_slot_layout("gemini", "command") == "file"
+
+
+def test_slot_filename_codex_agent_uses_toml_extension():
+    """(codex, agent) slot filename must be <slug>.toml — matches Codex subagents
+    convention that the filename stem equals the agent name (#140)."""
+    from agent_toolkit_cli.commands._link_lib import _slot_filename
+
+    assert _slot_filename("my-agent", "agent", "codex") == "my-agent.toml"
+
+
+def test_translate_slot_layout_codex_agent_is_file():
+    """(codex, agent) slot layout must be 'file' — the slot is a symlink to
+    the per-scope cache file, not a directory symlink (#140)."""
+    from agent_toolkit_cli.commands._link_lib import _translate_slot_layout
+
+    assert _translate_slot_layout("codex", "agent") == "file"
 
 
 def test_scope_cache_root_gemini_user(monkeypatch, tmp_path):

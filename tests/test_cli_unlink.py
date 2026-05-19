@@ -519,8 +519,12 @@ def test_unlink_user_opencode_agent_removes_slot_and_cache(env, seed_agent):
 
 
 def test_unlink_plan_with_unsupported_pair_exits_2_with_message(tmp_path, monkeypatch):
-    """`unlink user codex --plan -` with `agent: foo` must exit 2 (not 0)
-    and the output names the pair plus the supported kinds for codex."""
+    """`unlink user codex --plan -` with `command: foo` must exit 2 (not 0)
+    and the output names the pair plus the supported kinds for codex.
+
+    Note: (codex, agent) is now supported (#140); use (codex, command) which
+    remains a known gap.
+    """
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.delenv("AGENT_TOOLKIT_REPO", raising=False)
 
@@ -541,7 +545,7 @@ def test_unlink_plan_with_unsupported_pair_exits_2_with_message(tmp_path, monkey
             "unlink", "user", "codex",
             "--plan", "-",
         ],
-        input="agent:foo\n",
+        input="command:foo\n",
         catch_exceptions=False,
     )
     assert result.exit_code == 2, (
@@ -550,7 +554,7 @@ def test_unlink_plan_with_unsupported_pair_exits_2_with_message(tmp_path, monkey
     msg = result.output + (result.stderr or "")
     assert "unsupported" in msg.lower()
     assert "codex" in msg
-    assert "agent" in msg
+    assert "command" in msg
     assert "skill" in msg
 
 

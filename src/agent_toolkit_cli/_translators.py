@@ -125,6 +125,45 @@ def _translate_gemini_agent(record: AssetRecord, body: str) -> bytes:
     return _render(fm, body)
 
 
+def _translate_codex_agent(record: AssetRecord, body: str) -> bytes:
+    """Emit a Codex subagents TOML agent file.
+
+    Codex subagents live at `~/.codex/agents/<name>.toml` (and
+    `<project>/.codex/agents/<name>.toml`). The required TOML fields are
+    `name`, `description`, and `developer_instructions`.
+
+    The `name` field uses the asset slug (= slot filename stem) — not
+    `metadata.name` — so the slot filename and the TOML name field stay in
+    sync. Codex's loader derives the agent name from the filename by
+    convention; mismatches would cause silent-skip or name collisions.
+
+    We additionally emit an `[agent_toolkit_cli]` table for round-trip
+    traceability, mirroring `_translate_gemini_command`'s pattern exactly.
+    """
+    md = record.metadata
+    # Use the asset slug as the TOML name so filename ↔ name stay in sync.
+    slug = record.asset.slug
+    description = (md.get("metadata") or {}).get("description") or ""
+    api_version = md.get("apiVersion") or ""
+    metadata_block = md.get("metadata") or {}
+    spec_block = md.get("spec")
+
+    parts: list[str] = []
+    parts.append(f"name = {_toml_basic_string(slug)}\n")
+    parts.append(f"description = {_toml_basic_string(description)}\n")
+    parts.append(f"developer_instructions = {_toml_multiline_string(body)}\n")
+    parts.append("\n[agent_toolkit_cli]\n")
+    parts.append(f"apiVersion = {_toml_basic_string(api_version)}\n")
+    parts.append(
+        f"metadata = {_toml_basic_string(json.dumps(metadata_block, sort_keys=True))}\n"
+    )
+    if spec_block is not None:
+        parts.append(
+            f"spec = {_toml_basic_string(json.dumps(spec_block, sort_keys=True))}\n"
+        )
+    return "".join(parts).encode("utf-8")
+
+
 def _translate_gemini_command(record: AssetRecord, body: str) -> bytes:
     """Emit a Gemini-flavored TOML command file.
 
@@ -199,6 +238,7 @@ def _toml_multiline_string(s: str) -> str:
 TRANSLATORS: dict[tuple[str, str], Callable[[AssetRecord, str], bytes]] = {
     ("opencode", "agent"): _translate_opencode_agent,
     ("opencode", "command"): _translate_opencode_command,
+    ("codex", "agent"): _translate_codex_agent,
     ("codex", "skill"): _translate_codex_skill,
     ("opencode", "skill"): _translate_opencode_skill,
     ("gemini", "command"): _translate_gemini_command,

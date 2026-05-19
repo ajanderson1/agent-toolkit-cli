@@ -9,6 +9,7 @@ import yaml
 from agent_toolkit_cli._repo_resolution import resolve_toolkit_root
 from agent_toolkit_cli._translators import (
     TRANSLATORS,
+    _translate_codex_agent,
     _translate_codex_skill,
     _translate_gemini_agent,
     _translate_gemini_command,
@@ -452,3 +453,156 @@ def test_translators_dict_includes_gemini_agent():
 
     assert ("gemini", "agent") in TRANSLATORS
     assert TRANSLATORS[("gemini", "agent")] is _translate_gemini_agent
+
+
+# ===========================================================================
+# (codex, agent) translator — #140
+# ===========================================================================
+
+
+def _make_codex_agent_record(slug: str, description: str, spec: dict | None = None) -> AssetRecord:
+    """Build an AssetRecord for a codex agent."""
+    metadata: dict = {
+        "apiVersion": "agent-toolkit/v1alpha2",
+        "metadata": {
+            "name": slug,
+            "description": description,
+            "lifecycle": "stable",
+        },
+        "spec": spec or {
+            "origin": "first-party",
+            "vendored_via": "none",
+            "harnesses": ["codex"],
+        },
+    }
+    asset = Asset(kind="agent", slug=slug, path=Path(f"/fake/agents/{slug}.md"))
+    return AssetRecord(asset=asset, metadata=metadata, body_excerpt="", requires={})
+
+
+def test_translate_codex_agent_produces_valid_toml():
+    """tomllib.loads() must succeed on the rendered output."""
+    import tomllib
+
+    record = _make_codex_agent_record("my-agent", "Does things.")
+    body = "You are MyAgent.\n\nBe helpful.\n"
+    out = _translate_codex_agent(record, body)
+    assert isinstance(out, bytes)
+    parsed = tomllib.loads(out.decode("utf-8"))
+    assert isinstance(parsed, dict)
+
+
+def test_translate_codex_agent_required_fields_present():
+    """name, description, developer_instructions must be top-level keys."""
+    import tomllib
+
+    record = _make_codex_agent_record("my-agent", "Does things.")
+    body = "You are MyAgent.\n"
+    parsed = tomllib.loads(_translate_codex_agent(record, body).decode("utf-8"))
+
+    assert parsed["name"] == "my-agent"
+    assert parsed["description"] == "Does things."
+    assert "developer_instructions" in parsed
+    assert parsed["developer_instructions"].strip() == body.strip()
+
+
+def test_translate_codex_agent_name_uses_slug_not_metadata_name():
+    """name field must equal the asset slug, not metadata.name.
+
+    Codex's filename convention: <name>.toml ↔ TOML name field must match.
+    The slug is the canonical source (matches the slot filename stem).
+    """
+    import tomllib
+
+    # metadata.name has a different value from slug to verify which one wins.
+    metadata = {
+        "apiVersion": "agent-toolkit/v1alpha2",
+        "metadata": {
+            "name": "Pretty Name — human display",
+            "description": "d",
+            "lifecycle": "stable",
+        },
+        "spec": {"harnesses": ["codex"]},
+    }
+    asset = Asset(kind="agent", slug="my-slug", path=Path("/fake/agents/my-slug.md"))
+    record = AssetRecord(asset=asset, metadata=metadata, body_excerpt="", requires={})
+    parsed = tomllib.loads(_translate_codex_agent(record, "body\n").decode("utf-8"))
+    # Slot filename is my-slug.toml; TOML name must be my-slug.
+    assert parsed["name"] == "my-slug"
+
+
+def test_translate_codex_agent_body_is_developer_instructions_multiline():
+    """developer_instructions is emitted as a TOML multiline basic string."""
+    import tomllib
+
+    body = "Line one.\nLine two.\n"
+    record = _make_codex_agent_record("agent", "desc")
+    parsed = tomllib.loads(_translate_codex_agent(record, body).decode("utf-8"))
+    assert parsed["developer_instructions"] == body
+
+
+def test_translate_codex_agent_body_with_triple_quotes_round_trips():
+    """Body containing triple-quotes must survive the multiline string escaping."""
+    import tomllib
+
+    body = 'before """ middle """ end\n'
+    record = _make_codex_agent_record("agent", "desc")
+    parsed = tomllib.loads(_translate_codex_agent(record, body).decode("utf-8"))
+    assert parsed["developer_instructions"] == body
+
+
+def test_translate_codex_agent_toolkit_table_present():
+    """[agent_toolkit_cli] table must contain apiVersion + JSON-encoded metadata."""
+    import json
+    import tomllib
+
+    record = _make_codex_agent_record(
+        "agent",
+        "desc",
+        spec={"harnesses": ["codex"], "origin": "first-party"},
+    )
+    parsed = tomllib.loads(_translate_codex_agent(record, "body\n").decode("utf-8"))
+    wrapper = parsed["agent_toolkit_cli"]
+    assert wrapper["apiVersion"] == "agent-toolkit/v1alpha2"
+    meta = json.loads(wrapper["metadata"])
+    assert meta["description"] == "desc"
+
+
+def test_translate_codex_agent_toolkit_table_includes_spec_when_present():
+    """spec block must be JSON-encoded in [agent_toolkit_cli] when present."""
+    import json
+    import tomllib
+
+    spec = {"harnesses": ["codex"], "origin": "first-party"}
+    record = _make_codex_agent_record("agent", "desc", spec=spec)
+    parsed = tomllib.loads(_translate_codex_agent(record, "body\n").decode("utf-8"))
+    wrapper = parsed["agent_toolkit_cli"]
+    assert "spec" in wrapper
+    assert json.loads(wrapper["spec"]) == spec
+
+
+def test_translate_codex_agent_toolkit_table_omits_spec_when_absent():
+    """spec key must be absent from [agent_toolkit_cli] when not in source."""
+    import tomllib
+
+    metadata = {
+        "apiVersion": "agent-toolkit/v1alpha2",
+        "metadata": {"name": "a", "description": "d", "lifecycle": "stable"},
+        # No 'spec' key
+    }
+    asset = Asset(kind="agent", slug="a", path=Path("/fake/agents/a.md"))
+    record = AssetRecord(asset=asset, metadata=metadata, body_excerpt="", requires={})
+    parsed = tomllib.loads(_translate_codex_agent(record, "body\n").decode("utf-8"))
+    assert "spec" not in parsed["agent_toolkit_cli"]
+
+
+def test_translate_codex_agent_round_trip_stable():
+    """Rendering the same input twice yields identical bytes."""
+    record = _make_codex_agent_record("agent", "desc")
+    body = "Body.\n"
+    assert _translate_codex_agent(record, body) == _translate_codex_agent(record, body)
+
+
+def test_translators_dict_includes_codex_agent():
+    """Regression guard: (codex, agent) must be in TRANSLATORS."""
+    assert ("codex", "agent") in TRANSLATORS
+    assert TRANSLATORS[("codex", "agent")] is _translate_codex_agent

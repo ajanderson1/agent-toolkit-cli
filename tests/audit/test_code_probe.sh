@@ -16,9 +16,9 @@ t::run "claims skill x claude is supported" '
   fi
 '
 
-t::run "claims agent x codex is NOT supported (no slot)" '
-  if printf "%s\n" "$OUT" | awk -F"\t" "\$1==\"agent\" && \$2==\"codex\" && \$3==\"true\" {found=1} END {exit !found}"; then
-    echo "agent x codex should not be supported" >&2; return 1
+t::run "claims agent x codex IS supported (#140)" '
+  if ! printf "%s\n" "$OUT" | awk -F"\t" "\$1==\"agent\" && \$2==\"codex\" && \$3==\"true\" {found=1} END {exit !found}"; then
+    echo "expected agent x codex to be supported after #140" >&2; return 1
   fi
 '
 

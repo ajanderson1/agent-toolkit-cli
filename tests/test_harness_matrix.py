@@ -317,7 +317,7 @@ class TestAdapterParity:
 
 
 _TRANSLATE_PATH_RE = re.compile(
-    r"(agents/<slug>\.md|commands/<slug>\.md|commands/<slug>\.toml|"
+    r"(agents/<slug>\.md|agents/<slug>\.toml|commands/<slug>\.md|commands/<slug>\.toml|"
     r"skills/<slug>/SKILL\.md)\s*$"
 )
 

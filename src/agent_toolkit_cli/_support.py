@@ -8,6 +8,7 @@ adapter slot needs declaring; consumers (`_link_lib`, `_list_json`,
 Issue #30: silent-skip on unsupported pairs is now a structured raise.
 Remaining matrix gaps tracked individually: #74 (codex MCP HTTP transport),
 #75 (pi/agent dual-target), #53 (Gemini CLI as fifth harness).
+#140 (codex, agent) — now supported.
 """
 from __future__ import annotations
 
@@ -30,6 +31,7 @@ _USER_TARGETS: dict[tuple[str, str], str] = {
     # `link` silently no-ops (allowlist gets edited but no script is
     # materialised and ~/.claude/settings.json is never written).
     ("claude", "plugin"):      "{home}/.claude/plugins",
+    ("codex", "agent"):        "{home}/.codex/agents",
     ("codex", "skill"):        "{home}/.codex/skills",
     ("codex", "hook"):         "{home}/.codex/agent-toolkit-hooks",  # config_file+folder
     ("opencode", "skill"):     "{home}/.config/opencode/skills",
@@ -48,6 +50,7 @@ _PROJECT_TARGETS: dict[tuple[str, str], str] = {
     ("claude", "command"):     ".claude/commands",
     # ("claude", "hook"): see _USER_TARGETS — unsupported until adapter lands (#123).
     ("claude", "plugin"):      ".claude/plugins",
+    ("codex", "agent"):        ".codex/agents",
     ("codex", "skill"):        ".codex/skills",
     ("opencode", "skill"):     ".opencode/skills",
     ("opencode", "agent"):     ".opencode/agents",
