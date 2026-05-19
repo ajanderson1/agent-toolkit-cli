@@ -15,7 +15,11 @@ the code disagree.
   `~/.codex/config.toml`). Used for MCPs and any kind that registers via
   config rather than file drop-in.
 - **plugin_folder** — adapter owns a whole subfolder (e.g.
-  `~/.claude/plugins/agent-toolkit/`). Currently used for MCPs in Claude.
+  `~/.claude/plugins/agent-toolkit/`). Currently unused; reserved for
+  future kinds that own a directory rather than a config file. (Claude
+  MCPs use `config_file` against `~/.claude.json`, not this mechanism —
+  see audit #32 and design spec
+  `docs/superpowers/specs/2026-05-05-config-file-mcp-adapters-claude-opencode-design.md`.)
 - **config_file+folder** — adapter both mutates a single named config file
   AND owns a managed sub-folder of artefacts. Both surfaces commit or
   rollback together via one `diff()` call. Used for codex hooks (script
