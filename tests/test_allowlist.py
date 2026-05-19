@@ -35,7 +35,16 @@ def test_section_to_kind_inverse():
 
 
 def test_sections_constant_matches_routing():
-    assert set(SECTIONS) == {"skills", "agents", "commands", "hooks", "plugins", "mcps", "pi_extensions"}
+    assert SECTIONS == (
+        "skills",
+        "agents",
+        "commands",
+        "hooks",
+        "plugins",
+        "mcps",
+        "pi_extensions",
+        "pi_packages",
+    )
 
 
 def test_section_to_kind_mcps():

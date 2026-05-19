@@ -33,3 +33,43 @@ def read_packages(path: Path) -> list[str]:
     if not isinstance(packages, list):
         return []
     return [str(p) for p in packages if p]
+
+
+def write_packages(path: Path, packages: list[str]) -> None:
+    """Write `packages` as the `packages[]` field, preserving other keys.
+
+    Creates parent dirs and file if missing. The on-disk representation is
+    `{"packages": [...], ...other-keys}`. We deliberately preserve any keys
+    other than `packages` so Pi-internal settings survive toolkit edits.
+    Malformed existing JSON raises ValueError mentioning the path.
+    """
+    parsed: dict
+    if path.exists() and path.read_text(encoding="utf-8").strip():
+        try:
+            parsed = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"malformed settings.json at {path}: {exc}") from exc
+        if not isinstance(parsed, dict):
+            parsed = {}
+    else:
+        parsed = {}
+
+    parsed["packages"] = list(packages)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(parsed, indent=2) + "\n", encoding="utf-8")
+
+
+def add_package(path: Path, source: str) -> None:
+    """Add SOURCE to `packages[]` (idempotent; creates file if missing)."""
+    current = read_packages(path)
+    if source in current:
+        return
+    write_packages(path, current + [source])
+
+
+def remove_package(path: Path, source: str) -> None:
+    """Remove SOURCE from `packages[]` (idempotent; no-op if missing)."""
+    current = read_packages(path)
+    if source not in current:
+        return
+    write_packages(path, [s for s in current if s != source])

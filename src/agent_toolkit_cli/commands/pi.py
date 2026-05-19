@@ -9,39 +9,17 @@ import json
 from pathlib import Path
 
 import click
-import yaml
 
 from agent_toolkit_cli._allowlist import read_allowlist
 from agent_toolkit_cli._pi_inventory import PiRecord, build_pi_inventory
 from agent_toolkit_cli._pi_paths import PiPaths
-from agent_toolkit_cli._pi_settings import read_packages
+from agent_toolkit_cli._pi_settings import read_packages, write_packages
 
 
 def _read_node_modules_dir(d: Path) -> set[str]:
     if not d.is_dir():
         return set()
     return {p.name for p in d.iterdir() if p.is_dir() or p.is_symlink()}
-
-
-def _read_pi_packages(allowlist_path: Path) -> list[str]:
-    """Read the `pi_packages` section directly.
-
-    `read_allowlist` filters to a known section set today and drops
-    `pi_packages`; bypassing it here keeps the allowlist module unchanged
-    until commit 2/3 promote `pi_packages` to a first-class section.
-    """
-    if not allowlist_path.exists():
-        return []
-    text = allowlist_path.read_text(encoding="utf-8")
-    if not text.strip():
-        return []
-    parsed = yaml.safe_load(text) or {}
-    if not isinstance(parsed, dict):
-        return []
-    value = parsed.get("pi_packages") or []
-    if not isinstance(value, list):
-        return []
-    return [str(s) for s in value if s]
 
 
 def _gather_inventory(home: Path, project_root: Path) -> list[PiRecord]:
@@ -52,15 +30,13 @@ def _gather_inventory(home: Path, project_root: Path) -> list[PiRecord]:
     user_node_modules = _read_node_modules_dir(pp.user_node_modules_dir)
     project_node_modules = _read_node_modules_dir(pp.project_node_modules_dir)
 
-    user_allowlist_path = home / ".agent-toolkit.yaml"
-    project_allowlist_path = project_root / ".agent-toolkit.yaml"
-    user_allow = read_allowlist(user_allowlist_path)
-    project_allow = read_allowlist(project_allowlist_path)
+    user_allow = read_allowlist(home / ".agent-toolkit.yaml")
+    project_allow = read_allowlist(project_root / ".agent-toolkit.yaml")
 
     user_pi_exts = list(user_allow.get("pi_extensions", []) or [])
     project_pi_exts = list(project_allow.get("pi_extensions", []) or [])
-    user_pi_pkgs = _read_pi_packages(user_allowlist_path)
-    project_pi_pkgs = _read_pi_packages(project_allowlist_path)
+    user_pi_pkgs = list(user_allow.get("pi_packages", []) or [])
+    project_pi_pkgs = list(project_allow.get("pi_packages", []) or [])
 
     return build_pi_inventory(
         paths=pp,
@@ -138,3 +114,44 @@ def inventory_cmd(ctx: click.Context, scope: str, fmt: str) -> None:
             f"{'✓' if r.project_loaded else '—':<3} "
             f"{r.toolkit_intent:<8} {r.source}"
         )
+
+
+@pi.command(name="sync")
+@click.option(
+    "--scope",
+    type=click.Choice(["user", "project", "both"]),
+    default="both",
+    help="Reconcile user, project, or both allowlist files (default both).",
+)
+@click.pass_context
+def sync_cmd(ctx: click.Context, scope: str) -> None:
+    """Reconcile allowlist ``pi_packages:`` → settings.json ``packages[]``.
+
+    Writes only. Does NOT invoke ``pi install`` (fetch step is part of
+    ``pi load``). Use ``pi sync`` after manually editing the allowlist.
+    Idempotent: a no-op when settings.json already matches the allowlist.
+    """
+    home = Path.home()
+    project_root = ctx.obj.get("project_root") if ctx.obj else None
+    if project_root is None:
+        project_root = Path.cwd()
+
+    scopes = ("user", "project") if scope == "both" else (scope,)
+    pp = PiPaths(home=home, project_root=project_root)
+
+    for s in scopes:
+        allow_path = (
+            home / ".agent-toolkit.yaml"
+            if s == "user"
+            else project_root / ".agent-toolkit.yaml"
+        )
+        allow = read_allowlist(allow_path)
+        desired = list(dict.fromkeys(allow.get("pi_packages", []) or []))
+        settings_path = (
+            pp.user_settings_json if s == "user" else pp.project_settings_json
+        )
+
+        current = read_packages(settings_path)
+        if current == desired:
+            continue
+        write_packages(settings_path, desired)

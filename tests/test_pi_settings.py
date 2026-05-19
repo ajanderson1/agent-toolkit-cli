@@ -3,7 +3,12 @@ from pathlib import Path
 
 import pytest
 
-from agent_toolkit_cli._pi_settings import read_packages
+from agent_toolkit_cli._pi_settings import (
+    add_package,
+    read_packages,
+    remove_package,
+    write_packages,
+)
 
 
 def test_read_packages_missing_file(tmp_path: Path):
@@ -41,3 +46,36 @@ def test_read_packages_malformed_json_raises(tmp_path: Path):
     with pytest.raises(ValueError) as exc:
         read_packages(p)
     assert "settings.json" in str(exc.value).lower()
+
+
+def test_write_packages_preserves_unknown_keys(tmp_path: Path):
+    p = tmp_path / "settings.json"
+    p.write_text(json.dumps({"packages": [], "other": {"keep": 1}}))
+    write_packages(p, ["npm:foo"])
+    parsed = json.loads(p.read_text())
+    assert parsed["packages"] == ["npm:foo"]
+    assert parsed["other"] == {"keep": 1}
+
+
+def test_write_packages_creates_missing_file(tmp_path: Path):
+    p = tmp_path / "missing" / "settings.json"
+    write_packages(p, ["npm:foo"])
+    parsed = json.loads(p.read_text())
+    assert parsed == {"packages": ["npm:foo"]}
+
+
+def test_add_package_idempotent(tmp_path: Path):
+    p = tmp_path / "settings.json"
+    add_package(p, "npm:foo")
+    add_package(p, "npm:foo")
+    parsed = json.loads(p.read_text())
+    assert parsed["packages"] == ["npm:foo"]
+
+
+def test_remove_package_idempotent(tmp_path: Path):
+    p = tmp_path / "settings.json"
+    add_package(p, "npm:foo")
+    remove_package(p, "npm:foo")
+    remove_package(p, "npm:foo")
+    parsed = json.loads(p.read_text())
+    assert parsed["packages"] == []

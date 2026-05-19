@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+import yaml
 from click.testing import CliRunner
 
 from agent_toolkit_cli.cli import main
@@ -167,3 +168,75 @@ def test_pi_inventory_empty(tmp_path: Path, monkeypatch):
     )
     assert result.exit_code == 0
     assert json.loads(result.output) == []
+
+
+def test_pi_sync_adds_missing_package(tmp_path: Path, monkeypatch):
+    home = tmp_path / "home"
+    project = tmp_path / "proj"
+    project.mkdir()
+    (home / ".pi/agent").mkdir(parents=True)
+    (home / ".pi/agent/settings.json").write_text(json.dumps({"packages": []}))
+
+    allow = home / ".agent-toolkit.yaml"
+    allow.write_text(yaml.safe_dump({"pi_packages": ["npm:pi-subagents"]}))
+
+    monkeypatch.setenv("HOME", str(home))
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        ["--project", str(project), "pi", "sync", "--scope", "user"],
+    )
+    assert result.exit_code == 0, result.output
+
+    settings = json.loads((home / ".pi/agent/settings.json").read_text())
+    assert settings["packages"] == ["npm:pi-subagents"]
+
+
+def test_pi_sync_removes_orphan_package(tmp_path: Path, monkeypatch):
+    home = tmp_path / "home"
+    project = tmp_path / "proj"
+    project.mkdir()
+    (home / ".pi/agent").mkdir(parents=True)
+    (home / ".pi/agent/settings.json").write_text(
+        json.dumps({"packages": ["npm:pi-orphan"]})
+    )
+    allow = home / ".agent-toolkit.yaml"
+    allow.write_text(yaml.safe_dump({"pi_packages": []}))
+
+    monkeypatch.setenv("HOME", str(home))
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        ["--project", str(project), "pi", "sync", "--scope", "user"],
+    )
+    assert result.exit_code == 0, result.output
+    settings = json.loads((home / ".pi/agent/settings.json").read_text())
+    assert settings["packages"] == []
+
+
+def test_pi_sync_idempotent(tmp_path: Path, monkeypatch):
+    home = tmp_path / "home"
+    project = tmp_path / "proj"
+    project.mkdir()
+    (home / ".pi/agent").mkdir(parents=True)
+    (home / ".pi/agent/settings.json").write_text(
+        json.dumps({"packages": ["npm:pi-subagents"]})
+    )
+    allow = home / ".agent-toolkit.yaml"
+    allow.write_text(yaml.safe_dump({"pi_packages": ["npm:pi-subagents"]}))
+
+    monkeypatch.setenv("HOME", str(home))
+    runner = CliRunner()
+    before = (home / ".pi/agent/settings.json").read_text()
+    r1 = runner.invoke(
+        main, ["--project", str(project), "pi", "sync", "--scope", "user"]
+    )
+    assert r1.exit_code == 0
+    after_first = (home / ".pi/agent/settings.json").read_text()
+    r2 = runner.invoke(
+        main, ["--project", str(project), "pi", "sync", "--scope", "user"]
+    )
+    assert r2.exit_code == 0
+    after_second = (home / ".pi/agent/settings.json").read_text()
+    assert before == after_first == after_second
