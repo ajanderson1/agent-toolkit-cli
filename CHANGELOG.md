@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.3](https://github.com/ajanderson1/agent-toolkit-cli/compare/v0.7.2...v0.7.3) (2026-05-19)
+
+
+### Bug Fixes
+
+* **link:** [#137](https://github.com/ajanderson1/agent-toolkit-cli/issues/137) (gemini, command) slot pruned by its own sweep ([#138](https://github.com/ajanderson1/agent-toolkit-cli/issues/138)) ([5935ce2](https://github.com/ajanderson1/agent-toolkit-cli/commit/5935ce2ae8ffb466e25678db3d2f44b59efb8993))
+
 ## [0.7.2](https://github.com/ajanderson1/agent-toolkit-cli/compare/v0.7.1...v0.7.2) (2026-05-19)
 
 
