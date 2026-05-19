@@ -33,10 +33,10 @@ class ClaudeAdapter:
         if scope == "user":
             home = Path(os.environ.get("HOME", ""))
             return home / ".claude.json"
-        target = project_root / ".mcp.json"
-        if not target.is_file():
-            return None
-        return target
+        # Return the intended path unconditionally. `diff()` handles the
+        # absent-file case by emitting a `create` WriteAction; the dispatch
+        # layer's atomic-write helper creates parent dirs as needed. See #125.
+        return project_root / ".mcp.json"
 
     # ---- pre-flight ----
     def can_install(self, entry: McpEntry) -> None:

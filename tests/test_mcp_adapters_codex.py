@@ -46,18 +46,39 @@ def test_codex_user_config_target(monkeypatch, tmp_path):
     assert a.config_target("user", tmp_path) == tmp_path / ".codex" / "config.toml"
 
 
-def test_codex_project_config_target_requires_dir(tmp_path):
-    """Project target only set when .codex/ exists in project_root."""
+def test_codex_project_config_target_returns_path_unconditionally(tmp_path):
+    """Project target is always `<project_root>/.codex/config.toml`, present or not.
+
+    Regression test for #125 — previously returned None when `.codex/` absent,
+    causing `link project codex mcp:<slug>` to silently no-op.
+    """
     from agent_toolkit_cli.harness_adapters.codex import CodexAdapter
 
     proj = tmp_path / "p"
     proj.mkdir()
     a = CodexAdapter()
-    # No .codex/ → no target
-    assert a.config_target("project", proj) is None
-    # Create .codex/ → target appears
+    # No .codex/ → path still returned
+    assert a.config_target("project", proj) == proj / ".codex" / "config.toml"
+    # With .codex/ → same path
     (proj / ".codex").mkdir()
     assert a.config_target("project", proj) == proj / ".codex" / "config.toml"
+
+
+def test_codex_diff_project_creates_config_when_absent(tmp_path):
+    """`link project codex` creates `.codex/config.toml` if missing. Regression for #125."""
+    from agent_toolkit_cli.harness_adapters.codex import CodexAdapter
+
+    proj = tmp_path / "p"
+    proj.mkdir()
+    entry = _make_entry(name="demo-mcp", command="/bin/true")
+    a = CodexAdapter()
+    actions = a.diff("project", proj, [entry])
+    assert len(actions) == 1
+    act = actions[0]
+    assert act.op == "create"
+    assert act.path == proj / ".codex" / "config.toml"
+    text = act.contents.decode("utf-8")
+    assert "[mcp_servers.demo-mcp]" in text or 'mcp_servers."demo-mcp"' in text
 
 
 def test_codex_can_install_accepts_stdio():

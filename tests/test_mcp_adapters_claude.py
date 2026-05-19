@@ -48,18 +48,40 @@ def test_claude_user_config_target(monkeypatch, tmp_path):
     assert a.config_target("user", tmp_path) == tmp_path / ".claude.json"
 
 
-def test_claude_project_config_target_requires_file(tmp_path):
-    """Project target only set when .mcp.json exists at project_root."""
+def test_claude_project_config_target_returns_path_unconditionally(tmp_path):
+    """Project target is always `<project_root>/.mcp.json`, present or not.
+
+    Regression test for #125 — previously returned None when absent, causing
+    `link project claude mcp:<slug>` to silently no-op.
+    """
     from agent_toolkit_cli.harness_adapters.claude import ClaudeAdapter
 
     proj = tmp_path / "p"
     proj.mkdir()
     a = ClaudeAdapter()
-    # No .mcp.json → no target
-    assert a.config_target("project", proj) is None
-    # Create .mcp.json → target appears
+    # No .mcp.json → path still returned
+    assert a.config_target("project", proj) == proj / ".mcp.json"
+    # With .mcp.json → same path
     (proj / ".mcp.json").write_text("{}\n")
     assert a.config_target("project", proj) == proj / ".mcp.json"
+
+
+def test_claude_diff_project_creates_mcp_json_when_absent(tmp_path):
+    """`link project claude` creates `.mcp.json` if missing. Regression for #125."""
+    import json
+    from agent_toolkit_cli.harness_adapters.claude import ClaudeAdapter
+
+    proj = tmp_path / "p"
+    proj.mkdir()
+    entry = _make_entry(name="demo-mcp", command="/bin/true")
+    a = ClaudeAdapter()
+    actions = a.diff("project", proj, [entry])
+    assert len(actions) == 1
+    act = actions[0]
+    assert act.op == "create"
+    assert act.path == proj / ".mcp.json"
+    doc = json.loads(act.contents.decode("utf-8"))
+    assert "demo-mcp" in doc["mcpServers"]
 
 
 def test_claude_can_install_accepts_all_transports():

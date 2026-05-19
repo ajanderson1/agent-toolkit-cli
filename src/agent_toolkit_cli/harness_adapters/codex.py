@@ -37,10 +37,11 @@ class CodexAdapter:
         if scope == "user":
             home = Path(os.environ.get("HOME", ""))
             return home / ".codex" / "config.toml"
-        codex_dir = project_root / ".codex"
-        if not codex_dir.is_dir():
-            return None
-        return codex_dir / "config.toml"
+        # Return the intended path unconditionally. `diff()` handles the
+        # absent-file case by emitting a `create` WriteAction; the dispatch
+        # layer's atomic-write helper creates parent dirs (`.codex/`) as
+        # needed. See #125.
+        return project_root / ".codex" / "config.toml"
 
     # ---- pre-flight ----
     def can_install(self, entry: McpEntry) -> None:
