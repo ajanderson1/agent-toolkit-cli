@@ -474,3 +474,37 @@ def test_unlink_plan_with_unsupported_pair_exits_2_with_message(tmp_path, monkey
     assert "codex" in msg
     assert "agent" in msg
     assert "skill" in msg
+
+
+# ===========================================================================
+# Issue #119 — unlink <kind>:<slug> is a no-op for symlink-kinds on claude.
+# Regression: per-asset unlink must prune the on-disk `.md`-suffixed slot.
+# ===========================================================================
+
+
+def test_unlink_per_asset_claude_agent_removes_symlink(env, seed_agent):
+    """Regression for #119 — agent slot under claude is `<slug>.md`."""
+    home = env["home"]
+    toolkit = env["toolkit_root"]
+    seed_agent(toolkit, "demo-agent", ["claude"])
+    yaml_path = home / ".agent-toolkit.yaml"
+    yaml_path.write_text(
+        "skills: []\nagents:\n  - demo-agent\ncommands: []\nhooks: []\nplugins: []\n"
+    )
+    target_dir = home / ".claude" / "agents"
+    target_dir.mkdir(parents=True)
+    link_path = target_dir / "demo-agent.md"
+    link_path.symlink_to(toolkit / "agents" / "demo-agent.md")
+    assert link_path.is_symlink()
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        ["--toolkit-repo", str(toolkit), "unlink", "user", "claude", "agent:demo-agent"],
+    )
+    assert result.exit_code == 0, (result.output, result.stderr)
+    assert not link_path.is_symlink(), (
+        f"symlink at {link_path} still exists; output:\n{result.output}\n{result.stderr}"
+    )
+    yaml_text = yaml_path.read_text()
+    assert not re.search(r"^\s*-\s*demo-agent", yaml_text, re.MULTILINE)
