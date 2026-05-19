@@ -85,6 +85,51 @@ def test_drift_independent_scopes_both_emit(tmp_path):
     assert len(drift_msgs) == 2
 
 
+def test_drift_warns_when_user_node_modules_missing(tmp_path):
+    home = tmp_path / "home"
+    project = tmp_path / "proj"
+    home.mkdir()
+    project.mkdir()
+    (home / ".agent-toolkit.yaml").write_text("pi_packages:\n  - npm:phantom\n")
+    (home / ".pi/agent").mkdir(parents=True)
+    (home / ".pi/agent/settings.json").write_text(
+        json.dumps({"packages": ["npm:phantom"]})
+    )
+    # node_modules dir exists but is empty
+    (home / ".pi/agent/npm/node_modules").mkdir(parents=True)
+
+    results = audit_pi(home=home, project_root=project)
+
+    assert any(
+        "phantom" in r.message
+        and "node_modules" in r.message
+        and "(user)" in r.message
+        for r in results
+    )
+
+
+def test_drift_warns_when_project_node_modules_missing(tmp_path):
+    home = tmp_path / "home"
+    project = tmp_path / "proj"
+    home.mkdir()
+    project.mkdir()
+    (project / ".agent-toolkit.yaml").write_text("pi_packages:\n  - npm:phantom\n")
+    (project / ".pi").mkdir(parents=True)
+    (project / ".pi/settings.json").write_text(
+        json.dumps({"packages": ["npm:phantom"]})
+    )
+    (project / ".pi/npm/node_modules").mkdir(parents=True)
+
+    results = audit_pi(home=home, project_root=project)
+
+    assert any(
+        "phantom" in r.message
+        and "node_modules" in r.message
+        and "(project)" in r.message
+        for r in results
+    )
+
+
 def test_slug_collision_warns(tmp_path):
     home = tmp_path / "home"
     project = tmp_path / "proj"
