@@ -1,0 +1,89 @@
+import json
+from pathlib import Path
+
+from click.testing import CliRunner
+
+from agent_toolkit_cli.cli import main
+
+
+def _setup_pi_home(
+    home: Path,
+    ext_slugs: list[str],
+    packages: list[str],
+    node_modules: list[str],
+) -> None:
+    (home / ".pi/agent/extensions").mkdir(parents=True, exist_ok=True)
+    for s in ext_slugs:
+        (home / ".pi/agent/extensions" / s).mkdir()
+    (home / ".pi/agent").mkdir(parents=True, exist_ok=True)
+    (home / ".pi/agent/settings.json").write_text(
+        json.dumps({"packages": packages})
+    )
+    (home / ".pi/agent/npm/node_modules").mkdir(parents=True, exist_ok=True)
+    for pkg in node_modules:
+        (home / ".pi/agent/npm/node_modules" / pkg).mkdir()
+
+
+def test_pi_inventory_json_format(tmp_path: Path, monkeypatch):
+    home = tmp_path / "home"
+    project = tmp_path / "proj"
+    project.mkdir()
+    _setup_pi_home(
+        home,
+        ext_slugs=["status-bar"],
+        packages=["npm:pi-subagents"],
+        node_modules=["pi-subagents"],
+    )
+    monkeypatch.setenv("HOME", str(home))
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        ["--project", str(project), "pi", "inventory", "--format", "json"],
+    )
+    assert result.exit_code == 0, result.output
+
+    records = json.loads(result.output)
+    slugs = {r["slug"] for r in records}
+    assert slugs == {"status-bar", "pi-subagents"}
+
+    sb = next(r for r in records if r["slug"] == "status-bar")
+    assert sb["origin"] == "first-party"
+    assert sb["user_loaded"] is True
+
+    ps = next(r for r in records if r["slug"] == "pi-subagents")
+    assert ps["origin"] == "third-party"
+    assert ps["user_loaded"] is True
+
+
+def test_pi_inventory_text_format(tmp_path: Path, monkeypatch):
+    home = tmp_path / "home"
+    project = tmp_path / "proj"
+    project.mkdir()
+    _setup_pi_home(home, ext_slugs=["status-bar"], packages=[], node_modules=[])
+    monkeypatch.setenv("HOME", str(home))
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        ["--project", str(project), "pi", "inventory"],  # default --format text
+    )
+    assert result.exit_code == 0
+    assert "status-bar" in result.output
+    assert "first-party" in result.output
+
+
+def test_pi_inventory_empty(tmp_path: Path, monkeypatch):
+    home = tmp_path / "home"
+    project = tmp_path / "proj"
+    home.mkdir()
+    project.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        ["--project", str(project), "pi", "inventory", "--format", "json"],
+    )
+    assert result.exit_code == 0
+    assert json.loads(result.output) == []
