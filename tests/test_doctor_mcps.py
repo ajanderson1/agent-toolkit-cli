@@ -277,3 +277,27 @@ def test_doctor_mcps_verify_on_runs_command(monkeypatch, tmp_path):
     run(toolkit_root=tmp_path, harness="codex", scope="user",
         project_root=tmp_path, run_verify=True)
     assert sentinel.exists(), "verify command should have run with run_verify=True"
+
+
+def test_doctor_mcps_fail_on_unparseable_codex_toml(monkeypatch, tmp_path):
+    """Broken TOML in ~/.codex/config.toml → FAIL finding, no traceback (#122)."""
+    from agent_toolkit_cli.doctor.mcps import run
+    from agent_toolkit_cli.doctor.result import Status
+
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    (home / ".agent-toolkit.yaml").write_text("mcps:\n  - context7\n")
+    _seed_toolkit_with_mcp(tmp_path)
+    (home / ".codex").mkdir()
+    (home / ".codex" / "config.toml").write_text("{{{not toml\n")
+
+    result = run(
+        toolkit_root=tmp_path, harness="codex", scope="user",
+        project_root=tmp_path,
+    )
+    assert result.status == Status.FAIL
+    assert any(
+        "config.toml" in f and ("parse" in f.lower() or "toml" in f.lower())
+        for f in result.findings
+    ), result.findings

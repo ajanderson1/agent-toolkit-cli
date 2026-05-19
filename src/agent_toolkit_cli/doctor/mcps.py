@@ -9,6 +9,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import tomlkit.exceptions
+
 from agent_toolkit_cli._allowlist import read_allowlist
 from agent_toolkit_cli.commands._mcp_dispatch import _build_mcp_entries
 from agent_toolkit_cli.doctor.result import GroupResult, Status
@@ -61,7 +63,28 @@ def run(
         )
 
     entries = _build_mcp_entries(toolkit_root, allowed)
-    installed_names = adapter.list_installed(scope, project_root)
+
+    def _fail_unparseable(exc: tomlkit.exceptions.TOMLKitError) -> GroupResult:
+        """Codex (and any future TOML-backed adapter) raises on malformed
+        config files. Doctor is the report layer: convert the raise into a
+        FAIL finding rather than crashing the whole run."""
+        target = getattr(adapter, "config_target", lambda *_a, **_kw: None)(
+            scope, project_root
+        )
+        findings.append(
+            f"{harness}: config {target}: TOML parse error: {exc}"
+        )
+        return GroupResult(
+            name="mcps",
+            status=Status.FAIL,
+            summary=f"{harness} config unparseable",
+            findings=findings,
+        )
+
+    try:
+        installed_names = adapter.list_installed(scope, project_root)
+    except tomlkit.exceptions.TOMLKitError as exc:
+        return _fail_unparseable(exc)
 
     for entry in entries:
         if entry.name not in installed_names:
@@ -70,7 +93,11 @@ def run(
             )
             continue
 
-        if adapter.entry_drift(scope, project_root, entry):
+        try:
+            drift = adapter.entry_drift(scope, project_root, entry)
+        except tomlkit.exceptions.TOMLKitError as exc:
+            return _fail_unparseable(exc)
+        if drift:
             warnings.append(f"{entry.name}: drift — installed entry differs from template")
         else:
             findings.append(f"{entry.name}: installed and matches template")
