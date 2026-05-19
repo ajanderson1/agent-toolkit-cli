@@ -4,21 +4,22 @@ Caller resolves filesystem state for the third-party channel (node_modules sets)
 and the allowlist sections; this module synthesises one PiRecord per unique
 slug across both channels.
 
-Note: first-party extension-dir discovery (iterating `~/.pi/agent/extensions/`)
-is performed inside this module — a known mild impurity that keeps the
-auto-discovery rule encapsulated. Third-party inputs (node_modules) remain
-caller-provided sets.
+Note: first-party extension-dir discovery (iterating the user/project Pi
+extensions dirs) is performed inside this module — a known mild impurity that
+keeps the auto-discovery rule encapsulated. Third-party inputs (node_modules)
+remain caller-provided sets.
 
 Slug derivation:
-- first-party: directory name under <home>/.pi/agent/extensions/<slug>/
+- first-party: directory name under the Pi extensions dir
 - npm: source string after `npm:` is the package name. Slug = same.
 - git: last path segment of the URL, after stripping `@<ref>` suffix.
 """
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from pathlib import Path
 from typing import Literal
+
+from agent_toolkit_cli._pi_paths import PiPaths
 
 
 Origin = Literal["first-party", "third-party"]
@@ -40,7 +41,7 @@ class PiRecord:
         return asdict(self)
 
 
-def _slug_from_source(source: str) -> str:
+def slug_from_source(source: str) -> str:
     """Derive a display slug from a `packages[]` source string.
 
     Rules (see module docstring):
@@ -69,22 +70,23 @@ def _intent_for(*, in_user: bool, in_project: bool) -> Intent:
 
 def build_pi_inventory(
     *,
-    home: Path,
-    project_root: Path,
+    paths: PiPaths,
     user_packages: list[str],
     project_packages: list[str],
     user_node_modules: set[str],
     project_node_modules: set[str],
-    allowlist_pi_extensions: list[str],
-    allowlist_pi_packages: list[str],
+    user_allowlist_pi_extensions: list[str],
+    project_allowlist_pi_extensions: list[str],
+    user_allowlist_pi_packages: list[str],
+    project_allowlist_pi_packages: list[str],
 ) -> list[PiRecord]:
     """Build the unified inventory across both Pi extension channels.
 
     See module docstring for slug derivation rules.
     """
     # Resolve filesystem state for first-party (auto-discovery dirs).
-    user_ext_dir = home / ".pi" / "agent" / "extensions"
-    project_ext_dir = project_root / ".pi" / "extensions"
+    user_ext_dir = paths.user_extensions_dir
+    project_ext_dir = paths.project_extensions_dir
 
     user_ext_slugs: set[str] = (
         {p.name for p in user_ext_dir.iterdir() if p.is_dir() or p.is_symlink()}
@@ -99,24 +101,36 @@ def build_pi_inventory(
 
     # Index third-party sources by derived slug.
     user_third_party: dict[str, str] = {
-        _slug_from_source(s): s for s in user_packages
+        slug_from_source(s): s for s in user_packages
     }
     project_third_party: dict[str, str] = {
-        _slug_from_source(s): s for s in project_packages
+        slug_from_source(s): s for s in project_packages
     }
 
-    # Index allowlist intent.
-    allowlist_third_party_slugs: set[str] = {
-        _slug_from_source(s) for s in allowlist_pi_packages
+    # Index allowlist intent per scope.
+    user_allow_third_party_slugs: set[str] = {
+        slug_from_source(s) for s in user_allowlist_pi_packages
     }
-    allowlist_first_party_slugs: set[str] = set(allowlist_pi_extensions)
+    project_allow_third_party_slugs: set[str] = {
+        slug_from_source(s) for s in project_allowlist_pi_packages
+    }
+    user_allow_first_party_slugs: set[str] = set(user_allowlist_pi_extensions)
+    project_allow_first_party_slugs: set[str] = set(
+        project_allowlist_pi_extensions
+    )
 
     # Union of all slugs across both channels.
     all_first_party = (
-        user_ext_slugs | project_ext_slugs | allowlist_first_party_slugs
+        user_ext_slugs
+        | project_ext_slugs
+        | user_allow_first_party_slugs
+        | project_allow_first_party_slugs
     )
     all_third_party = (
-        set(user_third_party) | set(project_third_party) | allowlist_third_party_slugs
+        set(user_third_party)
+        | set(project_third_party)
+        | user_allow_third_party_slugs
+        | project_allow_third_party_slugs
     )
 
     out: list[PiRecord] = []
@@ -125,8 +139,8 @@ def build_pi_inventory(
         user_loaded = slug in user_ext_slugs
         project_loaded = slug in project_ext_slugs
         intent = _intent_for(
-            in_user=slug in allowlist_first_party_slugs,
-            in_project=False,  # allowlist_pi_extensions is user-scope today; project-scope intent is future work
+            in_user=slug in user_allow_first_party_slugs,
+            in_project=slug in project_allow_first_party_slugs,
         )
         out.append(
             PiRecord(
@@ -156,10 +170,8 @@ def build_pi_inventory(
         )
 
         intent = _intent_for(
-            in_user=any(
-                _slug_from_source(s) == slug for s in allowlist_pi_packages
-            ),
-            in_project=False,
+            in_user=slug in user_allow_third_party_slugs,
+            in_project=slug in project_allow_third_party_slugs,
         )
 
         out.append(
@@ -169,14 +181,10 @@ def build_pi_inventory(
                 source=display_source,
                 user_loaded=user_loaded,
                 project_loaded=project_loaded,
-                user_installed_at=str(
-                    home / ".pi/agent/npm/node_modules" / slug
-                )
+                user_installed_at=str(paths.user_node_modules_dir / slug)
                 if user_loaded
                 else None,
-                project_installed_at=str(
-                    project_root / ".pi/npm/node_modules" / slug
-                )
+                project_installed_at=str(paths.project_node_modules_dir / slug)
                 if project_loaded
                 else None,
                 toolkit_intent=intent,

@@ -1,15 +1,15 @@
 """`agent-toolkit-cli pi …` — unified Pi extension view + manage verbs.
 
 This module owns the `pi` Click group. Inventory landed in commit 1.
-Load/unload/sync land in later commits.
+`sync` lands in commit 2; `load`/`unload` land in commit 3.
 """
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 
 import click
+import yaml
 
 from agent_toolkit_cli._allowlist import read_allowlist
 from agent_toolkit_cli._pi_inventory import PiRecord, build_pi_inventory
@@ -17,16 +17,31 @@ from agent_toolkit_cli._pi_paths import PiPaths
 from agent_toolkit_cli._pi_settings import read_packages
 
 
-def _allowlist_path(scope: str, home: Path, project_root: Path) -> Path:
-    if scope == "project":
-        return project_root / ".agent-toolkit.yaml"
-    return home / ".agent-toolkit.yaml"
-
-
 def _read_node_modules_dir(d: Path) -> set[str]:
     if not d.is_dir():
         return set()
     return {p.name for p in d.iterdir() if p.is_dir() or p.is_symlink()}
+
+
+def _read_pi_packages(allowlist_path: Path) -> list[str]:
+    """Read the `pi_packages` section directly.
+
+    `read_allowlist` filters to a known section set today and drops
+    `pi_packages`; bypassing it here keeps the allowlist module unchanged
+    until commit 2/3 promote `pi_packages` to a first-class section.
+    """
+    if not allowlist_path.exists():
+        return []
+    text = allowlist_path.read_text(encoding="utf-8")
+    if not text.strip():
+        return []
+    parsed = yaml.safe_load(text) or {}
+    if not isinstance(parsed, dict):
+        return []
+    value = parsed.get("pi_packages") or []
+    if not isinstance(value, list):
+        return []
+    return [str(s) for s in value if s]
 
 
 def _gather_inventory(home: Path, project_root: Path) -> list[PiRecord]:
@@ -37,30 +52,26 @@ def _gather_inventory(home: Path, project_root: Path) -> list[PiRecord]:
     user_node_modules = _read_node_modules_dir(pp.user_node_modules_dir)
     project_node_modules = _read_node_modules_dir(pp.project_node_modules_dir)
 
-    user_allow = read_allowlist(home / ".agent-toolkit.yaml")
-    project_allow = read_allowlist(project_root / ".agent-toolkit.yaml")
-    pi_exts = list(
-        dict.fromkeys(
-            list(user_allow.get("pi_extensions", []) or [])
-            + list(project_allow.get("pi_extensions", []) or [])
-        )
-    )
-    pi_pkgs = list(
-        dict.fromkeys(
-            list(user_allow.get("pi_packages", []) or [])
-            + list(project_allow.get("pi_packages", []) or [])
-        )
-    )
+    user_allowlist_path = home / ".agent-toolkit.yaml"
+    project_allowlist_path = project_root / ".agent-toolkit.yaml"
+    user_allow = read_allowlist(user_allowlist_path)
+    project_allow = read_allowlist(project_allowlist_path)
+
+    user_pi_exts = list(user_allow.get("pi_extensions", []) or [])
+    project_pi_exts = list(project_allow.get("pi_extensions", []) or [])
+    user_pi_pkgs = _read_pi_packages(user_allowlist_path)
+    project_pi_pkgs = _read_pi_packages(project_allowlist_path)
 
     return build_pi_inventory(
-        home=home,
-        project_root=project_root,
+        paths=pp,
         user_packages=user_packages,
         project_packages=project_packages,
         user_node_modules=user_node_modules,
         project_node_modules=project_node_modules,
-        allowlist_pi_extensions=pi_exts,
-        allowlist_pi_packages=pi_pkgs,
+        user_allowlist_pi_extensions=user_pi_exts,
+        project_allowlist_pi_extensions=project_pi_exts,
+        user_allowlist_pi_packages=user_pi_pkgs,
+        project_allowlist_pi_packages=project_pi_pkgs,
     )
 
 
@@ -89,7 +100,7 @@ def inventory_cmd(ctx: click.Context, scope: str, fmt: str) -> None:
     Reads first-party auto-discovery dirs + third-party `settings.json` and
     `node_modules/` + the toolkit allowlist. Read-only.
     """
-    home = Path(os.environ.get("HOME", ""))
+    home = Path.home()
     project_root = ctx.obj.get("project_root") if ctx.obj else None
     if project_root is None:
         project_root = Path.cwd()
@@ -123,7 +134,7 @@ def inventory_cmd(ctx: click.Context, scope: str, fmt: str) -> None:
     for r in records:
         click.echo(
             f"{r.slug:<24} {r.origin:<12} "
-            f"{'✓' if r.user_loaded else ' ':<3} "
-            f"{'✓' if r.project_loaded else ' ':<3} "
+            f"{'✓' if r.user_loaded else '—':<3} "
+            f"{'✓' if r.project_loaded else '—':<3} "
             f"{r.toolkit_intent:<8} {r.source}"
         )

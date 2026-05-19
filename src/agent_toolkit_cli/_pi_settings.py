@@ -1,7 +1,7 @@
 """Read/write helpers for `~/.pi/agent/settings.json`.
 
 The toolkit treats this file as a JSON document with a `packages: [str]`
-field. Read returns the list; write helpers (commit 2) preserve unknown keys.
+field. Read returns the list; write helpers (commit 3) preserve unknown keys.
 This is the third-party-channel sibling of `_yaml_edit.py` (which owns the
 allowlist YAML for the first-party channel).
 """

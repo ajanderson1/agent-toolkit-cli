@@ -1,7 +1,7 @@
 """Pi filesystem path resolver.
 
 Single module so a Pi version bump (path layout changes) is one diff.
-Project scope omits the `/agent/` infix; see _support.py:55-60 for the rule.
+Project scope omits the `/agent/` infix; see `_support.py`'s project-scope rule.
 """
 from __future__ import annotations
 

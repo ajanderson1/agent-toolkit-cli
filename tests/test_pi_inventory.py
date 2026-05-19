@@ -1,10 +1,15 @@
 from pathlib import Path
 
-from agent_toolkit_cli._pi_inventory import PiRecord, build_pi_inventory  # noqa: F401
+from agent_toolkit_cli._pi_inventory import build_pi_inventory
+from agent_toolkit_cli._pi_paths import PiPaths
 
 
 def _mkdir_p(p: Path) -> None:
     p.mkdir(parents=True, exist_ok=True)
+
+
+def _paths(home: Path, project: Path) -> PiPaths:
+    return PiPaths(home=home, project_root=project)
 
 
 def test_first_party_user_loaded(tmp_path: Path):
@@ -14,14 +19,15 @@ def test_first_party_user_loaded(tmp_path: Path):
     _mkdir_p(project)
 
     records = build_pi_inventory(
-        home=home,
-        project_root=project,
+        paths=_paths(home, project),
         user_packages=[],
         project_packages=[],
         user_node_modules=set(),
         project_node_modules=set(),
-        allowlist_pi_extensions=["status-bar"],
-        allowlist_pi_packages=[],
+        user_allowlist_pi_extensions=["status-bar"],
+        project_allowlist_pi_extensions=[],
+        user_allowlist_pi_packages=[],
+        project_allowlist_pi_packages=[],
     )
 
     assert len(records) == 1
@@ -39,14 +45,15 @@ def test_third_party_user_loaded_unmanaged(tmp_path: Path):
     project = tmp_path / "proj"
 
     records = build_pi_inventory(
-        home=home,
-        project_root=project,
+        paths=_paths(home, project),
         user_packages=["npm:pi-subagents"],
         project_packages=[],
         user_node_modules={"pi-subagents"},
         project_node_modules=set(),
-        allowlist_pi_extensions=[],
-        allowlist_pi_packages=[],
+        user_allowlist_pi_extensions=[],
+        project_allowlist_pi_extensions=[],
+        user_allowlist_pi_packages=[],
+        project_allowlist_pi_packages=[],
     )
 
     assert len(records) == 1
@@ -64,14 +71,15 @@ def test_third_party_declared_but_not_resolved(tmp_path: Path):
     project = tmp_path / "proj"
 
     records = build_pi_inventory(
-        home=home,
-        project_root=project,
+        paths=_paths(home, project),
         user_packages=["npm:pi-subagents"],
         project_packages=[],
         user_node_modules=set(),  # fetch hasn't happened yet
         project_node_modules=set(),
-        allowlist_pi_extensions=[],
-        allowlist_pi_packages=["npm:pi-subagents"],
+        user_allowlist_pi_extensions=[],
+        project_allowlist_pi_extensions=[],
+        user_allowlist_pi_packages=["npm:pi-subagents"],
+        project_allowlist_pi_packages=[],
     )
 
     assert len(records) == 1
@@ -86,14 +94,15 @@ def test_collision_first_party_wins(tmp_path: Path):
     _mkdir_p(home / ".pi/agent/extensions/pi-subagents")
 
     records = build_pi_inventory(
-        home=home,
-        project_root=project,
+        paths=_paths(home, project),
         user_packages=["npm:pi-subagents"],
         project_packages=[],
         user_node_modules={"pi-subagents"},
         project_node_modules=set(),
-        allowlist_pi_extensions=["pi-subagents"],
-        allowlist_pi_packages=["npm:pi-subagents"],
+        user_allowlist_pi_extensions=["pi-subagents"],
+        project_allowlist_pi_extensions=[],
+        user_allowlist_pi_packages=["npm:pi-subagents"],
+        project_allowlist_pi_packages=[],
     )
 
     assert len(records) == 1
@@ -105,14 +114,15 @@ def test_git_source_slug_derivation(tmp_path: Path):
     project = tmp_path / "proj"
 
     records = build_pi_inventory(
-        home=home,
-        project_root=project,
+        paths=_paths(home, project),
         user_packages=["git:github.com/user/my-ext@v1"],
         project_packages=[],
         user_node_modules={"my-ext"},
         project_node_modules=set(),
-        allowlist_pi_extensions=[],
-        allowlist_pi_packages=[],
+        user_allowlist_pi_extensions=[],
+        project_allowlist_pi_extensions=[],
+        user_allowlist_pi_packages=[],
+        project_allowlist_pi_packages=[],
     )
 
     assert len(records) == 1
@@ -127,14 +137,51 @@ def test_record_is_sorted_by_slug(tmp_path: Path):
     _mkdir_p(home / ".pi/agent/extensions/alpha")
 
     records = build_pi_inventory(
-        home=home,
-        project_root=project,
+        paths=_paths(home, project),
         user_packages=[],
         project_packages=[],
         user_node_modules=set(),
         project_node_modules=set(),
-        allowlist_pi_extensions=["zeta", "alpha"],
-        allowlist_pi_packages=[],
+        user_allowlist_pi_extensions=["zeta", "alpha"],
+        project_allowlist_pi_extensions=[],
+        user_allowlist_pi_packages=[],
+        project_allowlist_pi_packages=[],
     )
 
     assert [r.slug for r in records] == ["alpha", "zeta"]
+
+
+def test_intent_both_when_in_user_and_project_allowlists(tmp_path: Path):
+    """A slug allowlisted at both scopes yields toolkit_intent='both'."""
+    home = tmp_path / "home"
+    project = tmp_path / "proj"
+
+    # first-party
+    fp_records = build_pi_inventory(
+        paths=_paths(home, project),
+        user_packages=[],
+        project_packages=[],
+        user_node_modules=set(),
+        project_node_modules=set(),
+        user_allowlist_pi_extensions=["status-bar"],
+        project_allowlist_pi_extensions=["status-bar"],
+        user_allowlist_pi_packages=[],
+        project_allowlist_pi_packages=[],
+    )
+    assert len(fp_records) == 1
+    assert fp_records[0].toolkit_intent == "both"
+
+    # third-party
+    tp_records = build_pi_inventory(
+        paths=_paths(home, project),
+        user_packages=[],
+        project_packages=[],
+        user_node_modules=set(),
+        project_node_modules=set(),
+        user_allowlist_pi_extensions=[],
+        project_allowlist_pi_extensions=[],
+        user_allowlist_pi_packages=["npm:pi-subagents"],
+        project_allowlist_pi_packages=["npm:pi-subagents"],
+    )
+    assert len(tp_records) == 1
+    assert tp_records[0].toolkit_intent == "both"
