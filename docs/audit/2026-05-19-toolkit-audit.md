@@ -3,7 +3,7 @@
 ## Rollup
 
 <!-- BEGIN_AUDIT:rollup -->
-Last scaffolded: 2026-05-19T16:48:23Z
+Last scaffolded: 2026-05-19T16:57:04Z
 
 _Prioritized issues list — hand-curate below._
 <!-- END_AUDIT:rollup -->
@@ -62,7 +62,7 @@ _Prioritized issues list — hand-curate below._
 
 ## Cells
 
-### agent × claude
+### agent × claude [STALE]
 
 <!-- BEGIN_AUDIT:cell agent-claude -->
 **Overview** — _hand-fill_
@@ -83,7 +83,7 @@ _Prioritized issues list — hand-curate below._
   - _hand-fill_
 <!-- END_AUDIT:cell agent-claude -->
 
-### agent × gemini
+### agent × gemini [STALE]
 
 <!-- BEGIN_AUDIT:cell agent-gemini -->
 **Overview** — _hand-fill_
@@ -104,7 +104,7 @@ _Prioritized issues list — hand-curate below._
   - _hand-fill_
 <!-- END_AUDIT:cell agent-gemini -->
 
-### agent × opencode
+### agent × opencode [STALE]
 
 <!-- BEGIN_AUDIT:cell agent-opencode -->
 **Overview** — _hand-fill_
@@ -125,7 +125,7 @@ _Prioritized issues list — hand-curate below._
   - _hand-fill_
 <!-- END_AUDIT:cell agent-opencode -->
 
-### agent × pi
+### agent × pi [STALE]
 
 <!-- BEGIN_AUDIT:cell agent-pi -->
 **Overview** — _hand-fill_
@@ -146,7 +146,7 @@ _Prioritized issues list — hand-curate below._
   - _hand-fill_
 <!-- END_AUDIT:cell agent-pi -->
 
-### command × claude
+### command × claude [STALE]
 
 <!-- BEGIN_AUDIT:cell command-claude -->
 **Overview** — _hand-fill_
@@ -167,7 +167,7 @@ _Prioritized issues list — hand-curate below._
   - _hand-fill_
 <!-- END_AUDIT:cell command-claude -->
 
-### command × gemini
+### command × gemini [STALE]
 
 <!-- BEGIN_AUDIT:cell command-gemini -->
 **Overview** — _hand-fill_
@@ -188,7 +188,7 @@ _Prioritized issues list — hand-curate below._
   - _hand-fill_
 <!-- END_AUDIT:cell command-gemini -->
 
-### command × opencode
+### command × opencode [STALE]
 
 <!-- BEGIN_AUDIT:cell command-opencode -->
 **Overview** — _hand-fill_
@@ -209,7 +209,7 @@ _Prioritized issues list — hand-curate below._
   - _hand-fill_
 <!-- END_AUDIT:cell command-opencode -->
 
-### hook × claude
+### hook × claude [STALE]
 
 <!-- BEGIN_AUDIT:cell hook-claude -->
 **Overview** — _hand-fill_
@@ -230,7 +230,7 @@ _Prioritized issues list — hand-curate below._
   - _hand-fill_
 <!-- END_AUDIT:cell hook-claude -->
 
-### hook × codex
+### hook × codex [STALE]
 
 <!-- BEGIN_AUDIT:cell hook-codex -->
 **Overview** — _hand-fill_
@@ -251,7 +251,7 @@ _Prioritized issues list — hand-curate below._
   - _hand-fill_
 <!-- END_AUDIT:cell hook-codex -->
 
-### mcp × claude
+### mcp × claude [STALE]
 
 <!-- BEGIN_AUDIT:cell mcp-claude -->
 **Overview** — _hand-fill_
@@ -272,7 +272,7 @@ _Prioritized issues list — hand-curate below._
   - _hand-fill_
 <!-- END_AUDIT:cell mcp-claude -->
 
-### mcp × codex
+### mcp × codex [STALE]
 
 <!-- BEGIN_AUDIT:cell mcp-codex -->
 **Overview** — _hand-fill_
@@ -293,7 +293,7 @@ _Prioritized issues list — hand-curate below._
   - _hand-fill_
 <!-- END_AUDIT:cell mcp-codex -->
 
-### mcp × gemini
+### mcp × gemini [STALE]
 
 <!-- BEGIN_AUDIT:cell mcp-gemini -->
 **Overview** — _hand-fill_
@@ -314,7 +314,7 @@ _Prioritized issues list — hand-curate below._
   - _hand-fill_
 <!-- END_AUDIT:cell mcp-gemini -->
 
-### mcp × opencode
+### mcp × opencode [STALE]
 
 <!-- BEGIN_AUDIT:cell mcp-opencode -->
 **Overview** — _hand-fill_
@@ -335,7 +335,7 @@ _Prioritized issues list — hand-curate below._
   - _hand-fill_
 <!-- END_AUDIT:cell mcp-opencode -->
 
-### pi-extension × pi
+### pi-extension × pi [STALE]
 
 <!-- BEGIN_AUDIT:cell pi-extension-pi -->
 **Overview** — _hand-fill_
@@ -356,7 +356,7 @@ _Prioritized issues list — hand-curate below._
   - _hand-fill_
 <!-- END_AUDIT:cell pi-extension-pi -->
 
-### plugin × claude
+### plugin × claude [STALE]
 
 <!-- BEGIN_AUDIT:cell plugin-claude -->
 **Overview** — _hand-fill_
@@ -377,7 +377,7 @@ _Prioritized issues list — hand-curate below._
   - _hand-fill_
 <!-- END_AUDIT:cell plugin-claude -->
 
-### skill × claude
+### skill × claude [PASS]
 
 <!-- BEGIN_AUDIT:cell skill-claude -->
 **Overview** — _hand-fill_
@@ -398,7 +398,7 @@ _Prioritized issues list — hand-curate below._
   - _hand-fill_
 <!-- END_AUDIT:cell skill-claude -->
 
-### skill × codex
+### skill × codex [STALE]
 
 <!-- BEGIN_AUDIT:cell skill-codex -->
 **Overview** — _hand-fill_
@@ -419,7 +419,7 @@ _Prioritized issues list — hand-curate below._
   - _hand-fill_
 <!-- END_AUDIT:cell skill-codex -->
 
-### skill × gemini
+### skill × gemini [STALE]
 
 <!-- BEGIN_AUDIT:cell skill-gemini -->
 **Overview** — _hand-fill_
@@ -440,7 +440,7 @@ _Prioritized issues list — hand-curate below._
   - _hand-fill_
 <!-- END_AUDIT:cell skill-gemini -->
 
-### skill × opencode
+### skill × opencode [STALE]
 
 <!-- BEGIN_AUDIT:cell skill-opencode -->
 **Overview** — _hand-fill_
@@ -461,7 +461,7 @@ _Prioritized issues list — hand-curate below._
   - _hand-fill_
 <!-- END_AUDIT:cell skill-opencode -->
 
-### skill × pi
+### skill × pi [STALE]
 
 <!-- BEGIN_AUDIT:cell skill-pi -->
 **Overview** — _hand-fill_

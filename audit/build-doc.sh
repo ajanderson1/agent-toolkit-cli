@@ -84,8 +84,19 @@ render_disagreements() {
 
 render_cell_stub() {
   local kind="$1" harness="$2"
+  local cell_id="${kind}-${harness}"
+  local status_glyph="[STALE]"
+  if [ -f "$REPO_ROOT/audit/.last-run.tsv" ]; then
+    local rc
+    rc=$(awk -F'\t' -v c="$cell_id" 'NR>1 && $1==c {print $2; exit}' "$REPO_ROOT/audit/.last-run.tsv")
+    case "$rc" in
+      0)  status_glyph="[PASS]" ;;
+      "") status_glyph="[STALE]" ;;
+      *)  status_glyph="[FAIL]" ;;
+    esac
+  fi
   cat <<EOF
-### ${kind} × ${harness}
+### ${kind} × ${harness} ${status_glyph}
 
 <!-- BEGIN_AUDIT:cell ${kind}-${harness} -->
 **Overview** — _hand-fill_
