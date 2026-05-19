@@ -62,3 +62,24 @@ def test_pending_op_takes_precedence_over_globe_suffix():
     # Pending overlay should be visible; globe is dropped to keep cell readable.
     assert "[yellow]" in cell_text
     assert "🌐" not in cell_text
+
+
+def test_no_globe_when_user_scope_cell_absent():
+    """A row that lacks a user-scope cell for the harness must not crash
+    and must not render the globe."""
+    row = AssetRow(
+        slug="alpha",
+        kind="skill",
+        origin="first-party",
+        description="",
+        path=Path("/fake/alpha"),
+        declared_harnesses=("claude",),
+        cells={
+            ("claude", "project"): CellState(status="linked", target_path=None, allowlisted=True),
+        },
+    )
+    state = InventoryState(toolkit_root=Path("/fake"), rows=(row,), all_harnesses=("claude",))
+    grid = AssetGrid(state)
+    grid._scope = "project"
+    cell_text = grid._cell_glyph(row=state.rows[0], harness="claude")
+    assert "🌐" not in cell_text

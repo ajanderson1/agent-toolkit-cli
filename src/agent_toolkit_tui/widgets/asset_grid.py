@@ -237,8 +237,9 @@ class AssetGrid(Vertical):
             )
 
     def _cell_glyph(self, *, row: AssetRow, harness: str) -> str:
-        """Compute the glyph string for a single cell, honouring pending ops
-        and the user-scope coverage indicator."""
+        """Pending overlays short-circuit before the user-scope indicator so
+        queued ops stay visible; the 🌐 suffix only applies in project view
+        when the matching user-scope cell is linked."""
         cell = row.cells.get((harness, self._scope))
         glyph = _GLYPH.get(cell.status, "  ") if cell else "  "
         pending = self._pending.get((self._scope, harness, row.kind, row.slug))
