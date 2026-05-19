@@ -15,6 +15,7 @@ from agent_toolkit_cli.doctor import (
     environment as g_environment,
     frontmatter as g_frontmatter,
     harness_homes as g_harness_homes,
+    pi_advisories as g_pi_advisories,
     submodules as g_submodules,
     symlinks as g_symlinks,
     user_scope_coverage as g_user_scope_coverage,
@@ -25,7 +26,7 @@ from agent_toolkit_cli.doctor.result import GroupResult, Status
 _GROUPS = (
     "environment", "symlink-integrity", "conventions", "submodule-health",
     "frontmatter", "duplicates", "harness-homes", "allowlist-audit", "mcps",
-    "user-scope-coverage",
+    "user-scope-coverage", "pi-advisories",
 )
 
 
@@ -107,6 +108,7 @@ def _run_global(
         ("allowlist-audit", lambda: g_allowlist_audit.run(root, project_root=Path.cwd())),
         ("mcps", lambda: g_mcps.run(root, harness=harness, scope=scope, project_root=Path.cwd())),
         ("user-scope-coverage", lambda: g_user_scope_coverage.run(root, project_root=Path.cwd())),
+        ("pi-advisories", lambda: g_pi_advisories.run(home=Path.home(), project_root=Path.cwd())),
     ]
     if group_name:
         runners = [(n, fn) for (n, fn) in runners if n == group_name]
