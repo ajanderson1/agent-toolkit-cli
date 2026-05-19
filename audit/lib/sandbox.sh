@@ -11,6 +11,7 @@
 SANDBOX_DEFAULT_TOOLKIT_REPO="${AGENT_TOOLKIT_REPO:-$HOME/GitHub/agent-toolkit}"
 
 sandbox::init() {
+  sandbox::cleanup
   local tmp
   tmp="$(mktemp -d -t agent-toolkit-audit.XXXXXX)"
   export SANDBOX_TMPDIR="$tmp"

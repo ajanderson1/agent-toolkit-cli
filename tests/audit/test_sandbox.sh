@@ -26,4 +26,13 @@ t::run "cleanup removes the tmpdir" '
   t::assert "tmpdir removed" "[ ! -d \"$h\" ]"
 '
 
+t::run "double init cleans up prior sandbox before creating new one" '
+  sandbox::init
+  local first="$HOME"
+  sandbox::init
+  local second="$HOME"
+  t::assert "new sandbox has a different path" "[ \"$first\" != \"$second\" ]"
+  t::assert "first sandbox no longer exists"   "[ ! -d \"$first\" ]"
+'
+
 t::summary
