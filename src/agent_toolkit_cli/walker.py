@@ -307,8 +307,8 @@ class AssetRecord:
     metadata: dict
     body_excerpt: str  # first paragraph or first 400 chars, whichever is shorter; "" if no body
     requires: dict[str, list[str]]  # harness → list of "kind:slug" strings; {} if absent
-    harness_description: str | None = None  # NEW: from SKILL.md top-level frontmatter
-    cli_description: str | None = None      # NEW: from sidecar metadata.description
+    harness_description: str | None = None  # SKILL.md top-level `description`; None for non-skills
+    cli_description: str | None = None      # sidecar `metadata.description`; None for non-skills
 
 
 def load_asset_record(asset: Asset) -> AssetRecord:

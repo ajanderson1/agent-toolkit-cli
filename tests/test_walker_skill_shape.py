@@ -73,3 +73,40 @@ def test_legacy_inline_skill_falls_back(legacy_inline_skill: Asset):
     # slots so consumers keep working during the tolerance window.
     assert record.harness_description == "Legacy combined description."
     assert record.cli_description == "Legacy combined description."
+
+
+def test_body_excerpt_strips_frontmatter_for_new_shape(new_shape_skill: Asset):
+    record = load_asset_record(new_shape_skill)
+    assert "body" in record.body_excerpt
+    assert "description:" not in record.body_excerpt
+
+
+def test_body_excerpt_strips_frontmatter_for_legacy(legacy_inline_skill: Asset):
+    record = load_asset_record(legacy_inline_skill)
+    assert "body" in record.body_excerpt
+    assert "apiVersion" not in record.body_excerpt
+
+
+def test_non_skill_kinds_have_none_descriptions(tmp_path: Path):
+    # An agent has no harness/cli_description distinction — both stay None.
+    agents_dir = tmp_path / "agents"
+    agents_dir.mkdir()
+    agent_path = agents_dir / "demo.md"
+    agent_path.write_text(
+        "---\n"
+        "apiVersion: agent-toolkit/v1alpha2\n"
+        "metadata:\n"
+        "  name: demo\n"
+        "  description: An agent.\n"
+        "  lifecycle: experimental\n"
+        "spec:\n"
+        "  origin: first-party\n"
+        "  vendored_via: none\n"
+        "  harnesses: [claude]\n"
+        "---\n"
+        "\nbody\n"
+    )
+    asset = Asset(kind="agent", slug="demo", path=agent_path)
+    record = load_asset_record(asset)
+    assert record.harness_description is None
+    assert record.cli_description is None
