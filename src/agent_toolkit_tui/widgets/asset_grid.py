@@ -7,6 +7,7 @@ from textual.containers import Vertical
 from textual.coordinate import Coordinate
 from textual.widgets import DataTable, Input
 
+from agent_toolkit_cli._support import USER_LINKED_STATUSES
 from agent_toolkit_tui.messages import AssetToggled
 from agent_toolkit_tui.state import AssetRow, CellState, InventoryState
 
@@ -28,7 +29,6 @@ _PENDING_LINK   = "[yellow]✔[/]"
 _PENDING_UNLINK = "[yellow]☐[/]"
 
 _USER_SCOPE_GLYPH = "🌐"
-_USER_LINKED_STATUSES = frozenset({"linked", "linked-matches", "linked-drifted"})
 
 
 class AssetGrid(Vertical):
@@ -124,7 +124,7 @@ class AssetGrid(Vertical):
                 continue
             key = (self._scope, harness, row.kind, row.slug)
             pending = self._pending.get(key)
-            _is_linked = cell.status in _USER_LINKED_STATUSES
+            _is_linked = cell.status in USER_LINKED_STATUSES
             effective_linked = (
                 (_is_linked and pending != "unlink")
                 or pending == "link"
@@ -140,7 +140,7 @@ class AssetGrid(Vertical):
                 continue
             key = (self._scope, harness, row.kind, row.slug)
             pending = self._pending.get(key)
-            _is_linked = cell.status in _USER_LINKED_STATUSES
+            _is_linked = cell.status in USER_LINKED_STATUSES
             already = (
                 (_is_linked and pending != "unlink")
                 or pending == "link"
@@ -189,7 +189,7 @@ class AssetGrid(Vertical):
             del self._pending[key]
             op = "clear"
         else:
-            _is_linked = cell.status in _USER_LINKED_STATUSES
+            _is_linked = cell.status in USER_LINKED_STATUSES
             op = "unlink" if _is_linked else "link"
             self._pending[key] = op
         self.post_message(AssetToggled(kind=row.kind, slug=row.slug,
@@ -251,7 +251,7 @@ class AssetGrid(Vertical):
             return _PENDING_UNLINK
         if self._scope == "project":
             user_cell = row.cells.get((harness, "user"))
-            if user_cell is not None and user_cell.status in _USER_LINKED_STATUSES:
+            if user_cell is not None and user_cell.status in USER_LINKED_STATUSES:
                 return f"{glyph} {_USER_SCOPE_GLYPH}"
         return glyph
 
@@ -262,7 +262,7 @@ class AssetGrid(Vertical):
                 cell = r.cells.get((harness, scope))
                 if cell is None:
                     return True   # cell vanished — pending is moot
-                if op == "link" and cell.status in _USER_LINKED_STATUSES:
+                if op == "link" and cell.status in USER_LINKED_STATUSES:
                     return True
                 if op == "unlink" and cell.status in {
                     "unlinked", "unsupported", "unlinked-allowlisted", "installed-not-allowlisted",
