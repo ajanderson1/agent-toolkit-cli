@@ -30,6 +30,6 @@ def run() -> GroupResult:
     return GroupResult(
         name="harness-homes",
         status=Status.OK,
-        summary="all 4 harness homes present",
+        summary=f"all {len(ALL_HARNESSES)} harness homes present",
         findings=findings,
     )
