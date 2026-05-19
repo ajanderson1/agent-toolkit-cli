@@ -38,11 +38,20 @@ def run(toolkit_root: Path) -> GroupResult:
                     f"Orphan body: {body_dir.relative_to(toolkit_root)} "
                     f"has no metadata. Add inline frontmatter or {sidecar.name}."
                 )
+            elif kind == "mcp" and has_inline and not has_sidecar:
+                # Legacy MCP: README.md carries frontmatter but no sidecar exists.
+                # Since PR 3 the walker ignores inline README frontmatter for MCPs;
+                # this asset is invisible to list/link/doctor output until migrated.
+                findings.append(
+                    f"Legacy MCP frontmatter: {inline.relative_to(toolkit_root)} "
+                    f"contains toolkit frontmatter but no sidecar exists. "
+                    f"Add a sidecar <slug>.toolkit.yaml to migrate."
+                )
     count = len(findings)
     return GroupResult(
         name="orphans",
         status=Status.ADVISORY if findings else Status.OK,
-        summary=f"{count} orphan body director{'y' if count == 1 else 'ies'} found",
+        summary=f"{count} finding(s)",
         findings=findings,
     )
 

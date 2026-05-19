@@ -59,12 +59,7 @@ def test_dry_run_reports_but_writes_nothing(tmp_path: Path) -> None:
     assert body.read_text() == body_before
 
 
-def test_apply_fixable_raises_not_implemented_in_pr1() -> None:
-    """Belt-and-braces: confirm apply_fixable still raises in PR 1."""
-    from agent_toolkit_cli.doctor.autofix import Fixable, apply_fixable
-    item = Fixable(kind="skill", slug="x", issue="mutex", action="x", target_path=Path("/tmp/x"))
-    try:
-        apply_fixable(item)
-        assert False, "expected NotImplementedError"
-    except NotImplementedError as e:
-        assert "PR 3" in str(e)
+def test_apply_fixable_is_callable() -> None:
+    """Belt-and-braces: confirm apply_fixable is importable and callable (PR 3 activates writes)."""
+    from agent_toolkit_cli.doctor.autofix import apply_fixable
+    assert callable(apply_fixable)

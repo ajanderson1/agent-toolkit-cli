@@ -8,7 +8,7 @@ import click
 from agent_toolkit_cli._repo_resolution import RepoNotFoundError, resolve_toolkit_root
 from agent_toolkit_cli._support import ALL_HARNESSES
 from agent_toolkit_cli._ui import header, summary
-from agent_toolkit_cli.doctor.autofix import find_fixables
+from agent_toolkit_cli.doctor.autofix import apply_fixable, find_fixables
 from agent_toolkit_cli.doctor import (
     allowlist_audit as g_allowlist_audit,
     conventions as g_conventions,
@@ -102,18 +102,22 @@ def doctor(
         raise SystemExit(1)
 
     if fix:
-        header("Autofix")
+        click.echo(header("Autofix"))
         fixables = find_fixables(toolkit_root)
         if not fixables:
             click.echo("Nothing to fix.")
         else:
             for item in fixables:
                 click.echo(f"  [{item.kind}/{item.slug}] {item.action}")
-            if not dry_run:
-                click.echo(
-                    "\nPR 1 ships dry-run only. Apply path activates in PR 3.",
-                    err=True,
-                )
+                if dry_run:
+                    continue
+                if not yes:
+                    if not click.confirm("    Apply this fix?", default=True):
+                        continue
+                try:
+                    apply_fixable(item)
+                except NotImplementedError as e:
+                    click.echo(f"    Skipped: {e}", err=True)
 
 
 def _run_global(

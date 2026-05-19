@@ -21,7 +21,7 @@ _KIND_RULES = (
     ("agent", "agents", "*.md"),
     ("command", "commands", "*.md"),
     ("hook", "hooks", "*.meta.yaml"),
-    ("mcp", "mcps", "config.json"),
+    # mcp is now sidecar-only — discovered in the second pass via *.toolkit.yaml
     ("pi-extension", "extensions", "extension.meta.yaml"),
 )
 
@@ -29,7 +29,10 @@ _KIND_RULES = (
 _SIDECAR_KINDS = frozenset({"skill", "mcp"})
 
 # Per-kind root directory (matches _KIND_RULES but indexed for lookup).
+# mcp is absent from _KIND_RULES (sidecar-only) but must remain here for the
+# second-pass sidecar discovery and _sidecar_path() lookups.
 _KIND_ROOT = {kind: root_name for kind, root_name, _ in _KIND_RULES}
+_KIND_ROOT["mcp"] = "mcps"
 
 
 def _sidecar_path(kind: str, slug: str, toolkit_root: Path) -> Path:
@@ -61,10 +64,8 @@ class Asset:
 def frontmatter_path(asset_path: Path, kind: str) -> Path:
     """Return the file carrying the asset's YAML frontmatter.
 
-    Resolution order:
-      1. For kinds in _SIDECAR_KINDS, check for a sibling <slug>.toolkit.yaml.
-      2. For MCPs, fall back to the sibling README.md (legacy path).
-      3. Otherwise, frontmatter lives in asset_path itself.
+    Skills and MCPs use sidecar metadata at `<root>/<slug>.toolkit.yaml`.
+    All other kinds use inline frontmatter in `asset_path` itself.
     """
     if kind in _SIDECAR_KINDS:
         slug = asset_path.parent.name
@@ -72,8 +73,6 @@ def frontmatter_path(asset_path: Path, kind: str) -> Path:
         sidecar = toolkit_root_candidate / _KIND_ROOT[kind] / f"{slug}.toolkit.yaml"
         if sidecar.is_file():
             return sidecar
-    if kind == "mcp":
-        return asset_path.parent / "README.md"
     return asset_path
 
 
@@ -317,19 +316,9 @@ def load_asset_record(asset: Asset) -> AssetRecord:
         metadata = yaml.safe_load(asset.path.read_text()) or {}
     elif asset.kind == "mcp":
         fm_path = frontmatter_path(asset.path, asset.kind)
-        if fm_path.is_file():
-            metadata = extract_metadata(fm_path) or {}
-            # Body excerpt: for sidecar-described MCPs there's no body to
-            # excerpt (the body IS the config.json/code). For legacy
-            # README-frontmatter MCPs, strip and excerpt as before.
-            if fm_path.name.endswith(".toolkit.yaml"):
-                body_excerpt = ""
-            else:
-                text = fm_path.read_text(encoding="utf-8").replace("\r\n", "\n")
-                body = _strip_frontmatter(text)
-                body_excerpt = _first_paragraph(body, max_chars=400)
-        else:
-            metadata = {}
+        # MCPs are sidecar-only; fm_path is always a *.toolkit.yaml path.
+        # body_excerpt stays "" (the body is config.json/code, not prose).
+        metadata = (extract_metadata(fm_path) if fm_path.is_file() else None) or {}
     elif asset.kind == "plugin":
         doc = _json.loads(asset.path.read_text())
         metadata = doc.get("agent_toolkit_cli") or {}

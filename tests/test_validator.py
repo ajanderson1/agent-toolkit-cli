@@ -109,8 +109,7 @@ def test_validator_mcp_requires_spec_mcp(tmp_path):
     mcp_dir = tmp_path / "mcps" / "context7"
     mcp_dir.mkdir(parents=True)
     (mcp_dir / "config.json").write_text("{}\n")
-    (mcp_dir / "README.md").write_text(
-        "---\n"
+    (tmp_path / "mcps" / "context7.toolkit.yaml").write_text(
         "apiVersion: agent-toolkit/v1alpha2\n"
         "metadata:\n"
         "  name: context7\n"
@@ -121,7 +120,6 @@ def test_validator_mcp_requires_spec_mcp(tmp_path):
         "  vendored_via: none\n"
         "  upstream: https://example.com\n"
         "  harnesses: [codex]\n"
-        "---\n"
     )
     asset = Asset(kind="mcp", slug="context7", path=mcp_dir / "config.json")
     v = Validator(toolkit_root=tmp_path)
@@ -137,8 +135,7 @@ def test_validator_mcp_with_spec_mcp_passes(tmp_path):
     mcp_dir = tmp_path / "mcps" / "context7"
     mcp_dir.mkdir(parents=True)
     (mcp_dir / "config.json").write_text("{}\n")
-    (mcp_dir / "README.md").write_text(
-        "---\n"
+    (tmp_path / "mcps" / "context7.toolkit.yaml").write_text(
         "apiVersion: agent-toolkit/v1alpha2\n"
         "metadata:\n"
         "  name: context7\n"
@@ -152,7 +149,6 @@ def test_validator_mcp_with_spec_mcp_passes(tmp_path):
         "  mcp:\n"
         "    transport: stdio\n"
         "    install_method: npx\n"
-        "---\n"
     )
     asset = Asset(kind="mcp", slug="context7", path=mcp_dir / "config.json")
     v = Validator(toolkit_root=tmp_path)

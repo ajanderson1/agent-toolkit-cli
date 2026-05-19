@@ -291,8 +291,7 @@ def test_link_per_asset_mcp_pi_skips_loudly(env, tmp_path):
     mcp_dir = toolkit / "mcps" / "context7"
     mcp_dir.mkdir(parents=True)
     (mcp_dir / "config.json").write_text('{"type":"stdio","command":"npx"}\n')
-    (mcp_dir / "README.md").write_text(
-        "---\n"
+    (toolkit / "mcps" / "context7.toolkit.yaml").write_text(
         "apiVersion: agent-toolkit/v1alpha2\n"
         "metadata:\n"
         "  name: context7\n"
@@ -307,7 +306,6 @@ def test_link_per_asset_mcp_pi_skips_loudly(env, tmp_path):
         "  mcp:\n"
         "    transport: stdio\n"
         "    install_method: npx\n"
-        "---\n"
     )
 
     project = tmp_path / "project"
@@ -341,8 +339,7 @@ def test_link_per_asset_mcp_codex_dispatches_to_adapter(env, tmp_path):
     (mcp_dir / "config.json").write_text(
         '{"type":"stdio","command":"npx","args":["-y","@upstash/context7-mcp"]}\n'
     )
-    (mcp_dir / "README.md").write_text(
-        "---\n"
+    (toolkit / "mcps" / "context7.toolkit.yaml").write_text(
         "apiVersion: agent-toolkit/v1alpha2\n"
         "metadata:\n"
         "  name: context7\n"
@@ -357,7 +354,6 @@ def test_link_per_asset_mcp_codex_dispatches_to_adapter(env, tmp_path):
         "  mcp:\n"
         "    transport: stdio\n"
         "    install_method: npx\n"
-        "---\n"
     )
 
     runner = CliRunner()

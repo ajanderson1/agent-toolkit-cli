@@ -40,12 +40,12 @@ def tui_env(tmp_path, monkeypatch):
     (mcp_dir / "config.json").write_text(
         '{"type":"stdio","command":"npx","args":["-y","@upstash/context7-mcp"]}\n'
     )
-    (mcp_dir / "README.md").write_text(
-        "---\napiVersion: agent-toolkit/v1alpha2\n"
+    (toolkit / "mcps" / "context7.toolkit.yaml").write_text(
+        "apiVersion: agent-toolkit/v1alpha2\n"
         "metadata:\n  name: context7\n  description: c.\n  lifecycle: stable\n"
         "spec:\n  origin: third-party\n  vendored_via: none\n"
         "  upstream: https://example.com\n  harnesses:\n    - codex\n"
-        "  mcp:\n    transport: stdio\n    install_method: npx\n---\n"
+        "  mcp:\n    transport: stdio\n    install_method: npx\n"
     )
 
     project = tmp_path / "project"
