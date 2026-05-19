@@ -100,3 +100,37 @@ DataTable > .datatable--cursor {
     background: $panel;
     padding: 0 2;
 }
+
+/* Scope toggle — paired toggle between project and user, replaces old
+   Rich [@click=...] chip markup. Both options share padding + border;
+   only background/foreground distinguishes active from inactive. */
+ScopeToggle {
+    height: 1;
+    width: auto;
+    margin: 0 0 0 2;
+}
+
+ScopeToggle Label.scope-toggle-label {
+    color: $text-muted;
+    margin: 0 1 0 0;
+}
+
+ScopeToggle Label.scope-option {
+    padding: 0 1;
+    margin: 0;
+    background: $surface;
+    color: $text;
+    border-left: vkey $primary-darken-2;
+}
+
+ScopeToggle Label.scope-option.-active {
+    background: $accent;
+    color: $background;
+    text-style: bold;
+}
+
+ScopeToggle Label.scope-option.-inactive {
+    background: $surface;
+    color: $text;
+    text-style: none;
+}
