@@ -22,24 +22,26 @@ from agent_toolkit_cli.harness_adapters.base import (
     UnimplementedAdapter,
     WriteAction,
 )
-from agent_toolkit_cli.walker import extract_frontmatter
+from agent_toolkit_cli.walker import extract_metadata, frontmatter_path
 
 
 def _build_mcp_entries(toolkit_root: Path, slugs: Iterable[str]) -> list[McpEntry]:
     """Resolve a list of slugs to McpEntry instances.
 
-    Skips slugs whose `mcps/<slug>/{config.json, README.md}` are not both present.
+    Skips slugs whose `mcps/<slug>/config.json` is absent.
+    Metadata is read via frontmatter_path() so both inline README.md frontmatter
+    and bare-YAML sidecars (*.toolkit.yaml) are supported.
     Returns entries in the order slugs were requested (skipped slugs simply absent).
     """
     entries: list[McpEntry] = []
     for slug in slugs:
         mcp_dir = toolkit_root / "mcps" / slug
         config_path = mcp_dir / "config.json"
-        readme_path = mcp_dir / "README.md"
-        if not config_path.is_file() or not readme_path.is_file():
+        if not config_path.is_file():
             continue
         inner = json.loads(config_path.read_text(encoding="utf-8"))
-        fm = extract_frontmatter(readme_path) or {}
+        fm_path = frontmatter_path(config_path, "mcp")
+        fm = (extract_metadata(fm_path) if fm_path.is_file() else None) or {}
         mcp_spec = ((fm.get("spec") or {}).get("mcp")) or {}
         entries.append(McpEntry(name=slug, inner_config=inner, mcp_spec=mcp_spec))
     return entries

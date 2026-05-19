@@ -78,6 +78,21 @@ git commit -m "chore(schema): sync vendored copy with toolkit repo"
 
 The pre-commit `schema-vendor-check` hook (lefthook) blocks any commit where the two vendored copies (`schemas/` and `src/agent_toolkit_cli/_schemas/`) diverge. There is no separate CI workflow that diffs against the toolkit-repo SSOT — that would require cross-repo read access, which the repo doesn't currently provide. Instead, the human running this procedure verifies the sync at copy time.
 
+## Asset identity
+
+- **Slug equality** — `metadata.name` MUST equal the on-disk slug.
+- **One asset, one metadata location.** Every asset carries metadata in
+  exactly one place:
+  - **skill** — sidecar `skills/<slug>.toolkit.yaml` (preferred) OR inline
+    frontmatter in `skills/<slug>/SKILL.md` (legacy). Never both.
+  - **mcp** — sidecar `mcps/<slug>.toolkit.yaml` (post-PR-3, the only form).
+  - **agent**, **command** — inline frontmatter in `<slug>.md`.
+  - **hook**, **pi-extension** — dedicated `.meta.yaml` sidecar.
+  - **plugin** — inline `agent_toolkit_cli` JSON key in `plugin.json`.
+- **Mutex rule** — if both sidecar AND inline metadata exist for the same
+  slug, `agent-toolkit-cli check` exits 2. Lefthook pre-commit blocks the
+  commit until one is removed.
+
 ## Adding a new harness / asset kind / CLI subcommand
 
 See the spec at `docs/superpowers/specs/2026-05-03-agent-toolkit-cli-tui-split-design.md` in the toolkit repo for the layered contract and extension seams. (The spec was written there during the split; future docs may move here.)

@@ -55,14 +55,16 @@ def test_third_party_requires_upstream():
     jsonschema.validate(data, schema)
 
 
-def test_submodule_requires_fork():
+def test_submodule_fork_is_optional():
+    """spec.fork is optional under vendored_via=submodule (unpatched upstreams need no fork)."""
     schema = _load_schema()
     data = _base()
     data["spec"]["origin"] = "third-party"
     data["spec"]["upstream"] = "https://example.com/repo"
     data["spec"]["vendored_via"] = "submodule"
-    with pytest.raises(jsonschema.ValidationError):
-        jsonschema.validate(data, schema)
+    # submodule without fork must now be valid
+    jsonschema.validate(data, schema)
+    # submodule with fork must also remain valid
     data["spec"]["fork"] = "https://github.com/ajanderson1/repo"
     jsonschema.validate(data, schema)
 

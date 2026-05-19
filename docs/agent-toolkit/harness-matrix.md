@@ -59,6 +59,14 @@ human readers can trace any cache file back to its source asset.
 
 `unlink` removes both the slot symlink and its cache file together.
 
+### Sidecar metadata vs projection mechanisms
+
+The mechanisms above describe how an asset is **projected** into a harness
+(symlink, translate, config_file, etc.). The asset's **metadata location**
+(inline frontmatter vs sidecar `<slug>.toolkit.yaml`) is an orthogonal
+concern handled at discovery time — see `cli.md` "Sidecar metadata."
+The matrix cells are identical regardless of where the metadata lives.
+
 ## Matrix
 
 | Kind \\ Harness | Claude | Codex | OpenCode | Gemini | Pi |

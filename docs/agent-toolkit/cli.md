@@ -529,6 +529,7 @@ Run environment, harness, and asset health checks.
 
 ```
 Usage: uv run agent-toolkit-cli doctor [SLUG] [--group GROUP] [--harness H] [--scope S] [--verbose]
+       uv run agent-toolkit-cli doctor --fix [--dry-run] [--yes]
 ```
 
 | Argument | Description |
@@ -543,6 +544,9 @@ Usage: uv run agent-toolkit-cli doctor [SLUG] [--group GROUP] [--harness H] [--s
 | `--scope <scope>` | Scope for mcps group (default: `user`; one of `user`, `project`) |
 | `--verbose` | Expand each group's evidence |
 | `--exit-code` | Exit with code 1 if any group fails (default: always exit 0) |
+| `--fix` | Apply mechanical autofixes for sidecar-related issues (see below) |
+| `--dry-run` | Report what `--fix` would change without writing |
+| `--yes` | Skip per-finding prompts under `--fix` |
 
 Verifies toolkit setup (schema, AGENTS.md, git, gh, submodules), asset conventions,
 symlink integrity, and MCP installation state. The `mcps` group reports:
@@ -553,6 +557,23 @@ symlink integrity, and MCP installation state. The `mcps` group reports:
 
 The `mcps` group skips silently with an OK status if the harness has no adapter yet
 (e.g. claude, opencode, pi await follow-up PRs).
+
+### `doctor --fix [--dry-run] [--yes]`
+
+Apply mechanical autofixes for sidecar-related issues:
+
+- **Mutex violation** (both sidecar AND inline for same slug) — favour
+  sidecar by default; strip inline frontmatter from the body file. Refuses
+  to edit files inside submodule paths.
+- **Orphan sidecar** (sidecar exists, body directory does not) — refuses
+  to autofix; surfaces the path so the operator can decide.
+- **Orphan body** (body exists with no metadata anywhere) — emits a stub
+  `<slug>.toolkit.yaml` for the operator to complete.
+
+`--dry-run` reports what would change without writing. `--yes` no-prompts.
+
+In PR 1, only `--dry-run` is functional; the actual write path activates
+in PR 3 (after MCP migration is complete in the content repo).
 
 **Examples:**
 ```bash
@@ -567,6 +588,12 @@ uv run agent-toolkit-cli doctor context7
 
 # Verbose output:
 uv run agent-toolkit-cli doctor --group mcps --verbose
+
+# Show what --fix would change (dry run):
+uv run agent-toolkit-cli doctor --fix --dry-run
+
+# Apply autofixes without prompts:
+uv run agent-toolkit-cli doctor --fix --yes
 ```
 
 > _Header & summary go to stderr; suppress with `--quiet` or `AGENT_TOOLKIT_QUIET=1`._
@@ -575,10 +602,17 @@ uv run agent-toolkit-cli doctor --group mcps --verbose
 
 ## new
 
-Scaffold a new asset with valid v1alpha2 frontmatter.
+### `new <kind> <slug> [--inline]`
+
+Scaffold a new asset. For `skill` and `mcp`, the default creates two
+files: a body without frontmatter, and a `<slug>.toolkit.yaml` sidecar.
+Pass `--inline` to create a single file with inline frontmatter instead.
+
+For `agent`, `command`, `hook`, `plugin`, and `pi-extension`, the
+existing single-file shape is used regardless of the `--inline` flag.
 
 ```
-Usage: uv run agent-toolkit-cli new <kind> <slug>
+Usage: uv run agent-toolkit-cli new <kind> <slug> [--inline]
 ```
 
 | Argument | Description |
@@ -586,17 +620,21 @@ Usage: uv run agent-toolkit-cli new <kind> <slug>
 | `kind` | One of: `skill`, `agent`, `command`, `hook`, `mcp`, `plugin`, `pi-extension` |
 | `slug` | Lowercase kebab-case name matching `^[a-z0-9][a-z0-9-]*$` |
 
+| Flag | Description |
+|---|---|
+| `--inline` | For `skill` and `mcp`: create a single file with inline frontmatter instead of the default sidecar form |
+
 Creates the asset at its canonical path with `lifecycle: experimental`, a TODO description
 placeholder, and `spec.harnesses: [claude]` (`[pi]` for `pi-extension`). Edit the
 description and harnesses, then run `check` before committing.
 
-| Kind | Scaffolded path |
+| Kind | Scaffolded path (default) |
 |---|---|
-| `skill` | `skills/<slug>/SKILL.md` |
+| `skill` | `skills/<slug>/SKILL.md` + `skills/<slug>.toolkit.yaml` |
 | `agent` | `agents/<slug>.md` |
 | `command` | `commands/<slug>.md` |
 | `hook` | `hooks/<slug>.meta.yaml` |
-| `mcp` | `mcps/<slug>/mcp.json` |
+| `mcp` | `mcps/<slug>/mcp.json` + `mcps/<slug>.toolkit.yaml` |
 | `plugin` | `plugins/<slug>/marketplace.json` |
 | `pi-extension` | `extensions/<slug>/extension.meta.yaml` |
 
@@ -604,10 +642,60 @@ description and harnesses, then run `check` before committing.
 ```bash
 uv run agent-toolkit-cli new skill my-research-skill
 $EDITOR skills/my-research-skill/SKILL.md
+$EDITOR skills/my-research-skill.toolkit.yaml
 uv run agent-toolkit-cli check
 ```
 
 > _Header & summary go to stderr; suppress with `--quiet` or `AGENT_TOOLKIT_QUIET=1`._
+
+---
+
+## Sidecar metadata
+
+Skill and MCP assets can declare their toolkit metadata in one of two
+locations:
+
+- **Sidecar (preferred for new assets):** A sibling YAML file named
+  `<slug>.toolkit.yaml`, living next to the asset directory:
+
+  ```
+  skills/
+    deep-research/                  ← body (may be a submodule)
+      SKILL.md
+    deep-research.toolkit.yaml      ← sidecar (this repo)
+  ```
+
+- **Inline (legacy):** YAML frontmatter at the top of the body file
+  (`SKILL.md` for skills; `README.md` for pre-migration MCPs).
+
+The sidecar form exists so that **submoduled or vendored upstream content
+can be ingested without modifying upstream files**. The body stays exactly
+as upstream published it; the toolkit's `apiVersion`/`metadata`/`spec`
+block lives in the sidecar.
+
+### Choosing a form
+
+- **Use sidecar** for any asset whose body is third-party (submoduled,
+  cloned from upstream, or vendored verbatim).
+- **Use inline** when authoring a self-contained first-party skill that
+  doesn't need to track an upstream — fewer files, full colocation.
+- New assets default to sidecar via `agent-toolkit-cli new`. Pass
+  `--inline` to opt back to single-file authoring.
+
+### Mutex rule
+
+Both sidecar and inline metadata for the same slug is an error.
+`agent-toolkit-cli check` exits 2; the lefthook gate blocks the commit.
+The fix:
+
+```
+agent-toolkit-cli doctor --fix --dry-run    # show what would change
+agent-toolkit-cli doctor --fix --yes        # apply: favour sidecar
+```
+
+The `--yes` mode always prefers the sidecar (consistent with the
+sidecar-as-preferred-form policy). Without `--yes`, doctor prompts
+per finding.
 
 ---
 

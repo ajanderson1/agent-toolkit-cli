@@ -8,6 +8,7 @@ import click
 from agent_toolkit_cli._repo_resolution import RepoNotFoundError, resolve_toolkit_root
 from agent_toolkit_cli._support import ALL_HARNESSES
 from agent_toolkit_cli._ui import header, summary
+from agent_toolkit_cli.doctor.autofix import find_fixables
 from agent_toolkit_cli.doctor import (
     allowlist_audit as g_allowlist_audit,
     conventions as g_conventions,
@@ -15,6 +16,7 @@ from agent_toolkit_cli.doctor import (
     environment as g_environment,
     frontmatter as g_frontmatter,
     harness_homes as g_harness_homes,
+    orphans as g_orphans,
     pi_advisories as g_pi_advisories,
     submodules as g_submodules,
     symlinks as g_symlinks,
@@ -26,7 +28,7 @@ from agent_toolkit_cli.doctor.result import GroupResult, Status
 _GROUPS = (
     "environment", "symlink-integrity", "conventions", "submodule-health",
     "frontmatter", "duplicates", "harness-homes", "allowlist-audit", "mcps",
-    "user-scope-coverage", "pi-advisories",
+    "user-scope-coverage", "orphans", "pi-advisories",
 )
 
 
@@ -45,6 +47,9 @@ _GROUPS = (
 @click.option("--scope", type=click.Choice(["user", "project"]), default="user")
 @click.option("--exit-code", "use_exit_code", is_flag=True)
 @click.option("--deep", is_flag=True, help="Reserved for future behavioural probes.")
+@click.option("--fix", is_flag=True, help="Apply mechanical autofixes (writes!).")
+@click.option("--dry-run", is_flag=True, help="With --fix: show what would change; do not write.")
+@click.option("--yes", is_flag=True, help="With --fix: no prompts; favour sidecar on mutex.")
 @click.pass_context
 def doctor(
     ctx: click.Context,
@@ -56,6 +61,9 @@ def doctor(
     scope: str,
     use_exit_code: bool,
     deep: bool,
+    fix: bool,
+    dry_run: bool,
+    yes: bool,
 ) -> None:
     """Five-group health check for the toolkit. Pass a slug for per-resource diagnosis."""
     if toolkit_root is None:
@@ -82,15 +90,30 @@ def doctor(
     for r in results:
         _print_result(r, verbose=verbose)
     worst = max((r.status for r in results), default=Status.OK)
-    counts = {Status.OK: 0, Status.WARN: 0, Status.FAIL: 0}
+    counts = {Status.ADVISORY: 0, Status.OK: 0, Status.WARN: 0, Status.FAIL: 0}
     for r in results:
         counts[r.status] += 1
     summary(
-        f"{counts[Status.OK]} OK, {counts[Status.WARN]} WARN, {counts[Status.FAIL]} FAIL. "
+        f"{counts[Status.OK]} OK, {counts[Status.WARN]} WARN, {counts[Status.FAIL]} FAIL, "
+        f"{counts[Status.ADVISORY]} INFO. "
         f"Worst: {worst.label()}."
     )
     if use_exit_code and worst == Status.FAIL:
         raise SystemExit(1)
+
+    if fix:
+        header("Autofix")
+        fixables = find_fixables(toolkit_root)
+        if not fixables:
+            click.echo("Nothing to fix.")
+        else:
+            for item in fixables:
+                click.echo(f"  [{item.kind}/{item.slug}] {item.action}")
+            if not dry_run:
+                click.echo(
+                    "\nPR 1 ships dry-run only. Apply path activates in PR 3.",
+                    err=True,
+                )
 
 
 def _run_global(
@@ -108,6 +131,7 @@ def _run_global(
         ("allowlist-audit", lambda: g_allowlist_audit.run(root, project_root=Path.cwd())),
         ("mcps", lambda: g_mcps.run(root, harness=harness, scope=scope, project_root=Path.cwd())),
         ("user-scope-coverage", lambda: g_user_scope_coverage.run(root, project_root=Path.cwd())),
+        ("orphans", lambda: g_orphans.run(root)),
         ("pi-advisories", lambda: g_pi_advisories.run(home=Path.home(), project_root=Path.cwd())),
     ]
     if group_name:
