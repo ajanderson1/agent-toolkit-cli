@@ -152,3 +152,89 @@ def test_apiversion_must_be_v1alpha2():
     data["apiVersion"] = "agent-toolkit/v2"
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate(data, schema)
+
+
+def _validate_collect(data, schema):
+    """Collect all validation errors as a list (empty list == valid)."""
+    validator = jsonschema.Draft202012Validator(schema)
+    return [e.message for e in validator.iter_errors(data)]
+
+
+def test_plugin_sidecar_validates():
+    """A well-formed plugin sidecar passes schema validation."""
+    schema = _load_schema()
+    doc = {
+        "apiVersion": "agent-toolkit/v1alpha2",
+        "metadata": {
+            "name": "superpowers",
+            "description": "TDD, debugging, brainstorming, plan-writing.",
+            "kind": "plugin",
+            "lifecycle": "stable",
+        },
+        "spec": {
+            "origin": "third-party",
+            "upstream": "https://github.com/anthropics/claude-plugins-official",
+            "vendored_via": "none",
+            "harnesses": ["claude"],
+            "source": {
+                "marketplace": "claude-plugins-official",
+                "marketplaceSource": {
+                    "source": "git",
+                    "url": "https://github.com/anthropics/claude-plugins-official.git",
+                },
+                "plugin": "superpowers",
+                "version": "latest",
+            },
+        },
+    }
+    errors = _validate_collect(doc, schema)
+    assert errors == [], errors
+
+
+def test_plugin_sidecar_requires_source():
+    """A plugin sidecar without spec.source fails validation."""
+    schema = _load_schema()
+    doc = {
+        "apiVersion": "agent-toolkit/v1alpha2",
+        "metadata": {
+            "name": "superpowers",
+            "description": "Missing source.",
+            "kind": "plugin",
+            "lifecycle": "stable",
+        },
+        "spec": {
+            "origin": "third-party",
+            "upstream": "https://github.com/anthropics/claude-plugins-official",
+            "vendored_via": "none",
+            "harnesses": ["claude"],
+        },
+    }
+    errors = _validate_collect(doc, schema)
+    assert errors, "expected at least one error about missing spec.source"
+
+
+def test_plugin_sidecar_harnesses_must_be_claude_only():
+    """spec.harnesses must include claude and nothing else for plugin kind."""
+    schema = _load_schema()
+    doc = {
+        "apiVersion": "agent-toolkit/v1alpha2",
+        "metadata": {
+            "name": "x",
+            "description": "Wrong harnesses.",
+            "kind": "plugin",
+            "lifecycle": "stable",
+        },
+        "spec": {
+            "origin": "first-party",
+            "vendored_via": "none",
+            "harnesses": ["claude", "codex"],
+            "source": {
+                "marketplace": "m",
+                "marketplaceSource": {"source": "git", "url": "https://example.com/m.git"},
+                "plugin": "x",
+                "version": "latest",
+            },
+        },
+    }
+    errors = _validate_collect(doc, schema)
+    assert errors, "expected error: plugin harnesses must equal [claude]"
