@@ -76,6 +76,11 @@ _CACHE_LAYOUT: dict[str, dict[str, tuple[str, ...]]] = {
         "user":    (".gemini", CACHE_DIR_NAME),
         "project": (".gemini", CACHE_DIR_NAME),
     },
+    "pi": {
+        # Pi's globalBaseDir is ~/.pi/agent; cache lives alongside other pi dirs.
+        "user":    (".pi", "agent", CACHE_DIR_NAME),
+        "project": (".pi", CACHE_DIR_NAME),
+    },
 }
 
 

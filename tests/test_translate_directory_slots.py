@@ -76,7 +76,7 @@ def test_scope_cache_root_preserves_opencode(tmp_path, monkeypatch):
 
 def test_scope_cache_root_unknown_harness_raises(tmp_path):
     with pytest.raises(ValueError):
-        _scope_cache_root("pi", "user", project_root=tmp_path)
+        _scope_cache_root("unknown-harness", "user", project_root=tmp_path)
 
 
 # ---------------------------------------------------------------------------
@@ -103,6 +103,33 @@ def test_render_to_cache_codex_skill_returns_directory_slot_target(
     assert cache_path == expected_cache_root / "skill" / "demo-skill" / "SKILL.md"
     assert slot_target == cache_path.parent
     assert cache_path.is_file()
+    assert b"description: demo-skill skill." in rendered
+
+
+def test_render_to_cache_pi_skill_returns_directory_slot_target(
+    tmp_path, monkeypatch, seed_toolkit, seed_skill,
+):
+    """Pi skills translate through the real `_translate_pi_skill` and land in
+    the pi per-scope cache as a directory slot. Sanity-check the layout end-
+    to-end on a legacy-inline fixture (no sidecar) so the harness_description
+    fallback through to v1alpha2 metadata.description is exercised."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    toolkit = seed_toolkit(tmp_path)
+    skill_dir = seed_skill(toolkit, "demo-skill", ["pi"])
+    asset_path = skill_dir / "SKILL.md"
+
+    cache_path, slot_target, rendered = _render_to_cache(
+        harness="pi", kind="skill", slug="demo-skill",
+        asset_path=asset_path, scope="user",
+        project_root=Path("/unused-for-user-scope"),
+        dry_run=False,
+    )
+
+    expected_cache_root = tmp_path / "home" / ".pi" / "agent" / ".agent-toolkit-cache"
+    assert cache_path == expected_cache_root / "skill" / "demo-skill" / "SKILL.md"
+    assert slot_target == cache_path.parent
+    assert cache_path.is_file()
+    assert b"name: demo-skill" in rendered
     assert b"description: demo-skill skill." in rendered
 
 

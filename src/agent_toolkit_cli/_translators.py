@@ -77,7 +77,7 @@ def _translate_codex_skill(record: AssetRecord, body: str) -> bytes:
     against codex 0.128.0: extra top-level keys are tolerated.
     """
     fm = {
-        "description": _description(record),
+        "description": record.harness_description or _description(record),
         "agent_toolkit_cli": _wrapper_block(record),
     }
     return _render(fm, body)
@@ -94,10 +94,34 @@ def _translate_opencode_skill(record: AssetRecord, body: str) -> bytes:
     wrapper (no top-level name/description) are silently dropped.
     """
     fm = {
-        "name": _name(record),
-        "description": _description(record),
+        "name": record.asset.slug,
+        "description": record.harness_description or _description(record),
         "agent_toolkit_cli": _wrapper_block(record),
     }
+    return _render(fm, body)
+
+
+def _translate_pi_skill(record: AssetRecord, body: str) -> bytes:
+    """Pi skills require `description:` at the YAML top level (per the
+    `pi demands` error `description is required`). Optionally accepts
+    `argument-hint:` for arg-aware skills; that field is sourced from
+    `spec.per_harness.pi.argument_hint` if present on the sidecar.
+
+    Output mirrors `_translate_opencode_skill`: top-level `name`,
+    `description`, optional `argument-hint`, plus the `agent_toolkit_cli`
+    wrapper for round-trip traceability.
+    """
+    description = record.harness_description or _description(record)
+    # record.metadata is the sidecar's parsed YAML for new-shape skills
+    # (walker.load_asset_record routes the v1alpha2 wrapper through here).
+    pi_extras = ((record.metadata.get("spec") or {}).get("per_harness") or {}).get("pi") or {}
+    fm: dict = {
+        "name": record.asset.slug,
+        "description": description,
+    }
+    if "argument_hint" in pi_extras:
+        fm["argument-hint"] = pi_extras["argument_hint"]
+    fm["agent_toolkit_cli"] = _wrapper_block(record)
     return _render(fm, body)
 
 
@@ -241,6 +265,7 @@ TRANSLATORS: dict[tuple[str, str], Callable[[AssetRecord, str], bytes]] = {
     ("codex", "agent"): _translate_codex_agent,
     ("codex", "skill"): _translate_codex_skill,
     ("opencode", "skill"): _translate_opencode_skill,
+    ("pi", "skill"): _translate_pi_skill,
     ("gemini", "command"): _translate_gemini_command,
     ("gemini", "agent"): _translate_gemini_agent,
 }

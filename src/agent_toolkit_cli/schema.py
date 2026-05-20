@@ -8,7 +8,7 @@ from pathlib import Path
 import jsonschema
 import yaml
 
-from agent_toolkit_cli.walker import Asset, extract_metadata, frontmatter_path
+from agent_toolkit_cli.walker import Asset, extract_frontmatter, extract_metadata, frontmatter_path
 
 
 class Validator:
@@ -55,6 +55,65 @@ class Validator:
             errors.append(
                 f"{asset.path}: slug mismatch — metadata.name={name!r} but path slug is {asset.slug!r}"
             )
+
+        # Skill-shape rules (new shape only — legacy inline skills are tolerated
+        # during the one-release window and surfaced via doctor advisory).
+        if asset.kind == "skill":
+            errors.extend(self._validate_skill_shape(asset, data))
+
+        return errors
+
+    def _validate_skill_shape(self, asset: Asset, sidecar_data: dict) -> list[str]:
+        """Cross-file skill-shape validation.
+
+        - SKILL.md must have top-level name + description.
+        - SKILL.md description must end with a period.
+        - SKILL.md name must equal asset slug.
+        - Sidecar metadata.description period rule is enforced by JSON Schema.
+
+        Legacy inline skills (no sidecar; v1alpha2 wrapper inside SKILL.md) are
+        detected by the absence of a sidecar file and return [] — they're tolerated
+        during the one-release tolerance window. Doctor surfaces an advisory.
+        """
+        errors: list[str] = []
+        sidecar = self.toolkit_root / "skills" / f"{asset.slug}.toolkit.yaml"
+        if not sidecar.is_file():
+            # Legacy inline shape — tolerated, doctor handles the advisory.
+            return errors
+
+        # New-shape skill: SKILL.md must have its own top-level frontmatter.
+        skill_md_fm = extract_frontmatter(asset.path)
+        if not skill_md_fm:
+            errors.append(
+                f"{asset.path}: SKILL.md is missing top-level frontmatter "
+                f"(required for sidecar-shape skills)"
+            )
+            return errors
+
+        name = skill_md_fm.get("name")
+        description = skill_md_fm.get("description")
+
+        if not name:
+            errors.append(f"{asset.path}: SKILL.md missing top-level `name`")
+        elif name != asset.slug:
+            errors.append(
+                f"{asset.path}: SKILL.md name={name!r} does not match slug {asset.slug!r}"
+            )
+
+        if not description:
+            errors.append(f"{asset.path}: SKILL.md missing top-level `description`")
+        elif not description.endswith("."):
+            errors.append(
+                f"{asset.path}: SKILL.md description must end with a period "
+                f"(got {description!r})"
+            )
+
+        sidecar_name = (sidecar_data.get("metadata") or {}).get("name")
+        if sidecar_name and name and sidecar_name != name:
+            errors.append(
+                f"{asset.path}: SKILL.md name={name!r} != sidecar metadata.name={sidecar_name!r}"
+            )
+
         return errors
 
     def _load_metadata(self, asset: Asset) -> dict | None:
