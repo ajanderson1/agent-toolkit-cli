@@ -325,19 +325,111 @@ def test_symlinks_group_fails_when_command_slot_replaced_by_dir(tmp_path, monkey
     ), result.findings
 
 
-def test_symlinks_group_fails_when_plugin_slot_replaced_by_dir(tmp_path, monkeypatch):
-    """Regression: doctor must report FAIL when a plugin symlink is replaced
-    by a real directory (#121)."""
+# NOTE: `test_symlinks_group_fails_when_plugin_slot_replaced_by_dir` was
+# removed as part of #149 Task 8. Plugins are no longer symlinks under
+# `~/.claude/plugins/<slug>/` — Claude Code (v2.0.13+) discovers them via
+# `installed_plugins.json` + `known_marketplaces.json` and clones into
+# `~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/` on first start.
+# The "symlink replaced by directory" scenario no longer applies. The new
+# adapter-driven checks below replace that regression coverage.
+
+
+def _seed_plugin_sidecar(toolkit_root, slug, marketplace, plugin, version="latest"):
+    """Write a v1alpha2 plugin sidecar at plugins/<slug>.toolkit.yaml."""
+    import yaml
+    plugins_dir = toolkit_root / "plugins"
+    plugins_dir.mkdir(parents=True, exist_ok=True)
+    sidecar = plugins_dir / f"{slug}.toolkit.yaml"
+    sidecar.write_text(yaml.safe_dump({
+        "apiVersion": "agent-toolkit/v1alpha2",
+        "metadata": {"name": slug, "lifecycle": "stable"},
+        "spec": {
+            "origin": "first-party",
+            "vendored_via": "none",
+            "harnesses": ["claude"],
+            "source": {
+                "marketplace": marketplace,
+                "marketplaceSource": {
+                    "source": "git",
+                    "url": f"https://example.invalid/{marketplace}.git",
+                },
+                "plugin": plugin,
+                "version": version,
+            },
+        },
+    }))
+
+
+def _seed_user_allowlist_plugins(fake_home, slugs):
+    """Write ~/.agent-toolkit.yaml with the given plugin slugs allow-listed."""
+    import yaml
+    fake_home.mkdir(parents=True, exist_ok=True)
+    (fake_home / ".agent-toolkit.yaml").write_text(
+        yaml.safe_dump({"plugins": list(slugs)})
+    )
+
+
+def _seed_installed_plugins_json(fake_home, key, version="latest"):
+    """Write a minimal installed_plugins.json with one user-scope entry."""
+    import json
+    plugins_dir = fake_home / ".claude" / "plugins"
+    plugins_dir.mkdir(parents=True, exist_ok=True)
+    (plugins_dir / "installed_plugins.json").write_text(json.dumps({
+        "version": 2,
+        "plugins": {
+            key: [{"scope": "user", "version": version}],
+        },
+    }))
+
+
+def test_doctor_plugin_passes_when_entry_recorded_and_cache_exists(tmp_path, monkeypatch):
+    """Adapter check passes when installed_plugins.json has the entry AND
+    the cache directory exists."""
     from agent_toolkit_cli.doctor.symlinks import run as run_sl
-    _make_plugin_with_harnesses(tmp_path, "delta", ["claude"])
+    _seed_plugin_sidecar(tmp_path, "delta", "mkt", "plg", version="1.0.0")
     fake_home = tmp_path / "home"
-    plugin_slot = fake_home / ".claude" / "plugins" / "delta"
-    plugin_slot.mkdir(parents=True)  # real dir at the plugin slot
+    _seed_user_allowlist_plugins(fake_home, ["delta"])
+    _seed_installed_plugins_json(fake_home, "plg@mkt", version="1.0.0")
+    cache_dir = fake_home / ".claude" / "plugins" / "cache" / "mkt" / "plg" / "1.0.0"
+    cache_dir.mkdir(parents=True)
     monkeypatch.setenv("HOME", str(fake_home))
     result = run_sl(tmp_path, harness="claude")
-    assert result.status == Status.FAIL
+    assert result.status == Status.OK, result.findings
     assert any(
-        "delta" in f and "not a symlink" in f for f in result.findings
+        "delta" in f and "cache present" in f for f in result.findings
+    ), result.findings
+
+
+def test_doctor_plugin_warns_when_cache_missing(tmp_path, monkeypatch):
+    """Adapter check WARNs (does not FAIL) when entry recorded but cache
+    directory absent — Claude clones lazily on first start."""
+    from agent_toolkit_cli.doctor.symlinks import run as run_sl
+    _seed_plugin_sidecar(tmp_path, "delta", "mkt", "plg", version="1.0.0")
+    fake_home = tmp_path / "home"
+    _seed_user_allowlist_plugins(fake_home, ["delta"])
+    _seed_installed_plugins_json(fake_home, "plg@mkt", version="1.0.0")
+    # Deliberately omit cache dir.
+    monkeypatch.setenv("HOME", str(fake_home))
+    result = run_sl(tmp_path, harness="claude")
+    assert result.status == Status.WARN, result.findings
+    assert any(
+        "delta" in f and "cache" in f and "absent" in f for f in result.findings
+    ), result.findings
+
+
+def test_doctor_plugin_fails_when_entry_missing(tmp_path, monkeypatch):
+    """Adapter check FAILs when an allow-listed plugin has no entry in
+    installed_plugins.json (user forgot to run `link`, or it got nuked)."""
+    from agent_toolkit_cli.doctor.symlinks import run as run_sl
+    _seed_plugin_sidecar(tmp_path, "delta", "mkt", "plg", version="1.0.0")
+    fake_home = tmp_path / "home"
+    _seed_user_allowlist_plugins(fake_home, ["delta"])
+    # No installed_plugins.json at all.
+    monkeypatch.setenv("HOME", str(fake_home))
+    result = run_sl(tmp_path, harness="claude")
+    assert result.status == Status.FAIL, result.findings
+    assert any(
+        "delta" in f and "not recorded" in f for f in result.findings
     ), result.findings
 
 
