@@ -53,7 +53,7 @@ def migrate_skills(content_repo: Path, dry_run: bool) -> None:
         description = metadata.get("description", "")
         slug_from_fm = metadata.get("name", slug)
 
-        notes = metadata.get("notes") or ""
+        notes = str(metadata.get("notes") or "")
         notes_lines = notes.splitlines()
         arg_hint: str | None = None
         remaining_notes_lines: list[str] = []
@@ -80,7 +80,8 @@ def migrate_skills(content_repo: Path, dry_run: bool) -> None:
             arg_hint=arg_hint,
         )
 
-        click.echo(f"migrated skills/{slug}/ (added sidecar, rewrote SKILL.md frontmatter)")
+        verb = "would migrate" if dry_run else "migrated"
+        click.echo(f"{verb} skills/{slug}/ (sidecar + harness-only SKILL.md frontmatter)")
         if not dry_run:
             skill_md.write_text(new_skill_md, encoding="utf-8")
             sidecar.write_text(new_sidecar, encoding="utf-8")
