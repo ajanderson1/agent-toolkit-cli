@@ -74,10 +74,10 @@ spec:
   source:
     marketplace: claude-plugins-official
     marketplaceSource:
-      type: git           # git | github | directory
+      source: git         # git | github | directory  (matches Claude's on-disk key)
       url: https://github.com/anthropics/claude-plugins-official.git
-      # repo: anthropics/claude-plugins-official    # for type: github
-      # path: /absolute/path                         # for type: directory
+      # repo: anthropics/claude-plugins-official    # for source: github
+      # path: /absolute/path                         # for source: directory
     plugin: superpowers
     version: "latest"   # or a pinned semver string
 ```
@@ -108,10 +108,10 @@ new branch for `kind: plugin` sidecars. Required:
 - `metadata.description`
 - `spec.harnesses` containing `claude` (and only `claude`)
 - `spec.source.marketplace` (string, marketplace short name)
-- `spec.source.marketplaceSource` (object with `type` ∈ {git, github, directory})
-  - `type: git` requires `url`
-  - `type: github` requires `repo` (e.g. `org/name`)
-  - `type: directory` requires `path` (absolute)
+- `spec.source.marketplaceSource` (object with `source` key ∈ {git, github, directory} — matches Claude's on-disk shape verbatim, including the repeated `source` nesting)
+  - `source: git` requires `url`
+  - `source: github` requires `repo` (e.g. `org/name`)
+  - `source: directory` requires `path` (absolute)
 - `spec.source.plugin` (string, plugin name as known to the marketplace)
 - `spec.source.version` (string; `"latest"` or pinned semver — no semver enforcement in schema)
 
@@ -254,7 +254,7 @@ spec:
   source:
     marketplace: claude-plugins-official
     marketplaceSource:
-      type: git
+      source: git
       url: https://github.com/anthropics/claude-plugins-official.git
     plugin: superpowers
     version: "latest"

@@ -192,7 +192,7 @@ def test_plugin_sidecar_validates():
             "source": {
                 "marketplace": "claude-plugins-official",
                 "marketplaceSource": {
-                    "type": "git",
+                    "source": "git",
                     "url": "https://github.com/anthropics/claude-plugins-official.git",
                 },
                 "plugin": "superpowers",
@@ -243,7 +243,7 @@ def test_plugin_sidecar_harnesses_must_be_claude_only():
             "harnesses": ["claude", "codex"],
             "source": {
                 "marketplace": "m",
-                "marketplaceSource": {"type": "git", "url": "https://example.com/m.git"},
+                "marketplaceSource": {"source": "git", "url": "https://example.com/m.git"},
                 "plugin": "x",
                 "version": "latest",
             },
@@ -271,18 +271,18 @@ In **both** `schemas/asset-frontmatter.v1alpha2.json` and `src/agent_toolkit_cli
     "marketplace": { "type": "string", "minLength": 1 },
     "marketplaceSource": {
       "type": "object",
-      "required": ["type"],
+      "required": ["source"],
       "additionalProperties": false,
       "properties": {
-        "type":  { "enum": ["git", "github", "directory"] },
-        "url":   { "type": "string", "format": "uri" },
-        "repo":  { "type": "string", "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$" },
-        "path":  { "type": "string" }
+        "source": { "enum": ["git", "github", "directory"] },
+        "url":    { "type": "string", "format": "uri" },
+        "repo":   { "type": "string", "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$" },
+        "path":   { "type": "string" }
       },
       "allOf": [
-        { "if": { "properties": { "type": { "const": "git" } } },       "then": { "required": ["url"] } },
-        { "if": { "properties": { "type": { "const": "github" } } },    "then": { "required": ["repo"] } },
-        { "if": { "properties": { "type": { "const": "directory" } } }, "then": { "required": ["path"] } }
+        { "if": { "properties": { "source": { "const": "git" } } },       "then": { "required": ["url"] } },
+        { "if": { "properties": { "source": { "const": "github" } } },    "then": { "required": ["repo"] } },
+        { "if": { "properties": { "source": { "const": "directory" } } }, "then": { "required": ["path"] } }
       ]
     },
     "plugin":  { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
@@ -349,7 +349,7 @@ spec:
   source:
     marketplace: claude-plugins-official
     marketplaceSource:
-      type: git
+      source: git
       url: https://github.com/anthropics/claude-plugins-official.git
     plugin: superpowers
     version: latest
@@ -420,7 +420,7 @@ def test_walker_discovers_plugin_sidecar(tmp_path):
         "  harnesses: [claude]\n"
         "  source:\n"
         "    marketplace: m\n"
-        "    marketplaceSource: {type: git, url: https://example.com/m.git}\n"
+        "    marketplaceSource: {source: git, url: https://example.com/m.git}\n"
         "    plugin: superpowers\n"
         "    version: latest\n"
     )
@@ -571,7 +571,7 @@ def test_plugin_entry_carries_source_fields():
     entry = PluginEntry(
         name="superpowers",
         marketplace="claude-plugins-official",
-        marketplace_source={"type": "git", "url": "https://x.example/y.git"},
+        marketplace_source={"source": "git", "url": "https://x.example/y.git"},
         plugin="superpowers",
         version="latest",
     )
@@ -588,7 +588,7 @@ def test_plugin_entry_is_frozen():
     import dataclasses
     entry = PluginEntry(
         name="x", marketplace="m",
-        marketplace_source={"type": "git", "url": "https://x.example/m.git"},
+        marketplace_source={"source": "git", "url": "https://x.example/m.git"},
         plugin="x", version="latest",
     )
     import pytest
@@ -987,7 +987,7 @@ def test_diff_creates_both_files_on_first_install(tmp_path, monkeypatch):
     entry = PluginEntry(
         name="superpowers",
         marketplace="claude-plugins-official",
-        marketplace_source={"type": "git", "url": "https://github.com/anthropics/claude-plugins-official.git"},
+        marketplace_source={"source": "git", "url": "https://github.com/anthropics/claude-plugins-official.git"},
         plugin="superpowers",
         version="latest",
     )
@@ -1026,7 +1026,7 @@ def test_diff_is_idempotent(tmp_path, monkeypatch):
     entry = PluginEntry(
         name="superpowers",
         marketplace="claude-plugins-official",
-        marketplace_source={"type": "git", "url": "https://github.com/anthropics/claude-plugins-official.git"},
+        marketplace_source={"source": "git", "url": "https://github.com/anthropics/claude-plugins-official.git"},
         plugin="superpowers",
         version="latest",
     )
@@ -1102,7 +1102,7 @@ def test_diff_preserves_unrelated_sibling_entries(tmp_path, monkeypatch):
 
     entry = PluginEntry(
         name="superpowers", marketplace="claude-plugins-official",
-        marketplace_source={"type": "git", "url": "https://x.example/y.git"},
+        marketplace_source={"source": "git", "url": "https://x.example/y.git"},
         plugin="superpowers", version="latest",
     )
     actions = ClaudePluginAdapter().diff("user", tmp_path, [entry])
@@ -1156,7 +1156,7 @@ def test_diff_refuses_marketplace_name_collision(tmp_path, monkeypatch):
 
     entry = PluginEntry(
         name="superpowers", marketplace="claude-plugins-official",
-        marketplace_source={"type": "git", "url": "https://github.com/anthropics/claude-plugins-official.git"},
+        marketplace_source={"source": "git", "url": "https://github.com/anthropics/claude-plugins-official.git"},
         plugin="superpowers", version="latest",
     )
     with pytest.raises(CannotInstall, match="already recorded with a different source"):
@@ -1199,13 +1199,13 @@ def test_pinned_version_forces_rewrite(tmp_path, monkeypatch):
     }, indent=2) + "\n")
     (plugins_dir / "known_marketplaces.json").write_text(json.dumps({
         "claude-plugins-official": {
-            "source": {"type": "git", "url": "https://github.com/anthropics/claude-plugins-official.git"},
+            "source": {"source": "git", "url": "https://github.com/anthropics/claude-plugins-official.git"},
         }
     }, indent=2) + "\n")
 
     entry = PluginEntry(
         name="superpowers", marketplace="claude-plugins-official",
-        marketplace_source={"type": "git", "url": "https://github.com/anthropics/claude-plugins-official.git"},
+        marketplace_source={"source": "git", "url": "https://github.com/anthropics/claude-plugins-official.git"},
         plugin="superpowers", version="6.0.0",  # pinned, drift from on-disk 5.1.0
     )
     actions = ClaudePluginAdapter().diff(
@@ -1242,12 +1242,12 @@ def test_latest_leaves_recorded_version_alone(tmp_path, monkeypatch):
         }
     }, indent=2) + "\n")
     (plugins_dir / "known_marketplaces.json").write_text(json.dumps({
-        "claude-plugins-official": {"source": {"type": "git", "url": "https://x/y.git"}}
+        "claude-plugins-official": {"source": {"source": "git", "url": "https://x/y.git"}}
     }, indent=2) + "\n")
 
     entry = PluginEntry(
         name="superpowers", marketplace="claude-plugins-official",
-        marketplace_source={"type": "git", "url": "https://x/y.git"},
+        marketplace_source={"source": "git", "url": "https://x/y.git"},
         plugin="superpowers", version="latest",
     )
     actions = ClaudePluginAdapter().diff(
@@ -1289,7 +1289,7 @@ def test_revert_drops_marketplace_when_unused(tmp_path, monkeypatch):
         }
     }, indent=2) + "\n")
     (plugins_dir / "known_marketplaces.json").write_text(json.dumps({
-        "cpo": {"source": {"type": "git", "url": "https://x/y.git"}}
+        "cpo": {"source": {"source": "git", "url": "https://x/y.git"}}
     }, indent=2) + "\n")
 
     # `previously_allowed` had the plugin; `entries` is empty (we removed it).
@@ -1322,12 +1322,12 @@ def test_revert_keeps_marketplace_when_shared(tmp_path, monkeypatch):
         }
     }, indent=2) + "\n")
     (plugins_dir / "known_marketplaces.json").write_text(json.dumps({
-        "cpo": {"source": {"type": "git", "url": "https://x/y.git"}}
+        "cpo": {"source": {"source": "git", "url": "https://x/y.git"}}
     }, indent=2) + "\n")
 
     keep = PluginEntry(
         name="compound", marketplace="cpo",
-        marketplace_source={"type": "git", "url": "https://x/y.git"},
+        marketplace_source={"source": "git", "url": "https://x/y.git"},
         plugin="compound", version="latest",
     )
     # previously_allowed = both; entries = only `compound` survives.
@@ -1524,7 +1524,7 @@ def test_link_unlink_cycle(fake_home, toolkit_repo):
     # Pre-existing sibling marketplace must survive.
     (fake_home / ".claude" / "plugins").mkdir(parents=True)
     (fake_home / ".claude" / "plugins" / "known_marketplaces.json").write_text(json.dumps({
-        "hand-rolled": {"source": {"type": "directory", "path": "/some/path"}},
+        "hand-rolled": {"source": {"source": "directory", "path": "/some/path"}},
     }, indent=2) + "\n")
 
     # link
@@ -1647,7 +1647,7 @@ def test_list_json_plugin_status_uses_adapter(tmp_path, monkeypatch):
         "plugins": {"superpowers@cpo": [{"scope": "user", "version": "latest"}]},
     }, indent=2) + "\n")
     (plugins_dir / "known_marketplaces.json").write_text(json.dumps({
-        "cpo": {"source": {"type": "git", "url": "https://x/y.git"}},
+        "cpo": {"source": {"source": "git", "url": "https://x/y.git"}},
     }, indent=2) + "\n")
 
     # ... build a synthetic asset + allowlist and invoke the list_json builder ...
