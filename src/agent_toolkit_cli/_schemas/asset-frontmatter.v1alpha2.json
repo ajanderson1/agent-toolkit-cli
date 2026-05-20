@@ -92,7 +92,8 @@
         },
         "per_harness": {
           "type": "object",
-          "additionalProperties": { "type": "object", "additionalProperties": true }
+          "additionalProperties": { "type": "object", "additionalProperties": true },
+          "propertyNames": { "enum": ["claude", "codex", "opencode", "gemini", "pi"] }
         }
       },
       "allOf": [

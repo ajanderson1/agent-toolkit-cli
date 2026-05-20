@@ -112,6 +112,8 @@ def _translate_pi_skill(record: AssetRecord, body: str) -> bytes:
     wrapper for round-trip traceability.
     """
     description = record.harness_description or _description(record)
+    # record.metadata is the sidecar's parsed YAML for new-shape skills
+    # (walker.load_asset_record routes the v1alpha2 wrapper through here).
     pi_extras = ((record.metadata.get("spec") or {}).get("per_harness") or {}).get("pi") or {}
     fm: dict = {
         "name": record.asset.slug,

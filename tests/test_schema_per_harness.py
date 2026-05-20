@@ -40,10 +40,14 @@ def test_per_harness_accepts_pi_argument_hint(schema):
     jsonschema.validate(doc, schema)
 
 
-def test_per_harness_accepts_unknown_harness_block(schema):
+def test_per_harness_rejects_unknown_harness_name(schema):
+    """Mirror the constraint on spec.requires: per_harness keys must be one
+    of the known harnesses. Catches typos (`codeX`) at validation time
+    rather than later when a translator silently ignores the block."""
     doc = _base_skill_doc()
-    doc["spec"]["per_harness"] = {"future_harness": {"any_key": "any_value"}}
-    jsonschema.validate(doc, schema)
+    doc["spec"]["per_harness"] = {"codeX": {"any_key": "any_value"}}
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(doc, schema)
 
 
 def test_per_harness_absent_is_valid(schema):

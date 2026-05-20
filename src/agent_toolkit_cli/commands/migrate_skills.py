@@ -53,6 +53,11 @@ def migrate_skills(content_repo: Path, dry_run: bool) -> None:
         description = metadata.get("description", "")
         slug_from_fm = metadata.get("name", slug)
 
+        # Best-effort heuristic: lift the first `argument-hint:` line from
+        # metadata.notes into spec.per_harness.pi.argument_hint. The legacy
+        # convention is to put it on a dedicated leading line; an
+        # `argument-hint:` substring appearing mid-paragraph could be
+        # misextracted, but no such usage exists in the content repo today.
         notes = str(metadata.get("notes") or "")
         notes_lines = notes.splitlines()
         arg_hint: str | None = None
@@ -66,8 +71,8 @@ def migrate_skills(content_repo: Path, dry_run: bool) -> None:
 
         new_skill_md = (
             "---\n"
-            f"name: {slug_from_fm}\n"
-            f"description: {description}\n"
+            f"name: {_yaml_scalar(slug_from_fm)}\n"
+            f"description: {_yaml_scalar(description)}\n"
             "---\n"
             + body
         )
@@ -94,6 +99,27 @@ def migrate_skills(content_repo: Path, dry_run: bool) -> None:
         click.echo(f"{migrated} migrated, {skipped} skipped{suffix}")
 
 
+def _yaml_scalar(value: object) -> str:
+    """Render a single string-like value safely as a YAML scalar.
+
+    PyYAML's safe_dump on a bare string emits a full YAML stream
+    (`--- value\\n...\\n`) — we want just the scalar representation. Trick:
+    dump a single-key dict and slice off the `k: ` prefix. This gets us
+    correct quoting/escaping for all the bad cases (colons, hashes,
+    YAML reserved words like `yes`/`no`/`null`, leading dashes, numerics-
+    as-strings, etc.) without doing the rules by hand.
+
+    The value is coerced to `str` defensively. Skills' name/description/
+    lifecycle/harness scalars are single-line by convention; embedded
+    newlines aren't supported by this helper.
+    """
+    out = yaml.safe_dump(
+        {"k": str(value)}, default_flow_style=False, allow_unicode=True
+    )
+    # Slice off the "k: " prefix and the trailing newline.
+    return out[len("k: ") :].rstrip("\n")
+
+
 def _render_sidecar(
     *,
     slug: str,
@@ -105,28 +131,30 @@ def _render_sidecar(
 ) -> str:
     """Render a sidecar via templated string assembly.
 
-    We don't use yaml.safe_dump because it drops the `# TODO shorten` comment.
-    The wrapper shape is small and known; the template is the source of truth.
+    We don't use yaml.safe_dump for the whole document because it drops the
+    `# TODO shorten` comment we need to surface to authors. Instead we
+    template the structure and route each user-supplied scalar through
+    `_yaml_scalar` for correct quoting/escaping.
     """
     lines: list[str] = []
     lines.append("apiVersion: agent-toolkit/v1alpha2")
     lines.append("metadata:")
-    lines.append(f"  name: {slug}")
-    lines.append(f"  description: {description}")
-    lines.append(f"  lifecycle: {lifecycle}")
+    lines.append(f"  name: {_yaml_scalar(slug)}")
+    lines.append(f"  description: {_yaml_scalar(description)}")
+    lines.append(f"  lifecycle: {_yaml_scalar(lifecycle)}")
     lines.append("  # TODO shorten — currently the same as SKILL.md description")
     if notes:
         lines.append("  notes: |")
         for nline in notes.splitlines():
             lines.append(f"    {nline}")
     lines.append("spec:")
-    lines.append(f"  origin: {spec.get('origin', 'first-party')}")
-    lines.append(f"  vendored_via: {spec.get('vendored_via', 'none')}")
+    lines.append(f"  origin: {_yaml_scalar(spec.get('origin', 'first-party'))}")
+    lines.append(f"  vendored_via: {_yaml_scalar(spec.get('vendored_via', 'none'))}")
     lines.append("  harnesses:")
     for h in spec.get("harnesses", []):
-        lines.append(f"    - {h}")
+        lines.append(f"    - {_yaml_scalar(h)}")
     if arg_hint is not None:
         lines.append("  per_harness:")
         lines.append("    pi:")
-        lines.append(f"      argument_hint: {arg_hint}")
+        lines.append(f"      argument_hint: {_yaml_scalar(arg_hint)}")
     return "\n".join(lines) + "\n"

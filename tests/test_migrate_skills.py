@@ -46,6 +46,46 @@ def test_real_run_uses_migrated_verb(tmp_path: Path):
     assert "would migrate" not in result.output, result.output
 
 
+def test_descriptions_with_yaml_unsafe_chars_round_trip(tmp_path: Path):
+    """A description containing `:`, `#`, or matching a YAML reserved word
+    must produce sidecar + SKILL.md that parse back to the same value.
+
+    Regression armor for the templated-string YAML emission: bare
+    f-string interpolation produces broken YAML for these inputs."""
+    import yaml as _yaml
+
+    repo = tmp_path / "repo"
+    skill_dir = repo / "skills" / "edgy"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        "---\n"
+        "apiVersion: agent-toolkit/v1alpha2\n"
+        "metadata:\n"
+        "  name: edgy\n"
+        '  description: "use foo: bar pattern with #hashtag."\n'
+        "  lifecycle: experimental\n"
+        "spec:\n"
+        "  origin: first-party\n"
+        "  vendored_via: none\n"
+        "  harnesses: [claude]\n"
+        "---\n\nBody.\n"
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["migrate-skills", "--content-repo", str(repo)])
+    assert result.exit_code == 0, result.output
+
+    # New SKILL.md must parse and round-trip the description value verbatim.
+    new_md_text = (repo / "skills" / "edgy" / "SKILL.md").read_text()
+    fm_yaml = new_md_text.split("---", 2)[1]
+    parsed = _yaml.safe_load(fm_yaml)
+    assert parsed["description"] == "use foo: bar pattern with #hashtag."
+
+    # Sidecar must also be valid YAML with the same description value.
+    sidecar_data = _yaml.safe_load((repo / "skills" / "edgy.toolkit.yaml").read_text())
+    assert sidecar_data["metadata"]["description"] == "use foo: bar pattern with #hashtag."
+
+
 def test_notes_with_non_string_value_does_not_crash(tmp_path: Path):
     """Defensive: a YAML `notes: 123` (integer) should not crash the
     splitlines() path. Fixture is hand-built rather than golden because
