@@ -49,4 +49,5 @@ class TestNewSkillSidecar:
         _setup_toolkit_root(tmp_path)
         result = _run_new(tmp_path, "skill", "bar", "--inline")
         assert result.returncode == 2, result.stderr
-        assert "inline" in result.stderr.lower() or "sidecar" in result.stderr.lower()
+        err = result.stderr.lower()
+        assert "inline" in err and "sidecar" in err, result.stderr

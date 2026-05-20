@@ -101,7 +101,7 @@ TODO body.
     "--inline",
     is_flag=True,
     default=False,
-    help="(skill/mcp only) Use inline frontmatter in the body file instead of a sidecar.",
+    help="(mcp only) Use inline frontmatter in the body file instead of a sidecar. Skills require the two-file shape.",
 )
 @click.pass_context
 def new(ctx: click.Context, kind: str, slug: str, toolkit_root: Path | None, inline: bool) -> None:

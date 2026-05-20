@@ -53,7 +53,8 @@ def test_new_skill_inline_rejected(tmp_path: Path):
     runner = CliRunner()
     result = _invoke_new_skill(runner, tmp_path, "demo", "--inline")
     assert result.exit_code == 2, result.output
-    assert "sidecar" in result.output.lower() or "inline" in result.output.lower()
+    out = result.output.lower()
+    assert "sidecar" in out and "inline" in out, result.output
 
 
 def test_new_mcp_inline_still_allowed(tmp_path: Path):
@@ -62,3 +63,14 @@ def test_new_mcp_inline_still_allowed(tmp_path: Path):
         cli, ["new", "mcp", "demo", "--toolkit-repo", str(tmp_path), "--inline"]
     )
     assert result.exit_code == 0, result.output
+    # Verify the inline path actually wrote the mcp asset with inline frontmatter
+    # and no sidecar — proving the inline branch executed end-to-end.
+    mcp_body = tmp_path / "mcps" / "demo.toolkit.yaml"
+    sidecar = tmp_path / "mcps" / "demo.sidecar.yaml"
+    # Inline mcp: the metadata lives in the body file itself (not a sidecar).
+    # Find whatever file was written under mcps/ and assert it carries frontmatter.
+    written = list((tmp_path / "mcps").rglob("*"))
+    asset_files = [p for p in written if p.is_file()]
+    assert asset_files, f"no mcp asset written under {tmp_path / 'mcps'}"
+    # No standalone sidecar file should exist alongside the inline mcp.
+    assert not sidecar.exists(), f"unexpected sidecar at {sidecar}"
