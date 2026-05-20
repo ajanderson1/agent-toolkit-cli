@@ -879,3 +879,125 @@ def test_list_json_plugin_status_project_scope_unsupported(tmp_path, monkeypatch
     )
     assert proj_claude["status"] == "unsupported", proj_claude
     assert proj_claude["target"] is None
+
+
+def _seed_pinned_plugin_toolkit(toolkit: Path) -> None:
+    """Set up toolkit dir with example-pinned plugin sidecar (version 5.1.0)."""
+    (toolkit / "schemas").mkdir(parents=True, exist_ok=True)
+    schema_src = Path(__file__).resolve().parents[1] / "schemas" / "asset-frontmatter.v1alpha2.json"
+    (toolkit / "schemas" / "asset-frontmatter.v1alpha2.json").write_text(schema_src.read_text())
+    (toolkit / ".agent-toolkit-source").write_text("")
+    fixture = Path(__file__).resolve().parent / "fixtures" / "plugin_sidecars" / "example-pinned.toolkit.yaml"
+    (toolkit / "plugins").mkdir(parents=True, exist_ok=True)
+    (toolkit / "plugins" / "example-pinned.toolkit.yaml").write_text(fixture.read_text())
+
+
+def test_list_json_plugin_status_linked_drifted(tmp_path, monkeypatch):
+    """Sidecar pins 5.1.0 but adapter records 4.0.0 → linked-drifted."""
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.delenv("AGENT_TOOLKIT_REPO", raising=False)
+
+    plugins_dir = home / ".claude" / "plugins"
+    plugins_dir.mkdir(parents=True)
+    (plugins_dir / "installed_plugins.json").write_text(
+        json.dumps({
+            "version": 2,
+            "plugins": {
+                "example-pinned@example-marketplace": [
+                    {"scope": "user", "version": "4.0.0"},
+                ],
+            },
+        }, indent=2) + "\n"
+    )
+    (plugins_dir / "known_marketplaces.json").write_text(
+        json.dumps({
+            "example-marketplace": {
+                "source": {
+                    "source": "git",
+                    "url": "https://example.com/marketplace.git",
+                },
+            },
+        }, indent=2) + "\n"
+    )
+
+    (home / ".agent-toolkit.yaml").write_text("plugins:\n  - example-pinned\n")
+
+    toolkit = tmp_path / "toolkit"
+    _seed_pinned_plugin_toolkit(toolkit)
+
+    project = tmp_path / "project"
+    project.mkdir()
+
+    runner = CliRunner()
+    res = runner.invoke(
+        list_json,
+        ["--toolkit-repo", str(toolkit), "--project", str(project)],
+    )
+    assert res.exit_code == 0, res.output
+    doc = json.loads(res.output)
+    [plugin] = [a for a in doc["assets"] if a["kind"] == "plugin"]
+    user_claude = next(
+        c for c in plugin["cells"]
+        if c["harness"] == "claude" and c["scope"] == "user"
+    )
+    assert user_claude["status"] == "linked-drifted", user_claude
+    assert user_claude["target"] == str(plugins_dir / "installed_plugins.json")
+    assert user_claude["allowlisted"] is True
+
+
+def test_list_json_plugin_status_installed_not_allowlisted(tmp_path, monkeypatch):
+    """Sidecar exists + adapter records install, but allowlist omits it → installed-not-allowlisted."""
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.delenv("AGENT_TOOLKIT_REPO", raising=False)
+
+    plugins_dir = home / ".claude" / "plugins"
+    plugins_dir.mkdir(parents=True)
+    (plugins_dir / "installed_plugins.json").write_text(
+        json.dumps({
+            "version": 2,
+            "plugins": {
+                "superpowers@claude-plugins-official": [
+                    {"scope": "user", "version": "latest"},
+                ],
+            },
+        }, indent=2) + "\n"
+    )
+    (plugins_dir / "known_marketplaces.json").write_text(
+        json.dumps({
+            "claude-plugins-official": {
+                "source": {
+                    "source": "git",
+                    "url": "https://github.com/anthropics/claude-plugins-official.git",
+                },
+            },
+        }, indent=2) + "\n"
+    )
+
+    # No allowlist entry for superpowers — installed but not allowlisted.
+    (home / ".agent-toolkit.yaml").write_text("plugins: []\n")
+
+    toolkit = tmp_path / "toolkit"
+    _seed_plugin_toolkit(toolkit)
+
+    project = tmp_path / "project"
+    project.mkdir()
+
+    runner = CliRunner()
+    res = runner.invoke(
+        list_json,
+        ["--toolkit-repo", str(toolkit), "--project", str(project)],
+    )
+    assert res.exit_code == 0, res.output
+    doc = json.loads(res.output)
+    [plugin] = [a for a in doc["assets"] if a["kind"] == "plugin"]
+    user_claude = next(
+        c for c in plugin["cells"]
+        if c["harness"] == "claude" and c["scope"] == "user"
+    )
+    assert user_claude["status"] == "installed-not-allowlisted", user_claude
+    assert user_claude["target"] == str(plugins_dir / "installed_plugins.json")
+    assert user_claude["allowlisted"] is False
