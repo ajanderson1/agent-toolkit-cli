@@ -88,7 +88,9 @@ The pre-commit `schema-vendor-check` hook (lefthook) blocks any commit where the
   - **mcp** — sidecar `mcps/<slug>.toolkit.yaml` (post-PR-3, the only form).
   - **agent**, **command** — inline frontmatter in `<slug>.md`.
   - **hook**, **pi-extension** — dedicated `.meta.yaml` sidecar.
-  - **plugin** — inline `agent_toolkit_cli` JSON key in `plugin.json`.
+  - **plugin** — sidecar `plugins/<slug>.toolkit.yaml` (preferred) OR inline
+    `agent_toolkit_cli` JSON key in `plugin.json` (legacy; emits a deprecation
+    warning during `check`). Never both.
 - **Mutex rule** — if both sidecar AND inline metadata exist for the same
   slug, `agent-toolkit-cli check` exits 2. Lefthook pre-commit blocks the
   commit until one is removed.
