@@ -28,9 +28,9 @@ def test_new_skill_creates_skeleton(tmp_path):
     sidecar = tmp_path / "skills" / "demo-skill.toolkit.yaml"
     assert skill_md.exists()
     assert sidecar.exists()
-    # Body should NOT have inline frontmatter
+    # Body now carries harness frontmatter (name + description only, not sidecar shape)
     body_text = skill_md.read_text()
-    assert not body_text.startswith("---\n")
+    assert body_text.startswith("---\n")
     # Sidecar carries the metadata
     sidecar_text = sidecar.read_text()
     assert "apiVersion: agent-toolkit/v1alpha2" in sidecar_text

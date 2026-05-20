@@ -76,6 +76,16 @@ _MCP_BODY_TEMPLATE_NO_FRONTMATTER = """# {slug}
 TODO body.
 """
 
+_SKILL_BODY_TEMPLATE = """---
+name: {slug}
+description: TODO write the harness-loader-facing description ending in a period.
+---
+
+# {slug}
+
+TODO body.
+"""
+
 
 @click.command(name="new", short_help="Scaffold a new asset with valid v1alpha2 frontmatter.")
 @click.argument("kind", type=click.Choice(list(_KIND_LAYOUT)))
@@ -99,6 +109,13 @@ def new(ctx: click.Context, kind: str, slug: str, toolkit_root: Path | None, inl
     v1alpha2 frontmatter. The file is created with TODO placeholders; edit
     them, then run `agent-toolkit check` to validate.
     """
+    if inline and kind == "skill":
+        raise click.UsageError(
+            "Inline frontmatter is no longer supported for skills. "
+            "Skills now use a two-file shape: SKILL.md (harness frontmatter) "
+            "plus <slug>.toolkit.yaml (toolkit sidecar). See "
+            "docs/superpowers/specs/2026-05-20-skill-sidecar-shape-design.md."
+        )
     header(f"Scaffolding new {kind} '{slug}'...")
     if toolkit_root is None:
         toolkit_root = (ctx.obj or {}).get("toolkit_root")
@@ -170,7 +187,10 @@ def new(ctx: click.Context, kind: str, slug: str, toolkit_root: Path | None, inl
         if use_sidecar:
             from agent_toolkit_cli.walker import _KIND_ROOT
 
-            target.write_text(_BODY_TEMPLATE_NO_FRONTMATTER.format(slug=slug))
+            if kind == "skill":
+                target.write_text(_SKILL_BODY_TEMPLATE.format(slug=slug))
+            else:
+                target.write_text(_BODY_TEMPLATE_NO_FRONTMATTER.format(slug=slug))
             sidecar = root / _KIND_ROOT[kind] / f"{slug}.toolkit.yaml"
             sidecar.write_text(_SIDECAR_TEMPLATE.format(slug=slug))
             click.echo(f"created {target.relative_to(root)}")
