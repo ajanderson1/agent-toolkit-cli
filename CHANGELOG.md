@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v0.8.0...v1.0.0) (2026-05-20)
+
+
+### Features
+
+* claude/plugin asset kind — config_file adapter for Claude plugins ([#149](https://github.com/ajanderson1/agent-toolkit-cli/issues/149)) ([#153](https://github.com/ajanderson1/agent-toolkit-cli/issues/153)) ([19e745f](https://github.com/ajanderson1/agent-toolkit-cli/commit/19e745f5eaf7af8162f2dbef225dc2328cf5e19b))
+* **skills:** split harness-facing SKILL.md frontmatter from toolkit sidecar ([#150](https://github.com/ajanderson1/agent-toolkit-cli/issues/150)) ([#151](https://github.com/ajanderson1/agent-toolkit-cli/issues/151)) ([27896cb](https://github.com/ajanderson1/agent-toolkit-cli/commit/27896cb75cb0542aeea8719a44958ffb6c328e91))
+
 ## [0.8.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v0.7.4...v0.8.0) (2026-05-19)
 
 
