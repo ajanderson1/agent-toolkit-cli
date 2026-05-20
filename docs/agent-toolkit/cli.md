@@ -134,6 +134,14 @@ agent-toolkit list mcp codex
 #   context7              [codex]                user:☑ project:☐
 ```
 
+### Plugins
+
+**plugin** (Claude-only by design). Managed declaratively via
+`~/.claude/plugins/installed_plugins.json` and
+`~/.claude/plugins/known_marketplaces.json`. The CLI writes the
+allowlist entries; Claude Code clones the plugin tree on next start.
+Project scope is not supported in this release.
+
 **Examples:**
 
 ```bash
@@ -633,7 +641,7 @@ description and harnesses, then run `check` before committing.
 | `command` | `commands/<slug>.md` |
 | `hook` | `hooks/<slug>.meta.yaml` |
 | `mcp` | `mcps/<slug>/mcp.json` + `mcps/<slug>.toolkit.yaml` |
-| `plugin` | `plugins/<slug>/marketplace.json` |
+| `plugin` | `plugins/<slug>/marketplace.json` (legacy; sidecar `plugins/<slug>.toolkit.yaml` is canonical, author by hand for now — #149 follow-up) |
 | `pi-extension` | `extensions/<slug>/extension.meta.yaml` |
 
 **Example:**

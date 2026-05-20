@@ -236,28 +236,51 @@ def discover_assets(toolkit_root: Path) -> list[Asset]:
 
 
 def _discover_plugins(toolkit_root: Path, submodule_paths: list[Path]) -> list[Asset]:
-    """Discover plugins under plugins/<slug>/.claude-plugin/.
+    """Discover plugin assets.
 
-    Each .claude-plugin/ directory yields at most one Asset: marketplace.json
-    takes precedence over plugin.json (the spec treats them as alternatives).
+    Canonical layout: ``plugins/<slug>.toolkit.yaml`` (sidecar-only).
+    Legacy layout:    ``plugins/<slug>/.claude-plugin/{plugin,marketplace}.json``
+                      with an inline ``agent_toolkit_cli`` block.
+
+    Mutex: if both forms exist for the same slug, raise
+    ``BothMetadataLocationsExist``.
     """
     plugin_root = toolkit_root / "plugins"
     if not plugin_root.exists():
         return []
-    assets: list[Asset] = []
+    assets: dict[str, Asset] = {}
+
+    # Pass 1: sidecars (canonical).
+    for sidecar in sorted(plugin_root.glob("*.toolkit.yaml")):
+        if _path_is_inside_submodule(sidecar, toolkit_root, submodule_paths):
+            continue
+        slug = sidecar.name.removesuffix(".toolkit.yaml")
+        if not slug:
+            continue
+        doc = yaml.safe_load(sidecar.read_text()) or {}
+        if (doc.get("metadata") or {}).get("kind") != "plugin":
+            continue
+        assets[slug] = Asset(kind="plugin", slug=slug, path=sidecar)
+
+    # Pass 2: legacy inline blocks (deprecation fall-back).
     for claude_dir in sorted(plugin_root.rglob(".claude-plugin")):
         if not claude_dir.is_dir():
             continue
         if _path_is_inside_submodule(claude_dir, toolkit_root, submodule_paths):
             continue
+        slug = claude_dir.parent.name
+        if not slug:
+            continue
         for filename in _PLUGIN_FILENAMES:
             path = claude_dir / filename
             if path.is_file():
-                slug = claude_dir.parent.name
-                if slug:
-                    assets.append(Asset(kind="plugin", slug=slug, path=path))
+                if slug in assets:
+                    raise BothMetadataLocationsExist(
+                        "plugin", slug, assets[slug].path, path
+                    )
+                assets[slug] = Asset(kind="plugin", slug=slug, path=path)
                 break
-    return assets
+    return list(assets.values())
 
 
 def _read_submodule_paths(toolkit_root: Path) -> list[Path]:
@@ -363,8 +386,11 @@ def load_asset_record(asset: Asset) -> AssetRecord:
         # body_excerpt stays "" (the body is config.json/code, not prose).
         metadata = (extract_metadata(fm_path) if fm_path.is_file() else None) or {}
     elif asset.kind == "plugin":
-        doc = _json.loads(asset.path.read_text())
-        metadata = doc.get("agent_toolkit_cli") or {}
+        if asset.path.name.endswith(".toolkit.yaml"):
+            metadata = yaml.safe_load(asset.path.read_text()) or {}
+        else:
+            doc = _json.loads(asset.path.read_text())
+            metadata = doc.get("agent_toolkit_cli") or {}
     else:
         metadata = {}
 

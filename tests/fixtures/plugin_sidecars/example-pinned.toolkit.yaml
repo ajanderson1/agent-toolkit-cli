@@ -1,0 +1,18 @@
+apiVersion: agent-toolkit/v1alpha2
+metadata:
+  name: example-pinned
+  description: Example fixture used in version-pinning tests.
+  kind: plugin
+  lifecycle: stable
+spec:
+  origin: third-party
+  upstream: https://example.com/marketplace
+  vendored_via: none
+  harnesses: [claude]
+  source:
+    marketplace: example-marketplace
+    marketplaceSource:
+      source: git
+      url: https://example.com/marketplace.git
+    plugin: example-pinned
+    version: 5.1.0

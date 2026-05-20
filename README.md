@@ -60,6 +60,8 @@ status `[☑] [≁] [☐] [!]` appears in `list` (and the TUI) for MCPs. Run
 missing prerequisites. Use `fix --mcps-only` to reconcile installed entries to
 the canonical allow-list template.
 
+**plugin** (Claude-only) — declarative install via `installed_plugins.json` + `known_marketplaces.json`.
+
 Full reference: [`docs/agent-toolkit/cli.md`](docs/agent-toolkit/cli.md).
 Schema reference: [SSOT in the toolkit repo](https://github.com/ajanderson1/agent-toolkit/blob/main/docs/agent-toolkit/schema.md).
 

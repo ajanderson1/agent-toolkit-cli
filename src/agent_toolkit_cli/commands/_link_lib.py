@@ -302,9 +302,10 @@ def harness_target_dirs(harness: str, kind: str, scope: str, project_root: Path)
 
 
 def _expected_source(asset_path: Path, kind: str) -> Path:
-    if kind == "plugin":
-        # asset_path is plugins/<slug>/.claude-plugin/{plugin,marketplace}.json
-        return asset_path.parent.parent
+    # Note: kind == "plugin" no longer reaches here — plugins dispatch via
+    # ClaudePluginAdapter in `project_from_file` and never enter the symlink
+    # path. The `_list_json` copy of this function still has a plugin branch;
+    # that's Task 7 (list-side adapter routing).
     if kind in {"skill", "mcp", "pi-extension"}:
         return asset_path.parent
     return asset_path
@@ -325,9 +326,13 @@ def _asset_harnesses(asset_path: Path, kind: str | None = None) -> list[str]:
         import yaml as _yaml
         fm = _yaml.safe_load(asset_path.read_text()) or {}
     elif kind == "plugin":
-        import json as _json
-        doc = _json.loads(asset_path.read_text())
-        fm = doc.get("agent_toolkit_cli") or {}
+        if asset_path.name.endswith(".toolkit.yaml"):
+            import yaml as _yaml
+            fm = _yaml.safe_load(asset_path.read_text()) or {}
+        else:
+            import json as _json
+            doc = _json.loads(asset_path.read_text())
+            fm = doc.get("agent_toolkit_cli") or {}
     elif kind == "mcp" or asset_path.name == "config.json":
         fm_path = frontmatter_path(asset_path, "mcp")
         fm = (extract_metadata(fm_path) if fm_path.is_file() else None) or {}
@@ -577,6 +582,70 @@ def project_from_file(
                     dry_run=dry_run,
                     stdout=stdout,
                     previously_allowed=prev_hooks,
+                )
+            except CannotInstall as exc:
+                print(f"warning: {exc}", file=stdout)
+                continue
+            continue
+        if kind == "plugin" and harness == "claude":
+            section = kind_to_section(kind)
+            plugin_allowed_slugs = list(allowed.get(section, []))
+
+            from agent_toolkit_cli.commands._plugin_dispatch import (  # noqa: PLC0415
+                _build_plugin_entries,
+                apply_link as apply_plugin_link,
+                previously_allowed_keys,
+            )
+            from agent_toolkit_cli.harness_adapters import get_adapter  # noqa: PLC0415
+            from agent_toolkit_cli.harness_adapters.base import (  # noqa: PLC0415
+                CannotInstall, UnimplementedAdapter,
+            )
+
+            adapter = get_adapter(harness, kind="plugin")
+            if isinstance(adapter, UnimplementedAdapter):
+                if plugin_allowed_slugs:
+                    print(adapter.skip_message(), file=stdout)
+                continue
+
+            # Project scope returns config_target=None → adapter returns []
+            # and we silently no-op. Surface that explicitly when the user
+            # had something allow-listed at a scope the adapter doesn't
+            # support — mirrors UnimplementedAdapter handling above.
+            if adapter.config_target(scope, project_root) is None:
+                if plugin_allowed_slugs:
+                    print(
+                        f"claude plugins are not supported at {scope} scope",
+                        file=stdout,
+                    )
+                continue
+
+            entries = _build_plugin_entries(toolkit_root, plugin_allowed_slugs)
+
+            # Build previously_allowed key set. Explicit snapshot if provided
+            # (link/unlink); otherwise reconcile-from-disk (mirrors MCP/hook
+            # pattern from #120).
+            if previous_allowed is not None:
+                prev_slugs = list(previous_allowed.get(section) or [])
+                prev_entries = _build_plugin_entries(toolkit_root, prev_slugs)
+                prev_keys = (
+                    {f"{e.plugin}@{e.marketplace}" for e in prev_entries}
+                    | set(adapter.list_installed(scope, project_root))
+                )
+            else:
+                prev_keys = previously_allowed_keys(
+                    adapter, scope, project_root,
+                    plugin_allowed_slugs, entries,
+                )
+
+            try:
+                apply_plugin_link(
+                    adapter,
+                    scope=scope,
+                    project_root=project_root,
+                    entries=entries,
+                    dry_run=dry_run,
+                    stdout=stdout,
+                    previously_allowed=prev_keys,
                 )
             except CannotInstall as exc:
                 print(f"warning: {exc}", file=stdout)

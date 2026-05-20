@@ -18,6 +18,7 @@ from agent_toolkit_cli.doctor import (
     harness_homes as g_harness_homes,
     orphans as g_orphans,
     pi_advisories as g_pi_advisories,
+    plugins as g_plugins,
     skill_shape as g_skill_shape,
     submodules as g_submodules,
     symlinks as g_symlinks,
@@ -29,7 +30,7 @@ from agent_toolkit_cli.doctor.result import GroupResult, Status
 _GROUPS = (
     "environment", "symlink-integrity", "conventions", "submodule-health",
     "frontmatter", "duplicates", "harness-homes", "allowlist-audit", "mcps",
-    "user-scope-coverage", "orphans", "pi-advisories", "skill-shape",
+    "plugins", "user-scope-coverage", "orphans", "pi-advisories", "skill-shape",
 )
 
 
@@ -160,6 +161,7 @@ def _run_global(
         ("harness-homes", lambda: g_harness_homes.run()),
         ("allowlist-audit", lambda: g_allowlist_audit.run(root, project_root=Path.cwd())),
         ("mcps", lambda: g_mcps.run(root, harness=harness, scope=scope, project_root=Path.cwd())),
+        ("plugins", lambda: g_plugins.run(root, harness=harness)),
         ("user-scope-coverage", lambda: g_user_scope_coverage.run(root, project_root=Path.cwd())),
         ("orphans", lambda: g_orphans.run(root)),
         ("pi-advisories", lambda: g_pi_advisories.run(home=Path.home(), project_root=Path.cwd())),

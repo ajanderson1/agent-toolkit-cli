@@ -1,0 +1,18 @@
+apiVersion: agent-toolkit/v1alpha2
+metadata:
+  name: superpowers
+  description: TDD, debugging, brainstorming, plan-writing.
+  kind: plugin
+  lifecycle: stable
+spec:
+  origin: third-party
+  upstream: https://github.com/anthropics/claude-plugins-official
+  vendored_via: none
+  harnesses: [claude]
+  source:
+    marketplace: claude-plugins-official
+    marketplaceSource:
+      source: git
+      url: https://github.com/anthropics/claude-plugins-official.git
+    plugin: superpowers
+    version: latest

@@ -36,6 +36,12 @@ def run(toolkit_root: Path, *, harness: str = "claude") -> GroupResult:
 
     expected: dict[tuple[str, str], Path] = {}
     for asset in discover_assets(toolkit_root):
+        # Plugin is managed by ClaudePluginAdapter (JSON config files), not by
+        # filesystem symlinks. Its check is delegated to `_check_plugins_via_adapter`
+        # below; skip here so the symlink-shaped loop never inspects the
+        # `~/.claude/plugins/<slug>` slot (which is no longer authoritative).
+        if asset.kind == "plugin" and harness == "claude":
+            continue
         meta = _meta_for(asset)
         spec = meta.get("spec") or {}
         if harness not in (spec.get("harnesses") or []):
@@ -100,7 +106,7 @@ def run(toolkit_root: Path, *, harness: str = "claude") -> GroupResult:
     declared_slugs = {(a.kind, a.slug): a for a in discover_assets(toolkit_root)}
     for (kind_dir_name, kind) in [
         ("skills", "skill"), ("agents", "agent"), ("commands", "command"),
-        ("hooks", "hook"), ("plugins", "plugin"), ("extensions", "pi-extension"),
+        ("hooks", "hook"), ("extensions", "pi-extension"),
     ]:
         rels = _USER_PATHS_ALL.get((harness, kind))
         if not rels:
@@ -114,6 +120,8 @@ def run(toolkit_root: Path, *, harness: str = "claude") -> GroupResult:
                 toolkit_root, warns,
             )
 
+    # Plugin checks are adapter-driven (JSON config files in ~/.claude/plugins/),
+    # not symlink-shaped. They live in the sibling `doctor/plugins.py` group.
 
     if fails:
         summary = (

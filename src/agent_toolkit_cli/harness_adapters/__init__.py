@@ -12,6 +12,7 @@ from agent_toolkit_cli.harness_adapters.base import (
     ConfigFileFolderAdapter,
     HookEntry,
     McpEntry,
+    PluginEntry,
     PluginFolderAdapter,
     Scope,
     UnimplementedAdapter,
@@ -38,6 +39,9 @@ def get_adapter(harness: str, kind: str = "mcp"):
     if harness == "codex" and kind == "mcp":
         from agent_toolkit_cli.harness_adapters.codex import CodexAdapter
         return CodexAdapter()
+    if harness == "claude" and kind == "plugin":
+        from agent_toolkit_cli.harness_adapters.claude_plugin import ClaudePluginAdapter
+        return ClaudePluginAdapter()
     if harness == "claude" and kind == "mcp":
         from agent_toolkit_cli.harness_adapters.claude import ClaudeAdapter
         return ClaudeAdapter()
@@ -57,6 +61,7 @@ __all__ = [
     "ConfigFileFolderAdapter",
     "HookEntry",
     "McpEntry",
+    "PluginEntry",
     "PluginFolderAdapter",
     "Scope",
     "UnimplementedAdapter",

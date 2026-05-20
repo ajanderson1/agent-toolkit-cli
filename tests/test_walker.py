@@ -3,7 +3,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from agent_toolkit_cli.walker import discover_assets, extract_frontmatter, load_asset_record
+from agent_toolkit_cli.walker import (
+    BothMetadataLocationsExist,
+    discover_assets,
+    extract_frontmatter,
+    load_asset_record,
+)
 
 
 def _write_mcp(toolkit_root: Path, slug: str, *, harnesses: list[str]) -> None:
@@ -321,3 +326,87 @@ def test_discover_mcp_without_sidecar_is_not_discovered(tmp_path):
     (mcp_dir / "config.json").write_text("{}\n")
     assets = [a for a in discover_assets(tmp_path) if a.kind == "mcp"]
     assert assets == []
+
+
+def test_walker_discovers_plugin_sidecar(tmp_path):
+    """plugins/<slug>.toolkit.yaml is discovered as a plugin asset."""
+    plugins_dir = tmp_path / "plugins"
+    plugins_dir.mkdir()
+    sidecar = plugins_dir / "superpowers.toolkit.yaml"
+    sidecar.write_text(
+        "apiVersion: agent-toolkit/v1alpha2\n"
+        "metadata:\n"
+        "  name: superpowers\n"
+        "  description: x.\n"
+        "  kind: plugin\n"
+        "  lifecycle: stable\n"
+        "spec:\n"
+        "  origin: third-party\n"
+        "  upstream: https://example.com\n"
+        "  vendored_via: none\n"
+        "  harnesses: [claude]\n"
+        "  source:\n"
+        "    marketplace: m\n"
+        "    marketplaceSource: {source: git, url: https://example.com/m.git}\n"
+        "    plugin: superpowers\n"
+        "    version: latest\n"
+    )
+    assets = discover_assets(tmp_path)
+    slugs = [a.slug for a in assets if a.kind == "plugin"]
+    assert slugs == ["superpowers"], f"got {slugs}"
+
+
+def test_walker_rejects_sidecar_plus_legacy_block(tmp_path):
+    """Mutex: a sidecar AND a legacy plugin.json for the same slug raises.
+
+    Sibling slugs (sidecar-only ``foo``, legacy-only ``bar``) co-exist; the
+    mutex must fire on the colliding slug (``superpowers``) — not globally.
+    """
+    import pytest
+
+    plugins_dir = tmp_path / "plugins"
+
+    # Colliding pair: superpowers has BOTH sidecar and legacy plugin.json.
+    (plugins_dir / "superpowers" / ".claude-plugin").mkdir(parents=True)
+    (plugins_dir / "superpowers" / ".claude-plugin" / "plugin.json").write_text(
+        '{"agent_toolkit_cli": {"apiVersion": "agent-toolkit/v1alpha2", '
+        '"metadata": {"name": "superpowers", "kind": "plugin"}}}'
+    )
+    (plugins_dir / "superpowers.toolkit.yaml").write_text(
+        "apiVersion: agent-toolkit/v1alpha2\n"
+        "metadata: {name: superpowers, kind: plugin}\n"
+    )
+
+    # Sidecar-only sibling.
+    (plugins_dir / "foo.toolkit.yaml").write_text(
+        "apiVersion: agent-toolkit/v1alpha2\n"
+        "metadata: {name: foo, kind: plugin}\n"
+    )
+
+    # Legacy-only sibling.
+    (plugins_dir / "bar" / ".claude-plugin").mkdir(parents=True)
+    (plugins_dir / "bar" / ".claude-plugin" / "plugin.json").write_text(
+        '{"agent_toolkit_cli": {"apiVersion": "agent-toolkit/v1alpha2", '
+        '"metadata": {"name": "bar", "kind": "plugin"}}}'
+    )
+
+    with pytest.raises(BothMetadataLocationsExist) as excinfo:
+        discover_assets(tmp_path)
+    err = excinfo.value
+    assert err.kind == "plugin"
+    assert err.slug == "superpowers"
+    assert err.sidecar_path.name == "superpowers.toolkit.yaml"
+    assert err.inline_path.name == "plugin.json"
+
+
+def test_walker_legacy_inline_block_still_discovered(tmp_path):
+    """Legacy plugin.json with agent_toolkit_cli block still works (deprecation fall-back)."""
+    plugins_dir = tmp_path / "plugins"
+    (plugins_dir / "atomic-agents" / ".claude-plugin").mkdir(parents=True)
+    (plugins_dir / "atomic-agents" / ".claude-plugin" / "plugin.json").write_text(
+        '{"agent_toolkit_cli": {"apiVersion": "agent-toolkit/v1alpha2", '
+        '"metadata": {"name": "atomic-agents", "kind": "plugin"}}}'
+    )
+    assets = discover_assets(tmp_path)
+    slugs = [a.slug for a in assets if a.kind == "plugin"]
+    assert slugs == ["atomic-agents"], f"got {slugs}"

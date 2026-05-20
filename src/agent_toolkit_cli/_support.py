@@ -30,7 +30,9 @@ _USER_TARGETS: dict[tuple[str, str], str] = {
     # yet (see #123). Leaving the row would advertise a supported pair while
     # `link` silently no-ops (allowlist gets edited but no script is
     # materialised and ~/.claude/settings.json is never written).
-    ("claude", "plugin"):      "{home}/.claude/plugins",
+    # ("claude", "plugin"): intentionally absent — this is a config_file cell
+    # mutating ~/.claude/plugins/installed_plugins.json and
+    # known_marketplaces.json (no symlink slot). Owned by ClaudePluginAdapter.
     ("codex", "agent"):        "{home}/.codex/agents",
     ("codex", "skill"):        "{home}/.codex/skills",
     ("codex", "hook"):         "{home}/.codex/agent-toolkit-hooks",  # config_file+folder
@@ -49,7 +51,9 @@ _PROJECT_TARGETS: dict[tuple[str, str], str] = {
     ("claude", "agent"):       ".claude/agents",
     ("claude", "command"):     ".claude/commands",
     # ("claude", "hook"): see _USER_TARGETS — unsupported until adapter lands (#123).
-    ("claude", "plugin"):      ".claude/plugins",
+    # ("claude", "plugin"): see _USER_TARGETS — config_file cell at user scope
+    # only; no project-scope install path (Claude reads plugin state from the
+    # user-scope JSON files exclusively).
     ("codex", "agent"):        ".codex/agents",
     ("codex", "skill"):        ".codex/skills",
     ("opencode", "skill"):     ".opencode/skills",

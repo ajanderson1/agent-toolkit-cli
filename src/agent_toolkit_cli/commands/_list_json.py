@@ -354,6 +354,91 @@ def _build_inventory(
                         "allowlisted": True,
                     })
                 continue
+            if asset.kind == "plugin":
+                # Status comes from the per-harness plugin adapter when available.
+                from agent_toolkit_cli.commands._plugin_dispatch import _build_plugin_entries  # noqa: PLC0415
+                from agent_toolkit_cli.harness_adapters import get_adapter  # noqa: PLC0415
+                from agent_toolkit_cli.harness_adapters.base import (  # noqa: PLC0415
+                    UnimplementedAdapter,
+                )
+
+                plugin_adapter = get_adapter(h, kind="plugin")
+                if isinstance(plugin_adapter, UnimplementedAdapter):
+                    cells.append({
+                        "harness": h, "scope": "user",
+                        "status": "unsupported", "target": None,
+                        "allowlisted": user_allowlisted,
+                    })
+                    cells.append({
+                        "harness": h, "scope": "project",
+                        "status": "unsupported", "target": None,
+                        "allowlisted": proj_allowlisted,
+                    })
+                    continue
+
+                # Build the PluginEntry for this slug; pass to adapter for status checks.
+                resolved_plugins = _build_plugin_entries(toolkit_root, [asset.slug])
+                plugin_entry = resolved_plugins[0] if resolved_plugins else None
+
+                for scope, allowlisted in (
+                    ("user", user_allowlisted),
+                    ("project", proj_allowlisted),
+                ):
+                    target_path = plugin_adapter.config_target(scope, project_root)
+                    if target_path is None:
+                        # Scope not supported by this adapter (e.g. project scope).
+                        cells.append({
+                            "harness": h, "scope": scope,
+                            "status": "unsupported", "target": None,
+                            "allowlisted": allowlisted,
+                        })
+                        continue
+
+                    if plugin_entry is None:
+                        # Sidecar resolved poorly — degrade to unsupported.
+                        cells.append({
+                            "harness": h, "scope": scope,
+                            "status": "unsupported", "target": None,
+                            "allowlisted": allowlisted,
+                        })
+                        continue
+
+                    installed_keys = plugin_adapter.list_installed(scope, project_root)
+                    composite_key = f"{plugin_entry.plugin}@{plugin_entry.marketplace}"
+                    is_installed = composite_key in installed_keys
+
+                    if not allowlisted:
+                        if is_installed:
+                            cells.append({
+                                "harness": h, "scope": scope,
+                                "status": "installed-not-allowlisted",
+                                "target": str(target_path),
+                                "allowlisted": False,
+                            })
+                        else:
+                            cells.append({
+                                "harness": h, "scope": scope,
+                                "status": "unlinked", "target": None,
+                                "allowlisted": False,
+                            })
+                        continue
+
+                    if not is_installed:
+                        cells.append({
+                            "harness": h, "scope": scope,
+                            "status": "unlinked-allowlisted", "target": None,
+                            "allowlisted": True,
+                        })
+                        continue
+
+                    drifted = plugin_adapter.entry_drift(scope, project_root, plugin_entry)
+                    cells.append({
+                        "harness": h, "scope": scope,
+                        "status": "linked-drifted" if drifted else "linked-matches",
+                        "target": str(target_path),
+                        "allowlisted": True,
+                    })
+                continue
             expected_src = _expected_source(asset.path, asset.kind)
             for scope, allowlisted in (
                 ("user", user_allowlisted),
