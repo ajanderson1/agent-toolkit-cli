@@ -16,7 +16,15 @@ t::run "init sets HOME under a tmpdir and exports harness vars" '
   t::assert "CODEX_HOME set"         "[ -n \"\${CODEX_HOME:-}\" ]"
   t::assert "XDG_CONFIG_HOME set"    "[ -n \"\${XDG_CONFIG_HOME:-}\" ]"
   t::assert "AGENT_TOOLKIT_REPO set" "[ -n \"\${AGENT_TOOLKIT_REPO:-}\" ]"
-  t::assert "toolkit repo exists"    "[ -d \"\$AGENT_TOOLKIT_REPO\" ]"
+  # On CI runners the default ($HOME/GitHub/agent-toolkit, captured at
+  # source-time) may not exist. The sandbox library is doing the right
+  # thing — it exports whatever the operator default is — so the
+  # existence assertion only makes sense when the path is actually
+  # populated (i.e. running locally on a dev machine with the repo
+  # cloned).
+  if [ -d "$SANDBOX_DEFAULT_TOOLKIT_REPO" ]; then
+    t::assert "toolkit repo exists" "[ -d \"\$AGENT_TOOLKIT_REPO\" ]"
+  fi
 '
 
 t::run "cleanup removes the tmpdir" '
