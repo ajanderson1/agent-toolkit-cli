@@ -321,3 +321,62 @@ def test_discover_mcp_without_sidecar_is_not_discovered(tmp_path):
     (mcp_dir / "config.json").write_text("{}\n")
     assets = [a for a in discover_assets(tmp_path) if a.kind == "mcp"]
     assert assets == []
+
+
+def test_walker_discovers_plugin_sidecar(tmp_path):
+    """plugins/<slug>.toolkit.yaml is discovered as a plugin asset."""
+    plugins_dir = tmp_path / "plugins"
+    plugins_dir.mkdir()
+    sidecar = plugins_dir / "superpowers.toolkit.yaml"
+    sidecar.write_text(
+        "apiVersion: agent-toolkit/v1alpha2\n"
+        "metadata:\n"
+        "  name: superpowers\n"
+        "  description: x.\n"
+        "  kind: plugin\n"
+        "  lifecycle: stable\n"
+        "spec:\n"
+        "  origin: third-party\n"
+        "  upstream: https://example.com\n"
+        "  vendored_via: none\n"
+        "  harnesses: [claude]\n"
+        "  source:\n"
+        "    marketplace: m\n"
+        "    marketplaceSource: {source: git, url: https://example.com/m.git}\n"
+        "    plugin: superpowers\n"
+        "    version: latest\n"
+    )
+    assets = discover_assets(tmp_path)
+    slugs = [a.slug for a in assets if a.kind == "plugin"]
+    assert slugs == ["superpowers"], f"got {slugs}"
+
+
+def test_walker_rejects_sidecar_plus_legacy_block(tmp_path):
+    """Mutex: a sidecar AND a legacy plugin.json for the same slug raises."""
+    import pytest
+
+    plugins_dir = tmp_path / "plugins"
+    (plugins_dir / "superpowers" / ".claude-plugin").mkdir(parents=True)
+    (plugins_dir / "superpowers" / ".claude-plugin" / "plugin.json").write_text(
+        '{"agent_toolkit_cli": {"apiVersion": "agent-toolkit/v1alpha2", '
+        '"metadata": {"name": "superpowers", "kind": "plugin"}}}'
+    )
+    (plugins_dir / "superpowers.toolkit.yaml").write_text(
+        "apiVersion: agent-toolkit/v1alpha2\n"
+        "metadata: {name: superpowers, kind: plugin}\n"
+    )
+    with pytest.raises(ValueError, match="both sidecar and inline"):
+        discover_assets(tmp_path)
+
+
+def test_walker_legacy_inline_block_still_discovered(tmp_path):
+    """Legacy plugin.json with agent_toolkit_cli block still works (deprecation fall-back)."""
+    plugins_dir = tmp_path / "plugins"
+    (plugins_dir / "atomic-agents" / ".claude-plugin").mkdir(parents=True)
+    (plugins_dir / "atomic-agents" / ".claude-plugin" / "plugin.json").write_text(
+        '{"agent_toolkit_cli": {"apiVersion": "agent-toolkit/v1alpha2", '
+        '"metadata": {"name": "atomic-agents", "kind": "plugin"}}}'
+    )
+    assets = discover_assets(tmp_path)
+    slugs = [a.slug for a in assets if a.kind == "plugin"]
+    assert slugs == ["atomic-agents"], f"got {slugs}"
