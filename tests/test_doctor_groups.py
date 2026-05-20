@@ -385,7 +385,7 @@ def _seed_installed_plugins_json(fake_home, key, version="latest"):
 def test_doctor_plugin_passes_when_entry_recorded_and_cache_exists(tmp_path, monkeypatch):
     """Adapter check passes when installed_plugins.json has the entry AND
     the cache directory exists."""
-    from agent_toolkit_cli.doctor.symlinks import run as run_sl
+    from agent_toolkit_cli.doctor.plugins import run as run_sl
     _seed_plugin_sidecar(tmp_path, "delta", "mkt", "plg", version="1.0.0")
     fake_home = tmp_path / "home"
     _seed_user_allowlist_plugins(fake_home, ["delta"])
@@ -403,7 +403,7 @@ def test_doctor_plugin_passes_when_entry_recorded_and_cache_exists(tmp_path, mon
 def test_doctor_plugin_warns_when_cache_missing(tmp_path, monkeypatch):
     """Adapter check WARNs (does not FAIL) when entry recorded but cache
     directory absent — Claude clones lazily on first start."""
-    from agent_toolkit_cli.doctor.symlinks import run as run_sl
+    from agent_toolkit_cli.doctor.plugins import run as run_sl
     _seed_plugin_sidecar(tmp_path, "delta", "mkt", "plg", version="1.0.0")
     fake_home = tmp_path / "home"
     _seed_user_allowlist_plugins(fake_home, ["delta"])
@@ -420,7 +420,7 @@ def test_doctor_plugin_warns_when_cache_missing(tmp_path, monkeypatch):
 def test_doctor_plugin_fails_when_entry_missing(tmp_path, monkeypatch):
     """Adapter check FAILs when an allow-listed plugin has no entry in
     installed_plugins.json (user forgot to run `link`, or it got nuked)."""
-    from agent_toolkit_cli.doctor.symlinks import run as run_sl
+    from agent_toolkit_cli.doctor.plugins import run as run_sl
     _seed_plugin_sidecar(tmp_path, "delta", "mkt", "plg", version="1.0.0")
     fake_home = tmp_path / "home"
     _seed_user_allowlist_plugins(fake_home, ["delta"])

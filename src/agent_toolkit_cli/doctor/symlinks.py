@@ -121,17 +121,7 @@ def run(toolkit_root: Path, *, harness: str = "claude") -> GroupResult:
             )
 
     # Plugin checks are adapter-driven (JSON config files in ~/.claude/plugins/),
-    # not symlink-shaped. Delegate to a dedicated routine that consults the
-    # ClaudePluginAdapter's `list_installed()` plus a warn-only cache-dir probe.
-    if harness == "claude":
-        _check_plugins_via_adapter(
-            toolkit_root=toolkit_root,
-            home=home,
-            findings=findings,
-            warns=warns,
-            fails=fails,
-        )
-
+    # not symlink-shaped. They live in the sibling `doctor/plugins.py` group.
 
     if fails:
         summary = (
@@ -159,106 +149,6 @@ def run(toolkit_root: Path, *, harness: str = "claude") -> GroupResult:
         summary=f"{len(findings)} link(s) all healthy for harness={harness}",
         findings=findings,
     )
-
-
-def _check_plugins_via_adapter(
-    *,
-    toolkit_root: Path,
-    home: Path,
-    findings: list[str],
-    warns: list[str],
-    fails: list[str],
-) -> None:
-    """Plugin health via `ClaudePluginAdapter` — not filesystem symlinks.
-
-    Rules:
-    - allow-listed but key absent from installed_plugins.json → FAIL
-    - allow-listed and key present, cache dir present → finding (pass)
-    - allow-listed and key present, cache dir absent → WARN (Claude clones
-      lazily on next start, so missing cache is not fatal)
-    """
-    from agent_toolkit_cli._allowlist import read_allowlist  # noqa: PLC0415
-    from agent_toolkit_cli.commands._plugin_dispatch import (  # noqa: PLC0415
-        _build_plugin_entries,
-    )
-    from agent_toolkit_cli.harness_adapters import get_adapter  # noqa: PLC0415
-    from agent_toolkit_cli.harness_adapters.base import (  # noqa: PLC0415
-        UnimplementedAdapter,
-    )
-
-    allowlist_path = home / ".agent-toolkit.yaml"
-    allowed_slugs = read_allowlist(allowlist_path).get("plugins", [])
-    if not allowed_slugs:
-        return
-
-    adapter = get_adapter("claude", kind="plugin")
-    if isinstance(adapter, UnimplementedAdapter):
-        return
-
-    # The adapter signature is `(scope, project_root)`. Doctor's symlink
-    # group is user-scope-only (matches the existing skill/agent/command
-    # checks above) — project plugins aren't supported in v1.
-    scope = "user"
-    project_root = Path(".")  # unused for user scope
-
-    config_target = adapter.config_target(scope, project_root)
-    if config_target is None:
-        return
-
-    installed_keys = set(adapter.list_installed(scope, project_root))
-
-    entries = _build_plugin_entries(toolkit_root, allowed_slugs)
-    # Map slug → entry so we can report by sidecar-slug.
-    entry_by_slug = {e.name: e for e in entries}
-
-    # Recorded versions for the cache-dir probe come from the JSON itself.
-    recorded_versions: dict[str, str] = {}
-    if config_target.is_file():
-        import json  # noqa: PLC0415
-        try:
-            doc = json.loads(config_target.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            doc = {}
-        for key, items in (doc.get("plugins") or {}).items():
-            if not isinstance(items, list):
-                continue
-            user_rec = next(
-                (e for e in items if isinstance(e, dict) and e.get("scope") == "user"),
-                None,
-            )
-            if user_rec and user_rec.get("version"):
-                recorded_versions[key] = str(user_rec["version"])
-
-    for slug in allowed_slugs:
-        entry = entry_by_slug.get(slug)
-        if entry is None:
-            # Sidecar missing / incomplete — link would also have skipped.
-            # Don't crash doctor; surface a warn so the user notices.
-            warns.append(
-                f"plugin/{slug}: sidecar missing or incomplete; skipped"
-            )
-            continue
-        key = f"{entry.plugin}@{entry.marketplace}"
-        if key not in installed_keys:
-            fails.append(
-                f"plugin/{slug}: not recorded in installed_plugins.json "
-                f"(key {key!r} missing) — run `agent-toolkit link user claude`"
-            )
-            continue
-        # Cache-dir probe (warn-only). Path layout per the marketplace cache:
-        #   ~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/
-        version = recorded_versions.get(key) or entry.version
-        cache_dir = (
-            home / ".claude" / "plugins" / "cache"
-            / entry.marketplace / entry.plugin / version
-        )
-        if cache_dir.is_dir():
-            findings.append(f"plugin/{slug}: installed (cache present)")
-        else:
-            warns.append(
-                f"plugin/{slug}: cache dir {cache_dir} absent — "
-                f"Claude will clone on next start"
-            )
 
 
 def _sweep_stale_in_dir(
