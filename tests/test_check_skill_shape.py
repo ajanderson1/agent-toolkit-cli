@@ -69,16 +69,59 @@ def test_harness_description_missing_period_fails(tmp_path: Path):
     assert any("description" in e and "period" in e.lower() for e in errors), errors
 
 
-def test_name_disagreement_fails(tmp_path: Path):
+def test_skill_md_name_slug_mismatch_fails(tmp_path: Path):
+    """SKILL.md name must equal the asset's slug. Keep the sidecar in
+    agreement with the SKILL.md value so this test exercises rule 3 only,
+    not rule 4 (sidecar/SKILL.md drift)."""
     fm = (
         "---\n"
         "name: not-demo\n"
         "description: Long harness description.\n"
         "---\n"
     )
-    asset = _write_new_shape_skill(tmp_path, skill_md_fm=fm)
+    sidecar = (
+        "apiVersion: agent-toolkit/v1alpha2\n"
+        "metadata:\n"
+        "  name: not-demo\n"  # sidecar agrees with SKILL.md; only the slug differs
+        "  description: Concise CLI label.\n"
+        "  lifecycle: experimental\n"
+        "spec:\n"
+        "  origin: first-party\n"
+        "  vendored_via: none\n"
+        "  harnesses: [claude]\n"
+    )
+    asset = _write_new_shape_skill(tmp_path, skill_md_fm=fm, sidecar=sidecar)
     errors = Validator(toolkit_root=tmp_path).validate(asset)
-    assert any("name" in e.lower() for e in errors), errors
+    assert any("does not match slug" in e for e in errors), errors
+
+
+def test_skill_md_sidecar_name_disagreement_fails(tmp_path: Path):
+    """SKILL.md name must agree with sidecar metadata.name. Keep SKILL.md
+    name equal to the slug so this test exercises rule 4 only, not rule 3.
+    Sidecar's metadata.name diverges."""
+    fm = (
+        "---\n"
+        "name: demo\n"  # matches the slug
+        "description: Long harness description.\n"
+        "---\n"
+    )
+    # Sidecar passes the JSON-schema name pattern but disagrees with SKILL.md.
+    # Note: the existing slug-mismatch check on metadata.name fires too here,
+    # but we assert on the cross-file message specifically.
+    sidecar = (
+        "apiVersion: agent-toolkit/v1alpha2\n"
+        "metadata:\n"
+        "  name: drifted\n"
+        "  description: Concise CLI label.\n"
+        "  lifecycle: experimental\n"
+        "spec:\n"
+        "  origin: first-party\n"
+        "  vendored_via: none\n"
+        "  harnesses: [claude]\n"
+    )
+    asset = _write_new_shape_skill(tmp_path, skill_md_fm=fm, sidecar=sidecar)
+    errors = Validator(toolkit_root=tmp_path).validate(asset)
+    assert any("!= sidecar metadata.name" in e for e in errors), errors
 
 
 def test_missing_cli_description_fails(tmp_path: Path):

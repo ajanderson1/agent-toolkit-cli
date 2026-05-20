@@ -104,7 +104,8 @@ class Validator:
             errors.append(f"{asset.path}: SKILL.md missing top-level `description`")
         elif not description.endswith("."):
             errors.append(
-                f"{asset.path}: SKILL.md description must end with a period"
+                f"{asset.path}: SKILL.md description must end with a period "
+                f"(got {description!r})"
             )
 
         sidecar_name = (sidecar_data.get("metadata") or {}).get("name")
