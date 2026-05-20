@@ -329,3 +329,11 @@ def test_revert_keeps_marketplace_when_shared(tmp_path, monkeypatch):
     assert "superpowers@cpo" not in installed["plugins"]
     assert "compound@cpo" in installed["plugins"]
     assert "cpo" in markets
+
+
+def test_get_adapter_returns_claude_plugin_adapter():
+    """The dispatcher returns the real ClaudePluginAdapter, not UnimplementedAdapter."""
+    from agent_toolkit_cli.harness_adapters import get_adapter
+    from agent_toolkit_cli.harness_adapters.claude_plugin import ClaudePluginAdapter
+    adapter = get_adapter("claude", "plugin")
+    assert isinstance(adapter, ClaudePluginAdapter)
