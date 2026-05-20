@@ -242,7 +242,8 @@ def _discover_plugins(toolkit_root: Path, submodule_paths: list[Path]) -> list[A
     Legacy layout:    ``plugins/<slug>/.claude-plugin/{plugin,marketplace}.json``
                       with an inline ``agent_toolkit_cli`` block.
 
-    Mutex: if both forms exist for the same slug, raise ``ValueError``.
+    Mutex: if both forms exist for the same slug, raise
+    ``BothMetadataLocationsExist``.
     """
     plugin_root = toolkit_root / "plugins"
     if not plugin_root.exists():
@@ -256,10 +257,7 @@ def _discover_plugins(toolkit_root: Path, submodule_paths: list[Path]) -> list[A
         slug = sidecar.name.removesuffix(".toolkit.yaml")
         if not slug:
             continue
-        try:
-            doc = yaml.safe_load(sidecar.read_text()) or {}
-        except yaml.YAMLError:
-            continue
+        doc = yaml.safe_load(sidecar.read_text()) or {}
         if (doc.get("metadata") or {}).get("kind") != "plugin":
             continue
         assets[slug] = Asset(kind="plugin", slug=slug, path=sidecar)
@@ -277,9 +275,8 @@ def _discover_plugins(toolkit_root: Path, submodule_paths: list[Path]) -> list[A
             path = claude_dir / filename
             if path.is_file():
                 if slug in assets:
-                    raise ValueError(
-                        f"plugin {slug!r}: both sidecar and inline agent_toolkit_cli "
-                        f"block present — remove one (see AGENTS.md § Asset identity)"
+                    raise BothMetadataLocationsExist(
+                        "plugin", slug, assets[slug].path, path
                     )
                 assets[slug] = Asset(kind="plugin", slug=slug, path=path)
                 break
