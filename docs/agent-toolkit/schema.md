@@ -13,8 +13,8 @@ kinds the block is YAML frontmatter; for JSON-based kinds it lives under the
 | command | `commands/<slug>.md` |
 | hook | `hooks/<slug>.meta.yaml` |
 | mcp | `mcps/<slug>/README.md` + `mcps/<slug>/config.json` |
-| **plugin** | `plugins/<slug>/.claude-plugin/plugin.json` (single-plugin) |
-| **plugin** | `plugins/<slug>/.claude-plugin/marketplace.json` (marketplace) |
+| **plugin** | `plugins/<slug>.toolkit.yaml` (canonical) |
+| **plugin** | `plugins/<slug>/.claude-plugin/plugin.json` (legacy fall-back) |
 | pi-extension | `extensions/<slug>/extension.meta.yaml` |
 
 ## Plugin example
@@ -62,4 +62,6 @@ spec:
 The walker discovers `plugins/<slug>.toolkit.yaml` first; if absent, it
 falls back to the legacy `plugins/<slug>/.claude-plugin/plugin.json` (or
 `marketplace.json`) and reads the inline `agent_toolkit_cli` block.
-`agent-toolkit new plugin <slug>` scaffolds the sidecar form automatically.
+`agent-toolkit new plugin <slug>` currently scaffolds the legacy form; the
+sidecar is the preferred shape for new plugins and should be authored by
+hand or migrated until `new` is updated (see #149 follow-up).

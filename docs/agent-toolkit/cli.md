@@ -641,7 +641,7 @@ description and harnesses, then run `check` before committing.
 | `command` | `commands/<slug>.md` |
 | `hook` | `hooks/<slug>.meta.yaml` |
 | `mcp` | `mcps/<slug>/mcp.json` + `mcps/<slug>.toolkit.yaml` |
-| `plugin` | `plugins/<slug>/marketplace.json` |
+| `plugin` | `plugins/<slug>/marketplace.json` (legacy; sidecar `plugins/<slug>.toolkit.yaml` is canonical, author by hand for now — #149 follow-up) |
 | `pi-extension` | `extensions/<slug>/extension.meta.yaml` |
 
 **Example:**
