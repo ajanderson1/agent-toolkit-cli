@@ -180,6 +180,8 @@ class ClaudePluginAdapter:
         for entry in entries:
             existing = doc.get(entry.marketplace)
             if existing is None:
+                # We write only `source` — Claude Code populates `installLocation`
+                # and `lastUpdated` on first start.
                 doc[entry.marketplace] = {"source": entry.marketplace_source}
             else:
                 existing_source = existing.get("source") or {}
@@ -200,9 +202,7 @@ class ClaudePluginAdapter:
             managed_marketplaces = previously_marketplaces | desired_marketplaces
             for name in list(doc.keys()):
                 if name in managed_marketplaces and name not in desired_marketplaces:
-                    still_used_by_new = any(e.marketplace == name for e in entries)
-                    if not still_used_by_new:
-                        del doc[name]
+                    del doc[name]
 
         after_bytes = self._dumps(doc).encode("utf-8")
         if after_bytes == before_bytes:
