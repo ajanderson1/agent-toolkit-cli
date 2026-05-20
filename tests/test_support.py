@@ -43,7 +43,10 @@ def test_supported_pairs_known_members():
     assert ("claude", "command") in SUPPORTED_PAIRS
     # ("claude", "hook"): unsupported until ClaudeHookAdapter lands (#123).
     assert ("claude", "hook") not in SUPPORTED_PAIRS
-    assert ("claude", "plugin") in SUPPORTED_PAIRS
+    # ("claude", "plugin"): config_file cell owned by ClaudePluginAdapter
+    # (mutates ~/.claude/plugins/installed_plugins.json + known_marketplaces.json);
+    # no symlink slot, so absent from SUPPORTED_PAIRS (#149).
+    assert ("claude", "plugin") not in SUPPORTED_PAIRS
     assert ("codex", "skill") in SUPPORTED_PAIRS
     assert ("codex", "agent") in SUPPORTED_PAIRS   # added in #140
     assert ("opencode", "skill") in SUPPORTED_PAIRS
@@ -125,8 +128,10 @@ def test_supported_kinds_for_claude_returns_full_kind_set():
     from agent_toolkit_cli._support import supported_kinds_for
 
     # "hook" intentionally omitted — no ClaudeHookAdapter exists yet (#123).
+    # "plugin" intentionally omitted — config_file cell via ClaudePluginAdapter,
+    # not a symlink slot (#149).
     assert supported_kinds_for("claude") == (
-        "skill", "agent", "command", "plugin",
+        "skill", "agent", "command",
     )
 
 
