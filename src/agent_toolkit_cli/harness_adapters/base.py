@@ -51,6 +51,24 @@ class HookEntry:
 
 
 @dataclass(frozen=True)
+class PluginEntry:
+    """One catalog plugin entry, ready for adapter consumption.
+
+    `name` is the toolkit slug (canonical id).
+    `marketplace` is the short name keying into known_marketplaces.json.
+    `marketplace_source` is the verbatim `spec.source.marketplaceSource` block
+    — uses Claude's on-disk key `source` (not `type`).
+    `plugin` is the plugin name as known to the marketplace.
+    `version` is `"latest"` or a pinned semver string.
+    """
+    name: str
+    marketplace: str
+    marketplace_source: dict
+    plugin: str
+    version: str
+
+
+@dataclass(frozen=True)
 class WriteAction:
     """Describes a single filesystem mutation produced by an adapter.
 
