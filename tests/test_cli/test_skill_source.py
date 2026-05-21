@@ -56,3 +56,32 @@ def test_path_traversal_rejected():
 def test_unparseable_rejected():
     with pytest.raises(SourceParseError):
         parse_source("not a url and not a path")
+
+
+def test_file_url_happy_path():
+    s = parse_source("file:///tmp/parent-src")
+    assert s.type == "git"
+    assert s.url == "file:///tmp/parent-src"
+    assert s.owner_repo == "local/parent-src"
+    assert s.ref is None
+    assert s.subpath is None
+
+
+def test_file_url_with_tree_ref_and_subpath():
+    s = parse_source("file:///tmp/parent-src/tree/main/sub/folder")
+    assert s.owner_repo == "local/parent-src"
+    assert s.ref == "main"
+    assert s.subpath == "sub/folder"
+
+
+def test_file_url_strips_dotgit_suffix():
+    s = parse_source("file:///tmp/parent-src.git")
+    assert s.url == "file:///tmp/parent-src"
+    assert s.owner_repo == "local/parent-src"
+
+
+def test_file_url_empty_body_rejected():
+    with pytest.raises(SourceParseError):
+        parse_source("file://")
+    with pytest.raises(SourceParseError):
+        parse_source("file:///")

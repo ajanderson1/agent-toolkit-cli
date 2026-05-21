@@ -108,6 +108,41 @@ def _parse_https(url: str) -> ParsedSource:
     )
 
 
+def _parse_file_url(url: str) -> ParsedSource:
+    """Parse a file:// URL into a synthetic owner/repo so the monorepo path can
+    treat a local clone as if it had a remote owner/repo.
+
+    Uses the file path's last component as `repo` and `local` as the synthetic
+    owner. Supports `/tree/<ref>/<subpath>` to address a subpath within the
+    parent, matching the GitHub URL convention.
+    """
+    body = url[len("file://"):]
+    # body might be "/abs/path[/tree/main/sub]" — split off tree/<ref>/<sub>.
+    ref: str | None = None
+    subpath: str | None = None
+    if "/tree/" in body:
+        head, _, rest = body.partition("/tree/")
+        parts = rest.split("/", 1)
+        ref = parts[0] or None
+        if len(parts) == 2 and parts[1]:
+            subpath = _sanitize_subpath(parts[1])
+        body = head
+    abs_path = body.removesuffix(".git").rstrip("/")
+    if not abs_path:
+        raise SourceParseError(f"Unparseable file:// URL: {url}")
+    repo = Path(abs_path).name
+    if not repo:
+        raise SourceParseError(f"Unparseable file:// URL: {url}")
+    owner_repo = f"local/{repo}"
+    return ParsedSource(
+        type="git",
+        url=f"file://{abs_path}",
+        owner_repo=owner_repo,
+        ref=ref,
+        subpath=subpath,
+    )
+
+
 def parse_source(input_: str) -> ParsedSource:
     if not input_:
         raise SourceParseError("empty source")
@@ -140,6 +175,9 @@ def parse_source(input_: str) -> ParsedSource:
 
     if input_.startswith(("http://", "https://")):
         return _parse_https(input_)
+
+    if input_.startswith("file://"):
+        return _parse_file_url(input_)
 
     # GitHub shorthand: owner/repo[/subpath] (no scheme, no leading dot/slash).
     m = re.fullmatch(
