@@ -57,8 +57,8 @@ Usage: agent-toolkit-cli skill add <source> [--ref <ref>] [--slug <slug>] [--ski
 
 | Flag | Description |
 |---|---|
-| `<source>` | `owner/repo`, full URL, SSH URL, local path, `owner/repo/<subpath>`, or `https://www.skills.sh/…` URL |
-| `--ref <ref>` | Git ref to pin (branch, tag, or SHA) |
+| `<source>` | `owner/repo`, `owner/repo@<ref>`, `owner/repo@<ref>/<subpath>`, full URL, SSH URL, local path, `owner/repo/<subpath>`, or `https://www.skills.sh/…` URL |
+| `--ref <ref>` | Git ref to pin (branch, tag, or SHA). Shorthand `owner/repo@<ref>` is equivalent; refs containing `/` need the `https://github.com/owner/repo/tree/<ref>/<subpath>` URL form. |
 | `--slug <slug>` | Override the slug used for the canonical directory and lock-file entry |
 | `--skill <name>` | Select one skill by `name:` frontmatter when `<source>` is a monorepo |
 
