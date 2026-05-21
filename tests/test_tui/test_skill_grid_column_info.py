@@ -32,10 +32,12 @@ async def test_universal_column_label_has_info_glyph():
         await pilot.pause()
         table = a.query_one("#skill-table", DataTable)
         labels = [str(c.label) for c in table.columns.values()]
-        # Layout: slug | universal | claude-code | pi | state
-        assert "ⓘ" in labels[1], f"universal label missing glyph: {labels[1]!r}"
-        assert "ⓘ" not in labels[2], f"claude-code label has glyph: {labels[2]!r}"
-        assert "ⓘ" not in labels[3], f"pi label has glyph: {labels[3]!r}"
+        # Layout: slug | description | universal | claude-code | pi | state | source
+        assert labels[1] == "description", f"description label missing: {labels[1]!r}"
+        assert "ⓘ" in labels[2], f"universal label missing glyph: {labels[2]!r}"
+        assert "ⓘ" not in labels[3], f"claude-code label has glyph: {labels[3]!r}"
+        assert "ⓘ" not in labels[4], f"pi label has glyph: {labels[4]!r}"
+        assert labels[-1] == "source", f"source label missing: {labels[-1]!r}"
 
 
 @pytest.mark.asyncio

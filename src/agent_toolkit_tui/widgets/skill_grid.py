@@ -1,13 +1,14 @@
 """Interactive DataTable for the TUI's skill tab.
 
-Columns: slug | claude-code | pi | state.
+Columns: slug | description | universal | claude-code | pi | state | source.
 
 `space` toggles a cell (queues link/unlink in `_pending`).
 `a` toggles a column.
 `^s` Apply is handled by the App, which reads pending_entries().
 
 The long tail of agents is managed via the CLI; the TUI grid only shows
-the interactive shortlist (claude-code + pi).
+the interactive shortlist (universal + claude-code + pi). The `description`
+and `source` columns are passive (no toggle / no info popup).
 """
 from __future__ import annotations
 
@@ -220,16 +221,17 @@ class SkillGrid(Vertical):
         self._rebuild(table)
 
     def _column_index(self, agent_name: str) -> int:
-        # Layout: [0]=slug, [1..N]=INTERACTIVE_AGENTS, [N+1]=state
+        # Layout: [0]=slug, [1]=description, [2..N+1]=INTERACTIVE_AGENTS,
+        #         [N+2]=state, [N+3]=source.
         try:
-            return 1 + list(INTERACTIVE_AGENTS).index(agent_name)
+            return 2 + list(INTERACTIVE_AGENTS).index(agent_name)
         except ValueError:
             return -1
 
     def _agent_for_column(self, col: int) -> str | None:
-        if col == 0:
+        if col < 2:
             return None
-        idx = col - 1
+        idx = col - 2
         if 0 <= idx < len(INTERACTIVE_AGENTS):
             return INTERACTIVE_AGENTS[idx]
         return None
@@ -238,6 +240,7 @@ class SkillGrid(Vertical):
         saved = table.cursor_coordinate
         table.clear(columns=True)
         table.add_column("slug", width=20)
+        table.add_column("description", width=40)
         for agent in INTERACTIVE_AGENTS:
             # Use "universal" verbatim for the bundle column (lowercase, per spec).
             # Other agents use their catalog display_name.
@@ -245,15 +248,18 @@ class SkillGrid(Vertical):
             label = f"{_INFO_GLYPH} {base}" if agent in COLUMN_INFO else base
             table.add_column(label, width=14)
         table.add_column("state", width=10)
+        table.add_column("source", width=30)
         for row in self._rows:
-            cells: list[str] = [row.slug]
+            cells: list[str] = [row.slug, row.description]
             for agent in INTERACTIVE_AGENTS:
                 cells.append(self._cell_glyph(row=row, agent=agent))
             cells.append(_STATE_MARKUP.get(row.state, row.state))
+            cells.append(row.source)
             table.add_row(*cells, key=f"skill:{row.slug}")
         if self._rows:
             max_row = len(self._rows) - 1
-            max_col = 1 + len(INTERACTIVE_AGENTS)
+            # Layout: slug + description + N agent cols + state + source.
+            max_col = 3 + len(INTERACTIVE_AGENTS)
             table.cursor_coordinate = Coordinate(
                 row=min(saved.row, max_row),
                 column=min(saved.column, max_col),
