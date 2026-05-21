@@ -847,7 +847,7 @@ async def test_skill_tab_renders_lock_rows(git_sandbox, tmp_path, monkeypatch):
     # to the real ~/.claude. The canonical + lock file are still created.
     result = CliRunner().invoke(cli_main, [
         "skill", "add", str(git_sandbox.upstream), "--slug", "demo", "-g",
-        "--harness", "codex",
+        "--agent", "codex",
     ])
     assert result.exit_code == 0, result.output
 

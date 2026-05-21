@@ -38,7 +38,7 @@ def test_npx_skills_list_reads_our_lock(
     runner = CliRunner()
     runner.invoke(main, [
         "skill", "add", str(git_sandbox.upstream), "--slug", "demo", "-g",
-        "--harness", "claude",
+        "--agent", "claude-code",
     ])
 
     # Upstream `npx skills` reads ~/.agents/.skill-lock.json for the global

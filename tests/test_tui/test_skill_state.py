@@ -11,7 +11,7 @@ def _add_demo_project(runner, upstream_path, project):
     return runner.invoke(main, [
         "--project", str(project),
         "skill", "add", str(upstream_path), "--slug", "demo", "-p",
-        "--harness", "claude",
+        "--agent", "claude-code",
     ])
 
 
@@ -21,13 +21,12 @@ def test_build_skill_rows_clean(git_sandbox, tmp_path: Path, monkeypatch):
     for k, v in git_sandbox.env.items():
         monkeypatch.setenv(k, v)
 
+    (project / ".claude").mkdir(exist_ok=True)
     CliRunner().invoke(main, [
         "--project", str(project),
         "skill", "add", str(git_sandbox.upstream), "--slug", "demo", "-p",
-        "--harness", "claude",
+        "--agent", "claude-code",
     ])
-    # Create .claude dir first
-    (project / ".claude").mkdir(exist_ok=True)
     _add_demo_project(CliRunner(), git_sandbox.upstream, project)
     rows = build_skill_rows(scope="project", home=None, project=project)
     assert any(r.slug == "demo" and r.state == "clean" for r in rows)

@@ -9,6 +9,7 @@ dependencies = [
     "ruamel.yaml>=0.18",
     "tomlkit>=0.13",
     "textual>=0.79",
+    "questionary>=2.0",
 ]
 
 [project.scripts]

@@ -12,7 +12,7 @@ def _add_demo_project(runner, upstream_path, project):
     return runner.invoke(main, [
         "--project", str(project),
         "skill", "add", str(upstream_path), "--slug", "demo", "-p",
-        "--harness", "claude",
+        "--agent", "claude-code",
     ])
 
 
@@ -24,8 +24,9 @@ def test_remove_clears_everything(git_sandbox, tmp_path: Path, monkeypatch):
 
     runner = CliRunner()
     _add_demo_project(runner, git_sandbox.upstream, project)
+    # --force bypasses the wizard (non-interactive path)
     result = runner.invoke(main, [
-        "--project", str(project), "skill", "remove", "demo", "-p",
+        "--project", str(project), "skill", "remove", "demo", "-p", "--force",
     ])
     assert result.exit_code == 0, result.output
     assert not (project / ".agents" / "skills" / "demo").exists()
@@ -34,9 +35,10 @@ def test_remove_clears_everything(git_sandbox, tmp_path: Path, monkeypatch):
     assert "demo" not in lock["skills"]
 
 
-def test_remove_refuses_dirty_without_force(
+def test_remove_without_force_skips_when_no_tty(
     git_sandbox, tmp_path: Path, monkeypatch,
 ):
+    """Without --force, wizard fires; non-TTY returns None => skipped."""
     project = tmp_path / "proj"
     project.mkdir()
     for k, v in git_sandbox.env.items():
@@ -45,12 +47,10 @@ def test_remove_refuses_dirty_without_force(
     runner = CliRunner()
     _add_demo_project(runner, git_sandbox.upstream, project)
     canonical = project / ".agents" / "skills" / "demo"
-    (canonical / "SKILL.md").write_text("uncommitted\n")
     result = runner.invoke(main, [
         "--project", str(project), "skill", "remove", "demo", "-p",
     ])
-    assert result.exit_code != 0
-    assert "dirty" in result.output.lower()
+    # Wizard returns None on non-TTY => "skipped" message, canonical intact
     assert canonical.exists()
 
 

@@ -26,7 +26,7 @@ def test_skill_add_project_writes_lock_and_creates_symlinks(
         "--project", str(project),
         "skill", "add", str(git_sandbox.upstream),
         "--slug", "demo", "-p",
-        "--harness", "claude",
+        "--agent", "claude-code",
     ])
     assert result.exit_code == 0, result.output
 
@@ -63,7 +63,7 @@ def test_skill_add_global_writes_lock_and_canonical(
     result = runner.invoke(main, [
         "skill", "add", str(git_sandbox.upstream),
         "--slug", "demo", "-g",
-        "--harness", "codex",
+        "--agent", "codex",
     ])
     assert result.exit_code == 0, result.output
 

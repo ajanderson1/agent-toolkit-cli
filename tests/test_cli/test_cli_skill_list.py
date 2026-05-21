@@ -16,7 +16,7 @@ def test_skill_list_shows_added_skill(git_sandbox, tmp_path: Path, monkeypatch):
     runner.invoke(main, [
         "--project", str(project),
         "skill", "add", str(git_sandbox.upstream), "--slug", "demo", "-p",
-        "--harness", "claude",
+        "--agent", "claude-code",
     ])
     result = runner.invoke(main, [
         "--project", str(project), "skill", "list", "-p",

@@ -11,7 +11,7 @@ def _add_demo_project(runner, upstream_path, project):
     return runner.invoke(main, [
         "--project", str(project),
         "skill", "add", str(upstream_path), "--slug", "demo", "-p",
-        "--harness", "claude",
+        "--agent", "claude-code",
     ])
 
 
