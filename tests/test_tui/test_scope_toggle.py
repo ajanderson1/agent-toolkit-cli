@@ -29,13 +29,13 @@ class _Host(App):
 
 @pytest.mark.asyncio
 async def test_scope_toggle_renders_both_labels():
-    """ScopeToggle composes one Label per scope value (project, user)."""
+    """ScopeToggle composes one Label per scope value (project, global)."""
     app = _Host()
     async with app.run_test() as pilot:
         await pilot.pause()
         labels = list(app.query(ScopeToggle).first().query(Label))
         texts = {str(label.render()).strip() for label in labels}
-        assert {"project", "user"}.issubset(texts)
+        assert {"project", "global"}.issubset(texts)
 
 
 @pytest.mark.asyncio
@@ -46,14 +46,14 @@ async def test_scope_toggle_set_active_marks_classes():
         await pilot.pause()
         toggle = app.query_one(ScopeToggle)
 
-        toggle.set_active("user")
+        toggle.set_active("global")
         await pilot.pause()
         project_label = toggle.query_one("#scope-toggle-project", Label)
-        user_label = toggle.query_one("#scope-toggle-user", Label)
-        assert "-active" in user_label.classes
+        global_label = toggle.query_one("#scope-toggle-global", Label)
+        assert "-active" in global_label.classes
         assert "-inactive" in project_label.classes
         assert "-active" not in project_label.classes
-        assert "-inactive" not in user_label.classes
+        assert "-inactive" not in global_label.classes
 
 
 @pytest.mark.asyncio
@@ -62,7 +62,7 @@ async def test_scope_toggle_click_dispatches_action_scope():
     app = _Host()
     async with app.run_test() as pilot:
         await pilot.pause()
-        # Click the inactive ('user') label directly.
-        await pilot.click("#scope-toggle-user")
+        # Click the inactive ('global') label directly.
+        await pilot.click("#scope-toggle-global")
         await pilot.pause()
-        assert app.scope_calls == ["user"]
+        assert app.scope_calls == ["global"]

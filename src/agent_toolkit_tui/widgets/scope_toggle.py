@@ -1,9 +1,8 @@
-"""ScopeToggle — paired-toggle widget for scope=project|user in the content header.
+"""ScopeToggle — paired-toggle widget for scope=project|global in the content header.
 
-Replaces the old Rich [@click=…] markup chips that were embedded in
-#content-header. Each scope is rendered as a Label with an explicit on_click
-handler, so mouse hit-testing is unambiguous and we don't depend on Rich
-action-link parsing inside a Static.
+Each scope is rendered as a Label with an explicit on_click handler, so mouse
+hit-testing is unambiguous. The host app owns the scope state machine; this
+widget is a pure view + click-source.
 """
 from __future__ import annotations
 
@@ -12,22 +11,11 @@ from textual.app import ComposeResult
 from textual.containers import Horizontal
 from textual.widgets import Label
 
-SCOPES: tuple[str, ...] = ("project", "user")
+SCOPES: tuple[str, ...] = ("project", "global")
 
 
 class ScopeToggle(Horizontal):
-    """Two-state toggle between 'project' and 'user' scopes.
-
-    Composition: a Horizontal of three Labels — a leading 'scope:' prefix
-    label plus one option Label per scope value. Option Labels carry the
-    'scope-option' class and one of '-active' / '-inactive' to drive CSS;
-    both share the same shape and padding so only colour distinguishes them.
-
-    Click handling: clicks on an option Label bubble to this widget's
-    `on_click`, which dispatches `self.app.action_scope(scope)`. The host
-    app owns the scope state machine; this widget is a pure view +
-    click-source.
-    """
+    """Two-state toggle between 'project' and 'global' scopes."""
 
     def __init__(self, *, active: str = "project", id: str | None = None) -> None:
         super().__init__(id=id)
@@ -60,12 +48,6 @@ class ScopeToggle(Horizontal):
             label.add_class("-active" if s == scope else "-inactive")
 
     def on_click(self, event: events.Click) -> None:
-        """Dispatch when a child Label is clicked.
-
-        Textual bubbles the Click event up from the Label to this Horizontal.
-        We identify the source by the event.widget.id and route to
-        self.app.action_scope.
-        """
         target = event.widget
         if target is None:
             return

@@ -1,11 +1,18 @@
 """agent-toolkit-cli Python CLI dispatcher."""
 from __future__ import annotations
 
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 import click
 
 from agent_toolkit_cli.commands.skill import skill
+
+
+try:
+    _VERSION = version("agent-toolkit")
+except PackageNotFoundError:
+    _VERSION = "unknown"
 
 
 @click.group(
@@ -17,6 +24,7 @@ from agent_toolkit_cli.commands.skill import skill
         "`uv tool install --from git+https://github.com/ajanderson1/agent-toolkit-cli@v1.0.0 agent-toolkit`."
     )
 )
+@click.version_option(_VERSION, "--version", "-V", prog_name="agent-toolkit-cli")
 @click.option(
     "--project",
     "project_root",
