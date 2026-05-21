@@ -1,0 +1,116 @@
+"""`agent-toolkit-cli skill ...` subcommand group.
+
+Add/update/push/remove/list/status verbs for the skill lock-file model.
+Other asset kinds remain on the legacy walker path.
+"""
+from __future__ import annotations
+
+import dataclasses
+from pathlib import Path
+
+import click
+
+from agent_toolkit_cli import skill_git
+from agent_toolkit_cli.skill_install import InstallError, install
+from agent_toolkit_cli.skill_lock import (
+    LockEntry,
+    add_entry,
+    read_lock,
+    write_lock,
+)
+from agent_toolkit_cli.skill_paths import SUPPORTED_HARNESSES, lock_file_path
+from agent_toolkit_cli.skill_source import SourceParseError, parse_source
+
+
+def _scope_and_roots(global_: bool, project: bool, ctx_project: Path | None):
+    if global_ and project:
+        raise click.UsageError("use either -g/--global or -p/--project, not both")
+    if global_:
+        return "global", Path.home(), None
+    project_root = ctx_project or Path.cwd()
+    return "project", None, project_root
+
+
+def _harness_tuple(harness: tuple[str, ...] | None) -> tuple[str, ...]:
+    if not harness:
+        return SUPPORTED_HARNESSES
+    for h in harness:
+        if h not in SUPPORTED_HARNESSES:
+            raise click.UsageError(f"unknown harness: {h}")
+    return tuple(harness)
+
+
+@click.group()
+def skill() -> None:
+    """Manage skills via per-skill upstream git repos + skills-lock.json."""
+
+
+@skill.command("add")
+@click.argument("source", required=True)
+@click.option(
+    "--slug", default=None,
+    help="Override the local slug (defaults to repo name).",
+)
+@click.option("--ref", default=None, help="Branch or tag to install.")
+@click.option("-g", "--global", "global_", is_flag=True)
+@click.option("-p", "--project", "project_flag", is_flag=True)
+@click.option(
+    "--harness", multiple=True,
+    help=f"Restrict to one or more of: {', '.join(SUPPORTED_HARNESSES)}.",
+)
+@click.pass_context
+def add(
+    ctx: click.Context,
+    source: str,
+    slug: str | None,
+    ref: str | None,
+    global_: bool,
+    project_flag: bool,
+    harness: tuple[str, ...],
+) -> None:
+    """Add a skill from SOURCE (owner/repo, URL, or local path)."""
+    try:
+        parsed = parse_source(source)
+    except SourceParseError as exc:
+        raise click.UsageError(str(exc)) from exc
+
+    if slug is None:
+        if parsed.owner_repo:
+            slug = parsed.owner_repo.split("/", 1)[1]
+        else:
+            slug = Path(parsed.url).name
+    if ref is not None:
+        parsed = dataclasses.replace(parsed, ref=ref)
+
+    scope, home, project_root = _scope_and_roots(
+        global_,
+        project_flag,
+        ctx.obj.get("project_root") if ctx.obj else None,
+    )
+    harnesses = _harness_tuple(harness)
+
+    try:
+        canonical = install(
+            parsed=parsed, slug=slug, scope=scope,
+            home=home, project=project_root, harnesses=harnesses, env=None,
+        )
+    except InstallError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    upstream_sha = skill_git.remote_head_sha(
+        canonical, ref=parsed.ref or "main", env=None,
+    )
+    local_sha = skill_git.head_sha(canonical, env=None)
+
+    lock_path = lock_file_path(scope=scope, home=home, project=project_root)
+    lock = read_lock(lock_path)
+    entry = LockEntry(
+        source=parsed.owner_repo or parsed.url,
+        source_type=parsed.type,
+        ref=parsed.ref,
+        skill_path="SKILL.md",
+        upstream_sha=upstream_sha,
+        local_sha=local_sha,
+    )
+    write_lock(lock_path, add_entry(lock, slug, entry))
+    click.echo(f"added {slug} <- {parsed.url}")
