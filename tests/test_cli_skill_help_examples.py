@@ -26,13 +26,34 @@ def test_skill_subcommand_help_has_examples_section(subcmd: str):
     assert "Examples:" in out, out
 
 
-def test_skill_help_no_deprecated_commands_in_examples():
-    """The Examples block must only reference v2 commands."""
-    out = _help(["skill", "--help"])
+_DEPRECATED_TOKENS = (
+    "check ", "link ", "doctor ", "fix ", "ingest ",
+    "inventory ", "migrate-skills ", "diff ", "unlink ", " pi ",
+)
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        ["skill"],
+        ["skill", "add"],
+        ["skill", "install"],
+        ["skill", "uninstall"],
+        ["skill", "list"],
+        ["skill", "status"],
+        ["skill", "update"],
+        ["skill", "push"],
+        ["skill", "remove"],
+    ],
+)
+def test_examples_block_has_no_deprecated_commands(args: list[str]):
+    """Every Examples: block (group + 8 subcommands) must only reference v2 commands."""
+    out = _help(args + ["--help"])
     examples = out.split("Examples:", 1)[1]
-    for removed in ("check ", "link ", "doctor ", "fix ", "ingest ",
-                    "inventory ", "migrate-skills ", "diff ", "unlink ", " pi "):
+    for removed in _DEPRECATED_TOKENS:
         assert removed not in examples, (
-            f"deprecated token {removed!r} appears in Examples block"
+            f"deprecated token {removed!r} in `{' '.join(args)} --help` Examples block"
         )
-    assert "--harness" not in examples, "--harness is a pre-v2 flag"
+    assert "--harness" not in examples, (
+        f"--harness is a pre-v2 flag (in `{' '.join(args)} --help`)"
+    )
