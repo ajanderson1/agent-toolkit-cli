@@ -18,7 +18,11 @@ from agent_toolkit_cli.skill_lock import (
     read_lock,
     write_lock,
 )
-from agent_toolkit_cli.skill_paths import SUPPORTED_HARNESSES, lock_file_path
+from agent_toolkit_cli.skill_paths import (
+    SUPPORTED_HARNESSES,
+    canonical_skill_dir,
+    lock_file_path,
+)
 from agent_toolkit_cli.skill_source import SourceParseError, parse_source
 
 
@@ -114,3 +118,61 @@ def add(
     )
     write_lock(lock_path, add_entry(lock, slug, entry))
     click.echo(f"added {slug} <- {parsed.url}")
+
+
+@skill.command("list")
+@click.option("-g", "--global", "global_", is_flag=True)
+@click.option("-p", "--project", "project_flag", is_flag=True)
+@click.pass_context
+def list_(ctx: click.Context, global_: bool, project_flag: bool) -> None:
+    """List installed skills from the lock file."""
+    scope, home, project_root = _scope_and_roots(
+        global_,
+        project_flag,
+        ctx.obj.get("project_root") if ctx.obj else None,
+    )
+    lock = read_lock(lock_file_path(scope=scope, home=home, project=project_root))
+    if not lock.skills:
+        click.echo("(no skills installed)")
+        return
+    for slug in sorted(lock.skills):
+        e = lock.skills[slug]
+        ref = e.ref or "main"
+        short = (e.upstream_sha or "")[:7]
+        click.echo(f"{slug}\t{e.source}\t{ref}\t{short}")
+
+
+@skill.command("status")
+@click.argument("slugs", nargs=-1)
+@click.option("-g", "--global", "global_", is_flag=True)
+@click.option("-p", "--project", "project_flag", is_flag=True)
+@click.pass_context
+def status_cmd(
+    ctx: click.Context,
+    slugs: tuple[str, ...],
+    global_: bool,
+    project_flag: bool,
+) -> None:
+    """Show per-skill working-tree status (clean/dirty/missing)."""
+    scope, home, project_root = _scope_and_roots(
+        global_,
+        project_flag,
+        ctx.obj.get("project_root") if ctx.obj else None,
+    )
+    lock = read_lock(lock_file_path(scope=scope, home=home, project=project_root))
+    targets = slugs or tuple(sorted(lock.skills))
+    for slug in targets:
+        if slug not in lock.skills:
+            click.echo(f"{slug}\t(not in lock)")
+            continue
+        canonical = canonical_skill_dir(
+            slug, scope=scope, home=home, project=project_root,
+        )
+        if not canonical.exists():
+            click.echo(f"{slug}\tmissing")
+            continue
+        wt = skill_git.status(canonical, env=None)
+        state = (
+            "dirty" if wt == skill_git.GitWorkingTreeStatus.DIRTY else "clean"
+        )
+        click.echo(f"{slug}\t{state}")
