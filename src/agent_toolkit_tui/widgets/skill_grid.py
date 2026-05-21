@@ -183,10 +183,10 @@ class SkillGrid(Vertical):
         except Exception:
             return
         col = table.cursor_coordinate.column
-        agent = self._agent_for_column(col)
-        if agent is None:
+        key = self._column_key_for_index(col)
+        if key is None:
             return
-        info = get_column_info(agent)
+        info = get_column_info(key)
         if info is None:
             return
         self.app.push_screen(ColumnInfoModal(info))

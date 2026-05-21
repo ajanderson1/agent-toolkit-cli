@@ -120,3 +120,27 @@ async def test_column_key_for_index_resolves_state():
         for i, agent in enumerate(INTERACTIVE_AGENTS, start=1):
             assert g._column_key_for_index(i) == agent
         assert g._column_key_for_index(state_col + 1) is None
+
+
+@pytest.mark.asyncio
+async def test_press_i_on_state_column_opens_modal():
+    from textual.app import App
+    from textual.coordinate import Coordinate
+    from textual.widgets import DataTable
+    from agent_toolkit_tui.skill_state import INTERACTIVE_AGENTS
+
+    class _A(App):
+        def compose(self):
+            yield SkillGrid([_row("alpha")], id="g")
+
+    a = _A()
+    async with a.run_test() as pilot:
+        await pilot.pause()
+        table = a.query_one("#skill-table", DataTable)
+        state_col = 1 + len(INTERACTIVE_AGENTS)
+        table.cursor_coordinate = Coordinate(row=0, column=state_col)
+        await pilot.pause()
+        await pilot.press("i")
+        await pilot.pause()
+        assert any(isinstance(s, ColumnInfoModal) for s in a.screen_stack), \
+            "ColumnInfoModal not pushed when pressing i on state column"
