@@ -350,7 +350,7 @@ def ensure_project_canonical(
     Raises InstallError if the slug is not in the global library lock.
     """
     from agent_toolkit_cli.skill_lock import (
-        LockEntry, add_entry, read_lock, write_lock,
+        LockEntry, add_entry, clone_url_from_entry, read_lock, write_lock,
     )
     from agent_toolkit_cli.skill_paths import lock_file_path
 
@@ -362,8 +362,8 @@ def ensure_project_canonical(
     project_canonical = project / ".agents" / "skills" / slug
     if not project_canonical.exists():
         project_canonical.parent.mkdir(parents=True, exist_ok=True)
-        source_url = entry.extras.get("sourceUrl") or entry.source
-        skill_git.clone(str(source_url), project_canonical, ref=entry.ref, env=env)
+        source_url = clone_url_from_entry(entry)
+        skill_git.clone(source_url, project_canonical, ref=entry.ref, env=env)
 
     project_lock_path = lock_file_path(scope="project", project=project)
     project_lock = read_lock(project_lock_path)

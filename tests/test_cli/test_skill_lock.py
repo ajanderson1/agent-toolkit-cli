@@ -5,6 +5,7 @@ from agent_toolkit_cli.skill_lock import (
     LockEntry,
     LockFile,
     add_entry,
+    clone_url_from_entry,
     read_lock,
     remove_entry,
     write_lock,
@@ -216,3 +217,31 @@ def test_new_file_defaults_to_v1(tmp_path: Path):
     raw = json.loads(p.read_text())
     assert raw["version"] == 1
     assert "demo" in raw["skills"]
+
+
+# ── clone_url_from_entry — used by both the v3 writer and the read-side
+# resolve in `ensure_project_canonical` (#159).
+
+
+def test_clone_url_from_entry_github_short_form():
+    e = LockEntry(source="foo/bar", source_type="github")
+    assert clone_url_from_entry(e) == "https://github.com/foo/bar.git"
+
+
+def test_clone_url_from_entry_gitlab_short_form():
+    e = LockEntry(source="foo/bar", source_type="gitlab")
+    assert clone_url_from_entry(e) == "https://gitlab.com/foo/bar.git"
+
+
+def test_clone_url_from_entry_extras_override_wins():
+    e = LockEntry(
+        source="foo/bar",
+        source_type="github",
+        extras={"sourceUrl": "git@github.com:override/x.git"},
+    )
+    assert clone_url_from_entry(e) == "git@github.com:override/x.git"
+
+
+def test_clone_url_from_entry_passthrough_for_local():
+    e = LockEntry(source="/tmp/some-upstream", source_type="local")
+    assert clone_url_from_entry(e) == "/tmp/some-upstream"

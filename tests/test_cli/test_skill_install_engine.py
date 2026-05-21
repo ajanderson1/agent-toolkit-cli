@@ -317,3 +317,52 @@ def test_ensure_project_canonical_writes_project_lock(git_sandbox, tmp_path, mon
     assert project_lock_path.exists(), "project lock must be written"
     data = json.loads(project_lock_path.read_text())
     assert "demo" in data.get("skills", {}), "demo must appear in project lock"
+
+
+def test_ensure_project_canonical_synthesises_github_url_for_v1_lock(
+    tmp_path, monkeypatch,
+):
+    """v1 lock entry with sourceType=github + bare owner/repo → git clone
+    is called with the synthesised https URL, not the bare short form (#159)."""
+    from agent_toolkit_cli import skill_install as si
+    from agent_toolkit_cli.skill_lock import (
+        LockEntry, LockFile, add_entry, write_lock,
+    )
+
+    library_root = tmp_path / "lib" / "skills"
+    library_root.mkdir(parents=True)
+    project = tmp_path / "proj"
+    project.mkdir()
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+
+    global_lock_path = library_root.parent / "skills-lock.json"
+    entry = LockEntry(
+        source="ajanderson1/journal-skill",
+        source_type="github",
+        ref=None,
+        skill_path="SKILL.md",
+    )
+    write_lock(
+        global_lock_path,
+        add_entry(LockFile(version=1, skills={}), "journal", entry),
+    )
+
+    captured: dict = {}
+
+    def fake_clone(url, dest, *, ref, env):
+        captured["url"] = url
+        captured["ref"] = ref
+        dest.mkdir(parents=True, exist_ok=True)
+        return None
+
+    monkeypatch.setattr(si.skill_git, "clone", fake_clone)
+
+    si.ensure_project_canonical(
+        slug="journal",
+        project=project,
+        global_lock_path=global_lock_path,
+        env=None,
+    )
+
+    assert captured["url"] == "https://github.com/ajanderson1/journal-skill.git"
+    assert captured["ref"] is None
