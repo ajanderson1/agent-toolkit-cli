@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.3.2](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.3.1...v2.3.2) (2026-05-21)
+
+
+### Documentation
+
+* **cli:** add Examples section to `skill --help` ([#171](https://github.com/ajanderson1/agent-toolkit-cli/issues/171)) ([96d8f91](https://github.com/ajanderson1/agent-toolkit-cli/commit/96d8f91307f8ee5c321cf7aa7aa19b4054b3c03f))
+
 ## [2.3.1](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.3.0...v2.3.1) (2026-05-21)
 
 
