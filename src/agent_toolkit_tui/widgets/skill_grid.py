@@ -20,7 +20,9 @@ from textual.coordinate import Coordinate
 from textual.widgets import DataTable
 
 from agent_toolkit_cli.skill_agents import AGENTS
+from agent_toolkit_tui.column_info import COLUMN_INFO, get_column_info
 from agent_toolkit_tui.skill_state import INTERACTIVE_AGENTS, SkillRow
+from agent_toolkit_tui.widgets.column_info_modal import ColumnInfoModal
 
 _STATE_MARKUP = {
     "clean":   "[green]clean[/]",
@@ -38,6 +40,7 @@ _PENDING_LINK   = "[yellow]+[/]"
 _PENDING_UNLINK = "[yellow]-[/]"
 _DRIFT_GLYPH    = "[red]![/]"
 _SKIPPED_GLYPH  = "[dim]●[/]"  # canonical-only, no symlink needed
+_INFO_GLYPH     = "ⓘ"
 
 Op = Literal["link", "unlink"]
 
@@ -53,6 +56,7 @@ class SkillGrid(Vertical):
     BINDINGS = [
         Binding("space", "toggle_cell", "Toggle", priority=True),
         Binding("a", "toggle_column", "All/None", priority=True),
+        Binding("i", "open_column_info", "Info", priority=True),
     ]
 
     def __init__(self, rows: list[SkillRow], *, id: str | None = None) -> None:
@@ -171,6 +175,21 @@ class SkillGrid(Vertical):
             self._pending[key] = target_op
         self._rebuild(table)
 
+    def action_open_column_info(self) -> None:
+        """Open ColumnInfoModal for the column under the cursor, if registered."""
+        try:
+            table = self.query_one("#skill-table", DataTable)
+        except Exception:
+            return
+        col = table.cursor_coordinate.column
+        agent = self._agent_for_column(col)
+        if agent is None:
+            return
+        info = get_column_info(agent)
+        if info is None:
+            return
+        self.app.push_screen(ColumnInfoModal(info))
+
     def _toggle_at(self, coord: Coordinate) -> None:
         try:
             table = self.query_one("#skill-table", DataTable)
@@ -222,7 +241,8 @@ class SkillGrid(Vertical):
         for agent in INTERACTIVE_AGENTS:
             # Use "universal" verbatim for the bundle column (lowercase, per spec).
             # Other agents use their catalog display_name.
-            label = "universal" if agent == "universal" else AGENTS[agent].display_name
+            base = "universal" if agent == "universal" else AGENTS[agent].display_name
+            label = f"{_INFO_GLYPH} {base}" if agent in COLUMN_INFO else base
             table.add_column(label, width=14)
         table.add_column("state", width=10)
         for row in self._rows:
