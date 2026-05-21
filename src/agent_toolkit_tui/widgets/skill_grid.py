@@ -236,6 +236,22 @@ class SkillGrid(Vertical):
             return INTERACTIVE_AGENTS[idx]
         return None
 
+    def _column_key_for_index(self, col: int) -> str | None:
+        """Resolve a column index to a COLUMN_INFO key.
+
+        Layout: [0]=slug, [1..N]=INTERACTIVE_AGENTS, [N+1]=state.
+        Returns None for unknown indices (including col 0; "slug" is not in
+        the info registry today).
+        """
+        if col == 0:
+            return None
+        n = len(INTERACTIVE_AGENTS)
+        if 1 <= col <= n:
+            return INTERACTIVE_AGENTS[col - 1]
+        if col == n + 1:
+            return "state"
+        return None
+
     def _rebuild(self, table: DataTable) -> None:
         saved = table.cursor_coordinate
         table.clear(columns=True)

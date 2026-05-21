@@ -99,3 +99,24 @@ async def test_press_i_on_slug_column_is_noop():
         await pilot.press("i")
         await pilot.pause()
         assert not any(isinstance(s, ColumnInfoModal) for s in a.screen_stack)
+
+
+@pytest.mark.asyncio
+async def test_column_key_for_index_resolves_state():
+    from textual.app import App
+    from agent_toolkit_tui.skill_state import INTERACTIVE_AGENTS
+
+    class _A(App):
+        def compose(self):
+            yield SkillGrid([_row("alpha")], id="g")
+
+    a = _A()
+    async with a.run_test() as pilot:
+        await pilot.pause()
+        g = a.query_one("#g", SkillGrid)
+        state_col = 1 + len(INTERACTIVE_AGENTS)
+        assert g._column_key_for_index(0) is None
+        assert g._column_key_for_index(state_col) == "state"
+        for i, agent in enumerate(INTERACTIVE_AGENTS, start=1):
+            assert g._column_key_for_index(i) == agent
+        assert g._column_key_for_index(state_col + 1) is None
