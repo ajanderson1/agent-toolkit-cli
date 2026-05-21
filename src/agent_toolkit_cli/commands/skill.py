@@ -173,6 +173,9 @@ def status_cmd(
         if not canonical.exists():
             click.echo(f"{slug}\tmissing")
             continue
+        if not skill_git.is_git_repo(canonical):
+            click.echo(f"{slug}\tcopy")
+            continue
         wt = skill_git.status(canonical, env=None)
         state = (
             "dirty" if wt == skill_git.GitWorkingTreeStatus.DIRTY else "clean"
@@ -210,6 +213,13 @@ def update_cmd(
         canonical = canonical_skill_dir(
             slug, scope=scope, home=home, project=project_root,
         )
+        if not skill_git.is_git_repo(canonical):
+            click.echo(
+                f"{slug}: copy-mode (no .git/) — cannot update; remove and "
+                f"re-add to switch to git-managed",
+            )
+            had_conflict = True
+            continue
         ref = entry.ref or "main"
         skill_git.fetch(canonical, env=None)
         try:
@@ -259,6 +269,12 @@ def push_cmd(
         canonical = canonical_skill_dir(
             slug, scope=scope, home=home, project=project_root,
         )
+        if not skill_git.is_git_repo(canonical):
+            click.echo(
+                f"{slug}: copy-mode (no .git/) — cannot push; remove and "
+                f"re-add to switch to git-managed",
+            )
+            continue
         if skill_git.status(canonical, env=None) == skill_git.GitWorkingTreeStatus.CLEAN:
             click.echo(f"{slug}: clean — nothing to push")
             continue
@@ -299,7 +315,7 @@ def remove_cmd(
         canonical = canonical_skill_dir(
             slug, scope=scope, home=home, project=project_root,
         )
-        if canonical.exists() and not force:
+        if canonical.exists() and skill_git.is_git_repo(canonical) and not force:
             wt = skill_git.status(canonical, env=None)
             if wt == skill_git.GitWorkingTreeStatus.DIRTY:
                 click.echo(f"{slug}: dirty — push or use --force to discard")

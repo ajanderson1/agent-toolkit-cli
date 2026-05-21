@@ -13,7 +13,7 @@ from agent_toolkit_cli import skill_git
 from agent_toolkit_cli.skill_lock import read_lock
 from agent_toolkit_cli.skill_paths import canonical_skill_dir, lock_file_path
 
-State = Literal["clean", "dirty", "missing"]
+State = Literal["clean", "dirty", "missing", "copy"]
 
 
 @dataclass(frozen=True)
@@ -36,6 +36,11 @@ def build_skill_rows(
         )
         if not canonical.exists():
             state: State = "missing"
+        elif not skill_git.is_git_repo(canonical):
+            # Skills installed by `npx skills add --copy` are plain files
+            # with no .git/. We can't run `git status` against them, but
+            # they're still on disk and usable by harnesses.
+            state = "copy"
         else:
             wt = skill_git.status(canonical, env=None)
             state = (
