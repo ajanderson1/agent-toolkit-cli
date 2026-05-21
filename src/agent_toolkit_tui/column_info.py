@@ -1,9 +1,9 @@
 """Per-column info content for SkillGrid headers.
 
 A column "info entry" is the content shown when the user presses `i` while
-the cursor is on a cell in that column. The registry maps a column name
-(matching an entry in INTERACTIVE_AGENTS, plus future extensions like
-"slug"/"state") to a factory that produces a fresh ColumnInfo at call time.
+the cursor is on a cell in that column. The registry maps a column key
+(an entry in INTERACTIVE_AGENTS, or a non-agent key such as "state") to a
+factory that produces a fresh ColumnInfo at call time.
 
 Factories — not pre-built ColumnInfo objects — so the Universal list
 always reflects the current catalog without an import-time snapshot.
@@ -41,8 +41,27 @@ def _universal_info() -> ColumnInfo:
     )
 
 
+def _state_info() -> ColumnInfo:
+    # Source of truth for badge meaning: _STATE_MARKUP in
+    # agent_toolkit_tui/widgets/skill_grid.py (declaration order preserved).
+    return ColumnInfo(
+        title="State badges",
+        lines=[
+            "Per-skill working-tree state in this scope.",
+            "",
+            "• clean — installed and matches the library canonical",
+            "• dirty — installed but the on-disk copy diverges from the library",
+            "• missing — in the library, not installed in this scope",
+            "• copy — installed as a real copy (symlink fallback — e.g. Windows)",
+            "• library — in the library, not yet installed in this project "
+            "(project scope only — normal pre-install state)",
+        ],
+    )
+
+
 COLUMN_INFO: dict[str, Callable[[], ColumnInfo]] = {
     "universal": _universal_info,
+    "state": _state_info,
 }
 
 

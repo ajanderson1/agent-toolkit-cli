@@ -43,3 +43,28 @@ def test_get_column_info_is_recomputed_each_call():
     assert info_a is not info_b
     assert info_a.title == info_b.title
     assert info_a.lines == info_b.lines
+
+
+def test_state_entry_is_registered():
+    assert "state" in COLUMN_INFO
+
+
+def test_get_column_info_state_returns_columninfo():
+    info = get_column_info("state")
+    assert isinstance(info, ColumnInfo)
+    assert info.title == "State badges"
+
+
+def test_get_column_info_state_lists_all_five_badges():
+    info = get_column_info("state")
+    text = "\n".join(info.lines)
+    for badge in ("clean", "dirty", "missing", "copy", "library"):
+        assert badge in text, f"badge {badge!r} missing from state info"
+
+
+def test_get_column_info_state_badge_order_matches_state_markup():
+    """Order matches _STATE_MARKUP declaration order, with `library` last."""
+    info = get_column_info("state")
+    bullets = [ln for ln in info.lines if ln.lstrip().startswith("•")]
+    badges = [ln.split("—")[0].strip().lstrip("• ").strip() for ln in bullets]
+    assert badges == ["clean", "dirty", "missing", "copy", "library"]

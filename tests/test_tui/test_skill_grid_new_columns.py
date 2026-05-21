@@ -43,8 +43,8 @@ async def test_description_column_is_second():
         await pilot.pause()
         table = a.query_one("#skill-table", DataTable)
         labels = [str(c.label) for c in table.columns.values()]
-        assert labels[0] == "slug"
-        assert labels[1] == "description"
+        assert labels[0] == "SKILL"
+        assert labels[1] == "Description"
         # Per-row cell text matches each row's description.
         row_keys = list(table.rows.keys())
         # rows are sorted by slug ("alpha" then "beta")
@@ -70,7 +70,7 @@ async def test_source_column_is_last():
         await pilot.pause()
         table = a.query_one("#skill-table", DataTable)
         labels = [str(c.label) for c in table.columns.values()]
-        assert labels[-1] == "source"
+        assert labels[-1] == "Source"
         row_keys = list(table.rows.keys())
         cells = list(table.get_row(row_keys[0]))
         assert cells[-1] == "git@github.com:foo/bar.git"
