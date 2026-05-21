@@ -1,5 +1,29 @@
 # Changelog
 
+## [2.3.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v1.0.0...v2.3.0) (2026-05-21)
+
+
+### ⚠ BREAKING CHANGES
+
+* **cli:** All pre-v2 CLI commands (`check`, `diff`, `doctor`, `fix`, `ingest`, `inventory`, `link`, `list`, `migrate-skills`, `new`, `pi`, `unlink`) were removed in [#160](https://github.com/ajanderson1/agent-toolkit-cli/issues/160). Only `skill` remains. Install from the `v1.0.0` tag to restore the legacy surface: `uv tool install --from git+https://github.com/ajanderson1/agent-toolkit-cli@v1.0.0 agent-toolkit`. See tracker [#163](https://github.com/ajanderson1/agent-toolkit-cli/issues/163) for the per-command v2 rebuild status.
+* **tui:** The TUI no longer surfaces agent/command/hook/mcp/plugin/pi-extension tabs by default. `AGENT_TOOLKIT_TUI_LEGACY=1` restores the old layout.
+
+### Features
+
+* **skill:** Lock-file-driven `skill add | list | status | update | push | remove` — byte-compatible with `vercel-labs/skills`. ([#154](https://github.com/ajanderson1/agent-toolkit-cli/pull/154))
+* **skill-agents:** 55-agent catalog ported from `vercel-labs/skills`; universal vs. per-harness install model.
+* **tui:** Interactive `SkillGrid` (claude-code + pi) replaces the legacy multi-tab default.
+* **skill:** Interactive `skill` wizard via `questionary`.
+* **v2.2:** library/install split + universal bundle ([#158](https://github.com/ajanderson1/agent-toolkit-cli/pull/158)).
+
+### Bug Fixes
+
+* **tui:** `apply-skill` crash with bad git clone URL for v1 global lock ([#161](https://github.com/ajanderson1/agent-toolkit-cli/pull/161))
+
+### Chores
+
+* **cli:** Deprecate pre-v2 CLI commands; keep only `skill` ([#164](https://github.com/ajanderson1/agent-toolkit-cli/pull/164)). 97 → 19 source files; 1129 → 216 tests; dropped `jsonschema` / `pyyaml` / `ruamel.yaml` / `tomlkit` deps.
+
 ## [1.0.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v0.8.0...v1.0.0) (2026-05-20)
 
 
