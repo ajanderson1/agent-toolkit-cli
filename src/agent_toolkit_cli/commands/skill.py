@@ -12,11 +12,12 @@ from pathlib import Path
 import click
 
 from agent_toolkit_cli import skill_git
-from agent_toolkit_cli.skill_install import InstallError, install
+from agent_toolkit_cli.skill_install import InstallError, install, uninstall
 from agent_toolkit_cli.skill_lock import (
     LockEntry,
     add_entry,
     read_lock,
+    remove_entry,
     write_lock,
 )
 from agent_toolkit_cli.skill_paths import (
@@ -267,3 +268,49 @@ def push_cmd(
         entry.local_sha = skill_git.head_sha(canonical, env=None)
         write_lock(lock_path, lock)
         click.echo(f"{slug}: pushed")
+
+
+@skill.command("remove")
+@click.argument("slugs", nargs=-1, required=True)
+@click.option("-g", "--global", "global_", is_flag=True)
+@click.option("-p", "--project", "project_flag", is_flag=True)
+@click.option("--force", is_flag=True, help="Remove even if working tree is dirty.")
+@click.pass_context
+def remove_cmd(
+    ctx: click.Context,
+    slugs: tuple[str, ...],
+    global_: bool,
+    project_flag: bool,
+    force: bool,
+) -> None:
+    """Remove a skill: canonical clone, projections, and lock entry."""
+    scope, home, project_root = _scope_and_roots(
+        global_,
+        project_flag,
+        ctx.obj.get("project_root") if ctx.obj else None,
+    )
+    lock_path = lock_file_path(scope=scope, home=home, project=project_root)
+    lock = read_lock(lock_path)
+    had_dirty = False
+    for slug in slugs:
+        if slug not in lock.skills:
+            click.echo(f"{slug}: not in lock")
+            continue
+        canonical = canonical_skill_dir(
+            slug, scope=scope, home=home, project=project_root,
+        )
+        if canonical.exists() and not force:
+            wt = skill_git.status(canonical, env=None)
+            if wt == skill_git.GitWorkingTreeStatus.DIRTY:
+                click.echo(f"{slug}: dirty — push or use --force to discard")
+                had_dirty = True
+                continue
+        uninstall(
+            slug=slug, scope=scope, home=home, project=project_root,
+            harnesses=SUPPORTED_HARNESSES,
+        )
+        lock = remove_entry(lock, slug)
+        write_lock(lock_path, lock)
+        click.echo(f"{slug}: removed")
+    if had_dirty:
+        ctx.exit(1)
