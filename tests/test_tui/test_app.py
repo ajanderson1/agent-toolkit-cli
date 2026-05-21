@@ -227,7 +227,8 @@ async def test_app_starts_and_shows_pending_zero():
         assert "Pending" in str(label.render())
 
 
-async def test_toggle_then_apply_invokes_runner():
+async def test_toggle_then_apply_invokes_runner(monkeypatch):
+    monkeypatch.setenv("AGENT_TOOLKIT_TUI_LEGACY", "1")
     runner = FakeRunner(_doc())
     app = TUIApp(toolkit_root=Path("/r"), runner=runner)
     async with app.run_test() as pilot:
@@ -243,6 +244,9 @@ async def test_toggle_then_apply_invokes_runner():
         table.focus()
         await pilot.pause()
         await pilot.press("enter")  # DataTable's Enter binding runs action_select_cursor
+        # Switch to a non-skill kind so ctrl+s routes through the AssetGrid apply path.
+        await pilot.press("2")
+        await pilot.pause()
         await pilot.press("ctrl+s")
         await pilot.pause()
         assert runner.calls, "expected at least one runner call"
@@ -254,7 +258,8 @@ async def test_toggle_then_apply_invokes_runner():
         assert dry is False
 
 
-async def test_diff_uses_dry_run():
+async def test_diff_uses_dry_run(monkeypatch):
+    monkeypatch.setenv("AGENT_TOOLKIT_TUI_LEGACY", "1")
     runner = FakeRunner(_doc())
     app = TUIApp(toolkit_root=Path("/r"), runner=runner)
     async with app.run_test() as pilot:
@@ -268,6 +273,9 @@ async def test_diff_uses_dry_run():
         table.focus()
         await pilot.pause()
         await pilot.press("enter")
+        # Switch to a non-skill kind so ctrl+d routes through the AssetGrid diff path.
+        await pilot.press("2")
+        await pilot.pause()
         await pilot.press("ctrl+d")
         await pilot.pause()
         assert runner.calls, "diff should have invoked the runner"
@@ -278,8 +286,9 @@ async def test_diff_uses_dry_run():
 # R-3 new pilot tests
 # ---------------------------------------------------------------------------
 
-async def test_refresh_rebuilds_state():
+async def test_refresh_rebuilds_state(monkeypatch):
     """ctrl+r calls list_state again and clears pending that matches new state."""
+    monkeypatch.setenv("AGENT_TOOLKIT_TUI_LEGACY", "1")
     runner = FakeRunner(_doc())
     app = TUIApp(toolkit_root=Path("/r"), runner=runner)
     async with app.run_test() as pilot:
@@ -295,6 +304,9 @@ async def test_refresh_rebuilds_state():
         await pilot.pause()
         await pilot.press("enter")
         await pilot.pause()
+        # Switch to a non-skill kind so ctrl+r routes through the AssetGrid refresh path.
+        await pilot.press("2")
+        await pilot.pause()
         list_calls_before = runner.list_calls
         # Refresh
         await pilot.press("ctrl+r")
@@ -304,8 +316,9 @@ async def test_refresh_rebuilds_state():
         )
 
 
-async def test_scope_change_updates_grid():
+async def test_scope_change_updates_grid(monkeypatch):
     """Posting ScopeChanged updates the grid's internal scope."""
+    monkeypatch.setenv("AGENT_TOOLKIT_TUI_LEGACY", "1")
     from agent_toolkit_tui.messages import ScopeChanged
     from agent_toolkit_tui.widgets import AssetGrid
 
@@ -321,7 +334,10 @@ async def test_scope_change_updates_grid():
         await pilot.pause()
         assert grid._scope == "user"
 
-        # Toggle a cell and verify runner is called with scope=user
+        # Toggle a cell and verify runner is called with scope=user.
+        # Switch to a non-skill kind so ctrl+s routes through the AssetGrid apply path.
+        await pilot.press("2")
+        await pilot.pause()
         from textual.coordinate import Coordinate
         from textual.widgets import DataTable
         table = grid.query_one("#grid-table", DataTable)
@@ -409,8 +425,9 @@ async def test_a_key_skips_unsupported_cells():
         )
 
 
-async def test_ctrl_z_reverts_all_pending():
+async def test_ctrl_z_reverts_all_pending(monkeypatch):
     """Ctrl+Z clears the pending queue without applying anything."""
+    monkeypatch.setenv("AGENT_TOOLKIT_TUI_LEGACY", "1")
     from agent_toolkit_tui.widgets import AssetGrid
     from textual.coordinate import Coordinate
     from textual.widgets import DataTable
@@ -429,6 +446,9 @@ async def test_ctrl_z_reverts_all_pending():
         await pilot.pause()
         assert grid.pending_entries(), "precondition: should have a pending entry"
 
+        # Switch to a non-skill kind so ctrl+z routes through the AssetGrid revert path.
+        await pilot.press("2")
+        await pilot.pause()
         await pilot.press("ctrl+z")
         await pilot.pause()
         assert grid.pending_entries() == {}, "ctrl+z should clear pending"

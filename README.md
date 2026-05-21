@@ -2,7 +2,7 @@
 
 Python CLI and Textual TUI for managing AI-agent **skills** across Claude Code, Codex, OpenCode, Gemini CLI, and Pi. Lock-file-driven, byte-compatible with [`vercel-labs/skills`](https://github.com/vercel-labs/skills).
 
-> **v2.0.0 — breaking changes.** The TUI now shows skills only. Agents, commands, hooks, MCPs, plugins, and pi-extensions are temporarily off the TUI; set `AGENT_TOOLKIT_TUI_LEGACY=1` to restore the v1 multi-kind interface while we rebuild each kind on the new lock-file model. CLI verbs for those kinds (`link`, `unlink`, `list`, `check`, `fix`, `doctor`, `inventory`, `new`) are **unchanged**. See [`docs/agent-toolkit/roadmap.md`](docs/agent-toolkit/roadmap.md).
+> **v2.1.0 — universal-agent install model.** Built on the 55-agent catalog ported from [vercel-labs/skills](https://github.com/vercel-labs/skills/blob/main/src/agents.ts). Universal agents (codex, opencode, gemini-cli, +11 more whose `skillsDir == .agents/skills`) skip per-harness symlinks at global scope; the canonical clone is enough. Non-universal agents (claude-code, pi, windsurf, +37 more) still get their per-harness symlink. Interactive wizard groups by universality; TUI skill grid covers the two we explicitly support (claude-code, pi). v2.0.0's `AGENT_TOOLKIT_TUI_LEGACY=1` escape hatch is preserved.
 
 ## Install
 

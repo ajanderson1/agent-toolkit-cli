@@ -336,8 +336,17 @@ class TUIApp(App):
 
     # ----- actions --------------------------------------------------------
     def action_quit(self) -> None:
-        grid = self.query_one("#asset-grid", AssetGrid)
-        n = len(grid.pending_entries())
+        from agent_toolkit_tui.widgets.skill_grid import SkillGrid
+        n_asset = n_skill = 0
+        try:
+            n_asset = len(self.query_one("#asset-grid", AssetGrid).pending_entries())
+        except NoMatches:
+            pass
+        try:
+            n_skill = len(self.query_one("#skill-grid", SkillGrid).pending_entries())
+        except NoMatches:
+            pass
+        n = n_asset + n_skill
         if n == 0:
             self.exit()
             return
@@ -345,7 +354,6 @@ class TUIApp(App):
         def _on_close(discard: bool | None) -> None:
             if discard:
                 self.exit()
-
         self.push_screen(ConfirmDiscardScreen(n), _on_close)
 
     def action_focus_filter(self) -> None:
@@ -401,6 +409,12 @@ class TUIApp(App):
         self.push_screen(PiTabScreen(records=records, runner=self.runner))
 
     def action_refresh(self) -> None:
+        if self._kind == "skill":
+            self._refresh_skill_view()
+            self._refresh_pending_label()
+            self._refresh_content_header()
+            self._refresh_status_bar()
+            return
         self.state = build_state(self.runner)
         self.query_one("#asset-grid", AssetGrid).update_state(self.state)
         self.query_one("#kinds-sidebar", KindsSidebar).update_state(self.state)
@@ -409,6 +423,19 @@ class TUIApp(App):
         self._refresh_status_bar()
 
     def action_revert(self) -> None:
+        if self._kind == "skill":
+            from agent_toolkit_tui.widgets.skill_grid import SkillGrid
+            try:
+                grid = self.query_one("#skill-grid", SkillGrid)
+            except NoMatches:
+                return
+            n = len(grid.pending_entries())
+            grid.clear_pending()
+            self._refresh_pending_label()
+            self.query_one("#footer-pending", Static).update(
+                f"reverted: {n} pending cleared"
+            )
+            return
         grid = self.query_one("#asset-grid", AssetGrid)
         n = len(grid.pending_entries())
         grid.clear_pending()
@@ -419,7 +446,19 @@ class TUIApp(App):
         )
 
     def action_diff(self) -> None:
-        # Diff = run pending through --dry-run and surface counts in the footer.
+        if self._kind == "skill":
+            from agent_toolkit_tui.widgets.skill_grid import SkillGrid
+            try:
+                grid = self.query_one("#skill-grid", SkillGrid)
+            except NoMatches:
+                return
+            pending = grid.pending_entries()
+            n_link = sum(1 for op in pending.values() if op == "link")
+            n_unlink = sum(1 for op in pending.values() if op == "unlink")
+            self.query_one("#footer-pending", Static).update(
+                f"diff: {n_link} would-link, {n_unlink} would-unlink"
+            )
+            return
         grid = self.query_one("#asset-grid", AssetGrid)
         results = self._apply_pending(dry_run=True, grid=grid)
         ok = sum(r.ok for r in results)
@@ -429,9 +468,11 @@ class TUIApp(App):
         )
 
     def action_apply(self) -> None:
+        if self._kind == "skill":
+            self._apply_skill_pending()
+            return
         grid = self.query_one("#asset-grid", AssetGrid)
         results = self._apply_pending(dry_run=False, grid=grid)
-        # Refresh state after apply (per spec: always reconcile)
         self.state = build_state(self.runner)
         grid.update_state(self.state)
         ok = sum(r.ok for r in results)
@@ -440,6 +481,52 @@ class TUIApp(App):
             grid.clear_pending()
         self._refresh_pending_label()
         self._refresh_status_bar()
+        self.query_one("#footer-pending", Static).update(
+            f"applied: {ok} ok, {failed} failed"
+        )
+
+    def _apply_skill_pending(self) -> None:
+        from collections import defaultdict
+        from agent_toolkit_cli.skill_install import (
+            InstallError, InstallPlan, apply as engine_apply,
+        )
+        from agent_toolkit_tui.widgets.skill_grid import SkillGrid
+        try:
+            grid = self.query_one("#skill-grid", SkillGrid)
+        except NoMatches:
+            return
+        pending = grid.pending_entries()
+        if not pending:
+            return
+        by_slug: dict[tuple[str, str], tuple[set[str], set[str]]] = defaultdict(
+            lambda: (set(), set())
+        )
+        for (scope, agent, slug), op in pending.items():
+            adds, removes = by_slug[(scope, slug)]
+            (adds if op == "link" else removes).add(agent)
+        ok = failed = 0
+        for (scope, slug), (adds, removes) in by_slug.items():
+            p = InstallPlan(
+                slug=slug, scope=scope, source=None, ref=None,
+                add_agents=tuple(sorted(adds)),
+                remove_agents=tuple(sorted(removes)),
+            )
+            home = Path.home() if scope == "global" else None
+            project = None if scope == "global" else Path.cwd()
+            try:
+                engine_apply(p, home=home, project=project, env=None)
+                ok += 1
+            except InstallError as exc:
+                self.query_one("#footer-pending", Static).update(
+                    f"apply error ({slug}): {exc}"
+                )
+                failed += 1
+        saved = grid.pending_entries() if failed else {}
+        if failed == 0:
+            grid.clear_pending()
+        self._refresh_skill_view()
+        if saved:
+            grid.restore_pending(saved)
         self.query_one("#footer-pending", Static).update(
             f"applied: {ok} ok, {failed} failed"
         )
@@ -474,7 +561,17 @@ class TUIApp(App):
         return results
 
     def _refresh_pending_label(self) -> None:
-        n = len(self.query_one("#asset-grid", AssetGrid).pending_entries())
+        n_asset = n_skill = 0
+        try:
+            n_asset = len(self.query_one("#asset-grid", AssetGrid).pending_entries())
+        except Exception:
+            pass
+        try:
+            from agent_toolkit_tui.widgets.skill_grid import SkillGrid
+            n_skill = len(self.query_one("#skill-grid", SkillGrid).pending_entries())
+        except Exception:
+            pass
+        n = n_asset + n_skill
         self.query_one("#footer-pending", Static).update(f"Pending: {n}")
 
     # ----- content header + status bar ------------------------------------
@@ -485,6 +582,13 @@ class TUIApp(App):
         that was the V3 mistake; harness state lives in the grid columns.
         Scope toggle is a sibling widget (ScopeToggle), not Rich markup.
         """
+        if self._kind == "skill":
+            try:
+                from agent_toolkit_tui.widgets.skill_grid import SkillGrid
+                n = self.query_one("#skill-grid", SkillGrid).row_count
+            except (NoMatches, Exception):
+                n = 0
+            return f"  [b]Skill[/]   [dim]·[/]   {n} items"
         if self._kind == "pi-extension":
             kind_label = "Pi Ext"
         else:
