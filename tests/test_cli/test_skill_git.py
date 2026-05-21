@@ -12,6 +12,7 @@ from agent_toolkit_cli.skill_git import (
     merge,
     push,
     remote_head_sha,
+    reset_hard,
     status,
 )
 
@@ -192,4 +193,98 @@ def test_commit_all_isolation_against_outer_git_dir(
     ).stdout.strip()
     assert outer_head_after == outer_head_before, (
         "GIT_DIR leak landed a commit in the outer repo"
+    )
+
+
+def test_reset_hard_snaps_working_tree_to_origin_ref(git_sandbox, tmp_path):
+    """Advance upstream, then reset_hard() must pull the clone forward,
+    discarding any local divergence."""
+    # Advance upstream via a second clone.
+    advancer = tmp_path / "advancer"
+    subprocess.run(
+        ["git", "clone", str(git_sandbox.upstream), str(advancer)],
+        check=True, env=git_sandbox.env, capture_output=True,
+    )
+    (advancer / "NEW.md").write_text("from upstream\n")
+    subprocess.run(
+        ["git", "-C", str(advancer), "add", "NEW.md"],
+        check=True, env=git_sandbox.env, capture_output=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(advancer), "commit", "-m", "advance"],
+        check=True, env=git_sandbox.env, capture_output=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(advancer), "push", "origin", "main"],
+        check=True, env=git_sandbox.env, capture_output=True,
+    )
+
+    # Dirty up the clone with a local commit on a divergent path.
+    (git_sandbox.clone / "LOCAL.md").write_text("local-divergence\n")
+    subprocess.run(
+        ["git", "-C", str(git_sandbox.clone), "add", "LOCAL.md"],
+        check=True, env=git_sandbox.env, capture_output=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(git_sandbox.clone), "commit", "-m", "local-only"],
+        check=True, env=git_sandbox.env, capture_output=True,
+    )
+
+    fetch(git_sandbox.clone, env=git_sandbox.env)
+    reset_hard(git_sandbox.clone, ref="main", env=git_sandbox.env)
+
+    # Upstream's new file is present; local-only file is gone.
+    assert (git_sandbox.clone / "NEW.md").exists()
+    assert not (git_sandbox.clone / "LOCAL.md").exists()
+    # HEAD now matches origin/main exactly.
+    assert head_sha(git_sandbox.clone, env=git_sandbox.env) == remote_head_sha(
+        git_sandbox.clone, ref="main", env=git_sandbox.env
+    )
+
+
+def test_reset_hard_isolation_against_outer_git_dir(
+    git_sandbox, tmp_path, monkeypatch,
+):
+    """Regression-style guard: a leaked GIT_DIR / GIT_INDEX_FILE must not
+    redirect the hard-reset into the outer repo.
+
+    See feedback_git_env_leak.md — reset_hard() goes through _run() so the
+    same scrub fires.
+    """
+    outer = tmp_path / "outer"
+    subprocess.run(
+        ["git", "init", "--initial-branch=main", str(outer)],
+        check=True, env=git_sandbox.env, capture_output=True,
+    )
+    (outer / "seed").write_text("seed\n")
+    subprocess.run(
+        ["git", "-C", str(outer), "add", "seed"],
+        check=True, env=git_sandbox.env, capture_output=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(outer), "commit", "-m", "outer-seed"],
+        check=True, env=git_sandbox.env, capture_output=True,
+    )
+    outer_head_before = subprocess.run(
+        ["git", "-C", str(outer), "rev-parse", "HEAD"],
+        check=True, env=git_sandbox.env, capture_output=True, text=True,
+    ).stdout.strip()
+
+    monkeypatch.setenv("GIT_DIR", str(outer / ".git"))
+    monkeypatch.setenv("GIT_INDEX_FILE", str(outer / ".git" / "index"))
+
+    import os
+    merged_env = os.environ.copy() | git_sandbox.env
+    merged_env["GIT_DIR"] = str(outer / ".git")
+    merged_env["GIT_INDEX_FILE"] = str(outer / ".git" / "index")
+
+    fetch(git_sandbox.clone, env=merged_env)
+    reset_hard(git_sandbox.clone, ref="main", env=merged_env)
+
+    outer_head_after = subprocess.run(
+        ["git", "-C", str(outer), "rev-parse", "HEAD"],
+        check=True, env=git_sandbox.env, capture_output=True, text=True,
+    ).stdout.strip()
+    assert outer_head_after == outer_head_before, (
+        "GIT_DIR leak caused reset_hard to touch the outer repo"
     )
