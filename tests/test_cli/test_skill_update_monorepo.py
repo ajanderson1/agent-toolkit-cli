@@ -249,3 +249,72 @@ def test_update_monorepo_refuses_dirty_working_tree(tmp_path, monkeypatch):
         "dirty-tree refusal should reject before starting merge"
     assert (parent_clone / "mkdocs" / "SKILL.md").read_text() == "dirty\n", \
         "user's uncommitted change must survive"
+
+
+def test_update_monorepo_merges_without_global_git_identity(
+    tmp_path, monkeypatch,
+):
+    """Regression: CI runners (and fresh dev VMs) have no global git config.
+    The `skill update` merge code path must inject a synthetic identity so
+    the merge commit can be created without requiring host-level config.
+
+    Reproduces the CI failure mode by pointing HOME at an empty directory
+    (so git can't read ~/.gitconfig) and stripping every GIT_* env var (so
+    no identity is inherited)."""
+    fake_home = tmp_path / "fake-home"
+    fake_home.mkdir()
+    monkeypatch.setenv("HOME", str(fake_home))
+    for var in (
+        "GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL",
+        "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL",
+        "GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM",
+    ):
+        monkeypatch.delenv(var, raising=False)
+    # Belt-and-braces: point system config at /dev/null so even a host
+    # /etc/gitconfig can't supply an identity.
+    monkeypatch.setenv("GIT_CONFIG_SYSTEM", "/dev/null")
+
+    parent = _init_parent(tmp_path)
+    parent_url = f"file://{parent}"
+    library = tmp_path / "library"
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library / "skills"))
+
+    runner = CliRunner()
+    r1 = runner.invoke(cli, ["skill", "add", parent_url, "--skill", "mkdocs"])
+    assert r1.exit_code == 0, r1.output
+
+    candidates = list((library / "skills" / "_parents").glob("*/*"))
+    assert len(candidates) == 1, candidates
+    parent_clone = candidates[0]
+
+    env = scrub_git_env()  # no identity vars — same scrub git_sandbox uses
+
+    # Local commit (still needs inline -c flags because we're talking to git
+    # directly, not through the production code path under test).
+    (parent_clone / "mkdocs" / "LOCAL.md").write_text("local\n")
+    for cmd in (
+        ["git", "-c", "user.email=t@t", "-c", "user.name=t", "add", "."],
+        ["git", "-c", "user.email=t@t", "-c", "user.name=t",
+         "commit", "-q", "-m", "local"],
+    ):
+        subprocess.run(cmd, cwd=parent_clone, check=True, env=env)
+
+    # Upstream commit on a different file.
+    (parent / "mkdocs" / "UPSTREAM.md").write_text("upstream\n")
+    for cmd in (
+        ["git", "-c", "user.email=t@t", "-c", "user.name=t", "add", "."],
+        ["git", "-c", "user.email=t@t", "-c", "user.name=t",
+         "commit", "-q", "-m", "upstream"],
+    ):
+        subprocess.run(cmd, cwd=parent, check=True, env=env)
+
+    # Now run `skill update` with no host identity available. This is the
+    # exact CI condition. The production merge call must inject identity
+    # via `-c user.name/email` to succeed.
+    r2 = runner.invoke(cli, ["skill", "update", "mkdocs", "-g"])
+    assert r2.exit_code == 0, r2.output
+    assert "Committer identity unknown" not in r2.output, r2.output
+
+    canonical = library / "skills" / "mkdocs"
+    assert (canonical / "LOCAL.md").read_text() == "local\n"
+    assert (canonical / "UPSTREAM.md").read_text() == "upstream\n"

@@ -83,9 +83,25 @@ def fetch(repo: Path, *, env: dict[str, str] | None) -> GitResult:
     return GitResult(stdout=proc.stdout, stderr=proc.stderr)
 
 
+_DEFAULT_MERGE_IDENTITY = (
+    "-c", "user.name=agent-toolkit-cli",
+    "-c", "user.email=noreply@agent-toolkit-cli",
+)
+
+
 def merge(repo: Path, *, ref: str, env: dict[str, str] | None) -> GitResult:
+    """Merge `origin/<ref>` into the current branch.
+
+    Pins a synthetic `user.name`/`user.email` via `-c` so the merge commit
+    can be created without relying on the host's global git config — agents,
+    CI runners, and fresh dev VMs often have no identity configured. Callers
+    that need to override (tests, future per-user flows) can still inject
+    `GIT_AUTHOR_*` / `GIT_COMMITTER_*` env vars, which take precedence over
+    `-c` config values.
+    """
     proc = _run(
-        ["git", "-C", str(repo), "merge", "--no-edit", f"origin/{ref}"],
+        ["git", "-C", str(repo), *_DEFAULT_MERGE_IDENTITY,
+         "merge", "--no-edit", f"origin/{ref}"],
         env=env,
     )
     return GitResult(stdout=proc.stdout, stderr=proc.stderr)
