@@ -9,6 +9,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
+import yaml
+
 from agent_toolkit_cli import skill_git
 from agent_toolkit_cli.skill_agents import AGENTS
 from agent_toolkit_cli.skill_install import _should_skip_symlink
@@ -45,6 +47,38 @@ class SkillRow:
     ref: str
     state: State
     cells: dict[tuple[str, str], SkillCell] = field(default_factory=dict)
+    description: str = ""
+
+
+def _read_skill_description(canonical: Path) -> str:
+    """Best-effort: read the `description:` from <canonical>/SKILL.md frontmatter.
+
+    Returns "" for any failure mode (missing dir, missing file, no frontmatter,
+    parse error, non-dict, missing key). Collapses whitespace so the cell stays
+    single-line.
+    """
+    if not canonical.exists() or not canonical.is_dir():
+        return ""
+    skill_md = canonical / "SKILL.md"
+    try:
+        text = skill_md.read_text()
+    except OSError:
+        return ""
+    if not text.startswith("---\n"):
+        return ""
+    end = text.find("\n---", 4)
+    if end == -1:
+        return ""
+    try:
+        fm = yaml.safe_load(text[4:end])
+    except yaml.YAMLError:
+        return ""
+    if not isinstance(fm, dict):
+        return ""
+    raw = fm.get("description")
+    if raw is None:
+        return ""
+    return " ".join(str(raw).split())
 
 
 def _universal_bundle_link(slug: str) -> Path:
@@ -134,5 +168,6 @@ def build_skill_rows(
         rows.append(SkillRow(
             slug=slug, source=entry.source, ref=entry.ref or "main",
             state=state, cells=cells,
+            description=_read_skill_description(canonical),
         ))
     return rows
