@@ -411,3 +411,28 @@ def test_diagnose_foreign_symlink_repair_foreign(
     assert f.fix_action is not None
     f.fix_action.apply()
     assert not link.is_symlink()
+
+
+def test_diagnose_dirty_tree(git_sandbox, tmp_path: Path, monkeypatch):
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    monkeypatch.setenv("HOME", str(fake_home))
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: fake_home))
+
+    runner = CliRunner()
+    _seed_library(runner, git_sandbox.upstream)
+    # Dirty the canonical.
+    (library_root / "demo" / "SKILL.md").write_text("edited\n")
+
+    from agent_toolkit_cli.skill_doctor import diagnose
+    findings = diagnose(
+        slugs=None, scope="global", home=fake_home, project=None,
+    )
+    dirty = [f for f in findings if f.kind == "dirty_tree"]
+    assert len(dirty) == 1
+    # Report-only.
+    assert dirty[0].fix_action is None

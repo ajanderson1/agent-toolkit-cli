@@ -295,4 +295,12 @@ def _check_slug(
                     bundle=bundle, canonical=canonical,
                 ),
             ))
+    if skill_git.is_git_repo(canonical):
+        if skill_git.status(canonical, env=None) == skill_git.GitWorkingTreeStatus.DIRTY:
+            findings.append(Finding(
+                kind="dirty_tree", slug=slug, scope=scope,
+                path=canonical,
+                detail=f"working tree at {canonical} has uncommitted changes",
+                fix_action=None,
+            ))
     return findings
