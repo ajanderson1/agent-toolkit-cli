@@ -83,7 +83,7 @@ def _make_reclone_action(
         if canonical.exists():
             return  # idempotent
         canonical.parent.mkdir(parents=True, exist_ok=True)
-        skill_git.clone(url, canonical, ref=entry.ref, env=None)
+        skill_git.clone(url, canonical, ref=ref, env=None)
 
     return FixAction(
         description=f"Re-clone {slug} from {url}",

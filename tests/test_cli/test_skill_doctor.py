@@ -4,6 +4,9 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
+from click.testing import CliRunner
+
+from agent_toolkit_cli.cli import main
 from agent_toolkit_cli.skill_doctor import FixAction, Finding
 
 
@@ -43,10 +46,6 @@ def test_diagnose_empty_lock_returns_no_findings(tmp_path: Path, monkeypatch):
         home=tmp_path / "home", project=None,
     )
     assert findings == []
-
-
-from click.testing import CliRunner
-from agent_toolkit_cli.cli import main
 
 
 def _seed_library(runner, upstream_path) -> None:
