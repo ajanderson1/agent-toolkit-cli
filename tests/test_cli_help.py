@@ -26,3 +26,18 @@ def test_top_level_help_describes_skill_purpose():
     result = runner.invoke(main, ["--help"])
     assert result.exit_code == 0
     assert "skill" in result.output.lower()
+
+
+def test_root_help_does_not_call_doctor_removed():
+    """v2.3.0 help string listed 'doctor' as removed; v2.3.x reintroduces it.
+
+    Guard against the stale claim by asserting doctor is not in the removed
+    list. (skill doctor itself is registered via `skill.add_command`.)"""
+    r = CliRunner().invoke(main, ["--help"])
+    assert r.exit_code == 0
+    # The "Pre-v2 commands ... were removed" sentence must not mention doctor.
+    removed_line = next(
+        (line for line in r.output.splitlines() if "were removed" in line),
+        "",
+    )
+    assert "doctor" not in removed_line, removed_line
