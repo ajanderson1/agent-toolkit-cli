@@ -6,24 +6,31 @@ from click.testing import CliRunner
 from agent_toolkit_cli.cli import main
 
 
-def test_push_publishes_local_edits(git_sandbox, tmp_path: Path, monkeypatch):
-    fake_home = tmp_path / "home"
-    fake_home.mkdir()
-    for k, v in git_sandbox.env.items():
-        monkeypatch.setenv(k, v)
-    monkeypatch.setenv("HOME", str(fake_home))
-
-    runner = CliRunner()
-    runner.invoke(main, [
-        "skill", "add", str(git_sandbox.upstream), "--slug", "demo", "-g",
+def _add_demo_project(runner, upstream_path, project):
+    (project / ".claude").mkdir(exist_ok=True)
+    return runner.invoke(main, [
+        "--project", str(project),
+        "skill", "add", str(upstream_path), "--slug", "demo", "-p",
         "--harness", "claude",
     ])
-    canonical = fake_home / ".agents" / "skills" / "demo"
+
+
+def test_push_publishes_local_edits(git_sandbox, tmp_path: Path, monkeypatch):
+    project = tmp_path / "proj"
+    project.mkdir()
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+
+    runner = CliRunner()
+    _add_demo_project(runner, git_sandbox.upstream, project)
+    canonical = project / ".agents" / "skills" / "demo"
     (canonical / "SKILL.md").write_text(
         "---\nname: demo\ndescription: Improved.\n---\n# improved\n"
     )
 
-    result = runner.invoke(main, ["skill", "push", "demo", "-g"])
+    result = runner.invoke(main, [
+        "--project", str(project), "skill", "push", "demo", "-p",
+    ])
     assert result.exit_code == 0, result.output
 
     verify = tmp_path / "verify"
@@ -35,18 +42,16 @@ def test_push_publishes_local_edits(git_sandbox, tmp_path: Path, monkeypatch):
 
 
 def test_push_clean_is_noop(git_sandbox, tmp_path: Path, monkeypatch):
-    fake_home = tmp_path / "home"
-    fake_home.mkdir()
+    project = tmp_path / "proj"
+    project.mkdir()
     for k, v in git_sandbox.env.items():
         monkeypatch.setenv(k, v)
-    monkeypatch.setenv("HOME", str(fake_home))
 
     runner = CliRunner()
-    runner.invoke(main, [
-        "skill", "add", str(git_sandbox.upstream), "--slug", "demo", "-g",
-        "--harness", "claude",
+    _add_demo_project(runner, git_sandbox.upstream, project)
+    result = runner.invoke(main, [
+        "--project", str(project), "skill", "push", "demo", "-p",
     ])
-    result = runner.invoke(main, ["skill", "push", "demo", "-g"])
     assert result.exit_code == 0
     assert "clean" in result.output.lower() or "nothing" in result.output.lower()
 
@@ -61,11 +66,10 @@ def test_push_does_not_leak_into_outer_repo(
     spurious 'self-improvement: ...' commit on the worktree's branch during
     lefthook's pre-commit pytest run.
     """
-    fake_home = tmp_path / "home"
-    fake_home.mkdir()
+    project = tmp_path / "proj"
+    project.mkdir()
     for k, v in git_sandbox.env.items():
         monkeypatch.setenv(k, v)
-    monkeypatch.setenv("HOME", str(fake_home))
 
     # Set up an "outer" repo to act as the would-be hijack target.
     outer = tmp_path / "outer"
@@ -92,16 +96,15 @@ def test_push_does_not_leak_into_outer_repo(
     monkeypatch.setenv("GIT_INDEX_FILE", str(outer / ".git" / "index"))
 
     runner = CliRunner()
-    runner.invoke(main, [
-        "skill", "add", str(git_sandbox.upstream), "--slug", "demo", "-g",
-        "--harness", "claude",
-    ])
-    canonical = fake_home / ".agents" / "skills" / "demo"
+    _add_demo_project(runner, git_sandbox.upstream, project)
+    canonical = project / ".agents" / "skills" / "demo"
     (canonical / "SKILL.md").write_text(
         "---\nname: demo\ndescription: Improved.\n---\n# improved\n"
     )
 
-    result = runner.invoke(main, ["skill", "push", "demo", "-g"])
+    result = runner.invoke(main, [
+        "--project", str(project), "skill", "push", "demo", "-p",
+    ])
     assert result.exit_code == 0, result.output
 
     outer_head_after = subprocess.run(

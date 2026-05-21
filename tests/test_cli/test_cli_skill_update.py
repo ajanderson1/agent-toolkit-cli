@@ -6,9 +6,11 @@ from click.testing import CliRunner
 from agent_toolkit_cli.cli import main
 
 
-def _add_demo(runner, upstream_path):
+def _add_demo_project(runner, upstream_path, project):
+    (project / ".claude").mkdir(exist_ok=True)
     return runner.invoke(main, [
-        "skill", "add", str(upstream_path), "--slug", "demo", "-g",
+        "--project", str(project),
+        "skill", "add", str(upstream_path), "--slug", "demo", "-p",
         "--harness", "claude",
     ])
 
@@ -39,33 +41,33 @@ def _advance_upstream(git_sandbox, files: dict[str, str]):
 
 
 def test_update_fast_forwards_clean(git_sandbox, tmp_path: Path, monkeypatch):
-    fake_home = tmp_path / "home"
-    fake_home.mkdir()
+    project = tmp_path / "proj"
+    project.mkdir()
     for k, v in git_sandbox.env.items():
         monkeypatch.setenv(k, v)
-    monkeypatch.setenv("HOME", str(fake_home))
 
     runner = CliRunner()
-    assert _add_demo(runner, git_sandbox.upstream).exit_code == 0
+    assert _add_demo_project(runner, git_sandbox.upstream, project).exit_code == 0
     _advance_upstream(git_sandbox, {"NEW.md": "from upstream\n"})
-    result = runner.invoke(main, ["skill", "update", "demo", "-g"])
+    result = runner.invoke(main, [
+        "--project", str(project), "skill", "update", "demo", "-p",
+    ])
     assert result.exit_code == 0, result.output
-    assert (fake_home / ".agents" / "skills" / "demo" / "NEW.md").exists()
+    assert (project / ".agents" / "skills" / "demo" / "NEW.md").exists()
 
 
 def test_update_surfaces_conflict_and_exits_nonzero(
     git_sandbox, tmp_path: Path, monkeypatch,
 ):
-    fake_home = tmp_path / "home"
-    fake_home.mkdir()
+    project = tmp_path / "proj"
+    project.mkdir()
     for k, v in git_sandbox.env.items():
         monkeypatch.setenv(k, v)
-    monkeypatch.setenv("HOME", str(fake_home))
 
     runner = CliRunner()
-    assert _add_demo(runner, git_sandbox.upstream).exit_code == 0
+    assert _add_demo_project(runner, git_sandbox.upstream, project).exit_code == 0
 
-    canonical = fake_home / ".agents" / "skills" / "demo"
+    canonical = project / ".agents" / "skills" / "demo"
     (canonical / "SKILL.md").write_text(
         "---\nname: demo\ndescription: Local edit.\n---\n# demo local\n"
     )
@@ -82,7 +84,9 @@ def test_update_surfaces_conflict_and_exits_nonzero(
         "SKILL.md":
             "---\nname: demo\ndescription: Upstream edit.\n---\n# demo upstream\n"
     })
-    result = runner.invoke(main, ["skill", "update", "demo", "-g"])
+    result = runner.invoke(main, [
+        "--project", str(project), "skill", "update", "demo", "-p",
+    ])
     assert result.exit_code != 0
     assert "conflict" in result.output.lower()
     assert "<<<<<<<" in (canonical / "SKILL.md").read_text()

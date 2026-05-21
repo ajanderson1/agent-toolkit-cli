@@ -842,10 +842,14 @@ async def test_skill_tab_renders_lock_rows(git_sandbox, tmp_path, monkeypatch):
         monkeypatch.setenv(k, v)
     monkeypatch.setenv("HOME", str(fake_home))
 
-    CliRunner().invoke(cli_main, [
+    # Use codex harness: codex is a universal agent, so global-scope add
+    # skips symlink creation (canonical IS the projection) and never writes
+    # to the real ~/.claude. The canonical + lock file are still created.
+    result = CliRunner().invoke(cli_main, [
         "skill", "add", str(git_sandbox.upstream), "--slug", "demo", "-g",
-        "--harness", "claude",
+        "--harness", "codex",
     ])
+    assert result.exit_code == 0, result.output
 
     runner = FakeRunner(_doc())
     app = TUIApp(toolkit_root=Path("/r"), runner=runner)
