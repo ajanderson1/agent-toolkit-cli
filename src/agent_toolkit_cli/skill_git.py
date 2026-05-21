@@ -91,6 +91,23 @@ def merge(repo: Path, *, ref: str, env: dict[str, str] | None) -> GitResult:
     return GitResult(stdout=proc.stdout, stderr=proc.stderr)
 
 
+def reset_hard(
+    repo: Path, *, ref: str, env: dict[str, str] | None,
+) -> GitResult:
+    """Hard-reset `repo`'s working tree to `origin/<ref>`.
+
+    Discards local commits and uncommitted changes. Goes through `_run` so
+    GIT_* env vars are scrubbed identically to every other git call
+    (see memory feedback_git_env_leak.md — a leaked GIT_DIR / GIT_INDEX_FILE
+    would otherwise redirect the operation into the parent repo).
+    """
+    proc = _run(
+        ["git", "-C", str(repo), "reset", "--hard", f"origin/{ref}"],
+        env=env,
+    )
+    return GitResult(stdout=proc.stdout, stderr=proc.stderr)
+
+
 def is_git_repo(repo: Path) -> bool:
     """True when `repo` contains a git working tree (`.git` directory or
     git-dir file). False for missing paths or plain file trees.
