@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Callable, Literal
 
 from agent_toolkit_cli import skill_git
-from agent_toolkit_cli.skill_agents import AGENTS, get_agent
+from agent_toolkit_cli.skill_agents import AGENTS
 from agent_toolkit_cli.skill_install import _should_skip_symlink
 from agent_toolkit_cli.skill_lock import (
     LockEntry, LockFile, clone_url_from_entry, read_lock, remove_entry, write_lock,
@@ -125,10 +125,8 @@ def _projection_paths(
     real agent at the given scope. Universal bundle handled separately.
     """
     out: list[tuple[str, Path]] = []
-    for name in AGENTS:
-        if name == "universal":
-            continue
-        if get_agent(name).is_universal:
+    for name, cfg in AGENTS.items():
+        if cfg.is_universal:
             # Skip rule fires at both scopes; no per-agent symlink expected.
             continue
         skip, _ = _should_skip_symlink(
@@ -186,7 +184,7 @@ def _check_slug(
         try:
             target = link.resolve()
         except OSError:
-            continue
+            continue  # broken symlink — reported by orphan_symlink detector (Task 6)
         if target == canonical_real:
             continue
         findings.append(Finding(

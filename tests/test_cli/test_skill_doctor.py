@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import shutil
+from dataclasses import replace as dc_replace
 from pathlib import Path
 
 from click.testing import CliRunner
 
+from agent_toolkit_cli import skill_agents
 from agent_toolkit_cli.cli import main
 from agent_toolkit_cli.skill_doctor import FixAction, Finding
 
@@ -143,14 +145,17 @@ def _patch_claude_global_skills_dir(monkeypatch, new_dir: Path) -> None:
     AgentConfig is frozen=True so we swap the dict entry rather than mutating the
     instance. monkeypatch restores the original entry on teardown.
     """
-    from agent_toolkit_cli import skill_agents
-    from dataclasses import replace as dc_replace
     original = skill_agents.AGENTS["claude-code"]
-    patched = dc_replace(original, global_skills_dir=new_dir)
-    monkeypatch.setitem(skill_agents.AGENTS, "claude-code", patched)
+    monkeypatch.setitem(skill_agents.AGENTS, "claude-code", dc_replace(original, global_skills_dir=new_dir))
 
 
-def test_diagnose_drifted_symlink_global(git_sandbox, tmp_path: Path, monkeypatch):
+def _setup_drifted_symlink_sandbox(
+    git_sandbox, tmp_path: Path, monkeypatch,
+) -> tuple[Path, Path, Path]:
+    """Seed a global library with 'demo' and plant a stale claude-code symlink.
+
+    Returns (fake_home, library_root, stale_link).
+    """
     library_root = tmp_path / "lib" / "skills"
     for k, v in git_sandbox.env.items():
         monkeypatch.setenv(k, v)
@@ -173,6 +178,14 @@ def test_diagnose_drifted_symlink_global(git_sandbox, tmp_path: Path, monkeypatc
     stale = claude_skills / "demo"
     stale.symlink_to(elsewhere)
 
+    return fake_home, library_root, stale
+
+
+def test_diagnose_drifted_symlink_global(git_sandbox, tmp_path: Path, monkeypatch):
+    fake_home, _library_root, stale = _setup_drifted_symlink_sandbox(
+        git_sandbox, tmp_path, monkeypatch,
+    )
+
     from agent_toolkit_cli.skill_doctor import diagnose
     findings = diagnose(
         slugs=None, scope="global", home=fake_home, project=None,
@@ -183,25 +196,9 @@ def test_diagnose_drifted_symlink_global(git_sandbox, tmp_path: Path, monkeypatc
 
 
 def test_drifted_symlink_fix_relinks(git_sandbox, tmp_path: Path, monkeypatch):
-    library_root = tmp_path / "lib" / "skills"
-    for k, v in git_sandbox.env.items():
-        monkeypatch.setenv(k, v)
-    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
-    fake_home = tmp_path / "home"
-    fake_home.mkdir()
-    monkeypatch.setenv("HOME", str(fake_home))
-    monkeypatch.setattr(Path, "home", staticmethod(lambda: fake_home))
-    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(fake_home / ".claude"))
-    _patch_claude_global_skills_dir(monkeypatch, fake_home / ".claude" / "skills")
-
-    runner = CliRunner()
-    _seed_library(runner, git_sandbox.upstream)
-    elsewhere = library_root / "elsewhere-slug"
-    elsewhere.mkdir(parents=True)
-    claude_skills = fake_home / ".claude" / "skills"
-    claude_skills.mkdir(parents=True)
-    stale = claude_skills / "demo"
-    stale.symlink_to(elsewhere)
+    fake_home, library_root, stale = _setup_drifted_symlink_sandbox(
+        git_sandbox, tmp_path, monkeypatch,
+    )
 
     from agent_toolkit_cli.skill_doctor import diagnose
     f = next(
