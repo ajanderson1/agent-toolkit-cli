@@ -40,6 +40,8 @@ def main(ctx: click.Context, project_root: Path | None) -> None:
 
 
 main.add_command(skill)
+# Plural alias for muscle memory (matches `npx -y skills`). See #180.
+main.add_command(skill, name="skills")
 
 
 if __name__ == "__main__":
