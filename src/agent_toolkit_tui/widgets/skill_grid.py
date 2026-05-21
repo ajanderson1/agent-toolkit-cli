@@ -1,14 +1,15 @@
 """Interactive DataTable for the TUI's skill tab.
 
-Columns: slug | description | universal | claude-code | pi | state | source.
+Columns: SKILL | Description | Universal ⓘ | Claude Code | Pi | State ⓘ | Source.
 
 `space` toggles a cell (queues link/unlink in `_pending`).
 `a` toggles a column.
+`i` opens ColumnInfoModal for the column under the cursor (Universal, State).
 `^s` Apply is handled by the App, which reads pending_entries().
 
 The long tail of agents is managed via the CLI; the TUI grid only shows
-the interactive shortlist (universal + claude-code + pi). The `description`
-and `source` columns are passive (no toggle / no info popup).
+the interactive shortlist (universal + claude-code + pi). The `Description`
+and `Source` columns are passive (no toggle / no info popup).
 """
 from __future__ import annotations
 
@@ -239,32 +240,33 @@ class SkillGrid(Vertical):
     def _column_key_for_index(self, col: int) -> str | None:
         """Resolve a column index to a COLUMN_INFO key.
 
-        Layout: [0]=slug, [1..N]=INTERACTIVE_AGENTS, [N+1]=state.
-        Returns None for unknown indices (including col 0; "slug" is not in
-        the info registry today).
+        Layout: [0]=slug, [1]=description, [2..N+1]=INTERACTIVE_AGENTS,
+                [N+2]=state, [N+3]=source.
+        Returns None for unknown indices (cols 0/1/N+3 — "slug", "description",
+        and "source" are not in the info registry today).
         """
-        if col == 0:
-            return None
         n = len(INTERACTIVE_AGENTS)
-        if 1 <= col <= n:
-            return INTERACTIVE_AGENTS[col - 1]
-        if col == n + 1:
+        if 2 <= col <= n + 1:
+            return INTERACTIVE_AGENTS[col - 2]
+        if col == n + 2:
             return "state"
         return None
 
     def _rebuild(self, table: DataTable) -> None:
         saved = table.cursor_coordinate
         table.clear(columns=True)
-        table.add_column("slug", width=20)
-        table.add_column("description", width=40)
+        table.add_column("SKILL", width=20)
+        table.add_column("Description", width=40)
         for agent in INTERACTIVE_AGENTS:
-            # Use "universal" verbatim for the bundle column (lowercase, per spec).
-            # Other agents use their catalog display_name.
-            base = "universal" if agent == "universal" else AGENTS[agent].display_name
-            label = f"{_INFO_GLYPH} {base}" if agent in COLUMN_INFO else base
+            # "Universal" gets a capitalised base; per-agent columns use the
+            # catalog display_name. The ⓘ glyph is suffixed for any column
+            # whose key is in COLUMN_INFO.
+            base = "Universal" if agent == "universal" else AGENTS[agent].display_name
+            label = f"{base} {_INFO_GLYPH}" if agent in COLUMN_INFO else base
             table.add_column(label, width=14)
-        table.add_column("state", width=10)
-        table.add_column("source", width=30)
+        state_label = f"State {_INFO_GLYPH}" if "state" in COLUMN_INFO else "State"
+        table.add_column(state_label, width=10)
+        table.add_column("Source", width=30)
         for row in self._rows:
             cells: list[str] = [row.slug, row.description]
             for agent in INTERACTIVE_AGENTS:
