@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import shutil
+import subprocess
 from dataclasses import replace as dc_replace
 from pathlib import Path
 
@@ -436,3 +437,37 @@ def test_diagnose_dirty_tree(git_sandbox, tmp_path: Path, monkeypatch):
     assert len(dirty) == 1
     # Report-only.
     assert dirty[0].fix_action is None
+
+
+def test_diagnose_lock_source_mismatch(git_sandbox, tmp_path: Path, monkeypatch):
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    monkeypatch.setenv("HOME", str(fake_home))
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: fake_home))
+
+    runner = CliRunner()
+    _seed_library(runner, git_sandbox.upstream)
+
+    # Point origin at a different URL on disk.
+    other = tmp_path / "other-remote.git"
+    subprocess.run(
+        ["git", "init", "--bare", str(other)],
+        check=True, env=git_sandbox.env, capture_output=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(library_root / "demo"),
+         "remote", "set-url", "origin", str(other)],
+        check=True, env=git_sandbox.env, capture_output=True,
+    )
+
+    from agent_toolkit_cli.skill_doctor import diagnose
+    findings = diagnose(
+        slugs=None, scope="global", home=fake_home, project=None,
+    )
+    mismatch = [f for f in findings if f.kind == "lock_source_mismatch"]
+    assert len(mismatch) == 1
+    assert mismatch[0].fix_action is None

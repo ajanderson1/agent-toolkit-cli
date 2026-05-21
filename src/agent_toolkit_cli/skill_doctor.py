@@ -215,6 +215,26 @@ def _make_bundle_repair_action(*, bundle: Path, canonical: Path) -> FixAction:
     )
 
 
+def _remote_origin_url(canonical: Path) -> str | None:
+    """Return `git remote get-url origin` for canonical, or None on failure."""
+    try:
+        proc = skill_git._run(
+            ["git", "-C", str(canonical), "remote", "get-url", "origin"],
+            env=None,
+        )
+    except skill_git.GitError:
+        return None
+    return proc.stdout.strip() or None
+
+
+def _normalise_git_url(url: str) -> str:
+    """Lowercase + strip a trailing .git so `foo` and `foo.git` compare equal."""
+    u = url.strip().lower()
+    if u.endswith(".git"):
+        u = u[:-4]
+    return u
+
+
 def _check_slug(
     *, slug: str, scope: Scope, home: Path | None, project: Path | None,
     entry: LockEntry, lock: LockFile, repair_foreign: bool,
@@ -301,6 +321,19 @@ def _check_slug(
                 kind="dirty_tree", slug=slug, scope=scope,
                 path=canonical,
                 detail=f"working tree at {canonical} has uncommitted changes",
+                fix_action=None,
+            ))
+    if skill_git.is_git_repo(canonical):
+        observed = _remote_origin_url(canonical)
+        expected = clone_url_from_entry(entry)
+        if observed is not None and _normalise_git_url(observed) != _normalise_git_url(expected):
+            findings.append(Finding(
+                kind="lock_source_mismatch", slug=slug, scope=scope,
+                path=canonical,
+                detail=(
+                    f"lock source {expected!r} != git remote origin "
+                    f"{observed!r}"
+                ),
                 fix_action=None,
             ))
     return findings
