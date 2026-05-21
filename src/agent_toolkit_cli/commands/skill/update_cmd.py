@@ -71,11 +71,14 @@ def update_cmd(
                 had_conflict = True
                 continue
             ref = entry.ref or "main"
+            skill_git.fetch(parent_dir, env=None)
             try:
-                skill_git.pull_ff_only(parent_dir, ref=ref, env=None)
+                skill_git.merge(parent_dir, ref=ref, env=None)
             except skill_git.GitError as exc:
                 click.echo(
-                    f"{slug}: parent pull failed (non-fast-forward?)"
+                    f"{slug}: merge failed in parent clone at {parent_dir}.\n"
+                    f"  Resolve conflicts there (or commit/stash your changes), "
+                    f"then re-run `agent-toolkit-cli skill update {slug}`."
                 )
                 click.echo(exc.stderr)
                 had_conflict = True
