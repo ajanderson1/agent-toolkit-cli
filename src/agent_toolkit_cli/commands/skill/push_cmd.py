@@ -38,11 +38,19 @@ def push_cmd(
     lock_path = lock_file_path(scope=scope, home=home, project=project_root)
     lock = read_lock(lock_path)
     targets = slugs or tuple(sorted(lock.skills))
+    rejected = False
     for slug in targets:
         if slug not in lock.skills:
             click.echo(f"{slug}: not in lock")
             continue
         entry = lock.skills[slug]
+        if entry.read_only:
+            click.echo(
+                f"{slug}: read-only (monorepo skill from {entry.parent_url}); "
+                f"`skill push` is rejected. Open a PR against the parent repo."
+            )
+            rejected = True
+            continue
         canonical = canonical_skill_dir(
             slug, scope=scope, home=home, project=project_root,
         )
@@ -61,3 +69,5 @@ def push_cmd(
         entry.local_sha = skill_git.head_sha(canonical, env=None)
         write_lock(lock_path, lock)
         click.echo(f"{slug}: pushed")
+    if rejected:
+        ctx.exit(1)

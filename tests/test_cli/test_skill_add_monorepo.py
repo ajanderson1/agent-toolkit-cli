@@ -1,6 +1,5 @@
 """End-to-end `skill add` against a fixture monorepo parent."""
 import json
-import os
 import subprocess
 from pathlib import Path
 
@@ -9,24 +8,17 @@ from click.testing import CliRunner
 
 from agent_toolkit_cli.cli import main as cli
 
+from tests.conftest import scrub_git_env
+
 
 FIXTURE = Path(__file__).parent.parent / "fixtures" / "monorepo_skills"
-
-
-def _clean_git_env() -> dict[str, str]:
-    """Strip inherited GIT_* vars so subprocess git calls don't leak into the
-    parent repo (see memory: feedback_git_env_leak.md). The pre-commit hook
-    runs tests with GIT_DIR/GIT_INDEX_FILE pointing at the calling repo, which
-    breaks `git init`/`git commit` inside an unrelated tmp directory.
-    """
-    return {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
 
 
 def _make_parent_repo(tmp_path: Path) -> str:
     """Initialise the fixture into a git repo and return its file URL."""
     parent_src = tmp_path / "parent-src"
     subprocess.run(["cp", "-R", str(FIXTURE), str(parent_src)], check=True)
-    env = _clean_git_env()
+    env = scrub_git_env()
     subprocess.run(
         ["git", "init", "-q", "-b", "main"],
         cwd=parent_src, check=True, env=env,

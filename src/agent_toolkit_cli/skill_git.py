@@ -108,6 +108,22 @@ def reset_hard(
     return GitResult(stdout=proc.stdout, stderr=proc.stderr)
 
 
+def pull_ff_only(
+    repo: Path, *, ref: str, env: dict[str, str] | None,
+) -> GitResult:
+    """`git pull --ff-only origin <ref>` for monorepo-parent refresh.
+
+    Same env scrubbing as the other helpers in this module. Raises GitError
+    when the remote can't be fast-forwarded (e.g. divergent history) — the
+    caller surfaces that as a conflict to the user.
+    """
+    proc = _run(
+        ["git", "-C", str(repo), "pull", "--ff-only", "origin", ref],
+        env=env,
+    )
+    return GitResult(stdout=proc.stdout, stderr=proc.stderr)
+
+
 def is_git_repo(repo: Path) -> bool:
     """True when `repo` contains a git working tree (`.git` directory or
     git-dir file). False for missing paths or plain file trees.
