@@ -7,13 +7,14 @@ caller's responsibility (via fix_action.apply).
 """
 from __future__ import annotations
 
+import datetime as _dt
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Literal
 
 from agent_toolkit_cli import skill_git
 from agent_toolkit_cli.skill_agents import AGENTS
-from agent_toolkit_cli.skill_install import _should_skip_symlink
+from agent_toolkit_cli.skill_install import _should_skip_symlink, _universal_bundle_link
 from agent_toolkit_cli.skill_lock import (
     LockEntry, LockFile, clone_url_from_entry, read_lock, remove_entry, write_lock,
 )
@@ -156,6 +157,33 @@ def _make_relink_action(*, link: Path, canonical: Path) -> FixAction:
     )
 
 
+def _make_bundle_repair_action(*, bundle: Path, canonical: Path) -> FixAction:
+    def _apply() -> None:
+        # Idempotent: if it's already a correct symlink, no-op.
+        if bundle.is_symlink() and bundle.resolve() == canonical.resolve():
+            return
+        if bundle.is_dir() and not bundle.is_symlink():
+            stamp = _dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+            backup = bundle.with_name(f"{bundle.name}.bak-doctor-{stamp}")
+            bundle.rename(backup)
+        if bundle.is_symlink():
+            bundle.unlink()
+        bundle.parent.mkdir(parents=True, exist_ok=True)
+        bundle.symlink_to(canonical)
+
+    return FixAction(
+        description=(
+            f"Back up real directory at {bundle} and replace with symlink to "
+            f"{canonical}"
+        ),
+        shell_preview=(
+            f"mv {bundle} {bundle}.bak-doctor-$(date +%Y%m%d-%H%M%S) && "
+            f"ln -s {canonical} {bundle}"
+        ),
+        apply=_apply,
+    )
+
+
 def _check_slug(
     *, slug: str, scope: Scope, home: Path | None, project: Path | None,
     entry: LockEntry, lock: LockFile, repair_foreign: bool,
@@ -196,4 +224,18 @@ def _check_slug(
             ),
             fix_action=_make_relink_action(link=link, canonical=canonical),
         ))
+    if scope == "global":
+        bundle = _universal_bundle_link(slug)
+        if bundle.exists() and not bundle.is_symlink():
+            findings.append(Finding(
+                kind="wrong_type_bundle", slug=slug, scope=scope,
+                path=bundle,
+                detail=(
+                    f"{bundle} is a real directory; expected symlink to "
+                    f"{canonical}"
+                ),
+                fix_action=_make_bundle_repair_action(
+                    bundle=bundle, canonical=canonical,
+                ),
+            ))
     return findings

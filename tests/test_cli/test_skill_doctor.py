@@ -213,3 +213,67 @@ def test_drifted_symlink_fix_relinks(git_sandbox, tmp_path: Path, monkeypatch):
     # Idempotent.
     f.fix_action.apply()
     assert stale.resolve() == (library_root / "demo").resolve()
+
+
+def test_diagnose_wrong_type_bundle_global(git_sandbox, tmp_path: Path, monkeypatch):
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    monkeypatch.setenv("HOME", str(fake_home))
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: fake_home))
+
+    runner = CliRunner()
+    _seed_library(runner, git_sandbox.upstream)
+
+    # Create a REAL directory at the bundle path (the v2.1-era layout).
+    bundle = fake_home / ".agents" / "skills" / "demo"
+    bundle.mkdir(parents=True)
+    (bundle / "SKILL.md").write_text("v2.1 leftover\n")
+
+    from agent_toolkit_cli.skill_doctor import diagnose
+    findings = diagnose(
+        slugs=None, scope="global", home=fake_home, project=None,
+    )
+    wrong = [f for f in findings if f.kind == "wrong_type_bundle"]
+    assert len(wrong) == 1
+    assert wrong[0].path == bundle
+
+
+def test_wrong_type_bundle_fix_moves_and_relinks(
+    git_sandbox, tmp_path: Path, monkeypatch,
+):
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    monkeypatch.setenv("HOME", str(fake_home))
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: fake_home))
+
+    runner = CliRunner()
+    _seed_library(runner, git_sandbox.upstream)
+    bundle = fake_home / ".agents" / "skills" / "demo"
+    bundle.mkdir(parents=True)
+    (bundle / "SKILL.md").write_text("v2.1 leftover\n")
+
+    from agent_toolkit_cli.skill_doctor import diagnose
+    f = next(
+        f for f in diagnose(
+            slugs=None, scope="global", home=fake_home, project=None,
+        )
+        if f.kind == "wrong_type_bundle"
+    )
+    f.fix_action.apply()
+
+    assert bundle.is_symlink()
+    assert bundle.resolve() == (library_root / "demo").resolve()
+    # Backup directory was created with a .bak-doctor- prefix.
+    backups = list(bundle.parent.glob("demo.bak-doctor-*"))
+    assert len(backups) == 1
+    # Idempotent: applying again does nothing destructive.
+    f.fix_action.apply()
+    assert bundle.is_symlink()
