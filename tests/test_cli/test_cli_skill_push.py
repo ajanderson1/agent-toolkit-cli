@@ -6,23 +6,33 @@ from click.testing import CliRunner
 from agent_toolkit_cli.cli import main
 
 
-def _add_demo_project(runner, upstream_path, project):
-    (project / ".claude").mkdir(exist_ok=True)
+def _add_and_install_project(runner, upstream_path, project):
+    """Add to library then install at project scope with claude-code."""
+    r = runner.invoke(main, [
+        "skill", "add", str(upstream_path), "--slug", "demo",
+    ])
+    if r.exit_code != 0:
+        return r
     return runner.invoke(main, [
         "--project", str(project),
-        "skill", "add", str(upstream_path), "--slug", "demo", "-p",
-        "--agent", "claude-code",
+        "skill", "install", "demo", "--scope", "project",
+        "--agents", "claude-code",
     ])
 
 
 def test_push_publishes_local_edits(git_sandbox, tmp_path: Path, monkeypatch):
     project = tmp_path / "proj"
     project.mkdir()
+    (project / ".claude").mkdir()
+    library_root = tmp_path / "lib" / "skills"
     for k, v in git_sandbox.env.items():
         monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
 
     runner = CliRunner()
-    _add_demo_project(runner, git_sandbox.upstream, project)
+    r = _add_and_install_project(runner, git_sandbox.upstream, project)
+    assert r.exit_code == 0, r.output
+
     canonical = project / ".agents" / "skills" / "demo"
     (canonical / "SKILL.md").write_text(
         "---\nname: demo\ndescription: Improved.\n---\n# improved\n"
@@ -44,11 +54,16 @@ def test_push_publishes_local_edits(git_sandbox, tmp_path: Path, monkeypatch):
 def test_push_clean_is_noop(git_sandbox, tmp_path: Path, monkeypatch):
     project = tmp_path / "proj"
     project.mkdir()
+    (project / ".claude").mkdir()
+    library_root = tmp_path / "lib" / "skills"
     for k, v in git_sandbox.env.items():
         monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
 
     runner = CliRunner()
-    _add_demo_project(runner, git_sandbox.upstream, project)
+    r = _add_and_install_project(runner, git_sandbox.upstream, project)
+    assert r.exit_code == 0, r.output
+
     result = runner.invoke(main, [
         "--project", str(project), "skill", "push", "demo", "-p",
     ])
@@ -62,14 +77,15 @@ def test_push_does_not_leak_into_outer_repo(
     """Regression: a leaked GIT_DIR from the parent process must not divert
     the self-improvement commit into the outer repo.
 
-    See feedback_git_env_leak.md — this is the exact failure that produced a
-    spurious 'self-improvement: ...' commit on the worktree's branch during
-    lefthook's pre-commit pytest run.
+    See feedback_git_env_leak.md.
     """
     project = tmp_path / "proj"
     project.mkdir()
+    (project / ".claude").mkdir()
+    library_root = tmp_path / "lib" / "skills"
     for k, v in git_sandbox.env.items():
         monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
 
     # Set up an "outer" repo to act as the would-be hijack target.
     outer = tmp_path / "outer"
@@ -96,7 +112,9 @@ def test_push_does_not_leak_into_outer_repo(
     monkeypatch.setenv("GIT_INDEX_FILE", str(outer / ".git" / "index"))
 
     runner = CliRunner()
-    _add_demo_project(runner, git_sandbox.upstream, project)
+    r = _add_and_install_project(runner, git_sandbox.upstream, project)
+    assert r.exit_code == 0, r.output
+
     canonical = project / ".agents" / "skills" / "demo"
     (canonical / "SKILL.md").write_text(
         "---\nname: demo\ndescription: Improved.\n---\n# improved\n"

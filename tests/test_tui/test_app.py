@@ -858,16 +858,18 @@ async def test_skill_tab_renders_lock_rows(git_sandbox, tmp_path, monkeypatch):
 
     fake_home = tmp_path / "home"
     fake_home.mkdir()
+    library_root = tmp_path / "lib" / "skills"
     for k, v in git_sandbox.env.items():
         monkeypatch.setenv(k, v)
     monkeypatch.setenv("HOME", str(fake_home))
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
 
-    # Use codex harness: codex is a universal agent, so global-scope add
-    # skips symlink creation (canonical IS the projection) and never writes
-    # to the real ~/.claude. The canonical + lock file are still created.
+    # skill add places the canonical in the library and writes the global lock.
+    # build_skill_rows(scope="global") reads library_lock_path() which resolves
+    # via AGENT_TOOLKIT_SKILLS_ROOT — no skill install needed for the TUI to
+    # see the row.
     result = CliRunner().invoke(cli_main, [
-        "skill", "add", str(git_sandbox.upstream), "--slug", "demo", "-g",
-        "--agent", "codex",
+        "skill", "add", str(git_sandbox.upstream), "--slug", "demo",
     ])
     assert result.exit_code == 0, result.output
 

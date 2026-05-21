@@ -6,12 +6,17 @@ from click.testing import CliRunner
 from agent_toolkit_cli.cli import main
 
 
-def _add_demo_project(runner, upstream_path, project):
-    (project / ".claude").mkdir(exist_ok=True)
+def _add_and_install_project(runner, upstream_path, project):
+    """Add to library then install at project scope."""
+    r = runner.invoke(main, [
+        "skill", "add", str(upstream_path), "--slug", "demo",
+    ])
+    if r.exit_code != 0:
+        return r
     return runner.invoke(main, [
         "--project", str(project),
-        "skill", "add", str(upstream_path), "--slug", "demo", "-p",
-        "--agent", "claude-code",
+        "skill", "install", "demo", "--scope", "project",
+        "--agents", "claude-code",
     ])
 
 
@@ -43,11 +48,14 @@ def _advance_upstream(git_sandbox, files: dict[str, str]):
 def test_update_fast_forwards_clean(git_sandbox, tmp_path: Path, monkeypatch):
     project = tmp_path / "proj"
     project.mkdir()
+    (project / ".claude").mkdir()
+    library_root = tmp_path / "lib" / "skills"
     for k, v in git_sandbox.env.items():
         monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
 
     runner = CliRunner()
-    assert _add_demo_project(runner, git_sandbox.upstream, project).exit_code == 0
+    assert _add_and_install_project(runner, git_sandbox.upstream, project).exit_code == 0
     _advance_upstream(git_sandbox, {"NEW.md": "from upstream\n"})
     result = runner.invoke(main, [
         "--project", str(project), "skill", "update", "demo", "-p",
@@ -61,11 +69,14 @@ def test_update_surfaces_conflict_and_exits_nonzero(
 ):
     project = tmp_path / "proj"
     project.mkdir()
+    (project / ".claude").mkdir()
+    library_root = tmp_path / "lib" / "skills"
     for k, v in git_sandbox.env.items():
         monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
 
     runner = CliRunner()
-    assert _add_demo_project(runner, git_sandbox.upstream, project).exit_code == 0
+    assert _add_and_install_project(runner, git_sandbox.upstream, project).exit_code == 0
 
     canonical = project / ".agents" / "skills" / "demo"
     (canonical / "SKILL.md").write_text(
