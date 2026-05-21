@@ -5,7 +5,6 @@ from pathlib import Path
 
 import click
 
-from agent_toolkit_cli._repo_resolution import RepoNotFoundError, resolve_toolkit_root
 from agent_toolkit_cli.commands.skill import skill
 
 
@@ -19,13 +18,6 @@ from agent_toolkit_cli.commands.skill import skill
     )
 )
 @click.option(
-    "--toolkit-repo",
-    "toolkit_repo",
-    type=click.Path(file_okay=False, path_type=Path),
-    default=None,
-    help="Path to the agent-toolkit repo (overrides env/walk-up/default).",
-)
-@click.option(
     "--project",
     "project_root",
     type=click.Path(file_okay=False, path_type=Path),
@@ -33,18 +25,10 @@ from agent_toolkit_cli.commands.skill import skill
     help="Path to the consumer project (default: CWD).",
 )
 @click.pass_context
-def main(ctx: click.Context, toolkit_repo: Path | None, project_root: Path | None) -> None:
+def main(ctx: click.Context, project_root: Path | None) -> None:
     """agent-toolkit-cli."""
     ctx.ensure_object(dict)
     ctx.obj["project_root"] = Path(project_root) if project_root else None
-    if toolkit_repo is None:
-        ctx.obj["toolkit_root"] = None
-        return
-    try:
-        ctx.obj["toolkit_root"] = resolve_toolkit_root(toolkit_repo)
-    except RepoNotFoundError as exc:
-        click.echo(str(exc), err=True)
-        ctx.exit(2)
 
 
 main.add_command(skill)

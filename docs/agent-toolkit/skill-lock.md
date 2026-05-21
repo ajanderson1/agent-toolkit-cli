@@ -134,7 +134,7 @@ The reverse also holds: a skill installed via `npx skills add owner/repo` lands 
 ## What this design intentionally does **not** do
 
 - **Auto-push** of self-improvements. There is no session-end hook that pushes for you. Run `skill push` manually (or wire it into your own workflow). A follow-on design will revisit auto-push once the manual flow is proven.
-- **Updates for the other six asset kinds.** Agent, command, mcp, hook, plugin, and pi-extension remain on the legacy walker model managed via `link` / `unlink` / `check` / `fix` / `doctor`. Phase 2 will revisit each.
+- **The other six asset kinds.** Agent, command, mcp, hook, plugin, and pi-extension were managed by the pre-v2 CLI commands removed in #160; the frozen surface lives at the `v1.0.0` tag. v2-native replacements (if any) land per-command — see the [#160 tracker issue](https://github.com/ajanderson1/agent-toolkit-cli/issues/163) for status.
 - **Submitting to the public skills.sh catalogue.** Your repos can be private; we use the same lock format and addressing scheme without depending on the catalogue.
 
 ## Where to look next

@@ -52,5 +52,5 @@ A tracker issue lists the v2-native rebuild status for each — see the PR body 
 ## See also
 
 - [`skill-lock.md`](skill-lock.md) — lock-file format and `skill` subcommand reference.
-- [`harness-matrix.md`](harness-matrix.md) — which agents are universal vs. per-harness.
+- The 55-agent catalog (`skillsDir == .agents/skills` = universal) lives in `src/agent_toolkit_cli/skill_agents.py`.
 - [`schema.md`](schema.md) — asset frontmatter schema (toolkit-repo SSOT, not consumed by this CLI post-v2.3.0).

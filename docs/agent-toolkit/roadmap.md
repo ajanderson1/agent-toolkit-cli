@@ -49,11 +49,11 @@ Once all seven kinds are lock-file-driven, the `AGENT_TOOLKIT_TUI_LEGACY=1` flag
 
 `AGENT_TOOLKIT_TUI_LEGACY` is removed at that point. The current default-mode behaviour (skills only) is itself a transitional state.
 
-### Walker + sidecar retirement
+### Walker + sidecar retirement — delivered in v2.3.0 (#160)
 
-Once no asset kind reaches the walker, the `walker.py` module, `*.toolkit.yaml` sidecar discovery, the `agent-frontmatter.v1alpha2.json` schema's sidecar branch, the `--toolkit-repo` flag, and the `link` / `unlink` / `check` / `fix` / `doctor` / `inventory` / `new` / `migrate-skills` legacy commands are all deleted.
+The `walker.py` module, `*.toolkit.yaml` sidecar discovery, the `agent-frontmatter.v1alpha2.json` schema's sidecar branch, the `--toolkit-repo` flag, and the `link` / `unlink` / `check` / `fix` / `doctor` / `inventory` / `new` / `migrate-skills` / `diff` / `list` / `pi` legacy commands were deleted in #160. The frozen v1 surface lives at the `v1.0.0` tag for anyone still needing it.
 
-This is a one-shot cleanup commit, not a gradual deprecation. Reaching it is the structural finish line for the v1 → v3 transition that started with v2.0.0.
+This was a one-shot cleanup commit, not a gradual deprecation. It is the structural finish line for the v1 → v3 transition that started with v2.0.0.
 
 ## Not on the roadmap (explicit non-goals)
 
