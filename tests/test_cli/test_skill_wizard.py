@@ -40,32 +40,25 @@ def test_select_remove_mode_test_hook():
     assert result.mode == "full"
 
 
-def test_skill_add_with_agent_flag_skips_wizard(git_sandbox, tmp_path, monkeypatch):
-    """--agent present => wizard is not invoked."""
-    monkeypatch.setenv("HOME", git_sandbox.env["HOME"])
-    project = tmp_path / "proj"
-    project.mkdir()
-    (project / ".claude").mkdir()
-    runner = CliRunner()
+def test_skill_add_never_invokes_wizard(git_sandbox, tmp_path, monkeypatch):
+    """v2.2: skill add is non-interactive; wizard is never called."""
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+
     from agent_toolkit_cli.commands.skill import wizard
+
     def boom(*a, **kw):
-        raise AssertionError("wizard should not be called")
+        raise AssertionError("wizard must not be called from skill add")
+
     monkeypatch.setattr(wizard, "select_agents_to_add", boom)
-    # Use project scope (won't touch real ~/.<harness>)
+
+    runner = CliRunner()
     result = runner.invoke(
         skill_group,
-        ["add", str(git_sandbox.upstream), "--slug", "demo",
-         "--agent", "claude-code", "-p"],
-        env={**git_sandbox.env},
+        ["add", str(git_sandbox.upstream), "--slug", "demo"],
+        env={**git_sandbox.env, "AGENT_TOOLKIT_SKILLS_ROOT": str(library_root)},
         catch_exceptions=False,
     )
-    # Verify add succeeded by checking the lock file
-    from agent_toolkit_cli.skill_lock import read_lock
-    from agent_toolkit_cli.skill_paths import lock_file_path
-    import os
-    os.chdir(project)
-    # Note: -p uses cwd; the test runner doesn't change cwd by default.
-    # Skip the assertion if exit code != 0 — common dir-handling quirks
-    # in CliRunner.
-    if result.exit_code != 0:
-        print(result.output)
+    assert result.exit_code == 0, result.output

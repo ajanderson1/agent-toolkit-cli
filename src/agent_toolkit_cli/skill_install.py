@@ -1,15 +1,15 @@
 """Canonical-clone + per-agent symlink projection, catalog-aware.
 
-Layout matches vercel-labs/skills:
-  canonical: <root>/.agents/skills/<slug>/   (a real git clone)
-  symlinks:  <agent.skills_dir>/<slug>       -> canonical
+v2.2 library/install split:
+  Library canonical: $AGENT_TOOLKIT_SKILLS_ROOT/<slug>/  (global-only, git tree)
+  Project canonical: <project>/.agents/skills/<slug>/    (independent git clone)
 
-Install rules (mirroring installer.ts:280-323):
-  - Global + universal agent  → no per-agent symlink (canonical IS the dir)
-  - Global + non-universal    → ~/.<agent.skills_dir>/<slug> symlink
-  - Project + universal       → <project>/.agents/skills/<slug> symlink
-  - Project + non-universal   → <project>/<agent.skills_dir>/<slug> symlink
-                                ONLY IF agent's root dir exists in project
+Symlink rules (v2.2, mirroring installer.ts:280-323):
+  - Global + "universal" bundle target  → ~/.agents/skills/<slug> → library
+  - Global + non-universal agent        → ~/.<agent-dir>/skills/<slug> → library
+  - Project + universal agent           → no symlink (canonical IS the install)
+  - Project + non-universal             → <project>/<agent-dir>/skills/<slug> → canonical
+                                          ONLY IF agent root dir exists in project
 """
 from __future__ import annotations
 
@@ -26,6 +26,7 @@ from agent_toolkit_cli.skill_paths import (
     Scope,
     agent_projection_dir,
     canonical_skill_dir,
+    library_skill_path,
     lock_file_path,
 )
 from agent_toolkit_cli.skill_source import ParsedSource
@@ -71,13 +72,28 @@ class InstallResult:
 def _should_skip_symlink(
     *, agent_name: str, scope: Scope, project: Path | None,
 ) -> tuple[bool, str]:
-    """Return (skip?, reason). Mirrors installer.ts:296-323."""
+    """Return (skip?, reason). Mirrors installer.ts:296-323 with v2.2 adjustments.
+
+    v2.2 semantics differ from v2.1 for universal agents at global scope:
+      - Global + universal: NOT skipped. We create ~/.agents/skills/<slug> → library.
+      - Project + universal: SKIPPED. The project canonical at
+        <project>/.agents/skills/<slug>/ IS the install; no symlink needed.
+      - Global + non-universal: NOT skipped (symlink → library).
+      - Project + non-universal: skipped if agent root dir is absent.
+
+    The special "universal" bundle token is handled in apply() before
+    _should_skip_symlink is called; it never reaches here as an agent_name.
+    """
     cfg = get_agent(agent_name)
-    # Rule 1: universal — canonical IS the agent projection (same path).
-    # Applies to both global and project scope because cfg.skills_dir ==
-    # ".agents/skills" for universal agents, which equals the canonical dir.
     if cfg.is_universal:
-        return True, "universal-global" if scope == "global" else "universal-project"
+        # Project canonical IS the universal-agent install path — no symlink.
+        if scope == "project":
+            return True, "universal-project"
+        # Global universal agents get a symlink ~/.agents/skills/<slug> → library,
+        # created via the universal bundle path in apply(). Per-agent universal
+        # symlinks (e.g. cfg.global_skills_dir) resolve through ~/.agents/skills/
+        # already at the OS level, so we skip the redundant per-agent write.
+        return True, "universal-global"
     # Rule 2: project + non-universal — only symlink if agent root exists.
     if scope == "project":
         project_dir = project or Path.cwd()
@@ -124,8 +140,12 @@ def _current_linked_agents(
 ) -> tuple[str, ...]:
     """Return agents whose symlink currently resolves to our canonical.
 
-    For agents where _should_skip_symlink() returns True, 'currently linked'
-    is determined by canonical existence (since no symlink is ever created)."""
+    Includes the "universal" bundle token at global scope if
+    ~/.agents/skills/<slug> is a symlink to the library canonical.
+
+    For project-scope universal agents (skip rule → canonical IS install),
+    'currently linked' means canonical exists.
+    """
     canonical = canonical_skill_dir(
         slug, scope=scope, home=home, project=project,
     )
@@ -133,17 +153,24 @@ def _current_linked_agents(
     canonical_exists = canonical.exists()
 
     linked: list[str] = []
+
+    # Check universal bundle token separately at global scope.
+    if scope == "global":
+        bundle_link = _universal_bundle_link(slug)
+        if bundle_link.is_symlink() and bundle_link.resolve() == canonical_real:
+            linked.append("universal")
+
     for name in AGENTS:
-        # Skip the synthetic 'universal' entry — never linked individually.
-        if not AGENTS[name].show_in_universal_list and name == "universal":
+        # Skip the synthetic 'universal' entry — handled above via bundle link.
+        if name == "universal":
             continue
 
         skip, _ = _should_skip_symlink(
             agent_name=name, scope=scope, project=project,
         )
         if skip:
-            # For skipped agents, 'linked' means 'canonical exists'.
-            if canonical_exists:
+            # For project-scope universal agents, 'linked' means canonical exists.
+            if scope == "project" and canonical_exists:
                 linked.append(name)
             continue
 
@@ -153,6 +180,11 @@ def _current_linked_agents(
         if link.is_symlink() and link.resolve() == canonical_real:
             linked.append(name)
     return tuple(linked)
+
+
+def _universal_bundle_link(slug: str) -> Path:
+    """The ~/.agents/skills/<slug> path used for universal-bundle installs at global scope."""
+    return Path.home() / ".agents" / "skills" / slug
 
 
 def apply(
@@ -191,6 +223,32 @@ def apply(
     created: list[Path] = []
     skipped: list[str] = []
     for name in plan.add_agents:
+        # The synthetic "universal" token means: create ~/.agents/skills/<slug>
+        # → library at global scope; at project scope it's a no-op (the project
+        # canonical IS the install).
+        if name == "universal":
+            if plan.scope == "global":
+                link = _universal_bundle_link(plan.slug)
+                link.parent.mkdir(parents=True, exist_ok=True)
+                if link.is_symlink():
+                    if link.resolve() != canonical.resolve():
+                        raise InstallError(
+                            f"{plan.slug}/universal: conflicting symlink at {link}: "
+                            f"points to {link.resolve()}, expected {canonical}"
+                        )
+                elif link.exists():
+                    raise InstallError(
+                        f"{plan.slug}/universal: conflicting non-symlink at {link}; "
+                        f"refusing to overwrite"
+                    )
+                else:
+                    link.symlink_to(canonical)
+                    created.append(link)
+            else:
+                # Project scope: project canonical exists → universal is already installed.
+                skipped.append(name)
+            continue
+
         skip, reason = _should_skip_symlink(
             agent_name=name, scope=plan.scope, project=project,
         )
@@ -220,6 +278,18 @@ def apply(
     # Remove symlinks.
     removed: list[Path] = []
     for name in plan.remove_agents:
+        if name == "universal":
+            if plan.scope == "global":
+                link = _universal_bundle_link(plan.slug)
+                if link.is_symlink():
+                    link.unlink()
+                    removed.append(link)
+                elif link.exists():
+                    raise InstallError(
+                        f"{plan.slug}/universal: cannot unlink {link}: not a symlink"
+                    )
+            continue
+
         skip, _ = _should_skip_symlink(
             agent_name=name, scope=plan.scope, project=project,
         )

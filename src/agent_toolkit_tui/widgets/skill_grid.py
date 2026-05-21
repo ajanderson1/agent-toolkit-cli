@@ -182,6 +182,14 @@ class SkillGrid(Vertical):
         cell = row.cells.get((agent, self._scope))
         if cell is None or cell.skipped:
             return
+        # Refuse destructive project-scope universal unlinks from the TUI.
+        # Removing the project canonical (<project>/.agents/skills/<slug>/)
+        # is a destructive operation that should be done explicitly via
+        # `skill remove --scope project`, not from a cell click.
+        # TODO: surface a user-visible message here (e.g. self.app.notify())
+        # once a notify pattern is established for SkillGrid.
+        if agent == "universal" and self._scope == "project" and cell.linked:
+            return
         key = (self._scope, agent, row.slug)
         if key in self._pending:
             del self._pending[key]
@@ -209,7 +217,9 @@ class SkillGrid(Vertical):
         table.clear(columns=True)
         table.add_column("slug", width=20)
         for agent in INTERACTIVE_AGENTS:
-            label = AGENTS[agent].display_name
+            # Use "universal" verbatim for the bundle column (lowercase, per spec).
+            # Other agents use their catalog display_name.
+            label = "universal" if agent == "universal" else AGENTS[agent].display_name
             table.add_column(label, width=14)
         table.add_column("state", width=10)
         for row in self._rows:

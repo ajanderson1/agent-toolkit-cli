@@ -27,7 +27,12 @@ def _src(path: Path) -> ParsedSource:
 
 
 def test_skip_rule_global_universal(tmp_path):
-    """codex is universal → global install skips symlink."""
+    """codex is universal → per-agent symlink skipped at global scope.
+
+    v2.2: individual universal agents (codex, gemini-cli, etc.) skip their
+    per-agent symlink. The single ~/.agents/skills/<slug> bundle symlink is
+    created separately via the "universal" token in apply(), not per-agent.
+    """
     skip, reason = _should_skip_symlink(
         agent_name="codex", scope="global", project=None,
     )
@@ -36,11 +41,11 @@ def test_skip_rule_global_universal(tmp_path):
 
 
 def test_skip_rule_project_universal(tmp_path):
-    """codex is universal → project install also skips symlink.
+    """codex is universal → project install skips symlink.
 
-    For universal agents cfg.skills_dir == '.agents/skills', which equals the
-    canonical dir. Creating a symlink from the canonical path to itself is not
-    meaningful, so both scopes skip the symlink creation."""
+    Project canonical at <project>/.agents/skills/<slug>/ IS the install for
+    universal agents. No additional symlink is created.
+    """
     skip, reason = _should_skip_symlink(
         agent_name="codex", scope="project", project=tmp_path,
     )
