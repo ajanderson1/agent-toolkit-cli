@@ -19,7 +19,8 @@ from agent_toolkit_cli.skill_lock import (
     LockEntry, LockFile, clone_url_from_entry, read_lock, remove_entry, write_lock,
 )
 from agent_toolkit_cli.skill_paths import (
-    Scope, agent_projection_dir, canonical_skill_dir, lock_file_path,
+    Scope, agent_projection_dir, canonical_skill_dir, library_root as _library_root_fn,
+    lock_file_path,
 )
 
 FindingKind = Literal[
@@ -141,6 +142,23 @@ def _projection_paths(
     return out
 
 
+def _is_inside(child: Path, parent: Path) -> bool:
+    try:
+        child.resolve().relative_to(parent.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def _expected_target_root(
+    *, scope: Scope, project: Path | None,
+) -> Path:
+    if scope == "global":
+        return _library_root_fn()
+    assert project is not None
+    return project / ".agents" / "skills"
+
+
 def _make_unlink_action(*, link: Path) -> FixAction:
     def _apply() -> None:
         if not link.is_symlink():
@@ -239,6 +257,20 @@ def _check_slug(
             continue
         target = link.resolve()
         if target == canonical_real:
+            continue
+        expected_root = _expected_target_root(scope=scope, project=project)
+        if not _is_inside(target, expected_root):
+            findings.append(Finding(
+                kind="foreign_symlink", slug=slug, scope=scope,
+                path=link,
+                detail=(
+                    f"{agent_name} symlink at {link} points to {target}, "
+                    f"which is outside {expected_root}"
+                ),
+                fix_action=(
+                    _make_unlink_action(link=link) if repair_foreign else None
+                ),
+            ))
             continue
         findings.append(Finding(
             kind="drifted_symlink", slug=slug, scope=scope,

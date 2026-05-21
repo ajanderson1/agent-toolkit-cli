@@ -339,3 +339,75 @@ def test_orphan_symlink_fix_unlinks(git_sandbox, tmp_path: Path, monkeypatch):
     # Idempotent.
     f.fix_action.apply()
     assert not broken.exists()
+
+
+def test_diagnose_foreign_symlink_report_only(
+    git_sandbox, tmp_path: Path, monkeypatch,
+):
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    monkeypatch.setenv("HOME", str(fake_home))
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: fake_home))
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(fake_home / ".claude"))
+    _patch_claude_global_skills_dir(monkeypatch, fake_home / ".claude" / "skills")
+
+    runner = CliRunner()
+    _seed_library(runner, git_sandbox.upstream)
+
+    # Foreign target outside the library root — but the path EXISTS so it's
+    # not orphan; and it's NOT inside library_root so it's foreign rather
+    # than drifted.
+    foreign = tmp_path / "user-handrolled-skill"
+    foreign.mkdir()
+    claude_skills = fake_home / ".claude" / "skills"
+    claude_skills.mkdir(parents=True)
+    link = claude_skills / "demo"
+    link.symlink_to(foreign)
+
+    from agent_toolkit_cli.skill_doctor import diagnose
+    findings = diagnose(
+        slugs=None, scope="global", home=fake_home, project=None,
+    )
+    foreign_findings = [f for f in findings if f.kind == "foreign_symlink"]
+    assert len(foreign_findings) == 1
+    # Report-only by default.
+    assert foreign_findings[0].fix_action is None
+
+
+def test_diagnose_foreign_symlink_repair_foreign(
+    git_sandbox, tmp_path: Path, monkeypatch,
+):
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    monkeypatch.setenv("HOME", str(fake_home))
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: fake_home))
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(fake_home / ".claude"))
+    _patch_claude_global_skills_dir(monkeypatch, fake_home / ".claude" / "skills")
+
+    runner = CliRunner()
+    _seed_library(runner, git_sandbox.upstream)
+
+    foreign = tmp_path / "user-handrolled-skill"
+    foreign.mkdir()
+    claude_skills = fake_home / ".claude" / "skills"
+    claude_skills.mkdir(parents=True)
+    link = claude_skills / "demo"
+    link.symlink_to(foreign)
+
+    from agent_toolkit_cli.skill_doctor import diagnose
+    findings = diagnose(
+        slugs=None, scope="global", home=fake_home, project=None,
+        repair_foreign=True,
+    )
+    f = next(f for f in findings if f.kind == "foreign_symlink")
+    assert f.fix_action is not None
+    f.fix_action.apply()
+    assert not link.is_symlink()
