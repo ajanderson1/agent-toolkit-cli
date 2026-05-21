@@ -11,7 +11,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Literal
 
-from agent_toolkit_cli.skill_paths import Scope
+from agent_toolkit_cli.skill_lock import LockEntry, LockFile, read_lock
+from agent_toolkit_cli.skill_paths import Scope, lock_file_path
 
 FindingKind = Literal[
     "missing_canonical", "drifted_symlink",
@@ -35,12 +36,6 @@ class Finding:
     path: Path
     detail: str
     fix_action: FixAction | None
-
-
-from agent_toolkit_cli.skill_lock import read_lock
-from agent_toolkit_cli.skill_paths import (
-    library_lock_path, lock_file_path,
-)
 
 
 def diagnose(
@@ -73,6 +68,6 @@ def diagnose(
 
 def _check_slug(
     *, slug: str, scope: Scope, home: Path | None, project: Path | None,
-    entry, lock, repair_foreign: bool,
+    entry: LockEntry, lock: LockFile, repair_foreign: bool,
 ) -> list[Finding]:
     return []
