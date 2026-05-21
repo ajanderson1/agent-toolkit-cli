@@ -10,14 +10,14 @@ Manage skills via per-skill upstream git repos + a per-scope lock file.
 
 ```text
 agent-toolkit-cli skill add <source> [-g|-p] [--ref <ref>] [--harness <h>]...
-agent-toolkit-cli skill list [-g|-p]
+agent-toolkit-cli skill list [-g|-p] [-a/--agent <name>] [--json]   # alias: ls
 agent-toolkit-cli skill status [<slug>...] [-g|-p]
 agent-toolkit-cli skill update [<slug>...] [-g|-p]      # merge-aware
 agent-toolkit-cli skill push   [<slug>...] [-g|-p]      # self-improvements upstream
-agent-toolkit-cli skill remove <slug>... [-g|-p] [--force]
+agent-toolkit-cli skill remove <slug>... [-g|-p] [--force]          # alias: rm
 ```
 
-`<source>` accepts `owner/repo`, a full HTTPS URL, an SSH URL, or a local path. `-g/--global` and `-p/--project` select scope; default is global.
+`<source>` accepts `owner/repo`, a full HTTPS URL, an SSH URL, or a local path. `-g/--global` and `-p/--project` select scope; default is global. `skill list --json` emits a JSON array (`slug`, `source`, `ref`, `upstream_sha`, `local_sha`, `scope`) for scripting; `-a/--agent <name>` filters to skills currently symlinked into that agent (or the `universal` token).
 
 Full reference, lock-file format, and skills.sh interop notes live in [`skill-lock.md`](skill-lock.md).
 

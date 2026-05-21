@@ -473,3 +473,7 @@ skill.add_command(list_cmd)
 skill.add_command(status_cmd)
 skill.add_command(update_cmd)
 skill.add_command(push_cmd)
+
+# Surface aliases to match `npx -y skills` muscle memory (#169).
+skill.add_command(list_cmd, name="ls")
+skill.add_command(remove_cmd, name="rm")
