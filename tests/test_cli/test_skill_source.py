@@ -85,3 +85,47 @@ def test_file_url_empty_body_rejected():
         parse_source("file://")
     with pytest.raises(SourceParseError):
         parse_source("file:///")
+
+
+def test_github_shorthand_with_ref():
+    s = parse_source("anthropics/claude-code@plugin-settings")
+    assert s == ParsedSource(
+        type="github",
+        url="https://github.com/anthropics/claude-code",
+        owner_repo="anthropics/claude-code",
+        ref="plugin-settings",
+        subpath=None,
+    )
+
+
+def test_github_shorthand_with_ref_tag():
+    s = parse_source("o/r@v1.2.3")
+    assert s.ref == "v1.2.3"
+    assert s.subpath is None
+
+
+def test_github_shorthand_with_ref_and_subpath():
+    s = parse_source("o/r@main/skills/foo")
+    assert s.owner_repo == "o/r"
+    assert s.ref == "main"
+    assert s.subpath == "skills/foo"
+
+
+def test_github_shorthand_empty_ref_rejected():
+    with pytest.raises(SourceParseError):
+        parse_source("o/r@")
+
+
+def test_github_shorthand_whitespace_ref_rejected():
+    with pytest.raises(SourceParseError):
+        parse_source("o/r@ main")
+
+
+def test_github_shorthand_ref_traversal_rejected():
+    with pytest.raises(SourceParseError, match="path traversal|ref"):
+        parse_source("o/r@..")
+
+
+def test_github_shorthand_ref_leading_dash_rejected():
+    with pytest.raises(SourceParseError):
+        parse_source("o/r@-bad")

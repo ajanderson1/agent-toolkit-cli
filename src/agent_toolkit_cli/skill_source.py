@@ -48,6 +48,20 @@ def _sanitize_subpath(subpath: str) -> str:
     return subpath
 
 
+def _sanitize_ref(ref: str) -> str:
+    if not ref:
+        raise SourceParseError("Empty ref")
+    if any(ch.isspace() for ch in ref):
+        raise SourceParseError(f"Unsafe ref: '{ref}' contains whitespace")
+    if ref.startswith("-"):
+        raise SourceParseError(f"Unsafe ref: '{ref}' must not start with '-'")
+    if any(seg == ".." for seg in ref.split("/")):
+        raise SourceParseError(
+            f"Unsafe ref: '{ref}' contains path traversal segments"
+        )
+    return ref
+
+
 def _parse_https(url: str) -> ParsedSource:
     parsed = urlparse(url)
     if parsed.hostname is None:
@@ -179,19 +193,23 @@ def parse_source(input_: str) -> ParsedSource:
     if input_.startswith("file://"):
         return _parse_file_url(input_)
 
-    # GitHub shorthand: owner/repo[/subpath] (no scheme, no leading dot/slash).
+    # GitHub shorthand: owner/repo[@ref][/subpath] (no scheme, no leading dot/slash).
     m = re.fullmatch(
-        r"(?P<owner>[A-Za-z0-9_.\-]+)/(?P<repo>[A-Za-z0-9_.\-]+)(?:/(?P<subpath>[^\s].*))?",
+        r"(?P<owner>[A-Za-z0-9_.\-]+)"
+        r"/(?P<repo>[A-Za-z0-9_.\-]+)"
+        r"(?:@(?P<ref>[^\s/][^\s/]*))?"
+        r"(?:/(?P<subpath>[^\s].*))?",
         input_,
     )
     if m:
         owner_repo = f"{m['owner']}/{m['repo']}"
+        ref = _sanitize_ref(m["ref"]) if m["ref"] else None
         subpath = _sanitize_subpath(m["subpath"]) if m["subpath"] else None
         return ParsedSource(
             type="github",
             url=f"https://github.com/{owner_repo}",
             owner_repo=owner_repo,
-            ref=None,
+            ref=ref,
             subpath=subpath,
             skill_name=None,
         )
