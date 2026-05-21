@@ -5,6 +5,10 @@ from click.testing import CliRunner
 from agent_toolkit_cli.cli import main
 from agent_toolkit_tui.skill_state import SkillCell, SkillRow, build_skill_rows, _cell_for
 
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
 
 def _add_demo_project(runner, upstream_path, project, library_root):
     """Add demo skill to library then install it at project scope for claude-code."""
@@ -72,10 +76,12 @@ def test_build_skill_rows_missing_canonical(
     runner = CliRunner()
     r = _add_demo_project(runner, git_sandbox.upstream, project, library_root)
     assert r.exit_code == 0, r.output
-    # Remove the canonical dir behind the lock's back.
+    # Remove the project canonical behind the lock's back. Since the slug is
+    # still in the library, state becomes "library" (available, not installed)
+    # rather than the alarming "missing".
     shutil.rmtree(project / ".agents" / "skills" / "demo")
     rows = build_skill_rows(scope="project", home=None, project=project)
-    assert rows[0].state == "missing"
+    assert rows[0].state == "library"
 
 
 # ---------------------------------------------------------------------------
@@ -222,3 +228,90 @@ def test_build_skill_rows_includes_universal_cell(
     universal_cell = row.cells[("universal", "project")]
     assert universal_cell.linked is True
     assert universal_cell.skipped is False
+
+
+# ---------------------------------------------------------------------------
+# Library-as-row-source tests (v2.2 behaviour)
+# ---------------------------------------------------------------------------
+
+def test_project_scope_shows_library_skills_before_install(
+    git_sandbox, tmp_path: Path, monkeypatch,
+):
+    """At project scope, library slugs appear even before `skill install` is run.
+
+    After `skill add` the library lock is populated but the project has no
+    canonical. build_skill_rows must return one row per library slug with
+    state="library" and all cells linked=False.
+    """
+    project = tmp_path / "proj"
+    project.mkdir()
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+
+    runner = CliRunner()
+    # Only add to the library — do NOT install to the project.
+    r = runner.invoke(main, ["skill", "add", str(git_sandbox.upstream), "--slug", "demo"])
+    assert r.exit_code == 0, r.output
+
+    rows = build_skill_rows(scope="project", home=None, project=project)
+    assert len(rows) == 1, f"expected 1 row, got {len(rows)}: {[r.slug for r in rows]}"
+    row = rows[0]
+    assert row.slug == "demo"
+    assert row.state == "library"
+    for key, cell in row.cells.items():
+        assert not cell.linked, (
+            f"cell {key} should be unlinked before install, got linked=True"
+        )
+
+
+def test_cell_for_claude_code_no_claude_dir_not_skipped(tmp_path: Path, monkeypatch):
+    """Project with no .claude/ → claude-code cell is linked=False, skipped=False.
+
+    v2.2: the 'agent-root-absent' skip rule is gone. The cell shows ☐ (unlinked)
+    rather than ● (skipped), meaning the user can install it.
+    """
+    library_root = tmp_path / "lib" / "skills"
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    project = tmp_path / "proj"
+    project.mkdir()
+    assert not (project / ".claude").exists()
+
+    cell = _cell_for("demo", "claude-code", scope="project", home=None, project=project)
+    assert cell.skipped is False
+    assert cell.linked is False
+
+
+def test_project_scope_universal_linked_after_install(
+    git_sandbox, tmp_path: Path, monkeypatch,
+):
+    """At project scope, after `skill install --scope project --agents universal`,
+    the universal cell is linked=True and state is 'clean'.
+    """
+    project = tmp_path / "proj"
+    project.mkdir()
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+
+    runner = CliRunner()
+    r = runner.invoke(main, ["skill", "add", str(git_sandbox.upstream), "--slug", "demo"])
+    assert r.exit_code == 0, r.output
+
+    r = runner.invoke(main, [
+        "--project", str(project),
+        "skill", "install", "demo",
+        "--scope", "project",
+        "--agents", "universal",
+    ])
+    assert r.exit_code == 0, r.output
+
+    rows = build_skill_rows(scope="project", home=None, project=project)
+    assert len(rows) == 1
+    row = rows[0]
+    assert row.slug == "demo"
+    assert row.state == "clean"
+    universal_cell = row.cells[("universal", "project")]
+    assert universal_cell.linked is True

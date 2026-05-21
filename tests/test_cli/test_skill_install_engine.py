@@ -61,17 +61,17 @@ def test_skip_rule_global_non_universal(tmp_path):
     assert skip is False
 
 
-def test_skip_rule_project_non_universal_no_dir(tmp_path):
-    """windsurf is non-universal; if .windsurf/ doesn't exist in project, skip."""
-    skip, reason = _should_skip_symlink(
+def test_skip_rule_project_non_universal(tmp_path):
+    """windsurf is non-universal → never skipped at project scope, with or without .windsurf/.
+
+    v2.2: the agent root dir is created on demand by apply(); the skip rule
+    'agent-root-absent' has been removed.
+    """
+    skip, _ = _should_skip_symlink(
         agent_name="windsurf", scope="project", project=tmp_path,
     )
-    assert skip is True
-    assert reason == "agent-root-absent"
+    assert skip is False
 
-
-def test_skip_rule_project_non_universal_dir_exists(tmp_path):
-    """windsurf with .windsurf/ present in project → symlink created."""
     (tmp_path / ".windsurf").mkdir()
     skip, _ = _should_skip_symlink(
         agent_name="windsurf", scope="project", project=tmp_path,
@@ -93,12 +93,12 @@ def test_apply_global_claude_creates_symlink(git_sandbox):
 
 
 def test_apply_project_claude_creates_symlink_when_dir_exists(git_sandbox, tmp_path):
-    """Project install + claude-code (non-universal) → symlink in project."""
+    """Regression: project install + claude-code works when .claude/ already exists."""
     home = Path(git_sandbox.env["HOME"])
     src = _src(git_sandbox.upstream)
     project = tmp_path / "myproj"
     project.mkdir()
-    (project / ".claude").mkdir()  # satisfy skip-rule 2
+    (project / ".claude").mkdir()
     p = InstallPlan(
         slug="demo", scope="project", source=src, ref=None,
         add_agents=("claude-code",), remove_agents=(),
@@ -111,8 +111,54 @@ def test_apply_project_claude_creates_symlink_when_dir_exists(git_sandbox, tmp_p
     assert "claude-code" not in result.skipped
 
 
-def test_apply_project_windsurf_skipped_when_dir_absent(git_sandbox, tmp_path):
-    """Project install + windsurf (non-universal); no .windsurf/ → skipped."""
+def test_project_install_auto_creates_agent_root(git_sandbox, tmp_path):
+    """Project install + pi (non-universal); no .pi/ → .pi/ and symlink auto-created.
+
+    v2.2: --agents pi is explicit consent; apply() calls mkdir(parents=True).
+    """
+    home = Path(git_sandbox.env["HOME"])
+    src = _src(git_sandbox.upstream)
+    project = tmp_path / "myproj"
+    project.mkdir()
+    assert not (project / ".pi").exists()
+    p = InstallPlan(
+        slug="demo", scope="project", source=src, ref=None,
+        add_agents=("pi",), remove_agents=(),
+    )
+    result = apply(p, home=home, project=project, env=git_sandbox.env)
+    link = agent_projection_dir(
+        "pi", "demo", scope="project", home=home, project=project,
+    )
+    assert link.is_symlink(), ".pi/skills/demo symlink must be created"
+    assert (project / ".pi").is_dir(), ".pi/ dir must be auto-created"
+    assert "pi" not in result.skipped
+
+
+def test_project_install_works_with_existing_agent_root(git_sandbox, tmp_path):
+    """Regression: project install + pi when .pi/ already exists → symlink created."""
+    home = Path(git_sandbox.env["HOME"])
+    src = _src(git_sandbox.upstream)
+    project = tmp_path / "myproj"
+    project.mkdir()
+    (project / ".pi").mkdir()
+    p = InstallPlan(
+        slug="demo", scope="project", source=src, ref=None,
+        add_agents=("pi",), remove_agents=(),
+    )
+    result = apply(p, home=home, project=project, env=git_sandbox.env)
+    link = agent_projection_dir(
+        "pi", "demo", scope="project", home=home, project=project,
+    )
+    assert link.is_symlink()
+    assert "pi" not in result.skipped
+
+
+def test_apply_project_windsurf_creates_symlink_when_dir_absent(git_sandbox, tmp_path):
+    """Project install + windsurf (non-universal); no .windsurf/ → symlink and dir auto-created.
+
+    v2.2: the agent root dir is created by apply() via mkdir(parents=True);
+    the old 'agent-root-absent' skip rule has been removed.
+    """
     home = Path(git_sandbox.env["HOME"])
     src = _src(git_sandbox.upstream)
     project = tmp_path / "myproj"
@@ -125,8 +171,8 @@ def test_apply_project_windsurf_skipped_when_dir_absent(git_sandbox, tmp_path):
     link = agent_projection_dir(
         "windsurf", "demo", scope="project", home=home, project=project,
     )
-    assert not link.exists()
-    assert "windsurf" in result.skipped
+    assert link.is_symlink(), ".windsurf/skills/demo symlink must be created"
+    assert "windsurf" not in result.skipped
 
 
 def test_apply_project_codex_skipped_universal(git_sandbox, tmp_path):

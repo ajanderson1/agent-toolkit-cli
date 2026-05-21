@@ -222,10 +222,13 @@ def test_install_project_non_universal_creates_symlink_when_dir_exists(
     assert claude_link.resolve() == project_canonical.resolve()
 
 
-def test_install_project_non_universal_skipped_when_agent_root_absent(
+def test_install_project_non_universal_auto_creates_agent_root(
     git_sandbox, tmp_path: Path, monkeypatch
 ):
-    """Project install + windsurf + no .windsurf/ → symlink skipped."""
+    """Project install + windsurf + no .windsurf/ → agent root and symlink auto-created.
+
+    v2.2: explicit --agents consent is sufficient; the directory is created on demand.
+    """
     library_root = tmp_path / "lib" / "skills"
     project = tmp_path / "proj"
     project.mkdir()
@@ -245,8 +248,8 @@ def test_install_project_non_universal_skipped_when_agent_root_absent(
     assert result.exit_code == 0, result.output
 
     windsurf_link = project / ".windsurf" / "skills" / "demo"
-    assert not windsurf_link.exists()
-    assert "skipped" in result.output
+    assert windsurf_link.is_symlink(), ".windsurf/skills/demo symlink must be created"
+    assert (project / ".windsurf").is_dir(), ".windsurf/ dir must be auto-created"
 
 
 def test_install_agents_required():

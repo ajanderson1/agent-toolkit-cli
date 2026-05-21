@@ -9,7 +9,7 @@ Symlink rules (v2.2, mirroring installer.ts:280-323):
   - Global + non-universal agent        → ~/.<agent-dir>/skills/<slug> → library
   - Project + universal agent           → no symlink (canonical IS the install)
   - Project + non-universal             → <project>/<agent-dir>/skills/<slug> → canonical
-                                          ONLY IF agent root dir exists in project
+                                          (agent root dir is created if absent)
 """
 from __future__ import annotations
 
@@ -74,12 +74,13 @@ def _should_skip_symlink(
 ) -> tuple[bool, str]:
     """Return (skip?, reason). Mirrors installer.ts:296-323 with v2.2 adjustments.
 
-    v2.2 semantics differ from v2.1 for universal agents at global scope:
+    v2.2 semantics:
       - Global + universal: NOT skipped. We create ~/.agents/skills/<slug> → library.
       - Project + universal: SKIPPED. The project canonical at
         <project>/.agents/skills/<slug>/ IS the install; no symlink needed.
       - Global + non-universal: NOT skipped (symlink → library).
-      - Project + non-universal: skipped if agent root dir is absent.
+      - Project + non-universal: NOT skipped. The agent root dir is auto-created
+        by apply() via link.parent.mkdir(parents=True, exist_ok=True).
 
     The special "universal" bundle token is handled in apply() before
     _should_skip_symlink is called; it never reaches here as an agent_name.
@@ -94,12 +95,6 @@ def _should_skip_symlink(
         # symlinks (e.g. cfg.global_skills_dir) resolve through ~/.agents/skills/
         # already at the OS level, so we skip the redundant per-agent write.
         return True, "universal-global"
-    # Rule 2: project + non-universal — only symlink if agent root exists.
-    if scope == "project":
-        project_dir = project or Path.cwd()
-        agent_root_name = cfg.skills_dir.split("/")[0]
-        if not (project_dir / agent_root_name).exists():
-            return True, "agent-root-absent"
     return False, ""
 
 
@@ -143,8 +138,8 @@ def _current_linked_agents(
     Includes the "universal" bundle token at global scope if
     ~/.agents/skills/<slug> is a symlink to the library canonical.
 
-    For project-scope universal agents (skip rule → canonical IS install),
-    'currently linked' means canonical exists.
+    For project-scope universal agents (the only skipped case at project scope),
+    'currently linked' means the project canonical directory exists.
     """
     canonical = canonical_skill_dir(
         slug, scope=scope, home=home, project=project,

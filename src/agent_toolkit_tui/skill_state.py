@@ -14,10 +14,13 @@ from agent_toolkit_cli.skill_agents import AGENTS
 from agent_toolkit_cli.skill_install import _should_skip_symlink
 from agent_toolkit_cli.skill_lock import read_lock
 from agent_toolkit_cli.skill_paths import (
-    agent_projection_dir, canonical_skill_dir, lock_file_path,
+    agent_projection_dir, canonical_skill_dir, library_lock_path,
 )
 
-State = Literal["clean", "dirty", "missing", "copy"]
+# "library" means the skill exists in the library but is not installed in this
+# project (no project canonical at <project>/.agents/skills/<slug>/). This is
+# the normal pre-install state and is rendered in dim/gray — not alarming.
+State = Literal["clean", "dirty", "missing", "copy", "library"]
 Scope = Literal["global", "project"]
 
 # Agents whose cells the TUI grid renders interactively. Mirrors v2.0.0's
@@ -100,15 +103,21 @@ def _cell_for(
 def build_skill_rows(
     *, scope: Scope, home: Path | None, project: Path | None,
 ) -> list[SkillRow]:
-    lock = read_lock(lock_file_path(scope=scope, home=home, project=project))
+    # The library lock is the universe of slugs available on this machine.
+    # At global scope the library lock IS the scope lock, so this is equivalent
+    # to the previous behaviour. At project scope we read the library lock for
+    # row inclusion, then derive per-row state from the project's filesystem.
+    lib_lock = read_lock(library_lock_path())
     rows: list[SkillRow] = []
-    for slug in sorted(lock.skills):
-        entry = lock.skills[slug]
+    for slug in sorted(lib_lock.skills):
+        entry = lib_lock.skills[slug]
         canonical = canonical_skill_dir(
             slug, scope=scope, home=home, project=project,
         )
         if not canonical.exists():
-            state: State = "missing"
+            # Project scope: slug is in the library but not yet installed here.
+            # Global scope: library entry recorded but directory was deleted.
+            state: State = "library" if scope == "project" else "missing"
         elif not skill_git.is_git_repo(canonical):
             state = "copy"
         else:

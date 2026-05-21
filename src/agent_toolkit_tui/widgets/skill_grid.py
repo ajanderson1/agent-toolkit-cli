@@ -27,6 +27,9 @@ _STATE_MARKUP = {
     "dirty":   "[yellow]dirty[/]",
     "missing": "[red]missing[/]",
     "copy":    "[blue]copy[/]",
+    # "library" = in the library, not yet installed in this project. Normal
+    # pre-install state. Rendered dim so it doesn't look alarming.
+    "library": "[dim]library[/]",
 }
 
 _LINKED_GLYPH   = "[green]✔[/]"
