@@ -4,6 +4,11 @@
 **Branch:** `feat/162-skill-add-monorepo`
 **Mode:** `--auto`
 
+> **Superseded in parts by:**
+> [`2026-05-22-skill-update-monorepo-three-way-merge-design.md`](2026-05-22-skill-update-monorepo-three-way-merge-design.md)
+> changes the `update` paragraph from `git pull --ff-only` to `fetch` + `merge`
+> and fixes the TUI `state: copy` label for monorepo skills.
+
 ## Goal
 
 Let one `skill add` invocation install a single skill from a parent repo that contains many. Three input shapes must work and produce the same lock entry:

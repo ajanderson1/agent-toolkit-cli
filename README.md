@@ -33,7 +33,9 @@ agent-toolkit-cli skill remove <slug>... [-g|-p] [--force]
 
 The CLI uses the 55-agent catalog ported from [vercel-labs/skills](https://github.com/vercel-labs/skills/blob/main/src/agents.ts). Universal agents (codex, opencode, gemini-cli, +11 more whose `skillsDir == .agents/skills`) skip per-harness symlinks at global scope. Non-universal agents (claude-code, pi, windsurf, +37 more) still get their per-harness symlink. Interactive wizard groups by universality; TUI skill grid covers the two we explicitly support (claude-code, pi). v2.0.0's `AGENT_TOOLKIT_TUI_LEGACY=1` escape hatch is preserved.
 
-**Monorepo skills:** A `<source>` may name a parent repo that contains several skills. Pick one with `--skill <name>` (matches `SKILL.md` frontmatter `name:`), or pass the subpath inline (`owner/repo/<subpath>` or `<repo>/tree/<ref>/<subpath>`). `https://www.skills.sh/<owner>/<repo>/<skill>` URLs also work end-to-end. Monorepo entries are read-only; `skill push` refuses them and points at the parent repo.
+**Monorepo skills:** A `<source>` may name a parent repo that contains several skills. Pick one with `--skill <name>` (matches `SKILL.md` frontmatter `name:`), or pass the subpath inline (`owner/repo/<subpath>` or `<repo>/tree/<ref>/<subpath>`). `https://www.skills.sh/<owner>/<repo>/<skill>` URLs also work end-to-end.
+
+The parent clone lives at `<library>/_parents/<owner>/<repo>/` and is yours to edit — local commits are first-class. `skill update` runs `git fetch` + `git merge` on that clone, so your work merges with upstream like any normal git repo. On conflict the clone is left mid-merge; resolve in place and re-run `skill update`. The TUI reports each monorepo skill's `state` as `clean` or `dirty`, same semantics as per-skill repos. `skill push` still refuses monorepo entries — sharing changes back upstream means forking the parent yourself.
 
 ### TUI
 
