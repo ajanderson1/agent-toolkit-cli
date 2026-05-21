@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.4.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.3.3...v2.4.0) (2026-05-21)
+
+
+### Features
+
+* **cli:** accept `skills` as alias for `skill` command group ([#183](https://github.com/ajanderson1/agent-toolkit-cli/issues/183)) ([cb2d1fe](https://github.com/ajanderson1/agent-toolkit-cli/commit/cb2d1fe9d721e9159956d5e40e2d202a439cf71b)), closes [#180](https://github.com/ajanderson1/agent-toolkit-cli/issues/180)
+* **tui:** add description and upstream-source columns to SkillGrid ([#186](https://github.com/ajanderson1/agent-toolkit-cli/issues/186)) ([4acdd97](https://github.com/ajanderson1/agent-toolkit-cli/commit/4acdd972b5cb701d024bbf911d2481b65accbcf1)), closes [#182](https://github.com/ajanderson1/agent-toolkit-cli/issues/182)
+
+
+### Bug Fixes
+
+* **skill add:** accept owner/repo@&lt;ref&gt;[/&lt;subpath&gt;] shorthand ([#185](https://github.com/ajanderson1/agent-toolkit-cli/issues/185)) ([6dd7cba](https://github.com/ajanderson1/agent-toolkit-cli/commit/6dd7cba72ff5a9ba6839ba04614997a0888b023d))
+
 ## [2.3.3](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.3.2...v2.3.3) (2026-05-21)
 
 
