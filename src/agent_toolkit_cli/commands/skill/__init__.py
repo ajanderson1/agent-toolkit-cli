@@ -34,7 +34,54 @@ from .status_cmd import status_cmd
 from .update_cmd import update_cmd
 
 
-@click.group()
+_SKILL_GROUP_EPILOG = """\
+Examples:
+
+\b
+  # Add a skill to the global library (clone only — no symlinks yet)
+  $ agent-toolkit-cli skill add anthropics/skills
+
+\b
+  # Pin to a branch or tag
+  $ agent-toolkit-cli skill add anthropics/skills --ref main
+  $ agent-toolkit-cli skill add anthropics/skills --ref v1.2.0
+
+\b
+  # Override the local slug
+  $ agent-toolkit-cli skill add ajanderson1/journal-skill --slug journal
+
+\b
+  # Make it visible to a specific agent (claude-code) or all universal agents
+  $ agent-toolkit-cli skill install journal --agents claude-code
+  $ agent-toolkit-cli skill install journal --agents universal
+  $ agent-toolkit-cli skill install journal --agents all
+
+\b
+  # Project-scope install (canonical lives under <project>/.agents/skills/)
+  $ agent-toolkit-cli skill install journal --agents claude-code -p
+
+\b
+  # List, status, update, push
+  $ agent-toolkit-cli skill list                  # global by default
+  $ agent-toolkit-cli skill list -p               # project scope
+  $ agent-toolkit-cli skill status                # clean / dirty / missing per skill
+  $ agent-toolkit-cli skill update                # fetch + merge upstream for all
+  $ agent-toolkit-cli skill update journal        # one skill only
+  $ agent-toolkit-cli skill push journal          # self-improvements upstream
+
+\b
+  # Take down agent visibility but keep the canonical clone
+  $ agent-toolkit-cli skill uninstall journal --agents claude-code
+
+\b
+  # Remove a skill completely (interactive picker if no slug given)
+  $ agent-toolkit-cli skill remove journal
+  $ agent-toolkit-cli skill remove                # interactive
+  $ agent-toolkit-cli skill remove journal --force  # discard dirty changes
+"""
+
+
+@click.group(epilog=_SKILL_GROUP_EPILOG)
 def skill() -> None:
     """Manage skills via per-skill upstream git repos + skills-lock.json."""
 
@@ -56,7 +103,14 @@ def _resolve_agents(agents_str: str, scope: str) -> tuple[str, ...]:
     return tuple(parts)
 
 
-@skill.command("add")
+@skill.command("add", epilog="""\
+Examples:
+
+\b
+  agent-toolkit-cli skill add anthropics/skills
+  agent-toolkit-cli skill add anthropics/skills --ref v1.2.0
+  agent-toolkit-cli skill add ajanderson1/journal-skill --slug journal
+""")
 @click.argument("source", required=True)
 @click.option("--slug", default=None,
               help="Override the local slug (defaults to repo name).")
@@ -129,7 +183,14 @@ def add(
     click.echo(f"added {slug} to library <- {parsed.url}")
 
 
-@skill.command("install")
+@skill.command("install", epilog="""\
+Examples:
+
+\b
+  agent-toolkit-cli skill install journal --agents claude-code
+  agent-toolkit-cli skill install journal --agents universal
+  agent-toolkit-cli skill install journal --agents claude-code -p
+""")
 @click.argument("slug", required=True)
 @click.option("--agents", "agents_str", required=True,
               help="Comma-separated agent names, 'universal', or 'all'.")
@@ -227,7 +288,13 @@ def install_cmd(
     click.echo(f"installed {slug} for {agents_str}")
 
 
-@skill.command("uninstall")
+@skill.command("uninstall", epilog="""\
+Examples:
+
+\b
+  agent-toolkit-cli skill uninstall journal --agents claude-code
+  agent-toolkit-cli skill uninstall journal --agents all
+""")
 @click.argument("slug", required=True)
 @click.option("--agents", "agents_str", required=True,
               help="Comma-separated agent names, 'universal', or 'all'.")
@@ -287,7 +354,14 @@ def uninstall_cmd(
     click.echo(f"uninstalled {slug} for {agents_str}")
 
 
-@skill.command("remove")
+@skill.command("remove", epilog="""\
+Examples:
+
+\b
+  agent-toolkit-cli skill remove journal
+  agent-toolkit-cli skill remove                    # interactive picker
+  agent-toolkit-cli skill remove journal --force    # discard dirty changes
+""")
 @click.argument("slugs", nargs=-1, required=False)
 @click.option("--force", is_flag=True, help="Remove even if working tree is dirty.")
 @click.pass_context

@@ -9,7 +9,13 @@ from agent_toolkit_cli.skill_paths import lock_file_path
 from ._common import scope_and_roots
 
 
-@click.command("list")
+@click.command("list", epilog="""\
+Examples:
+
+\b
+  agent-toolkit-cli skill list        # global skills
+  agent-toolkit-cli skill list -p     # project-scope skills
+""")
 @click.option("-g", "--global", "global_", is_flag=True)
 @click.option("-p", "--project", "project_flag", is_flag=True)
 @click.pass_context

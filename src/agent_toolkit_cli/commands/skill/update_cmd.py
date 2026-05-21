@@ -10,7 +10,13 @@ from agent_toolkit_cli.skill_paths import canonical_skill_dir, lock_file_path
 from ._common import scope_and_roots
 
 
-@click.command("update")
+@click.command("update", epilog="""\
+Examples:
+
+\b
+  agent-toolkit-cli skill update              # update all skills
+  agent-toolkit-cli skill update journal      # update one skill
+""")
 @click.argument("slugs", nargs=-1)
 @click.option("-g", "--global", "global_", is_flag=True)
 @click.option("-p", "--project", "project_flag", is_flag=True)
