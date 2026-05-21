@@ -104,6 +104,20 @@ def push(repo: Path, *, ref: str, env: dict[str, str] | None) -> GitResult:
     return GitResult(stdout=proc.stdout, stderr=proc.stderr)
 
 
+def commit_all(
+    repo: Path, *, message: str, env: dict[str, str] | None,
+) -> GitResult:
+    """Stage every working-tree change and commit. Goes through _run so env
+    is scrubbed identically to every other git call — never spawn `git` from
+    the command layer directly (see memory feedback_git_env_leak.md).
+    """
+    _run(["git", "-C", str(repo), "add", "-A"], env=env)
+    proc = _run(
+        ["git", "-C", str(repo), "commit", "-m", message], env=env,
+    )
+    return GitResult(stdout=proc.stdout, stderr=proc.stderr)
+
+
 def head_sha(repo: Path, *, env: dict[str, str] | None) -> str:
     proc = _run(["git", "-C", str(repo), "rev-parse", "HEAD"], env=env)
     return proc.stdout.strip()

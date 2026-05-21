@@ -6,6 +6,7 @@ Other asset kinds remain on the legacy walker path.
 from __future__ import annotations
 
 import dataclasses
+import datetime as _dt
 from pathlib import Path
 
 import click
@@ -227,3 +228,42 @@ def update_cmd(
         click.echo(f"{slug}: updated")
     if had_conflict:
         ctx.exit(1)
+
+
+@skill.command("push")
+@click.argument("slugs", nargs=-1)
+@click.option("-g", "--global", "global_", is_flag=True)
+@click.option("-p", "--project", "project_flag", is_flag=True)
+@click.pass_context
+def push_cmd(
+    ctx: click.Context,
+    slugs: tuple[str, ...],
+    global_: bool,
+    project_flag: bool,
+) -> None:
+    """Commit and push self-improvements upstream. No-op when clean."""
+    scope, home, project_root = _scope_and_roots(
+        global_,
+        project_flag,
+        ctx.obj.get("project_root") if ctx.obj else None,
+    )
+    lock_path = lock_file_path(scope=scope, home=home, project=project_root)
+    lock = read_lock(lock_path)
+    targets = slugs or tuple(sorted(lock.skills))
+    for slug in targets:
+        if slug not in lock.skills:
+            click.echo(f"{slug}: not in lock")
+            continue
+        entry = lock.skills[slug]
+        canonical = canonical_skill_dir(
+            slug, scope=scope, home=home, project=project_root,
+        )
+        if skill_git.status(canonical, env=None) == skill_git.GitWorkingTreeStatus.CLEAN:
+            click.echo(f"{slug}: clean — nothing to push")
+            continue
+        msg = f"self-improvement: {_dt.datetime.now(_dt.UTC).isoformat()}"
+        skill_git.commit_all(canonical, message=msg, env=None)
+        skill_git.push(canonical, ref=entry.ref or "main", env=None)
+        entry.local_sha = skill_git.head_sha(canonical, env=None)
+        write_lock(lock_path, lock)
+        click.echo(f"{slug}: pushed")

@@ -102,3 +102,76 @@ def test_env_with_outer_git_dir_is_scrubbed(git_sandbox, monkeypatch):
     merged_env = os.environ.copy() | git_sandbox.env
     s = status(git_sandbox.clone, env=merged_env)
     assert s == GitWorkingTreeStatus.CLEAN
+
+
+def test_commit_all_creates_commit_in_target_repo(git_sandbox):
+    from agent_toolkit_cli.skill_git import commit_all
+
+    (git_sandbox.clone / "LOCAL.md").write_text("self-improvement\n")
+    commit_all(git_sandbox.clone, message="local change", env=git_sandbox.env)
+
+    log = subprocess.run(
+        ["git", "-C", str(git_sandbox.clone), "log", "-1", "--format=%s"],
+        check=True, env=git_sandbox.env, capture_output=True, text=True,
+    )
+    assert log.stdout.strip() == "local change"
+
+
+def test_commit_all_isolation_against_outer_git_dir(
+    git_sandbox, tmp_path, monkeypatch,
+):
+    """Regression: even if a malicious/leaked GIT_DIR is in the caller's env,
+    commit_all() must land its commit in the target repo, not the outer one.
+
+    See feedback_git_env_leak.md — this exact failure produced a spurious
+    'self-improvement: ...' commit on the worktree's own branch when
+    _commit_dirty bypassed _scrub().
+    """
+    from agent_toolkit_cli.skill_git import commit_all
+
+    # Create a separate "outer" repo to act as the would-be hijack target.
+    outer = tmp_path / "outer"
+    subprocess.run(
+        ["git", "init", "--initial-branch=main", str(outer)],
+        check=True, env=git_sandbox.env, capture_output=True,
+    )
+    (outer / "seed").write_text("seed\n")
+    subprocess.run(
+        ["git", "-C", str(outer), "add", "seed"],
+        check=True, env=git_sandbox.env, capture_output=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(outer), "commit", "-m", "outer-seed"],
+        check=True, env=git_sandbox.env, capture_output=True,
+    )
+    outer_head_before = subprocess.run(
+        ["git", "-C", str(outer), "rev-parse", "HEAD"],
+        check=True, env=git_sandbox.env, capture_output=True, text=True,
+    ).stdout.strip()
+
+    # Simulate the leaked-env scenario.
+    monkeypatch.setenv("GIT_DIR", str(outer / ".git"))
+    monkeypatch.setenv("GIT_INDEX_FILE", str(outer / ".git" / "index"))
+
+    (git_sandbox.clone / "LOCAL.md").write_text("self-improvement\n")
+    import os
+    merged_env = os.environ.copy() | git_sandbox.env
+    # Re-leak after the merge to make sure the helper itself scrubs:
+    merged_env["GIT_DIR"] = str(outer / ".git")
+    merged_env["GIT_INDEX_FILE"] = str(outer / ".git" / "index")
+
+    commit_all(git_sandbox.clone, message="should-land-in-sandbox", env=merged_env)
+
+    sandbox_head_msg = subprocess.run(
+        ["git", "-C", str(git_sandbox.clone), "log", "-1", "--format=%s"],
+        check=True, env=git_sandbox.env, capture_output=True, text=True,
+    ).stdout.strip()
+    assert sandbox_head_msg == "should-land-in-sandbox"
+
+    outer_head_after = subprocess.run(
+        ["git", "-C", str(outer), "rev-parse", "HEAD"],
+        check=True, env=git_sandbox.env, capture_output=True, text=True,
+    ).stdout.strip()
+    assert outer_head_after == outer_head_before, (
+        "GIT_DIR leak landed a commit in the outer repo"
+    )
