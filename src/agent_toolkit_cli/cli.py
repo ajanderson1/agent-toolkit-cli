@@ -19,6 +19,7 @@ from agent_toolkit_cli.commands.list import list_cmd
 from agent_toolkit_cli.commands.migrate_skills import migrate_skills
 from agent_toolkit_cli.commands.new import new
 from agent_toolkit_cli.commands.pi import pi
+from agent_toolkit_cli.commands.skill import skill
 from agent_toolkit_cli.commands.unlink import unlink
 
 
@@ -70,6 +71,7 @@ main.add_command(list_cmd)
 main.add_command(migrate_skills)
 main.add_command(new)
 main.add_command(pi)
+main.add_command(skill)
 main.add_command(unlink)
 main.add_command(yaml_edit)
 main.add_command(list_json)
