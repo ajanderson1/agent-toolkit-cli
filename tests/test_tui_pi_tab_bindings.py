@@ -74,6 +74,8 @@ def test_pi_load_nonzero_exit_raises_runner_error(monkeypatch, tmp_path):
 
 @pytest.mark.asyncio
 async def test_pressing_u_loads_under_user_scope_and_refreshes(monkeypatch, tmp_path):
+    # PiTab is part of the legacy multi-kind interface; not exposed in v2 default.
+    monkeypatch.setenv("AGENT_TOOLKIT_TUI_LEGACY", "1")
     from agent_toolkit_tui.app import TUIApp
     from agent_toolkit_tui.runner import CLIRunner
 

@@ -6,6 +6,7 @@ messages; they don't know about the runner.
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -238,12 +239,19 @@ class TUIApp(App):
         self.state: InventoryState = build_state(self.runner)
         self._scope: str = "project"
         self._kind: str = "skill"
+        # AGENT_TOOLKIT_TUI_LEGACY=1 restores the seven-kind interface that
+        # shipped in v1. Default is skills-only — see docs/agent-toolkit/
+        # roadmap.md for what's coming back and when.
+        self._legacy: bool = os.environ.get("AGENT_TOOLKIT_TUI_LEGACY") == "1"
         self.sub_title = f"v{__version__}"
 
     # ----- composition ----------------------------------------------------
     def compose(self) -> ComposeResult:
         yield Header()
         with Horizontal(id="main"):
+            # KindsSidebar + AssetGrid still mount, but are hidden in
+            # non-legacy mode. Keeps the existing query_one(#asset-grid, ...)
+            # callers working without 14 try/NoMatches guards.
             yield KindsSidebar(self.state, id="kinds-sidebar")
             with Vertical(id="content"):
                 with Horizontal(id="content-header-row"):
@@ -290,6 +298,13 @@ class TUIApp(App):
             self.theme = "gruvbox"
         except Exception:
             pass
+        if not self._legacy:
+            # Skill-only UI: hide legacy widgets, pin kind to skill.
+            try:
+                self.query_one("#kinds-sidebar", KindsSidebar).display = False
+            except NoMatches:
+                pass
+            self._kind = "skill"
         self._refresh_pending_label()
         self._refresh_status_bar()
         self._refresh_skill_view()
@@ -356,6 +371,10 @@ class TUIApp(App):
         self.action_scope("user" if self._scope == "project" else "project")
 
     def action_kind(self, kind: str) -> None:
+        if not self._legacy and kind != "skill":
+            # In default mode the other kinds are hidden; ignore the keyboard
+            # shortcut rather than triggering a half-rendered view.
+            return
         if kind == self._kind:
             return
         self._kind = kind
@@ -372,6 +391,8 @@ class TUIApp(App):
         runner and displays the records in a `PiTab` widget. Press ``u``/``p``
         inside the modal to toggle user/project load state for the cursor row.
         """
+        if not self._legacy:
+            return
         try:
             records = self.runner.pi_inventory()
         except RunnerError as exc:

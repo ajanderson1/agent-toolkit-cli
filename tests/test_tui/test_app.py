@@ -573,10 +573,14 @@ async def test_space_on_unsupported_cell_is_noop():
 
 # ── Dashboard layout: new keybindings (#43) ───────────────────────────────
 
-async def test_number_key_switches_kind():
-    """Pressing 1-7 changes the active kind in AssetGrid and KindsSidebar."""
+async def test_number_key_switches_kind(monkeypatch):
+    """Pressing 1-7 changes the active kind in AssetGrid and KindsSidebar.
+
+    Legacy multi-kind mode — under v2 default the other kinds are hidden.
+    """
     from agent_toolkit_tui.widgets import AssetGrid, KindsSidebar
 
+    monkeypatch.setenv("AGENT_TOOLKIT_TUI_LEGACY", "1")
     runner = FakeRunner(_doc())
     app = TUIApp(toolkit_root=Path("/r"), runner=runner)
     async with app.run_test() as pilot:
@@ -627,10 +631,15 @@ async def test_s_key_toggles_scope():
         assert grid._scope == "project"
 
 
-async def test_breadcrumb_reflects_current_kind_and_scope():
-    """The content header shows the kind; scope lives in the ScopeToggle sibling."""
+async def test_breadcrumb_reflects_current_kind_and_scope(monkeypatch):
+    """The content header shows the kind; scope lives in the ScopeToggle sibling.
+
+    Legacy multi-kind mode — under v2 default kind is pinned to skill so the
+    breadcrumb-changes-with-keypress assertion would never fire.
+    """
     from textual.widgets import Static
 
+    monkeypatch.setenv("AGENT_TOOLKIT_TUI_LEGACY", "1")
     runner = FakeRunner(_doc())
     app = TUIApp(toolkit_root=Path("/r"), runner=runner)
     async with app.run_test() as pilot:
@@ -775,6 +784,50 @@ async def test_subtitle_shows_version():
         # Either "v<X.Y.Z>" if installed, or "vunknown" in a non-installed dev shell.
         assert sub.startswith("v"), f"sub_title should start with 'v', got {sub!r}"
         assert len(sub) >= 2, "sub_title should include some version text"
+
+
+async def test_default_mode_hides_kinds_sidebar_and_pins_skill(
+    git_sandbox, tmp_path, monkeypatch,
+):
+    """v2 default: no AGENT_TOOLKIT_TUI_LEGACY → sidebar hidden, _kind locked."""
+    from agent_toolkit_tui.widgets import KindsSidebar
+
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("HOME", str(fake_home))
+    monkeypatch.delenv("AGENT_TOOLKIT_TUI_LEGACY", raising=False)
+
+    runner = FakeRunner(_doc())
+    app = TUIApp(toolkit_root=Path("/r"), runner=runner)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        sidebar = app.query_one("#kinds-sidebar", KindsSidebar)
+        assert sidebar.display is False
+        app.action_kind("agent")
+        assert app._kind == "skill"
+
+
+async def test_legacy_mode_keeps_all_kinds(git_sandbox, tmp_path, monkeypatch):
+    """AGENT_TOOLKIT_TUI_LEGACY=1 restores the v1 multi-kind interface."""
+    from agent_toolkit_tui.widgets import KindsSidebar
+
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("HOME", str(fake_home))
+    monkeypatch.setenv("AGENT_TOOLKIT_TUI_LEGACY", "1")
+
+    runner = FakeRunner(_doc())
+    app = TUIApp(toolkit_root=Path("/r"), runner=runner)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        sidebar = app.query_one("#kinds-sidebar", KindsSidebar)
+        assert sidebar.display is True
+        app.action_kind("agent")
+        assert app._kind == "agent"
 
 
 async def test_skill_tab_renders_lock_rows(git_sandbox, tmp_path, monkeypatch):
