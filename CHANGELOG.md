@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.3.1](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.3.0...v2.3.1) (2026-05-21)
+
+
+### Bug Fixes
+
+* **tui:** align with v2.3 skill-only CLI ([#166](https://github.com/ajanderson1/agent-toolkit-cli/issues/166)) ([a52929b](https://github.com/ajanderson1/agent-toolkit-cli/commit/a52929be4be3e4695c13d2ef9b2e563045e3316f))
+
 ## [2.3.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v1.0.0...v2.3.0) (2026-05-21)
 
 
