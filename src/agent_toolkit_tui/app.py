@@ -288,6 +288,7 @@ class TUIApp(App):
             scope, home, project = "global", Path.home(), None
         else:
             scope, home, project = "project", None, Path.cwd()
+        skill_grid.set_scope(scope)
         skill_grid.set_rows(
             build_skill_rows(scope=scope, home=home, project=project)
         )
