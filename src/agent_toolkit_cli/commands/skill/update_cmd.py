@@ -1,11 +1,18 @@
 """skill update subcommand."""
 from __future__ import annotations
 
+import shutil
+
 import click
 
 from agent_toolkit_cli import skill_git
 from agent_toolkit_cli.skill_lock import read_lock, write_lock
-from agent_toolkit_cli.skill_paths import canonical_skill_dir, lock_file_path, parent_clone_path
+from agent_toolkit_cli.skill_paths import (
+    canonical_skill_dir,
+    library_skill_path,
+    lock_file_path,
+    parent_clone_path,
+)
 
 from ._common import scope_and_roots
 
@@ -73,6 +80,15 @@ def update_cmd(
                 click.echo(exc.stderr)
                 had_conflict = True
                 continue
+            # Copy-mode entries need an explicit re-copy because the library
+            # canonical is a stale snapshot of the parent's subfolder, not a
+            # live symlink.
+            if entry.extras.get("materialised") == "copy":
+                library_dir = library_skill_path(slug)
+                skill_root = parent_dir / entry.skill_path
+                if library_dir.exists():
+                    shutil.rmtree(library_dir)
+                shutil.copytree(skill_root, library_dir)
             entry.upstream_sha = skill_git.head_sha(parent_dir, env=None)
             write_lock(lock_path, lock)
             click.echo(f"{slug}: updated (parent {entry.source} @ {ref})")
