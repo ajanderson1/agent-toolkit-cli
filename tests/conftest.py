@@ -16,14 +16,15 @@ class GitSandbox:
     env: dict[str, str]
 
 
-def _scrub_git_env(base: dict[str, str]) -> dict[str, str]:
+def scrub_git_env(base: dict[str, str] | None = None) -> dict[str, str]:
     """Strip inherited GIT_* env vars. See memory feedback_git_env_leak.md."""
-    return {k: v for k, v in base.items() if not k.startswith("GIT_")}
+    env = dict(base) if base is not None else os.environ.copy()
+    return {k: v for k, v in env.items() if not k.startswith("GIT_")}
 
 
 @pytest.fixture
 def git_sandbox(tmp_path: Path) -> GitSandbox:
-    env = _scrub_git_env(os.environ.copy())
+    env = scrub_git_env()
     env.update({
         "GIT_AUTHOR_NAME": "Test User",
         "GIT_AUTHOR_EMAIL": "test@example.invalid",

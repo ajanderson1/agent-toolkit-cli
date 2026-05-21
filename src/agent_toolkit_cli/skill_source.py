@@ -25,6 +25,7 @@ class ParsedSource:
     owner_repo: str | None
     ref: str | None
     subpath: str | None
+    skill_name: str | None = None
 
 
 _LOCAL_PREFIXES = ("./", "../")
@@ -54,6 +55,26 @@ def _parse_https(url: str) -> ParsedSource:
     host = parsed.hostname
     path = parsed.path.lstrip("/").removesuffix(".git")
 
+    if host in ("skills.sh", "www.skills.sh"):
+        parts = path.split("/")
+        # Tolerate a single trailing empty segment from a trailing slash.
+        if parts and parts[-1] == "":
+            parts = parts[:-1]
+        if len(parts) != 3 or not all(parts):
+            raise SourceParseError(
+                f"skills.sh URL needs /<owner>/<repo>/<skill>: {url}"
+            )
+        owner, repo, skill_name = parts[0], parts[1], parts[2]
+        owner_repo = f"{owner}/{repo}"
+        return ParsedSource(
+            type="github",
+            url=f"https://github.com/{owner_repo}",
+            owner_repo=owner_repo,
+            ref=None,
+            subpath=None,
+            skill_name=skill_name,
+        )
+
     ref: str | None = None
     subpath: str | None = None
     if "/tree/" in path:
@@ -81,6 +102,41 @@ def _parse_https(url: str) -> ParsedSource:
     return ParsedSource(
         type=source_type,
         url=canonical_url,
+        owner_repo=owner_repo,
+        ref=ref,
+        subpath=subpath,
+    )
+
+
+def _parse_file_url(url: str) -> ParsedSource:
+    """Parse a file:// URL into a synthetic owner/repo so the monorepo path can
+    treat a local clone as if it had a remote owner/repo.
+
+    Uses the file path's last component as `repo` and `local` as the synthetic
+    owner. Supports `/tree/<ref>/<subpath>` to address a subpath within the
+    parent, matching the GitHub URL convention.
+    """
+    body = url[len("file://"):]
+    # body might be "/abs/path[/tree/main/sub]" — split off tree/<ref>/<sub>.
+    ref: str | None = None
+    subpath: str | None = None
+    if "/tree/" in body:
+        head, _, rest = body.partition("/tree/")
+        parts = rest.split("/", 1)
+        ref = parts[0] or None
+        if len(parts) == 2 and parts[1]:
+            subpath = _sanitize_subpath(parts[1])
+        body = head
+    abs_path = body.removesuffix(".git").rstrip("/")
+    if not abs_path:
+        raise SourceParseError(f"Unparseable file:// URL: {url}")
+    repo = Path(abs_path).name
+    if not repo:
+        raise SourceParseError(f"Unparseable file:// URL: {url}")
+    owner_repo = f"local/{repo}"
+    return ParsedSource(
+        type="git",
+        url=f"file://{abs_path}",
         owner_repo=owner_repo,
         ref=ref,
         subpath=subpath,
@@ -120,15 +176,24 @@ def parse_source(input_: str) -> ParsedSource:
     if input_.startswith(("http://", "https://")):
         return _parse_https(input_)
 
-    # GitHub shorthand: owner/repo (no scheme, no leading dot/slash, exactly one slash).
-    if re.fullmatch(r"[A-Za-z0-9_.\-]+/[A-Za-z0-9_.\-]+", input_):
-        owner_repo = input_
+    if input_.startswith("file://"):
+        return _parse_file_url(input_)
+
+    # GitHub shorthand: owner/repo[/subpath] (no scheme, no leading dot/slash).
+    m = re.fullmatch(
+        r"(?P<owner>[A-Za-z0-9_.\-]+)/(?P<repo>[A-Za-z0-9_.\-]+)(?:/(?P<subpath>[^\s].*))?",
+        input_,
+    )
+    if m:
+        owner_repo = f"{m['owner']}/{m['repo']}"
+        subpath = _sanitize_subpath(m["subpath"]) if m["subpath"] else None
         return ParsedSource(
             type="github",
             url=f"https://github.com/{owner_repo}",
             owner_repo=owner_repo,
             ref=None,
-            subpath=None,
+            subpath=subpath,
+            skill_name=None,
         )
 
     raise SourceParseError(f"Unrecognised source: {input_}")

@@ -44,6 +44,26 @@ class DirtyCanonicalError(InstallError):
     """Full-remove requested against dirty canonical without --force."""
 
 
+def _symlink_or_copy(src: Path, dest: Path) -> str:
+    """Materialise `dest` to refer to `src`. Try symlink; fall back to copy.
+
+    Returns 'symlink' or 'copy' so the caller can record the materialisation
+    mode in the lock entry's extras (relevant for `update`: copy-mode needs
+    re-copy, symlink-mode just needs the parent to be re-pulled).
+    """
+    if dest.exists() or dest.is_symlink():
+        raise InstallError(
+            f"{dest}: refusing to overwrite existing path"
+        )
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        dest.symlink_to(src, target_is_directory=True)
+        return "symlink"
+    except OSError:
+        shutil.copytree(src, dest)
+        return "copy"
+
+
 @dataclass(frozen=True)
 class InstallPlan:
     slug: str

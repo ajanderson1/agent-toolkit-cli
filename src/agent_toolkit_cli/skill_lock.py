@@ -34,6 +34,8 @@ class LockEntry:
     skill_path: str | None = None
     upstream_sha: str | None = None
     local_sha: str | None = None
+    parent_url: str | None = None
+    read_only: bool = False
     extras: dict[str, object] = field(default_factory=dict)
 
 
@@ -48,10 +50,12 @@ class LockFile:
 # installedAt, updatedAt (and lacks upstreamSha/localSha/ref).
 _V1_ENTRY_FIELDS = {
     "source", "sourceType", "ref", "skillPath", "upstreamSha", "localSha",
+    "parentUrl", "readOnly",
 }
 _V3_ENTRY_FIELDS = {
     "source", "sourceType", "sourceUrl", "ref", "skillPath",
     "skillFolderHash", "installedAt", "updatedAt", "pluginName",
+    "parentUrl", "readOnly",
 }
 # Wrapper-level fields v3 carries outside `skills`.
 _V3_WRAPPER_FIELDS = {"dismissed", "lastSelectedAgents"}
@@ -66,6 +70,8 @@ def _entry_from_dict_v1(d: dict) -> LockEntry:
         skill_path=d.get("skillPath"),
         upstream_sha=d.get("upstreamSha"),
         local_sha=d.get("localSha"),
+        parent_url=d.get("parentUrl"),
+        read_only=bool(d.get("readOnly", False)),
         extras=extras,
     )
 
@@ -81,6 +87,8 @@ def _entry_from_dict_v3(d: dict) -> LockEntry:
         upstream_sha=d.get("skillFolderHash"),
         # v3 has no local_sha concept; leave None.
         local_sha=None,
+        parent_url=d.get("parentUrl"),
+        read_only=bool(d.get("readOnly", False)),
         extras={
             **extras,
             # Preserve v3-only metadata so round-trip is lossless.
@@ -102,6 +110,10 @@ def _entry_to_dict_v1(e: LockEntry) -> dict:
         out["upstreamSha"] = e.upstream_sha
     if e.local_sha is not None:
         out["localSha"] = e.local_sha
+    if e.parent_url is not None:
+        out["parentUrl"] = e.parent_url
+    if e.read_only:
+        out["readOnly"] = True
     # Drop v3-only keys we may have stashed in extras when round-tripping
     # from a v3 file we later wrote as v1 (e.g. a project lock copied from
     # the global one — unusual, but be tidy).
@@ -146,6 +158,10 @@ def _entry_to_dict_v3(e: LockEntry) -> dict:
         out["ref"] = e.ref
     if e.skill_path is not None:
         out["skillPath"] = e.skill_path
+    if e.parent_url is not None:
+        out["parentUrl"] = e.parent_url
+    if e.read_only:
+        out["readOnly"] = True
     if e.upstream_sha is not None:
         out["skillFolderHash"] = e.upstream_sha
     out["installedAt"] = e.extras.get("installedAt") or now
