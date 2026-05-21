@@ -1,5 +1,5 @@
-/* agent-toolkit-tui — V1 Navigator, gruvbox-friendly.
-   Layout: Header → Horizontal(KindsSidebar | Vertical(content-header + AssetGrid))
+/* agent-toolkit-tui — gruvbox-friendly.
+   Layout: Header → Vertical(content-header-row + SkillGrid)
            → status-bar → footer-pending → Footer.
 */
 
