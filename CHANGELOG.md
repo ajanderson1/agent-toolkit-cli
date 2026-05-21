@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.3.3](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.3.2...v2.3.3) (2026-05-21)
+
+
+### Features
+
+* **tui:** ⓘ info affordance on Universal column header ([#167](https://github.com/ajanderson1/agent-toolkit-cli/issues/167)) ([#175](https://github.com/ajanderson1/agent-toolkit-cli/issues/175)) ([ba7943e](https://github.com/ajanderson1/agent-toolkit-cli/commit/ba7943eb060eb0efe4754f216a45c2c5741bc470))
+
+
+### Bug Fixes
+
+* **deps:** add pyyaml as runtime dependency ([#178](https://github.com/ajanderson1/agent-toolkit-cli/issues/178)) ([f5ef948](https://github.com/ajanderson1/agent-toolkit-cli/commit/f5ef9489b1eb03d023f917524003adc9947e0e59))
+
 ## [2.3.2](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.3.1...v2.3.2) (2026-05-21)
 
 
