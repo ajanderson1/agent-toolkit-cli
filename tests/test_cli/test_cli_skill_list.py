@@ -6,18 +6,21 @@ from agent_toolkit_cli.cli import main
 
 
 def test_skill_list_shows_added_skill(git_sandbox, tmp_path: Path, monkeypatch):
-    fake_home = tmp_path / "home"
-    fake_home.mkdir()
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / ".claude").mkdir()
     for k, v in git_sandbox.env.items():
         monkeypatch.setenv(k, v)
-    monkeypatch.setenv("HOME", str(fake_home))
 
     runner = CliRunner()
     runner.invoke(main, [
-        "skill", "add", str(git_sandbox.upstream), "--slug", "demo", "-g",
-        "--harness", "claude",
+        "--project", str(project),
+        "skill", "add", str(git_sandbox.upstream), "--slug", "demo", "-p",
+        "--agent", "claude-code",
     ])
-    result = runner.invoke(main, ["skill", "list", "-g"])
+    result = runner.invoke(main, [
+        "--project", str(project), "skill", "list", "-p",
+    ])
     assert result.exit_code == 0, result.output
     assert "demo" in result.output
 

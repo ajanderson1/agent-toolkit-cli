@@ -91,6 +91,20 @@ def merge(repo: Path, *, ref: str, env: dict[str, str] | None) -> GitResult:
     return GitResult(stdout=proc.stdout, stderr=proc.stderr)
 
 
+def is_git_repo(repo: Path) -> bool:
+    """True when `repo` contains a git working tree (`.git` directory or
+    git-dir file). False for missing paths or plain file trees.
+
+    Useful for skills installed via `npx skills add --copy`, which lays
+    down plain files without a `.git/` — operations like `status` and
+    `update` are not applicable to those installs.
+    """
+    if not repo.is_dir():
+        return False
+    git_dir = repo / ".git"
+    return git_dir.is_dir() or git_dir.is_file()
+
+
 def status(repo: Path, *, env: dict[str, str] | None) -> GitWorkingTreeStatus:
     proc = _run(["git", "-C", str(repo), "status", "--porcelain"], env=env)
     return (

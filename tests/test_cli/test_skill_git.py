@@ -104,6 +104,24 @@ def test_env_with_outer_git_dir_is_scrubbed(git_sandbox, monkeypatch):
     assert s == GitWorkingTreeStatus.CLEAN
 
 
+def test_is_git_repo_true_for_clone(git_sandbox):
+    from agent_toolkit_cli.skill_git import is_git_repo
+    assert is_git_repo(git_sandbox.clone) is True
+
+
+def test_is_git_repo_false_for_plain_dir(tmp_path):
+    from agent_toolkit_cli.skill_git import is_git_repo
+    plain = tmp_path / "plain"
+    plain.mkdir()
+    (plain / "SKILL.md").write_text("hi")
+    assert is_git_repo(plain) is False
+
+
+def test_is_git_repo_false_for_missing(tmp_path):
+    from agent_toolkit_cli.skill_git import is_git_repo
+    assert is_git_repo(tmp_path / "nope") is False
+
+
 def test_commit_all_creates_commit_in_target_repo(git_sandbox):
     from agent_toolkit_cli.skill_git import commit_all
 

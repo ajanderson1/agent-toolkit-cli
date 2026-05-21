@@ -85,7 +85,11 @@ def test_remove_unknown_entry_is_noop():
     assert remove_entry(lf, "nope") == lf
 
 
-def test_bad_version_treated_as_empty(tmp_path: Path):
+def test_unknown_high_version_treated_as_empty(tmp_path: Path):
+    """Forward compat: a version we have no reader for becomes empty rather
+    than crashing — but unknown fields in known versions are preserved
+    (covered by test_unknown_fields_in_input_are_preserved_on_round_trip).
+    """
     p = tmp_path / "skills-lock.json"
     p.write_text('{"version": 999, "skills": {}}')
     lf = read_lock(p)
@@ -97,3 +101,118 @@ def test_unparseable_file_treated_as_empty(tmp_path: Path):
     p.write_text("not json")
     lf = read_lock(p)
     assert lf == LockFile(version=1, skills={})
+
+
+# ── Cross-version interop: `npx skills` writes v3 globally ─────────────────
+
+
+def test_read_v3_global_lock_from_npx_skills(tmp_path: Path):
+    """`npx skills` writes version 3 to ~/.agents/.skill-lock.json. Our reader
+    accepts it and surfaces entries via the same LockEntry shape.
+    """
+    p = tmp_path / ".skill-lock.json"
+    p.write_text(
+        json.dumps({
+            "version": 3,
+            "skills": {
+                "cmux": {
+                    "source": "manaflow-ai/cmux",
+                    "sourceType": "github",
+                    "sourceUrl": "https://github.com/manaflow-ai/cmux.git",
+                    "skillPath": "skills/cmux/SKILL.md",
+                    "skillFolderHash": "d7b4a428df22553048a6830f4b5f3733fe1f9393",
+                    "installedAt": "2026-05-21T07:24:10.916Z",
+                    "updatedAt": "2026-05-21T07:24:10.916Z",
+                },
+            },
+            "dismissed": {"findSkillsPrompt": True},
+            "lastSelectedAgents": ["claude-code", "codex"],
+        })
+    )
+    lf = read_lock(p)
+    assert lf.version == 3
+    assert "cmux" in lf.skills
+    e = lf.skills["cmux"]
+    assert e.source == "manaflow-ai/cmux"
+    assert e.source_type == "github"
+    assert e.skill_path == "skills/cmux/SKILL.md"
+    # v3 stores upstream pin as skillFolderHash; we surface it via upstream_sha
+    # so callers don't have to care which version they're reading.
+    assert e.upstream_sha == "d7b4a428df22553048a6830f4b5f3733fe1f9393"
+
+
+def test_write_preserves_existing_file_version(tmp_path: Path):
+    """If we read a v3 file, we write v3 back — never downgrade.
+    Preserves interop with `npx skills` reading the same file later.
+    """
+    p = tmp_path / ".skill-lock.json"
+    p.write_text(
+        json.dumps({
+            "version": 3,
+            "skills": {
+                "cmux": {
+                    "source": "manaflow-ai/cmux",
+                    "sourceType": "github",
+                    "sourceUrl": "https://github.com/manaflow-ai/cmux.git",
+                    "skillPath": "skills/cmux/SKILL.md",
+                    "skillFolderHash": "d7b4a428df22553048a6830f4b5f3733fe1f9393",
+                    "installedAt": "2026-05-21T07:24:10.916Z",
+                    "updatedAt": "2026-05-21T07:24:10.916Z",
+                },
+            },
+            "dismissed": {"findSkillsPrompt": True},
+        })
+    )
+    lf = read_lock(p)
+    write_lock(p, lf)
+    raw = json.loads(p.read_text())
+    assert raw["version"] == 3
+    assert raw["skills"]["cmux"]["skillFolderHash"] == (
+        "d7b4a428df22553048a6830f4b5f3733fe1f9393"
+    )
+    # Wrapper fields survive round-trip
+    assert raw["dismissed"] == {"findSkillsPrompt": True}
+
+
+def test_write_adds_entry_to_v3_file_using_v3_shape(tmp_path: Path):
+    """Adding an entry to a v3 file writes it back in v3 shape."""
+    p = tmp_path / ".skill-lock.json"
+    p.write_text(
+        json.dumps({
+            "version": 3, "skills": {}, "dismissed": {},
+        })
+    )
+    lf = read_lock(p)
+    lf = add_entry(
+        lf, "journal",
+        LockEntry(
+            source="ajanderson1/journal", source_type="github",
+            ref="main", skill_path="SKILL.md",
+            upstream_sha="abc123",
+        ),
+    )
+    write_lock(p, lf)
+    raw = json.loads(p.read_text())
+    assert raw["version"] == 3
+    entry = raw["skills"]["journal"]
+    assert entry["source"] == "ajanderson1/journal"
+    # v3 stores the upstream pin under skillFolderHash, not upstreamSha
+    assert entry["skillFolderHash"] == "abc123"
+    # v3 has timestamps; we synthesise on write
+    assert "installedAt" in entry
+    assert "updatedAt" in entry
+
+
+def test_new_file_defaults_to_v1(tmp_path: Path):
+    """Writing to a path that doesn't exist creates a v1 file (the project
+    lock format). v3 is only used when reading a v3 file back."""
+    p = tmp_path / "skills-lock.json"
+    lf = LockFile(version=1, skills={})
+    lf = add_entry(
+        lf, "demo",
+        LockEntry(source="o/demo", source_type="github", ref="main"),
+    )
+    write_lock(p, lf)
+    raw = json.loads(p.read_text())
+    assert raw["version"] == 1
+    assert "demo" in raw["skills"]

@@ -227,7 +227,8 @@ async def test_app_starts_and_shows_pending_zero():
         assert "Pending" in str(label.render())
 
 
-async def test_toggle_then_apply_invokes_runner():
+async def test_toggle_then_apply_invokes_runner(monkeypatch):
+    monkeypatch.setenv("AGENT_TOOLKIT_TUI_LEGACY", "1")
     runner = FakeRunner(_doc())
     app = TUIApp(toolkit_root=Path("/r"), runner=runner)
     async with app.run_test() as pilot:
@@ -243,6 +244,9 @@ async def test_toggle_then_apply_invokes_runner():
         table.focus()
         await pilot.pause()
         await pilot.press("enter")  # DataTable's Enter binding runs action_select_cursor
+        # Switch to a non-skill kind so ctrl+s routes through the AssetGrid apply path.
+        await pilot.press("2")
+        await pilot.pause()
         await pilot.press("ctrl+s")
         await pilot.pause()
         assert runner.calls, "expected at least one runner call"
@@ -254,7 +258,8 @@ async def test_toggle_then_apply_invokes_runner():
         assert dry is False
 
 
-async def test_diff_uses_dry_run():
+async def test_diff_uses_dry_run(monkeypatch):
+    monkeypatch.setenv("AGENT_TOOLKIT_TUI_LEGACY", "1")
     runner = FakeRunner(_doc())
     app = TUIApp(toolkit_root=Path("/r"), runner=runner)
     async with app.run_test() as pilot:
@@ -268,6 +273,9 @@ async def test_diff_uses_dry_run():
         table.focus()
         await pilot.pause()
         await pilot.press("enter")
+        # Switch to a non-skill kind so ctrl+d routes through the AssetGrid diff path.
+        await pilot.press("2")
+        await pilot.pause()
         await pilot.press("ctrl+d")
         await pilot.pause()
         assert runner.calls, "diff should have invoked the runner"
@@ -278,8 +286,9 @@ async def test_diff_uses_dry_run():
 # R-3 new pilot tests
 # ---------------------------------------------------------------------------
 
-async def test_refresh_rebuilds_state():
+async def test_refresh_rebuilds_state(monkeypatch):
     """ctrl+r calls list_state again and clears pending that matches new state."""
+    monkeypatch.setenv("AGENT_TOOLKIT_TUI_LEGACY", "1")
     runner = FakeRunner(_doc())
     app = TUIApp(toolkit_root=Path("/r"), runner=runner)
     async with app.run_test() as pilot:
@@ -295,6 +304,9 @@ async def test_refresh_rebuilds_state():
         await pilot.pause()
         await pilot.press("enter")
         await pilot.pause()
+        # Switch to a non-skill kind so ctrl+r routes through the AssetGrid refresh path.
+        await pilot.press("2")
+        await pilot.pause()
         list_calls_before = runner.list_calls
         # Refresh
         await pilot.press("ctrl+r")
@@ -304,8 +316,9 @@ async def test_refresh_rebuilds_state():
         )
 
 
-async def test_scope_change_updates_grid():
+async def test_scope_change_updates_grid(monkeypatch):
     """Posting ScopeChanged updates the grid's internal scope."""
+    monkeypatch.setenv("AGENT_TOOLKIT_TUI_LEGACY", "1")
     from agent_toolkit_tui.messages import ScopeChanged
     from agent_toolkit_tui.widgets import AssetGrid
 
@@ -321,7 +334,10 @@ async def test_scope_change_updates_grid():
         await pilot.pause()
         assert grid._scope == "user"
 
-        # Toggle a cell and verify runner is called with scope=user
+        # Toggle a cell and verify runner is called with scope=user.
+        # Switch to a non-skill kind so ctrl+s routes through the AssetGrid apply path.
+        await pilot.press("2")
+        await pilot.pause()
         from textual.coordinate import Coordinate
         from textual.widgets import DataTable
         table = grid.query_one("#grid-table", DataTable)
@@ -409,8 +425,9 @@ async def test_a_key_skips_unsupported_cells():
         )
 
 
-async def test_ctrl_z_reverts_all_pending():
+async def test_ctrl_z_reverts_all_pending(monkeypatch):
     """Ctrl+Z clears the pending queue without applying anything."""
+    monkeypatch.setenv("AGENT_TOOLKIT_TUI_LEGACY", "1")
     from agent_toolkit_tui.widgets import AssetGrid
     from textual.coordinate import Coordinate
     from textual.widgets import DataTable
@@ -429,6 +446,9 @@ async def test_ctrl_z_reverts_all_pending():
         await pilot.pause()
         assert grid.pending_entries(), "precondition: should have a pending entry"
 
+        # Switch to a non-skill kind so ctrl+z routes through the AssetGrid revert path.
+        await pilot.press("2")
+        await pilot.pause()
         await pilot.press("ctrl+z")
         await pilot.pause()
         assert grid.pending_entries() == {}, "ctrl+z should clear pending"
@@ -573,10 +593,14 @@ async def test_space_on_unsupported_cell_is_noop():
 
 # ── Dashboard layout: new keybindings (#43) ───────────────────────────────
 
-async def test_number_key_switches_kind():
-    """Pressing 1-7 changes the active kind in AssetGrid and KindsSidebar."""
+async def test_number_key_switches_kind(monkeypatch):
+    """Pressing 1-7 changes the active kind in AssetGrid and KindsSidebar.
+
+    Legacy multi-kind mode — under v2 default the other kinds are hidden.
+    """
     from agent_toolkit_tui.widgets import AssetGrid, KindsSidebar
 
+    monkeypatch.setenv("AGENT_TOOLKIT_TUI_LEGACY", "1")
     runner = FakeRunner(_doc())
     app = TUIApp(toolkit_root=Path("/r"), runner=runner)
     async with app.run_test() as pilot:
@@ -627,10 +651,15 @@ async def test_s_key_toggles_scope():
         assert grid._scope == "project"
 
 
-async def test_breadcrumb_reflects_current_kind_and_scope():
-    """The content header shows the kind; scope lives in the ScopeToggle sibling."""
+async def test_breadcrumb_reflects_current_kind_and_scope(monkeypatch):
+    """The content header shows the kind; scope lives in the ScopeToggle sibling.
+
+    Legacy multi-kind mode — under v2 default kind is pinned to skill so the
+    breadcrumb-changes-with-keypress assertion would never fire.
+    """
     from textual.widgets import Static
 
+    monkeypatch.setenv("AGENT_TOOLKIT_TUI_LEGACY", "1")
     runner = FakeRunner(_doc())
     app = TUIApp(toolkit_root=Path("/r"), runner=runner)
     async with app.run_test() as pilot:
@@ -777,6 +806,50 @@ async def test_subtitle_shows_version():
         assert len(sub) >= 2, "sub_title should include some version text"
 
 
+async def test_default_mode_hides_kinds_sidebar_and_pins_skill(
+    git_sandbox, tmp_path, monkeypatch,
+):
+    """v2 default: no AGENT_TOOLKIT_TUI_LEGACY → sidebar hidden, _kind locked."""
+    from agent_toolkit_tui.widgets import KindsSidebar
+
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("HOME", str(fake_home))
+    monkeypatch.delenv("AGENT_TOOLKIT_TUI_LEGACY", raising=False)
+
+    runner = FakeRunner(_doc())
+    app = TUIApp(toolkit_root=Path("/r"), runner=runner)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        sidebar = app.query_one("#kinds-sidebar", KindsSidebar)
+        assert sidebar.display is False
+        app.action_kind("agent")
+        assert app._kind == "skill"
+
+
+async def test_legacy_mode_keeps_all_kinds(git_sandbox, tmp_path, monkeypatch):
+    """AGENT_TOOLKIT_TUI_LEGACY=1 restores the v1 multi-kind interface."""
+    from agent_toolkit_tui.widgets import KindsSidebar
+
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("HOME", str(fake_home))
+    monkeypatch.setenv("AGENT_TOOLKIT_TUI_LEGACY", "1")
+
+    runner = FakeRunner(_doc())
+    app = TUIApp(toolkit_root=Path("/r"), runner=runner)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        sidebar = app.query_one("#kinds-sidebar", KindsSidebar)
+        assert sidebar.display is True
+        app.action_kind("agent")
+        assert app._kind == "agent"
+
+
 async def test_skill_tab_renders_lock_rows(git_sandbox, tmp_path, monkeypatch):
     """When the skill kind is active, SkillGrid mounts and reads the lock file."""
     from click.testing import CliRunner
@@ -789,10 +862,14 @@ async def test_skill_tab_renders_lock_rows(git_sandbox, tmp_path, monkeypatch):
         monkeypatch.setenv(k, v)
     monkeypatch.setenv("HOME", str(fake_home))
 
-    CliRunner().invoke(cli_main, [
+    # Use codex harness: codex is a universal agent, so global-scope add
+    # skips symlink creation (canonical IS the projection) and never writes
+    # to the real ~/.claude. The canonical + lock file are still created.
+    result = CliRunner().invoke(cli_main, [
         "skill", "add", str(git_sandbox.upstream), "--slug", "demo", "-g",
-        "--harness", "claude",
+        "--agent", "codex",
     ])
+    assert result.exit_code == 0, result.output
 
     runner = FakeRunner(_doc())
     app = TUIApp(toolkit_root=Path("/r"), runner=runner)
