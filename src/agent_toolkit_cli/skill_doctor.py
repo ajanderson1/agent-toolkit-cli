@@ -141,6 +141,19 @@ def _projection_paths(
     return out
 
 
+def _make_unlink_action(*, link: Path) -> FixAction:
+    def _apply() -> None:
+        if not link.is_symlink():
+            return  # idempotent
+        link.unlink()
+
+    return FixAction(
+        description=f"Unlink {link}",
+        shell_preview=f"rm {link}",
+        apply=_apply,
+    )
+
+
 def _make_relink_action(*, link: Path, canonical: Path) -> FixAction:
     def _apply() -> None:
         if link.is_symlink() and link.resolve() == canonical.resolve():
@@ -209,10 +222,22 @@ def _check_slug(
     ):
         if not link.is_symlink():
             continue
-        try:
-            target = link.resolve()
-        except OSError:
-            continue  # broken symlink — reported by orphan_symlink detector (Task 6)
+        target_path = Path(link.readlink())
+        if not target_path.is_absolute():
+            target_path = (link.parent / target_path).resolve()
+        target_exists = target_path.exists()
+        if not target_exists:
+            findings.append(Finding(
+                kind="orphan_symlink", slug=slug, scope=scope,
+                path=link,
+                detail=(
+                    f"{agent_name} symlink at {link} points to {target_path} "
+                    f"which does not exist"
+                ),
+                fix_action=_make_unlink_action(link=link),
+            ))
+            continue
+        target = link.resolve()
         if target == canonical_real:
             continue
         findings.append(Finding(

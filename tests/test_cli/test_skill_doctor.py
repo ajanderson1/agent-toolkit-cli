@@ -277,3 +277,65 @@ def test_wrong_type_bundle_fix_moves_and_relinks(
     # Idempotent: applying again does nothing destructive.
     f.fix_action.apply()
     assert bundle.is_symlink()
+
+
+def test_diagnose_orphan_symlink(git_sandbox, tmp_path: Path, monkeypatch):
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    monkeypatch.setenv("HOME", str(fake_home))
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: fake_home))
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(fake_home / ".claude"))
+    _patch_claude_global_skills_dir(monkeypatch, fake_home / ".claude" / "skills")
+
+    runner = CliRunner()
+    _seed_library(runner, git_sandbox.upstream)
+    # Symlink to a path that doesn't exist.
+    claude_skills = fake_home / ".claude" / "skills"
+    claude_skills.mkdir(parents=True)
+    broken = claude_skills / "demo"
+    broken.symlink_to(tmp_path / "does-not-exist")
+
+    from agent_toolkit_cli.skill_doctor import diagnose
+    findings = diagnose(
+        slugs=None, scope="global", home=fake_home, project=None,
+    )
+    orphans = [f for f in findings if f.kind == "orphan_symlink"]
+    assert len(orphans) == 1
+
+
+def test_orphan_symlink_fix_unlinks(git_sandbox, tmp_path: Path, monkeypatch):
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    monkeypatch.setenv("HOME", str(fake_home))
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: fake_home))
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(fake_home / ".claude"))
+    _patch_claude_global_skills_dir(monkeypatch, fake_home / ".claude" / "skills")
+
+    runner = CliRunner()
+    _seed_library(runner, git_sandbox.upstream)
+    claude_skills = fake_home / ".claude" / "skills"
+    claude_skills.mkdir(parents=True)
+    broken = claude_skills / "demo"
+    broken.symlink_to(tmp_path / "does-not-exist")
+
+    from agent_toolkit_cli.skill_doctor import diagnose
+    f = next(
+        f for f in diagnose(
+            slugs=None, scope="global", home=fake_home, project=None,
+        )
+        if f.kind == "orphan_symlink"
+    )
+    f.fix_action.apply()
+    assert not broken.is_symlink()
+    assert not broken.exists()
+    # Idempotent.
+    f.fix_action.apply()
+    assert not broken.exists()
