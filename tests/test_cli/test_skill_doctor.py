@@ -31,3 +31,14 @@ def test_fix_action_apply_is_callable():
     fa.apply()
     fa.apply()
     assert calls == [1, 1]
+
+
+def test_diagnose_empty_lock_returns_no_findings(tmp_path: Path, monkeypatch):
+    library_root = tmp_path / "lib" / "skills"
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    from agent_toolkit_cli.skill_doctor import diagnose
+    findings = diagnose(
+        slugs=None, scope="global",
+        home=tmp_path / "home", project=None,
+    )
+    assert findings == []
