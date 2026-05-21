@@ -1,9 +1,12 @@
+import subprocess
 from pathlib import Path
 
 from click.testing import CliRunner
 
 from agent_toolkit_cli.cli import main
 from agent_toolkit_tui.skill_state import SkillCell, SkillRow, build_skill_rows, _cell_for
+from tests.conftest import scrub_git_env
+from tests.test_cli.test_skill_update_monorepo import _init_parent
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -320,11 +323,6 @@ def test_project_scope_universal_linked_after_install(
 # ---------------------------------------------------------------------------
 # Monorepo skill state tests (parent-clone-derived)
 # ---------------------------------------------------------------------------
-
-import subprocess
-
-from tests.conftest import scrub_git_env
-from tests.test_cli.test_skill_update_monorepo import _init_parent
 
 
 def _install_monorepo_skill(tmp_path: Path, monkeypatch) -> Path:
