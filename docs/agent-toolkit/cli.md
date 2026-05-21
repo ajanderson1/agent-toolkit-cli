@@ -49,6 +49,37 @@ The following pre-v2 commands no longer exist on `main`. They remain available a
 
 A tracker issue lists the v2-native rebuild status for each — see the PR body for #160.
 
+## skill add
+
+```
+Usage: agent-toolkit-cli skill add <source> [--ref <ref>] [--slug <slug>] [--skill <name>]
+```
+
+| Flag | Description |
+|---|---|
+| `<source>` | `owner/repo`, full URL, SSH URL, local path, `owner/repo/<subpath>`, or `https://www.skills.sh/…` URL |
+| `--ref <ref>` | Git ref to pin (branch, tag, or SHA) |
+| `--slug <slug>` | Override the slug used for the canonical directory and lock-file entry |
+| `--skill <name>` | Select one skill by `name:` frontmatter when `<source>` is a monorepo |
+
+### Monorepo skills
+
+These three commands install the same `mkdocs` skill, lock-file equivalent:
+
+```bash
+agent-toolkit-cli skill add vamseeachanta/workspace-hub --skill mkdocs
+agent-toolkit-cli skill add vamseeachanta/workspace-hub/mkdocs
+agent-toolkit-cli skill add https://www.skills.sh/vamseeachanta/workspace-hub/mkdocs
+```
+
+The parent repo is cloned once under `$AGENT_TOOLKIT_SKILLS_ROOT/_parents/<owner>/<repo>/` (or `~/.agent-toolkit/skills/_parents/<owner>/<repo>/` by default). The library canonical at `<library>/<slug>/` is a symlink into the parent's subfolder; on platforms where symlinks fail, the CLI falls back to a recursive copy and records `materialised: "copy"` in the lock entry.
+
+`skill update <slug>` for monorepo entries runs `git pull --ff-only` against the parent clone — the symlinked canonical sees the new content immediately.
+
+`skill push <slug>` for monorepo entries is refused; the message names the parent URL so you can open a PR there instead.
+
+---
+
 ## See also
 
 - [`skill-lock.md`](skill-lock.md) — lock-file format and `skill` subcommand reference.

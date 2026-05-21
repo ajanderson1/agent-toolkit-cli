@@ -21,7 +21,7 @@ uv tool install --from git+https://github.com/ajanderson1/agent-toolkit-cli agen
 ### Skills — lock-file driven, agent-aware
 
 ```text
-agent-toolkit-cli skill add <source> [-g|-p] [--ref <ref>] [--harness <h>]...
+agent-toolkit-cli skill add <source> [--ref <ref>] [--slug <slug>] [--skill <name>]
 agent-toolkit-cli skill list [-g|-p]
 agent-toolkit-cli skill status [<slug>...] [-g|-p]
 agent-toolkit-cli skill update [<slug>...] [-g|-p]      # merge-aware
@@ -32,6 +32,8 @@ agent-toolkit-cli skill remove <slug>... [-g|-p] [--force]
 `<source>` accepts `owner/repo`, full URL, SSH URL, or local path — same scheme as `npx skills add`. See [`docs/agent-toolkit/skill-lock.md`](docs/agent-toolkit/skill-lock.md) for the lock-file format and skills.sh interop details.
 
 The CLI uses the 55-agent catalog ported from [vercel-labs/skills](https://github.com/vercel-labs/skills/blob/main/src/agents.ts). Universal agents (codex, opencode, gemini-cli, +11 more whose `skillsDir == .agents/skills`) skip per-harness symlinks at global scope. Non-universal agents (claude-code, pi, windsurf, +37 more) still get their per-harness symlink. Interactive wizard groups by universality; TUI skill grid covers the two we explicitly support (claude-code, pi). v2.0.0's `AGENT_TOOLKIT_TUI_LEGACY=1` escape hatch is preserved.
+
+**Monorepo skills:** A `<source>` may name a parent repo that contains several skills. Pick one with `--skill <name>` (matches `SKILL.md` frontmatter `name:`), or pass the subpath inline (`owner/repo/<subpath>` or `<repo>/tree/<ref>/<subpath>`). `https://www.skills.sh/<owner>/<repo>/<skill>` URLs also work end-to-end. Monorepo entries are read-only; `skill push` refuses them and points at the parent repo.
 
 ### TUI
 
