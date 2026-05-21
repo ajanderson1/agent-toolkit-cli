@@ -1,0 +1,31 @@
+Usage: agent-toolkit-cli [OPTIONS] COMMAND [ARGS]...
+
+  agent-toolkit-cli — metadata-aware commands for asset frontmatter and
+  AGENTS.md.
+
+  Resolves the toolkit repo via: --toolkit-repo flag > AGENT_TOOLKIT_REPO env
+  > .agent-toolkit-source walk-up > ~/GitHub/agent-toolkit default.
+  Subcommands' --toolkit-repo flag still works for explicit per-invocation
+  paths.
+
+Options:
+  --toolkit-repo DIRECTORY  Path to the agent-toolkit repo (overrides
+                            env/walk-up/default).
+  --project DIRECTORY       Path to the consumer project (for
+                            link/unlink/list/diff).
+  --help                    Show this message and exit.
+
+Commands:
+  check           Validate asset frontmatter and AGENTS.md auto-regions.
+  diff            Preview what `link` would change (alias for `link...
+  doctor          Run five-group health check (or per-resource diagnosis).
+  fix             Regenerate AGENTS.md auto-regions.
+  ingest          Ingest an asset from a URL, name, or local file.
+  inventory       List assets, filter by kind, or zoom into a single...
+  link            Project assets per the allow-list.
+  list            Display the asset inventory with user/project install...
+  migrate-skills  Rewrite legacy inline-frontmatter skills into the new...
+  new             Scaffold a new asset with valid v1alpha2 frontmatter.
+  pi              Pi: unified extension inventory and load/unload across...
+  skill           Manage skills via per-skill upstream git repos +...
+  unlink          Remove projected symlinks per the allow-list.

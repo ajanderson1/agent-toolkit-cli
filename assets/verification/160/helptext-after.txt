@@ -1,0 +1,18 @@
+Usage: agent-toolkit-cli [OPTIONS] COMMAND [ARGS]...
+
+  agent-toolkit-cli — manage skills via per-skill upstream git repos +
+  lockfile. Run `agent-toolkit-cli skill --help` for subcommands.
+
+  Pre-v2 commands (check, link, doctor, etc.) were removed in v2.3.0. The
+  frozen v1 surface lives at the v1.0.0 tag; install it via `uv tool install
+  --from git+https://github.com/ajanderson1/agent-toolkit-cli@v1.0.0 agent-
+  toolkit`.
+
+Options:
+  --toolkit-repo DIRECTORY  Path to the agent-toolkit repo (overrides
+                            env/walk-up/default).
+  --project DIRECTORY       Path to the consumer project (default: CWD).
+  --help                    Show this message and exit.
+
+Commands:
+  skill  Manage skills via per-skill upstream git repos + skills-lock.json.
