@@ -124,3 +124,18 @@ def test_library_lock_path_honors_env_var(tmp_path: Path):
     custom = tmp_path / "lib" / "skills"
     p = library_lock_path(env={"AGENT_TOOLKIT_SKILLS_ROOT": str(custom)})
     assert p == tmp_path / "lib" / "skills-lock.json"
+
+
+def test_parent_clone_path_no_ref(tmp_path):
+    from agent_toolkit_cli.skill_paths import parent_clone_path
+    env = {"AGENT_TOOLKIT_SKILLS_ROOT": str(tmp_path / "skills")}
+    p = parent_clone_path("vamseeachanta", "workspace-hub", ref=None, env=env)
+    assert p == tmp_path / "skills" / "_parents" / "vamseeachanta" / "workspace-hub"
+
+
+def test_parent_clone_path_with_ref(tmp_path):
+    from agent_toolkit_cli.skill_paths import parent_clone_path
+    env = {"AGENT_TOOLKIT_SKILLS_ROOT": str(tmp_path / "skills")}
+    p = parent_clone_path("o", "r", ref="v1.2.3", env=env)
+    assert p.name == "r@v1.2.3"
+    assert p.parent.name == "o"

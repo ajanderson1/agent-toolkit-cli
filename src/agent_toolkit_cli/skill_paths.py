@@ -100,6 +100,20 @@ def library_skill_path(slug: str, *, env: dict[str, str] | None = None) -> Path:
     return library_root(env) / slug
 
 
+def parent_clone_path(
+    owner: str, repo: str, *, ref: str | None,
+    env: dict[str, str] | None = None,
+) -> Path:
+    """Where a monorepo parent is cloned, shared across all skills from it.
+
+    Lives at <library_root>/_parents/<owner>/<repo>[@<ref>]/ so the cache is
+    inside the AGENT_TOOLKIT_SKILLS_ROOT blast radius and travels with
+    --toolkit-repo overrides.
+    """
+    leaf = repo if ref is None else f"{repo}@{ref}"
+    return library_root(env) / "_parents" / owner / leaf
+
+
 def library_lock_path(env: dict[str, str] | None = None) -> Path:
     """Return the path of the global skills-lock.json for v2.2+.
 
