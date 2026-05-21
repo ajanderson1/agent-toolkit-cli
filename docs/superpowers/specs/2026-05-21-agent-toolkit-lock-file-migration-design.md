@@ -134,7 +134,7 @@ Actions surfaced in the TUI: update, push, remove, open-in-editor. The TUI is ot
 3. **MCPs and hooks.** See "Open questions."
 4. **Old code paths removed.** Walker, sidecar discovery, `--toolkit-repo` flag, the monorepo's `skills/` etc. directories, schema's sidecar branch — all deleted once the corresponding kind has finished migrating.
 
-Migration is **asset-kind atomic**: each kind either uses the new model or the old model, never both. The CLI carries the old code path for a kind until that kind's migration is complete, then the old path is removed.
+Migration is **asset-kind atomic** but **slug-incremental within a kind**: within the skills kind, individual skills migrate one at a time and the CLI tolerates a partially-migrated state (some skills resolved via lock file, others still resolved via the legacy walker against the monorepo). Once the last slug in a kind migrates, the legacy code path for that kind is deleted in a single follow-up commit. No kind ever runs both code paths post-migration.
 
 ### 10. Robustness invariants (mirrors `skills.sh` + additions)
 
