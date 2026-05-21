@@ -117,22 +117,31 @@ def _now_iso() -> str:
     return _dt.datetime.now(_dt.UTC).isoformat().replace("+00:00", "Z")
 
 
+def clone_url_from_entry(e: LockEntry) -> str:
+    """Resolve a LockEntry to a `git clone`-able URL.
+
+    v1 lock entries carry only `source` (e.g. `owner/repo`) + `sourceType`,
+    so the read path has to synthesise the URL the same way the v3 writer
+    does — otherwise `ensure_project_canonical` hands git a bare owner/repo
+    string and the clone fails (#159).
+    """
+    url_from_extras = e.extras.get("sourceUrl")
+    if isinstance(url_from_extras, str) and url_from_extras:
+        return url_from_extras
+    if e.source_type == "github" and "/" in e.source:
+        return f"https://github.com/{e.source}.git"
+    if e.source_type == "gitlab" and "/" in e.source:
+        return f"https://gitlab.com/{e.source}.git"
+    return e.source
+
+
 def _entry_to_dict_v3(e: LockEntry) -> dict:
     now = _now_iso()
     out: dict[str, object] = {
         "source": e.source,
         "sourceType": e.source_type,
+        "sourceUrl": clone_url_from_entry(e),
     }
-    # Synthesise sourceUrl from owner/repo when we have no original.
-    url_from_extras = e.extras.get("sourceUrl")
-    if url_from_extras is not None:
-        out["sourceUrl"] = url_from_extras
-    elif e.source_type == "github" and "/" in e.source:
-        out["sourceUrl"] = f"https://github.com/{e.source}.git"
-    elif e.source_type == "gitlab" and "/" in e.source:
-        out["sourceUrl"] = f"https://gitlab.com/{e.source}.git"
-    else:
-        out["sourceUrl"] = e.source
     if e.ref is not None:
         out["ref"] = e.ref
     if e.skill_path is not None:
