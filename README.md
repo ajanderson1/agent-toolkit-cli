@@ -1,6 +1,8 @@
 # agent-toolkit-cli
 
-Bash + Python CLI and Textual TUI for managing the [`agent-toolkit`](https://github.com/ajanderson1/agent-toolkit) asset library across Claude Code, Codex, OpenCode, Gemini CLI, and Pi.
+Python CLI and Textual TUI for managing AI-agent **skills** across Claude Code, Codex, OpenCode, Gemini CLI, and Pi. Lock-file-driven, byte-compatible with [`vercel-labs/skills`](https://github.com/vercel-labs/skills).
+
+> **v2.0.0 — breaking changes.** The TUI now shows skills only. Agents, commands, hooks, MCPs, plugins, and pi-extensions are temporarily off the TUI; set `AGENT_TOOLKIT_TUI_LEGACY=1` to restore the v1 multi-kind interface while we rebuild each kind on the new lock-file model. CLI verbs for those kinds (`link`, `unlink`, `list`, `check`, `fix`, `doctor`, `inventory`, `new`) are **unchanged**. See [`docs/agent-toolkit/roadmap.md`](docs/agent-toolkit/roadmap.md).
 
 ## Install
 
@@ -36,6 +38,21 @@ git -C ~/GitHub/agent-toolkit submodule update --init --recursive
 
 ## Commands
 
+### Skills (new in v2.0.0 — lock-file driven)
+
+```text
+agent-toolkit-cli skill add <source> [-g|-p] [--ref <ref>] [--harness <h>]...
+agent-toolkit-cli skill list [-g|-p]
+agent-toolkit-cli skill status [<slug>...] [-g|-p]
+agent-toolkit-cli skill update [<slug>...] [-g|-p]      # merge-aware
+agent-toolkit-cli skill push   [<slug>...] [-g|-p]      # self-improvements upstream
+agent-toolkit-cli skill remove <slug>... [-g|-p] [--force]
+```
+
+`<source>` accepts `owner/repo`, full URL, SSH URL, or local path — same scheme as `npx skills add`. See [`docs/agent-toolkit/skill-lock.md`](docs/agent-toolkit/skill-lock.md) for the full reference, lock-file format, and skills.sh interop details.
+
+### Other asset kinds (CLI unchanged; TUI deferred to v3)
+
 ```text
 agent-toolkit-cli link <user|project> <harness> [<kind>:<slug>] [--all] [-y]
 agent-toolkit-cli unlink <user|project> <harness> (--all | <kind>:<slug>)
@@ -47,7 +64,7 @@ agent-toolkit-cli doctor [<slug>]
 agent-toolkit-cli inventory [<kind>|<slug>]      # asset library catalog (python)
 agent-toolkit-cli ingest [<url|name|file>]
 agent-toolkit-cli new <kind> <slug>
-agent-toolkit-cli tui
+agent-toolkit-cli tui                            # default: skills only
 ```
 
 `list` vs `inventory`: `list` is project-scoped — shows what's installed for a `<user|project>` scope and harness, with ✓/— install state. `inventory` is library-scoped — browses the SSOT's asset catalog with no notion of install state.
