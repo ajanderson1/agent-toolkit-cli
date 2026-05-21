@@ -26,8 +26,10 @@ from agent_toolkit_tui.messages import (
 )
 from agent_toolkit_tui.runner import CLIRunner, PlanResult, RunnerError
 from agent_toolkit_tui.state import InventoryState, build_state
+from agent_toolkit_tui.skill_state import build_skill_rows
 from agent_toolkit_tui.widgets import AssetGrid, KindsSidebar, ScopeToggle
 from agent_toolkit_tui.widgets.pi_tab import PiTab
+from agent_toolkit_tui.widgets.skill_grid import SkillGrid
 
 
 class ConfirmDiscardScreen(ModalScreen[bool]):
@@ -248,9 +250,39 @@ class TUIApp(App):
                     yield Static(self._build_content_header(), id="content-header")
                     yield ScopeToggle(active=self._scope, id="scope-toggle")
                 yield AssetGrid(self.state, id="asset-grid")
+                yield SkillGrid([], id="skill-grid")
         yield Static("", id="status-bar")
         yield Static("", id="footer-pending")
         yield Footer()
+
+    # ----- skill-tab helpers ----------------------------------------------
+    def _refresh_skill_view(self) -> None:
+        """Show SkillGrid when kind == 'skill', otherwise show AssetGrid.
+
+        Rebuilds SkillGrid rows in place whenever the skill tab is active.
+        Other kinds continue to use AssetGrid.
+        """
+        is_skill = self._kind == "skill"
+        try:
+            asset_grid = self.query_one("#asset-grid", AssetGrid)
+            asset_grid.display = not is_skill
+        except NoMatches:
+            pass
+        try:
+            skill_grid = self.query_one("#skill-grid", SkillGrid)
+        except NoMatches:
+            return
+        skill_grid.display = is_skill
+        if not is_skill:
+            return
+
+        if self._scope == "user":
+            scope, home, project = "global", Path.home(), None
+        else:
+            scope, home, project = "project", None, Path.cwd()
+        skill_grid.set_rows(
+            build_skill_rows(scope=scope, home=home, project=project)
+        )
 
     # ----- lifecycle ------------------------------------------------------
     def on_mount(self) -> None:
@@ -260,6 +292,7 @@ class TUIApp(App):
             pass
         self._refresh_pending_label()
         self._refresh_status_bar()
+        self._refresh_skill_view()
         # Default focus on the data table, not the filter Input — `q` and other
         # bindings should fire as bindings, not as text input.
         try:
@@ -271,12 +304,14 @@ class TUIApp(App):
     def on_kind_changed(self, event: KindChanged) -> None:
         self._kind = event.kind
         self.query_one("#asset-grid", AssetGrid).set_kind(event.kind)
+        self._refresh_skill_view()
         self._refresh_content_header()
         self._refresh_status_bar()
 
     def on_scope_changed(self, event: ScopeChanged) -> None:
         self._scope = event.scope
         self.query_one("#asset-grid", AssetGrid).set_scope(event.scope)
+        self._refresh_skill_view()
         self._refresh_content_header()
         self._refresh_status_bar()
 
@@ -313,6 +348,7 @@ class TUIApp(App):
             self.query_one("#scope-toggle", ScopeToggle).set_active(scope)
         except NoMatches:
             pass
+        self._refresh_skill_view()
         self._refresh_content_header()
         self._refresh_status_bar()
 
@@ -325,6 +361,7 @@ class TUIApp(App):
         self._kind = kind
         self.query_one("#kinds-sidebar", KindsSidebar).set_active(kind)
         self.query_one("#asset-grid", AssetGrid).set_kind(kind)
+        self._refresh_skill_view()
         self._refresh_content_header()
         self._refresh_status_bar()
 

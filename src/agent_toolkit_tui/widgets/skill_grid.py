@@ -51,3 +51,17 @@ class SkillGrid(Vertical):
                 r.slug, r.source, r.ref, _STATE_MARKUP.get(r.state, r.state),
             )
         yield table
+
+    def set_rows(self, rows: list[SkillRow]) -> None:
+        """Rebuild the table from a fresh set of rows. In-place to avoid
+        remount-by-id collisions."""
+        self._rows = sorted(rows, key=lambda r: r.slug)
+        try:
+            table = self.query_one("#skill-table", DataTable)
+        except Exception:
+            return
+        table.clear()
+        for r in self._rows:
+            table.add_row(
+                r.slug, r.source, r.ref, _STATE_MARKUP.get(r.state, r.state),
+            )

@@ -777,6 +777,35 @@ async def test_subtitle_shows_version():
         assert len(sub) >= 2, "sub_title should include some version text"
 
 
+async def test_skill_tab_renders_lock_rows(git_sandbox, tmp_path, monkeypatch):
+    """When the skill kind is active, SkillGrid mounts and reads the lock file."""
+    from click.testing import CliRunner
+    from agent_toolkit_cli.cli import main as cli_main
+    from agent_toolkit_tui.widgets.skill_grid import SkillGrid
+
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("HOME", str(fake_home))
+
+    CliRunner().invoke(cli_main, [
+        "skill", "add", str(git_sandbox.upstream), "--slug", "demo", "-g",
+        "--harness", "claude",
+    ])
+
+    runner = FakeRunner(_doc())
+    app = TUIApp(toolkit_root=Path("/r"), runner=runner)
+    # Default kind is "skill"; explicitly toggle TUI scope to "user" so the
+    # skill data path resolves to global (HOME) lock.
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        app.action_scope("user")
+        await pilot.pause()
+        grid = app.query_one(SkillGrid)
+        assert grid.row_slugs == ["demo"]
+
+
 async def test_no_harness_chips_anywhere_outside_grid():
     """Regression for #43 reopen — no global 'harnesses: claude codex …' chip row."""
     from textual.widgets import Static
