@@ -1,9 +1,9 @@
 """Per-column info content for SkillGrid headers.
 
 A column "info entry" is the content shown when the user presses `i` while
-the cursor is on a cell in that column. The registry maps a column name
-(matching an entry in INTERACTIVE_AGENTS, plus future extensions like
-"slug"/"state") to a factory that produces a fresh ColumnInfo at call time.
+the cursor is on a cell in that column. The registry maps a column key
+(an entry in INTERACTIVE_AGENTS, or a non-agent key such as "state") to a
+factory that produces a fresh ColumnInfo at call time.
 
 Factories — not pre-built ColumnInfo objects — so the Universal list
 always reflects the current catalog without an import-time snapshot.
