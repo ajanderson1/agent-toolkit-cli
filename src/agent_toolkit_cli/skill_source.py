@@ -25,6 +25,7 @@ class ParsedSource:
     owner_repo: str | None
     ref: str | None
     subpath: str | None
+    skill_name: str | None = None
 
 
 _LOCAL_PREFIXES = ("./", "../")
@@ -53,6 +54,26 @@ def _parse_https(url: str) -> ParsedSource:
         raise SourceParseError(f"Unparseable URL: {url}")
     host = parsed.hostname
     path = parsed.path.lstrip("/").removesuffix(".git")
+
+    if host in ("skills.sh", "www.skills.sh"):
+        parts = path.split("/")
+        # Tolerate a single trailing empty segment from a trailing slash.
+        if parts and parts[-1] == "":
+            parts = parts[:-1]
+        if len(parts) != 3 or not all(parts):
+            raise SourceParseError(
+                f"skills.sh URL needs /<owner>/<repo>/<skill>: {url}"
+            )
+        owner, repo, skill_name = parts[0], parts[1], parts[2]
+        owner_repo = f"{owner}/{repo}"
+        return ParsedSource(
+            type="github",
+            url=f"https://github.com/{owner_repo}",
+            owner_repo=owner_repo,
+            ref=None,
+            subpath=None,
+            skill_name=skill_name,
+        )
 
     ref: str | None = None
     subpath: str | None = None
@@ -120,15 +141,21 @@ def parse_source(input_: str) -> ParsedSource:
     if input_.startswith(("http://", "https://")):
         return _parse_https(input_)
 
-    # GitHub shorthand: owner/repo (no scheme, no leading dot/slash, exactly one slash).
-    if re.fullmatch(r"[A-Za-z0-9_.\-]+/[A-Za-z0-9_.\-]+", input_):
-        owner_repo = input_
+    # GitHub shorthand: owner/repo[/subpath] (no scheme, no leading dot/slash).
+    m = re.fullmatch(
+        r"(?P<owner>[A-Za-z0-9_.\-]+)/(?P<repo>[A-Za-z0-9_.\-]+)(?:/(?P<subpath>[^\s].*))?",
+        input_,
+    )
+    if m:
+        owner_repo = f"{m['owner']}/{m['repo']}"
+        subpath = _sanitize_subpath(m["subpath"]) if m["subpath"] else None
         return ParsedSource(
             type="github",
             url=f"https://github.com/{owner_repo}",
             owner_repo=owner_repo,
             ref=None,
-            subpath=None,
+            subpath=subpath,
+            skill_name=None,
         )
 
     raise SourceParseError(f"Unrecognised source: {input_}")
