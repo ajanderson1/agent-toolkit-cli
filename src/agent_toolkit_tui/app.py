@@ -489,7 +489,9 @@ class TUIApp(App):
         from collections import defaultdict
         from agent_toolkit_cli.skill_install import (
             InstallError, InstallPlan, apply as engine_apply,
+            ensure_project_canonical,
         )
+        from agent_toolkit_cli.skill_paths import library_lock_path
         from agent_toolkit_tui.widgets.skill_grid import SkillGrid
         try:
             grid = self.query_one("#skill-grid", SkillGrid)
@@ -506,13 +508,27 @@ class TUIApp(App):
             (adds if op == "link" else removes).add(agent)
         ok = failed = 0
         for (scope, slug), (adds, removes) in by_slug.items():
+            home = Path.home() if scope == "global" else None
+            project = None if scope == "global" else Path.cwd()
+            if scope == "project":
+                try:
+                    ensure_project_canonical(
+                        slug=slug,
+                        project=project,
+                        global_lock_path=library_lock_path(),
+                        env=None,
+                    )
+                except InstallError as exc:
+                    self.query_one("#footer-pending", Static).update(
+                        f"apply error ({slug}): {exc}"
+                    )
+                    failed += 1
+                    continue
             p = InstallPlan(
                 slug=slug, scope=scope, source=None, ref=None,
                 add_agents=tuple(sorted(adds)),
                 remove_agents=tuple(sorted(removes)),
             )
-            home = Path.home() if scope == "global" else None
-            project = None if scope == "global" else Path.cwd()
             try:
                 engine_apply(p, home=home, project=project, env=None)
                 ok += 1

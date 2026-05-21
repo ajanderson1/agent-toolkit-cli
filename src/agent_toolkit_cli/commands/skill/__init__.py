@@ -16,15 +16,14 @@ from agent_toolkit_cli.skill_install import (
     _current_linked_agents,
     _universal_bundle_link,
     apply as engine_apply,
+    ensure_project_canonical,
     plan as engine_plan,
     uninstall,
 )
 from agent_toolkit_cli.skill_lock import read_lock, remove_entry, write_lock
 from agent_toolkit_cli.skill_paths import (
-    canonical_skill_dir,
     library_lock_path,
     library_skill_path,
-    lock_file_path,
 )
 from agent_toolkit_cli.skill_source import SourceParseError, parse_source
 
@@ -162,10 +161,7 @@ def install_cmd(
         click.echo(f"{slug}: no agents specified; nothing to do")
         return
 
-    # Look up the global lock entry for the source/ref.
     global_lock_path = library_lock_path()
-    global_lock = read_lock(global_lock_path)
-    global_entry = global_lock.skills.get(slug)
 
     if scope == "global":
         # Library canonical must already exist.
@@ -193,28 +189,20 @@ def install_cmd(
         project_root = (
             ctx.obj.get("project_root") if ctx.obj else None
         ) or Path.cwd()
-        project_canonical = project_root / ".agents" / "skills" / slug
 
-        # Clone from global lock source if not present.
-        if not project_canonical.exists():
-            if global_entry is None:
-                raise click.ClickException(
-                    f"{slug}: not in global library. "
-                    f"Run `skill add <source>` first."
-                )
-            project_canonical.parent.mkdir(parents=True, exist_ok=True)
-            source_url = (
-                global_entry.extras.get("sourceUrl") or global_entry.source
+        try:
+            ensure_project_canonical(
+                slug=slug,
+                project=project_root,
+                global_lock_path=global_lock_path,
+                env=None,
             )
-            try:
-                skill_git.clone(
-                    str(source_url), project_canonical,
-                    ref=global_entry.ref, env=None,
-                )
-            except Exception as exc:
-                raise click.ClickException(
-                    f"clone for project scope failed: {exc}"
-                ) from exc
+        except InstallError as exc:
+            raise click.ClickException(str(exc)) from exc
+        except Exception as exc:
+            raise click.ClickException(
+                f"clone for project scope failed: {exc}"
+            ) from exc
 
         # Filter out "universal" for project scope — canonical IS the install.
         # Non-universal agents get symlinks per skip rules.
@@ -230,23 +218,6 @@ def install_cmd(
             raise click.ClickException(str(exc)) from exc
         created = result.created
         skipped = result.skipped
-
-        # Update project lock.
-        from agent_toolkit_cli.skill_lock import LockEntry, add_entry
-        project_lock_path = lock_file_path(
-            scope="project", project=project_root,
-        )
-        project_lock = read_lock(project_lock_path)
-        if slug not in project_lock.skills and global_entry is not None:
-            proj_entry = LockEntry(
-                source=global_entry.source,
-                source_type=global_entry.source_type,
-                ref=global_entry.ref,
-                skill_path=global_entry.skill_path,
-                upstream_sha=None,
-                local_sha=None,
-            )
-            write_lock(project_lock_path, add_entry(project_lock, slug, proj_entry))
 
     if created:
         for link in created:

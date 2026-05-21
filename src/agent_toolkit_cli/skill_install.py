@@ -339,6 +339,53 @@ def apply(
     )
 
 
+def ensure_project_canonical(
+    *,
+    slug: str,
+    project: Path,
+    global_lock_path: Path,
+    env: dict[str, str] | None = None,
+) -> Path:
+    """If <project>/.agents/skills/<slug>/ doesn't exist, clone it from the
+    global library lock's recorded source URL. Returns the canonical path.
+
+    Also writes the project lock entry if absent (same guarantee the CLI's
+    install_cmd provides, so both call sites get a fully-ready project canonical).
+
+    Raises InstallError if the slug is not in the global library lock.
+    """
+    from agent_toolkit_cli.skill_lock import (
+        LockEntry, add_entry, read_lock, write_lock,
+    )
+    from agent_toolkit_cli.skill_paths import lock_file_path
+
+    global_lock = read_lock(global_lock_path)
+    entry = global_lock.skills.get(slug)
+    if entry is None:
+        raise InstallError(f"{slug}: not in global library")
+
+    project_canonical = project / ".agents" / "skills" / slug
+    if not project_canonical.exists():
+        project_canonical.parent.mkdir(parents=True, exist_ok=True)
+        source_url = entry.extras.get("sourceUrl") or entry.source
+        skill_git.clone(str(source_url), project_canonical, ref=entry.ref, env=env)
+
+    project_lock_path = lock_file_path(scope="project", project=project)
+    project_lock = read_lock(project_lock_path)
+    if slug not in project_lock.skills:
+        proj_entry = LockEntry(
+            source=entry.source,
+            source_type=entry.source_type,
+            ref=entry.ref,
+            skill_path=entry.skill_path,
+            upstream_sha=None,
+            local_sha=None,
+        )
+        write_lock(project_lock_path, add_entry(project_lock, slug, proj_entry))
+
+    return project_canonical
+
+
 # ── Legacy v2.0.0 wrappers ──────────────────────────────────────────────
 # These continue to accept the 5-harness shortcut names and delegate to
 # plan()+apply() using skills.sh agent names.
