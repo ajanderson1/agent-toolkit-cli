@@ -8,7 +8,7 @@
 
 Re-platform `agent-toolkit-cli` and `agent-toolkit-tui` onto a `skills.sh`-derived model in which **every asset — first-party and third-party — is its own upstream git repository**, addressed and reconciled through a lock file. The `agent-toolkit` monorepo's role as content SSOT dissolves; the lock file becomes the SSOT for "what is installed, where it came from, and how it relates to upstream."
 
-This is **Option A** as scoped during brainstorming: skills move first, but all seven asset kinds eventually adopt the same model. Non-skill kinds with awkward fit (MCPs, hooks — see "Open questions") get explicit per-kind adapters that translate between the lock-file model and their native install surface, rather than being permanently exempted.
+This is **Option A** as scoped during brainstorming, with explicit narrowing during open-question review: **only the skill asset kind migrates in this design.** The other six asset kinds (agent, command, mcp, hook, plugin, pi-extension) remain on the current monorepo + sidecar + walker model. A Phase 2 follow-on design will revisit each of those kinds individually; some (mcp, hook, plugin) have structural shape that does not map cleanly to per-asset repos and may end up staying monorepo-resident permanently.
 
 ## Motivation
 
@@ -44,7 +44,7 @@ Per-asset repos live at e.g. `github.com/ajanderson1/<slug>`. The `agent-toolkit
 
 Per-harness symlinks remain **projections**, not sources of truth. Editing the canonical clone updates every harness simultaneously.
 
-The same layout pattern extends to other asset kinds where folder-shaped (`agents/`, `commands/`, `plugins/`, `pi-extensions/`). For kinds that are not folder-shaped (`mcps/`, `hooks/`), see "Open questions" below.
+In this design the layout applies **to the skill asset kind only**. The other six kinds retain their current on-disk layout under the monorepo and the existing symlink projection. The Phase 2 design will decide per-kind whether the same layout extends.
 
 ### 3. Lock file format
 
@@ -101,40 +101,43 @@ Triggered either by explicit `agent-toolkit-cli push <slug>` or by an end-of-ses
 
 ### 6. CLI surface
 
-The CLI converges on a verb set parallel to `skills.sh`, generalised across asset kinds:
+A new `skill` subcommand group is added, parallel to but separate from the existing verbs:
 
 ```
-agent-toolkit-cli add <source> [-p|--project] [-g|--global] [--ref <ref>]
-agent-toolkit-cli update [<slug>...] [-p|--project] [-g|--global]
-agent-toolkit-cli push   [<slug>...] [-p|--project] [-g|--global]
-agent-toolkit-cli remove <slug>...   [-p|--project] [-g|--global]
-agent-toolkit-cli list   [-p|--project] [-g|--global] [--kind <kind>]
-agent-toolkit-cli status [<slug>...]      # clean / dirty / behind / conflicted
-agent-toolkit-cli doctor                  # consistency check between lock + disk
+agent-toolkit-cli skill add <source> [-p|--project] [-g|--global] [--ref <ref>]
+agent-toolkit-cli skill update [<slug>...] [-p|--project] [-g|--global]
+agent-toolkit-cli skill push   [<slug>...] [-p|--project] [-g|--global]
+agent-toolkit-cli skill remove <slug>...   [-p|--project] [-g|--global]
+agent-toolkit-cli skill list   [-p|--project] [-g|--global]
+agent-toolkit-cli skill status [<slug>...]      # clean / dirty / behind / conflicted
 ```
 
-The current `--toolkit-repo` flag is **deprecated and removed** once migration completes — there is no longer a toolkit repo to point at. The `--project` flag remains; its semantics narrow to "which project's lock file." Asset kind is inferred from the asset's own `metadata.kind` (carried in `SKILL.md`-equivalent frontmatter) and from the lock-file entry; no `<kind>:<slug>` syntax is needed at the CLI for the common path.
+The existing verbs (`link`, `unlink`, `list`, `diff`, `check`, `fix`, `doctor`, `inventory`, `ingest`, `new`, `tui`) and the two-flag contract (`--toolkit-repo`, `--project`) remain in place for the six non-migrating asset kinds. They continue to operate against the monorepo SSOT exactly as today.
+
+The legacy `link/unlink/list` paths **stop accepting `skill:<slug>`** once the skill migration completes. Asset-kind boundary is enforced at the CLI: skill operations go through `skill ...`; other kinds go through the legacy verbs.
 
 ### 7. Frontmatter / metadata
 
-The `.toolkit.yaml` sidecar is **eliminated** for all asset kinds that adopt the lock-file model. Asset metadata lives in the asset's primary file (`SKILL.md`, `AGENT.md`, command `.md`, etc.) as YAML frontmatter. `skills.sh` requires only `name` + `description`; our additional fields (`apiVersion`, `metadata.lifecycle`, `spec.harnesses`, etc.) are added as extra frontmatter keys. `skills.sh` ignores them; our CLI reads them.
+The `.toolkit.yaml` sidecar is **eliminated for the skill asset kind only**. Skill metadata lives in `SKILL.md` frontmatter. `skills.sh` requires only `name` + `description`; our additional fields (`apiVersion`, `metadata.lifecycle`, `spec.harnesses`, etc.) are added as extra frontmatter keys. `skills.sh` ignores unknown keys; our CLI reads them.
 
-The schema (`asset-frontmatter.v1alpha2.json`) remains, and remains vendored at the same two paths (`schemas/` and `src/agent_toolkit_cli/_schemas/`). Its scope tightens from "validates sidecar OR inline" to "validates inline only." The mutex check disappears with the sidecar.
+For the six non-migrating kinds, the sidecar model and the inline-vs-sidecar mutex check **remain unchanged**.
+
+The schema (`asset-frontmatter.v1alpha2.json`) remains, vendored at the same two paths (`schemas/` and `src/agent_toolkit_cli/_schemas/`). Its skill branch tightens to "inline only"; its other branches are untouched.
 
 ### 8. TUI
 
-The TUI's data model switches from "walker reads monorepo state" to "reader reads lock file + per-asset working copy git status." Per-kind tabs remain but their contents come from the lock file rather than the walker. New per-row state column: `clean / dirty / behind / ahead / conflicted`, derived from `git status` and `git rev-list` against the working copy.
+The TUI gains a **skill-specific data path**: when the skill tab is active, contents come from the lock file plus `git status`/`git rev-list` against each canonical clone. New per-row state column: `clean / dirty / behind / ahead / conflicted`. New per-row actions: update, push, remove, open-in-editor.
 
-Actions surfaced in the TUI: update, push, remove, open-in-editor. The TUI is otherwise unchanged in shape — same kinds sidebar, same asset grid.
+Other tabs (agent, command, mcp, hook, plugin, pi-extension) continue to be driven by the existing walker against the monorepo SSOT. No changes to their shape or data model.
 
-### 9. Migration (phased, asset-kind by asset-kind)
+The kinds sidebar and asset grid layout are unchanged.
 
-1. **Skills first.** ~30 skills currently in `~/GitHub/agent-toolkit/skills/`. Each extracted to its own repo via `git filter-repo --path skills/<slug> --path-rename skills/<slug>:` (preserves history). New repos created with `gh repo create ajanderson1/<slug> --private --source=. --push`. Lock file populated by re-running `agent-toolkit-cli add ajanderson1/<slug>` for each.
-2. **Agents, commands, plugins, pi-extensions.** Same extraction pattern. Folder-shaped, no transformation needed.
-3. **MCPs and hooks.** See "Open questions."
-4. **Old code paths removed.** Walker, sidecar discovery, `--toolkit-repo` flag, the monorepo's `skills/` etc. directories, schema's sidecar branch — all deleted once the corresponding kind has finished migrating.
+### 9. Migration (skills only, slug-incremental)
 
-Migration is **asset-kind atomic** but **slug-incremental within a kind**: within the skills kind, individual skills migrate one at a time and the CLI tolerates a partially-migrated state (some skills resolved via lock file, others still resolved via the legacy walker against the monorepo). Once the last slug in a kind migrates, the legacy code path for that kind is deleted in a single follow-up commit. No kind ever runs both code paths post-migration.
+1. **Proof-of-concept first.** A throwaway repo `ajanderson1/test-migration-skill` is created from scratch (not extracted from the monorepo) and used to validate every CLI verb (`add`, `update`, `push`, `remove`, `status`, `list`) end-to-end before any real skill is touched.
+2. **Real skills extracted one at a time.** Each skill in `~/GitHub/agent-toolkit/skills/` is extracted to its own repo via `git filter-repo --path skills/<slug> --path-rename skills/<slug>:` (preserves history). New repos created with `gh repo create ajanderson1/<slug> --private --source=. --push`. Lock file populated by re-running `agent-toolkit-cli skill add ajanderson1/<slug>` for each. The CLI tolerates a partially-migrated state: some skills resolved via the lock file, others still resolved via the legacy walker against the monorepo.
+3. **Legacy skill code path removed.** Once the last skill migrates, the walker's skill discovery, the skill sidecar mutex check, and any skill-specific monorepo paths are deleted in a single follow-up commit. Other kinds are untouched.
+4. **Phase 2 (separate spec).** Each of the six remaining kinds is revisited individually: does it benefit from the lock-file model, or stay monorepo-resident? No commitment in this design.
 
 ### 10. Robustness invariants (mirrors `skills.sh` + additions)
 
@@ -145,37 +148,32 @@ Migration is **asset-kind atomic** but **slug-incremental within a kind**: withi
 5. **Symlinks for projections, content in one place.** Editing the canonical updates every harness.
 6. **Failure modes are git failure modes.** Conflicts, auth failures, ref-not-found — all surface as real git errors with stderr passthrough.
 
-## Open questions
+## Decisions (closed during review)
 
-These are real design questions that affect the implementation plan. They must be closed before `/writing-plans` is invoked.
+1. **Non-skill kinds parked.** Agents, commands, MCPs, hooks, plugins, pi-extensions remain on the current model in this design. A Phase 2 follow-on spec revisits each individually.
 
-1. **MCPs are not folders.** An MCP is a single block in `~/.codex/config.toml` (or equivalent), not a directory with a markdown file. Does an MCP "asset" become its own tiny repo containing just a `mcp.toml` (or similar manifest) + a `README.md`, which the CLI then translates into the target config file? Or do MCPs stay monorepo-resident permanently as a special case, addressed by name only in the lock file (no upstream)?
+2. **Disk cost accepted.** ~3–15 MB per scope for per-skill `.git/` directories is acceptable. Full clones (not shallow) — no `--depth=1` machinery in this design.
 
-2. **Hooks are settings.json injections.** Same shape problem as MCPs. A hook is a JSON object inserted into `~/.claude/settings.json`. Becoming its own repo means the repo contains a `hook.json` + `README.md` and the CLI does the injection. Worth confirming this is the intent before specifying.
+3. **Auto-push deferred.** This design ships with manual `agent-toolkit-cli skill push` only. End-of-session auto-push hook is out of scope and will get its own spec once the manual flow is proven.
 
-3. **Plugins (Claude-only).** Currently declarative via `installed_plugins.json` + `known_marketplaces.json`. Likely closer to MCPs/hooks than to skills. Same question.
+4. **`skills.sh` interop is a goal.** `npx skills add ajanderson1/<slug>` MUST work against our skill repos. CI includes a smoke test that installs one of our skills via the upstream CLI and verifies the result.
 
-4. **Per-skill `.git/` directories — disk cost.** ~30 skills × ~100–500 KB per `.git/` = ~3–15 MB per scope, doubled if global + project both populated. Acceptable, but worth naming.
-
-5. **Auto-push policy.** The end-of-session hook that pushes self-improvements: opt-in, opt-out, or unimplemented in this design and deferred to a follow-on?
-
-6. **`agent-toolkit-cli` vs. `npx skills` interop**. Goal stated as bit-compatible lock file. Do we also want `npx skills add ajanderson1/<slug>` to work against our repos? (Mostly automatic given the layout, but worth confirming as a non-goal vs. goal.)
-
-7. **First repo extraction order.** Migration plan calls for skills first, but which skill goes first as the proof-of-concept? `journal` (frequently edited, exercises self-improvement) or `aj-workflow` (simpler, fewer dependencies)?
+5. **Proof-of-concept is a throwaway repo.** `ajanderson1/test-migration-skill`, created from scratch, validates every CLI verb before any real skill is extracted. The first real extraction is deferred to a separate decision after the POC passes.
 
 ## Non-goals (in this design)
 
 - Submitting to the public `skills.sh` catalogue. Private repos remain private; we use the addressing scheme and lock format but not the public index.
 - Wrapping the `npx skills` CLI. We re-implement in Python so we are not exposed to upstream breakage.
-- Migrating MCPs / hooks / plugins concurrently with skills. They land in a follow-on design once the skill path is proven.
+- Migrating any non-skill asset kind. Phase 2 territory.
+- Auto-push of self-improvements. Manual `skill push` only in this design.
 - Multi-user / team sync of self-improvements. Self-improvements flow per-user via the user's own forks; team-wide propagation is out of scope.
+- Shallow clones / disk-cost optimisation. Full clones; can revisit later if disk becomes a real problem.
 
 ## Success criteria
 
-- Every skill currently in the monorepo is extracted to its own repo with history preserved.
-- `agent-toolkit-cli add ajanderson1/journal -g` followed by `agent-toolkit-cli update journal` and `agent-toolkit-cli push journal` works end-to-end without manual git intervention in the clean case.
-- A diverged-edit scenario (machine A edits SKILL.md, machine B independently edits the same lines, both push and pull) surfaces a real git merge conflict in the working copy, resolvable with stock tools.
-- The TUI displays per-asset state correctly: clean / dirty / behind / ahead / conflicted.
-- `npx skills list` (the upstream `skills.sh` CLI) successfully reads a lock file written by `agent-toolkit-cli`.
-- `~/.toolkit-repo` / `--toolkit-repo` no longer appears anywhere in the codebase for migrated kinds.
-- The sidecar file format no longer exists for migrated kinds; schema's sidecar branch removed.
+- `agent-toolkit-cli skill add ajanderson1/test-migration-skill -g` followed by `skill update`, `skill push`, and `skill remove` works end-to-end against the throwaway POC repo without manual git intervention in the clean case.
+- A diverged-edit scenario on the POC repo (machine A edits `SKILL.md`, machine B independently edits the same lines, both push and pull) surfaces a real `git` merge conflict in the working copy, resolvable with stock tools.
+- The TUI's skill tab displays per-asset state correctly: clean / dirty / behind / ahead / conflicted.
+- `npx skills list` and `npx skills add ajanderson1/test-migration-skill` (the upstream `skills.sh` CLI) both succeed against a repo and a lock file written by `agent-toolkit-cli`. Verified by a CI smoke test.
+- After all real skills are extracted: the monorepo's `skills/` directory is empty (or removed); the walker no longer discovers skills; the sidecar mutex check no longer applies to skills.
+- The six non-skill asset kinds continue to operate via their existing code paths with no regressions. Existing test suites for those kinds pass unchanged.
