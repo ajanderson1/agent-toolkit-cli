@@ -135,3 +135,84 @@ def test_make_remove_entry_action_drops_lock_row(
     action.apply()
     lock = read_lock(library_lock_path())
     assert "demo" not in lock.skills
+
+
+def _patch_claude_global_skills_dir(monkeypatch, new_dir: Path) -> None:
+    """Replace AGENTS['claude-code'] with a copy pointing global_skills_dir at new_dir.
+
+    AgentConfig is frozen=True so we swap the dict entry rather than mutating the
+    instance. monkeypatch restores the original entry on teardown.
+    """
+    from agent_toolkit_cli import skill_agents
+    from dataclasses import replace as dc_replace
+    original = skill_agents.AGENTS["claude-code"]
+    patched = dc_replace(original, global_skills_dir=new_dir)
+    monkeypatch.setitem(skill_agents.AGENTS, "claude-code", patched)
+
+
+def test_diagnose_drifted_symlink_global(git_sandbox, tmp_path: Path, monkeypatch):
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    monkeypatch.setenv("HOME", str(fake_home))
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: fake_home))
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(fake_home / ".claude"))
+    _patch_claude_global_skills_dir(monkeypatch, fake_home / ".claude" / "skills")
+
+    runner = CliRunner()
+    _seed_library(runner, git_sandbox.upstream)
+
+    # Stale symlink → another path WITHIN library_root (so it's drift, not foreign).
+    elsewhere = library_root / "elsewhere-slug"
+    elsewhere.mkdir(parents=True)
+    claude_skills = fake_home / ".claude" / "skills"
+    claude_skills.mkdir(parents=True)
+    stale = claude_skills / "demo"
+    stale.symlink_to(elsewhere)
+
+    from agent_toolkit_cli.skill_doctor import diagnose
+    findings = diagnose(
+        slugs=None, scope="global", home=fake_home, project=None,
+    )
+    drift = [f for f in findings if f.kind == "drifted_symlink"]
+    assert len(drift) == 1
+    assert drift[0].path == stale
+
+
+def test_drifted_symlink_fix_relinks(git_sandbox, tmp_path: Path, monkeypatch):
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    monkeypatch.setenv("HOME", str(fake_home))
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: fake_home))
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(fake_home / ".claude"))
+    _patch_claude_global_skills_dir(monkeypatch, fake_home / ".claude" / "skills")
+
+    runner = CliRunner()
+    _seed_library(runner, git_sandbox.upstream)
+    elsewhere = library_root / "elsewhere-slug"
+    elsewhere.mkdir(parents=True)
+    claude_skills = fake_home / ".claude" / "skills"
+    claude_skills.mkdir(parents=True)
+    stale = claude_skills / "demo"
+    stale.symlink_to(elsewhere)
+
+    from agent_toolkit_cli.skill_doctor import diagnose
+    f = next(
+        f for f in diagnose(
+            slugs=None, scope="global", home=fake_home, project=None,
+        )
+        if f.kind == "drifted_symlink"
+    )
+    f.fix_action.apply()
+    assert stale.is_symlink()
+    assert stale.resolve() == (library_root / "demo").resolve()
+    # Idempotent.
+    f.fix_action.apply()
+    assert stale.resolve() == (library_root / "demo").resolve()

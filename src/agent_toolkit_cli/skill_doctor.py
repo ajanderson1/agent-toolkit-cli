@@ -12,11 +12,13 @@ from pathlib import Path
 from typing import Callable, Literal
 
 from agent_toolkit_cli import skill_git
+from agent_toolkit_cli.skill_agents import AGENTS, get_agent
+from agent_toolkit_cli.skill_install import _should_skip_symlink
 from agent_toolkit_cli.skill_lock import (
     LockEntry, LockFile, clone_url_from_entry, read_lock, remove_entry, write_lock,
 )
 from agent_toolkit_cli.skill_paths import (
-    Scope, canonical_skill_dir, lock_file_path,
+    Scope, agent_projection_dir, canonical_skill_dir, lock_file_path,
 )
 
 FindingKind = Literal[
@@ -116,6 +118,46 @@ def make_remove_entry_action(
     )
 
 
+def _projection_paths(
+    slug: str, *, scope: Scope, home: Path | None, project: Path | None,
+) -> list[tuple[str, Path]]:
+    """Return (agent_name, projection_path) tuples for every non-universal
+    real agent at the given scope. Universal bundle handled separately.
+    """
+    out: list[tuple[str, Path]] = []
+    for name in AGENTS:
+        if name == "universal":
+            continue
+        if get_agent(name).is_universal:
+            # Skip rule fires at both scopes; no per-agent symlink expected.
+            continue
+        skip, _ = _should_skip_symlink(
+            agent_name=name, scope=scope, project=project,
+        )
+        if skip:
+            continue
+        out.append((name, agent_projection_dir(
+            name, slug, scope=scope, home=home, project=project,
+        )))
+    return out
+
+
+def _make_relink_action(*, link: Path, canonical: Path) -> FixAction:
+    def _apply() -> None:
+        if link.is_symlink() and link.resolve() == canonical.resolve():
+            return  # idempotent
+        if link.is_symlink() or link.exists():
+            link.unlink()
+        link.parent.mkdir(parents=True, exist_ok=True)
+        link.symlink_to(canonical)
+
+    return FixAction(
+        description=f"Re-link {link} → {canonical}",
+        shell_preview=f"rm {link} && ln -s {canonical} {link}",
+        apply=_apply,
+    )
+
+
 def _check_slug(
     *, slug: str, scope: Scope, home: Path | None, project: Path | None,
     entry: LockEntry, lock: LockFile, repair_foreign: bool,
@@ -135,4 +177,25 @@ def _check_slug(
             ),
         ))
         return findings  # other checks all assume canonical exists
+    canonical_real = canonical.resolve()
+    for agent_name, link in _projection_paths(
+        slug, scope=scope, home=home, project=project,
+    ):
+        if not link.is_symlink():
+            continue
+        try:
+            target = link.resolve()
+        except OSError:
+            continue
+        if target == canonical_real:
+            continue
+        findings.append(Finding(
+            kind="drifted_symlink", slug=slug, scope=scope,
+            path=link,
+            detail=(
+                f"{agent_name} symlink at {link} points to {target}, "
+                f"expected {canonical}"
+            ),
+            fix_action=_make_relink_action(link=link, canonical=canonical),
+        ))
     return findings
