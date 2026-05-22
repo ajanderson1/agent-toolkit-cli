@@ -270,9 +270,10 @@ def test_update_monorepo_merges_without_global_git_identity(
         "GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM",
     ):
         monkeypatch.delenv(var, raising=False)
-    # Belt-and-braces: point system config at /dev/null so even a host
-    # /etc/gitconfig can't supply an identity.
-    monkeypatch.setenv("GIT_CONFIG_SYSTEM", "/dev/null")
+    # Note: skill_git._scrub() strips GIT_CONFIG_* before the merge subprocess,
+    # so we can't redirect /etc/gitconfig from here. Typical CI runners and
+    # dev VMs have no /etc/gitconfig anyway. The deny-list above plus an
+    # empty HOME is what actually starves git of identity sources.
 
     parent = _init_parent(tmp_path)
     parent_url = f"file://{parent}"
@@ -318,3 +319,16 @@ def test_update_monorepo_merges_without_global_git_identity(
     canonical = library / "skills" / "mkdocs"
     assert (canonical / "LOCAL.md").read_text() == "local\n"
     assert (canonical / "UPSTREAM.md").read_text() == "upstream\n"
+
+    # Lock in the synthetic identity contract: the merge commit must be
+    # authored/committed by the agent-toolkit-cli identity. Asserting the
+    # actual fields makes this test robust to /etc/gitconfig variations on
+    # other hosts — without this, a host with /etc/gitconfig setting an
+    # identity could silently green this test even if the production fix
+    # were reverted.
+    head_author = subprocess.run(
+        ["git", "-C", str(parent_clone), "log", "-1", "--format=%an <%ae>"],
+        check=True, env=env, capture_output=True, text=True,
+    ).stdout.strip()
+    assert head_author == "agent-toolkit-cli <noreply@agent-toolkit-cli>", \
+        f"merge commit must use synthetic identity, got: {head_author}"
