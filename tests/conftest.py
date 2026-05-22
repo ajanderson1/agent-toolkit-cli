@@ -31,12 +31,17 @@ def _strip_git_env(monkeypatch: pytest.MonkeyPatch) -> None:
     GIT_INDEX_FILE from a parent hook and cannot accidentally write
     commits into the outer repo. monkeypatch restores env at teardown.
     """
+    # Snapshot keys before mutating — iterating os.environ while
+    # deleting from it would be undefined behaviour.
     for var in [k for k in os.environ if k.startswith("GIT_")]:
         monkeypatch.delenv(var, raising=False)
 
 
 @pytest.fixture
 def git_sandbox(tmp_path: Path) -> GitSandbox:
+    # Belt-and-braces: autouse _strip_git_env has already cleared GIT_*
+    # from os.environ; this explicit scrub keeps the fixture self-contained
+    # and self-documenting even if the autouse layer ever moves.
     env = scrub_git_env()
     env.update({
         "GIT_AUTHOR_NAME": "Test User",

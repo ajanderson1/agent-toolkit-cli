@@ -4,9 +4,8 @@ The autouse fixture in tests/conftest.py (_strip_git_env) strips every
 GIT_* variable from os.environ before each test. These tests lock that
 behavior so a future change cannot silently remove it.
 
-See:
-- docs/superpowers/specs/2026-05-22-pytest-git-env-autouse-design.md
-- ~/.claude/projects/.../memory/feedback_git_env_leak.md
+See docs/superpowers/specs/2026-05-22-pytest-git-env-autouse-design.md
+for the rationale and the failure mode this closes (PR #206 / issue #209).
 """
 from __future__ import annotations
 
