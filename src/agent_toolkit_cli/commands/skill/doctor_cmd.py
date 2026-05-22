@@ -26,6 +26,7 @@ def doctor_cmd(
     scope, home, project_root = scope_and_roots(
         global_, project_flag,
         ctx.obj.get("project_root") if ctx.obj else None,
+        read_only=True,
     )
     findings = diagnose(
         slugs=slugs or None,

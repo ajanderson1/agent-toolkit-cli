@@ -64,6 +64,34 @@ def test_update_fast_forwards_clean(git_sandbox, tmp_path: Path, monkeypatch):
     assert (project / ".agents" / "skills" / "demo" / "NEW.md").exists()
 
 
+def test_update_no_flag_outside_project_uses_global(
+    git_sandbox, tmp_path: Path, monkeypatch,
+):
+    """No flag + no project lock at cwd → update consults global lock (#220).
+
+    Mirrors the #216 list/status fix for verbs that mutate.
+    """
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+
+    runner = CliRunner()
+    r = runner.invoke(main, [
+        "skill", "add", str(git_sandbox.upstream), "--slug", "demo",
+    ])
+    assert r.exit_code == 0, r.output
+
+    not_a_project = tmp_path / "not-a-project"
+    not_a_project.mkdir()
+    result = runner.invoke(main, [
+        "--project", str(not_a_project), "skill", "update", "demo",
+    ])
+    assert result.exit_code == 0, result.output
+    assert "not in lock" not in result.output
+    assert "demo" in result.output  # at least a slug-bearing status line
+
+
 def test_update_surfaces_conflict_and_exits_nonzero(
     git_sandbox, tmp_path: Path, monkeypatch,
 ):

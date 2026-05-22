@@ -95,6 +95,32 @@ def test_reset_clean_snaps_to_upstream(git_sandbox, tmp_path: Path, monkeypatch)
     assert "reset to" in result.output
 
 
+def test_reset_no_flag_outside_project_uses_global(
+    git_sandbox, tmp_path: Path, monkeypatch,
+):
+    """No flag + no project lock at cwd → reset consults global lock (#220).
+
+    Mirrors the #216 list/status fix for verbs that mutate.
+    """
+    library_root = tmp_path / "lib" / "skills"
+    _set_sandbox_env(monkeypatch, git_sandbox, library_root)
+
+    runner = CliRunner()
+    r = runner.invoke(main, [
+        "skill", "add", str(git_sandbox.upstream), "--slug", "demo",
+    ])
+    assert r.exit_code == 0, r.output
+
+    not_a_project = tmp_path / "not-a-project"
+    not_a_project.mkdir()
+    result = runner.invoke(main, [
+        "--project", str(not_a_project), "skill", "reset", "demo",
+    ])
+    assert result.exit_code == 0, result.output
+    assert "not in lock" not in result.output
+    assert "reset to" in result.output
+
+
 def test_reset_refuses_dirty_without_force(git_sandbox, tmp_path: Path, monkeypatch):
     """Dirty working tree → reset refuses, exits non-zero, edits untouched."""
     project = tmp_path / "proj"
