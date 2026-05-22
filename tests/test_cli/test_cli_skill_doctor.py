@@ -31,6 +31,36 @@ def test_doctor_clean_tree_exit0(git_sandbox, tmp_path: Path, monkeypatch):
     assert "all clean" in r.output
 
 
+def test_doctor_no_flag_outside_project_uses_global(
+    git_sandbox, tmp_path: Path, monkeypatch,
+):
+    """No flag + no project lock at cwd → doctor consults global scope (#220).
+
+    Mirrors the #216 list/status fix for verbs that mutate / inspect.
+    Without the fix, doctor reads an empty project lock and reports
+    `✓ all clean` (false-clean for an installed global skill).
+    """
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    runner = CliRunner()
+    library_root, fake_home = _seed(
+        runner, git_sandbox.upstream, monkeypatch, tmp_path,
+    )
+    # Plant drift in the GLOBAL library so a global-scope diagnose finds it.
+    # If doctor (with no flag) silently goes to project scope, it will see
+    # an empty lock and report `✓ all clean` — missing the global drift.
+    shutil.rmtree(library_root / "demo")
+
+    not_a_project = tmp_path / "not-a-project"
+    not_a_project.mkdir()
+    r = runner.invoke(main, [
+        "--project", str(not_a_project), "skill", "doctor", "--no-fix",
+    ])
+    assert r.exit_code == 1, r.output  # findings present → non-zero
+    assert "missing_canonical" in r.output
+    assert "demo" in r.output
+
+
 def test_doctor_no_fix_exits_nonzero_with_findings(
     git_sandbox, tmp_path: Path, monkeypatch,
 ):

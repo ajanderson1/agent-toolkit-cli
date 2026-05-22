@@ -71,6 +71,34 @@ def test_push_clean_is_noop(git_sandbox, tmp_path: Path, monkeypatch):
     assert "clean" in result.output.lower() or "nothing" in result.output.lower()
 
 
+def test_push_no_flag_outside_project_uses_global(
+    git_sandbox, tmp_path: Path, monkeypatch,
+):
+    """No flag + no project lock at cwd → push consults global lock (#220).
+
+    Mirrors the #216 list/status fix for verbs that mutate.
+    """
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+
+    runner = CliRunner()
+    r = runner.invoke(main, [
+        "skill", "add", str(git_sandbox.upstream), "--slug", "demo",
+    ])
+    assert r.exit_code == 0, r.output
+
+    not_a_project = tmp_path / "not-a-project"
+    not_a_project.mkdir()
+    result = runner.invoke(main, [
+        "--project", str(not_a_project), "skill", "push", "demo",
+    ])
+    assert result.exit_code == 0, result.output
+    assert "not in lock" not in result.output
+    assert "demo" in result.output  # at least a slug-bearing status line
+
+
 def test_push_does_not_leak_into_outer_repo(
     git_sandbox, tmp_path: Path, monkeypatch,
 ):

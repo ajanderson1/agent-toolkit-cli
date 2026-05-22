@@ -39,6 +39,7 @@ def update_cmd(
         global_,
         project_flag,
         ctx.obj.get("project_root") if ctx.obj else None,
+        read_only=True,
     )
     lock_path = lock_file_path(scope=scope, home=home, project=project_root)
     lock = read_lock(lock_path)
