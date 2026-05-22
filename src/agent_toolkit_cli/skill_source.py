@@ -55,10 +55,21 @@ def _sanitize_ref(ref: str) -> str:
         raise SourceParseError(f"Unsafe ref: '{ref}' contains whitespace")
     if ref.startswith("-"):
         raise SourceParseError(f"Unsafe ref: '{ref}' must not start with '-'")
-    if any(seg == ".." for seg in ref.split("/")):
-        raise SourceParseError(
-            f"Unsafe ref: '{ref}' contains path traversal segments"
-        )
+    if "\\" in ref:
+        raise SourceParseError(f"Unsafe ref: '{ref}' contains backslash")
+    if "@{" in ref:
+        raise SourceParseError(f"Unsafe ref: '{ref}' contains '@{{'")
+    if ".." in ref:
+        raise SourceParseError(f"Unsafe ref: '{ref}' contains '..'")
+    for seg in ref.split("/"):
+        if seg.startswith("."):
+            raise SourceParseError(
+                f"Unsafe ref: '{ref}' has a segment starting with '.'"
+            )
+        if seg.endswith(".lock"):
+            raise SourceParseError(
+                f"Unsafe ref: '{ref}' has a segment ending in '.lock'"
+            )
     return ref
 
 

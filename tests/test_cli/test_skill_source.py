@@ -129,3 +129,34 @@ def test_github_shorthand_ref_traversal_rejected():
 def test_github_shorthand_ref_leading_dash_rejected():
     with pytest.raises(SourceParseError):
         parse_source("o/r@-bad")
+
+
+def test_github_shorthand_ref_dot_lock_rejected():
+    with pytest.raises(SourceParseError, match="lock"):
+        parse_source("o/r@feat.lock")
+
+
+def test_github_shorthand_ref_leading_dot_rejected():
+    with pytest.raises(SourceParseError, match=r"starting with '\.'"):
+        parse_source("o/r@.hidden")
+
+
+def test_github_shorthand_ref_double_dot_substring_rejected():
+    with pytest.raises(SourceParseError, match=r"'\.\.'"):
+        parse_source("o/r@feat..main")
+
+
+def test_github_shorthand_ref_reflog_syntax_rejected():
+    with pytest.raises(SourceParseError, match=r"'@\{'"):
+        parse_source("o/r@main@{1}")
+
+
+def test_github_shorthand_ref_backslash_rejected():
+    with pytest.raises(SourceParseError, match="backslash"):
+        parse_source(r"o/r@bad\path")
+
+
+def test_github_shorthand_ref_head_with_tilde_accepted():
+    s = parse_source("o/r@HEAD~1")
+    assert s.ref == "HEAD~1"
+    assert s.subpath is None

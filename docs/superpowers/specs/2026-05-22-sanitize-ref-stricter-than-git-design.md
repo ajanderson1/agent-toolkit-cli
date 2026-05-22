@@ -15,11 +15,10 @@ Extend `_sanitize_ref` to also refuse, matching the documented rules in `git-che
 1. Any segment that **starts with `.`** (e.g. `.hidden`).
 2. Any segment that **ends with `.lock`** (e.g. `feat.lock`).
 3. The substring `..` anywhere in the ref (e.g. `feat..main`), not just as a full segment.
-4. Any segment that **ends with `/`** (i.e. trailing slash, empty trailing segment).
-5. The substring `@{` anywhere (Git reflog syntax).
-6. The character `\` (backslash) anywhere.
+4. The substring `@{` anywhere (Git reflog syntax).
+5. The character `\` (backslash) anywhere.
 
-Control characters and whitespace are already covered by the existing `isspace()` guard plus the regex shape; no extra check needed.
+Control characters and whitespace are already covered by the existing `isspace()` guard plus the regex shape; no extra check needed. A trailing-`/` rule is unnecessary here: the shorthand regex `[^\s/][^\s/]*` for the ref already forbids `/` in the ref token, so the unreachable rule would be dead defensive code.
 
 ## Acceptance (from the issue)
 
