@@ -180,23 +180,22 @@ def test_doctor_journal_v21_to_v22_repro(
     library_journal = library_root / "journal"
     assert library_journal.exists()
 
-    # The engine diagnoses two findings in this order:
-    #   1. foreign_symlink (report-only): the claude link points to the bundle,
-    #      which is a real dir outside library_root. The engine cannot classify
-    #      it as drifted_symlink because wrong_type_bundle is fixed after
-    #      diagnosis. No prompt is shown for this finding.
+    # The engine diagnoses two findings:
+    #   1. drifted_symlink (fixable): the claude link points at the v2.1
+    #      bundle path (~/.agents/skills/journal). The new
+    #      _is_universal_bundle_target predicate triggers drift instead
+    #      of foreign_symlink, so this is now a prompted fix rather than
+    #      a skipped report.
     #   2. wrong_type_bundle (fixable): bundle is a real dir, not a symlink.
-    #      A single 'y' applies this fix.
-    # After fixing wrong_type_bundle, bundle becomes a symlink → library.
-    # The claude link still points to bundle, but because bundle is now a
-    # symlink, claude_link.resolve() chains through to library_journal.
-    # Exit code is 1 because the foreign_symlink was skipped (report-only).
-    r = runner.invoke(main, ["skill", "doctor", "journal", "-g"], input="y\n")
-    assert r.exit_code == 1, r.output  # 1 finding skipped (foreign_symlink)
-    assert "foreign_symlink" in r.output  # reported, report-only
-    assert "wrong_type_bundle" in r.output  # prompted and fixed
+    # Two 'y' answers apply both fixes. Exit code is 0 — nothing skipped.
+    r = runner.invoke(
+        main, ["skill", "doctor", "journal", "-g"], input="y\ny\n",
+    )
+    assert r.exit_code == 0, r.output
+    assert "drifted_symlink" in r.output
+    assert "wrong_type_bundle" in r.output
     assert "fixed." in r.output
-    assert "1 skipped" in r.output
+    assert "foreign_symlink" not in r.output
 
     # Bundle is now a symlink to library.
     assert bundle.is_symlink()
