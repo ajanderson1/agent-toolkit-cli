@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.5.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.4.0...v2.5.0) (2026-05-22)
+
+
+### Features
+
+* skill doctor + TUI i cell-info modal ([#190](https://github.com/ajanderson1/agent-toolkit-cli/issues/190)) ([14fe8c9](https://github.com/ajanderson1/agent-toolkit-cli/commit/14fe8c94f840107082dd3a85b6411dde8f27322d))
+* **skills:** monorepo skills are locally editable (three-way merge + clean/dirty state) ([#189](https://github.com/ajanderson1/agent-toolkit-cli/issues/189)) ([421c424](https://github.com/ajanderson1/agent-toolkit-cli/commit/421c4245cfe4a585aa665e2d473079353335e6c5))
+
 ## [2.4.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.3.3...v2.4.0) (2026-05-21)
 
 
