@@ -8,6 +8,7 @@ caller's responsibility (via fix_action.apply).
 from __future__ import annotations
 
 import datetime as _dt
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Literal
@@ -227,9 +228,23 @@ def _remote_origin_url(canonical: Path) -> str | None:
     return proc.stdout.strip() or None
 
 
+_SSH_GIT_URL_RE = re.compile(r"^git@([^:]+):(.+?)(?:\.git)?$")
+_HTTPS_GIT_URL_RE = re.compile(r"^https?://([^/]+)/(.+?)(?:\.git)?$")
+
+
 def _normalise_git_url(url: str) -> str:
-    """Lowercase + strip a trailing .git so `foo` and `foo.git` compare equal."""
+    """Reduce SSH and HTTPS forms to ``host/path`` for equality comparison.
+
+    `git@github.com:foo/bar.git` and `https://github.com/foo/bar.git` both
+    collapse to `github.com/foo/bar`. Anything that doesn't match either
+    pattern falls back to lowercase + trailing-`.git` strip, preserving the
+    pre-existing behaviour for local paths and unfamiliar URL forms.
+    """
     u = url.strip().lower()
+    if (m := _SSH_GIT_URL_RE.match(u)):
+        return f"{m.group(1)}/{m.group(2)}"
+    if (m := _HTTPS_GIT_URL_RE.match(u)):
+        return f"{m.group(1)}/{m.group(2)}"
     if u.endswith(".git"):
         u = u[:-4]
     return u
