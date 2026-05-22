@@ -83,3 +83,140 @@ async def test_project_scope_globally_linked_cell_shows_marker():
         pi_plain = Text.from_markup(str(table.get_cell(row_key, pi_col_key))).plain
         assert "🌐" in cc_plain, f"claude-code cell missing marker: {cc_plain!r}"
         assert "🌐" not in pi_plain, f"pi cell unexpectedly shows marker: {pi_plain!r}"
+
+
+@pytest.mark.asyncio
+async def test_global_scope_view_does_not_show_marker():
+    """In global scope, even a globally-linked row must not show 🌐.
+    The marker is informative only when looking at the project view."""
+    row = _row_with(
+        "alpha",
+        global_cells={
+            "universal": _linked(),
+            "claude-code": _linked(),
+            "pi": _linked(),
+        },
+    )
+
+    class _A(App):
+        def compose(self):
+            yield SkillGrid([row], id="g")
+
+    a = _A()
+    async with a.run_test() as pilot:
+        g = a.query_one("#g", SkillGrid)
+        g.set_scope("global")
+        await pilot.pause()
+        table = a.query_one("#skill-table", DataTable)
+        g._rebuild(table)  # type: ignore[attr-defined]
+        await pilot.pause()
+        row_key = list(table.rows.keys())[0]
+        for agent in INTERACTIVE_AGENTS:
+            col_idx = 2 + INTERACTIVE_AGENTS.index(agent)
+            col_key = list(table.columns.keys())[col_idx]
+            plain = Text.from_markup(str(table.get_cell(row_key, col_key))).plain
+            assert "🌐" not in plain, (
+                f"global-scope {agent} cell unexpectedly has marker: {plain!r}"
+            )
+
+
+@pytest.mark.asyncio
+async def test_drifted_global_cell_does_not_show_marker():
+    """A drifted global symlink is NOT a clean global install — no marker."""
+    row = _row_with(
+        "alpha",
+        project_cells={agent: _unlinked() for agent in INTERACTIVE_AGENTS},
+        global_cells={
+            "universal": _unlinked(),
+            "claude-code": _drifted(),
+            "pi": _unlinked(),
+        },
+    )
+
+    class _A(App):
+        def compose(self):
+            yield SkillGrid([row], id="g")
+
+    a = _A()
+    async with a.run_test() as pilot:
+        g = a.query_one("#g", SkillGrid)
+        g.set_scope("project")
+        await pilot.pause()
+        table = a.query_one("#skill-table", DataTable)
+        g._rebuild(table)  # type: ignore[attr-defined]
+        await pilot.pause()
+        row_key = list(table.rows.keys())[0]
+        cc_col_key = list(table.columns.keys())[2 + INTERACTIVE_AGENTS.index("claude-code")]
+        plain = Text.from_markup(str(table.get_cell(row_key, cc_col_key))).plain
+        assert "🌐" not in plain, f"drifted global cell shows marker: {plain!r}"
+
+
+@pytest.mark.asyncio
+async def test_skipped_global_cell_does_not_show_marker():
+    """A skipped global cell (canonical-IS-dir) is informational, not a
+    clean per-agent global link — no marker."""
+    row = _row_with(
+        "alpha",
+        project_cells={agent: _unlinked() for agent in INTERACTIVE_AGENTS},
+        global_cells={
+            "universal": _skipped(),
+            "claude-code": _unlinked(),
+            "pi": _unlinked(),
+        },
+    )
+
+    class _A(App):
+        def compose(self):
+            yield SkillGrid([row], id="g")
+
+    a = _A()
+    async with a.run_test() as pilot:
+        g = a.query_one("#g", SkillGrid)
+        g.set_scope("project")
+        await pilot.pause()
+        table = a.query_one("#skill-table", DataTable)
+        g._rebuild(table)  # type: ignore[attr-defined]
+        await pilot.pause()
+        row_key = list(table.rows.keys())[0]
+        u_col_key = list(table.columns.keys())[2 + INTERACTIVE_AGENTS.index("universal")]
+        plain = Text.from_markup(str(table.get_cell(row_key, u_col_key))).plain
+        assert "🌐" not in plain, f"skipped global cell shows marker: {plain!r}"
+
+
+@pytest.mark.asyncio
+async def test_per_agent_independence():
+    """A row that is globally linked for universal but not pi shows the
+    marker only on the universal cell."""
+    row = _row_with(
+        "alpha",
+        project_cells={agent: _unlinked() for agent in INTERACTIVE_AGENTS},
+        global_cells={
+            "universal": _linked(),
+            "claude-code": _unlinked(),
+            "pi": _unlinked(),
+        },
+    )
+
+    class _A(App):
+        def compose(self):
+            yield SkillGrid([row], id="g")
+
+    a = _A()
+    async with a.run_test() as pilot:
+        g = a.query_one("#g", SkillGrid)
+        g.set_scope("project")
+        await pilot.pause()
+        table = a.query_one("#skill-table", DataTable)
+        g._rebuild(table)  # type: ignore[attr-defined]
+        await pilot.pause()
+        row_key = list(table.rows.keys())[0]
+        cols = list(table.columns.keys())
+        u_plain = Text.from_markup(str(table.get_cell(
+            row_key, cols[2 + INTERACTIVE_AGENTS.index("universal")]))).plain
+        cc_plain = Text.from_markup(str(table.get_cell(
+            row_key, cols[2 + INTERACTIVE_AGENTS.index("claude-code")]))).plain
+        pi_plain = Text.from_markup(str(table.get_cell(
+            row_key, cols[2 + INTERACTIVE_AGENTS.index("pi")]))).plain
+        assert "🌐" in u_plain, f"universal cell missing marker: {u_plain!r}"
+        assert "🌐" not in cc_plain, f"claude-code cell has marker: {cc_plain!r}"
+        assert "🌐" not in pi_plain, f"pi cell has marker: {pi_plain!r}"
