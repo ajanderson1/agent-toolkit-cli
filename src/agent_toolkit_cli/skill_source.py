@@ -202,6 +202,15 @@ def parse_source(input_: str) -> ParsedSource:
         input_,
     )
     if m:
+        if m["ref"] and m["subpath"]:
+            raise SourceParseError(
+                f"Ambiguous shorthand '{input_}': @<ref>/<subpath> form is not supported "
+                f"because refs may themselves contain '/'. Use one of:\n"
+                f"  • URL form (refs without '/'):  "
+                f"https://github.com/{m['owner']}/{m['repo']}/tree/{m['ref']}/{m['subpath']}\n"
+                f"  • --ref flag (any ref):         "
+                f"skill add {m['owner']}/{m['repo']}/{m['subpath']} --ref <ref>"
+            )
         owner_repo = f"{m['owner']}/{m['repo']}"
         ref = _sanitize_ref(m["ref"]) if m["ref"] else None
         subpath = _sanitize_subpath(m["subpath"]) if m["subpath"] else None
