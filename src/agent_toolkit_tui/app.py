@@ -91,6 +91,7 @@ class TUIApp(App):
         Binding("ctrl+r", "refresh", "Refresh", priority=True),
         Binding("ctrl+z", "revert", "Revert", priority=True),
         Binding("s", "scope_toggle", "toggle scope"),
+        Binding("i", "info_pass", "Info"),
         Binding("q", "quit", "Quit"),
     ]
 
@@ -169,6 +170,14 @@ class TUIApp(App):
 
     def action_scope_toggle(self) -> None:
         self.action_scope("global" if self._scope == "project" else "project")
+
+    def action_info_pass(self) -> None:
+        """Delegate `i` to the SkillGrid widget (visible in Footer hints)."""
+        try:
+            grid = self.query_one("#skill-grid", SkillGrid)
+        except NoMatches:
+            return
+        grid.action_info()
 
     def action_refresh(self) -> None:
         self._refresh_skill_view()

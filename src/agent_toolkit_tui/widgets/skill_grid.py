@@ -58,7 +58,7 @@ class SkillGrid(Vertical):
     BINDINGS = [
         Binding("space", "toggle_cell", "Toggle", priority=True),
         Binding("a", "toggle_column", "All/None", priority=True),
-        Binding("i", "open_column_info", "Info", priority=True),
+        Binding("i", "info", "Info", priority=True),
     ]
 
     def __init__(self, rows: list[SkillRow], *, id: str | None = None) -> None:
@@ -137,6 +137,153 @@ class SkillGrid(Vertical):
         except Exception:
             return
         self._toggle_at(table.cursor_coordinate)
+
+    def action_info(self) -> None:
+        """Route `i` by column. Columns with a registered ColumnInfo open
+        ColumnInfoModal (header-level info such as Universal bundle, State
+        badge legend). Everything else opens CellInfoScreen with the per-cell
+        state (linked target, drift+doctor command, pending op, slug source)."""
+        from agent_toolkit_tui.screens.cell_info import CellInfoScreen
+
+        try:
+            table = self.query_one("#skill-table", DataTable)
+        except Exception:
+            return
+        coord = table.cursor_coordinate
+        if coord.row >= len(self._rows):
+            return
+
+        # Column-level info first: defer to ColumnInfoModal for registered keys.
+        col_key = self._column_key_for_index(coord.column)
+        if col_key is not None and get_column_info(col_key) is not None:
+            self.action_open_column_info()
+            return
+
+        row = self._rows[coord.row]
+        scope = self._scope
+        scope_flag = "-g" if scope == "global" else "-p"
+
+        # Slug column → source/ref/state context.
+        if coord.column == 0:
+            title = f"{row.slug} · slug"
+            body = (
+                f"Skill [b]{row.slug}[/]\n"
+                f"Source: {row.source}\n"
+                f"Ref:    {row.ref}\n"
+                f"State:  {row.state}"
+            )
+        else:
+            # Agent column without registered info (e.g. Claude Code, Pi) — cell-state body.
+            agent = self._agent_for_column(coord.column)
+            if agent is None:
+                return
+            cell = row.cells.get((agent, scope))
+            if cell is None:
+                return
+            title = f"{row.slug} · {agent} @ {scope}"
+            pending = self._pending.get((scope, agent, row.slug))
+            body = self._info_body_for_cell(
+                row=row,
+                agent=agent,
+                cell=cell,
+                pending=pending,
+                scope=scope,
+                scope_flag=scope_flag,
+            )
+        self.app.push_screen(CellInfoScreen(title=title, body_markup=body))
+
+    def _info_body_for_cell(
+        self,
+        *,
+        row: "SkillRow",
+        agent: str,
+        cell: object,
+        pending: "str | None",
+        scope: str,
+        scope_flag: str,
+    ) -> str:
+        from pathlib import Path
+
+        from agent_toolkit_cli.skill_paths import (
+            agent_projection_dir,
+            canonical_skill_dir,
+        )
+
+        canonical = canonical_skill_dir(
+            row.slug,
+            scope=scope,
+            home=Path.home() if scope == "global" else None,
+            project=None if scope == "global" else Path.cwd(),
+        )
+        if agent == "universal":
+            if scope == "global":
+                bundle = Path.home() / ".agents" / "skills" / row.slug
+                if cell.drift:
+                    return (
+                        f"[red]Drift detected.[/]\n\n"
+                        f"Bundle path: {bundle}\n"
+                        f"Expected:    symlink → {canonical}\n\n"
+                        f"Fix with:\n"
+                        f"  [b]agent-toolkit-cli skill doctor {row.slug} "
+                        f"{scope_flag}[/]"
+                    )
+                if cell.linked:
+                    return f"Linked.\nBundle: {bundle} → {canonical}"
+                return (
+                    f"Not linked.\nPress [b]space[/] to queue link "
+                    f"({bundle} → {canonical})."
+                )
+            # project scope: canonical IS the install
+            if cell.linked:
+                return f"Project canonical exists at {canonical}."
+            return (
+                f"Not installed in project.\nPress [b]space[/] to queue "
+                f"install (clones into {canonical})."
+            )
+
+        link = agent_projection_dir(
+            agent,
+            row.slug,
+            scope=scope,
+            home=Path.home() if scope == "global" else None,
+            project=None if scope == "global" else Path.cwd(),
+        )
+        if cell.skipped:
+            return (
+                f"Universal agent — no symlink needed.\n"
+                f"Skill lives at {canonical}."
+            )
+        if pending == "link":
+            return (
+                f"[yellow]Pending: link.[/]\n"
+                f"{link} → {canonical}\n\n"
+                f"Press [b]^s[/] to apply."
+            )
+        if pending == "unlink":
+            return (
+                f"[yellow]Pending: unlink.[/]\n"
+                f"{link}\n\n"
+                f"Press [b]^s[/] to apply."
+            )
+        if cell.drift:
+            try:
+                target = link.resolve()
+            except OSError:
+                target = "(unreadable)"
+            return (
+                f"[red]Drift detected.[/]\n\n"
+                f"Symlink: {link}\n"
+                f"Points to: {target}\n"
+                f"Expected:  {canonical}\n\n"
+                f"Fix with:\n"
+                f"  [b]agent-toolkit-cli skill doctor {row.slug} {scope_flag}[/]"
+            )
+        if cell.linked:
+            return f"Linked.\n{link} → {canonical}"
+        return (
+            f"Not linked.\nPress [b]space[/] to queue link "
+            f"({link} → {canonical})."
+        )
 
     def action_toggle_column(self) -> None:
         try:
