@@ -17,6 +17,7 @@ from agent_toolkit_cli.skill_install import _should_skip_symlink
 from agent_toolkit_cli.skill_lock import read_lock
 from agent_toolkit_cli.skill_paths import (
     agent_projection_dir, canonical_skill_dir, library_lock_path,
+    parent_clone_path,
 )
 
 # "library" means the skill exists in the library but is not installed in this
@@ -152,7 +153,25 @@ def build_skill_rows(
             # Project scope: slug is in the library but not yet installed here.
             # Global scope: library entry recorded but directory was deleted.
             state: State = "library" if scope == "project" else "missing"
+        elif entry.parent_url is not None:
+            # Monorepo skill — state lives in the parent clone, not the
+            # symlinked subpath (which has no `.git/` of its own).
+            owner, repo = entry.source.split("/", 1)
+            parent_dir = parent_clone_path(
+                owner, repo, ref=entry.ref, env=None,
+            )
+            if not skill_git.is_git_repo(parent_dir):
+                # Parent clone missing — user `rm -rf`'d it, or
+                # materialised: copy with no parent available.
+                state = "copy"
+            else:
+                wt = skill_git.status(parent_dir, env=None)
+                state = (
+                    "dirty" if wt == skill_git.GitWorkingTreeStatus.DIRTY
+                    else "clean"
+                )
         elif not skill_git.is_git_repo(canonical):
+            # Plain-file install (e.g. `npx skills add --copy`).
             state = "copy"
         else:
             wt = skill_git.status(canonical, env=None)

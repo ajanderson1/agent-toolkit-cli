@@ -74,7 +74,7 @@ agent-toolkit-cli skill add https://www.skills.sh/vamseeachanta/workspace-hub/mk
 
 The parent repo is cloned once under `$AGENT_TOOLKIT_SKILLS_ROOT/_parents/<owner>/<repo>/` (or `~/.agent-toolkit/skills/_parents/<owner>/<repo>/` by default). The library canonical at `<library>/<slug>/` is a symlink into the parent's subfolder; on platforms where symlinks fail, the CLI falls back to a recursive copy and records `materialised: "copy"` in the lock entry.
 
-`skill update <slug>` for monorepo entries runs `git pull --ff-only` against the parent clone — the symlinked canonical sees the new content immediately.
+`skill update <slug>` for monorepo entries runs `git fetch` + `git merge` against the parent clone, so local commits merge with upstream cleanly. On conflict the command exits 1 and names the parent clone path (`<library>/_parents/<owner>/<repo>/`); resolve there and re-run `skill update`.
 
 `skill push <slug>` for monorepo entries is refused; the message names the parent URL so you can open a PR there instead.
 

@@ -3,6 +3,7 @@ from pathlib import Path
 from click.testing import CliRunner
 
 from agent_toolkit_cli.cli import main
+from tests.test_cli.test_skill_update_monorepo import _init_parent
 
 
 def _add_and_install_project(runner, upstream_path, project, library_root):
@@ -59,4 +60,46 @@ def test_skill_status_dirty(git_sandbox, tmp_path: Path, monkeypatch):
         "--project", str(project), "skill", "status", "-p",
     ])
     assert result.exit_code == 0
+    assert "dirty" in result.output
+
+
+def test_skill_status_monorepo_clean(tmp_path: Path, monkeypatch):
+    """Fresh monorepo install — parent clone is clean → status reports clean."""
+    parent = _init_parent(tmp_path)
+    library = tmp_path / "library"
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library / "skills"))
+
+    runner = CliRunner()
+    r = runner.invoke(
+        main, ["skill", "add", f"file://{parent}", "--skill", "mkdocs"]
+    )
+    assert r.exit_code == 0, r.output
+
+    result = runner.invoke(main, ["skill", "status", "-g"])
+    assert result.exit_code == 0, result.output
+    assert "mkdocs" in result.output
+    assert "clean" in result.output
+    assert "copy" not in result.output
+
+
+def test_skill_status_monorepo_dirty(tmp_path: Path, monkeypatch):
+    """Uncommitted edit in the parent clone → status reports dirty."""
+    parent = _init_parent(tmp_path)
+    library = tmp_path / "library"
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library / "skills"))
+
+    runner = CliRunner()
+    r = runner.invoke(
+        main, ["skill", "add", f"file://{parent}", "--skill", "mkdocs"]
+    )
+    assert r.exit_code == 0, r.output
+
+    candidates = list((library / "skills" / "_parents").glob("*/*"))
+    assert len(candidates) == 1, candidates
+    parent_clone = candidates[0]
+    (parent_clone / "mkdocs" / "SKILL.md").write_text("dirty\n")
+
+    result = runner.invoke(main, ["skill", "status", "-g"])
+    assert result.exit_code == 0, result.output
+    assert "mkdocs" in result.output
     assert "dirty" in result.output

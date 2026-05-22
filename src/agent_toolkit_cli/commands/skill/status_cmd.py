@@ -5,7 +5,11 @@ import click
 
 from agent_toolkit_cli import skill_git
 from agent_toolkit_cli.skill_lock import read_lock
-from agent_toolkit_cli.skill_paths import canonical_skill_dir, lock_file_path
+from agent_toolkit_cli.skill_paths import (
+    canonical_skill_dir,
+    lock_file_path,
+    parent_clone_path,
+)
 
 from ._common import scope_and_roots
 
@@ -39,16 +43,29 @@ def status_cmd(
         if slug not in lock.skills:
             click.echo(f"{slug}\t(not in lock)")
             continue
+        entry = lock.skills[slug]
         canonical = canonical_skill_dir(
             slug, scope=scope, home=home, project=project_root,
         )
         if not canonical.exists():
             click.echo(f"{slug}\tmissing")
             continue
-        if not skill_git.is_git_repo(canonical):
+        if entry.parent_url is not None:
+            # Monorepo skill — status lives in the parent clone, not the
+            # symlinked subpath (which has no `.git/` of its own).
+            owner, repo = entry.source.split("/", 1)
+            parent_dir = parent_clone_path(
+                owner, repo, ref=entry.ref, env=None,
+            )
+            if not skill_git.is_git_repo(parent_dir):
+                click.echo(f"{slug}\tcopy")
+                continue
+            wt = skill_git.status(parent_dir, env=None)
+        elif not skill_git.is_git_repo(canonical):
             click.echo(f"{slug}\tcopy")
             continue
-        wt = skill_git.status(canonical, env=None)
+        else:
+            wt = skill_git.status(canonical, env=None)
         state = (
             "dirty" if wt == skill_git.GitWorkingTreeStatus.DIRTY else "clean"
         )

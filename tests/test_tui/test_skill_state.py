@@ -1,9 +1,12 @@
+import subprocess
 from pathlib import Path
 
 from click.testing import CliRunner
 
 from agent_toolkit_cli.cli import main
 from agent_toolkit_tui.skill_state import SkillCell, SkillRow, build_skill_rows, _cell_for
+from tests.conftest import scrub_git_env
+from tests.test_cli.test_skill_update_monorepo import _init_parent
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -315,3 +318,84 @@ def test_project_scope_universal_linked_after_install(
     assert row.state == "clean"
     universal_cell = row.cells[("universal", "project")]
     assert universal_cell.linked is True
+
+
+# ---------------------------------------------------------------------------
+# Monorepo skill state tests (parent-clone-derived)
+# ---------------------------------------------------------------------------
+
+
+def _install_monorepo_skill(tmp_path: Path, monkeypatch) -> Path:
+    """Bootstrap a monorepo skill at global scope. Returns the parent_clone path."""
+    parent = _init_parent(tmp_path)
+    library = tmp_path / "library"
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library / "skills"))
+
+    runner = CliRunner()
+    r = runner.invoke(main, ["skill", "add", f"file://{parent}", "--skill", "mkdocs"])
+    assert r.exit_code == 0, r.output
+
+    candidates = list((library / "skills" / "_parents").glob("*/*"))
+    assert len(candidates) == 1, candidates
+    return candidates[0]
+
+
+def test_build_rows_monorepo_clean_when_parent_clean(tmp_path: Path, monkeypatch):
+    _install_monorepo_skill(tmp_path, monkeypatch)
+    rows = build_skill_rows(scope="global", home=tmp_path, project=None)
+    row = next(r for r in rows if r.slug == "mkdocs")
+    assert row.state == "clean", row
+
+
+def test_build_rows_monorepo_dirty_when_parent_has_uncommitted_change(
+    tmp_path: Path, monkeypatch,
+):
+    parent_clone = _install_monorepo_skill(tmp_path, monkeypatch)
+    (parent_clone / "mkdocs" / "SKILL.md").write_text("dirty\n")
+    rows = build_skill_rows(scope="global", home=tmp_path, project=None)
+    row = next(r for r in rows if r.slug == "mkdocs")
+    assert row.state == "dirty", row
+
+
+def test_build_rows_monorepo_clean_when_parent_has_only_committed_changes(
+    tmp_path: Path, monkeypatch,
+):
+    """Local commits with no uncommitted changes → `clean`. Matches the
+    per-skill-repo branch's behaviour (git status --porcelain doesn't surface
+    ahead-of-upstream)."""
+    parent_clone = _install_monorepo_skill(tmp_path, monkeypatch)
+    (parent_clone / "mkdocs" / "LOCAL.md").write_text("local\n")
+    env = scrub_git_env()
+    for cmd in (
+        ["git", "-c", "user.email=t@t", "-c", "user.name=t", "add", "."],
+        ["git", "-c", "user.email=t@t", "-c", "user.name=t",
+         "commit", "-q", "-m", "local"],
+    ):
+        subprocess.run(cmd, cwd=parent_clone, check=True, env=env)
+    rows = build_skill_rows(scope="global", home=tmp_path, project=None)
+    row = next(r for r in rows if r.slug == "mkdocs")
+    assert row.state == "clean", row
+
+
+def test_build_rows_monorepo_copy_when_parent_missing(
+    tmp_path: Path, monkeypatch,
+):
+    """User `rm -rf`'d _parents/ — state falls back to 'copy'."""
+    import shutil
+
+    _install_monorepo_skill(tmp_path, monkeypatch)
+    library_root = tmp_path / "library" / "skills"
+    parents_dir = library_root / "_parents"
+    shutil.rmtree(parents_dir)
+
+    # Canonical (symlink target) is now dangling. Make canonical existent
+    # so we exercise the parent-missing branch (not the missing-canonical
+    # one).
+    canonical = library_root / "mkdocs"
+    if canonical.is_symlink():
+        canonical.unlink()
+    canonical.mkdir(parents=True, exist_ok=True)
+
+    rows = build_skill_rows(scope="global", home=tmp_path, project=None)
+    row = next(r for r in rows if r.slug == "mkdocs")
+    assert row.state == "copy", row
