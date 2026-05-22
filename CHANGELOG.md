@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.7.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.6.0...v2.7.0) (2026-05-22)
+
+
+### Features
+
+* **tui:** drop Description column; surface description in slug-cell info modal ([#200](https://github.com/ajanderson1/agent-toolkit-cli/issues/200)) ([c6a583f](https://github.com/ajanderson1/agent-toolkit-cli/commit/c6a583f92354581d933b084d107ab0d7dd8570f9))
+
+
+### Bug Fixes
+
+* **doctor:** classify v2.1 bundle target as drift, not foreign ([#192](https://github.com/ajanderson1/agent-toolkit-cli/issues/192)) ([#205](https://github.com/ajanderson1/agent-toolkit-cli/issues/205)) ([d9b4385](https://github.com/ajanderson1/agent-toolkit-cli/commit/d9b4385c9ef15e3de8edb646a04bf1af7b011e38))
+* **doctor:** normalise ssh ↔ https git URLs in _normalise_git_url ([#201](https://github.com/ajanderson1/agent-toolkit-cli/issues/201)) ([a6aab7e](https://github.com/ajanderson1/agent-toolkit-cli/commit/a6aab7e4da80ec26641719a5e755835b5eb9272e)), closes [#191](https://github.com/ajanderson1/agent-toolkit-cli/issues/191)
+* **skill add:** reject ambiguous owner/repo@&lt;ref&gt;/&lt;subpath&gt; shorthand ([#203](https://github.com/ajanderson1/agent-toolkit-cli/issues/203)) ([36783f1](https://github.com/ajanderson1/agent-toolkit-cli/commit/36783f1c8de025f928d431884ea9e062e437aa12))
+* **skill-git:** inject synthetic identity in commit_all() ([#197](https://github.com/ajanderson1/agent-toolkit-cli/issues/197)) ([#206](https://github.com/ajanderson1/agent-toolkit-cli/issues/206)) ([22097a2](https://github.com/ajanderson1/agent-toolkit-cli/commit/22097a2e1dfc9ba444b64efcdbe3d0fb9b4cc475))
+* **skill-source:** align `_sanitize_ref` with `git check-ref-format` ([#204](https://github.com/ajanderson1/agent-toolkit-cli/issues/204)) ([f685397](https://github.com/ajanderson1/agent-toolkit-cli/commit/f68539725e425006f7d6dd4436836e8977d8c198))
+
 ## [2.6.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.5.0...v2.6.0) (2026-05-22)
 
 
