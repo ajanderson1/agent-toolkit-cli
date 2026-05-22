@@ -23,7 +23,7 @@ from textual.coordinate import Coordinate
 from textual.widgets import DataTable
 
 from agent_toolkit_cli.skill_agents import AGENTS
-from agent_toolkit_tui.column_info import get_column_info
+from agent_toolkit_tui.column_info import COLUMN_INFO, get_column_info
 from agent_toolkit_tui.skill_state import INTERACTIVE_AGENTS, SkillRow
 from agent_toolkit_tui.widgets.column_info_modal import ColumnInfoModal
 
@@ -156,8 +156,10 @@ class SkillGrid(Vertical):
             return
 
         # Column-level info first: defer to ColumnInfoModal for registered keys.
+        # Use COLUMN_INFO membership directly so the factory isn't called twice
+        # (action_open_column_info calls it with context to build the real modal).
         col_key = self._column_key_for_index(coord.column)
-        if col_key is not None and get_column_info(col_key) is not None:
+        if col_key is not None and col_key in COLUMN_INFO:
             self.action_open_column_info()
             return
 
