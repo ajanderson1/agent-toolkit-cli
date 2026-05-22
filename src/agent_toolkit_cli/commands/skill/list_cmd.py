@@ -14,10 +14,13 @@ from ._common import scope_and_roots
 
 
 @click.command("list", epilog="""\
+Default scope: project if <cwd>/skills-lock.json exists, otherwise global.
+
 Examples:
 
 \b
-  agent-toolkit-cli skill list        # global skills
+  agent-toolkit-cli skill list        # auto-detect (project or global)
+  agent-toolkit-cli skill list -g     # global library
   agent-toolkit-cli skill list -p     # project-scope skills
 """)
 @click.option("-g", "--global", "global_", is_flag=True)
@@ -43,6 +46,7 @@ def list_cmd(
         global_,
         project_flag,
         ctx.obj.get("project_root") if ctx.obj else None,
+        read_only=True,
     )
 
     if agent is not None and agent != "universal" and agent not in AGENTS:
@@ -62,7 +66,7 @@ def list_cmd(
     if as_json:
         _emit_json(lock, slugs, scope)
         return
-    _emit_table(lock, slugs, agent)
+    _emit_table(lock, slugs, agent, scope=scope, project_flag_explicit=project_flag)
 
 
 def _emit_json(lock: LockFile, slugs: list[str], scope: str) -> None:
@@ -81,10 +85,23 @@ def _emit_json(lock: LockFile, slugs: list[str], scope: str) -> None:
     click.echo(json.dumps(out))
 
 
-def _emit_table(lock: LockFile, slugs: list[str], agent: str | None) -> None:
+def _emit_table(
+    lock: LockFile,
+    slugs: list[str],
+    agent: str | None,
+    *,
+    scope: str = "global",
+    project_flag_explicit: bool = False,
+) -> None:
     """Print the human-readable tab-separated table to stdout."""
     if not lock.skills:
-        click.echo("(no skills installed)")
+        if project_flag_explicit and scope == "project":
+            click.echo(
+                '(no project skills here. Run "skill list -g" for the global '
+                'library, or "-p" from inside a project)'
+            )
+        else:
+            click.echo("(no skills installed)")
         return
     if not slugs:
         click.echo(f"(no skills linked into {agent})")
