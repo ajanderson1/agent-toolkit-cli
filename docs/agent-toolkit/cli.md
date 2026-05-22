@@ -13,7 +13,7 @@ agent-toolkit-cli skill add <source> [-g|-p] [--ref <ref>] [--harness <h>]...
 agent-toolkit-cli skill list [-g|-p] [-a/--agent <name>] [--json]   # alias: ls
 agent-toolkit-cli skill status [<slug>...] [-g|-p]
 agent-toolkit-cli skill update [<slug>...] [-g|-p]      # merge-aware
-agent-toolkit-cli skill push   [<slug>...] [-g|-p]      # self-improvements upstream
+agent-toolkit-cli skill push   [<slug>...] [-g|-p] [--direct]   # PR-branch by default
 agent-toolkit-cli skill remove <slug>... [-g|-p] [--force]          # alias: rm
 ```
 
@@ -77,6 +77,14 @@ The parent repo is cloned once under `$AGENT_TOOLKIT_SKILLS_ROOT/_parents/<owner
 `skill update <slug>` for monorepo entries runs `git fetch` + `git merge` against the parent clone, so local commits merge with upstream cleanly. On conflict the command exits 1 and names the parent clone path (`<library>/_parents/<owner>/<repo>/`); resolve there and re-run `skill update`.
 
 `skill push <slug>` for monorepo entries is refused; the message names the parent URL so you can open a PR there instead.
+
+## skill push
+
+By default `skill push <slug>` creates a `skill/self-improvement-<timestamp>` branch in the canonical skill repo, pushes it, and opens a PR against the tracked ref via `gh pr create` (printing the PR URL). When `gh` is not installed or not authenticated the branch is still pushed and the command prints a hint with the branch's web URL so you can open the PR by hand.
+
+`--direct` opts into the pre-#221 behaviour: commit + push straight to the tracked ref and update `local_sha` in the lockfile. Use it for solo first-party skills where opening a PR for every self-improvement would be ceremony. The default path leaves `local_sha` alone — the next `skill update` picks up the merged change normally.
+
+Monorepo entries (`read_only: true`) reject both modes — sharing changes back means forking the parent yourself.
 
 ---
 
