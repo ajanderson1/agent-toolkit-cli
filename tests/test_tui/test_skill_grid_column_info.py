@@ -1,4 +1,9 @@
-"""Pilot tests for SkillGrid's column-info wiring."""
+"""Pilot tests for SkillGrid's column-info wiring.
+
+`i` routes via `_column_key_for_index`:
+  - Universal / State (have a registered ColumnInfo) → ColumnInfoModal
+  - Agent columns (Claude Code, Pi) / slug / description / source → CellInfoScreen
+"""
 from __future__ import annotations
 
 import pytest
@@ -41,7 +46,8 @@ async def test_universal_column_label_has_info_glyph():
 
 
 @pytest.mark.asyncio
-async def test_press_i_on_universal_column_opens_modal():
+async def test_press_i_on_universal_column_opens_column_info_modal():
+    """i on universal column opens ColumnInfoModal (registered column info)."""
     from textual.app import App
 
     class _A(App):
@@ -56,14 +62,16 @@ async def test_press_i_on_universal_column_opens_modal():
         await pilot.pause()
         await pilot.press("i")
         await pilot.pause()
-        assert any(isinstance(s, ColumnInfoModal) for s in a.screen_stack), \
-            "ColumnInfoModal not pushed"
+        assert isinstance(a.screen, ColumnInfoModal), \
+            "ColumnInfoModal not pushed for universal column"
 
 
 @pytest.mark.asyncio
-async def test_press_i_on_claude_code_column_is_noop():
-    """No info registered for claude-code → pressing i does nothing."""
+async def test_press_i_on_claude_code_column_opens_cell_info():
+    """i on agent (non-info-registered) columns opens CellInfoScreen with cell state."""
     from textual.app import App
+
+    from agent_toolkit_tui.screens.cell_info import CellInfoScreen
 
     class _A(App):
         def compose(self):
@@ -77,14 +85,18 @@ async def test_press_i_on_claude_code_column_is_noop():
         await pilot.pause()
         await pilot.press("i")
         await pilot.pause()
-        assert not any(isinstance(s, ColumnInfoModal) for s in a.screen_stack)
+        assert isinstance(a.screen, CellInfoScreen), \
+            "CellInfoScreen not pushed for claude-code column"
 
 
 @pytest.mark.asyncio
-async def test_press_i_on_slug_column_is_noop():
+async def test_press_i_on_slug_column_opens_cell_info():
+    """i on the slug column opens CellInfoScreen (not ColumnInfoModal)."""
     from textual.app import App
     from textual.coordinate import Coordinate
     from textual.widgets import DataTable
+
+    from agent_toolkit_tui.screens.cell_info import CellInfoScreen
 
     class _A(App):
         def compose(self):
@@ -98,6 +110,8 @@ async def test_press_i_on_slug_column_is_noop():
         await pilot.pause()
         await pilot.press("i")
         await pilot.pause()
+        assert isinstance(a.screen, CellInfoScreen), \
+            "CellInfoScreen not pushed for slug column"
         assert not any(isinstance(s, ColumnInfoModal) for s in a.screen_stack)
 
 

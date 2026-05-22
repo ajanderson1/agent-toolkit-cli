@@ -29,6 +29,7 @@ from agent_toolkit_cli.skill_paths import (
 from agent_toolkit_cli.skill_source import ParsedSource, SourceParseError, parse_source
 
 from ._common import scope_and_roots, validate_agent_names
+from .doctor_cmd import doctor_cmd
 from .list_cmd import list_cmd
 from .push_cmd import push_cmd
 from .reset_cmd import reset_cmd
@@ -620,6 +621,7 @@ skill.add_command(status_cmd)
 skill.add_command(update_cmd)
 skill.add_command(push_cmd)
 skill.add_command(reset_cmd)
+skill.add_command(doctor_cmd)
 
 # Surface aliases to match `npx -y skills` muscle memory (#169).
 skill.add_command(list_cmd, name="ls")
