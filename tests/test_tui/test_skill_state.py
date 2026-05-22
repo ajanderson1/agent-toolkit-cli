@@ -326,7 +326,6 @@ def test_project_scope_universal_linked_after_install(
 
 
 # ---------------------------------------------------------------------------
-<<<<<<< HEAD
 # Monorepo skill state tests (parent-clone-derived)
 # ---------------------------------------------------------------------------
 
@@ -405,7 +404,9 @@ def test_build_rows_monorepo_copy_when_parent_missing(
     rows = build_skill_rows(scope="global", home=tmp_path, project=None)
     row = next(r for r in rows if r.slug == "mkdocs")
     assert row.state == "copy", row
-=======
+
+
+# ---------------------------------------------------------------------------
 # Global-cell population when in project scope (#188)
 # ---------------------------------------------------------------------------
 
@@ -505,4 +506,3 @@ def test_build_skill_rows_global_scope_unchanged(
         assert (agent, "project") not in demo.cells, (
             f"unexpected project cell at global scope: {demo.cells.keys()}"
         )
->>>>>>> 2f557e4 (feat(tui): populate global cells in project scope for indicator (#188))
