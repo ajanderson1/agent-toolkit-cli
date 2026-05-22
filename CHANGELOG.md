@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.6.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.5.0...v2.6.0) (2026-05-22)
+
+
+### Features
+
+* **tui:** re-implement globally-installed indicator in Project scope ([#188](https://github.com/ajanderson1/agent-toolkit-cli/issues/188)) ([#195](https://github.com/ajanderson1/agent-toolkit-cli/issues/195)) ([9cffcde](https://github.com/ajanderson1/agent-toolkit-cli/commit/9cffcdeaf92caaaf2b7b0d7d2c2e3fc3d8b0a7bc))
+
 ## [2.5.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.4.0...v2.5.0) (2026-05-22)
 
 
