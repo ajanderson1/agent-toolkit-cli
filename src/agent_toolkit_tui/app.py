@@ -129,7 +129,7 @@ class TUIApp(App):
     def _scope_to_roots(self) -> tuple[str, Path | None, Path | None]:
         if self._scope == "global":
             return "global", Path.home(), None
-        return "project", None, Path.cwd()
+        return "project", Path.home(), Path.cwd()
 
     def _refresh_skill_view(self) -> None:
         try:
