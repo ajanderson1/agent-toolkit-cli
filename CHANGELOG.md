@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.7.2](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.7.1...v2.7.2) (2026-05-22)
+
+
+### Bug Fixes
+
+* **skill push:** open PR by default; --direct preserves push-to-tracked-ref ([#224](https://github.com/ajanderson1/agent-toolkit-cli/issues/224)) ([5751ade](https://github.com/ajanderson1/agent-toolkit-cli/commit/5751ade99e216b26ecacb294c51802c2f81a54ab))
+* **skill scope:** default to global for push/update/reset/doctor ([#220](https://github.com/ajanderson1/agent-toolkit-cli/issues/220)) ([#222](https://github.com/ajanderson1/agent-toolkit-cli/issues/222)) ([9b141d8](https://github.com/ajanderson1/agent-toolkit-cli/commit/9b141d8d997f10fa2556d434e6b9277c5a66ce9b))
+
 ## [2.7.1](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.7.0...v2.7.1) (2026-05-22)
 
 
