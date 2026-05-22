@@ -178,6 +178,15 @@ def checkout_new_branch(
     return GitResult(stdout=proc.stdout, stderr=proc.stderr)
 
 
+def checkout(repo: Path, *, ref: str, env: dict[str, str] | None) -> GitResult:
+    """`git checkout <ref>`. Caller owns ensuring the working tree is in a
+    state that can accept the switch (e.g. has just committed)."""
+    proc = _run(
+        ["git", "-C", str(repo), "checkout", ref], env=env,
+    )
+    return GitResult(stdout=proc.stdout, stderr=proc.stderr)
+
+
 def current_branch(repo: Path, *, env: dict[str, str] | None) -> str:
     proc = _run(
         ["git", "-C", str(repo), "rev-parse", "--abbrev-ref", "HEAD"],

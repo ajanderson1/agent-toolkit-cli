@@ -143,6 +143,7 @@ def test_push_default_opens_pr_branch(git_sandbox, tmp_path, monkeypatch):
     heads = _upstream_heads(git_sandbox.upstream, git_sandbox.env)
     pr_heads = [h for h in heads if h.startswith("skill/self-improvement-")]
     assert len(pr_heads) == 1, f"expected one PR branch, got: {heads}"
+    assert pr_heads[0].endswith("-demo")
 
     assert "pushed branch skill/self-improvement-" in result.output
     assert "https://github.com/x/y/pull/42" in result.output
@@ -176,6 +177,105 @@ def test_push_default_without_gh_prints_branch_hint(
 
     assert "pushed branch skill/self-improvement-" in result.output
     assert "--direct" in result.output
+
+
+def test_push_default_returns_canonical_to_base_ref(
+    git_sandbox, tmp_path, monkeypatch,
+):
+    """After a PR-branch push the canonical skill repo is checked back to
+    the tracked ref, so the next `skill update` merges into the right
+    branch instead of into the throwaway PR branch."""
+    _install_gh_stub(tmp_path, monkeypatch)
+    project, _, canonical = _setup_dirty_install(
+        git_sandbox, tmp_path, monkeypatch,
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(main, [
+        "--project", str(project), "skill", "push", "demo", "-p",
+    ])
+    assert result.exit_code == 0, result.output
+
+    head_branch = subprocess.run(
+        ["git", "-C", str(canonical), "rev-parse", "--abbrev-ref", "HEAD"],
+        check=True, env=git_sandbox.env, capture_output=True, text=True,
+    ).stdout.strip()
+    assert head_branch == "main", (
+        f"canonical repo left on {head_branch!r}; should be back on main"
+    )
+
+
+def test_push_default_batch_branch_names_are_unique(
+    git_sandbox, tmp_path, monkeypatch,
+):
+    """Two slugs pushed in the same invocation must produce distinct PR
+    branches even when the wall clock ticks within a second."""
+    _install_gh_stub(tmp_path, monkeypatch)
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / ".claude").mkdir()
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in git_sandbox.env.items():
+        if k == "PATH":
+            continue
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+
+    runner = CliRunner()
+    # Install two skills, both pointing at the same upstream (a second
+    # bare repo so they can be pushed independently).
+    second_upstream = tmp_path / "upstream2.git"
+    subprocess.run(
+        ["git", "init", "--bare", "--initial-branch=main", str(second_upstream)],
+        check=True, env=git_sandbox.env, capture_output=True,
+    )
+    subprocess.run(
+        ["git", "clone", str(git_sandbox.upstream), str(tmp_path / "seed2")],
+        check=True, env=git_sandbox.env, capture_output=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(tmp_path / "seed2"), "remote", "set-url",
+         "origin", str(second_upstream)],
+        check=True, env=git_sandbox.env, capture_output=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(tmp_path / "seed2"), "push", "origin", "main"],
+        check=True, env=git_sandbox.env, capture_output=True,
+    )
+
+    for slug, upstream in (("demo1", git_sandbox.upstream),
+                           ("demo2", second_upstream)):
+        r = runner.invoke(main, [
+            "skill", "add", str(upstream), "--slug", slug,
+        ])
+        assert r.exit_code == 0, r.output
+        r = runner.invoke(main, [
+            "--project", str(project),
+            "skill", "install", slug, "--scope", "project",
+            "--agents", "claude-code",
+        ])
+        assert r.exit_code == 0, r.output
+        canonical = project / ".agents" / "skills" / slug
+        (canonical / "SKILL.md").write_text(
+            f"---\nname: {slug}\ndescription: Improved {slug}.\n---\n# {slug}\n"
+        )
+
+    result = runner.invoke(main, [
+        "--project", str(project), "skill", "push", "demo1", "demo2", "-p",
+    ])
+    assert result.exit_code == 0, result.output
+
+    heads1 = _upstream_heads(git_sandbox.upstream, git_sandbox.env)
+    heads2 = _upstream_heads(second_upstream, git_sandbox.env)
+    pr1 = [h for h in heads1 if h.startswith("skill/self-improvement-")]
+    pr2 = [h for h in heads2 if h.startswith("skill/self-improvement-")]
+    assert len(pr1) == 1, heads1
+    assert len(pr2) == 1, heads2
+    # Each branch name encodes its slug, so even at the same wall-clock
+    # second the two are distinguishable.
+    assert pr1[0] != pr2[0]
+    assert pr1[0].endswith("-demo1")
+    assert pr2[0].endswith("-demo2")
 
 
 def test_push_default_gh_auth_failure_falls_back(

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import datetime as _dt
+import functools
 import re
 import shutil
 import subprocess
@@ -40,6 +41,9 @@ def push_cmd(
     direct: bool,
 ) -> None:
     """Publish self-improvements upstream. Opens a PR by default."""
+    # Memoise gh-availability for the lifetime of this invocation so a
+    # batch `skill push` doesn't spawn `gh auth status` per slug.
+    _gh_available.cache_clear()
     scope, home, project_root = scope_and_roots(
         global_,
         project_flag,
@@ -99,20 +103,38 @@ def _push_direct(
 
 def _push_via_pr(canonical: Path, entry, slug: str) -> None:
     base_ref = entry.ref or "main"
-    branch = f"skill/self-improvement-{_utc_basic_iso()}"
+    branch = f"skill/self-improvement-{_utc_basic_iso()}-{_slug_for_ref(slug)}"
+    # checkout -b then immediately commit_all — the working-tree changes
+    # carry onto the new branch and become the first commit. The branch is
+    # then pushed; we always check the canonical repo back to base_ref so a
+    # subsequent `skill update` merges into the tracked ref, not the PR
+    # branch we just created.
     skill_git.checkout_new_branch(canonical, name=branch, env=None)
     msg = f"self-improvement: {_utc_iso()}"
     skill_git.commit_all(canonical, message=msg, env=None)
-    skill_git.push(canonical, ref=branch, env=None)
-    click.echo(f"{slug}: pushed branch {branch}")
-    pr_url = _open_pr(canonical, branch, base=base_ref, slug=slug)
-    if pr_url:
-        click.echo(f"  PR: {pr_url}")
-        return
-    web = _branch_web_url(canonical, branch)
-    if web:
-        click.echo(f"  → open a PR: {web}")
-    click.echo(f"  (rerun with --direct to push to {base_ref})")
+    try:
+        skill_git.push(canonical, ref=branch, env=None)
+        click.echo(f"{slug}: pushed branch {branch}")
+        pr_url = _open_pr(canonical, branch, base=base_ref, slug=slug)
+        if pr_url:
+            click.echo(f"  PR: {pr_url}")
+        else:
+            web = _branch_web_url(canonical, branch)
+            if web:
+                click.echo(f"  → open a PR: {web}")
+            click.echo(f"  (rerun with --direct to push to {base_ref})")
+    finally:
+        skill_git.checkout(canonical, ref=base_ref, env=None)
+
+
+_REF_SAFE_RE = re.compile(r"[^a-zA-Z0-9._-]+")
+
+
+def _slug_for_ref(slug: str) -> str:
+    """Lower-case the slug and collapse anything outside `[a-zA-Z0-9._-]`
+    to a single `-`, so the result is safe to drop into a git ref name."""
+    cleaned = _REF_SAFE_RE.sub("-", slug.lower()).strip("-")
+    return cleaned or "skill"
 
 
 def _utc_basic_iso() -> str:
@@ -123,6 +145,7 @@ def _utc_iso() -> str:
     return _dt.datetime.now(_dt.UTC).isoformat()
 
 
+@functools.lru_cache(maxsize=1)
 def _gh_available() -> bool:
     if shutil.which("gh") is None:
         return False
