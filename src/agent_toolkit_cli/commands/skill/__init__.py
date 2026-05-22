@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import dataclasses
+import os
 import shutil
 from pathlib import Path
 
@@ -21,7 +22,7 @@ from agent_toolkit_cli.skill_install import (
     plan as engine_plan,
     uninstall,
 )
-from agent_toolkit_cli.skill_lock import read_lock, remove_entry, write_lock
+from agent_toolkit_cli.skill_lock import LockFile, read_lock, remove_entry, write_lock
 from agent_toolkit_cli.skill_paths import (
     library_lock_path,
     library_skill_path,
@@ -580,12 +581,22 @@ def remove_cmd(
                 had_dirty = True
                 continue
 
-        # Full remove: unlink all global symlinks + rmtree library dir + lock entry.
+        # Full remove: unlink all global symlinks + remove the library entry
+        # (symlink → unlink + sweep orphan parent clone; directory → rmtree).
         _remove_all_global_symlinks(slug)
-        if library_dir.exists():
+        parent_clone_to_check: Path | None = None
+        if library_dir.is_symlink():
+            target = Path(os.readlink(library_dir))
+            if not target.is_absolute():
+                target = (library_dir.parent / target).resolve(strict=False)
+            parent_clone_to_check = _enclosing_parent_clone(target)
+            library_dir.unlink()
+        elif library_dir.exists():
             shutil.rmtree(library_dir)
         lock = remove_entry(lock, slug)
         write_lock(lock_path, lock)
+        if parent_clone_to_check is not None and parent_clone_to_check.exists():
+            _cleanup_parent_clone_if_orphaned(parent_clone_to_check, lock)
         click.echo(f"{slug}: removed")
 
     if had_dirty:
@@ -607,6 +618,47 @@ def _remove_all_global_symlinks(slug: str) -> None:
         link = cfg.global_skills_dir / slug
         if link.is_symlink():
             link.unlink()
+
+
+def _enclosing_parent_clone(target: Path) -> Path | None:
+    """Return the `_parents/<owner>/<repo>[@<ref>]/` ancestor of `target`, or None.
+
+    Monorepo library symlinks point into
+    ``<library_root>/_parents/<owner>/<repo>[@<ref>]/<subpath>``. Climb the
+    parents until we hit a directory whose own parent is named ``_parents`` —
+    that is the per-(owner, repo, ref) clone we may need to sweep. Returns
+    None if `target` is not under a `_parents/` tree (defensive — we won't
+    sweep a directory we can't positively identify as a parent clone).
+    """
+    for ancestor in target.parents:
+        if ancestor.parent.name == "_parents":
+            return ancestor
+    return None
+
+
+def _cleanup_parent_clone_if_orphaned(
+    parent_clone: Path, lock: LockFile,
+) -> bool:
+    """Remove `parent_clone` if no remaining lock entry's library symlink targets it.
+
+    Walks current lock entries, resolves each canonical's symlink target, and
+    checks whether `parent_clone` is an ancestor. If any sibling still points
+    in, leave the clone intact (it is still shared). Otherwise rmtree it.
+    Returns True iff the clone was removed.
+    """
+    for sibling_slug in lock.skills:
+        sibling = library_skill_path(sibling_slug)
+        if not sibling.is_symlink():
+            continue
+        sibling_target = Path(os.readlink(sibling))
+        if not sibling_target.is_absolute():
+            sibling_target = (sibling.parent / sibling_target).resolve(
+                strict=False,
+            )
+        if parent_clone in sibling_target.parents:
+            return False
+    shutil.rmtree(parent_clone)
+    return True
 
 
 def _count_linked(slug: str, scope: str, home: Path | None, project: Path | None) -> str:
