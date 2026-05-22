@@ -1,10 +1,10 @@
 """Interactive DataTable for the TUI's skill tab.
 
-Columns: SKILL | Universal ⓘ | Claude Code | Pi | State ⓘ | Source.
+Columns: SKILL ⓘ | Universal ⓘ | Claude Code ⓘ | Pi ⓘ | State ⓘ | Source.
 
 `space` toggles a cell (queues link/unlink in `_pending`).
 `a` toggles a column.
-`i` opens ColumnInfoModal for the column under the cursor (Universal, State).
+`i` opens ColumnInfoModal for columns with registered info (Universal, State); for all other glyphed columns (SKILL, Claude Code, Pi) it opens CellInfoScreen with per-cell or slug context. The Source column has no info panel.
 `^s` Apply is handled by the App, which reads pending_entries().
 
 The long tail of agents is managed via the CLI; the TUI grid only shows
@@ -156,8 +156,10 @@ class SkillGrid(Vertical):
             return
 
         # Column-level info first: defer to ColumnInfoModal for registered keys.
+        # Use COLUMN_INFO membership directly so the factory isn't called twice
+        # (action_open_column_info calls it with context to build the real modal).
         col_key = self._column_key_for_index(coord.column)
-        if col_key is not None and get_column_info(col_key) is not None:
+        if col_key is not None and col_key in COLUMN_INFO:
             self.action_open_column_info()
             return
 
@@ -167,12 +169,16 @@ class SkillGrid(Vertical):
 
         # Slug column → source/ref/state context.
         if coord.column == 0:
+            # 'library' = no meaningful state (slug in library, not yet
+            # installed here). Render as em-dash so the modal doesn't look
+            # like it's printing a debug literal.
+            state_display = "—" if row.state == "library" else row.state
             title = f"{row.slug} · slug"
             body = (
                 f"Skill [b]{row.slug}[/]\n"
                 f"Source: {row.source}\n"
                 f"Ref:    {row.ref}\n"
-                f"State:  {row.state}"
+                f"State:  {state_display}"
             )
             if row.description:
                 body += f"\n\nDescription:\n{row.description}"
@@ -338,10 +344,26 @@ class SkillGrid(Vertical):
         key = self._column_key_for_index(col)
         if key is None:
             return
-        info = get_column_info(key)
+        context = self._context_for(key=key, row_index=table.cursor_coordinate.row)
+        info = get_column_info(key, context=context)
         if info is None:
             return
         self.app.push_screen(ColumnInfoModal(info))
+
+    def _context_for(self, *, key: str, row_index: int) -> dict | None:
+        """Build the per-call context dict for get_column_info().
+
+        Today only the 'universal' key uses it: we surface whether the focused
+        row is also installed globally so the modal can omit the 🌐 paragraph
+        when it's not.
+        """
+        if key != "universal":
+            return None
+        if row_index < 0 or row_index >= len(self._rows):
+            return None
+        row = self._rows[row_index]
+        global_cell = row.cells.get(("universal", "global"))
+        return {"global_linked": bool(global_cell and global_cell.linked)}
 
     def _toggle_at(self, coord: Coordinate) -> None:
         try:
@@ -404,16 +426,17 @@ class SkillGrid(Vertical):
     def _rebuild(self, table: DataTable) -> None:
         saved = table.cursor_coordinate
         table.clear(columns=True)
-        table.add_column("SKILL", width=20)
+        # Slug column has cell-info (the slug-cell panel) → glyph it.
+        table.add_column(f"SKILL {_INFO_GLYPH}", width=20)
         for agent in INTERACTIVE_AGENTS:
-            # "Universal" gets a capitalised base; per-agent columns use the
-            # catalog display_name. The ⓘ glyph is suffixed for any column
-            # whose key is in COLUMN_INFO.
+            # Every interactive agent column exposes either a column-info
+            # modal (Universal) or per-cell info (Claude Code, Pi via
+            # CellInfoScreen) — glyph them all.
             base = "Universal" if agent == "universal" else AGENTS[agent].display_name
-            label = f"{base} {_INFO_GLYPH}" if agent in COLUMN_INFO else base
-            table.add_column(label, width=14)
-        state_label = f"State {_INFO_GLYPH}" if "state" in COLUMN_INFO else "State"
-        table.add_column(state_label, width=10)
+            table.add_column(f"{base} {_INFO_GLYPH}", width=14)
+        # State has a column-info modal → glyph it.
+        table.add_column(f"State {_INFO_GLYPH}", width=10)
+        # Source is passive — no info panel, no glyph.
         table.add_column("Source", width=30)
         for row in self._rows:
             cells: list[str] = [row.slug]

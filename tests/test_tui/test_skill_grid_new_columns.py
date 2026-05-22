@@ -112,3 +112,40 @@ def test_read_skill_description_no_key(tmp_path):
     d.mkdir()
     (d / "SKILL.md").write_text("---\nname: alpha\n---\n")
     assert _read_skill_description(d) == ""
+
+
+def test_build_skill_rows_project_scope_falls_back_to_library_description(
+    git_sandbox, tmp_path, monkeypatch,
+):
+    """At project scope, when the project canonical is absent (state='library'),
+    SkillRow.description reads from the library canonical instead of returning empty."""
+    from click.testing import CliRunner
+    from agent_toolkit_cli.cli import main
+    from agent_toolkit_tui.skill_state import build_skill_rows
+
+    project = tmp_path / "proj"
+    project.mkdir()
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+
+    runner = CliRunner()
+    # Only add to library; do NOT install at project scope.
+    r = runner.invoke(main, ["skill", "add", str(git_sandbox.upstream), "--slug", "demo"])
+    assert r.exit_code == 0, r.output
+
+    # Stamp a description into the library canonical's SKILL.md.
+    library_canonical = library_root / "demo"
+    skill_md = library_canonical / "SKILL.md"
+    skill_md.write_text(
+        "---\nname: demo\ndescription: Library description value\n---\n\nBody.\n"
+    )
+
+    rows = build_skill_rows(scope="project", home=None, project=project)
+    assert len(rows) == 1
+    row = rows[0]
+    assert row.state == "library", f"precondition: expected state=library, got {row.state}"
+    assert row.description == "Library description value", (
+        f"description should fall back to the library canonical, got {row.description!r}"
+    )
