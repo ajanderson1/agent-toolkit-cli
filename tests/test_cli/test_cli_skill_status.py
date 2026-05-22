@@ -82,6 +82,48 @@ def test_skill_status_monorepo_clean(tmp_path: Path, monkeypatch):
     assert "copy" not in result.output
 
 
+def test_skill_status_no_flag_outside_project_uses_global(
+    git_sandbox, tmp_path: Path, monkeypatch,
+):
+    """No flag + no project lock at cwd → consult global lock (#210)."""
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+
+    runner = CliRunner()
+    r = runner.invoke(main, [
+        "skill", "add", str(git_sandbox.upstream), "--slug", "demo",
+    ])
+    assert r.exit_code == 0, r.output
+
+    not_a_project = tmp_path / "not-a-project"
+    not_a_project.mkdir()
+    result = runner.invoke(main, [
+        "--project", str(not_a_project), "skill", "status", "demo",
+    ])
+    assert result.exit_code == 0, result.output
+    assert "demo" in result.output
+    assert "(not in lock)" not in result.output
+
+
+def test_skill_status_project_flag_outside_project_shows_hint(
+    tmp_path: Path, monkeypatch,
+):
+    """`-p` forced + no project lock → clear hint (#210)."""
+    library_root = tmp_path / "lib" / "skills"
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    not_a_project = tmp_path / "not-a-project"
+    not_a_project.mkdir()
+
+    runner = CliRunner()
+    result = runner.invoke(main, [
+        "--project", str(not_a_project), "skill", "status", "-p",
+    ])
+    assert result.exit_code == 0, result.output
+    assert "no project skills here" in result.output
+
+
 def test_skill_status_monorepo_dirty(tmp_path: Path, monkeypatch):
     """Uncommitted edit in the parent clone → status reports dirty."""
     parent = _init_parent(tmp_path)

@@ -15,11 +15,14 @@ from ._common import scope_and_roots
 
 
 @click.command("status", epilog="""\
+Default scope: project if <cwd>/skills-lock.json exists, otherwise global.
+
 Examples:
 
 \b
-  agent-toolkit-cli skill status              # all skills
+  agent-toolkit-cli skill status              # all skills (auto-detect scope)
   agent-toolkit-cli skill status journal      # one skill
+  agent-toolkit-cli skill status -g           # force global library
 """)
 @click.argument("slugs", nargs=-1)
 @click.option("-g", "--global", "global_", is_flag=True)
@@ -36,8 +39,15 @@ def status_cmd(
         global_,
         project_flag,
         ctx.obj.get("project_root") if ctx.obj else None,
+        read_only=True,
     )
     lock = read_lock(lock_file_path(scope=scope, home=home, project=project_root))
+    if not lock.skills and project_flag and scope == "project":
+        click.echo(
+            '(no project skills here. Run "skill status -g" for the global '
+            'library, or "-p" from inside a project)'
+        )
+        return
     targets = slugs or tuple(sorted(lock.skills))
     for slug in targets:
         if slug not in lock.skills:
