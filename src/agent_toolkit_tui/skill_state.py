@@ -17,7 +17,7 @@ from agent_toolkit_cli.skill_install import _should_skip_symlink
 from agent_toolkit_cli.skill_lock import read_lock
 from agent_toolkit_cli.skill_paths import (
     agent_projection_dir, canonical_skill_dir, library_lock_path,
-    parent_clone_path,
+    library_skill_path, parent_clone_path,
 )
 
 # "library" means the skill exists in the library but is not installed in this
@@ -192,9 +192,15 @@ def build_skill_rows(
                 cells[(agent, "global")] = _cell_for(
                     slug, agent, scope="global", home=home, project=None,
                 )
+        description = _read_skill_description(canonical)
+        if not description and scope == "project":
+            # Project canonical may be absent (state == "library") or missing
+            # SKILL.md; fall back to the library copy, which is the source of
+            # truth for the description anyway.
+            description = _read_skill_description(library_skill_path(slug))
         rows.append(SkillRow(
             slug=slug, source=entry.source, ref=entry.ref or "main",
             state=state, cells=cells,
-            description=_read_skill_description(canonical),
+            description=description,
         ))
     return rows
