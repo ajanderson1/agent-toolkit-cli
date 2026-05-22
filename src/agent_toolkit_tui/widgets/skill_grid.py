@@ -420,16 +420,17 @@ class SkillGrid(Vertical):
     def _rebuild(self, table: DataTable) -> None:
         saved = table.cursor_coordinate
         table.clear(columns=True)
-        table.add_column("SKILL", width=20)
+        # Slug column has cell-info (the slug-cell panel) → glyph it.
+        table.add_column(f"SKILL {_INFO_GLYPH}", width=20)
         for agent in INTERACTIVE_AGENTS:
-            # "Universal" gets a capitalised base; per-agent columns use the
-            # catalog display_name. The ⓘ glyph is suffixed for any column
-            # whose key is in COLUMN_INFO.
+            # Every interactive agent column exposes either a column-info
+            # modal (Universal) or per-cell info (Claude Code, Pi via
+            # CellInfoScreen) — glyph them all.
             base = "Universal" if agent == "universal" else AGENTS[agent].display_name
-            label = f"{base} {_INFO_GLYPH}" if agent in COLUMN_INFO else base
-            table.add_column(label, width=14)
-        state_label = f"State {_INFO_GLYPH}" if "state" in COLUMN_INFO else "State"
-        table.add_column(state_label, width=10)
+            table.add_column(f"{base} {_INFO_GLYPH}", width=14)
+        # State has a column-info modal → glyph it.
+        table.add_column(f"State {_INFO_GLYPH}", width=10)
+        # Source is passive — no info panel, no glyph.
         table.add_column("Source", width=30)
         for row in self._rows:
             cells: list[str] = [row.slug]

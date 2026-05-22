@@ -23,8 +23,8 @@ def _row(slug: str, *, scope: str = "global") -> SkillRow:
 
 
 @pytest.mark.asyncio
-async def test_universal_column_label_has_info_glyph():
-    """The universal column label is 'Universal ⓘ'; agent columns have no glyph."""
+async def test_columns_have_info_glyph_except_source():
+    """Every column whose cells expose an info panel gets ⓘ; Source is passive (#212)."""
     from textual.app import App
     from textual.widgets import DataTable
 
@@ -37,11 +37,14 @@ async def test_universal_column_label_has_info_glyph():
         await pilot.pause()
         table = a.query_one("#skill-table", DataTable)
         labels = [str(c.label) for c in table.columns.values()]
-        # Layout: SKILL | Universal ⓘ | Claude Code | Pi | State ⓘ | Source
+        # Layout: SKILL | Universal | Claude Code | Pi | State | Source
+        assert labels[0] == "SKILL ⓘ", f"slug label: {labels[0]!r}"
         assert labels[1] == "Universal ⓘ", f"universal label: {labels[1]!r}"
-        assert "ⓘ" not in labels[2], f"claude-code label has glyph: {labels[2]!r}"
-        assert "ⓘ" not in labels[3], f"pi label has glyph: {labels[3]!r}"
+        assert labels[2] == "Claude Code ⓘ", f"claude-code label: {labels[2]!r}"
+        assert labels[3] == "Pi ⓘ", f"pi label: {labels[3]!r}"
+        assert labels[-2] == "State ⓘ", f"state label: {labels[-2]!r}"
         assert labels[-1] == "Source", f"source label: {labels[-1]!r}"
+        assert "ⓘ" not in labels[-1], f"source must not have glyph: {labels[-1]!r}"
 
 
 @pytest.mark.asyncio
@@ -176,7 +179,7 @@ async def test_slug_header_is_uppercase():
         await pilot.pause()
         table = a.query_one("#skill-table", DataTable)
         labels = [str(c.label) for c in table.columns.values()]
-        assert labels[0] == "SKILL", f"slug header: {labels[0]!r}"
+        assert labels[0] == "SKILL ⓘ", f"slug header: {labels[0]!r}"
 
 
 @pytest.mark.asyncio
@@ -214,7 +217,7 @@ async def test_full_header_row():
         table = a.query_one("#skill-table", DataTable)
         labels = [str(c.label) for c in table.columns.values()]
         assert labels == [
-            "SKILL", "Universal ⓘ", "Claude Code", "Pi",
+            "SKILL ⓘ", "Universal ⓘ", "Claude Code ⓘ", "Pi ⓘ",
             "State ⓘ", "Source",
         ], f"unexpected header row: {labels!r}"
 
