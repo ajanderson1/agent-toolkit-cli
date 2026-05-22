@@ -167,12 +167,16 @@ class SkillGrid(Vertical):
 
         # Slug column → source/ref/state context.
         if coord.column == 0:
+            # 'library' = no meaningful state (slug in library, not yet
+            # installed here). Render as em-dash so the modal doesn't look
+            # like it's printing a debug literal.
+            state_display = "—" if row.state == "library" else row.state
             title = f"{row.slug} · slug"
             body = (
                 f"Skill [b]{row.slug}[/]\n"
                 f"Source: {row.source}\n"
                 f"Ref:    {row.ref}\n"
-                f"State:  {row.state}"
+                f"State:  {state_display}"
             )
             if row.description:
                 body += f"\n\nDescription:\n{row.description}"

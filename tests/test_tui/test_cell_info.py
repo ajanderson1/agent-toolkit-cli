@@ -192,3 +192,62 @@ async def test_info_on_slug_column_omits_description_when_empty():
         assert isinstance(a.screen, CellInfoScreen)
         body = str(a.screen.query_one("#cell-info-body").content)
         assert "Description" not in body
+
+
+@pytest.mark.asyncio
+async def test_info_on_slug_column_library_state_renders_em_dash():
+    """A row in the 'library' state shows `State:  —` (em dash), not the literal word (#212)."""
+    from textual.app import App
+    from textual.coordinate import Coordinate
+    from textual.widgets import DataTable
+
+    # Build a row with state='library' — _row() defaults to 'clean', so override.
+    row = _row("journal")
+    row.state = "library"
+
+    class _A(App):
+        def compose(self):
+            yield SkillGrid([row], id="g")
+
+    a = _A()
+    async with a.run_test() as pilot:
+        await pilot.pause()
+        g = a.query_one("#g", SkillGrid)
+        t = g.query_one("#skill-table", DataTable)
+        t.cursor_coordinate = Coordinate(row=0, column=0)
+        await pilot.pause()
+        await pilot.press("i")
+        await pilot.pause()
+        assert isinstance(a.screen, CellInfoScreen)
+        body = str(a.screen.query_one("#cell-info-body").content)
+        assert "State:  —" in body, f"expected em-dash for library state, got: {body!r}"
+        assert "State:  library" not in body, (
+            f"slug-cell modal should not print literal 'library', got: {body!r}"
+        )
+
+
+@pytest.mark.asyncio
+async def test_info_on_slug_column_non_library_state_still_renders_word():
+    """A non-library state still shows the literal state value (e.g. 'clean')."""
+    from textual.app import App
+    from textual.coordinate import Coordinate
+    from textual.widgets import DataTable
+
+    row = _row("journal")  # state defaults to 'clean'
+
+    class _A(App):
+        def compose(self):
+            yield SkillGrid([row], id="g")
+
+    a = _A()
+    async with a.run_test() as pilot:
+        await pilot.pause()
+        g = a.query_one("#g", SkillGrid)
+        t = g.query_one("#skill-table", DataTable)
+        t.cursor_coordinate = Coordinate(row=0, column=0)
+        await pilot.pause()
+        await pilot.press("i")
+        await pilot.pause()
+        assert isinstance(a.screen, CellInfoScreen)
+        body = str(a.screen.query_one("#cell-info-body").content)
+        assert "State:  clean" in body, f"non-library state should render literal: {body!r}"
