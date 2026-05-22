@@ -337,6 +337,12 @@ class TUIApp(App):
 
 
 def main() -> int:
+    import sys
+
+    argv = sys.argv[1:]
+    if argv and argv[0] in ("--version", "-V"):
+        print(f"agent-toolkit-tui, version {__version__}")
+        return 0
     TUIApp().run()
     return 0
 
