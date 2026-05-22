@@ -15,6 +15,7 @@ def _row(
     linked: tuple[str, ...] = (),
     drifted: tuple[str, ...] = (),
     skipped: tuple[str, ...] = (),
+    description: str = "",
 ) -> SkillRow:
     cells = {}
     for a in INTERACTIVE_AGENTS:
@@ -29,6 +30,7 @@ def _row(
         ref="main",
         state="clean",
         cells=cells,
+        description=description,
     )
 
 
@@ -139,3 +141,54 @@ async def test_info_on_slug_column_shows_source():
         assert isinstance(a.screen, CellInfoScreen)
         body = str(a.screen.query_one("#cell-info-body").content)
         assert "x/journal" in body  # the source string from _row
+
+
+@pytest.mark.asyncio
+async def test_info_on_slug_column_includes_description_when_present():
+    """A row with a SKILL.md description surfaces it under the slug-cell info body."""
+    from textual.app import App
+    from textual.coordinate import Coordinate
+    from textual.widgets import DataTable
+
+    class _A(App):
+        def compose(self):
+            yield SkillGrid([_row("journal", description="An atomic-note journal skill.")], id="g")
+
+    a = _A()
+    async with a.run_test() as pilot:
+        await pilot.pause()
+        g = a.query_one("#g", SkillGrid)
+        t = g.query_one("#skill-table", DataTable)
+        t.cursor_coordinate = Coordinate(row=0, column=0)
+        await pilot.pause()
+        await pilot.press("i")
+        await pilot.pause()
+        assert isinstance(a.screen, CellInfoScreen)
+        body = str(a.screen.query_one("#cell-info-body").content)
+        assert "Description" in body
+        assert "An atomic-note journal skill." in body
+
+
+@pytest.mark.asyncio
+async def test_info_on_slug_column_omits_description_when_empty():
+    """No `Description:` label appears when the row has no description string."""
+    from textual.app import App
+    from textual.coordinate import Coordinate
+    from textual.widgets import DataTable
+
+    class _A(App):
+        def compose(self):
+            yield SkillGrid([_row("journal", description="")], id="g")
+
+    a = _A()
+    async with a.run_test() as pilot:
+        await pilot.pause()
+        g = a.query_one("#g", SkillGrid)
+        t = g.query_one("#skill-table", DataTable)
+        t.cursor_coordinate = Coordinate(row=0, column=0)
+        await pilot.pause()
+        await pilot.press("i")
+        await pilot.pause()
+        assert isinstance(a.screen, CellInfoScreen)
+        body = str(a.screen.query_one("#cell-info-body").content)
+        assert "Description" not in body

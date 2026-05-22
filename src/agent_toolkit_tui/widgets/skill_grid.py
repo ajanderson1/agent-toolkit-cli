@@ -1,6 +1,6 @@
 """Interactive DataTable for the TUI's skill tab.
 
-Columns: SKILL | Description | Universal ⓘ | Claude Code | Pi | State ⓘ | Source.
+Columns: SKILL | Universal ⓘ | Claude Code | Pi | State ⓘ | Source.
 
 `space` toggles a cell (queues link/unlink in `_pending`).
 `a` toggles a column.
@@ -8,8 +8,9 @@ Columns: SKILL | Description | Universal ⓘ | Claude Code | Pi | State ⓘ | So
 `^s` Apply is handled by the App, which reads pending_entries().
 
 The long tail of agents is managed via the CLI; the TUI grid only shows
-the interactive shortlist (universal + claude-code + pi). The `Description`
-and `Source` columns are passive (no toggle / no info popup).
+the interactive shortlist (universal + claude-code + pi). The `Source`
+column is passive (no toggle / no info popup); the SKILL slug-cell info
+modal surfaces the skill description when present.
 """
 from __future__ import annotations
 
@@ -173,6 +174,8 @@ class SkillGrid(Vertical):
                 f"Ref:    {row.ref}\n"
                 f"State:  {row.state}"
             )
+            if row.description:
+                body += f"\n\nDescription:\n{row.description}"
         else:
             # Agent column without registered info (e.g. Claude Code, Pi) — cell-state body.
             agent = self._agent_for_column(coord.column)
@@ -370,17 +373,16 @@ class SkillGrid(Vertical):
         self._rebuild(table)
 
     def _column_index(self, agent_name: str) -> int:
-        # Layout: [0]=slug, [1]=description, [2..N+1]=INTERACTIVE_AGENTS,
-        #         [N+2]=state, [N+3]=source.
+        # Layout: [0]=slug, [1..N]=INTERACTIVE_AGENTS, [N+1]=state, [N+2]=source.
         try:
-            return 2 + list(INTERACTIVE_AGENTS).index(agent_name)
+            return 1 + list(INTERACTIVE_AGENTS).index(agent_name)
         except ValueError:
             return -1
 
     def _agent_for_column(self, col: int) -> str | None:
-        if col < 2:
+        if col < 1:
             return None
-        idx = col - 2
+        idx = col - 1
         if 0 <= idx < len(INTERACTIVE_AGENTS):
             return INTERACTIVE_AGENTS[idx]
         return None
@@ -388,15 +390,14 @@ class SkillGrid(Vertical):
     def _column_key_for_index(self, col: int) -> str | None:
         """Resolve a column index to a COLUMN_INFO key.
 
-        Layout: [0]=slug, [1]=description, [2..N+1]=INTERACTIVE_AGENTS,
-                [N+2]=state, [N+3]=source.
-        Returns None for unknown indices (cols 0/1/N+3 — "slug", "description",
-        and "source" are not in the info registry today).
+        Layout: [0]=slug, [1..N]=INTERACTIVE_AGENTS, [N+1]=state, [N+2]=source.
+        Returns None for unknown indices (cols 0 and N+2 — "slug" and
+        "source" are not in the info registry today).
         """
         n = len(INTERACTIVE_AGENTS)
-        if 2 <= col <= n + 1:
-            return INTERACTIVE_AGENTS[col - 2]
-        if col == n + 2:
+        if 1 <= col <= n:
+            return INTERACTIVE_AGENTS[col - 1]
+        if col == n + 1:
             return "state"
         return None
 
@@ -404,7 +405,6 @@ class SkillGrid(Vertical):
         saved = table.cursor_coordinate
         table.clear(columns=True)
         table.add_column("SKILL", width=20)
-        table.add_column("Description", width=40)
         for agent in INTERACTIVE_AGENTS:
             # "Universal" gets a capitalised base; per-agent columns use the
             # catalog display_name. The ⓘ glyph is suffixed for any column
@@ -416,7 +416,7 @@ class SkillGrid(Vertical):
         table.add_column(state_label, width=10)
         table.add_column("Source", width=30)
         for row in self._rows:
-            cells: list[str] = [row.slug, row.description]
+            cells: list[str] = [row.slug]
             for agent in INTERACTIVE_AGENTS:
                 cells.append(self._cell_glyph(row=row, agent=agent))
             cells.append(_STATE_MARKUP.get(row.state, row.state))
@@ -424,8 +424,8 @@ class SkillGrid(Vertical):
             table.add_row(*cells, key=f"skill:{row.slug}")
         if self._rows:
             max_row = len(self._rows) - 1
-            # Layout: slug + description + N agent cols + state + source.
-            max_col = 3 + len(INTERACTIVE_AGENTS)
+            # Layout: slug + N agent cols + state + source.
+            max_col = 2 + len(INTERACTIVE_AGENTS)
             table.cursor_coordinate = Coordinate(
                 row=min(saved.row, max_row),
                 column=min(saved.column, max_col),
