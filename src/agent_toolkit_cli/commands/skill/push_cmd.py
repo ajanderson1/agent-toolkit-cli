@@ -2,11 +2,15 @@
 from __future__ import annotations
 
 import datetime as _dt
+import re
+import shutil
+import subprocess
+from pathlib import Path
 
 import click
 
 from agent_toolkit_cli import skill_git
-from agent_toolkit_cli.skill_lock import read_lock, write_lock
+from agent_toolkit_cli.skill_lock import LockFile, read_lock, write_lock
 from agent_toolkit_cli.skill_paths import canonical_skill_dir, lock_file_path
 
 from ._common import scope_and_roots
@@ -16,20 +20,26 @@ from ._common import scope_and_roots
 Examples:
 
 \b
-  agent-toolkit-cli skill push                # push all dirty skills
-  agent-toolkit-cli skill push journal        # push one skill
+  agent-toolkit-cli skill push                # push all dirty skills as PRs
+  agent-toolkit-cli skill push journal        # push one skill as a PR
+  agent-toolkit-cli skill push --direct mkdocs  # legacy: commit straight to tracked ref
 """)
 @click.argument("slugs", nargs=-1)
 @click.option("-g", "--global", "global_", is_flag=True)
 @click.option("-p", "--project", "project_flag", is_flag=True)
+@click.option(
+    "--direct", is_flag=True,
+    help="Push directly to the tracked ref. Default opens a PR.",
+)
 @click.pass_context
 def push_cmd(
     ctx: click.Context,
     slugs: tuple[str, ...],
     global_: bool,
     project_flag: bool,
+    direct: bool,
 ) -> None:
-    """Commit and push self-improvements upstream. No-op when clean."""
+    """Publish self-improvements upstream. Opens a PR by default."""
     scope, home, project_root = scope_and_roots(
         global_,
         project_flag,
@@ -64,11 +74,117 @@ def push_cmd(
         if skill_git.status(canonical, env=None) == skill_git.GitWorkingTreeStatus.CLEAN:
             click.echo(f"{slug}: clean — nothing to push")
             continue
-        msg = f"self-improvement: {_dt.datetime.now(_dt.UTC).isoformat()}"
-        skill_git.commit_all(canonical, message=msg, env=None)
-        skill_git.push(canonical, ref=entry.ref or "main", env=None)
-        entry.local_sha = skill_git.head_sha(canonical, env=None)
-        write_lock(lock_path, lock)
-        click.echo(f"{slug}: pushed")
+        if direct:
+            _push_direct(canonical, entry, slug, lock, lock_path)
+        else:
+            _push_via_pr(canonical, entry, slug)
     if rejected:
         ctx.exit(1)
+
+
+def _push_direct(
+    canonical: Path,
+    entry,
+    slug: str,
+    lock: LockFile,
+    lock_path: Path,
+) -> None:
+    msg = f"self-improvement: {_utc_iso()}"
+    skill_git.commit_all(canonical, message=msg, env=None)
+    skill_git.push(canonical, ref=entry.ref or "main", env=None)
+    entry.local_sha = skill_git.head_sha(canonical, env=None)
+    write_lock(lock_path, lock)
+    click.echo(f"{slug}: pushed")
+
+
+def _push_via_pr(canonical: Path, entry, slug: str) -> None:
+    base_ref = entry.ref or "main"
+    branch = f"skill/self-improvement-{_utc_basic_iso()}"
+    skill_git.checkout_new_branch(canonical, name=branch, env=None)
+    msg = f"self-improvement: {_utc_iso()}"
+    skill_git.commit_all(canonical, message=msg, env=None)
+    skill_git.push(canonical, ref=branch, env=None)
+    click.echo(f"{slug}: pushed branch {branch}")
+    pr_url = _open_pr(canonical, branch, base=base_ref, slug=slug)
+    if pr_url:
+        click.echo(f"  PR: {pr_url}")
+        return
+    web = _branch_web_url(canonical, branch)
+    if web:
+        click.echo(f"  → open a PR: {web}")
+    click.echo(f"  (rerun with --direct to push to {base_ref})")
+
+
+def _utc_basic_iso() -> str:
+    return _dt.datetime.now(_dt.UTC).strftime("%Y%m%dT%H%M%SZ")
+
+
+def _utc_iso() -> str:
+    return _dt.datetime.now(_dt.UTC).isoformat()
+
+
+def _gh_available() -> bool:
+    if shutil.which("gh") is None:
+        return False
+    try:
+        proc = subprocess.run(
+            ["gh", "auth", "status"], capture_output=True, text=True,
+        )
+    except OSError:
+        return False
+    return proc.returncode == 0
+
+
+def _open_pr(canonical: Path, branch: str, *, base: str, slug: str) -> str | None:
+    if not _gh_available():
+        return None
+    title = f"skill({slug}): self-improvement"
+    body = (
+        f"Automated self-improvement push from agent-toolkit-cli.\n\n"
+        f"Slug: `{slug}`\n"
+        f"Branch: `{branch}` → `{base}`\n"
+    )
+    try:
+        proc = subprocess.run(
+            [
+                "gh", "pr", "create",
+                "--base", base,
+                "--head", branch,
+                "--title", title,
+                "--body", body,
+            ],
+            cwd=str(canonical),
+            capture_output=True,
+            text=True,
+        )
+    except OSError:
+        return None
+    if proc.returncode != 0:
+        return None
+    return _first_url(proc.stdout)
+
+
+_URL_RE = re.compile(r"https?://\S+")
+
+
+def _first_url(text: str) -> str | None:
+    m = _URL_RE.search(text)
+    return m.group(0) if m else None
+
+
+_GITHUB_SSH_RE = re.compile(r"^git@github\.com:(?P<path>[^/]+/[^/]+?)(?:\.git)?$")
+_GITHUB_HTTPS_RE = re.compile(
+    r"^https?://github\.com/(?P<path>[^/]+/[^/]+?)(?:\.git)?/?$"
+)
+
+
+def _branch_web_url(canonical: Path, branch: str) -> str | None:
+    try:
+        url = skill_git.remote_url(canonical, env=None)
+    except skill_git.GitError:
+        return None
+    for pattern in (_GITHUB_SSH_RE, _GITHUB_HTTPS_RE):
+        m = pattern.match(url)
+        if m:
+            return f"https://github.com/{m.group('path')}/tree/{branch}"
+    return None

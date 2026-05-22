@@ -168,6 +168,31 @@ def push(repo: Path, *, ref: str, env: dict[str, str] | None) -> GitResult:
     return GitResult(stdout=proc.stdout, stderr=proc.stderr)
 
 
+def checkout_new_branch(
+    repo: Path, *, name: str, env: dict[str, str] | None,
+) -> GitResult:
+    """`git checkout -b <name>` from the current HEAD."""
+    proc = _run(
+        ["git", "-C", str(repo), "checkout", "-b", name], env=env,
+    )
+    return GitResult(stdout=proc.stdout, stderr=proc.stderr)
+
+
+def current_branch(repo: Path, *, env: dict[str, str] | None) -> str:
+    proc = _run(
+        ["git", "-C", str(repo), "rev-parse", "--abbrev-ref", "HEAD"],
+        env=env,
+    )
+    return proc.stdout.strip()
+
+
+def remote_url(repo: Path, *, env: dict[str, str] | None) -> str:
+    proc = _run(
+        ["git", "-C", str(repo), "remote", "get-url", "origin"], env=env,
+    )
+    return proc.stdout.strip()
+
+
 def commit_all(
     repo: Path, *, message: str, env: dict[str, str] | None,
 ) -> GitResult:

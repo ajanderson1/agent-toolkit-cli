@@ -25,7 +25,7 @@ agent-toolkit-cli skill add <source> [--ref <ref>] [--slug <slug>] [--skill <nam
 agent-toolkit-cli skill list [-g|-p]
 agent-toolkit-cli skill status [<slug>...] [-g|-p]
 agent-toolkit-cli skill update [<slug>...] [-g|-p]      # merge-aware
-agent-toolkit-cli skill push   [<slug>...] [-g|-p]      # self-improvements upstream
+agent-toolkit-cli skill push   [<slug>...] [-g|-p] [--direct]   # PR-branch by default
 agent-toolkit-cli skill remove <slug>... [-g|-p] [--force]
 ```
 
