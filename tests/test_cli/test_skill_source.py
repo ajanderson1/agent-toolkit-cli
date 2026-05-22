@@ -104,11 +104,27 @@ def test_github_shorthand_with_ref_tag():
     assert s.subpath is None
 
 
-def test_github_shorthand_with_ref_and_subpath():
-    s = parse_source("o/r@main/skills/foo")
-    assert s.owner_repo == "o/r"
-    assert s.ref == "main"
-    assert s.subpath == "skills/foo"
+def test_github_shorthand_ref_with_subpath_rejected():
+    """`o/r@<ref>/<subpath>` is ambiguous with slash-refs — reject and direct users
+    to the URL form or the `--ref` flag. See #198."""
+    with pytest.raises(SourceParseError, match="Ambiguous shorthand"):
+        parse_source("o/r@main/skills/foo")
+
+
+def test_github_shorthand_slash_ref_rejected():
+    """#198 reproduction: `o/r@feature/branch` previously parsed silently as
+    ref='feature', subpath='branch'. Now rejected."""
+    with pytest.raises(SourceParseError, match="Ambiguous shorthand"):
+        parse_source("o/r@feature/branch")
+
+
+def test_github_shorthand_slash_ref_error_names_alternatives():
+    """The error message must point users at both unambiguous alternatives."""
+    with pytest.raises(SourceParseError) as exc:
+        parse_source("o/r@feature/branch")
+    msg = str(exc.value)
+    assert "/tree/" in msg, "error should name the URL escape hatch"
+    assert "--ref" in msg, "error should name the --ref flag"
 
 
 def test_github_shorthand_empty_ref_rejected():

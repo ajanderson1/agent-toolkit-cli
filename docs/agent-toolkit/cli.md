@@ -57,8 +57,8 @@ Usage: agent-toolkit-cli skill add <source> [--ref <ref>] [--slug <slug>] [--ski
 
 | Flag | Description |
 |---|---|
-| `<source>` | `owner/repo`, `owner/repo@<ref>`, `owner/repo@<ref>/<subpath>`, full URL, SSH URL, local path, `owner/repo/<subpath>`, or `https://www.skills.sh/…` URL |
-| `--ref <ref>` | Git ref to pin (branch, tag, or SHA). Shorthand `owner/repo@<ref>` is equivalent; refs containing `/` need the `https://github.com/owner/repo/tree/<ref>/<subpath>` URL form. |
+| `<source>` | `owner/repo`, `owner/repo@<ref>`, `owner/repo/<subpath>`, full URL, SSH URL, local path, or `https://www.skills.sh/…` URL. To pin a ref **and** a subpath together, use the URL form `https://github.com/owner/repo/tree/<ref>/<subpath>` or pair the `<owner>/<repo>/<subpath>` shorthand with `--ref`. The combined shorthand `owner/repo@<ref>/<subpath>` is rejected because slash-containing refs make it ambiguous (see #198). |
+| `--ref <ref>` | Git ref to pin (branch, tag, or SHA). Shorthand `owner/repo@<ref>` is equivalent for refs without `/`; refs containing `/` (e.g. `feature/branch`) must use this flag. |
 | `--slug <slug>` | Override the slug used for the canonical directory and lock-file entry |
 | `--skill <name>` | Select one skill by `name:` frontmatter when `<source>` is a monorepo |
 
