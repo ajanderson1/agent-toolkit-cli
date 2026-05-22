@@ -70,12 +70,30 @@ def test_get_column_info_state_badge_order_matches_state_markup():
     assert badges == ["clean", "dirty", "missing", "copy", "library"]
 
 
-def test_universal_info_mentions_global_indicator():
-    """The Universal column-info popup explains the 🌐 marker (#188)."""
-    info = get_column_info("universal")
+def test_universal_info_includes_global_marker_when_context_says_globally_linked():
+    """Universal info shows the 🌐 paragraph when the focused row IS globally installed."""
+    info = get_column_info("universal", context={"global_linked": True})
     assert info is not None
     joined = "\n".join(info.lines)
     assert "🌐" in joined, f"info missing global marker glyph: {info.lines}"
     assert "global" in joined.lower(), (
         f"info should explain the marker mentions global scope: {info.lines}"
     )
+
+
+def test_universal_info_omits_global_marker_when_context_says_not_globally_linked():
+    """Universal info OMITS the 🌐 paragraph when the focused row is NOT globally installed (#212)."""
+    info = get_column_info("universal", context={"global_linked": False})
+    assert info is not None
+    joined = "\n".join(info.lines)
+    assert "🌐" not in joined, (
+        f"info should omit 🌐 marker when not globally linked, got: {info.lines}"
+    )
+
+
+def test_universal_info_includes_global_marker_when_no_context():
+    """Without context (e.g. legacy callers) the 🌐 paragraph still appears (back-compat)."""
+    info = get_column_info("universal")
+    assert info is not None
+    joined = "\n".join(info.lines)
+    assert "🌐" in joined, f"info missing global marker glyph: {info.lines}"

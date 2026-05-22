@@ -23,7 +23,7 @@ class ColumnInfo:
     lines: list[str]
 
 
-def _universal_info() -> ColumnInfo:
+def _universal_info(context: dict | None = None) -> ColumnInfo:
     harness_names = get_universal_agents()
     description = [
         "Toggles link/unlink for every harness whose",
@@ -35,19 +35,22 @@ def _universal_info() -> ColumnInfo:
         f"  • {name} — {AGENTS[name].display_name}"
         for name in harness_names
     ]
+    # The 🌐 marker block is contextual: it only makes sense when the focused
+    # row IS installed globally. Omit it when the caller says otherwise.
+    show_marker = context is None or bool(context.get("global_linked", True))
     indicator_note = [
         "",
         "🌐 marker (project scope only):",
         "  This skill is also installed globally,",
         "  so you may not need it at project scope too.",
-    ]
+    ] if show_marker else []
     return ColumnInfo(
         title="Universal bundle",
         lines=description + bullets + indicator_note,
     )
 
 
-def _state_info() -> ColumnInfo:
+def _state_info(context: dict | None = None) -> ColumnInfo:
     # Source of truth for badge meaning: _STATE_MARKUP in
     # agent_toolkit_tui/widgets/skill_grid.py (declaration order preserved).
     return ColumnInfo(
@@ -65,15 +68,19 @@ def _state_info() -> ColumnInfo:
     )
 
 
-COLUMN_INFO: dict[str, Callable[[], ColumnInfo]] = {
+COLUMN_INFO: dict[str, Callable[..., ColumnInfo]] = {
     "universal": _universal_info,
     "state": _state_info,
 }
 
 
-def get_column_info(name: str) -> ColumnInfo | None:
-    """Return a fresh ColumnInfo for `name`, or None if unregistered."""
+def get_column_info(name: str, *, context: dict | None = None) -> ColumnInfo | None:
+    """Return a fresh ColumnInfo for `name`, or None if unregistered.
+
+    `context` is forwarded to the factory. Today only `_universal_info` reads
+    it (`global_linked` flag).
+    """
     factory = COLUMN_INFO.get(name)
     if factory is None:
         return None
-    return factory()
+    return factory(context)
