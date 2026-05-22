@@ -22,6 +22,19 @@ def scrub_git_env(base: dict[str, str] | None = None) -> dict[str, str]:
     return {k: v for k, v in env.items() if not k.startswith("GIT_")}
 
 
+@pytest.fixture(autouse=True)
+def _strip_git_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Strip inherited GIT_* env vars from os.environ for every test.
+
+    Closes #209 — prevents the lefthook-leak trap: a test that shells out
+    to git without an explicit env= argument no longer inherits GIT_DIR /
+    GIT_INDEX_FILE from a parent hook and cannot accidentally write
+    commits into the outer repo. monkeypatch restores env at teardown.
+    """
+    for var in [k for k in os.environ if k.startswith("GIT_")]:
+        monkeypatch.delenv(var, raising=False)
+
+
 @pytest.fixture
 def git_sandbox(tmp_path: Path) -> GitSandbox:
     env = scrub_git_env()
