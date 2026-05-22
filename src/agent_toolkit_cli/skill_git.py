@@ -83,7 +83,7 @@ def fetch(repo: Path, *, env: dict[str, str] | None) -> GitResult:
     return GitResult(stdout=proc.stdout, stderr=proc.stderr)
 
 
-_DEFAULT_MERGE_IDENTITY = (
+_DEFAULT_IDENTITY = (
     "-c", "user.name=agent-toolkit-cli",
     "-c", "user.email=noreply@agent-toolkit-cli",
 )
@@ -94,13 +94,14 @@ def merge(repo: Path, *, ref: str, env: dict[str, str] | None) -> GitResult:
 
     Pins a synthetic `user.name`/`user.email` via `-c` so the merge commit
     can be created without relying on the host's global git config — agents,
-    CI runners, and fresh dev VMs often have no identity configured. Callers
-    that need to override (tests, future per-user flows) can still inject
+    CI runners, and fresh dev VMs often have no identity configured. The
+    same constant is reused by `commit_all()`. Callers that need to
+    override (tests, future per-user flows) can still inject
     `GIT_AUTHOR_*` / `GIT_COMMITTER_*` env vars, which take precedence over
     `-c` config values.
     """
     proc = _run(
-        ["git", "-C", str(repo), *_DEFAULT_MERGE_IDENTITY,
+        ["git", "-C", str(repo), *_DEFAULT_IDENTITY,
          "merge", "--no-edit", f"origin/{ref}"],
         env=env,
     )
@@ -173,10 +174,17 @@ def commit_all(
     """Stage every working-tree change and commit. Goes through _run so env
     is scrubbed identically to every other git call — never spawn `git` from
     the command layer directly (see memory feedback_git_env_leak.md).
+
+    Pins the same synthetic identity as `merge()` via `*_DEFAULT_IDENTITY`
+    so the commit succeeds on hosts without a global git config (CI
+    runners, fresh dev VMs, agent sandboxes). `GIT_AUTHOR_*` /
+    `GIT_COMMITTER_*` env vars still take precedence per git's config rules.
     """
     _run(["git", "-C", str(repo), "add", "-A"], env=env)
     proc = _run(
-        ["git", "-C", str(repo), "commit", "-m", message], env=env,
+        ["git", "-C", str(repo), *_DEFAULT_IDENTITY,
+         "commit", "-m", message],
+        env=env,
     )
     return GitResult(stdout=proc.stdout, stderr=proc.stderr)
 
