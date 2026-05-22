@@ -1,10 +1,10 @@
 """Interactive DataTable for the TUI's skill tab.
 
-Columns: SKILL | Universal ⓘ | Claude Code | Pi | State ⓘ | Source.
+Columns: SKILL ⓘ | Universal ⓘ | Claude Code ⓘ | Pi ⓘ | State ⓘ | Source.
 
 `space` toggles a cell (queues link/unlink in `_pending`).
 `a` toggles a column.
-`i` opens ColumnInfoModal for the column under the cursor (Universal, State).
+`i` opens ColumnInfoModal for columns with registered info (Universal, State); for all other glyphed columns (SKILL, Claude Code, Pi) it opens CellInfoScreen with per-cell or slug context. The Source column has no info panel.
 `^s` Apply is handled by the App, which reads pending_entries().
 
 The long tail of agents is managed via the CLI; the TUI grid only shows
@@ -23,7 +23,7 @@ from textual.coordinate import Coordinate
 from textual.widgets import DataTable
 
 from agent_toolkit_cli.skill_agents import AGENTS
-from agent_toolkit_tui.column_info import COLUMN_INFO, get_column_info
+from agent_toolkit_tui.column_info import get_column_info
 from agent_toolkit_tui.skill_state import INTERACTIVE_AGENTS, SkillRow
 from agent_toolkit_tui.widgets.column_info_modal import ColumnInfoModal
 
