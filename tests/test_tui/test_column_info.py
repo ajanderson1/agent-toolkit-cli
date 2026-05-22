@@ -68,3 +68,14 @@ def test_get_column_info_state_badge_order_matches_state_markup():
     bullets = [ln for ln in info.lines if ln.lstrip().startswith("•")]
     badges = [ln.split("—")[0].strip().lstrip("• ").strip() for ln in bullets]
     assert badges == ["clean", "dirty", "missing", "copy", "library"]
+
+
+def test_universal_info_mentions_global_indicator():
+    """The Universal column-info popup explains the 🌐 marker (#188)."""
+    info = get_column_info("universal")
+    assert info is not None
+    joined = "\n".join(info.lines)
+    assert "🌐" in joined, f"info missing global marker glyph: {info.lines}"
+    assert "global" in joined.lower(), (
+        f"info should explain the marker mentions global scope: {info.lines}"
+    )
