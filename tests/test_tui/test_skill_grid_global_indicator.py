@@ -220,3 +220,36 @@ async def test_per_agent_independence():
         assert "🌐" in u_plain, f"universal cell missing marker: {u_plain!r}"
         assert "🌐" not in cc_plain, f"claude-code cell has marker: {cc_plain!r}"
         assert "🌐" not in pi_plain, f"pi cell has marker: {pi_plain!r}"
+
+
+@pytest.mark.asyncio
+async def test_project_scope_no_global_cells_in_row_does_not_crash():
+    """When a row carries no (agent, 'global') cells at all (e.g. callers
+    that passed home=None to build_skill_rows), the marker simply does not
+    render — no AttributeError, no crash (#188)."""
+    row = _row_with(
+        "alpha",
+        project_cells={agent: _unlinked() for agent in INTERACTIVE_AGENTS},
+        global_cells=None,
+    )
+
+    class _A(App):
+        def compose(self):
+            yield SkillGrid([row], id="g")
+
+    a = _A()
+    async with a.run_test() as pilot:
+        g = a.query_one("#g", SkillGrid)
+        g.set_scope("project")
+        await pilot.pause()
+        table = a.query_one("#skill-table", DataTable)
+        g._rebuild(table)  # type: ignore[attr-defined]
+        await pilot.pause()
+        row_key = list(table.rows.keys())[0]
+        cols = list(table.columns.keys())
+        for agent in INTERACTIVE_AGENTS:
+            col_key = cols[2 + INTERACTIVE_AGENTS.index(agent)]
+            plain = Text.from_markup(str(table.get_cell(row_key, col_key))).plain
+            assert "🌐" not in plain, (
+                f"row without global cells should not show marker on {agent}: {plain!r}"
+            )
