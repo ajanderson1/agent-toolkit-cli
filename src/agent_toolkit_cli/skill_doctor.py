@@ -151,6 +151,25 @@ def _is_inside(child: Path, parent: Path) -> bool:
         return False
 
 
+def _universal_bundle_root() -> Path:
+    """Root of the v2.1 universal-bundle layout: ~/.agents/skills.
+
+    Mirrors `skill_install._universal_bundle_link` (which is `<root>/<slug>`).
+    """
+    return Path.home() / ".agents" / "skills"
+
+
+def _is_universal_bundle_target(target: Path) -> bool:
+    """True when `target` lives inside the universal-bundle root.
+
+    On a v2.1 → v2.2 migration the per-harness symlinks point at
+    `~/.agents/skills/<slug>` (a real dir or a transitional symlink). The
+    classification should be `drifted_symlink` (re-link to library) rather
+    than `foreign_symlink` (report-only).
+    """
+    return _is_inside(target, _universal_bundle_root())
+
+
 def _expected_target_root(
     *, scope: Scope, project: Path | None,
 ) -> Path:
@@ -295,6 +314,19 @@ def _check_slug(
             continue
         expected_root = _expected_target_root(scope=scope, project=project)
         if not _is_inside(target, expected_root):
+            if _is_universal_bundle_target(target):
+                findings.append(Finding(
+                    kind="drifted_symlink", slug=slug, scope=scope,
+                    path=link,
+                    detail=(
+                        f"{agent_name} symlink at {link} points to {target} "
+                        f"(v2.1 bundle layout), expected {canonical}"
+                    ),
+                    fix_action=_make_relink_action(
+                        link=link, canonical=canonical,
+                    ),
+                ))
+                continue
             findings.append(Finding(
                 kind="foreign_symlink", slug=slug, scope=scope,
                 path=link,

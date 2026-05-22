@@ -439,6 +439,54 @@ def test_diagnose_dirty_tree(git_sandbox, tmp_path: Path, monkeypatch):
     assert dirty[0].fix_action is None
 
 
+def test_diagnose_v21_bundle_target_is_drift(
+    git_sandbox, tmp_path: Path, monkeypatch,
+):
+    """A claude-code symlink that points at ~/.agents/skills/<slug>
+    (the v2.1 bundle layout) must classify as drifted_symlink, not
+    foreign_symlink — the user can apply the fix to relink to the library.
+    """
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    monkeypatch.setenv("HOME", str(fake_home))
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: fake_home))
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(fake_home / ".claude"))
+    _patch_claude_global_skills_dir(monkeypatch, fake_home / ".claude" / "skills")
+
+    runner = CliRunner()
+    _seed_library(runner, git_sandbox.upstream)
+
+    # Plant the v2.1 layout: a real dir at ~/.agents/skills/demo and a
+    # claude-code symlink pointing at it.
+    bundle = fake_home / ".agents" / "skills" / "demo"
+    bundle.mkdir(parents=True)
+    (bundle / "SKILL.md").write_text("v2.1 leftover\n")
+    claude_skills = fake_home / ".claude" / "skills"
+    claude_skills.mkdir(parents=True)
+    link = claude_skills / "demo"
+    link.symlink_to(bundle)
+
+    from agent_toolkit_cli.skill_doctor import diagnose
+    findings = diagnose(
+        slugs=None, scope="global", home=fake_home, project=None,
+    )
+    drift = [f for f in findings if f.kind == "drifted_symlink" and f.path == link]
+    foreign = [f for f in findings if f.kind == "foreign_symlink" and f.path == link]
+    assert len(drift) == 1, [f.kind for f in findings]
+    assert len(foreign) == 0
+    # Fix action present and idempotent: relinks at library canonical.
+    assert drift[0].fix_action is not None
+    drift[0].fix_action.apply()
+    assert link.is_symlink()
+    assert link.resolve() == (library_root / "demo").resolve()
+    drift[0].fix_action.apply()  # idempotent
+    assert link.resolve() == (library_root / "demo").resolve()
+
+
 def test_diagnose_lock_source_mismatch(git_sandbox, tmp_path: Path, monkeypatch):
     library_root = tmp_path / "lib" / "skills"
     for k, v in git_sandbox.env.items():
