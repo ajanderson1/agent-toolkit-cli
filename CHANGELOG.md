@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.7.1](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.7.0...v2.7.1) (2026-05-22)
+
+
+### Bug Fixes
+
+* **doctor:** cover trailing-slash + `ssh://` URL variants in `_normalise_git_url` ([#215](https://github.com/ajanderson1/agent-toolkit-cli/issues/215)) ([6e4c86b](https://github.com/ajanderson1/agent-toolkit-cli/commit/6e4c86b8e7346cbeb700059e7a2b0b1a4a58e1d3))
+* **skill list:** default to global scope when no project lock at cwd ([#216](https://github.com/ajanderson1/agent-toolkit-cli/issues/216)) ([e22265e](https://github.com/ajanderson1/agent-toolkit-cli/commit/e22265e76e05bb3b7737a5faa345ddd2fe266a19))
+* **skill remove:** handle monorepo symlinks ([#207](https://github.com/ajanderson1/agent-toolkit-cli/issues/207)) ([#217](https://github.com/ajanderson1/agent-toolkit-cli/issues/217)) ([9ac15e0](https://github.com/ajanderson1/agent-toolkit-cli/commit/9ac15e0d906ff332d2595fed177b84740c679cd0))
+* **tui:** agent-toolkit-tui --version prints version, exits 0 ([#211](https://github.com/ajanderson1/agent-toolkit-cli/issues/211)) ([#213](https://github.com/ajanderson1/agent-toolkit-cli/issues/213)) ([f82a99d](https://github.com/ajanderson1/agent-toolkit-cli/commit/f82a99daaf4e4a8f5e6b512fc6f0698a94d18cbe))
+* **tui:** four info-panel cosmetic issues ([#212](https://github.com/ajanderson1/agent-toolkit-cli/issues/212)) ([#219](https://github.com/ajanderson1/agent-toolkit-cli/issues/219)) ([7d79232](https://github.com/ajanderson1/agent-toolkit-cli/commit/7d79232ed80f50f20d899a5340241220d4eeb411))
+
 ## [2.7.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.6.0...v2.7.0) (2026-05-22)
 
 
