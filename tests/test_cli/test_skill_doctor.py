@@ -551,3 +551,24 @@ def test_normalise_git_url_fallback_for_unknown_form():
     assert _normalise_git_url("/tmp/some-remote.git") == "/tmp/some-remote"
     # Already-normalised string round-trips.
     assert _normalise_git_url("github.com/foo/bar") == "github.com/foo/bar"
+
+
+def test_normalise_git_url_trailing_slash_variants():
+    from agent_toolkit_cli.skill_doctor import _normalise_git_url
+    canonical = _normalise_git_url("https://github.com/foo/bar.git")
+    # HTTPS with trailing slash.
+    assert _normalise_git_url("https://github.com/foo/bar/") == canonical
+    # SSH `git@host:` form with trailing slash on `.git`.
+    assert _normalise_git_url("git@github.com:foo/bar.git/") == canonical
+    # Fallback path (no regex match) with trailing slash.
+    assert _normalise_git_url("/tmp/some-remote.git/") == "/tmp/some-remote"
+
+
+def test_normalise_git_url_ssh_scheme_form():
+    from agent_toolkit_cli.skill_doctor import _normalise_git_url
+    canonical = _normalise_git_url("https://github.com/foo/bar.git")
+    # `ssh://git@host/path` form (less common but valid).
+    assert _normalise_git_url("ssh://git@github.com/foo/bar") == canonical
+    assert _normalise_git_url("ssh://git@github.com/foo/bar.git") == canonical
+    # Without explicit user.
+    assert _normalise_git_url("ssh://github.com/foo/bar") == canonical
