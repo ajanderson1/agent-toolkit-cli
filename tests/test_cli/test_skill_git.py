@@ -288,3 +288,81 @@ def test_reset_hard_isolation_against_outer_git_dir(
     assert outer_head_after == outer_head_before, (
         "GIT_DIR leak caused reset_hard to touch the outer repo"
     )
+
+
+def test_commit_all_succeeds_without_global_git_identity(
+    tmp_path: Path, monkeypatch,
+):
+    """Regression for #197: `commit_all()` must succeed on hosts with no
+    global git identity (CI runners, fresh dev VMs, agent sandboxes).
+
+    Reproduces the no-identity condition by pointing HOME at an empty
+    directory and stripping every identity-bearing GIT_* env var. The
+    production code path under test (`commit_all`) must inject a synthetic
+    identity via `-c user.name/email` — same fix pattern PR #189 applied
+    to `merge()`.
+
+    Every subprocess in this test is given a scrubbed env (no GIT_*) — a
+    leaked GIT_DIR / GIT_INDEX_FILE from a parent process would otherwise
+    redirect seed commits into the outer repo (see memory
+    feedback_git_env_leak.md).
+    """
+    from agent_toolkit_cli.skill_git import commit_all
+    from tests.conftest import scrub_git_env
+
+    fake_home = tmp_path / "fake-home"
+    fake_home.mkdir()
+    monkeypatch.setenv("HOME", str(fake_home))
+    for var in (
+        "GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL",
+        "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL",
+        "GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM",
+    ):
+        monkeypatch.delenv(var, raising=False)
+
+    seed_env = scrub_git_env()
+
+    # Seed a minimal repo with one commit (using inline -c flags — the
+    # production code path is what we're testing, not git init/seed).
+    repo = tmp_path / "repo"
+    subprocess.run(
+        ["git", "init", "--initial-branch=main", str(repo)],
+        check=True, capture_output=True, env=seed_env,
+    )
+    (repo / "SEED.md").write_text("seed\n")
+    subprocess.run(
+        ["git", "-c", "user.email=t@t", "-c", "user.name=t",
+         "-C", str(repo), "add", "SEED.md"],
+        check=True, capture_output=True, env=seed_env,
+    )
+    subprocess.run(
+        ["git", "-c", "user.email=t@t", "-c", "user.name=t",
+         "-C", str(repo), "commit", "-q", "-m", "seed"],
+        check=True, capture_output=True, env=seed_env,
+    )
+
+    # Now exercise commit_all() with no host identity available. This is
+    # the exact failure condition from #197 — without the fix, git would
+    # die with "fatal: empty ident name (...) not allowed". commit_all()
+    # itself scrubs GIT_* via _run(), so env=None is the right call here.
+    (repo / "LOCAL.md").write_text("local\n")
+    commit_all(repo, message="should-land-without-host-identity", env=None)
+
+    # Subject of HEAD matches what we passed.
+    subj = subprocess.run(
+        ["git", "-C", str(repo), "log", "-1", "--format=%s"],
+        check=True, capture_output=True, text=True, env=seed_env,
+    ).stdout.strip()
+    assert subj == "should-land-without-host-identity"
+
+    # Lock in the synthetic-identity contract: HEAD's author must be the
+    # agent-toolkit-cli identity. Asserting the actual fields makes this
+    # test robust to /etc/gitconfig variations on other hosts — without
+    # this, a host with /etc/gitconfig setting an identity could silently
+    # green this test even if the production fix were reverted.
+    head_author = subprocess.run(
+        ["git", "-C", str(repo), "log", "-1", "--format=%an <%ae>"],
+        check=True, capture_output=True, text=True, env=seed_env,
+    ).stdout.strip()
+    assert head_author == "agent-toolkit-cli <noreply@agent-toolkit-cli>", \
+        f"commit_all must use synthetic identity, got: {head_author}"
