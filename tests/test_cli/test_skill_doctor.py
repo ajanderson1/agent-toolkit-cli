@@ -471,3 +471,35 @@ def test_diagnose_lock_source_mismatch(git_sandbox, tmp_path: Path, monkeypatch)
     mismatch = [f for f in findings if f.kind == "lock_source_mismatch"]
     assert len(mismatch) == 1
     assert mismatch[0].fix_action is None
+
+
+def test_normalise_git_url_ssh_https_equivalent():
+    from agent_toolkit_cli.skill_doctor import _normalise_git_url
+    ssh = "git@github.com:foo/bar.git"
+    https = "https://github.com/foo/bar.git"
+    https_no_suffix = "https://github.com/foo/bar"
+    ssh_no_suffix = "git@github.com:foo/bar"
+    assert _normalise_git_url(ssh) == _normalise_git_url(https)
+    assert _normalise_git_url(https) == _normalise_git_url(https_no_suffix)
+    assert _normalise_git_url(ssh) == _normalise_git_url(ssh_no_suffix)
+
+
+def test_normalise_git_url_different_repos_differ():
+    from agent_toolkit_cli.skill_doctor import _normalise_git_url
+    assert (
+        _normalise_git_url("https://github.com/foo/bar.git")
+        != _normalise_git_url("https://github.com/foo/baz.git")
+    )
+    # Different hosts still differ.
+    assert (
+        _normalise_git_url("git@github.com:foo/bar.git")
+        != _normalise_git_url("git@gitlab.com:foo/bar.git")
+    )
+
+
+def test_normalise_git_url_fallback_for_unknown_form():
+    from agent_toolkit_cli.skill_doctor import _normalise_git_url
+    # Local path - no regex matches, fallback strips trailing .git.
+    assert _normalise_git_url("/tmp/some-remote.git") == "/tmp/some-remote"
+    # Already-normalised string round-trips.
+    assert _normalise_git_url("github.com/foo/bar") == "github.com/foo/bar"
