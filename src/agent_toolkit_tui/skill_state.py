@@ -184,6 +184,14 @@ def build_skill_rows(
             cells[(agent, scope)] = _cell_for(
                 slug, agent, scope=scope, home=home, project=project,
             )
+        # In project scope, also probe global so the SkillGrid can render
+        # the globally-installed indicator (#188). Skipped when home is
+        # None (callers that don't care about the indicator).
+        if scope == "project" and home is not None:
+            for agent in INTERACTIVE_AGENTS:
+                cells[(agent, "global")] = _cell_for(
+                    slug, agent, scope="global", home=home, project=None,
+                )
         rows.append(SkillRow(
             slug=slug, source=entry.source, ref=entry.ref or "main",
             state=state, cells=cells,

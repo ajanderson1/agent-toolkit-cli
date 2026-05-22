@@ -43,6 +43,7 @@ _PENDING_UNLINK = "[yellow]-[/]"
 _DRIFT_GLYPH    = "[red]![/]"
 _SKIPPED_GLYPH  = "[dim]●[/]"  # canonical-only, no symlink needed
 _INFO_GLYPH     = "ⓘ"
+_GLOBAL_GLYPH   = "🌐"
 
 Op = Literal["link", "unlink"]
 
@@ -433,14 +434,26 @@ class SkillGrid(Vertical):
     def _cell_glyph(self, *, row: SkillRow, agent: str) -> str:
         cell = row.cells.get((agent, self._scope))
         if cell is None:
-            return " "
-        if cell.skipped:
-            return _SKIPPED_GLYPH
-        pending = self._pending.get((self._scope, agent, row.slug))
-        if pending == "link":
-            return _PENDING_LINK
-        if pending == "unlink":
-            return _PENDING_UNLINK
-        if cell.drift:
-            return _DRIFT_GLYPH
-        return _LINKED_GLYPH if cell.linked else _UNLINKED_GLYPH
+            base = " "
+        elif cell.skipped:
+            base = _SKIPPED_GLYPH
+        else:
+            pending = self._pending.get((self._scope, agent, row.slug))
+            if pending == "link":
+                base = _PENDING_LINK
+            elif pending == "unlink":
+                base = _PENDING_UNLINK
+            elif cell.drift:
+                base = _DRIFT_GLYPH
+            else:
+                base = _LINKED_GLYPH if cell.linked else _UNLINKED_GLYPH
+        if self._scope == "project":
+            global_cell = row.cells.get((agent, "global"))
+            if (
+                global_cell is not None
+                and global_cell.linked
+                and not global_cell.drift
+                and not global_cell.skipped
+            ):
+                return f"{base} {_GLOBAL_GLYPH}"
+        return base

@@ -4,7 +4,12 @@ from pathlib import Path
 from click.testing import CliRunner
 
 from agent_toolkit_cli.cli import main
-from agent_toolkit_tui.skill_state import SkillCell, SkillRow, build_skill_rows, _cell_for
+from agent_toolkit_tui.skill_state import (
+    INTERACTIVE_AGENTS,
+    SkillCell,
+    _cell_for,
+    build_skill_rows,
+)
 from tests.conftest import scrub_git_env
 from tests.test_cli.test_skill_update_monorepo import _init_parent
 
@@ -399,3 +404,105 @@ def test_build_rows_monorepo_copy_when_parent_missing(
     rows = build_skill_rows(scope="global", home=tmp_path, project=None)
     row = next(r for r in rows if r.slug == "mkdocs")
     assert row.state == "copy", row
+
+
+# ---------------------------------------------------------------------------
+# Global-cell population when in project scope (#188)
+# ---------------------------------------------------------------------------
+
+
+def _install_demo_globally(runner, project, library_root, *, universal: bool = True):
+    """Install demo at global scope. Caller already added it to the library."""
+    args = [
+        "skill", "install", "demo",
+        "--scope", "global",
+    ]
+    if universal:
+        args.extend(["--agents", "universal"])
+    return runner.invoke(main, args)
+
+
+def test_build_skill_rows_project_scope_populates_global_cells(
+    git_sandbox, tmp_path: Path, monkeypatch,
+):
+    """In project scope, when home is provided, each row carries both
+    (agent, 'project') and (agent, 'global') cells so the SkillGrid can
+    render the globally-installed indicator (#188)."""
+    project = tmp_path / "proj"
+    project.mkdir()
+    home = tmp_path / "home"
+    home.mkdir()
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    monkeypatch.setenv("HOME", str(home))
+
+    runner = CliRunner()
+    r = _add_demo_project(runner, git_sandbox.upstream, project, library_root)
+    assert r.exit_code == 0, r.output
+
+    rows = build_skill_rows(scope="project", home=home, project=project)
+    demo = next(r for r in rows if r.slug == "demo")
+    # Project cells still present (existing behaviour).
+    for agent in INTERACTIVE_AGENTS:
+        assert (agent, "project") in demo.cells, (
+            f"project cell missing for agent {agent!r}: {demo.cells.keys()}"
+        )
+    # Global cells now also present (new behaviour).
+    for agent in INTERACTIVE_AGENTS:
+        assert (agent, "global") in demo.cells, (
+            f"global cell missing for agent {agent!r}: {demo.cells.keys()}"
+        )
+
+
+def test_build_skill_rows_project_scope_without_home_skips_global_cells(
+    git_sandbox, tmp_path: Path, monkeypatch,
+):
+    """Backwards-compatible path: home=None in project scope omits global
+    cells. The indicator simply won't render — no exception."""
+    project = tmp_path / "proj"
+    project.mkdir()
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+
+    runner = CliRunner()
+    r = _add_demo_project(runner, git_sandbox.upstream, project, library_root)
+    assert r.exit_code == 0, r.output
+
+    rows = build_skill_rows(scope="project", home=None, project=project)
+    demo = next(r for r in rows if r.slug == "demo")
+    for agent in INTERACTIVE_AGENTS:
+        assert (agent, "project") in demo.cells
+        assert (agent, "global") not in demo.cells, (
+            f"unexpected global cell when home=None: {demo.cells.keys()}"
+        )
+
+
+def test_build_skill_rows_global_scope_unchanged(
+    git_sandbox, tmp_path: Path, monkeypatch,
+):
+    """Global-scope behaviour is unchanged: no project cells get populated."""
+    home = tmp_path / "home"
+    home.mkdir()
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    monkeypatch.setenv("HOME", str(home))
+
+    runner = CliRunner()
+    r = runner.invoke(main, [
+        "skill", "add", str(git_sandbox.upstream), "--slug", "demo",
+    ])
+    assert r.exit_code == 0, r.output
+
+    rows = build_skill_rows(scope="global", home=home, project=None)
+    demo = next(r for r in rows if r.slug == "demo")
+    for agent in INTERACTIVE_AGENTS:
+        assert (agent, "global") in demo.cells
+        assert (agent, "project") not in demo.cells, (
+            f"unexpected project cell at global scope: {demo.cells.keys()}"
+        )

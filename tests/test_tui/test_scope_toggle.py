@@ -6,10 +6,13 @@ clicks to the app's action_scope action.
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from textual.app import App, ComposeResult
 from textual.widgets import Label
 
+from agent_toolkit_tui.app import TUIApp
 from agent_toolkit_tui.widgets import ScopeToggle
 
 
@@ -66,3 +69,23 @@ async def test_scope_toggle_click_dispatches_action_scope():
         await pilot.click("#scope-toggle-global")
         await pilot.pause()
         assert app.scope_calls == ["global"]
+
+
+def test_scope_to_roots_project_mode_passes_home():
+    """In project scope the TUI must pass Path.home() so build_skill_rows
+    can populate (agent, 'global') cells for the indicator (#188)."""
+    app = TUIApp()
+    app._scope = "project"  # type: ignore[attr-defined]
+    scope, home, project = app._scope_to_roots()  # type: ignore[attr-defined]
+    assert scope == "project"
+    assert home == Path.home(), f"expected Path.home(), got {home!r}"
+    assert project == Path.cwd(), f"expected Path.cwd(), got {project!r}"
+
+
+def test_scope_to_roots_global_mode_unchanged():
+    app = TUIApp()
+    app._scope = "global"  # type: ignore[attr-defined]
+    scope, home, project = app._scope_to_roots()  # type: ignore[attr-defined]
+    assert scope == "global"
+    assert home == Path.home()
+    assert project is None

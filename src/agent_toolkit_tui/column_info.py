@@ -35,9 +35,15 @@ def _universal_info() -> ColumnInfo:
         f"  • {name} — {AGENTS[name].display_name}"
         for name in harness_names
     ]
+    indicator_note = [
+        "",
+        "🌐 marker (project scope only):",
+        "  This skill is also installed globally,",
+        "  so you may not need it at project scope too.",
+    ]
     return ColumnInfo(
         title="Universal bundle",
-        lines=description + bullets,
+        lines=description + bullets + indicator_note,
     )
 
 
