@@ -217,3 +217,72 @@ async def test_full_header_row():
             "SKILL", "Universal ⓘ", "Claude Code", "Pi",
             "State ⓘ", "Source",
         ], f"unexpected header row: {labels!r}"
+
+
+@pytest.mark.asyncio
+async def test_universal_modal_omits_global_marker_when_not_globally_linked():
+    """In project scope, opening the Universal column info on a row whose global
+    cell is NOT linked produces a modal without the 🌐 marker paragraph (#212)."""
+    from textual.app import App
+
+    from agent_toolkit_tui.skill_state import INTERACTIVE_AGENTS, SkillCell, SkillRow
+
+    # Project-scope row with global cells populated but NOT linked.
+    cells = {}
+    for a in INTERACTIVE_AGENTS:
+        cells[(a, "project")] = SkillCell(linked=False, drift=False, skipped=False)
+        cells[(a, "global")] = SkillCell(linked=False, drift=False, skipped=False)
+    row = SkillRow(slug="alpha", source="x/alpha", ref="main", state="library", cells=cells)
+
+    class _A(App):
+        def compose(self):
+            grid = SkillGrid([row], id="g")
+            grid.set_scope("project")
+            yield grid
+
+    a = _A()
+    async with a.run_test() as pilot:
+        await pilot.pause()
+        g = a.query_one("#g", SkillGrid)
+        g.cursor_to_cell(row_slug="alpha", agent_name="universal")
+        await pilot.pause()
+        await pilot.press("i")
+        await pilot.pause()
+        assert isinstance(a.screen, ColumnInfoModal)
+        text = "\n".join(a.screen._info.lines)
+        assert "🌐" not in text, f"unexpected 🌐 in modal: {a.screen._info.lines}"
+
+
+@pytest.mark.asyncio
+async def test_universal_modal_keeps_global_marker_when_globally_linked():
+    """In project scope, opening the Universal column info on a row whose global
+    cell IS linked still includes the 🌐 marker paragraph."""
+    from textual.app import App
+
+    from agent_toolkit_tui.skill_state import INTERACTIVE_AGENTS, SkillCell, SkillRow
+
+    cells = {}
+    for a in INTERACTIVE_AGENTS:
+        cells[(a, "project")] = SkillCell(linked=False, drift=False, skipped=False)
+        cells[(a, "global")] = SkillCell(linked=False, drift=False, skipped=False)
+    # The universal global cell is linked — caller has the skill globally installed.
+    cells[("universal", "global")] = SkillCell(linked=True, drift=False, skipped=False)
+    row = SkillRow(slug="alpha", source="x/alpha", ref="main", state="library", cells=cells)
+
+    class _A(App):
+        def compose(self):
+            grid = SkillGrid([row], id="g")
+            grid.set_scope("project")
+            yield grid
+
+    a = _A()
+    async with a.run_test() as pilot:
+        await pilot.pause()
+        g = a.query_one("#g", SkillGrid)
+        g.cursor_to_cell(row_slug="alpha", agent_name="universal")
+        await pilot.pause()
+        await pilot.press("i")
+        await pilot.pause()
+        assert isinstance(a.screen, ColumnInfoModal)
+        text = "\n".join(a.screen._info.lines)
+        assert "🌐" in text, f"expected 🌐 in modal: {a.screen._info.lines}"

@@ -338,10 +338,26 @@ class SkillGrid(Vertical):
         key = self._column_key_for_index(col)
         if key is None:
             return
-        info = get_column_info(key)
+        context = self._context_for(key=key, row_index=table.cursor_coordinate.row)
+        info = get_column_info(key, context=context)
         if info is None:
             return
         self.app.push_screen(ColumnInfoModal(info))
+
+    def _context_for(self, *, key: str, row_index: int) -> dict | None:
+        """Build the per-call context dict for get_column_info().
+
+        Today only the 'universal' key uses it: we surface whether the focused
+        row is also installed globally so the modal can omit the 🌐 paragraph
+        when it's not.
+        """
+        if key != "universal":
+            return None
+        if row_index < 0 or row_index >= len(self._rows):
+            return None
+        row = self._rows[row_index]
+        global_cell = row.cells.get(("universal", "global"))
+        return {"global_linked": bool(global_cell and global_cell.linked)}
 
     def _toggle_at(self, coord: Coordinate) -> None:
         try:
