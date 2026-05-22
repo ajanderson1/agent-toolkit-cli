@@ -31,6 +31,12 @@ uv run agent-toolkit-cli skill list
 
 `lefthook.yml` runs `uv run pytest -q` on pre-commit.
 
+## Testing
+
+`tests/conftest.py` includes an autouse fixture that strips `GIT_*` env vars from `os.environ` before every test runs. This closes the lefthook-leak trap (#209): a test that shells out to `git` without an explicit `env=` argument no longer inherits `GIT_DIR` / `GIT_INDEX_FILE` from a parent hook and cannot accidentally write commits into the outer repo.
+
+For most tests this means `subprocess.run(["git", ...], cwd=tmp_path)` is safe by default. Pass an explicit `env=` only when the test needs to **set** identity vars (e.g. `GIT_AUTHOR_NAME` for a deterministic commit) — not when it merely needs to **prevent leakage**.
+
 ## Adding a new `skill` subcommand
 
 1. Add a new module under `src/agent_toolkit_cli/commands/skill/<name>_cmd.py`.
