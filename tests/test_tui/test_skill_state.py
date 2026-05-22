@@ -7,7 +7,6 @@ from agent_toolkit_cli.cli import main
 from agent_toolkit_tui.skill_state import (
     INTERACTIVE_AGENTS,
     SkillCell,
-    SkillRow,
     _cell_for,
     build_skill_rows,
 )
