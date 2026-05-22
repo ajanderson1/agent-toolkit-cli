@@ -77,8 +77,8 @@ async def test_project_scope_globally_linked_cell_shows_marker():
         assert rendered_rows, "no rows rendered"
         row_key = rendered_rows[0]
         cols = list(table.columns.keys())
-        cc_col_key = cols[2 + INTERACTIVE_AGENTS.index("claude-code")]
-        pi_col_key = cols[2 + INTERACTIVE_AGENTS.index("pi")]
+        cc_col_key = cols[1 + INTERACTIVE_AGENTS.index("claude-code")]
+        pi_col_key = cols[1 + INTERACTIVE_AGENTS.index("pi")]
         cc_plain = Text.from_markup(str(table.get_cell(row_key, cc_col_key))).plain
         pi_plain = Text.from_markup(str(table.get_cell(row_key, pi_col_key))).plain
         assert "🌐" in cc_plain, f"claude-code cell missing marker: {cc_plain!r}"
@@ -112,7 +112,7 @@ async def test_global_scope_view_does_not_show_marker():
         await pilot.pause()
         row_key = list(table.rows.keys())[0]
         for agent in INTERACTIVE_AGENTS:
-            col_idx = 2 + INTERACTIVE_AGENTS.index(agent)
+            col_idx = 1 + INTERACTIVE_AGENTS.index(agent)
             col_key = list(table.columns.keys())[col_idx]
             plain = Text.from_markup(str(table.get_cell(row_key, col_key))).plain
             assert "🌐" not in plain, (
@@ -146,7 +146,7 @@ async def test_drifted_global_cell_does_not_show_marker():
         g._rebuild(table)  # type: ignore[attr-defined]
         await pilot.pause()
         row_key = list(table.rows.keys())[0]
-        cc_col_key = list(table.columns.keys())[2 + INTERACTIVE_AGENTS.index("claude-code")]
+        cc_col_key = list(table.columns.keys())[1 + INTERACTIVE_AGENTS.index("claude-code")]
         plain = Text.from_markup(str(table.get_cell(row_key, cc_col_key))).plain
         assert "🌐" not in plain, f"drifted global cell shows marker: {plain!r}"
 
@@ -178,7 +178,7 @@ async def test_skipped_global_cell_does_not_show_marker():
         g._rebuild(table)  # type: ignore[attr-defined]
         await pilot.pause()
         row_key = list(table.rows.keys())[0]
-        u_col_key = list(table.columns.keys())[2 + INTERACTIVE_AGENTS.index("universal")]
+        u_col_key = list(table.columns.keys())[1 + INTERACTIVE_AGENTS.index("universal")]
         plain = Text.from_markup(str(table.get_cell(row_key, u_col_key))).plain
         assert "🌐" not in plain, f"skipped global cell shows marker: {plain!r}"
 
@@ -212,11 +212,11 @@ async def test_per_agent_independence():
         row_key = list(table.rows.keys())[0]
         cols = list(table.columns.keys())
         u_plain = Text.from_markup(str(table.get_cell(
-            row_key, cols[2 + INTERACTIVE_AGENTS.index("universal")]))).plain
+            row_key, cols[1 + INTERACTIVE_AGENTS.index("universal")]))).plain
         cc_plain = Text.from_markup(str(table.get_cell(
-            row_key, cols[2 + INTERACTIVE_AGENTS.index("claude-code")]))).plain
+            row_key, cols[1 + INTERACTIVE_AGENTS.index("claude-code")]))).plain
         pi_plain = Text.from_markup(str(table.get_cell(
-            row_key, cols[2 + INTERACTIVE_AGENTS.index("pi")]))).plain
+            row_key, cols[1 + INTERACTIVE_AGENTS.index("pi")]))).plain
         assert "🌐" in u_plain, f"universal cell missing marker: {u_plain!r}"
         assert "🌐" not in cc_plain, f"claude-code cell has marker: {cc_plain!r}"
         assert "🌐" not in pi_plain, f"pi cell has marker: {pi_plain!r}"
@@ -248,7 +248,7 @@ async def test_project_scope_no_global_cells_in_row_does_not_crash():
         row_key = list(table.rows.keys())[0]
         cols = list(table.columns.keys())
         for agent in INTERACTIVE_AGENTS:
-            col_key = cols[2 + INTERACTIVE_AGENTS.index(agent)]
+            col_key = cols[1 + INTERACTIVE_AGENTS.index(agent)]
             plain = Text.from_markup(str(table.get_cell(row_key, col_key))).plain
             assert "🌐" not in plain, (
                 f"row without global cells should not show marker on {agent}: {plain!r}"

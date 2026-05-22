@@ -1,5 +1,9 @@
-"""Tests for the description (column index 1) and source (last column)
-columns added to SkillGrid in #182."""
+"""Tests for the source column and the description-into-slug-info flow.
+
+The `description` field still lives on SkillRow (sourced from each skill's
+SKILL.md frontmatter); it is surfaced via the slug-cell info modal rather
+than a dedicated column. See test_cell_info.py for the slug-info path.
+"""
 from __future__ import annotations
 
 import pytest
@@ -27,34 +31,6 @@ def _row(slug: str, *, description: str = "", source: str = "", state="clean") -
 
 
 @pytest.mark.asyncio
-async def test_description_column_is_second():
-    from textual.app import App
-    from textual.widgets import DataTable
-
-    class _A(App):
-        def compose(self):
-            yield SkillGrid([
-                _row("alpha", description="first skill"),
-                _row("beta", description="second skill"),
-            ], id="g")
-
-    a = _A()
-    async with a.run_test() as pilot:
-        await pilot.pause()
-        table = a.query_one("#skill-table", DataTable)
-        labels = [str(c.label) for c in table.columns.values()]
-        assert labels[0] == "SKILL"
-        assert labels[1] == "Description"
-        # Per-row cell text matches each row's description.
-        row_keys = list(table.rows.keys())
-        # rows are sorted by slug ("alpha" then "beta")
-        cells_alpha = list(table.get_row(row_keys[0]))
-        cells_beta = list(table.get_row(row_keys[1]))
-        assert cells_alpha[1] == "first skill"
-        assert cells_beta[1] == "second skill"
-
-
-@pytest.mark.asyncio
 async def test_source_column_is_last():
     from textual.app import App
     from textual.widgets import DataTable
@@ -77,28 +53,9 @@ async def test_source_column_is_last():
 
 
 @pytest.mark.asyncio
-async def test_description_empty_for_library_rows():
-    """A library-state row with no description renders an empty cell, not 'None'."""
-    from textual.app import App
-    from textual.widgets import DataTable
-
-    class _A(App):
-        def compose(self):
-            yield SkillGrid([_row("alpha", description="", state="library")], id="g")
-
-    a = _A()
-    async with a.run_test() as pilot:
-        await pilot.pause()
-        table = a.query_one("#skill-table", DataTable)
-        row_keys = list(table.rows.keys())
-        cells = list(table.get_row(row_keys[0]))
-        assert cells[1] == ""
-
-
-@pytest.mark.asyncio
-async def test_new_columns_do_not_break_agent_toggling():
-    """The new columns shift agent columns right by one; toggle binding still
-    targets the right agent."""
+async def test_agent_toggling_targets_correct_column():
+    """slug at col 0, agents start at col 1. cursor_to_cell + space queues
+    a link for the right agent."""
     from textual.app import App
 
     class _A(App):
