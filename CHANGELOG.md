@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.8.1](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.8.0...v2.8.1) (2026-05-23)
+
+
+### Bug Fixes
+
+* **skill doctor:** detect and clean stray projection symlinks ([#227](https://github.com/ajanderson1/agent-toolkit-cli/issues/227)) ([c7b6f28](https://github.com/ajanderson1/agent-toolkit-cli/commit/c7b6f288dc7586f6140431815c8975e154ce74a6))
+
 ## [2.8.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.7.2...v2.8.0) (2026-05-23)
 
 
