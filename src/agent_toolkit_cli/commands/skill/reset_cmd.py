@@ -1,11 +1,18 @@
 """skill reset subcommand — force-sync to upstream HEAD."""
 from __future__ import annotations
 
+import shutil
+
 import click
 
 from agent_toolkit_cli import skill_git
 from agent_toolkit_cli.skill_lock import read_lock, write_lock
-from agent_toolkit_cli.skill_paths import canonical_skill_dir, lock_file_path
+from agent_toolkit_cli.skill_paths import (
+    canonical_skill_dir,
+    library_skill_path,
+    lock_file_path,
+    parent_clone_path,
+)
 
 from ._common import scope_and_roots
 
@@ -58,6 +65,56 @@ def reset_cmd(
             continue
 
         entry = lock.skills[slug]
+
+        if entry.parent_url is not None:
+            if scope != "global":
+                click.echo(
+                    f"{slug}: monorepo reset only supported at global scope"
+                )
+                had_error = True
+                continue
+            owner, repo = entry.source.split("/", 1)
+            parent_dir = parent_clone_path(
+                owner, repo, ref=entry.ref, env=None,
+            )
+            if not skill_git.is_git_repo(parent_dir):
+                click.echo(
+                    f"{slug}: parent clone missing or not a git repo at "
+                    f"{parent_dir}"
+                )
+                had_error = True
+                continue
+            if not force:
+                wt = skill_git.status(parent_dir, env=None)
+                if wt == skill_git.GitWorkingTreeStatus.DIRTY:
+                    click.echo(
+                        f"{slug}: parent clone at {parent_dir} is dirty — "
+                        f"commit, push, or use --force to discard"
+                    )
+                    had_error = True
+                    continue
+            ref = entry.ref or "main"
+            try:
+                skill_git.fetch(parent_dir, env=None)
+                skill_git.reset_hard(parent_dir, ref=ref, env=None)
+            except skill_git.GitError as exc:
+                raise click.ClickException(
+                    f"{slug}: git failed during parent reset\n{exc.stderr}"
+                ) from exc
+            if entry.extras.get("materialised") == "copy":
+                library_dir = library_skill_path(slug)
+                skill_root = parent_dir / entry.skill_path
+                if library_dir.exists():
+                    shutil.rmtree(library_dir)
+                shutil.copytree(skill_root, library_dir)
+            entry.upstream_sha = skill_git.head_sha(parent_dir, env=None)
+            write_lock(lock_path, lock)
+            click.echo(
+                f"{slug}: reset parent {entry.source} to "
+                f"{entry.upstream_sha[:7]}"
+            )
+            continue
+
         canonical = canonical_skill_dir(
             slug, scope=scope, home=home, project=project_root,
         )
