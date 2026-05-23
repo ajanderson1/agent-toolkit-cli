@@ -42,11 +42,17 @@ def test_fix_action_apply_is_callable():
 
 def test_diagnose_empty_lock_returns_no_findings(tmp_path: Path, monkeypatch):
     library_root = tmp_path / "lib" / "skills"
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
     monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    monkeypatch.setenv("HOME", str(fake_home))
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: fake_home))
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(fake_home / ".claude"))
+    _patch_claude_global_skills_dir(monkeypatch, fake_home / ".claude" / "skills")
     from agent_toolkit_cli.skill_doctor import diagnose
     findings = diagnose(
         slugs=None, scope="global",
-        home=tmp_path / "home", project=None,
+        home=fake_home, project=None,
     )
     assert findings == []
 
@@ -562,6 +568,137 @@ def test_normalise_git_url_trailing_slash_variants():
     assert _normalise_git_url("git@github.com:foo/bar.git/") == canonical
     # Fallback path (no regex match) with trailing slash.
     assert _normalise_git_url("/tmp/some-remote.git/") == "/tmp/some-remote"
+
+
+def test_diagnose_stray_symlink_global(git_sandbox, tmp_path: Path, monkeypatch):
+    """A symlink in a projection dir whose basename isn't in the lock is stray."""
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    monkeypatch.setenv("HOME", str(fake_home))
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: fake_home))
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(fake_home / ".claude"))
+    _patch_claude_global_skills_dir(monkeypatch, fake_home / ".claude" / "skills")
+
+    runner = CliRunner()
+    _seed_library(runner, git_sandbox.upstream)  # adds 'demo' to lock
+
+    # Plant a symlink for a slug that isn't in the lock at all.
+    claude_skills = fake_home / ".claude" / "skills"
+    claude_skills.mkdir(parents=True, exist_ok=True)
+    legacy_target = tmp_path / "legacy-skill"
+    legacy_target.mkdir()
+    stray = claude_skills / "old-slug"
+    stray.symlink_to(legacy_target)
+
+    from agent_toolkit_cli.skill_doctor import diagnose
+    findings = diagnose(
+        slugs=None, scope="global", home=fake_home, project=None,
+    )
+    strays = [f for f in findings if f.kind == "stray_symlink"]
+    assert len(strays) == 1
+    assert strays[0].slug == "old-slug"
+    assert strays[0].path == stray
+    assert strays[0].fix_action is not None
+
+
+def test_stray_symlink_fix_unlinks(git_sandbox, tmp_path: Path, monkeypatch):
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    monkeypatch.setenv("HOME", str(fake_home))
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: fake_home))
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(fake_home / ".claude"))
+    _patch_claude_global_skills_dir(monkeypatch, fake_home / ".claude" / "skills")
+
+    runner = CliRunner()
+    _seed_library(runner, git_sandbox.upstream)
+
+    claude_skills = fake_home / ".claude" / "skills"
+    claude_skills.mkdir(parents=True, exist_ok=True)
+    legacy_target = tmp_path / "legacy-skill"
+    legacy_target.mkdir()
+    stray = claude_skills / "old-slug"
+    stray.symlink_to(legacy_target)
+
+    from agent_toolkit_cli.skill_doctor import diagnose
+    f = next(
+        f for f in diagnose(
+            slugs=None, scope="global", home=fake_home, project=None,
+        )
+        if f.kind == "stray_symlink"
+    )
+    f.fix_action.apply()
+    assert not stray.is_symlink()
+    # Idempotent.
+    f.fix_action.apply()
+    assert not stray.exists()
+
+
+def test_stray_scan_skipped_when_slugs_provided(
+    git_sandbox, tmp_path: Path, monkeypatch,
+):
+    """Doctor with explicit slugs only scans those slugs, not stray links."""
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    monkeypatch.setenv("HOME", str(fake_home))
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: fake_home))
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(fake_home / ".claude"))
+    _patch_claude_global_skills_dir(monkeypatch, fake_home / ".claude" / "skills")
+
+    runner = CliRunner()
+    _seed_library(runner, git_sandbox.upstream)
+
+    claude_skills = fake_home / ".claude" / "skills"
+    claude_skills.mkdir(parents=True, exist_ok=True)
+    legacy_target = tmp_path / "legacy-skill"
+    legacy_target.mkdir()
+    (claude_skills / "old-slug").symlink_to(legacy_target)
+
+    from agent_toolkit_cli.skill_doctor import diagnose
+    findings = diagnose(
+        slugs=("demo",), scope="global", home=fake_home, project=None,
+    )
+    assert not any(f.kind == "stray_symlink" for f in findings)
+
+
+def test_diagnose_stray_symlink_project(git_sandbox, tmp_path: Path, monkeypatch):
+    """Project-scope stray scan finds legacy .claude/skills/* not in project lock."""
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    monkeypatch.setenv("HOME", str(fake_home))
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: fake_home))
+
+    project = tmp_path / "proj"
+    project.mkdir()
+    # No project lock; plant a stray symlink in the project-scope claude dir.
+    claude_skills = project / ".claude" / "skills"
+    claude_skills.mkdir(parents=True)
+    legacy_target = tmp_path / "legacy-skill"
+    legacy_target.mkdir()
+    stray = claude_skills / "aj-workflow"
+    stray.symlink_to(legacy_target)
+
+    from agent_toolkit_cli.skill_doctor import diagnose
+    findings = diagnose(
+        slugs=None, scope="project", home=None, project=project,
+    )
+    strays = [f for f in findings if f.kind == "stray_symlink"]
+    assert any(f.slug == "aj-workflow" and f.path == stray for f in strays)
 
 
 def test_normalise_git_url_ssh_scheme_form():

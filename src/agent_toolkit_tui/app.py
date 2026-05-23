@@ -303,8 +303,8 @@ class TUIApp(App):
             pass
 
     def _refresh_status_bar(self) -> None:
-        """Roll up SkillGrid rows into linked / pending / drifted / broken counts."""
-        linked = drifted = broken = 0
+        """Roll up SkillGrid rows into linked / pending / drifted / stray / broken counts."""
+        linked = drifted = stray = broken = 0
         try:
             grid = self.query_one("#skill-grid", SkillGrid)
         except (NoMatches, Exception):
@@ -319,6 +319,8 @@ class TUIApp(App):
                         continue
                     if cell.drift:
                         drifted += 1
+                    elif cell.stray:
+                        stray += 1
                     elif cell.linked:
                         linked += 1
             pending = len(grid.pending_entries())
@@ -328,6 +330,7 @@ class TUIApp(App):
             f"  [b green]{linked}[/] linked   "
             f"[b yellow]{pending}[/] pending   "
             f"[b orange3]{drifted}[/] drifted   "
+            f"[b yellow]{stray}[/] stray   "
             f"[b red]{broken}[/] broken"
         )
         try:

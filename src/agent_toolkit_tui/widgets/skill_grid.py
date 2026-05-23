@@ -42,6 +42,7 @@ _UNLINKED_GLYPH = "☐"
 _PENDING_LINK   = "[yellow]+[/]"
 _PENDING_UNLINK = "[yellow]-[/]"
 _DRIFT_GLYPH    = "[red]![/]"
+_STRAY_GLYPH    = "[yellow]?[/]"  # symlink exists but skill isn't installed here
 _SKIPPED_GLYPH  = "[dim]●[/]"  # canonical-only, no symlink needed
 _INFO_GLYPH     = "ⓘ"
 _GLOBAL_GLYPH   = "🌐"
@@ -288,6 +289,21 @@ class SkillGrid(Vertical):
                 f"Fix with:\n"
                 f"  [b]agent-toolkit-cli skill doctor {row.slug} {scope_flag}[/]"
             )
+        if cell.stray:
+            try:
+                target = link.readlink()
+            except OSError:
+                target = "(unreadable)"
+            return (
+                f"[yellow]Stray symlink.[/]\n\n"
+                f"Symlink: {link}\n"
+                f"Points to: {target}\n\n"
+                f"This skill isn't installed at {scope} scope, so the link\n"
+                f"has no canonical to point at. Remove it:\n"
+                f"  [b]rm {link}[/]\n\n"
+                f"Or scan + clean all stray links:\n"
+                f"  [b]agent-toolkit-cli skill doctor {scope_flag}[/]"
+            )
         if cell.linked:
             return f"Linked.\n{link} → {canonical}"
         return (
@@ -468,6 +484,8 @@ class SkillGrid(Vertical):
                 base = _PENDING_UNLINK
             elif cell.drift:
                 base = _DRIFT_GLYPH
+            elif cell.stray:
+                base = _STRAY_GLYPH
             else:
                 base = _LINKED_GLYPH if cell.linked else _UNLINKED_GLYPH
         if self._scope == "project":
@@ -476,6 +494,7 @@ class SkillGrid(Vertical):
                 global_cell is not None
                 and global_cell.linked
                 and not global_cell.drift
+                and not global_cell.stray
                 and not global_cell.skipped
             ):
                 return f"{base} {_GLOBAL_GLYPH}"
