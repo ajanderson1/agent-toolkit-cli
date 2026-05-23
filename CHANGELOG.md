@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.8.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.7.2...v2.8.0) (2026-05-23)
+
+
+### Features
+
+* **skill reset:** support monorepo skills via parent-clone reset ([#225](https://github.com/ajanderson1/agent-toolkit-cli/issues/225)) ([d15f530](https://github.com/ajanderson1/agent-toolkit-cli/commit/d15f530829093b195b112eef2c1c01db64fa33bd)), closes [#220](https://github.com/ajanderson1/agent-toolkit-cli/issues/220)
+
 ## [2.7.2](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.7.1...v2.7.2) (2026-05-22)
 
 
