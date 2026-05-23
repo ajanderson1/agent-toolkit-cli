@@ -239,6 +239,54 @@ def test_build_skill_rows_includes_universal_cell(
 
 
 # ---------------------------------------------------------------------------
+# Stray-cell tests: symlink exists but skill isn't installed at this scope
+# ---------------------------------------------------------------------------
+
+def test_cell_for_project_scope_stray_symlink(tmp_path: Path, monkeypatch):
+    """Project-scope symlink to elsewhere with no project canonical → stray, not drift."""
+    library_root = tmp_path / "lib" / "skills"
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    project = tmp_path / "proj"
+    project.mkdir()
+
+    # No project canonical. Plant a legacy claude-code symlink anyway.
+    elsewhere = tmp_path / "legacy"
+    elsewhere.mkdir()
+    claude_skills = project / ".claude" / "skills"
+    claude_skills.mkdir(parents=True)
+    (claude_skills / "demo").symlink_to(elsewhere)
+
+    cell = _cell_for(
+        "demo", "claude-code", scope="project", home=None, project=project,
+    )
+    assert cell.stray is True
+    assert cell.drift is False
+    assert cell.linked is False
+
+
+def test_cell_for_drift_when_canonical_exists(tmp_path: Path, monkeypatch):
+    """Same symlink layout but canonical present at scope → drift, not stray."""
+    library_root = tmp_path / "lib" / "skills"
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    project = tmp_path / "proj"
+    project.mkdir()
+    # Project canonical exists.
+    (project / ".agents" / "skills" / "demo").mkdir(parents=True)
+
+    elsewhere = tmp_path / "legacy"
+    elsewhere.mkdir()
+    claude_skills = project / ".claude" / "skills"
+    claude_skills.mkdir(parents=True)
+    (claude_skills / "demo").symlink_to(elsewhere)
+
+    cell = _cell_for(
+        "demo", "claude-code", scope="project", home=None, project=project,
+    )
+    assert cell.drift is True
+    assert cell.stray is False
+
+
+# ---------------------------------------------------------------------------
 # Library-as-row-source tests (v2.2 behaviour)
 # ---------------------------------------------------------------------------
 

@@ -15,6 +15,7 @@ def _row(
     linked: tuple[str, ...] = (),
     drifted: tuple[str, ...] = (),
     skipped: tuple[str, ...] = (),
+    stray: tuple[str, ...] = (),
     description: str = "",
 ) -> SkillRow:
     cells = {}
@@ -23,6 +24,7 @@ def _row(
             linked=(a in linked),
             drift=(a in drifted),
             skipped=(a in skipped),
+            stray=(a in stray),
         )
     return SkillRow(
         slug=slug,
@@ -96,6 +98,32 @@ async def test_info_on_drift_cell_shows_doctor_command():
         body = str(a.screen.query_one("#cell-info-body").content)
         assert "skill doctor journal -g" in body
         assert "drift" in body.lower()
+
+
+@pytest.mark.asyncio
+async def test_info_on_stray_cell_shows_rm_command():
+    """A stray symlink cell shows the rm command, not a doctor re-link."""
+    from textual.app import App
+
+    class _A(App):
+        def compose(self):
+            yield SkillGrid([_row("aj-workflow", stray=("claude-code",))], id="g")
+
+    a = _A()
+    async with a.run_test() as pilot:
+        await pilot.pause()
+        g = a.query_one("#g", SkillGrid)
+        g.cursor_to_cell(row_slug="aj-workflow", agent_name="claude-code")
+        await pilot.pause()
+        await pilot.press("i")
+        await pilot.pause()
+        assert isinstance(a.screen, CellInfoScreen)
+        body = str(a.screen.query_one("#cell-info-body").content)
+        assert "stray" in body.lower()
+        assert "rm " in body
+        # Does not direct user to a per-slug doctor invocation (which is a no-op
+        # for strays since the slug isn't in the lock).
+        assert "skill doctor aj-workflow" not in body
 
 
 @pytest.mark.asyncio

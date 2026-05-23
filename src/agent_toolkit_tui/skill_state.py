@@ -37,8 +37,9 @@ INTERACTIVE_AGENTS: tuple[str, ...] = ("universal", "claude-code", "pi")
 @dataclass(frozen=True)
 class SkillCell:
     linked: bool       # symlink resolves to canonical (or canonical exists for skipped)
-    drift: bool        # symlink exists but points elsewhere
+    drift: bool        # symlink exists, points elsewhere, AND canonical exists at this scope
     skipped: bool      # universal-global: no symlink needed, canonical IS the dir
+    stray: bool = False  # symlink exists but skill isn't installed at this scope
 
 
 @dataclass
@@ -132,6 +133,11 @@ def _cell_for(
     canonical_real = canonical.resolve() if canonical.exists() else canonical
     if link.resolve() == canonical_real:
         return SkillCell(linked=True, drift=False, skipped=False)
+    # Symlink points elsewhere. If the skill isn't installed at this scope
+    # (no canonical on disk) treat it as 'stray' rather than 'drift' — there's
+    # nothing to re-link to, the right fix is to remove the symlink.
+    if not canonical.exists():
+        return SkillCell(linked=False, drift=False, skipped=False, stray=True)
     return SkillCell(linked=False, drift=True, skipped=False)
 
 

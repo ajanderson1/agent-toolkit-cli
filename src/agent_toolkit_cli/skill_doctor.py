@@ -27,7 +27,7 @@ from agent_toolkit_cli.skill_paths import (
 FindingKind = Literal[
     "missing_canonical", "drifted_symlink",
     "wrong_type_bundle", "orphan_symlink", "foreign_symlink",
-    "dirty_tree", "lock_source_mismatch",
+    "dirty_tree", "lock_source_mismatch", "stray_symlink",
 ]
 
 
@@ -58,7 +58,9 @@ def diagnose(
 ) -> list[Finding]:
     """Return all findings for the requested scope.
 
-    slugs=None scans every slug in the lock. Otherwise scans only those slugs.
+    slugs=None scans every slug in the lock AND every projection dir for
+    stray symlinks (links whose basename isn't in the scope's lock).
+    Otherwise scans only the named slugs and skips the stray scan.
     """
     lock = read_lock(lock_file_path(scope=scope, home=home, project=project))
     targets = (
@@ -73,6 +75,88 @@ def diagnose(
             entry=lock.skills[slug], lock=lock,
             repair_foreign=repair_foreign,
         ))
+    if slugs is None:
+        findings.extend(_scan_stray_symlinks(
+            scope=scope, home=home, project=project, lock=lock,
+        ))
+    return findings
+
+
+def _runtime_global_skills_dir(cfg, runtime_home: Path) -> Path:
+    """Return cfg.global_skills_dir with its import-time HOME prefix swapped
+    for runtime_home.
+
+    skill_agents resolves HOME once at import. Tests that monkeypatch
+    Path.home() afterwards leave the AGENTS dict pointing at the real
+    user's home dirs. Re-deriving the path against runtime_home keeps the
+    stray scan honest under test sandboxes without invalidating production
+    behaviour (where Path.home() == import-time HOME).
+    """
+    from agent_toolkit_cli.skill_agents import HOME as _IMPORT_HOME
+    p = cfg.global_skills_dir
+    if runtime_home == _IMPORT_HOME:
+        return p
+    try:
+        relative = p.relative_to(_IMPORT_HOME)
+    except ValueError:
+        return p
+    return runtime_home / relative
+
+
+def _scan_stray_symlinks(
+    *, scope: Scope, home: Path | None, project: Path | None, lock: LockFile,
+) -> list[Finding]:
+    """Find symlinks in projection dirs whose basename isn't in the lock.
+
+    These are leftover links from an older layout, a manually-removed install,
+    or a renamed slug. The fix is to remove the symlink — there's no canonical
+    to point it at.
+    """
+    findings: list[Finding] = []
+    known = set(lock.skills)
+    seen: set[Path] = set()
+    runtime_home = Path.home()
+    for agent_name, cfg in AGENTS.items():
+        if cfg.is_universal:
+            continue
+        skip, _ = _should_skip_symlink(
+            agent_name=agent_name, scope=scope, project=project,
+        )
+        if skip:
+            continue
+        if scope == "global":
+            parent = _runtime_global_skills_dir(cfg, runtime_home)
+        else:
+            assert project is not None
+            parent = project / cfg.skills_dir
+        if parent in seen:
+            continue
+        seen.add(parent)
+        if not parent.is_dir():
+            continue
+        try:
+            entries = list(parent.iterdir())
+        except OSError:
+            continue
+        for link in entries:
+            if not link.is_symlink():
+                continue
+            slug = link.name
+            if slug in known:
+                continue
+            try:
+                target = link.readlink()
+            except OSError:
+                target = Path("(unreadable)")
+            findings.append(Finding(
+                kind="stray_symlink", slug=slug, scope=scope,
+                path=link,
+                detail=(
+                    f"{link} -> {target}: '{slug}' is not in the {scope} "
+                    f"lock; symlink is a leftover from an older install"
+                ),
+                fix_action=_make_unlink_action(link=link),
+            ))
     return findings
 
 
