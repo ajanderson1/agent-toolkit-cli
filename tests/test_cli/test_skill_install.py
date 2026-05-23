@@ -55,12 +55,16 @@ def test_install_refuses_to_overwrite_unrelated_symlink(git_sandbox, tmp_path: P
     claude_skills.mkdir(parents=True)
     (claude_skills / "demo").symlink_to(foreign)
     src = parse_source(str(git_sandbox.upstream))
-    with pytest.raises(InstallError, match="conflicting symlink"):
+    with pytest.raises(InstallError, match="conflicting symlink") as excinfo:
         install(
             parsed=src, slug="demo", scope="project",
             home=None, project=project, harnesses=("claude",),
             env=git_sandbox.env,
         )
+    # The error points the user at doctor, the escape hatch for stray links.
+    msg = str(excinfo.value)
+    assert "skill doctor -p" in msg
+    assert "stray symlinks" in msg
 
 
 def test_uninstall_removes_canonical_and_symlinks(git_sandbox, tmp_path: Path):

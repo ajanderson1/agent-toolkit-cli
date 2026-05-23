@@ -36,6 +36,12 @@ class InstallError(RuntimeError):
     """Base error for install failures."""
 
 
+def _doctor_hint(slug: str, scope: str) -> str:
+    """Suggest the doctor command that clears a blocking stray symlink."""
+    flag = "-g" if scope == "global" else "-p"
+    return f"\n  Run: agent-toolkit-cli skill doctor {flag}  (removes stray symlinks)"
+
+
 class LockMismatchError(InstallError):
     """Canonical exists on disk but lock entry source differs from request."""
 
@@ -250,6 +256,7 @@ def apply(
                         raise InstallError(
                             f"{plan.slug}/universal: conflicting symlink at {link}: "
                             f"points to {link.resolve()}, expected {canonical}"
+                            + _doctor_hint(plan.slug, plan.scope)
                         )
                 elif link.exists():
                     raise InstallError(
@@ -280,6 +287,7 @@ def apply(
                 raise InstallError(
                     f"{plan.slug}/{name}: conflicting symlink at {link}: "
                     f"points to {target}, expected {canonical}"
+                    + _doctor_hint(plan.slug, plan.scope)
                 )
         elif link.exists():
             raise InstallError(
