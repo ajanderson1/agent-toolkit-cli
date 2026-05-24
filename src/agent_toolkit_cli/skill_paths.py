@@ -103,15 +103,29 @@ def library_skill_path(slug: str, *, env: dict[str, str] | None = None) -> Path:
 def parent_clone_path(
     owner: str, repo: str, *, ref: str | None,
     env: dict[str, str] | None = None,
+    root: Path | None = None,
 ) -> Path:
     """Where a monorepo parent is cloned, shared across all skills from it.
 
-    Lives at <library_root>/_parents/<owner>/<repo>[@<ref>]/ so the cache is
-    inside the AGENT_TOOLKIT_SKILLS_ROOT blast radius and travels with
-    --toolkit-repo overrides.
+    Global scope (root=None): <library_root>/_parents/<owner>/<repo>[@<ref>]/
+    so the cache is inside the AGENT_TOOLKIT_SKILLS_ROOT blast radius and
+    travels with --toolkit-repo overrides.
+
+    Project scope: pass root=<project>/.agents/skills (see project_parents_root)
+    so the cache is <project>/.agents/skills/_parents/<owner>/<repo>[@<ref>]/.
     """
+    base = root if root is not None else library_root(env)
     leaf = repo if ref is None else f"{repo}@{ref}"
-    return library_root(env) / "_parents" / owner / leaf
+    return base / "_parents" / owner / leaf
+
+
+def project_parents_root(project: Path) -> Path:
+    """Root under which a project's monorepo `_parents/` cache lives.
+
+    This is the same directory that holds project canonical skill dirs:
+    <project>/.agents/skills. Passed as `root=` to parent_clone_path().
+    """
+    return project / ".agents" / "skills"
 
 
 def library_lock_path(env: dict[str, str] | None = None) -> Path:
