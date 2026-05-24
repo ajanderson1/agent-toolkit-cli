@@ -4,8 +4,10 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from click.testing import CliRunner
 
 from agent_toolkit_cli import skill_install
+from agent_toolkit_cli.cli import main as cli
 from agent_toolkit_cli.skill_lock import (
     LockEntry, add_entry, read_lock, write_lock,
 )
@@ -90,3 +92,29 @@ def test_ensure_project_canonical_monorepo_symlinks_into_parent(
     e = proj_lock["skills"]["mkdocs"]
     assert e["skillPath"] == "mkdocs"
     assert e["parentUrl"].endswith("/parent-src")
+
+
+def test_install_p_monorepo_claude_symlink_resolves_to_skill_md(
+    tmp_path, isolated_library, monkeypatch,
+):
+    library = isolated_library
+    parent_url = _make_parent_repo(tmp_path)
+    _seed_global_monorepo_entry(library, parent_url, "mkdocs", "mkdocs")
+
+    project = tmp_path / "proj"
+    project.mkdir()
+    monkeypatch.chdir(project)
+
+    runner = CliRunner(env=scrub_git_env())
+    result = runner.invoke(cli, [
+        "skill", "install", "mkdocs", "--agents", "claude-code", "-p",
+    ])
+    assert result.exit_code == 0, result.output
+
+    # The claude-code projection symlink must resolve to a dir with SKILL.md.
+    link = project / ".claude" / "skills" / "mkdocs"
+    assert link.is_symlink()
+    assert (link / "SKILL.md").exists(), (
+        "claude-code symlink does not resolve to SKILL.md — the original bug"
+    )
+    assert (link / "SKILL.md").read_text().startswith("---\nname: mkdocs")
