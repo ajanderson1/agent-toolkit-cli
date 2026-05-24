@@ -394,7 +394,13 @@ def ensure_project_canonical(
             raise InstallError(
                 f"{slug}: monorepo lock entry missing skillPath"
             )
-        owner, repo = entry.source.split("/", 1)
+        parts = entry.source.split("/", 1)
+        if len(parts) != 2:
+            raise InstallError(
+                f"{slug}: monorepo lock entry has non-owner/repo source "
+                f"{entry.source!r}"
+            )
+        owner, repo = parts
         parent_dir = parent_clone_path(
             owner, repo, ref=entry.ref,
             root=project_parents_root(project), env=env,
@@ -404,6 +410,11 @@ def ensure_project_canonical(
             skill_git.clone(
                 entry.parent_url, parent_dir, ref=entry.ref, env=env,
             )
+        else:
+            try:
+                skill_git.fetch(parent_dir, env=env)
+            except Exception:  # noqa: BLE001
+                pass  # offline / no remote — the existing clone is still usable
         skill_root = parent_dir / entry.skill_path
         if not (skill_root / "SKILL.md").exists():
             raise InstallError(
@@ -413,6 +424,11 @@ def ensure_project_canonical(
         if not project_canonical.exists() and not project_canonical.is_symlink():
             project_canonical.parent.mkdir(parents=True, exist_ok=True)
             project_canonical.symlink_to(skill_root)
+        if project_canonical.is_symlink() and not project_canonical.exists():
+            raise InstallError(
+                f"{slug}: canonical symlink at {project_canonical} is broken "
+                f"(parent clone missing). Run `skill doctor -p` to repair."
+            )
     elif not project_canonical.exists():
         # Single-skill repo: clone the repo root flat into the canonical dir.
         project_canonical.parent.mkdir(parents=True, exist_ok=True)

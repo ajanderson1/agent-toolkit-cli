@@ -81,6 +81,8 @@ def test_ensure_project_canonical_monorepo_symlinks_into_parent(
     parents = project / ".agents" / "skills" / "_parents"
     parent_clones = list(parents.glob("*/*"))
     assert len(parent_clones) == 1
+    assert parent_clones[0].name == "agent-browser"
+    assert parent_clones[0].parent.name == "vercel-labs"
     assert (parent_clones[0] / "mkdocs" / "SKILL.md").exists()
 
     # Project lock carries parentUrl + skillPath so downstream cmds detect it.
