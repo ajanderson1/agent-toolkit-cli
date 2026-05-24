@@ -156,8 +156,8 @@ def test_parent_clone_path_project_root(tmp_path):
 
 
 def test_parent_clone_path_default_root_unchanged(tmp_path, monkeypatch):
-    from agent_toolkit_cli.skill_paths import parent_clone_path, library_root
+    from agent_toolkit_cli.skill_paths import parent_clone_path
 
     monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(tmp_path / "lib" / "skills"))
     p = parent_clone_path("o", "r", ref=None)
-    assert p == library_root() / "_parents" / "o" / "r"
+    assert p == tmp_path / "lib" / "skills" / "_parents" / "o" / "r"

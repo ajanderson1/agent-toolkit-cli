@@ -114,6 +114,7 @@ def parent_clone_path(
     Project scope: pass root=<project>/.agents/skills (see project_parents_root)
     so the cache is <project>/.agents/skills/_parents/<owner>/<repo>[@<ref>]/.
     """
+    # env is only consulted when root is None (global scope).
     base = root if root is not None else library_root(env)
     leaf = repo if ref is None else f"{repo}@{ref}"
     return base / "_parents" / owner / leaf
