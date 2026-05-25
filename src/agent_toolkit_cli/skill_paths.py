@@ -17,6 +17,7 @@ v2.2 model — library vs install:
 """
 from __future__ import annotations
 
+import hashlib
 import os
 from pathlib import Path
 from typing import Literal
@@ -98,6 +99,35 @@ def library_root(env: dict[str, str] | None = None) -> Path:
 def library_skill_path(slug: str, *, env: dict[str, str] | None = None) -> Path:
     """Return the canonical library path for a single skill slug."""
     return library_root(env) / slug
+
+
+def project_id(project: Path) -> str:
+    """Stable, collision-free directory name for a project's skill store.
+
+    Sanitized absolute path + 6-hex-char sha256 suffix. The sanitized prefix
+    keeps doctor output and on-disk inspection human-readable; the hash suffix
+    guarantees uniqueness even if two distinct paths sanitize to the same
+    string. Taken over project.resolve() so symlinked/relative invocations of
+    the same project map to one id.
+    """
+    real = project.resolve()
+    abs_str = str(real)
+    sanitized = "".join(
+        c if (c.isalnum() or c in "._-") else "-" for c in abs_str
+    ).strip("-")
+    digest = hashlib.sha256(abs_str.encode()).hexdigest()[:6]
+    return f"{sanitized}-{digest}"
+
+
+def project_store_root(project: Path, *, env: dict[str, str] | None = None) -> Path:
+    """Per-project skill store: <library_root>.parent/projects/<id>/skills.
+
+    Holds project canonical skill dirs AND the project's _parents/ cache.
+    Lives under ~/.agent-toolkit (library_root().parent) by default, OUTSIDE
+    the project tree, so removing a skill never touches project files.
+    Honors $AGENT_TOOLKIT_SKILLS_ROOT via library_root(env).
+    """
+    return library_root(env).parent / "projects" / project_id(project) / "skills"
 
 
 def parent_clone_path(
