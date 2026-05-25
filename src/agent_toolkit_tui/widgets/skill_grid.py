@@ -395,14 +395,9 @@ class SkillGrid(Vertical):
         cell = row.cells.get((agent, self._scope))
         if cell is None or cell.skipped:
             return
-        # Refuse destructive project-scope universal unlinks from the TUI.
-        # Removing the project canonical (<project>/.agents/skills/<slug>/)
-        # is a destructive operation that should be done explicitly via
-        # `skill remove --scope project`, not from a cell click.
-        # TODO: surface a user-visible message here (e.g. self.app.notify())
-        # once a notify pattern is established for SkillGrid.
-        if agent == "universal" and self._scope == "project" and cell.linked:
-            return
+        # Universal at project scope is now a plain projection symlink into the
+        # external store (post-#235/#237), so unlinking it is non-destructive and
+        # the engine handles it like any other cell — no special guard (#232).
         key = (self._scope, agent, row.slug)
         if key in self._pending:
             del self._pending[key]
