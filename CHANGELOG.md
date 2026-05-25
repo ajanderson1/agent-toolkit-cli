@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.9.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.8.1...v2.9.0) (2026-05-25)
+
+
+### Features
+
+* **skill install:** project-scope monorepo support via parent-clone + symlink ([#233](https://github.com/ajanderson1/agent-toolkit-cli/issues/233)) ([503092f](https://github.com/ajanderson1/agent-toolkit-cli/commit/503092f2c0c2ec2c91472ed30551ef8e7dc8a906))
+
 ## [2.8.1](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.8.0...v2.8.1) (2026-05-23)
 
 
