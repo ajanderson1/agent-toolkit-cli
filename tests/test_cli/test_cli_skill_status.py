@@ -3,6 +3,7 @@ from pathlib import Path
 from click.testing import CliRunner
 
 from agent_toolkit_cli.cli import main
+from agent_toolkit_cli.skill_paths import canonical_skill_dir
 from tests.test_cli.test_skill_update_monorepo import _init_parent
 
 
@@ -54,7 +55,7 @@ def test_skill_status_dirty(git_sandbox, tmp_path: Path, monkeypatch):
     r = _add_and_install_project(runner, git_sandbox.upstream, project, library_root)
     assert r.exit_code == 0, r.output
 
-    canonical = project / ".agents" / "skills" / "demo"
+    canonical = canonical_skill_dir("demo", scope="project", project=project)
     (canonical / "SKILL.md").write_text("self-edit\n")
     result = runner.invoke(main, [
         "--project", str(project), "skill", "status", "-p",

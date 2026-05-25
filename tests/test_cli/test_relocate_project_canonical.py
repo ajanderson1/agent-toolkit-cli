@@ -223,3 +223,22 @@ def test_doctor_orphan_sweep_detects_unreferenced_canonical(
             f.fix_action.apply()
     assert not orphan.exists()
     assert not bak.exists()
+
+
+def test_status_p_monorepo_not_mislabeled_copy(
+    tmp_path, isolated_library, monkeypatch,
+):
+    parent_url = _make_parent_repo(tmp_path)
+    _seed_global_monorepo_entry(parent_url, "mkdocs", "mkdocs")
+    project = tmp_path / "proj"
+    project.mkdir()
+    monkeypatch.chdir(project)
+    runner = CliRunner(env=scrub_git_env())
+    assert runner.invoke(cli, ["skill", "install", "mkdocs",
+                               "--agents", "codex", "-p"]).exit_code == 0
+
+    result = runner.invoke(cli, ["skill", "status", "-p"])
+    assert result.exit_code == 0, result.output
+    line = next(ln for ln in result.output.splitlines() if ln.startswith("mkdocs"))
+    assert "\tcopy" not in line, f"monorepo skill mislabeled as copy: {line!r}"
+    assert "\tclean" in line or "\tdirty" in line

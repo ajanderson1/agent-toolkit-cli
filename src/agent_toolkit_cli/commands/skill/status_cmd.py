@@ -9,6 +9,7 @@ from agent_toolkit_cli.skill_paths import (
     canonical_skill_dir,
     lock_file_path,
     parent_clone_path,
+    project_parents_root,
 )
 
 from ._common import scope_and_roots
@@ -66,6 +67,7 @@ def status_cmd(
             owner, repo = entry.source.split("/", 1)
             parent_dir = parent_clone_path(
                 owner, repo, ref=entry.ref, env=None,
+                root=project_parents_root(project_root) if scope == "project" else None,
             )
             if not skill_git.is_git_repo(parent_dir):
                 click.echo(f"{slug}\tcopy")
