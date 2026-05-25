@@ -198,3 +198,27 @@ def test_project_store_root_under_library_parent(tmp_path, monkeypatch):
     root = project_store_root(project)
     assert root == library_root().parent / "projects" / project_id(project) / "skills"
     assert root == tmp_path / "lib" / "projects" / project_id(project) / "skills"
+
+
+def test_canonical_skill_dir_project_uses_store(tmp_path, monkeypatch):
+    from agent_toolkit_cli.skill_paths import (
+        canonical_skill_dir, project_store_root,
+    )
+
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(tmp_path / "lib" / "skills"))
+    project = tmp_path / "proj"
+    project.mkdir()
+    got = canonical_skill_dir("mkdocs", scope="project", project=project)
+    assert got == project_store_root(project) / "mkdocs"
+    assert ".agents" not in str(got)
+
+
+def test_project_parents_root_uses_store(tmp_path, monkeypatch):
+    from agent_toolkit_cli.skill_paths import (
+        project_parents_root, project_store_root,
+    )
+
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(tmp_path / "lib" / "skills"))
+    project = tmp_path / "proj"
+    project.mkdir()
+    assert project_parents_root(project) == project_store_root(project)
