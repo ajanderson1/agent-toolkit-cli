@@ -1,10 +1,12 @@
 """Relocated project canonical: external store + uniform projection symlinks."""
+import json
 import subprocess
 from pathlib import Path
 
 import pytest
 from click.testing import CliRunner
 
+from agent_toolkit_cli import skill_install
 from agent_toolkit_cli.cli import main as cli
 from agent_toolkit_cli.skill_lock import LockEntry, add_entry, read_lock, write_lock
 from agent_toolkit_cli.skill_paths import (
@@ -69,3 +71,24 @@ def test_project_universal_gets_symlink_into_external_store(
     assert (uni / "SKILL.md").exists()
 
     assert not (project / ".agents" / "skills" / "_parents").exists()
+
+
+def test_ensure_project_canonical_writes_to_external_store(
+    tmp_path, isolated_library,
+):
+    parent_url = _make_parent_repo(tmp_path)
+    _seed_global_monorepo_entry(parent_url, "mkdocs", "mkdocs")
+    project = tmp_path / "proj"
+    project.mkdir()
+
+    canonical = skill_install.ensure_project_canonical(
+        slug="mkdocs", project=project,
+        global_lock_path=library_lock_path(), env=scrub_git_env(),
+    )
+    assert canonical == project_store_root(project) / "mkdocs"
+    assert canonical.is_symlink()  # monorepo → symlink into store _parents
+    assert (canonical / "SKILL.md").exists()
+    assert (project_store_root(project) / "_parents").exists()
+    assert not (project / ".agents" / "skills" / "_parents").exists()
+    e = json.loads((project / "skills-lock.json").read_text())["skills"]["mkdocs"]
+    assert e["parentUrl"].endswith("/parent-src")

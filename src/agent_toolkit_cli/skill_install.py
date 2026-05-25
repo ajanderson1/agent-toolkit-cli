@@ -347,6 +347,11 @@ def apply(
     )
 
 
+def migrate_project_canonical(*, project: Path, slug: str) -> None:
+    """Stub — full body added in Task 5."""
+    return None
+
+
 def ensure_project_canonical(
     *,
     slug: str,
@@ -378,7 +383,9 @@ def ensure_project_canonical(
     if entry is None:
         raise InstallError(f"{slug}: not in global library")
 
-    project_canonical = project / ".agents" / "skills" / slug
+    from agent_toolkit_cli.skill_paths import canonical_skill_dir
+    migrate_project_canonical(project=project, slug=slug)
+    project_canonical = canonical_skill_dir(slug, scope="project", project=project)
 
     if entry.parent_url is not None:
         # Monorepo skill: clone the parent into the project-local _parents/
