@@ -139,3 +139,25 @@ def test_parent_clone_path_with_ref(tmp_path):
     p = parent_clone_path("o", "r", ref="v1.2.3", env=env)
     assert p.name == "r@v1.2.3"
     assert p.parent.name == "o"
+
+
+def test_parent_clone_path_project_root(tmp_path):
+    from agent_toolkit_cli.skill_paths import parent_clone_path, project_parents_root
+
+    project = tmp_path / "proj"
+    root = project_parents_root(project)
+    assert root == project / ".agents" / "skills"
+
+    p = parent_clone_path("vercel-labs", "agent-browser", ref=None, root=root)
+    assert p == project / ".agents" / "skills" / "_parents" / "vercel-labs" / "agent-browser"
+
+    p_ref = parent_clone_path("o", "r", ref="dev", root=root)
+    assert p_ref == project / ".agents" / "skills" / "_parents" / "o" / "r@dev"
+
+
+def test_parent_clone_path_default_root_unchanged(tmp_path, monkeypatch):
+    from agent_toolkit_cli.skill_paths import parent_clone_path
+
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(tmp_path / "lib" / "skills"))
+    p = parent_clone_path("o", "r", ref=None)
+    assert p == tmp_path / "lib" / "skills" / "_parents" / "o" / "r"

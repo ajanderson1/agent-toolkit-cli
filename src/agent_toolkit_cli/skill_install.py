@@ -20,13 +20,12 @@ from typing import Iterable, Literal
 
 from agent_toolkit_cli import skill_git
 from agent_toolkit_cli.skill_agents import (
-    AGENTS, UnknownAgentError, get_agent, is_universal,
+    AGENTS, UnknownAgentError, get_agent,
 )
 from agent_toolkit_cli.skill_paths import (
     Scope,
     agent_projection_dir,
     canonical_skill_dir,
-    library_skill_path,
     lock_file_path,
 )
 from agent_toolkit_cli.skill_source import ParsedSource
@@ -364,6 +363,10 @@ def ensure_project_canonical(
     """If <project>/.agents/skills/<slug>/ doesn't exist, clone it from the
     global library lock's recorded source URL. Returns the canonical path.
 
+    For monorepo skills (global lock entry has parent_url set), clones the
+    parent repo into a project-local _parents/ cache and symlinks the
+    canonical into parent/<skillPath>, mirroring the global library layout.
+
     Also writes the project lock entry if absent (same guarantee the CLI's
     install_cmd provides, so both call sites get a fully-ready project canonical).
 
@@ -372,7 +375,9 @@ def ensure_project_canonical(
     from agent_toolkit_cli.skill_lock import (
         LockEntry, add_entry, clone_url_from_entry, read_lock, write_lock,
     )
-    from agent_toolkit_cli.skill_paths import lock_file_path
+    from agent_toolkit_cli.skill_paths import (
+        lock_file_path, parent_clone_path, project_parents_root,
+    )
 
     global_lock = read_lock(global_lock_path)
     entry = global_lock.skills.get(slug)
@@ -380,7 +385,52 @@ def ensure_project_canonical(
         raise InstallError(f"{slug}: not in global library")
 
     project_canonical = project / ".agents" / "skills" / slug
-    if not project_canonical.exists():
+
+    if entry.parent_url is not None:
+        # Monorepo skill: clone the parent into the project-local _parents/
+        # cache and symlink the canonical into parent/<skillPath>, mirroring
+        # the global library layout.
+        if entry.skill_path is None:
+            raise InstallError(
+                f"{slug}: monorepo lock entry missing skillPath"
+            )
+        parts = entry.source.split("/", 1)
+        if len(parts) != 2:
+            raise InstallError(
+                f"{slug}: monorepo lock entry has non-owner/repo source "
+                f"{entry.source!r}"
+            )
+        owner, repo = parts
+        parent_dir = parent_clone_path(
+            owner, repo, ref=entry.ref,
+            root=project_parents_root(project), env=env,
+        )
+        if not parent_dir.exists():
+            parent_dir.parent.mkdir(parents=True, exist_ok=True)
+            skill_git.clone(
+                entry.parent_url, parent_dir, ref=entry.ref, env=env,
+            )
+        else:
+            try:
+                skill_git.fetch(parent_dir, env=env)
+            except Exception:  # noqa: BLE001
+                pass  # offline / no remote — the existing clone is still usable
+        skill_root = parent_dir / entry.skill_path
+        if not (skill_root / "SKILL.md").exists():
+            raise InstallError(
+                f"{slug}: {entry.skill_path}/SKILL.md not found in parent "
+                f"clone at {parent_dir}"
+            )
+        if not project_canonical.exists() and not project_canonical.is_symlink():
+            project_canonical.parent.mkdir(parents=True, exist_ok=True)
+            project_canonical.symlink_to(skill_root)
+        if project_canonical.is_symlink() and not project_canonical.exists():
+            raise InstallError(
+                f"{slug}: canonical symlink at {project_canonical} is broken "
+                f"(parent clone missing). Run `skill doctor -p` to repair."
+            )
+    elif not project_canonical.exists():
+        # Single-skill repo: clone the repo root flat into the canonical dir.
         project_canonical.parent.mkdir(parents=True, exist_ok=True)
         source_url = clone_url_from_entry(entry)
         skill_git.clone(source_url, project_canonical, ref=entry.ref, env=env)
@@ -395,6 +445,8 @@ def ensure_project_canonical(
             skill_path=entry.skill_path,
             upstream_sha=None,
             local_sha=None,
+            parent_url=entry.parent_url,
+            read_only=entry.read_only,
         )
         write_lock(project_lock_path, add_entry(project_lock, slug, proj_entry))
 
