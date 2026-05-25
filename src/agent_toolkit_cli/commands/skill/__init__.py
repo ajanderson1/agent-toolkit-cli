@@ -241,7 +241,12 @@ def _add_monorepo(parsed: ParsedSource, slug: str | None) -> None:
     if parsed.subpath:
         subpath = parsed.subpath
     else:
-        subpath = _resolve_skill_name_to_subpath(parent_dir, parsed.skill_name)
+        # Reaching here without a subpath means the caller routed on
+        # parsed.skill_name being set (see add_cmd's `subpath or skill_name`).
+        assert parsed.skill_name is not None
+        subpath = _resolve_skill_name_to_subpath(
+            parent_dir, parsed.skill_name, source=parsed.owner_repo,
+        )
 
     skill_root = parent_dir / subpath
     if not (skill_root / "SKILL.md").exists():
@@ -288,10 +293,15 @@ def _add_monorepo(parsed: ParsedSource, slug: str | None) -> None:
     click.echo(f"added {final_slug} to library <- {parsed.url}/{subpath}")
 
 
-def _resolve_skill_name_to_subpath(parent_dir: Path, skill_name: str) -> str:
+def _resolve_skill_name_to_subpath(
+    parent_dir: Path, skill_name: str, source: str | None = None,
+) -> str:
     """Walk parent_dir for SKILL.md files; pick the one whose frontmatter name matches.
 
-    Raises ClickException with available names if none match.
+    Raises ClickException with available names if none match. When more than one
+    SKILL.md shares the requested name, the error hands the user a concrete way
+    out: an explicit-subpath `skill add` command per match (using `source` as the
+    owner/repo when known, else naming the bare subpaths).
     """
     candidates = []
     matches = []
@@ -325,9 +335,21 @@ def _resolve_skill_name_to_subpath(parent_dir: Path, skill_name: str) -> str:
             f"Available: {listing}"
         )
     if len(matches) > 1:
+        subpaths = [str(m) for m in matches]
+        if source:
+            hints = "\n".join(
+                f"  skill add {source}/{sub}" for sub in subpaths
+            )
+        else:
+            hints = "\n".join(
+                f"  skill add <source>/{sub}  (or --skill {skill_name} "
+                f"on a source already naming {sub})"
+                for sub in subpaths
+            )
         raise click.ClickException(
             f"skill {skill_name!r} matches multiple SKILL.md files: "
-            f"{', '.join(str(m) for m in matches)}"
+            f"{', '.join(subpaths)}.\n"
+            f"Address one by its explicit subpath:\n{hints}"
         )
     return str(matches[0])
 
