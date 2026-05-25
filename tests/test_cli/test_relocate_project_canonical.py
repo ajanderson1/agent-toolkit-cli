@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
-from agent_toolkit_cli import skill_install
+from agent_toolkit_cli import skill_doctor, skill_install
 from agent_toolkit_cli.cli import main as cli
 from agent_toolkit_cli.skill_lock import LockEntry, add_entry, read_lock, write_lock
 from agent_toolkit_cli.skill_paths import (
@@ -196,3 +196,30 @@ def test_project_uninstall_preserves_external_canonical(
     assert "mkdocs" not in proj_lock.get("skills", {})
     # External canonical PRESERVED (the whole point).
     assert (canonical / "SKILL.md").exists(), "external canonical must survive uninstall"
+
+
+def test_doctor_orphan_sweep_detects_unreferenced_canonical(
+    tmp_path, isolated_library,
+):
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / "skills-lock.json").write_text('{"version": 1, "skills": {}}')
+    store = project_store_root(project)
+    orphan = store / "ghost"
+    orphan.mkdir(parents=True)
+    (orphan / "SKILL.md").write_text("---\nname: ghost\n---\n")
+    bak = store / "solo.bak-20260101T000000Z"
+    bak.mkdir()
+
+    findings = skill_doctor.diagnose(
+        slugs=None, scope="project", home=None, project=project,
+    )
+    kinds = {(f.kind, f.slug) for f in findings}
+    assert ("orphan_canonical", "ghost") in kinds
+    assert any(f.kind == "orphan_canonical" and "bak-" in str(f.path) for f in findings)
+
+    for f in findings:
+        if f.kind == "orphan_canonical":
+            f.fix_action.apply()
+    assert not orphan.exists()
+    assert not bak.exists()
