@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.11.1](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.11.0...v2.11.1) (2026-05-25)
+
+
+### Bug Fixes
+
+* **skill install:** surface stray-symlink failures and point at doctor ([#229](https://github.com/ajanderson1/agent-toolkit-cli/issues/229)) ([2d9858f](https://github.com/ajanderson1/agent-toolkit-cli/commit/2d9858fbc38039d733dd218f7e8ba6828bc546ac))
+
 ## [2.11.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.10.1...v2.11.0) (2026-05-25)
 
 
