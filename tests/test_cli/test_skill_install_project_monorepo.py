@@ -11,7 +11,7 @@ from agent_toolkit_cli.cli import main as cli
 from agent_toolkit_cli.skill_lock import (
     LockEntry, add_entry, read_lock, write_lock,
 )
-from agent_toolkit_cli.skill_paths import library_lock_path
+from agent_toolkit_cli.skill_paths import library_lock_path, project_parents_root
 
 from tests.conftest import scrub_git_env
 
@@ -80,7 +80,7 @@ def test_ensure_project_canonical_monorepo_symlinks_into_parent(
     assert (canonical / "SKILL.md").exists()
     assert (canonical / "SKILL.md").read_text().startswith("---\nname: mkdocs")
 
-    parents = project / ".agents" / "skills" / "_parents"
+    parents = project_parents_root(project) / "_parents"
     parent_clones = list(parents.glob("*/*"))
     assert len(parent_clones) == 1
     assert parent_clones[0].name == "agent-browser"

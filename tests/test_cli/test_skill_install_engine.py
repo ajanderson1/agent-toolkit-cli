@@ -11,7 +11,7 @@ from agent_toolkit_cli.skill_install import (
     _should_skip_symlink, apply, ensure_project_canonical, plan,
 )
 from agent_toolkit_cli.skill_paths import (
-    canonical_skill_dir, agent_projection_dir,
+    canonical_skill_dir, agent_projection_dir, project_store_root,
 )
 from agent_toolkit_cli.skill_source import ParsedSource
 
@@ -252,7 +252,7 @@ def test_ensure_project_canonical_clones_when_absent(git_sandbox, tmp_path, monk
         env=git_sandbox.env,
     )
 
-    assert result == project / ".agents" / "skills" / "demo"
+    assert result == project_store_root(project) / "demo"
     assert result.is_dir() and not result.is_symlink()
     assert (result / "SKILL.md").exists()
 

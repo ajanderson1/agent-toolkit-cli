@@ -16,6 +16,7 @@ from pathlib import Path
 from click.testing import CliRunner
 
 from agent_toolkit_cli.cli import main
+from agent_toolkit_cli.skill_paths import canonical_skill_dir
 
 
 # --- helpers (local copies, mirrors test_cli_skill_update.py / _push.py) ---
@@ -90,7 +91,7 @@ def test_reset_clean_snaps_to_upstream(git_sandbox, tmp_path: Path, monkeypatch)
         "--project", str(project), "skill", "reset", "demo", "-p",
     ])
     assert result.exit_code == 0, result.output
-    canonical = project / ".agents" / "skills" / "demo"
+    canonical = canonical_skill_dir("demo", scope="project", project=project)
     assert (canonical / "NEW.md").exists()
     assert "reset to" in result.output
 
@@ -132,7 +133,7 @@ def test_reset_refuses_dirty_without_force(git_sandbox, tmp_path: Path, monkeypa
     runner = CliRunner()
     assert _add_and_install_project(runner, git_sandbox.upstream, project).exit_code == 0
 
-    canonical = project / ".agents" / "skills" / "demo"
+    canonical = canonical_skill_dir("demo", scope="project", project=project)
     dirty_text = "---\nname: demo\ndescription: Dirty local edit.\n---\n# dirty\n"
     (canonical / "SKILL.md").write_text(dirty_text)
 
@@ -161,7 +162,7 @@ def test_reset_force_discards_dirty_tree(git_sandbox, tmp_path: Path, monkeypatc
     runner = CliRunner()
     assert _add_and_install_project(runner, git_sandbox.upstream, project).exit_code == 0
 
-    canonical = project / ".agents" / "skills" / "demo"
+    canonical = canonical_skill_dir("demo", scope="project", project=project)
     (canonical / "SKILL.md").write_text(
         "---\nname: demo\ndescription: Dirty.\n---\n# dirty\n"
     )
@@ -288,8 +289,8 @@ def test_reset_multi_slug(git_sandbox, tmp_path: Path, monkeypatch):
         "--project", str(project), "skill", "reset", "demo", "demo2", "-p",
     ])
     assert result.exit_code == 0, result.output
-    assert (project / ".agents" / "skills" / "demo" / "NEW1.md").exists()
-    assert (project / ".agents" / "skills" / "demo2" / "NEW2.md").exists()
+    assert (canonical_skill_dir("demo", scope="project", project=project) / "NEW1.md").exists()
+    assert (canonical_skill_dir("demo2", scope="project", project=project) / "NEW2.md").exists()
 
     lock_data = json.loads((project / "skills-lock.json").read_text())
     for slug in ("demo", "demo2"):

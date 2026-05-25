@@ -11,6 +11,7 @@ from agent_toolkit_cli.skill_paths import (
     library_root,
     library_skill_path,
     lock_file_path,
+    project_store_root,
 )
 
 
@@ -24,10 +25,13 @@ def test_canonical_skill_dir_global_is_library_path(tmp_path: Path, monkeypatch)
     assert p == lib / "journal"
 
 
-def test_canonical_skill_dir_project(tmp_path: Path):
+def test_canonical_skill_dir_project(tmp_path: Path, monkeypatch):
+    lib = tmp_path / "lib" / "skills"
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(lib))
     project = tmp_path / "proj"
+    project.mkdir()
     p = canonical_skill_dir("journal", scope="project", home=None, project=project)
-    assert p == project / ".agents" / "skills" / "journal"
+    assert p == project_store_root(project) / "journal"
 
 
 def test_lock_file_path_global_is_library_lock(tmp_path: Path, monkeypatch):
@@ -141,18 +145,21 @@ def test_parent_clone_path_with_ref(tmp_path):
     assert p.parent.name == "o"
 
 
-def test_parent_clone_path_project_root(tmp_path):
+def test_parent_clone_path_project_root(tmp_path, monkeypatch):
     from agent_toolkit_cli.skill_paths import parent_clone_path, project_parents_root
 
+    lib = tmp_path / "lib" / "skills"
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(lib))
     project = tmp_path / "proj"
+    project.mkdir()
     root = project_parents_root(project)
-    assert root == project / ".agents" / "skills"
+    assert root == project_store_root(project)
 
     p = parent_clone_path("vercel-labs", "agent-browser", ref=None, root=root)
-    assert p == project / ".agents" / "skills" / "_parents" / "vercel-labs" / "agent-browser"
+    assert p == root / "_parents" / "vercel-labs" / "agent-browser"
 
     p_ref = parent_clone_path("o", "r", ref="dev", root=root)
-    assert p_ref == project / ".agents" / "skills" / "_parents" / "o" / "r@dev"
+    assert p_ref == root / "_parents" / "o" / "r@dev"
 
 
 def test_parent_clone_path_default_root_unchanged(tmp_path, monkeypatch):
