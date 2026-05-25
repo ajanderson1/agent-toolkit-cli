@@ -203,6 +203,43 @@ def test_apply_project_codex_gets_symlink_universal(git_sandbox, tmp_path):
     assert "codex" not in result.skipped
 
 
+def test_apply_project_universal_unlink_removes_symlink(git_sandbox, tmp_path):
+    """#232: removing "universal" at project scope unlinks the projection symlink.
+
+    Mirrors test_apply_project_codex_gets_symlink_universal for the install side.
+    After unlink the <project>/.agents/skills/<slug> symlink is gone, but the
+    external-store canonical is untouched (non-destructive).
+    """
+    home = Path(git_sandbox.env["HOME"])
+    src = _src(git_sandbox.upstream)
+    project = tmp_path / "myproj"
+    project.mkdir()
+    apply(
+        InstallPlan(
+            slug="demo", scope="project", source=src, ref=None,
+            add_agents=("codex",), remove_agents=(),
+        ),
+        home=home, project=project, env=git_sandbox.env,
+    )
+    link = agent_projection_dir(
+        "codex", "demo", scope="project", home=home, project=project,
+    )
+    assert link.is_symlink(), "precondition: install creates the projection symlink"
+    canonical = canonical_skill_dir(
+        "demo", scope="project", home=home, project=project,
+    )
+
+    apply(
+        InstallPlan(
+            slug="demo", scope="project", source=None, ref=None,
+            add_agents=(), remove_agents=("universal",),
+        ),
+        home=home, project=project, env=git_sandbox.env,
+    )
+    assert not link.exists(), "universal unlink must remove the projection symlink"
+    assert canonical.is_dir(), "external-store canonical must survive the unlink"
+
+
 def test_plan_unknown_agent_raises():
     """plan() with bogus agent name raises UnknownAgentError."""
     from agent_toolkit_cli.skill_agents import UnknownAgentError
