@@ -18,6 +18,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Literal
 
+import click
+
 from agent_toolkit_cli import skill_git
 from agent_toolkit_cli.skill_agents import (
     AGENTS, UnknownAgentError, get_agent,
@@ -348,8 +350,54 @@ def apply(
 
 
 def migrate_project_canonical(*, project: Path, slug: str) -> None:
-    """Stub — full body added in Task 5."""
-    return None
+    """Migrate an old in-tree project canonical to the external store.
+
+    Idempotent. Old layout put the canonical at <project>/.agents/skills/<slug>
+    as a real clone (single-skill) or a symlink into the in-tree _parents/ cache
+    (v2.9.0 monorepo). The new layout keeps the canonical in the external store
+    (project_store_root) and leaves only a projection symlink in the tree.
+
+    - Old is already a symlink into the store: no-op (already migrated).
+    - Old is any other symlink (v2.9.0 monorepo, or stale): remove it; the
+      installer recreates the new-layout symlink and re-clones the parent into
+      the store's _parents/.
+    - Old is a real directory (single-skill clone, possibly dirty): if the
+      store dest already exists, rename it to <slug>.bak-<UTC-timestamp> first
+      (never overwrite); then move the clone into the store (git history + dirty
+      work travel intact); leave a symlink behind so stale references resolve.
+    """
+    import datetime
+
+    from agent_toolkit_cli.skill_paths import project_store_root
+
+    old = project / ".agents" / "skills" / slug
+    if not old.is_symlink() and not old.exists():
+        return  # nothing to migrate
+
+    dest = project_store_root(project) / slug
+
+    if old.is_symlink():
+        try:
+            resolved = old.resolve()
+        except OSError:
+            resolved = None
+        if resolved is not None and resolved == dest.resolve():
+            return  # already migrated → no-op
+        old.unlink()  # v2.9.0 monorepo symlink / stale: holds no work
+        return
+
+    # old is a real directory: move it into the store.
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    if dest.exists() or dest.is_symlink():
+        ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        backup = dest.parent / f"{slug}.bak-{ts}"
+        shutil.move(str(dest), str(backup))
+        click.echo(
+            f"{slug}: existing store entry backed up to {backup} before migration"
+        )
+    shutil.move(str(old), str(dest))
+    old.parent.mkdir(parents=True, exist_ok=True)
+    old.symlink_to(dest)
 
 
 def ensure_project_canonical(

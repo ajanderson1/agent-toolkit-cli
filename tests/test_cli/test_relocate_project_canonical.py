@@ -96,3 +96,76 @@ def test_ensure_project_canonical_writes_to_external_store(
     assert not (project / ".agents" / "skills" / "_parents").exists()
     e = json.loads((project / "skills-lock.json").read_text())["skills"]["mkdocs"]
     assert e["parentUrl"].endswith("/parent-src")
+
+
+def _make_intree_clone(project: Path, slug: str, marker: str) -> Path:
+    """Simulate an old-layout in-tree single-skill clone with a marker file."""
+    old = project / ".agents" / "skills" / slug
+    old.mkdir(parents=True)
+    (old / "SKILL.md").write_text(f"---\nname: {slug}\n---\n")
+    (old / "MARKER.txt").write_text(marker)
+    env = scrub_git_env()
+    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=old, check=True, env=env)
+    subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t",
+                    "add", "."], cwd=old, check=True, env=env)
+    subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t",
+                    "commit", "-q", "-m", "x"], cwd=old, check=True, env=env)
+    return old
+
+
+def test_migrate_moves_intree_clone_to_store(tmp_path, isolated_library):
+    project = tmp_path / "proj"
+    project.mkdir()
+    _make_intree_clone(project, "solo", "keepme")
+
+    skill_install.migrate_project_canonical(project=project, slug="solo")
+
+    dest = project_store_root(project) / "solo"
+    assert dest.is_dir() and not dest.is_symlink()
+    assert (dest / "MARKER.txt").read_text() == "keepme"  # dirty work preserved
+    assert (dest / ".git").exists()  # git history travels
+    old = project / ".agents" / "skills" / "solo"
+    assert old.is_symlink()
+    assert old.resolve() == dest.resolve()
+
+
+def test_migrate_is_idempotent(tmp_path, isolated_library):
+    project = tmp_path / "proj"
+    project.mkdir()
+    _make_intree_clone(project, "solo", "v1")
+    skill_install.migrate_project_canonical(project=project, slug="solo")
+    skill_install.migrate_project_canonical(project=project, slug="solo")
+    dest = project_store_root(project) / "solo"
+    assert (dest / "MARKER.txt").read_text() == "v1"
+    assert not list((project_store_root(project)).glob("solo.bak-*"))
+
+
+def test_migrate_backs_up_destination_collision(tmp_path, isolated_library):
+    project = tmp_path / "proj"
+    project.mkdir()
+    dest = project_store_root(project) / "solo"
+    dest.mkdir(parents=True)
+    (dest / "OLD.txt").write_text("old-dest")
+    _make_intree_clone(project, "solo", "new-intree")
+
+    skill_install.migrate_project_canonical(project=project, slug="solo")
+
+    assert (dest / "MARKER.txt").read_text() == "new-intree"
+    baks = list(project_store_root(project).glob("solo.bak-*"))
+    assert len(baks) == 1
+    assert (baks[0] / "OLD.txt").read_text() == "old-dest"
+
+
+def test_migrate_intree_symlink_is_removed(tmp_path, isolated_library):
+    """v2.9.0 monorepo layout: in-tree path is a symlink (holds no work)."""
+    project = tmp_path / "proj"
+    project.mkdir()
+    target = tmp_path / "somewhere"
+    target.mkdir()
+    old = project / ".agents" / "skills" / "mono"
+    old.parent.mkdir(parents=True)
+    old.symlink_to(target)
+
+    skill_install.migrate_project_canonical(project=project, slug="mono")
+
+    assert not old.exists() and not old.is_symlink()
