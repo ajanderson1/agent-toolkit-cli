@@ -4,6 +4,7 @@ from pathlib import Path
 from click.testing import CliRunner
 
 from agent_toolkit_cli.cli import main
+from agent_toolkit_cli.skill_paths import canonical_skill_dir
 from agent_toolkit_tui.skill_state import (
     INTERACTIVE_AGENTS,
     SkillCell,
@@ -58,7 +59,7 @@ def test_build_skill_rows_dirty(git_sandbox, tmp_path: Path, monkeypatch):
     runner = CliRunner()
     r = _add_demo_project(runner, git_sandbox.upstream, project, library_root)
     assert r.exit_code == 0, r.output
-    (project / ".agents" / "skills" / "demo" / "SKILL.md").write_text("edit\n")
+    (canonical_skill_dir("demo", scope="project", project=project) / "SKILL.md").write_text("edit\n")
     rows = build_skill_rows(scope="project", home=None, project=project)
     assert rows[0].state == "dirty"
 
@@ -87,7 +88,7 @@ def test_build_skill_rows_missing_canonical(
     # Remove the project canonical behind the lock's back. Since the slug is
     # still in the library, state becomes "library" (available, not installed)
     # rather than the alarming "missing".
-    shutil.rmtree(project / ".agents" / "skills" / "demo")
+    shutil.rmtree(canonical_skill_dir("demo", scope="project", project=project))
     rows = build_skill_rows(scope="project", home=None, project=project)
     assert rows[0].state == "library"
 
@@ -163,51 +164,60 @@ def test_universal_cell_global_drifted(tmp_path: Path, monkeypatch):
 
 
 def test_universal_cell_project_linked(tmp_path: Path, monkeypatch):
-    """At project scope, universal cell is linked when the project canonical dir exists."""
+    """At project scope, universal cell is linked when the shared
+    <project>/.agents/skills/<slug> symlink resolves to the external-store
+    canonical (the dir all universal agents read through)."""
     library_root = tmp_path / "lib" / "skills"
     monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
     project = tmp_path / "proj"
     project.mkdir()
 
-    # Create the project canonical as a real directory (not a symlink).
-    canonical = project / ".agents" / "skills" / "demo"
+    # The canonical lives in the external store.
+    canonical = canonical_skill_dir("demo", scope="project", project=project)
     canonical.mkdir(parents=True)
+    # The shared universal projection symlink points at it.
+    bundle = project / ".agents" / "skills"
+    bundle.mkdir(parents=True)
+    (bundle / "demo").symlink_to(canonical)
 
     cell = _cell_for("demo", "universal", scope="project", home=None, project=project)
     assert cell == SkillCell(linked=True, drift=False, skipped=False)
 
 
 def test_universal_cell_project_not_linked(tmp_path: Path, monkeypatch):
-    """At project scope, universal cell is not linked when the project canonical is absent."""
+    """At project scope, universal cell is not linked when the shared symlink is absent
+    (even if the external-store canonical exists — installed, but universal not linked here)."""
     library_root = tmp_path / "lib" / "skills"
     monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
     project = tmp_path / "proj"
     project.mkdir()
+
+    # Canonical present in the store, but no .agents/skills/demo symlink.
+    canonical_skill_dir("demo", scope="project", project=project).mkdir(parents=True)
 
     cell = _cell_for("demo", "universal", scope="project", home=None, project=project)
     assert cell == SkillCell(linked=False, drift=False, skipped=False)
 
 
-def test_universal_cell_project_symlink_not_linked(tmp_path: Path, monkeypatch):
-    """At project scope, universal cell is NOT linked when the path is a symlink.
-
-    The project canonical must be a real directory, not a symlink.  A symlink
-    at that path would indicate an incorrect install; we report not-linked.
-    """
+def test_universal_cell_project_drifted(tmp_path: Path, monkeypatch):
+    """At project scope, universal cell is drifted when the shared symlink points
+    somewhere other than the external-store canonical."""
     library_root = tmp_path / "lib" / "skills"
     monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
     project = tmp_path / "proj"
     project.mkdir()
 
-    # Create a symlink at the project canonical path instead of a real dir.
-    target = tmp_path / "elsewhere"
-    target.mkdir()
+    canonical = canonical_skill_dir("demo", scope="project", project=project)
+    canonical.mkdir(parents=True)
+    # Symlink points elsewhere, not at the canonical → drift.
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
     (project / ".agents" / "skills").mkdir(parents=True)
-    (project / ".agents" / "skills" / "demo").symlink_to(target)
+    (project / ".agents" / "skills" / "demo").symlink_to(elsewhere)
 
     cell = _cell_for("demo", "universal", scope="project", home=None, project=project)
-    # A symlink is not the project canonical; linked must be False.
     assert cell.linked is False
+    assert cell.drift is True
 
 
 def test_build_skill_rows_includes_universal_cell(
@@ -232,9 +242,12 @@ def test_build_skill_rows_includes_universal_cell(
     assert ("universal", "project") in row.cells, (
         f"universal cell missing; cells keys: {list(row.cells.keys())}"
     )
-    # The project canonical exists as a real dir after install, so linked=True.
+    # Demo was installed for claude-code only (not the universal bundle), so the
+    # universal cell is present but not linked: under the external-store model
+    # "linked" requires the shared <project>/.agents/skills/<slug> symlink, which
+    # only the universal token creates.
     universal_cell = row.cells[("universal", "project")]
-    assert universal_cell.linked is True
+    assert universal_cell.linked is False
     assert universal_cell.skipped is False
 
 
@@ -270,8 +283,8 @@ def test_cell_for_drift_when_canonical_exists(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
     project = tmp_path / "proj"
     project.mkdir()
-    # Project canonical exists.
-    (project / ".agents" / "skills" / "demo").mkdir(parents=True)
+    # Project canonical exists in the external store.
+    canonical_skill_dir("demo", scope="project", project=project).mkdir(parents=True)
 
     elsewhere = tmp_path / "legacy"
     elsewhere.mkdir()

@@ -26,6 +26,7 @@ from agent_toolkit_cli.skill_lock import LockFile, read_lock, remove_entry, writ
 from agent_toolkit_cli.skill_paths import (
     library_lock_path,
     library_skill_path,
+    lock_file_path,
 )
 from agent_toolkit_cli.skill_source import ParsedSource, SourceParseError, parse_source
 
@@ -413,13 +414,13 @@ def install_cmd(
                 f"clone for project scope failed: {exc}"
             ) from exc
 
-        # Filter out "universal" for project scope — canonical IS the install.
-        # Non-universal agents get symlinks per skip rules.
-        non_universal = tuple(a for a in target_agents if a != "universal")
+        # Under the external-store model every agent — including the synthetic
+        # "universal" bundle token — projects via a symlink into the project
+        # tree; apply() creates <project>/.agents/skills/<slug> for "universal".
         p = InstallPlan(
             slug=slug, scope="project",
             source=None, ref=None,
-            add_agents=non_universal, remove_agents=(),
+            add_agents=target_agents, remove_agents=(),
         )
         try:
             result = engine_apply(p, home=None, project=project_root, env=None)
@@ -484,17 +485,27 @@ def uninstall_cmd(
         project_root = (
             ctx.obj.get("project_root") if ctx.obj else None
         ) or Path.cwd()
-        non_universal = tuple(a for a in target_agents if a != "universal")
+        # Every agent — including the synthetic "universal" bundle token —
+        # projects via a symlink under the external-store model; apply() removes
+        # <project>/.agents/skills/<slug> for "universal".
         p = InstallPlan(
             slug=slug, scope="project",
             source=None, ref=None,
-            add_agents=(), remove_agents=non_universal,
+            add_agents=(), remove_agents=target_agents,
         )
         try:
             result = engine_apply(p, home=None, project=project_root, env=None)
         except InstallError as exc:
             raise click.ClickException(str(exc)) from exc
         removed = result.removed
+
+        # Project scope is non-destructive: the external canonical in the
+        # per-project store is preserved (dirty work survives; doctor's orphan
+        # sweep reclaims it later). Drop only the project lock entry.
+        proj_lock_path = lock_file_path(scope="project", project=project_root)
+        proj_lock = read_lock(proj_lock_path)
+        if slug in proj_lock.skills:
+            write_lock(proj_lock_path, remove_entry(proj_lock, slug))
 
     if removed:
         for link in removed:

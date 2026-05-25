@@ -8,6 +8,7 @@ from pathlib import Path
 from click.testing import CliRunner
 
 from agent_toolkit_cli.cli import main
+from agent_toolkit_cli.skill_paths import project_store_root
 
 
 def _add_and_install_global_universal(runner, upstream_path, library_root, fake_home):
@@ -81,7 +82,13 @@ def test_uninstall_idempotent(
 def test_uninstall_project_preserves_canonical(
     git_sandbox, tmp_path: Path, monkeypatch
 ):
-    """skill uninstall --scope project removes symlinks but preserves project canonical."""
+    """skill uninstall --scope project removes symlinks but preserves external canonical.
+
+    Under the v2.9 model the project canonical lives in the external per-project
+    store (project_store_root), NOT inside the project tree. Uninstall removes
+    projection symlinks and the project lock entry but leaves the external
+    canonical intact so dirty work survives.
+    """
     library_root = tmp_path / "lib" / "skills"
     project = tmp_path / "proj"
     project.mkdir()
@@ -102,9 +109,11 @@ def test_uninstall_project_preserves_canonical(
     ])
     assert r.exit_code == 0, r.output
 
-    project_canonical = project / ".agents" / "skills" / "demo"
+    # Under the new model the canonical is in the external store; the in-tree
+    # path is a projection symlink (for claude-code: .claude/skills/demo).
+    external_canonical = project_store_root(project) / "demo"
     claude_link = project / ".claude" / "skills" / "demo"
-    assert project_canonical.is_dir()
+    assert external_canonical.is_dir(), "external canonical must exist after install"
     assert claude_link.is_symlink()
 
     result = runner.invoke(main, [
@@ -114,7 +123,8 @@ def test_uninstall_project_preserves_canonical(
     ])
     assert result.exit_code == 0, result.output
     assert not claude_link.exists(), "claude-code symlink must be removed"
-    assert project_canonical.is_dir(), "project canonical must be preserved"
+    # External canonical preserved — the whole point of non-destructive uninstall.
+    assert external_canonical.is_dir(), "external canonical must survive uninstall"
 
 
 def test_uninstall_agents_required():

@@ -9,6 +9,7 @@ import pytest
 from click.testing import CliRunner
 
 from agent_toolkit_cli.cli import main
+from agent_toolkit_cli.skill_paths import canonical_skill_dir
 
 
 def _add_demo(runner, upstream_path, library_root):
@@ -168,7 +169,8 @@ def test_install_global_idempotent(
 def test_install_project_universal_clones_project_canonical(
     git_sandbox, tmp_path: Path, monkeypatch
 ):
-    """skill install --scope project --agents universal clones <project>/.agents/skills/<slug>."""
+    """skill install --scope project --agents universal: real clone in store,
+    no in-tree symlink (the store canonical IS the install for the universal token)."""
     library_root = tmp_path / "lib" / "skills"
     project = tmp_path / "proj"
     project.mkdir()
@@ -187,9 +189,13 @@ def test_install_project_universal_clones_project_canonical(
     ])
     assert result.exit_code == 0, result.output
 
-    project_canonical = project / ".agents" / "skills" / "demo"
-    assert project_canonical.is_dir() and not project_canonical.is_symlink()
-    assert (project_canonical / "SKILL.md").exists()
+    # Under the new model the real canonical lives in the external store, NOT
+    # in the project tree.  When --agents universal is used at project scope
+    # the CLI records the store clone as the install; no in-tree symlink is
+    # created (the store canonical IS the install).
+    store_canonical = canonical_skill_dir("demo", scope="project", project=project)
+    assert store_canonical.is_dir() and not store_canonical.is_symlink()
+    assert (store_canonical / "SKILL.md").exists()
 
 
 def test_install_project_non_universal_creates_symlink_when_dir_exists(
@@ -215,11 +221,13 @@ def test_install_project_non_universal_creates_symlink_when_dir_exists(
     ])
     assert result.exit_code == 0, result.output
 
-    project_canonical = project / ".agents" / "skills" / "demo"
+    # Real canonical in external store.
+    store_canonical = canonical_skill_dir("demo", scope="project", project=project)
+    assert store_canonical.is_dir()
+    # Claude-code gets a projection symlink → store canonical.
     claude_link = project / ".claude" / "skills" / "demo"
-    assert project_canonical.is_dir()
     assert claude_link.is_symlink()
-    assert claude_link.resolve() == project_canonical.resolve()
+    assert claude_link.resolve() == store_canonical.resolve()
 
 
 def test_install_project_non_universal_auto_creates_agent_root(

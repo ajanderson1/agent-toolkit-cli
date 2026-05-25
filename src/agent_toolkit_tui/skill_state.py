@@ -17,7 +17,7 @@ from agent_toolkit_cli.skill_install import _should_skip_symlink
 from agent_toolkit_cli.skill_lock import read_lock
 from agent_toolkit_cli.skill_paths import (
     agent_projection_dir, canonical_skill_dir, library_lock_path,
-    library_skill_path, parent_clone_path,
+    library_skill_path, parent_clone_path, project_parents_root,
 )
 
 # "library" means the skill exists in the library but is not installed in this
@@ -88,6 +88,11 @@ def _universal_bundle_link(slug: str) -> Path:
     return Path.home() / ".agents" / "skills" / slug
 
 
+def _project_universal_link(project: Path, slug: str) -> Path:
+    """Return the <project>/.agents/skills/<slug> path for the project universal bundle."""
+    return project / ".agents" / "skills" / slug
+
+
 def _cell_for(
     slug: str, agent_name: str, *,
     scope: Scope, home: Path | None, project: Path | None,
@@ -96,28 +101,27 @@ def _cell_for(
     # use _should_skip_symlink (that function doesn't understand "universal" as
     # an agent_name — the engine strips it before calling skip checks).
     if agent_name == "universal":
-        if scope == "global":
-            # Global: linked iff ~/.agents/skills/<slug> is a symlink that
-            # resolves to the library canonical.
-            canonical = canonical_skill_dir(
-                slug, scope=scope, home=home, project=project,
-            )
-            bundle_link = _universal_bundle_link(slug)
-            if not bundle_link.is_symlink():
-                return SkillCell(linked=False, drift=False, skipped=False)
-            canonical_real = canonical.resolve() if canonical.exists() else canonical
-            if bundle_link.resolve() == canonical_real:
-                return SkillCell(linked=True, drift=False, skipped=False)
-            # Symlink exists but points elsewhere — drifted.
-            return SkillCell(linked=False, drift=True, skipped=False)
-        else:
-            # Project scope: linked iff <project>/.agents/skills/<slug>/ exists
-            # as a directory (not a symlink — it's the project canonical).
-            canonical = canonical_skill_dir(
-                slug, scope=scope, home=home, project=project,
-            )
-            linked = canonical.exists() and canonical.is_dir() and not canonical.is_symlink()
-            return SkillCell(linked=linked, drift=False, skipped=False)
+        # The universal bundle is one shared projection symlink that all
+        # universal agents read through. Both scopes detect it the same way now:
+        # linked iff the bundle link is a symlink resolving to the canonical
+        # (which lives in the library at global scope, the external store at
+        # project scope). Global: ~/.agents/skills/<slug>; project:
+        # <project>/.agents/skills/<slug>.
+        canonical = canonical_skill_dir(
+            slug, scope=scope, home=home, project=project,
+        )
+        bundle_link = (
+            _universal_bundle_link(slug)
+            if scope == "global"
+            else _project_universal_link(project, slug)  # type: ignore[arg-type]
+        )
+        if not bundle_link.is_symlink():
+            return SkillCell(linked=False, drift=False, skipped=False)
+        canonical_real = canonical.resolve() if canonical.exists() else canonical
+        if bundle_link.resolve() == canonical_real:
+            return SkillCell(linked=True, drift=False, skipped=False)
+        # Symlink exists but points elsewhere — drifted.
+        return SkillCell(linked=False, drift=True, skipped=False)
 
     canonical = canonical_skill_dir(slug, scope=scope, home=home, project=project)
     skip, _ = _should_skip_symlink(
@@ -165,6 +169,7 @@ def build_skill_rows(
             owner, repo = entry.source.split("/", 1)
             parent_dir = parent_clone_path(
                 owner, repo, ref=entry.ref, env=None,
+                root=project_parents_root(project) if scope == "project" else None,
             )
             if not skill_git.is_git_repo(parent_dir):
                 # Parent clone missing — user `rm -rf`'d it, or

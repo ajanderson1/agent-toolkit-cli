@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from agent_toolkit_cli.skill_install import InstallError, install, uninstall
+from agent_toolkit_cli.skill_paths import canonical_skill_dir
 from agent_toolkit_cli.skill_source import parse_source
 
 
@@ -32,7 +33,9 @@ def test_install_creates_canonical_and_symlinks(git_sandbox, tmp_path: Path):
     assert claude.is_symlink() and Path(claude.resolve()) == canonical.resolve()
 
 
-def test_install_is_idempotent(git_sandbox, tmp_path: Path):
+def test_install_is_idempotent(git_sandbox, tmp_path: Path, monkeypatch):
+    library_root = tmp_path / "lib" / "skills"
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
     project = tmp_path / "proj"
     project.mkdir()
     (project / ".claude").mkdir()
@@ -41,7 +44,7 @@ def test_install_is_idempotent(git_sandbox, tmp_path: Path):
             harnesses=("claude",), env=git_sandbox.env)
     install(parsed=src, slug="demo", scope="project", home=None, project=project,
             harnesses=("claude",), env=git_sandbox.env)
-    canonical = project / ".agents" / "skills" / "demo"
+    canonical = canonical_skill_dir("demo", scope="project", project=project)
     assert (canonical / "SKILL.md").exists()
 
 

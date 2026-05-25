@@ -7,8 +7,8 @@ v2.2 model — library vs install:
   working tree.  Agents reach a library skill via a symlink created by
   `skill install`.  The global lock is at <library_root>.parent/skills-lock.json.
 
-  Project scope retains skills.sh's model: its own per-project canonical at
-  <project>/.agents/skills/<slug>/ (independent git clone).  Project lock at
+  Project scope: its own per-project canonical at an external store outside
+  the project tree (see project_store_root).  Project lock at
   <project>/skills-lock.json.
 
   canonical_skill_dir(slug, scope='global') now delegates to library_skill_path.
@@ -17,6 +17,7 @@ v2.2 model — library vs install:
 """
 from __future__ import annotations
 
+import hashlib
 import os
 from pathlib import Path
 from typing import Literal
@@ -49,13 +50,13 @@ def canonical_skill_dir(
     is accepted for backward compatibility but ignored — the library root is
     always determined by $AGENT_TOOLKIT_SKILLS_ROOT.
 
-    Project scope: <project>/.agents/skills/<slug>/ (unchanged from v2.1).
+    Project scope: <store_root>/<slug> (external store; see project_store_root).
     """
     if scope == "global":
         return library_skill_path(slug)
     if project is None:
         raise ValueError("project scope requires project")
-    return project / ".agents" / "skills" / slug
+    return project_store_root(project) / slug
 
 
 def lock_file_path(
@@ -100,18 +101,63 @@ def library_skill_path(slug: str, *, env: dict[str, str] | None = None) -> Path:
     return library_root(env) / slug
 
 
+def project_id(project: Path) -> str:
+    """Stable, collision-free directory name for a project's skill store.
+
+    Sanitized absolute path + 6-hex-char sha256 suffix. The sanitized prefix
+    keeps doctor output and on-disk inspection human-readable; the hash suffix
+    guarantees uniqueness even if two distinct paths sanitize to the same
+    string. Taken over project.resolve() so symlinked/relative invocations of
+    the same project map to one id.
+    """
+    real = project.resolve()
+    abs_str = str(real)
+    sanitized = "".join(
+        c if (c.isalnum() or c in "._-") else "-" for c in abs_str
+    ).strip("-")
+    digest = hashlib.sha256(abs_str.encode()).hexdigest()[:6]
+    return f"{sanitized}-{digest}"
+
+
+def project_store_root(project: Path, *, env: dict[str, str] | None = None) -> Path:
+    """Per-project skill store: <library_root>.parent/projects/<id>/skills.
+
+    Holds project canonical skill dirs AND the project's _parents/ cache.
+    Lives under ~/.agent-toolkit (library_root().parent) by default, OUTSIDE
+    the project tree, so removing a skill never touches project files.
+    Honors $AGENT_TOOLKIT_SKILLS_ROOT via library_root(env).
+    """
+    return library_root(env).parent / "projects" / project_id(project) / "skills"
+
+
 def parent_clone_path(
     owner: str, repo: str, *, ref: str | None,
     env: dict[str, str] | None = None,
+    root: Path | None = None,
 ) -> Path:
     """Where a monorepo parent is cloned, shared across all skills from it.
 
-    Lives at <library_root>/_parents/<owner>/<repo>[@<ref>]/ so the cache is
-    inside the AGENT_TOOLKIT_SKILLS_ROOT blast radius and travels with
-    --toolkit-repo overrides.
+    Global scope (root=None): <library_root>/_parents/<owner>/<repo>[@<ref>]/
+    so the cache is inside the AGENT_TOOLKIT_SKILLS_ROOT blast radius and
+    travels with --toolkit-repo overrides.
+
+    Project scope: pass root=project_store_root(project) (see project_parents_root)
+    so the cache is <store_root>/_parents/<owner>/<repo>[@<ref>]/.
     """
+    # env is only consulted when root is None (global scope).
+    base = root if root is not None else library_root(env)
     leaf = repo if ref is None else f"{repo}@{ref}"
-    return library_root(env) / "_parents" / owner / leaf
+    return base / "_parents" / owner / leaf
+
+
+def project_parents_root(project: Path) -> Path:
+    """Root under which a project's monorepo `_parents/` cache lives.
+
+    This is the per-project external store (project_store_root), the same
+    directory that holds project canonical skill dirs. Passed as `root=` to
+    parent_clone_path().
+    """
+    return project_store_root(project)
 
 
 def library_lock_path(env: dict[str, str] | None = None) -> Path:

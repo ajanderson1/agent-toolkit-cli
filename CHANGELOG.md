@@ -1,5 +1,38 @@
 # Changelog
 
+## [2.11.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.10.1...v2.11.0) (2026-05-25)
+
+
+### Features
+
+* **doctor:** flag orphan real-dir strays in ~/.agents/skills ([#231](https://github.com/ajanderson1/agent-toolkit-cli/issues/231)) ([#241](https://github.com/ajanderson1/agent-toolkit-cli/issues/241)) ([ae74393](https://github.com/ajanderson1/agent-toolkit-cli/commit/ae74393d814d6a951afa7ac8ee3ec26575f1da79))
+
+
+### Bug Fixes
+
+* **tui:** allow universal uninstall at project scope ([#232](https://github.com/ajanderson1/agent-toolkit-cli/issues/232)) ([#239](https://github.com/ajanderson1/agent-toolkit-cli/issues/239)) ([f623abe](https://github.com/ajanderson1/agent-toolkit-cli/commit/f623abe771a35e3cd5cbe7a77f0fa97c05facbc8))
+
+## [2.10.1](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.10.0...v2.10.1) (2026-05-25)
+
+
+### Bug Fixes
+
+* **skill:** universal bundle toggle works at project scope ([#237](https://github.com/ajanderson1/agent-toolkit-cli/issues/237)) ([cffb49a](https://github.com/ajanderson1/agent-toolkit-cli/commit/cffb49a775e0e5985a9d7656f11e6de1f829f895))
+
+## [2.10.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.9.0...v2.10.0) (2026-05-25)
+
+
+### Features
+
+* **skill:** relocate project canonical out of the project tree ([#235](https://github.com/ajanderson1/agent-toolkit-cli/issues/235)) ([2551db3](https://github.com/ajanderson1/agent-toolkit-cli/commit/2551db39dc19def7563f83543b84a8da74ac43de))
+
+## [2.9.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.8.1...v2.9.0) (2026-05-25)
+
+
+### Features
+
+* **skill install:** project-scope monorepo support via parent-clone + symlink ([#233](https://github.com/ajanderson1/agent-toolkit-cli/issues/233)) ([503092f](https://github.com/ajanderson1/agent-toolkit-cli/commit/503092f2c0c2ec2c91472ed30551ef8e7dc8a906))
+
 ## [2.8.1](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.8.0...v2.8.1) (2026-05-23)
 
 
