@@ -29,7 +29,7 @@ FindingKind = Literal[
     "missing_canonical", "drifted_symlink",
     "wrong_type_bundle", "orphan_symlink", "foreign_symlink",
     "dirty_tree", "lock_source_mismatch", "stray_symlink",
-    "orphan_canonical",
+    "orphan_canonical", "stray_bundle_dir",
 ]
 
 
@@ -82,6 +82,9 @@ def diagnose(
             scope=scope, home=home, project=project, lock=lock,
         ))
         findings.extend(_scan_orphan_canonicals(
+            scope=scope, home=home, project=project, lock=lock,
+        ))
+        findings.extend(_scan_stray_bundle_dirs(
             scope=scope, home=home, project=project, lock=lock,
         ))
     return findings
@@ -208,6 +211,79 @@ def _scan_orphan_canonicals(
             fix_action=_make_rmtree_action(path=path),
         ))
     return findings
+
+
+def _scan_stray_bundle_dirs(
+    *, scope: Scope, home: Path | None, project: Path | None, lock: LockFile,
+) -> list[Finding]:
+    """Find orphan REAL directories in the universal-bundle root ~/.agents/skills.
+
+    Global scope only. A correctly installed global universal skill is a *symlink*
+    at ~/.agents/skills/<slug> → the library canonical; a real dir there whose slug
+    is in the lock is a `wrong_type_bundle` case (handled by _check_slug). What this
+    scan catches is the remainder: real dirs whose slug is NOT in the lock (orphan
+    strays), and doctor's own `*.bak-doctor-*` leftovers that nothing else reaps.
+
+    Strays are moved to a `.bak-doctor-*` backup (non-destructive — they may hold
+    un-locked skill files). `.bak-*` leftovers are removed outright (already backups).
+    """
+    if scope != "global":
+        return []
+    root = _universal_bundle_root()
+    if not root.is_dir():
+        return []
+    known = set(lock.skills)
+    findings: list[Finding] = []
+    try:
+        entries = sorted(root.iterdir())
+    except OSError:
+        return []
+    for path in entries:
+        if path.is_symlink() or not path.is_dir():
+            continue  # symlinks are correct install artifacts; ignore files
+        name = path.name
+        is_bak = ".bak-" in name
+        if name in known and not is_bak:
+            continue  # real dir IS in lock → wrong_type_bundle's job, not stray
+        if is_bak:
+            slug = name.split(".bak-")[0]
+            findings.append(Finding(
+                kind="stray_bundle_dir", slug=slug, scope=scope,
+                path=path,
+                detail=f"{path}: leftover doctor backup, safe to remove",
+                fix_action=_make_rmtree_action(path=path),
+            ))
+        else:
+            findings.append(Finding(
+                kind="stray_bundle_dir", slug=name, scope=scope,
+                path=path,
+                detail=(
+                    f"{path}: '{name}' is a real directory in the universal "
+                    f"bundle but has no entry in the global lock"
+                ),
+                fix_action=_make_backup_dir_action(path=path),
+            ))
+    return findings
+
+
+def _make_backup_dir_action(*, path: Path) -> FixAction:
+    """Move a directory to a `.bak-doctor-<stamp>` sibling (non-destructive).
+
+    Mirrors the backup half of `_make_bundle_repair_action` without the relink:
+    a stray has no canonical to point at. Stamped at apply()-time so repeat runs
+    don't collide.
+    """
+    def _apply() -> None:
+        if not path.is_dir() or path.is_symlink():
+            return  # idempotent: already moved / not a real dir
+        stamp = _dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+        path.rename(path.with_name(f"{path.name}.bak-doctor-{stamp}"))
+
+    return FixAction(
+        description=f"Back up stray directory {path} to a .bak-doctor-* sibling",
+        shell_preview=f"mv {path} {path}.bak-doctor-$(date +%Y%m%d-%H%M%S)",
+        apply=_apply,
+    )
 
 
 def _make_rmtree_action(*, path: Path) -> FixAction:

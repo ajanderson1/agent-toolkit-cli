@@ -709,3 +709,105 @@ def test_normalise_git_url_ssh_scheme_form():
     assert _normalise_git_url("ssh://git@github.com/foo/bar.git") == canonical
     # Without explicit user.
     assert _normalise_git_url("ssh://github.com/foo/bar") == canonical
+
+
+# ── #231: stray real-dir scan in ~/.agents/skills ────────────────────────
+
+
+def _bundle_home(tmp_path: Path, monkeypatch) -> Path:
+    """Fake HOME with an empty global lock, ready for ~/.agents/skills planting."""
+    library_root = tmp_path / "lib" / "skills"
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    monkeypatch.setenv("HOME", str(fake_home))
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: fake_home))
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(fake_home / ".claude"))
+    _patch_claude_global_skills_dir(monkeypatch, fake_home / ".claude" / "skills")
+    return fake_home
+
+
+def test_diagnose_stray_bundle_dir_global(tmp_path: Path, monkeypatch):
+    """A real dir in ~/.agents/skills/<slug> not in the lock → stray_bundle_dir."""
+    fake_home = _bundle_home(tmp_path, monkeypatch)
+    ghost = fake_home / ".agents" / "skills" / "ghost"
+    (ghost / "sub").mkdir(parents=True)
+    (ghost / "SKILL.md").write_text("# ghost\n")
+    from agent_toolkit_cli.skill_doctor import diagnose
+    findings = diagnose(slugs=None, scope="global", home=fake_home, project=None)
+    strays = [f for f in findings if f.kind == "stray_bundle_dir"]
+    assert len(strays) == 1, [f.kind for f in findings]
+    assert strays[0].slug == "ghost"
+    assert strays[0].path == ghost
+    assert strays[0].fix_action is not None
+
+
+def test_stray_bundle_dir_fix_moves_to_bak(tmp_path: Path, monkeypatch):
+    """The stray_bundle_dir fix moves the dir to a .bak-doctor-* sibling, not delete."""
+    fake_home = _bundle_home(tmp_path, monkeypatch)
+    ghost = fake_home / ".agents" / "skills" / "ghost"
+    ghost.mkdir(parents=True)
+    (ghost / "SKILL.md").write_text("# ghost\n")
+    from agent_toolkit_cli.skill_doctor import diagnose
+    findings = diagnose(slugs=None, scope="global", home=fake_home, project=None)
+    stray = next(f for f in findings if f.kind == "stray_bundle_dir")
+    stray.fix_action.apply()
+    assert not ghost.exists(), "original stray dir must be moved away"
+    baks = list((fake_home / ".agents" / "skills").glob("ghost.bak-doctor-*"))
+    assert len(baks) == 1, "stray must be preserved as a .bak-doctor-* backup"
+    assert baks[0].is_dir() and not baks[0].is_symlink()
+    assert (baks[0] / "SKILL.md").exists(), "backup must preserve contents"
+
+
+def test_stray_bundle_dir_skips_symlink(tmp_path: Path, monkeypatch):
+    """A symlink in ~/.agents/skills (correct v2.2 install) is never flagged stray."""
+    fake_home = _bundle_home(tmp_path, monkeypatch)
+    target = tmp_path / "real-skill"
+    target.mkdir()
+    bundle_root = fake_home / ".agents" / "skills"
+    bundle_root.mkdir(parents=True)
+    (bundle_root / "linked").symlink_to(target)
+    from agent_toolkit_cli.skill_doctor import diagnose
+    findings = diagnose(slugs=None, scope="global", home=fake_home, project=None)
+    assert not [f for f in findings if f.kind == "stray_bundle_dir"]
+
+
+def test_diagnose_bak_doctor_dirs_offered_for_cleanup(tmp_path: Path, monkeypatch):
+    """A leftover *.bak-doctor-* dir in the bundle root is offered for removal."""
+    fake_home = _bundle_home(tmp_path, monkeypatch)
+    bak = fake_home / ".agents" / "skills" / "ghost.bak-doctor-20250101-120000"
+    bak.mkdir(parents=True)
+    from agent_toolkit_cli.skill_doctor import diagnose
+    findings = diagnose(slugs=None, scope="global", home=fake_home, project=None)
+    bak_findings = [f for f in findings if f.path == bak]
+    assert len(bak_findings) == 1, [f.kind for f in findings]
+    bak_findings[0].fix_action.apply()
+    assert not bak.exists(), "leftover backup must be removable by the fix"
+
+
+def test_stray_bundle_dir_skips_known_slug(git_sandbox, tmp_path: Path, monkeypatch):
+    """A real dir whose slug IS in the lock is not double-reported as stray.
+
+    (That case is wrong_type_bundle's job, handled by _check_slug.)
+    """
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    monkeypatch.setenv("HOME", str(fake_home))
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: fake_home))
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(fake_home / ".claude"))
+    _patch_claude_global_skills_dir(monkeypatch, fake_home / ".claude" / "skills")
+
+    runner = CliRunner()
+    _seed_library(runner, git_sandbox.upstream)  # 'demo' now in the global lock
+
+    # Plant a real dir at ~/.agents/skills/demo (slug IS in the lock).
+    demo_bundle = fake_home / ".agents" / "skills" / "demo"
+    demo_bundle.mkdir(parents=True)
+    from agent_toolkit_cli.skill_doctor import diagnose
+    findings = diagnose(slugs=None, scope="global", home=fake_home, project=None)
+    assert not [f for f in findings if f.kind == "stray_bundle_dir"], \
+        "in-lock real dir must not be reported as stray_bundle_dir"
