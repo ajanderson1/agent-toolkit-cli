@@ -557,6 +557,19 @@ def uninstall(
         home=home, project=project,
     )
     apply(p, home=home, project=project, env=None)
+
+    if scope == "project":
+        # Non-destructive: projection symlinks removed by apply() above; drop
+        # only the project lock entry. The external canonical is preserved so
+        # dirty work survives; doctor's orphan sweep reclaims it if unreferenced.
+        from agent_toolkit_cli.skill_lock import read_lock, remove_entry, write_lock
+
+        lock_path = lock_file_path(scope="project", project=project)
+        lock = read_lock(lock_path)
+        if slug in lock.skills:
+            write_lock(lock_path, remove_entry(lock, slug))
+        return
+
     canonical = canonical_skill_dir(
         slug, scope=scope, home=home, project=project,
     )

@@ -169,3 +169,30 @@ def test_migrate_intree_symlink_is_removed(tmp_path, isolated_library):
     skill_install.migrate_project_canonical(project=project, slug="mono")
 
     assert not old.exists() and not old.is_symlink()
+
+
+def test_project_uninstall_preserves_external_canonical(
+    tmp_path, isolated_library, monkeypatch,
+):
+    parent_url = _make_parent_repo(tmp_path)
+    _seed_global_monorepo_entry(parent_url, "mkdocs", "mkdocs")
+    project = tmp_path / "proj"
+    project.mkdir()
+    monkeypatch.chdir(project)
+    runner = CliRunner(env=scrub_git_env())
+    assert runner.invoke(cli, ["skill", "install", "mkdocs",
+                               "--agents", "codex", "-p"]).exit_code == 0
+
+    canonical = canonical_skill_dir("mkdocs", scope="project", project=project)
+    assert (canonical / "SKILL.md").exists()
+
+    result = runner.invoke(cli, ["skill", "uninstall", "mkdocs",
+                                 "--agents", "codex", "-p"])
+    assert result.exit_code == 0, result.output
+
+    # Projection symlink gone; lock entry gone.
+    assert not (project / ".agents" / "skills" / "mkdocs").exists()
+    proj_lock = json.loads((project / "skills-lock.json").read_text())
+    assert "mkdocs" not in proj_lock.get("skills", {})
+    # External canonical PRESERVED (the whole point).
+    assert (canonical / "SKILL.md").exists(), "external canonical must survive uninstall"
