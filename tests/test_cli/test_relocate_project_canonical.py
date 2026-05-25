@@ -57,9 +57,12 @@ def test_project_universal_gets_symlink_into_external_store(
     project.mkdir()
     monkeypatch.chdir(project)
 
+    # codex is a universal agent (skills_dir == ".agents/skills"). Under the
+    # inverted skip rule it must now get a real projection symlink there, since
+    # the canonical no longer lives in the tree for it to read directly.
     runner = CliRunner(env=scrub_git_env())
     result = runner.invoke(cli, ["skill", "install", "mkdocs",
-                                 "--agents", "claude-code", "-p"])
+                                 "--agents", "codex", "-p"])
     assert result.exit_code == 0, result.output
 
     canonical = canonical_skill_dir("mkdocs", scope="project", project=project)
@@ -70,6 +73,7 @@ def test_project_universal_gets_symlink_into_external_store(
     assert uni.is_symlink(), "project-universal must now get a projection symlink"
     assert (uni / "SKILL.md").exists()
 
+    # The _parents cache lives in the external store, never in the project tree.
     assert not (project / ".agents" / "skills" / "_parents").exists()
 
 
