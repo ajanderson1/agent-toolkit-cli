@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.10.1](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.10.0...v2.10.1) (2026-05-25)
+
+
+### Bug Fixes
+
+* **skill:** universal bundle toggle works at project scope ([#237](https://github.com/ajanderson1/agent-toolkit-cli/issues/237)) ([cffb49a](https://github.com/ajanderson1/agent-toolkit-cli/commit/cffb49a775e0e5985a9d7656f11e6de1f829f895))
+
 ## [2.10.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.9.0...v2.10.0) (2026-05-25)
 
 
