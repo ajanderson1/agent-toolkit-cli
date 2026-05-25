@@ -233,6 +233,7 @@ class TUIApp(App):
             adds, removes = by_slug[(scope, slug)]
             (adds if op == "link" else removes).add(agent)
         ok = failed = 0
+        errors: list[str] = []
         for (scope, slug), (adds, removes) in by_slug.items():
             home = Path.home() if scope == "global" else None
             project = None if scope == "global" else Path.cwd()
@@ -245,9 +246,7 @@ class TUIApp(App):
                         env=None,
                     )
                 except InstallError as exc:
-                    self.query_one("#footer-pending", Static).update(
-                        f"apply error ({slug}): {exc}"
-                    )
+                    errors.append(f"{slug}: {exc}")
                     failed += 1
                     continue
             p = InstallPlan(
@@ -259,9 +258,7 @@ class TUIApp(App):
                 engine_apply(p, home=home, project=project, env=None)
                 ok += 1
             except InstallError as exc:
-                self.query_one("#footer-pending", Static).update(
-                    f"apply error ({slug}): {exc}"
-                )
+                errors.append(f"{slug}: {exc}")
                 failed += 1
         saved = grid.pending_entries() if failed else {}
         if failed == 0:
@@ -271,9 +268,27 @@ class TUIApp(App):
             grid.restore_pending(saved)
         self._refresh_pending_label()
         self._refresh_status_bar()
-        self.query_one("#footer-pending", Static).update(
-            f"applied: {ok} ok, {failed} failed"
-        )
+        # Surface failures so they aren't clobbered by the summary line. The
+        # full error (incl. the doctor hint) is shown; the summary is appended
+        # only when everything succeeded.
+        if errors:
+            # Collapse the multi-line install error to single line for the footer
+            # and push the full text into the cell-info modal channel via title.
+            first = " ".join(errors[0].split())
+            extra = f" (+{failed - 1} more)" if failed > 1 else ""
+            self.query_one("#footer-pending", Static).update(
+                f"[red]apply failed[/] — {first}{extra}"
+            )
+            self.notify(
+                "\n\n".join(errors),
+                title=f"Apply: {ok} ok, {failed} failed",
+                severity="error",
+                timeout=12,
+            )
+        else:
+            self.query_one("#footer-pending", Static).update(
+                f"applied: {ok} ok, {failed} failed"
+            )
 
     # ----- header + status -----------------------------------------------
     def _build_content_header(self) -> str:
