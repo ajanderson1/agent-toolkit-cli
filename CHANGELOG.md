@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.11.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.10.1...v2.11.0) (2026-05-25)
+
+
+### Features
+
+* **doctor:** flag orphan real-dir strays in ~/.agents/skills ([#231](https://github.com/ajanderson1/agent-toolkit-cli/issues/231)) ([#241](https://github.com/ajanderson1/agent-toolkit-cli/issues/241)) ([ae74393](https://github.com/ajanderson1/agent-toolkit-cli/commit/ae74393d814d6a951afa7ac8ee3ec26575f1da79))
+
+
+### Bug Fixes
+
+* **tui:** allow universal uninstall at project scope ([#232](https://github.com/ajanderson1/agent-toolkit-cli/issues/232)) ([#239](https://github.com/ajanderson1/agent-toolkit-cli/issues/239)) ([f623abe](https://github.com/ajanderson1/agent-toolkit-cli/commit/f623abe771a35e3cd5cbe7a77f0fa97c05facbc8))
+
 ## [2.10.1](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.10.0...v2.10.1) (2026-05-25)
 
 
