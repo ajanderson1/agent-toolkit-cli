@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.10.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.9.0...v2.10.0) (2026-05-25)
+
+
+### Features
+
+* **skill:** relocate project canonical out of the project tree ([#235](https://github.com/ajanderson1/agent-toolkit-cli/issues/235)) ([2551db3](https://github.com/ajanderson1/agent-toolkit-cli/commit/2551db39dc19def7563f83543b84a8da74ac43de))
+
 ## [2.9.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.8.1...v2.9.0) (2026-05-25)
 
 
