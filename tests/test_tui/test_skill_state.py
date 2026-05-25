@@ -4,6 +4,7 @@ from pathlib import Path
 from click.testing import CliRunner
 
 from agent_toolkit_cli.cli import main
+from agent_toolkit_cli.skill_paths import canonical_skill_dir
 from agent_toolkit_tui.skill_state import (
     INTERACTIVE_AGENTS,
     SkillCell,
@@ -58,7 +59,7 @@ def test_build_skill_rows_dirty(git_sandbox, tmp_path: Path, monkeypatch):
     runner = CliRunner()
     r = _add_demo_project(runner, git_sandbox.upstream, project, library_root)
     assert r.exit_code == 0, r.output
-    (project / ".agents" / "skills" / "demo" / "SKILL.md").write_text("edit\n")
+    (canonical_skill_dir("demo", scope="project", project=project) / "SKILL.md").write_text("edit\n")
     rows = build_skill_rows(scope="project", home=None, project=project)
     assert rows[0].state == "dirty"
 
@@ -87,7 +88,7 @@ def test_build_skill_rows_missing_canonical(
     # Remove the project canonical behind the lock's back. Since the slug is
     # still in the library, state becomes "library" (available, not installed)
     # rather than the alarming "missing".
-    shutil.rmtree(project / ".agents" / "skills" / "demo")
+    shutil.rmtree(canonical_skill_dir("demo", scope="project", project=project))
     rows = build_skill_rows(scope="project", home=None, project=project)
     assert rows[0].state == "library"
 
@@ -163,14 +164,15 @@ def test_universal_cell_global_drifted(tmp_path: Path, monkeypatch):
 
 
 def test_universal_cell_project_linked(tmp_path: Path, monkeypatch):
-    """At project scope, universal cell is linked when the project canonical dir exists."""
+    """At project scope, universal cell is linked when the project canonical dir exists
+    in the external store."""
     library_root = tmp_path / "lib" / "skills"
     monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
     project = tmp_path / "proj"
     project.mkdir()
 
-    # Create the project canonical as a real directory (not a symlink).
-    canonical = project / ".agents" / "skills" / "demo"
+    # Create the project canonical in the external store as a real directory (not a symlink).
+    canonical = canonical_skill_dir("demo", scope="project", project=project)
     canonical.mkdir(parents=True)
 
     cell = _cell_for("demo", "universal", scope="project", home=None, project=project)
@@ -270,8 +272,8 @@ def test_cell_for_drift_when_canonical_exists(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
     project = tmp_path / "proj"
     project.mkdir()
-    # Project canonical exists.
-    (project / ".agents" / "skills" / "demo").mkdir(parents=True)
+    # Project canonical exists in the external store.
+    canonical_skill_dir("demo", scope="project", project=project).mkdir(parents=True)
 
     elsewhere = tmp_path / "legacy"
     elsewhere.mkdir()

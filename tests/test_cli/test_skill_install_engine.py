@@ -7,11 +7,11 @@ from pathlib import Path
 import pytest
 
 from agent_toolkit_cli.skill_install import (
-    InstallError, InstallPlan, LockMismatchError,
+    InstallError, InstallPlan,
     _should_skip_symlink, apply, ensure_project_canonical, plan,
 )
 from agent_toolkit_cli.skill_paths import (
-    canonical_skill_dir, agent_projection_dir, lock_file_path,
+    canonical_skill_dir, agent_projection_dir, project_store_root,
 )
 from agent_toolkit_cli.skill_source import ParsedSource
 
@@ -41,16 +41,16 @@ def test_skip_rule_global_universal(tmp_path):
 
 
 def test_skip_rule_project_universal(tmp_path):
-    """codex is universal → project install skips symlink.
+    """codex is universal → project install is NOT skipped.
 
-    Project canonical at <project>/.agents/skills/<slug>/ IS the install for
-    universal agents. No additional symlink is created.
+    The canonical now lives in the external store, so universal agents need
+    a per-slug symlink in <project>/.agents/skills/<slug> like every other agent.
     """
     skip, reason = _should_skip_symlink(
         agent_name="codex", scope="project", project=tmp_path,
     )
-    assert skip is True
-    assert reason == "universal-project"
+    assert skip is False
+    assert reason == ""
 
 
 def test_skip_rule_global_non_universal(tmp_path):
@@ -175,9 +175,12 @@ def test_apply_project_windsurf_creates_symlink_when_dir_absent(git_sandbox, tmp
     assert "windsurf" not in result.skipped
 
 
-def test_apply_project_codex_skipped_universal(git_sandbox, tmp_path):
-    """Project install + codex (universal) → skipped because the canonical
-    path equals the agent projection path for universal agents."""
+def test_apply_project_codex_gets_symlink_universal(git_sandbox, tmp_path):
+    """Project install + codex (universal) → gets a projection symlink.
+
+    The canonical lives in the external store; universal agents reach it via
+    <project>/.agents/skills/<slug> → external store, like every other agent.
+    """
     home = Path(git_sandbox.env["HOME"])
     src = _src(git_sandbox.upstream)
     project = tmp_path / "myproj"
@@ -192,8 +195,12 @@ def test_apply_project_codex_skipped_universal(git_sandbox, tmp_path):
     )
     # The canonical is a real directory (git clone), not a symlink.
     assert canonical.is_dir() and not canonical.is_symlink()
-    # codex is universal → symlink creation was skipped.
-    assert "codex" in result.skipped
+    # codex is universal → symlink created at <project>/.agents/skills/demo.
+    link = agent_projection_dir(
+        "codex", "demo", scope="project", home=home, project=project,
+    )
+    assert link.is_symlink(), ".agents/skills/demo symlink must be created for codex"
+    assert "codex" not in result.skipped
 
 
 def test_plan_unknown_agent_raises():
@@ -245,7 +252,7 @@ def test_ensure_project_canonical_clones_when_absent(git_sandbox, tmp_path, monk
         env=git_sandbox.env,
     )
 
-    assert result == project / ".agents" / "skills" / "demo"
+    assert result == project_store_root(project) / "demo"
     assert result.is_dir() and not result.is_symlink()
     assert (result / "SKILL.md").exists()
 

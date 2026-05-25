@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import re
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Literal
@@ -28,6 +29,7 @@ FindingKind = Literal[
     "missing_canonical", "drifted_symlink",
     "wrong_type_bundle", "orphan_symlink", "foreign_symlink",
     "dirty_tree", "lock_source_mismatch", "stray_symlink",
+    "orphan_canonical",
 ]
 
 
@@ -77,6 +79,9 @@ def diagnose(
         ))
     if slugs is None:
         findings.extend(_scan_stray_symlinks(
+            scope=scope, home=home, project=project, lock=lock,
+        ))
+        findings.extend(_scan_orphan_canonicals(
             scope=scope, home=home, project=project, lock=lock,
         ))
     return findings
@@ -158,6 +163,66 @@ def _scan_stray_symlinks(
                 fix_action=_make_unlink_action(link=link),
             ))
     return findings
+
+
+def _scan_orphan_canonicals(
+    *, scope: Scope, home: Path | None, project: Path | None, lock: LockFile,
+) -> list[Finding]:
+    """Find entries in the per-project external store with no lock entry.
+
+    Project scope only. After a non-destructive uninstall the external canonical
+    is left behind; over time the store accumulates unreferenced clones. Also
+    sweeps `*.bak-*` dirs left by migration collisions. The fix removes them.
+    """
+    if scope != "project":
+        return []
+    assert project is not None
+    from agent_toolkit_cli.skill_paths import project_store_root
+
+    store = project_store_root(project)
+    if not store.is_dir():
+        return []
+    known = set(lock.skills)
+    findings: list[Finding] = []
+    try:
+        entries = sorted(store.iterdir())
+    except OSError:
+        return []
+    for path in entries:
+        name = path.name
+        if name == "_parents":
+            continue  # parent cache is managed by install, not an orphan
+        is_bak = ".bak-" in name
+        if name in known and not is_bak:
+            continue  # referenced canonical — keep
+        slug = name.split(".bak-")[0] if is_bak else name
+        detail = (
+            f"{path}: migration backup, safe to remove"
+            if is_bak
+            else f"{path}: '{name}' has no entry in the project lock "
+                 f"(orphaned canonical from a prior uninstall)"
+        )
+        findings.append(Finding(
+            kind="orphan_canonical", slug=slug, scope=scope,
+            path=path, detail=detail,
+            fix_action=_make_rmtree_action(path=path),
+        ))
+    return findings
+
+
+def _make_rmtree_action(*, path: Path) -> FixAction:
+    """A FixAction that removes a directory tree (or symlink) at `path`."""
+    def _apply() -> None:
+        if path.is_symlink() or path.is_file():
+            path.unlink()
+        elif path.is_dir():
+            shutil.rmtree(path)
+
+    return FixAction(
+        description=f"Remove {path}",
+        shell_preview=f"rm -rf {path}",
+        apply=_apply,
+    )
 
 
 def _make_reclone_action(

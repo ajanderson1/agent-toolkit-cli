@@ -7,7 +7,7 @@ v2.2 library/install split:
 Symlink rules (v2.2, mirroring installer.ts:280-323):
   - Global + "universal" bundle target  → ~/.agents/skills/<slug> → library
   - Global + non-universal agent        → ~/.<agent-dir>/skills/<slug> → library
-  - Project + universal agent           → no symlink (canonical IS the install)
+  - Project + universal agent           → symlink → external canonical (store)
   - Project + non-universal             → <project>/<agent-dir>/skills/<slug> → canonical
                                           (agent root dir is created if absent)
 """
@@ -17,6 +17,8 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Literal
+
+import click
 
 from agent_toolkit_cli import skill_git
 from agent_toolkit_cli.skill_agents import (
@@ -93,10 +95,11 @@ def _should_skip_symlink(
 ) -> tuple[bool, str]:
     """Return (skip?, reason). Mirrors installer.ts:296-323 with v2.2 adjustments.
 
-    v2.2 semantics:
-      - Global + universal: NOT skipped. We create ~/.agents/skills/<slug> → library.
-      - Project + universal: SKIPPED. The project canonical at
-        <project>/.agents/skills/<slug>/ IS the install; no symlink needed.
+    v2.2 semantics (post-store relocation):
+      - Global + universal: SKIPPED. ~/.agents/skills/<slug> → library is
+        created via the universal bundle path in apply().
+      - Project + universal: NOT skipped. Canonical is in the external store;
+        each universal agent gets <project>/.agents/skills/<slug> → store.
       - Global + non-universal: NOT skipped (symlink → library).
       - Project + non-universal: NOT skipped. The agent root dir is auto-created
         by apply() via link.parent.mkdir(parents=True, exist_ok=True).
@@ -105,15 +108,15 @@ def _should_skip_symlink(
     _should_skip_symlink is called; it never reaches here as an agent_name.
     """
     cfg = get_agent(agent_name)
-    if cfg.is_universal:
-        # Project canonical IS the universal-agent install path — no symlink.
-        if scope == "project":
-            return True, "universal-project"
+    if cfg.is_universal and scope == "global":
         # Global universal agents get a symlink ~/.agents/skills/<slug> → library,
         # created via the universal bundle path in apply(). Per-agent universal
-        # symlinks (e.g. cfg.global_skills_dir) resolve through ~/.agents/skills/
-        # already at the OS level, so we skip the redundant per-agent write.
+        # symlinks resolve through ~/.agents/skills/ already at the OS level, so
+        # we skip the redundant per-agent write.
         return True, "universal-global"
+    # Project-scope universal agents are NOT skipped: the canonical now lives in
+    # the external store, so the universal agent reaches it via a per-slug
+    # symlink in <project>/.agents/skills/<slug> like every other agent.
     return False, ""
 
 
@@ -156,15 +159,11 @@ def _current_linked_agents(
 
     Includes the "universal" bundle token at global scope if
     ~/.agents/skills/<slug> is a symlink to the library canonical.
-
-    For project-scope universal agents (the only skipped case at project scope),
-    'currently linked' means the project canonical directory exists.
     """
     canonical = canonical_skill_dir(
         slug, scope=scope, home=home, project=project,
     )
     canonical_real = canonical.resolve() if canonical.exists() else canonical
-    canonical_exists = canonical.exists()
 
     linked: list[str] = []
 
@@ -183,9 +182,6 @@ def _current_linked_agents(
             agent_name=name, scope=scope, project=project,
         )
         if skip:
-            # For project-scope universal agents, 'linked' means canonical exists.
-            if scope == "project" and canonical_exists:
-                linked.append(name)
             continue
 
         link = agent_projection_dir(
@@ -353,6 +349,57 @@ def apply(
     )
 
 
+def migrate_project_canonical(*, project: Path, slug: str) -> None:
+    """Migrate an old in-tree project canonical to the external store.
+
+    Idempotent. Old layout put the canonical at <project>/.agents/skills/<slug>
+    as a real clone (single-skill) or a symlink into the in-tree _parents/ cache
+    (v2.9.0 monorepo). The new layout keeps the canonical in the external store
+    (project_store_root) and leaves only a projection symlink in the tree.
+
+    - Old is already a symlink into the store: no-op (already migrated).
+    - Old is any other symlink (v2.9.0 monorepo, or stale): remove it; the
+      installer recreates the new-layout symlink and re-clones the parent into
+      the store's _parents/.
+    - Old is a real directory (single-skill clone, possibly dirty): if the
+      store dest already exists, rename it to <slug>.bak-<UTC-timestamp> first
+      (never overwrite); then move the clone into the store (git history + dirty
+      work travel intact); leave a symlink behind so stale references resolve.
+    """
+    import datetime
+
+    from agent_toolkit_cli.skill_paths import project_store_root
+
+    old = project / ".agents" / "skills" / slug
+    if not old.is_symlink() and not old.exists():
+        return  # nothing to migrate
+
+    dest = project_store_root(project) / slug
+
+    if old.is_symlink():
+        try:
+            resolved = old.resolve()
+        except OSError:
+            resolved = None
+        if resolved is not None and resolved == dest.resolve():
+            return  # already migrated → no-op
+        old.unlink()  # v2.9.0 monorepo symlink / stale: holds no work
+        return
+
+    # old is a real directory: move it into the store.
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    if dest.exists() or dest.is_symlink():
+        ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        backup = dest.parent / f"{slug}.bak-{ts}"
+        shutil.move(str(dest), str(backup))
+        click.echo(
+            f"{slug}: existing store entry backed up to {backup} before migration"
+        )
+    shutil.move(str(old), str(dest))
+    old.parent.mkdir(parents=True, exist_ok=True)
+    old.symlink_to(dest)
+
+
 def ensure_project_canonical(
     *,
     slug: str,
@@ -384,7 +431,9 @@ def ensure_project_canonical(
     if entry is None:
         raise InstallError(f"{slug}: not in global library")
 
-    project_canonical = project / ".agents" / "skills" / slug
+    from agent_toolkit_cli.skill_paths import canonical_skill_dir
+    migrate_project_canonical(project=project, slug=slug)
+    project_canonical = canonical_skill_dir(slug, scope="project", project=project)
 
     if entry.parent_url is not None:
         # Monorepo skill: clone the parent into the project-local _parents/
@@ -508,6 +557,19 @@ def uninstall(
         home=home, project=project,
     )
     apply(p, home=home, project=project, env=None)
+
+    if scope == "project":
+        # Non-destructive: projection symlinks removed by apply() above; drop
+        # only the project lock entry. The external canonical is preserved so
+        # dirty work survives; doctor's orphan sweep reclaims it if unreferenced.
+        from agent_toolkit_cli.skill_lock import read_lock, remove_entry, write_lock
+
+        lock_path = lock_file_path(scope="project", project=project)
+        lock = read_lock(lock_path)
+        if slug in lock.skills:
+            write_lock(lock_path, remove_entry(lock, slug))
+        return
+
     canonical = canonical_skill_dir(
         slug, scope=scope, home=home, project=project,
     )

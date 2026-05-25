@@ -4,6 +4,7 @@ from pathlib import Path
 from click.testing import CliRunner
 
 from agent_toolkit_cli.cli import main
+from agent_toolkit_cli.skill_paths import canonical_skill_dir
 
 
 def _add_and_install_project(runner, upstream_path, project):
@@ -61,7 +62,7 @@ def test_update_fast_forwards_clean(git_sandbox, tmp_path: Path, monkeypatch):
         "--project", str(project), "skill", "update", "demo", "-p",
     ])
     assert result.exit_code == 0, result.output
-    assert (project / ".agents" / "skills" / "demo" / "NEW.md").exists()
+    assert (canonical_skill_dir("demo", scope="project", project=project) / "NEW.md").exists()
 
 
 def test_update_no_flag_outside_project_uses_global(
@@ -106,7 +107,7 @@ def test_update_surfaces_conflict_and_exits_nonzero(
     runner = CliRunner()
     assert _add_and_install_project(runner, git_sandbox.upstream, project).exit_code == 0
 
-    canonical = project / ".agents" / "skills" / "demo"
+    canonical = canonical_skill_dir("demo", scope="project", project=project)
     (canonical / "SKILL.md").write_text(
         "---\nname: demo\ndescription: Local edit.\n---\n# demo local\n"
     )

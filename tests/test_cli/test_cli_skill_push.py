@@ -6,6 +6,7 @@ from pathlib import Path
 from click.testing import CliRunner
 
 from agent_toolkit_cli.cli import main
+from agent_toolkit_cli.skill_paths import canonical_skill_dir
 
 
 def _add_and_install_project(runner, upstream_path, project):
@@ -44,7 +45,7 @@ def _setup_dirty_install(git_sandbox, tmp_path: Path, monkeypatch):
     r = _add_and_install_project(runner, git_sandbox.upstream, project)
     assert r.exit_code == 0, r.output
 
-    canonical = project / ".agents" / "skills" / "demo"
+    canonical = canonical_skill_dir("demo", scope="project", project=project)
     (canonical / "SKILL.md").write_text(
         "---\nname: demo\ndescription: Improved.\n---\n# improved\n"
     )
@@ -255,7 +256,7 @@ def test_push_default_batch_branch_names_are_unique(
             "--agents", "claude-code",
         ])
         assert r.exit_code == 0, r.output
-        canonical = project / ".agents" / "skills" / slug
+        canonical = canonical_skill_dir(slug, scope="project", project=project)
         (canonical / "SKILL.md").write_text(
             f"---\nname: {slug}\ndescription: Improved {slug}.\n---\n# {slug}\n"
         )
@@ -458,7 +459,7 @@ def test_push_does_not_leak_into_outer_repo(
     r = _add_and_install_project(runner, git_sandbox.upstream, project)
     assert r.exit_code == 0, r.output
 
-    canonical = project / ".agents" / "skills" / "demo"
+    canonical = canonical_skill_dir("demo", scope="project", project=project)
     (canonical / "SKILL.md").write_text(
         "---\nname: demo\ndescription: Improved.\n---\n# improved\n"
     )

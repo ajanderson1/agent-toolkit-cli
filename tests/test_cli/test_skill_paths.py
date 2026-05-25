@@ -11,6 +11,7 @@ from agent_toolkit_cli.skill_paths import (
     library_root,
     library_skill_path,
     lock_file_path,
+    project_store_root,
 )
 
 
@@ -24,10 +25,13 @@ def test_canonical_skill_dir_global_is_library_path(tmp_path: Path, monkeypatch)
     assert p == lib / "journal"
 
 
-def test_canonical_skill_dir_project(tmp_path: Path):
+def test_canonical_skill_dir_project(tmp_path: Path, monkeypatch):
+    lib = tmp_path / "lib" / "skills"
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(lib))
     project = tmp_path / "proj"
+    project.mkdir()
     p = canonical_skill_dir("journal", scope="project", home=None, project=project)
-    assert p == project / ".agents" / "skills" / "journal"
+    assert p == project_store_root(project) / "journal"
 
 
 def test_lock_file_path_global_is_library_lock(tmp_path: Path, monkeypatch):
@@ -141,18 +145,21 @@ def test_parent_clone_path_with_ref(tmp_path):
     assert p.parent.name == "o"
 
 
-def test_parent_clone_path_project_root(tmp_path):
+def test_parent_clone_path_project_root(tmp_path, monkeypatch):
     from agent_toolkit_cli.skill_paths import parent_clone_path, project_parents_root
 
+    lib = tmp_path / "lib" / "skills"
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(lib))
     project = tmp_path / "proj"
+    project.mkdir()
     root = project_parents_root(project)
-    assert root == project / ".agents" / "skills"
+    assert root == project_store_root(project)
 
     p = parent_clone_path("vercel-labs", "agent-browser", ref=None, root=root)
-    assert p == project / ".agents" / "skills" / "_parents" / "vercel-labs" / "agent-browser"
+    assert p == root / "_parents" / "vercel-labs" / "agent-browser"
 
     p_ref = parent_clone_path("o", "r", ref="dev", root=root)
-    assert p_ref == project / ".agents" / "skills" / "_parents" / "o" / "r@dev"
+    assert p_ref == root / "_parents" / "o" / "r@dev"
 
 
 def test_parent_clone_path_default_root_unchanged(tmp_path, monkeypatch):
@@ -161,3 +168,64 @@ def test_parent_clone_path_default_root_unchanged(tmp_path, monkeypatch):
     monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(tmp_path / "lib" / "skills"))
     p = parent_clone_path("o", "r", ref=None)
     assert p == tmp_path / "lib" / "skills" / "_parents" / "o" / "r"
+
+
+def test_project_id_stable_and_sanitized(tmp_path):
+    from agent_toolkit_cli.skill_paths import project_id
+
+    p = tmp_path / "GitHub" / "ryanair_fares"
+    p.mkdir(parents=True)
+    pid1 = project_id(p)
+    pid2 = project_id(p)
+    assert pid1 == pid2, "same path must yield same id"
+    assert "/" not in pid1
+    prefix, _, suffix = pid1.rpartition("-")
+    assert len(suffix) == 6 and all(c in "0123456789abcdef" for c in suffix)
+    assert "ryanair_fares" in prefix
+
+
+def test_project_id_distinct_paths_distinct_ids(tmp_path):
+    from agent_toolkit_cli.skill_paths import project_id
+
+    a = tmp_path / "a"
+    b = tmp_path / "b"
+    a.mkdir()
+    b.mkdir()
+    assert project_id(a) != project_id(b)
+
+
+def test_project_store_root_under_library_parent(tmp_path, monkeypatch):
+    from agent_toolkit_cli.skill_paths import (
+        project_store_root, project_id, library_root,
+    )
+
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(tmp_path / "lib" / "skills"))
+    project = tmp_path / "proj"
+    project.mkdir()
+    root = project_store_root(project)
+    assert root == library_root().parent / "projects" / project_id(project) / "skills"
+    assert root == tmp_path / "lib" / "projects" / project_id(project) / "skills"
+
+
+def test_canonical_skill_dir_project_uses_store(tmp_path, monkeypatch):
+    from agent_toolkit_cli.skill_paths import (
+        canonical_skill_dir, project_store_root,
+    )
+
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(tmp_path / "lib" / "skills"))
+    project = tmp_path / "proj"
+    project.mkdir()
+    got = canonical_skill_dir("mkdocs", scope="project", project=project)
+    assert got == project_store_root(project) / "mkdocs"
+    assert ".agents" not in str(got)
+
+
+def test_project_parents_root_uses_store(tmp_path, monkeypatch):
+    from agent_toolkit_cli.skill_paths import (
+        project_parents_root, project_store_root,
+    )
+
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(tmp_path / "lib" / "skills"))
+    project = tmp_path / "proj"
+    project.mkdir()
+    assert project_parents_root(project) == project_store_root(project)

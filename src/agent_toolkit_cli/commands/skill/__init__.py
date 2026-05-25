@@ -26,6 +26,7 @@ from agent_toolkit_cli.skill_lock import LockFile, read_lock, remove_entry, writ
 from agent_toolkit_cli.skill_paths import (
     library_lock_path,
     library_skill_path,
+    lock_file_path,
 )
 from agent_toolkit_cli.skill_source import ParsedSource, SourceParseError, parse_source
 
@@ -495,6 +496,14 @@ def uninstall_cmd(
         except InstallError as exc:
             raise click.ClickException(str(exc)) from exc
         removed = result.removed
+
+        # Project scope is non-destructive: the external canonical in the
+        # per-project store is preserved (dirty work survives; doctor's orphan
+        # sweep reclaims it later). Drop only the project lock entry.
+        proj_lock_path = lock_file_path(scope="project", project=project_root)
+        proj_lock = read_lock(proj_lock_path)
+        if slug in proj_lock.skills:
+            write_lock(proj_lock_path, remove_entry(proj_lock, slug))
 
     if removed:
         for link in removed:
