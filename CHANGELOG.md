@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.11.2](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.11.1...v2.11.2) (2026-05-25)
+
+
+### Bug Fixes
+
+* **skill:** multi-match error suggests explicit-subpath commands ([#243](https://github.com/ajanderson1/agent-toolkit-cli/issues/243)) ([67a3abf](https://github.com/ajanderson1/agent-toolkit-cli/commit/67a3abf04e2c02f496d02fd6acff34a4169cf7ad))
+
 ## [2.11.1](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.11.0...v2.11.1) (2026-05-25)
 
 
