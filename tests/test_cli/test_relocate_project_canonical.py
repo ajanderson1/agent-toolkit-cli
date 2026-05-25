@@ -242,3 +242,55 @@ def test_status_p_monorepo_not_mislabeled_copy(
     line = next(ln for ln in result.output.splitlines() if ln.startswith("mkdocs"))
     assert "\tcopy" not in line, f"monorepo skill mislabeled as copy: {line!r}"
     assert "\tclean" in line or "\tdirty" in line
+
+
+def test_install_universal_token_project_creates_shared_symlink(
+    tmp_path, isolated_library, monkeypatch,
+):
+    """The synthetic `universal` token at project scope must create the shared
+    <project>/.agents/skills/<slug> symlink → external store (the dir all
+    universal agents read through), not be a no-op."""
+    parent_url = _make_parent_repo(tmp_path)
+    _seed_global_monorepo_entry(parent_url, "mkdocs", "mkdocs")
+    project = tmp_path / "proj"
+    project.mkdir()
+    monkeypatch.chdir(project)
+    runner = CliRunner(env=scrub_git_env())
+    result = runner.invoke(cli, ["skill", "install", "mkdocs",
+                                 "--agents", "universal", "-p"])
+    assert result.exit_code == 0, result.output
+
+    shared = project / ".agents" / "skills" / "mkdocs"
+    assert shared.is_symlink(), (
+        "universal token at project scope must create the shared .agents/skills symlink"
+    )
+    canonical = canonical_skill_dir("mkdocs", scope="project", project=project)
+    assert shared.resolve() == canonical.resolve()
+    assert (shared / "SKILL.md").exists()
+
+
+def test_uninstall_universal_token_project_removes_shared_symlink(
+    tmp_path, isolated_library, monkeypatch,
+):
+    """Unchecking universal (the bug from the screenshot): the shared
+    <project>/.agents/skills/<slug> symlink must be removed; canonical preserved."""
+    parent_url = _make_parent_repo(tmp_path)
+    _seed_global_monorepo_entry(parent_url, "mkdocs", "mkdocs")
+    project = tmp_path / "proj"
+    project.mkdir()
+    monkeypatch.chdir(project)
+    runner = CliRunner(env=scrub_git_env())
+    assert runner.invoke(cli, ["skill", "install", "mkdocs",
+                               "--agents", "universal", "-p"]).exit_code == 0
+    shared = project / ".agents" / "skills" / "mkdocs"
+    assert shared.is_symlink()
+
+    result = runner.invoke(cli, ["skill", "uninstall", "mkdocs",
+                                 "--agents", "universal", "-p"])
+    assert result.exit_code == 0, result.output
+    assert not shared.exists() and not shared.is_symlink(), (
+        "unchecking universal must remove the shared .agents/skills symlink"
+    )
+    # Canonical in the external store is preserved.
+    canonical = canonical_skill_dir("mkdocs", scope="project", project=project)
+    assert (canonical / "SKILL.md").exists()

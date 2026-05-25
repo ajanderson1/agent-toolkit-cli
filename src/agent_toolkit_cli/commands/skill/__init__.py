@@ -414,13 +414,13 @@ def install_cmd(
                 f"clone for project scope failed: {exc}"
             ) from exc
 
-        # Filter out "universal" for project scope — canonical IS the install.
-        # Non-universal agents get symlinks per skip rules.
-        non_universal = tuple(a for a in target_agents if a != "universal")
+        # Under the external-store model every agent — including the synthetic
+        # "universal" bundle token — projects via a symlink into the project
+        # tree; apply() creates <project>/.agents/skills/<slug> for "universal".
         p = InstallPlan(
             slug=slug, scope="project",
             source=None, ref=None,
-            add_agents=non_universal, remove_agents=(),
+            add_agents=target_agents, remove_agents=(),
         )
         try:
             result = engine_apply(p, home=None, project=project_root, env=None)
@@ -485,11 +485,13 @@ def uninstall_cmd(
         project_root = (
             ctx.obj.get("project_root") if ctx.obj else None
         ) or Path.cwd()
-        non_universal = tuple(a for a in target_agents if a != "universal")
+        # Every agent — including the synthetic "universal" bundle token —
+        # projects via a symlink under the external-store model; apply() removes
+        # <project>/.agents/skills/<slug> for "universal".
         p = InstallPlan(
             slug=slug, scope="project",
             source=None, ref=None,
-            add_agents=(), remove_agents=non_universal,
+            add_agents=(), remove_agents=target_agents,
         )
         try:
             result = engine_apply(p, home=None, project=project_root, env=None)

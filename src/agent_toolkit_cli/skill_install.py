@@ -197,6 +197,16 @@ def _universal_bundle_link(slug: str) -> Path:
     return Path.home() / ".agents" / "skills" / slug
 
 
+def _project_universal_link(project: Path, slug: str) -> Path:
+    """The <project>/.agents/skills/<slug> path for the universal bundle at project scope.
+
+    Every universal agent (skills_dir == ".agents/skills") reads through this one
+    shared projection. Mirrors _universal_bundle_link at project scope: under the
+    external-store model it is a symlink → the project canonical, created/removed
+    by the synthetic "universal" token in apply()."""
+    return project / ".agents" / "skills" / slug
+
+
 def apply(
     plan: InstallPlan,
     *,
@@ -237,26 +247,30 @@ def apply(
         # → library at global scope; at project scope it's a no-op (the project
         # canonical IS the install).
         if name == "universal":
-            if plan.scope == "global":
-                link = _universal_bundle_link(plan.slug)
-                link.parent.mkdir(parents=True, exist_ok=True)
-                if link.is_symlink():
-                    if link.resolve() != canonical.resolve():
-                        raise InstallError(
-                            f"{plan.slug}/universal: conflicting symlink at {link}: "
-                            f"points to {link.resolve()}, expected {canonical}"
-                        )
-                elif link.exists():
+            # The universal bundle is one shared projection symlink that all
+            # universal agents read through: ~/.agents/skills/<slug> at global
+            # scope, <project>/.agents/skills/<slug> at project scope. Under the
+            # external-store model both point at the (out-of-tree) canonical.
+            link = (
+                _universal_bundle_link(plan.slug)
+                if plan.scope == "global"
+                else _project_universal_link(project, plan.slug)
+            )
+            link.parent.mkdir(parents=True, exist_ok=True)
+            if link.is_symlink():
+                if link.resolve() != canonical.resolve():
                     raise InstallError(
-                        f"{plan.slug}/universal: conflicting non-symlink at {link}; "
-                        f"refusing to overwrite"
+                        f"{plan.slug}/universal: conflicting symlink at {link}: "
+                        f"points to {link.resolve()}, expected {canonical}"
                     )
-                else:
-                    link.symlink_to(canonical)
-                    created.append(link)
+            elif link.exists():
+                raise InstallError(
+                    f"{plan.slug}/universal: conflicting non-symlink at {link}; "
+                    f"refusing to overwrite"
+                )
             else:
-                # Project scope: project canonical exists → universal is already installed.
-                skipped.append(name)
+                link.symlink_to(canonical)
+                created.append(link)
             continue
 
         skip, reason = _should_skip_symlink(
@@ -289,15 +303,18 @@ def apply(
     removed: list[Path] = []
     for name in plan.remove_agents:
         if name == "universal":
-            if plan.scope == "global":
-                link = _universal_bundle_link(plan.slug)
-                if link.is_symlink():
-                    link.unlink()
-                    removed.append(link)
-                elif link.exists():
-                    raise InstallError(
-                        f"{plan.slug}/universal: cannot unlink {link}: not a symlink"
-                    )
+            link = (
+                _universal_bundle_link(plan.slug)
+                if plan.scope == "global"
+                else _project_universal_link(project, plan.slug)
+            )
+            if link.is_symlink():
+                link.unlink()
+                removed.append(link)
+            elif link.exists():
+                raise InstallError(
+                    f"{plan.slug}/universal: cannot unlink {link}: not a symlink"
+                )
             continue
 
         skip, _ = _should_skip_symlink(
