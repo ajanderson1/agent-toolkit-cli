@@ -30,3 +30,29 @@ def test_reconstruct_helper_clones_single_repo_and_pins(
 
     assert (library_skill_path("demo") / "SKILL.md").exists()
     assert local_sha == target_sha
+
+
+NOTE_UPSTREAM = "pinned to upstream commits"
+NOTE_PROJECT = "Project-scoped skills"
+NOTE_AGENTS = "not installed for any agent"
+
+
+def test_import_missing_file_errors(tmp_path, monkeypatch):
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(tmp_path / "lib" / "skills"))
+    runner = CliRunner()
+    result = runner.invoke(main, ["skill", "import", str(tmp_path / "nope.json")])
+    assert result.exit_code != 0
+    assert "not found" in result.output.lower()
+
+
+def test_import_empty_file_imports_nothing_but_prints_notes(tmp_path, monkeypatch):
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(tmp_path / "lib" / "skills"))
+    incoming = tmp_path / "incoming.json"
+    incoming.write_text('{"version": 1, "skills": {}}')
+    runner = CliRunner()
+    result = runner.invoke(main, ["skill", "import", str(incoming)])
+    assert result.exit_code == 0, result.output
+    assert "0 added" in result.output
+    assert NOTE_UPSTREAM in result.output
+    assert NOTE_PROJECT in result.output
+    assert NOTE_AGENTS in result.output
