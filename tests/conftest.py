@@ -155,3 +155,90 @@ def make_dirty(git_sandbox) -> GitSandbox:
     """Uncommitted working-tree change."""
     (git_sandbox.clone / "SKILL.md").write_text("uncommitted edit\n")
     return git_sandbox
+
+
+# ---------------------------------------------------------------------------
+# Install-shaped fixtures (Task 3)
+# ---------------------------------------------------------------------------
+
+@dataclass
+class InstalledSkill:
+    slug: str
+    canonical: Path
+    lock_path: Path
+    lock_text: str
+    read_only: bool
+
+
+@pytest.fixture
+def _cli_env(git_sandbox, tmp_path, monkeypatch):
+    """Monkeypatch env so the real CLI installs into a sandbox library root.
+
+    library_lock_path() = library_root().parent / "skills-lock.json", so for
+    AGENT_TOOLKIT_SKILLS_ROOT = tmp_path/lib/skills the lock lands at
+    tmp_path/lib/skills-lock.json (one level above the skills dir).
+    """
+    root = tmp_path / "lib" / "skills"
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(root))
+    return root
+
+
+@pytest.fixture
+def installed_skill(git_sandbox, _cli_env) -> InstalledSkill:
+    """A git-managed global skill added via the real CLI."""
+    from click.testing import CliRunner
+    from agent_toolkit_cli.cli import main
+    root = _cli_env
+    runner = CliRunner()
+    r = runner.invoke(main, ["skill", "add", str(git_sandbox.upstream),
+                             "--slug", "demo"])
+    assert r.exit_code == 0, r.output
+    canonical = root / "demo"
+    # Lock lives at library_root().parent / "skills-lock.json"
+    lock_path = root.parent / "skills-lock.json"
+    return InstalledSkill(
+        slug="demo", canonical=canonical, lock_path=lock_path,
+        lock_text=lock_path.read_text(), read_only=False,
+    )
+
+
+@pytest.fixture
+def copymode_skill(_cli_env) -> InstalledSkill:
+    """A canonical with plain files and no .git/ (copy-mode)."""
+    root = _cli_env
+    canonical = root / "copydemo"
+    canonical.mkdir(parents=True)
+    (canonical / "SKILL.md").write_text(
+        "---\nname: copydemo\ndescription: copy.\n---\n# copydemo\n"
+    )
+    # Lock lives at library_root().parent / "skills-lock.json"
+    lock_path = root.parent / "skills-lock.json"
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path.write_text('{"version": 3, "skills": {"copydemo": {}}}')
+    return InstalledSkill(
+        slug="copydemo", canonical=canonical, lock_path=lock_path,
+        lock_text=lock_path.read_text(), read_only=False,
+    )
+
+
+@pytest.fixture
+def monorepo_skill(tmp_path, monkeypatch) -> InstalledSkill:
+    """A read-only monorepo skill added via the real CLI."""
+    from click.testing import CliRunner
+    from agent_toolkit_cli.cli import main
+    from tests.test_cli.test_skill_update_monorepo import _init_parent
+    parent = _init_parent(tmp_path)
+    root = tmp_path / "library" / "skills"
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(root))
+    runner = CliRunner()
+    r = runner.invoke(main, ["skill", "add", f"file://{parent}",
+                             "--skill", "mkdocs"])
+    assert r.exit_code == 0, r.output
+    # Lock lives at library_root().parent / "skills-lock.json"
+    lock_path = root.parent / "skills-lock.json"
+    return InstalledSkill(
+        slug="mkdocs", canonical=root / "mkdocs", lock_path=lock_path,
+        lock_text=lock_path.read_text(), read_only=True,
+    )
