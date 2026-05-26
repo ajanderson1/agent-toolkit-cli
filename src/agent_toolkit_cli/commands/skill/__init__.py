@@ -39,6 +39,83 @@ from .status_cmd import status_cmd
 from .update_cmd import update_cmd
 
 
+def reconstruct_skill_into_library(
+    parsed: ParsedSource,
+    slug: str,
+    *,
+    pin_sha: str | None,
+) -> tuple[str | None, str | None]:
+    """Clone `parsed` into the library at `slug`; return (upstream_sha, local_sha).
+
+    Single-repo: clone at parsed.ref, optionally checkout pin_sha, record SHAs.
+    Monorepo: parent clone + subpath symlink (pin_sha ignored; parent-HEAD pinned).
+    Does not touch the lock file — the caller owns lock mutation.
+    """
+    if parsed.subpath or parsed.skill_name:
+        return _reconstruct_monorepo(parsed, slug)
+    return _reconstruct_single(parsed, slug, pin_sha=pin_sha)
+
+
+def _reconstruct_single(
+    parsed: ParsedSource, slug: str, *, pin_sha: str | None,
+) -> tuple[str | None, str | None]:
+    library_dir = library_skill_path(slug)
+    if not library_dir.exists():
+        library_dir.parent.mkdir(parents=True, exist_ok=True)
+        skill_git.clone(parsed.url, library_dir, ref=parsed.ref, env=None)
+    if pin_sha and skill_git.is_git_repo(library_dir):
+        skill_git.checkout(library_dir, ref=pin_sha, env=None)
+    if skill_git.is_git_repo(library_dir):
+        upstream_sha = skill_git.remote_head_sha(
+            library_dir, ref=parsed.ref or "main", env=None,
+        )
+        local_sha = skill_git.head_sha(library_dir, env=None)
+    else:
+        upstream_sha = None
+        local_sha = None
+    return upstream_sha, local_sha
+
+
+def _reconstruct_monorepo(
+    parsed: ParsedSource, slug: str,
+) -> tuple[str | None, str | None]:
+    from agent_toolkit_cli.skill_install import _symlink_or_copy
+    from agent_toolkit_cli.skill_paths import parent_clone_path
+
+    if parsed.owner_repo is None:
+        raise click.ClickException("monorepo source must resolve to owner/repo")
+    owner, repo = parsed.owner_repo.split("/", 1)
+    parent_dir = parent_clone_path(owner, repo, ref=parsed.ref, env=None)
+    if not parent_dir.exists():
+        parent_dir.parent.mkdir(parents=True, exist_ok=True)
+        skill_git.clone(parsed.url, parent_dir, ref=parsed.ref, env=None)
+    else:
+        try:
+            skill_git.fetch(parent_dir, env=None)
+        except Exception:
+            pass
+    if parsed.subpath:
+        subpath = parsed.subpath
+    else:
+        assert parsed.skill_name is not None
+        subpath = _resolve_skill_name_to_subpath(
+            parent_dir, parsed.skill_name, source=parsed.owner_repo,
+        )
+    skill_root = parent_dir / subpath
+    if not (skill_root / "SKILL.md").exists():
+        raise click.ClickException(
+            f"{subpath}/SKILL.md not found in parent {parsed.owner_repo}"
+        )
+    library_dir = library_skill_path(slug)
+    if not library_dir.exists() and not library_dir.is_symlink():
+        _symlink_or_copy(skill_root, library_dir)
+    parent_sha = (
+        skill_git.head_sha(parent_dir, env=None)
+        if skill_git.is_git_repo(parent_dir) else None
+    )
+    return parent_sha, None
+
+
 _SKILL_GROUP_EPILOG = """\
 Examples:
 
