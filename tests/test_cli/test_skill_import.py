@@ -235,3 +235,21 @@ def test_import_reconstructs_monorepo_entry(tmp_path, monkeypatch):
     lock = json.loads((library_root.parent / "skills-lock.json").read_text())
     assert lock["skills"]["mkdocs"]["skillPath"] == "mkdocs"
     assert lock["skills"]["mkdocs"].get("readOnly") is True
+
+
+def test_import_self_is_noop(installed_skill):
+    """Importing the live global lock onto itself skips all, changes nothing."""
+    before = installed_skill.lock_path.read_text()
+    runner = CliRunner()
+    result = runner.invoke(main, ["skill", "import", str(installed_skill.lock_path)])
+    assert result.exit_code == 0, result.output
+    assert "0 added" in result.output
+    assert "skipped" in result.output
+    assert installed_skill.lock_path.read_text() == before
+
+
+def test_import_appears_in_skill_help():
+    runner = CliRunner()
+    result = runner.invoke(main, ["skill", "--help"])
+    assert result.exit_code == 0
+    assert "import" in result.output
