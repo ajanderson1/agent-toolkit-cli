@@ -247,15 +247,22 @@ taxonomy is what's being locked in.
 
 ## Gap Ledger (seeds Spec 2)
 
-| § | Gap | Current behaviour locked in | Proposed follow-up (Spec 2) |
-|---|-----|------------------------------|------------------------------|
-| 1 | `status` drift-blind | reports only working-tree clean/dirty | use `divergence()`; report `update available` / `ahead` / `diverged` in plain language |
-| 2 | `update` always merges | prints `updated` even when current | distinguish "already up to date" from "merged N commits" |
-| 3 | conflict message is git-literate | `conflict during merge (resolve in working copy)` | emit `claude -p` copy-paste resolver scoped to the canonical path |
-| 4 | push clean-gap | clean+ahead → "nothing to push", drops commits | push when **dirty OR ahead** (via `divergence()`); report commit count |
-| 5 | push ownership unverified | proceeds whenever `git push` succeeds | `gh`-based repo-permission check; refuse with clear message when not owned (own brainstorm — larger) |
-| 6 | doctor offline / drift-blind | no fetch, no upstream findings | parallel fetch + `behind_upstream` / `diverged_upstream` findings with in-progress reporting; offline fallback |
-| 7 | doctor stray-symlink coverage gaps | current taxonomy only | audit pathologies (real-dir-where-symlink in per-agent dirs, broken chains, symlink→symlink); add `external_symlink_into_canonical` (report + offer remove) |
+**Reconciliation (post-implementation, 2026-05-26):** Every characterization test passed exactly
+as this matrix predicted — no implementer reported a behavioural deviation, so no ledger row
+required correction. Each gap is now pinned by a concrete test (last column); Spec 2 updates that
+test when it lands the fix, which doubles as a checklist. Full suite at completion: **423 passed,
+2 skipped.** The diverged-merge case produced a true two-parent merge commit as the matrix assumed
+(`test_diverged_merge_creates_merge_commit`).
+
+| § | Gap | Current behaviour locked in | Pinned by test | Proposed follow-up (Spec 2) |
+|---|-----|------------------------------|----------------|------------------------------|
+| 1 | `status` drift-blind | reports only working-tree clean/dirty | `test_status_behind_still_reports_clean` | use `divergence()`; report `update available` / `ahead` / `diverged` in plain language |
+| 2 | `update` always merges | prints `updated` even when current | `test_update_up_to_date_still_says_updated` | distinguish "already up to date" from "merged N commits" |
+| 3 | conflict message is git-literate | `conflict during merge (resolve in working copy)` | `test_update_conflict_exits_nonzero_and_is_terse` | emit `claude -p` copy-paste resolver scoped to the canonical path |
+| 4 | push clean-gap | clean+ahead → "nothing to push", drops commits | `test_push_clean_with_commits_ahead_drops_them` | push when **dirty OR ahead** (via `divergence()`); report commit count |
+| 5 | push ownership unverified | proceeds whenever `git push` succeeds | `test_ahead_push_succeeds_no_ownership_check` | `gh`-based repo-permission check; refuse with clear message when not owned (own brainstorm — larger) |
+| 6 | doctor offline / drift-blind | no fetch, no upstream findings | `test_doctor_does_not_report_upstream_drift` | parallel fetch + `behind_upstream` / `diverged_upstream` findings with in-progress reporting; offline fallback |
+| 7 | doctor stray-symlink coverage gaps | current taxonomy only | *(no new test — covered by existing doctor taxonomy tests; audit deferred to Spec 2)* | audit pathologies (real-dir-where-symlink in per-agent dirs, broken chains, symlink→symlink); add `external_symlink_into_canonical` (report + offer remove) |
 
 ## Spec 2 forward-pointer
 
