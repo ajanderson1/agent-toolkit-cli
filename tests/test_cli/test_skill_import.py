@@ -97,3 +97,33 @@ def test_import_adds_new_single_skill_pinned(git_sandbox, tmp_path, monkeypatch)
     lock = json.loads((library_root.parent / "skills-lock.json").read_text())
     assert "demo" in lock["skills"]
     assert lock["skills"]["demo"]["localSha"] == sha
+
+
+def test_import_skips_existing_and_preserves_lock(
+    installed_skill, git_sandbox, tmp_path
+):
+    """A slug already in the library is skipped; its lock entry is untouched."""
+    before = installed_skill.lock_path.read_text()
+
+    # Incoming names the SAME slug 'demo' but points at a different source.
+    incoming = tmp_path / "incoming.json"
+    incoming.write_text(json.dumps({
+        "version": 1,
+        "skills": {
+            "demo": {
+                "source": "someone/other-repo",
+                "sourceType": "github",
+                "skillPath": "SKILL.md",
+                "upstreamSha": "deadbeef",
+            }
+        },
+    }))
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["skill", "import", str(incoming)])
+    assert result.exit_code == 0, result.output
+    assert "1 skipped" in result.output
+    assert "already present" in result.output
+
+    # Additive-merge invariant: existing entry byte-identical.
+    assert installed_skill.lock_path.read_text() == before
