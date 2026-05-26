@@ -127,3 +127,37 @@ def test_import_skips_existing_and_preserves_lock(
 
     # Additive-merge invariant: existing entry byte-identical.
     assert installed_skill.lock_path.read_text() == before
+
+
+def test_import_latest_clones_current_head(make_behind, tmp_path, monkeypatch):
+    """--latest lands on upstream HEAD, not the recorded (older) sha."""
+    from agent_toolkit_cli import skill_git
+    sandbox = make_behind
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+
+    # Recorded sha = the OLD clone HEAD (before upstream advanced).
+    old_sha = skill_git.head_sha(sandbox.clone, env=None)
+    incoming = tmp_path / "incoming.json"
+    incoming.write_text(json.dumps({
+        "version": 1,
+        "skills": {
+            "demo": {
+                "source": str(sandbox.upstream),
+                "sourceType": "git",
+                "skillPath": "SKILL.md",
+                "upstreamSha": old_sha,
+                "localSha": old_sha,
+            }
+        },
+    }))
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["skill", "import", str(incoming), "--latest"])
+    assert result.exit_code == 0, result.output
+    assert "latest:" in result.output
+
+    landed = skill_git.head_sha(library_root / "demo", env=None)
+    assert landed != old_sha, "with --latest, HEAD should be upstream's newer commit"
