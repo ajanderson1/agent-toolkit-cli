@@ -260,7 +260,7 @@ test when it lands the fix, which doubles as a checklist. Full suite at completi
 | 2 | `update` always merges | prints `updated` even when current | `test_update_up_to_date_still_says_updated` | distinguish "already up to date" from "merged N commits" |
 | 3 | conflict message is git-literate | `conflict during merge (resolve in working copy)` | `test_update_conflict_exits_nonzero_and_is_terse` | emit `claude -p` copy-paste resolver scoped to the canonical path |
 | 4 | push clean-gap | clean+ahead → "nothing to push", drops commits | `test_push_clean_with_commits_ahead_drops_them` | push when **dirty OR ahead** (via `divergence()`); report commit count |
-| 5 | push ownership unverified | proceeds whenever `git push` succeeds | `test_ahead_push_succeeds_no_ownership_check` | `gh`-based repo-permission check; refuse with clear message when not owned (own brainstorm — larger) |
+| 5 | push ownership unverified | proceeds whenever `git push` succeeds | `test_ahead_push_succeeds_no_ownership_check` (integration) + `test_push_dirty_direct_pushes` (e2e) | `gh`-based repo-permission check; refuse with clear message when not owned (own brainstorm — larger) |
 | 6 | doctor offline / drift-blind | no fetch, no upstream findings | `test_doctor_does_not_report_upstream_drift` | parallel fetch + `behind_upstream` / `diverged_upstream` findings with in-progress reporting; offline fallback |
 | 7 | doctor stray-symlink coverage gaps | current taxonomy only | *(no new test — covered by existing doctor taxonomy tests; audit deferred to Spec 2)* | audit pathologies (real-dir-where-symlink in per-agent dirs, broken chains, symlink→symlink); add `external_symlink_into_canonical` (report + offer remove) |
 

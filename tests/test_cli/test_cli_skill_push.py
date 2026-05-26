@@ -529,13 +529,19 @@ def test_push_clean_with_commits_ahead_drops_them(git_sandbox, tmp_path, monkeyp
 
 
 def test_push_dirty_direct_pushes(git_sandbox, tmp_path, monkeypatch):
-    """Dirty working tree + --direct commits and pushes; HEAD reaches the remote."""
+    """Dirty working tree + --direct commits and pushes; HEAD reaches the remote.
+
+    Also documents current behaviour for Gap Ledger §5: push performs NO
+    upstream-ownership verification — a dirty skill pushes whenever
+    `git push` succeeds, even though the upstream is not checked for
+    ownership.  See Gap Ledger §5."""
     runner, root = _setup_global_demo(git_sandbox, tmp_path, monkeypatch)
     canonical = root / "demo"
     (canonical / "SKILL.md").write_text("self-improvement\n")  # dirty
     result = runner.invoke(main, ["skill", "push", "demo", "-g", "--direct"])
     assert result.exit_code == 0, result.output
     assert "pushed" in result.output
+    # No ownership gate: the commit reached the remote.
     assert _rev_parse(canonical, "HEAD", git_sandbox.env) \
         == _rev_parse(canonical, "origin/main", git_sandbox.env)
 
