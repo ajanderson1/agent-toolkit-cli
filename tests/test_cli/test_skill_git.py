@@ -4,9 +4,11 @@ from pathlib import Path
 import pytest
 
 from agent_toolkit_cli.skill_git import (
+    Divergence,
     GitError,
     GitWorkingTreeStatus,
     clone,
+    divergence,
     fetch,
     head_sha,
     merge,
@@ -366,3 +368,80 @@ def test_commit_all_succeeds_without_global_git_identity(
     ).stdout.strip()
     assert head_author == "agent-toolkit-cli <noreply@agent-toolkit-cli>", \
         f"commit_all must use synthetic identity, got: {head_author}"
+
+
+def _advance_upstream(git_sandbox):
+    """Push one new commit to upstream via a throwaway clone."""
+    other = git_sandbox.upstream.parent / "advance-helper"
+    subprocess.run(
+        ["git", "clone", str(git_sandbox.upstream), str(other)],
+        check=True, env=git_sandbox.env, capture_output=True,
+    )
+    (other / "UPSTREAM.md").write_text("upstream advance\n")
+    subprocess.run(["git", "-C", str(other), "add", "-A"],
+                   check=True, env=git_sandbox.env, capture_output=True)
+    subprocess.run(["git", "-C", str(other), "commit", "-m", "upstream"],
+                   check=True, env=git_sandbox.env, capture_output=True)
+    subprocess.run(["git", "-C", str(other), "push", "origin", "main"],
+                   check=True, env=git_sandbox.env, capture_output=True)
+
+
+def _commit_local(git_sandbox, name="LOCAL.md", body="local change\n"):
+    """Create one local commit in the clone (not pushed)."""
+    (git_sandbox.clone / name).write_text(body)
+    subprocess.run(["git", "-C", str(git_sandbox.clone), "add", "-A"],
+                   check=True, env=git_sandbox.env, capture_output=True)
+    subprocess.run(["git", "-C", str(git_sandbox.clone), "commit", "-m", "local"],
+                   check=True, env=git_sandbox.env, capture_output=True)
+
+
+def test_divergence_up_to_date(git_sandbox):
+    fetch(git_sandbox.clone, env=git_sandbox.env)
+    assert divergence(git_sandbox.clone, ref="main", env=git_sandbox.env) \
+        == Divergence.UP_TO_DATE
+
+
+def test_divergence_ahead(git_sandbox):
+    _commit_local(git_sandbox)
+    fetch(git_sandbox.clone, env=git_sandbox.env)
+    assert divergence(git_sandbox.clone, ref="main", env=git_sandbox.env) \
+        == Divergence.AHEAD
+
+
+def test_divergence_behind(git_sandbox):
+    _advance_upstream(git_sandbox)
+    fetch(git_sandbox.clone, env=git_sandbox.env)
+    assert divergence(git_sandbox.clone, ref="main", env=git_sandbox.env) \
+        == Divergence.BEHIND
+
+
+def test_divergence_diverged(git_sandbox):
+    _commit_local(git_sandbox)
+    _advance_upstream(git_sandbox)
+    fetch(git_sandbox.clone, env=git_sandbox.env)
+    assert divergence(git_sandbox.clone, ref="main", env=git_sandbox.env) \
+        == Divergence.DIVERGED
+
+
+def test_divergence_does_not_fetch(git_sandbox):
+    """divergence() reads only local refs — a behind clone reads UP_TO_DATE
+    until the caller fetches. Pins the 'caller must fetch' contract."""
+    _advance_upstream(git_sandbox)
+    assert divergence(git_sandbox.clone, ref="main", env=git_sandbox.env) \
+        == Divergence.UP_TO_DATE
+    fetch(git_sandbox.clone, env=git_sandbox.env)
+    assert divergence(git_sandbox.clone, ref="main", env=git_sandbox.env) \
+        == Divergence.BEHIND
+
+
+def test_divergence_parses_left_right_count(monkeypatch):
+    import agent_toolkit_cli.skill_git as g
+
+    class _Fake:
+        def __init__(self, out): self.stdout = out; self.stderr = ""
+
+    cases = {"0\t0": g.Divergence.UP_TO_DATE, "2\t0": g.Divergence.AHEAD,
+             "0\t3": g.Divergence.BEHIND, "2\t3": g.Divergence.DIVERGED}
+    for out, expected in cases.items():
+        monkeypatch.setattr(g, "_run", lambda *a, _o=out, **k: _Fake(_o))
+        assert g.divergence(Path("/x"), ref="main", env=None) == expected

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import shutil
+import subprocess
 from pathlib import Path
 
 from click.testing import CliRunner
@@ -234,3 +235,31 @@ def test_doctor_journal_v21_to_v22_repro(
     assert claude_link.resolve() == library_journal.resolve()
     # Backup of the original bundle dir was created.
     assert any(bundle.parent.glob("journal.bak-doctor-*"))
+
+
+def test_doctor_does_not_report_upstream_drift(git_sandbox, tmp_path: Path, monkeypatch):
+    """Documents current behaviour: doctor is offline — a canonical behind
+    upstream produces NO drift finding. See Gap Ledger §6 (Spec 2 adds it)."""
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    runner = CliRunner()
+    _seed(runner, git_sandbox.upstream, monkeypatch, tmp_path)
+
+    # Advance upstream so the canonical is behind.
+    helper = git_sandbox.upstream.parent / "doctor-advance-helper"
+    subprocess.run(["git", "clone", str(git_sandbox.upstream), str(helper)],
+                   check=True, env=git_sandbox.env, capture_output=True)
+    (helper / "UP.md").write_text("up\n")
+    subprocess.run(["git", "-C", str(helper), "add", "-A"],
+                   check=True, env=git_sandbox.env, capture_output=True)
+    subprocess.run(["git", "-C", str(helper), "commit", "-m", "up"],
+                   check=True, env=git_sandbox.env, capture_output=True)
+    subprocess.run(["git", "-C", str(helper), "push", "origin", "main"],
+                   check=True, env=git_sandbox.env, capture_output=True)
+
+    result = runner.invoke(main, ["skill", "doctor", "-g"])
+    assert result.exit_code == 0, result.output
+    out = result.output.lower()
+    assert "behind upstream" not in out
+    assert "newer version" not in out
+    assert "update available" not in out

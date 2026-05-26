@@ -33,6 +33,15 @@ class GitWorkingTreeStatus(enum.Enum):
     DIRTY = "dirty"
 
 
+class Divergence(enum.Enum):
+    """Local HEAD relative to origin/<ref>, classified from
+    `git rev-list --left-right --count`."""
+    UP_TO_DATE = "up_to_date"
+    BEHIND = "behind"      # upstream has commits we don't
+    AHEAD = "ahead"        # we have commits upstream doesn't
+    DIVERGED = "diverged"  # both sides moved
+
+
 @dataclass
 class GitResult:
     stdout: str
@@ -235,3 +244,30 @@ def remote_head_sha(
         ["git", "-C", str(repo), "rev-parse", f"origin/{ref}"], env=env,
     )
     return proc.stdout.strip()
+
+
+def divergence(
+    repo: Path, *, ref: str, env: dict[str, str] | None
+) -> Divergence:
+    """Classify local HEAD vs origin/<ref> using
+    `git rev-list --left-right --count HEAD...origin/<ref>`, which prints
+    `<ahead>\\t<behind>`.
+
+    Reads ONLY the local repo's refs — it does NOT fetch. Callers that need
+    a live comparison must `fetch()` first; otherwise origin/<ref> is
+    whatever the last fetch/clone recorded.
+    """
+    proc = _run(
+        ["git", "-C", str(repo), "rev-list", "--left-right", "--count",
+         f"HEAD...origin/{ref}"],
+        env=env,
+    )
+    ahead_str, behind_str = proc.stdout.split()
+    ahead, behind = int(ahead_str), int(behind_str)
+    if ahead and behind:
+        return Divergence.DIVERGED
+    if ahead:
+        return Divergence.AHEAD
+    if behind:
+        return Divergence.BEHIND
+    return Divergence.UP_TO_DATE

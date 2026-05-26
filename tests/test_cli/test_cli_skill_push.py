@@ -476,3 +476,79 @@ def test_push_does_not_leak_into_outer_repo(
     assert outer_head_after == outer_head_before, (
         "push leaked into outer repo (GIT_DIR/GIT_INDEX_FILE scrub failed)"
     )
+
+
+# ---------------------------------------------------------------------------
+# Global-scope push helpers
+# ---------------------------------------------------------------------------
+
+
+def _setup_global_demo(git_sandbox, tmp_path, monkeypatch):
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in git_sandbox.env.items():
+        if k == "PATH":
+            continue  # callers may have adjusted PATH (e.g. gh stub); don't clobber
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    runner = CliRunner()
+    r = runner.invoke(main, ["skill", "add", str(git_sandbox.upstream),
+                             "--slug", "demo"])
+    assert r.exit_code == 0, r.output
+    return runner, library_root
+
+
+# Reads git refs directly (not via skill_git) so the assertion is an independent
+# oracle — a bug in skill_git's SHA helpers can't mask a push-stranding bug.
+def _rev_parse(canonical, ref, env):
+    return subprocess.run(
+        ["git", "-C", str(canonical), "rev-parse", ref],
+        check=True, env=env, capture_output=True, text=True,
+    ).stdout.strip()
+
+
+def test_push_clean_with_commits_ahead_drops_them(git_sandbox, tmp_path, monkeypatch):
+    """Documents the clean-gap BUG: a clean tree with local commits ahead of
+    origin reports 'nothing to push' and the commits never reach the remote.
+    See Gap Ledger §4 — Spec 2 fixes this."""
+    runner, root = _setup_global_demo(git_sandbox, tmp_path, monkeypatch)
+    canonical = root / "demo"
+    # Commit locally (clean working tree, but ahead of origin).
+    (canonical / "NEW.md").write_text("ahead commit\n")
+    subprocess.run(["git", "-C", str(canonical), "add", "-A"],
+                   check=True, env=git_sandbox.env, capture_output=True)
+    subprocess.run(["git", "-C", str(canonical), "commit", "-m", "ahead"],
+                   check=True, env=git_sandbox.env, capture_output=True)
+
+    result = runner.invoke(main, ["skill", "push", "demo", "-g", "--direct"])
+    assert result.exit_code == 0, result.output
+    assert "nothing to push" in result.output  # the bug, pinned
+
+    # Prove the commit did NOT reach the remote.
+    assert _rev_parse(canonical, "HEAD", git_sandbox.env) \
+        != _rev_parse(canonical, "origin/main", git_sandbox.env)
+
+
+def test_push_dirty_direct_pushes(git_sandbox, tmp_path, monkeypatch):
+    """Dirty working tree + --direct commits and pushes; HEAD reaches the remote.
+
+    Also documents current behaviour for Gap Ledger §5: push performs NO
+    upstream-ownership verification — a dirty skill pushes whenever
+    `git push` succeeds, even though the upstream is not checked for
+    ownership.  See Gap Ledger §5."""
+    runner, root = _setup_global_demo(git_sandbox, tmp_path, monkeypatch)
+    canonical = root / "demo"
+    (canonical / "SKILL.md").write_text("self-improvement\n")  # dirty
+    result = runner.invoke(main, ["skill", "push", "demo", "-g", "--direct"])
+    assert result.exit_code == 0, result.output
+    assert "pushed" in result.output
+    # No ownership gate: the commit reached the remote.
+    assert _rev_parse(canonical, "HEAD", git_sandbox.env) \
+        == _rev_parse(canonical, "origin/main", git_sandbox.env)
+
+
+def test_push_monorepo_refused(monorepo_skill):
+    """read-only monorepo skill → push refused, exit 1."""
+    runner = CliRunner()
+    result = runner.invoke(main, ["skill", "push", "mkdocs", "-g"])
+    assert result.exit_code == 1
+    assert "read-only" in result.output
