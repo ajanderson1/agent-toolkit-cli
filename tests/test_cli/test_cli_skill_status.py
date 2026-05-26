@@ -185,6 +185,7 @@ def test_status_behind_still_reports_clean(git_sandbox, tmp_path, monkeypatch):
 
 
 def test_status_missing_reports_missing(git_sandbox, tmp_path, monkeypatch):
+    """Documents current behaviour: status reports 'missing' when the canonical directory is absent."""
     library_root = tmp_path / "lib" / "skills"
     for k, v in git_sandbox.env.items():
         monkeypatch.setenv(k, v)
@@ -193,7 +194,7 @@ def test_status_missing_reports_missing(git_sandbox, tmp_path, monkeypatch):
     r = runner.invoke(main, ["skill", "add", str(git_sandbox.upstream),
                              "--slug", "demo"])
     assert r.exit_code == 0, r.output
-    shutil.rmtree(library_root / "demo")
+    shutil.rmtree(canonical_skill_dir("demo", scope="global"))
     result = runner.invoke(main, ["skill", "status", "demo", "-g"])
     assert result.exit_code == 0, result.output
     assert "missing" in result.output
