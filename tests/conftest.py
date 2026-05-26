@@ -91,3 +91,66 @@ def git_sandbox(tmp_path: Path) -> GitSandbox:
     )
 
     return GitSandbox(upstream=upstream, clone=clone, env=env)
+
+
+def _git(sandbox, *args):
+    subprocess.run(["git", "-C", str(sandbox.clone), *args],
+                   check=True, env=sandbox.env, capture_output=True)
+
+
+def _advance_remote(sandbox, name="UPSTREAM.md", body="upstream\n"):
+    """Push one commit to upstream via a throwaway clone."""
+    helper = sandbox.upstream.parent / "remote-advance-helper"
+    if not helper.exists():
+        subprocess.run(["git", "clone", str(sandbox.upstream), str(helper)],
+                       check=True, env=sandbox.env, capture_output=True)
+    (helper / name).write_text(body)
+    subprocess.run(["git", "-C", str(helper), "add", "-A"],
+                   check=True, env=sandbox.env, capture_output=True)
+    subprocess.run(["git", "-C", str(helper), "commit", "-m", "upstream"],
+                   check=True, env=sandbox.env, capture_output=True)
+    subprocess.run(["git", "-C", str(helper), "push", "origin", "main"],
+                   check=True, env=sandbox.env, capture_output=True)
+
+
+@pytest.fixture
+def make_behind(git_sandbox) -> GitSandbox:
+    """Upstream advanced; clone left behind (not fetched)."""
+    _advance_remote(git_sandbox)
+    return git_sandbox
+
+
+@pytest.fixture
+def make_ahead(git_sandbox) -> GitSandbox:
+    """Clone has a local commit not pushed to upstream."""
+    (git_sandbox.clone / "LOCAL.md").write_text("local\n")
+    _git(git_sandbox, "add", "-A")
+    _git(git_sandbox, "commit", "-m", "local")
+    return git_sandbox
+
+
+@pytest.fixture
+def make_diverged(git_sandbox) -> GitSandbox:
+    """Both sides committed on non-conflicting paths."""
+    (git_sandbox.clone / "LOCAL.md").write_text("local\n")
+    _git(git_sandbox, "add", "-A")
+    _git(git_sandbox, "commit", "-m", "local")
+    _advance_remote(git_sandbox)
+    return git_sandbox
+
+
+@pytest.fixture
+def make_conflict(git_sandbox) -> GitSandbox:
+    """Both sides edited the same line of SKILL.md."""
+    (git_sandbox.clone / "SKILL.md").write_text("local edit\n")
+    _git(git_sandbox, "add", "-A")
+    _git(git_sandbox, "commit", "-m", "local SKILL edit")
+    _advance_remote(git_sandbox, name="SKILL.md", body="upstream edit\n")
+    return git_sandbox
+
+
+@pytest.fixture
+def make_dirty(git_sandbox) -> GitSandbox:
+    """Uncommitted working-tree change."""
+    (git_sandbox.clone / "SKILL.md").write_text("uncommitted edit\n")
+    return git_sandbox
