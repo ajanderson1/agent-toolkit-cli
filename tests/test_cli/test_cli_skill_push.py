@@ -479,13 +479,15 @@ def test_push_does_not_leak_into_outer_repo(
 
 
 # ---------------------------------------------------------------------------
-# Global-scope push helpers (Task 7)
+# Global-scope push helpers
 # ---------------------------------------------------------------------------
 
 
 def _setup_global_demo(git_sandbox, tmp_path, monkeypatch):
     library_root = tmp_path / "lib" / "skills"
     for k, v in git_sandbox.env.items():
+        if k == "PATH":
+            continue  # callers may have adjusted PATH (e.g. gh stub); don't clobber
         monkeypatch.setenv(k, v)
     monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
     runner = CliRunner()
@@ -495,6 +497,8 @@ def _setup_global_demo(git_sandbox, tmp_path, monkeypatch):
     return runner, library_root
 
 
+# Reads git refs directly (not via skill_git) so the assertion is an independent
+# oracle — a bug in skill_git's SHA helpers can't mask a push-stranding bug.
 def _rev_parse(canonical, ref, env):
     return subprocess.run(
         ["git", "-C", str(canonical), "rev-parse", ref],
@@ -525,6 +529,7 @@ def test_push_clean_with_commits_ahead_drops_them(git_sandbox, tmp_path, monkeyp
 
 
 def test_push_dirty_direct_pushes(git_sandbox, tmp_path, monkeypatch):
+    """Dirty working tree + --direct commits and pushes; HEAD reaches the remote."""
     runner, root = _setup_global_demo(git_sandbox, tmp_path, monkeypatch)
     canonical = root / "demo"
     (canonical / "SKILL.md").write_text("self-improvement\n")  # dirty
