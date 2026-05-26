@@ -87,7 +87,7 @@ def test_conflict_merge_leaves_recoverable_tree(make_conflict):
     # Recoverable: abort succeeds and returns rc 0.
     abort = subprocess.run(
         ["git", "-C", str(s.clone), "merge", "--abort"],
-        env=s.env, capture_output=True,
+        env=s.env, capture_output=True, text=True,
     )
     assert abort.returncode == 0
 
