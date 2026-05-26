@@ -181,6 +181,7 @@ def test_update_conflict_exits_nonzero_and_is_terse(git_sandbox, tmp_path, monke
     assert result.exit_code == 1
     assert "conflict" in result.output.lower()
     assert "claude" not in result.output.lower()  # no resolver yet — the gap
+    assert "<<<<<<<" in (root / "demo" / "SKILL.md").read_text()
 
 
 def test_update_copymode_refuses(copymode_skill):
