@@ -111,13 +111,18 @@ symlink), so doctor/status/update/push tests start where real usage starts:
 - `copymode_skill` — plain-file skill with no `.git/` (refusal case).
 
 **Determinism guards.** All fixtures inherit the autouse `_strip_git_env` scrub and synthetic
-identity. Dedicated regression tests reproduce the two historical failure modes and assert
-they stay closed:
+identity. The two historical failure modes are already neutralised and stay covered:
 
-- *GIT_* env leak*: a command shelled out with a leaked `GIT_DIR`/`GIT_INDEX_FILE` must not
-  write into the outer repo (`feedback_git_env_leak`).
-- *Subagent worktree corruption*: a fixture must not leak git config that mis-authors commits
-  (`feedback_subagent_git_isolation`).
+- *GIT_* env leak* (`feedback_git_env_leak`): a command shelled out with a leaked
+  `GIT_DIR`/`GIT_INDEX_FILE` must not write into the outer repo. Already covered by
+  `tests/test_conftest_git_env_scrub.py` (the autouse scrub + a subprocess-inheritance test).
+  No new test needed — the new fixtures simply inherit the guard.
+- *Subagent worktree corruption* (`feedback_subagent_git_isolation`): a leaked git config could
+  mis-author commits. Mitigated at the production layer by the synthetic identity
+  (`-c user.name=…`/`user.email=…`) that `commit_all()` and `merge()` already pin, plus the
+  identity vars the `git_sandbox` env sets. This is a property assertion, not a behaviour test:
+  the existing git tests that create commits and inspect them already exercise that the pinned
+  identity wins, so no dedicated reproduction test is added.
 
 ## `divergence()` helper
 
