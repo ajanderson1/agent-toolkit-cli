@@ -161,3 +161,43 @@ def test_import_latest_clones_current_head(make_behind, tmp_path, monkeypatch):
 
     landed = skill_git.head_sha(library_root / "demo", env=None)
     assert landed != old_sha, "with --latest, HEAD should be upstream's newer commit"
+
+
+def test_import_partial_failure_exit_1_but_writes_good(
+    git_sandbox, tmp_path, monkeypatch
+):
+    from agent_toolkit_cli import skill_git
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+
+    good_sha = skill_git.head_sha(git_sandbox.clone, env=None)
+    incoming = tmp_path / "incoming.json"
+    incoming.write_text(json.dumps({
+        "version": 1,
+        "skills": {
+            "good": {
+                "source": str(git_sandbox.upstream),
+                "sourceType": "git", "skillPath": "SKILL.md",
+                "upstreamSha": good_sha, "localSha": good_sha,
+            },
+            "bad": {
+                "source": str(tmp_path / "does-not-exist.git"),
+                "sourceType": "git", "skillPath": "SKILL.md",
+                "upstreamSha": "deadbeef",
+            },
+        },
+    }))
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["skill", "import", str(incoming)])
+    assert result.exit_code == 1, result.output
+    assert "1 added" in result.output and "1 failed" in result.output
+    assert "failed" in result.output and "bad" in result.output
+
+    # Good skill still landed and is in the lock.
+    assert (library_root / "good" / "SKILL.md").exists()
+    lock = json.loads((library_root.parent / "skills-lock.json").read_text())
+    assert "good" in lock["skills"]
+    assert "bad" not in lock["skills"]
