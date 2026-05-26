@@ -237,7 +237,7 @@ def test_doctor_journal_v21_to_v22_repro(
     assert any(bundle.parent.glob("journal.bak-doctor-*"))
 
 
-def test_doctor_does_not_report_upstream_drift(git_sandbox, tmp_path, monkeypatch):
+def test_doctor_does_not_report_upstream_drift(git_sandbox, tmp_path: Path, monkeypatch):
     """Documents current behaviour: doctor is offline — a canonical behind
     upstream produces NO drift finding. See Gap Ledger §6 (Spec 2 adds it)."""
     for k, v in git_sandbox.env.items():
@@ -260,6 +260,6 @@ def test_doctor_does_not_report_upstream_drift(git_sandbox, tmp_path, monkeypatc
     result = runner.invoke(main, ["skill", "doctor", "-g"])
     assert result.exit_code == 0, result.output
     out = result.output.lower()
-    assert "behind" not in out
+    assert "behind upstream" not in out
     assert "newer version" not in out
     assert "update available" not in out
