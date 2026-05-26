@@ -56,3 +56,44 @@ def test_import_empty_file_imports_nothing_but_prints_notes(tmp_path, monkeypatc
     assert NOTE_UPSTREAM in result.output
     assert NOTE_PROJECT in result.output
     assert NOTE_AGENTS in result.output
+
+
+def _write_incoming_for(upstream: Path, slug: str, sha: str, dest: Path) -> Path:
+    """Write a v1 lock naming one single-repo skill pinned to `sha`."""
+    dest.write_text(json.dumps({
+        "version": 1,
+        "skills": {
+            slug: {
+                "source": str(upstream),
+                "sourceType": "git",
+                "skillPath": "SKILL.md",
+                "upstreamSha": sha,
+                "localSha": sha,
+            }
+        },
+    }))
+    return dest
+
+
+def test_import_adds_new_single_skill_pinned(git_sandbox, tmp_path, monkeypatch):
+    from agent_toolkit_cli import skill_git
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+
+    sha = skill_git.head_sha(git_sandbox.clone, env=None)
+    incoming = _write_incoming_for(
+        git_sandbox.upstream, "demo", sha, tmp_path / "incoming.json",
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["skill", "import", str(incoming)])
+    assert result.exit_code == 0, result.output
+    assert "1 added" in result.output
+    assert "added" in result.output and "demo" in result.output
+
+    assert (library_root / "demo" / "SKILL.md").exists()
+    lock = json.loads((library_root.parent / "skills-lock.json").read_text())
+    assert "demo" in lock["skills"]
+    assert lock["skills"]["demo"]["localSha"] == sha
