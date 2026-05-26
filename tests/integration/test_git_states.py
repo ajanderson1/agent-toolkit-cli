@@ -1,9 +1,13 @@
 """Integration: state-builder fixtures produce the divergence state they name."""
+import pytest
+
 from agent_toolkit_cli.skill_git import (
     Divergence,
+    GitError,
     GitWorkingTreeStatus,
     divergence,
     fetch,
+    merge,
     status,
 )
 
@@ -33,8 +37,6 @@ def test_make_dirty_yields_dirty(make_dirty):
 
 def test_make_conflict_blocks_merge(make_conflict):
     """Both sides edited the same line — merge must raise GitError."""
-    import pytest
-    from agent_toolkit_cli.skill_git import GitError, merge
     sandbox = make_conflict
     fetch(sandbox.clone, env=sandbox.env)
     with pytest.raises(GitError):

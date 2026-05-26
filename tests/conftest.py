@@ -101,6 +101,7 @@ def _git(sandbox, *args):
 def _advance_remote(sandbox, name="UPSTREAM.md", body="upstream\n"):
     """Push one commit to upstream via a throwaway clone."""
     helper = sandbox.upstream.parent / "remote-advance-helper"
+    # Clone once per git_sandbox lifetime (one call per fixture is the contract).
     if not helper.exists():
         subprocess.run(["git", "clone", str(sandbox.upstream), str(helper)],
                        check=True, env=sandbox.env, capture_output=True)
