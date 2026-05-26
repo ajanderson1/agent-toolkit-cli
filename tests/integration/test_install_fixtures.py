@@ -9,6 +9,8 @@ def test_installed_skill_has_git_canonical(installed_skill):
 
 def test_copymode_skill_has_no_git(copymode_skill):
     assert not is_git_repo(copymode_skill.canonical)
+    assert copymode_skill.read_only is False
+    assert copymode_skill.slug in copymode_skill.lock_text
 
 
 def test_monorepo_skill_is_read_only(monorepo_skill):

@@ -8,6 +8,9 @@ from pathlib import Path
 
 import pytest
 
+from click.testing import CliRunner
+from agent_toolkit_cli.cli import main
+
 
 @dataclass
 class GitSandbox:
@@ -188,8 +191,6 @@ def _cli_env(git_sandbox, tmp_path, monkeypatch):
 @pytest.fixture
 def installed_skill(git_sandbox, _cli_env) -> InstalledSkill:
     """A git-managed global skill added via the real CLI."""
-    from click.testing import CliRunner
-    from agent_toolkit_cli.cli import main
     root = _cli_env
     runner = CliRunner()
     r = runner.invoke(main, ["skill", "add", str(git_sandbox.upstream),
@@ -216,7 +217,7 @@ def copymode_skill(_cli_env) -> InstalledSkill:
     # Lock lives at library_root().parent / "skills-lock.json"
     lock_path = root.parent / "skills-lock.json"
     lock_path.parent.mkdir(parents=True, exist_ok=True)
-    lock_path.write_text('{"version": 3, "skills": {"copydemo": {}}}')
+    lock_path.write_text('{"version": 1, "skills": {"copydemo": {}}}')
     return InstalledSkill(
         slug="copydemo", canonical=canonical, lock_path=lock_path,
         lock_text=lock_path.read_text(), read_only=False,
@@ -226,11 +227,10 @@ def copymode_skill(_cli_env) -> InstalledSkill:
 @pytest.fixture
 def monorepo_skill(tmp_path, monkeypatch) -> InstalledSkill:
     """A read-only monorepo skill added via the real CLI."""
-    from click.testing import CliRunner
-    from agent_toolkit_cli.cli import main
     from tests.test_cli.test_skill_update_monorepo import _init_parent
     parent = _init_parent(tmp_path)
     root = tmp_path / "library" / "skills"
+    # GIT_* scrubbing handled by autouse _strip_git_env; _init_parent uses inline -c for identity.
     monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(root))
     runner = CliRunner()
     r = runner.invoke(main, ["skill", "add", f"file://{parent}",
