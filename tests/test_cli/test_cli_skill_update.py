@@ -130,3 +130,62 @@ def test_update_surfaces_conflict_and_exits_nonzero(
     assert result.exit_code != 0
     assert "conflict" in result.output.lower()
     assert "<<<<<<<" in (canonical / "SKILL.md").read_text()
+
+
+# ---------------------------------------------------------------------------
+# Task 6 — E2E characterization: update across git states (global scope)
+# Covers Gap Ledger §2 (no "already up to date") and §3 (terse conflict).
+# ---------------------------------------------------------------------------
+
+
+def _setup_global_demo(git_sandbox, tmp_path, monkeypatch):
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    runner = CliRunner()
+    r = runner.invoke(main, ["skill", "add", str(git_sandbox.upstream),
+                             "--slug", "demo"])
+    assert r.exit_code == 0, r.output
+    return runner, library_root
+
+
+def test_update_behind_fast_forwards(git_sandbox, tmp_path, monkeypatch):
+    runner, root = _setup_global_demo(git_sandbox, tmp_path, monkeypatch)
+    _advance_upstream(git_sandbox, {"UPSTREAM.md": "upstream\n"})
+    result = runner.invoke(main, ["skill", "update", "demo", "-g"])
+    assert result.exit_code == 0, result.output
+    assert "updated" in result.output
+    assert (root / "demo" / "UPSTREAM.md").exists()
+
+
+def test_update_up_to_date_still_says_updated(git_sandbox, tmp_path, monkeypatch):
+    """Documents current behaviour: update prints 'updated' even when already
+    current — no 'already up to date'. See Gap Ledger §2."""
+    runner, root = _setup_global_demo(git_sandbox, tmp_path, monkeypatch)
+    result = runner.invoke(main, ["skill", "update", "demo", "-g"])
+    assert result.exit_code == 0, result.output
+    assert "updated" in result.output
+
+
+def test_update_conflict_exits_nonzero_and_is_terse(git_sandbox, tmp_path, monkeypatch):
+    """Documents current behaviour: conflict → exit 1 + git-literate message,
+    no copy-paste resolver. See Gap Ledger §3."""
+    runner, root = _setup_global_demo(git_sandbox, tmp_path, monkeypatch)
+    # Local edit in canonical, conflicting upstream edit on the same file.
+    (root / "demo" / "SKILL.md").write_text("local edit\n")
+    subprocess.run(["git", "-C", str(root / "demo"), "commit", "-am", "local"],
+                   check=True, env=git_sandbox.env, capture_output=True)
+    _advance_upstream(git_sandbox, {"SKILL.md": "upstream edit\n"})
+    result = runner.invoke(main, ["skill", "update", "demo", "-g"])
+    assert result.exit_code == 1
+    assert "conflict" in result.output.lower()
+    assert "claude" not in result.output.lower()  # no resolver yet — the gap
+
+
+def test_update_copymode_refuses(copymode_skill):
+    """copy-mode (no .git/) → refuse with re-add guidance, exit 1."""
+    runner = CliRunner()
+    result = runner.invoke(main, ["skill", "update", "copydemo", "-g"])
+    assert result.exit_code == 1
+    assert "copy-mode" in result.output
