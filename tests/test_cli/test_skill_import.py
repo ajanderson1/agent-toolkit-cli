@@ -201,3 +201,37 @@ def test_import_partial_failure_exit_1_but_writes_good(
     lock = json.loads((library_root.parent / "skills-lock.json").read_text())
     assert "good" in lock["skills"]
     assert "bad" not in lock["skills"]
+
+
+def test_import_reconstructs_monorepo_entry(tmp_path, monkeypatch):
+    from tests.test_cli.test_skill_update_monorepo import _init_parent
+    parent = _init_parent(tmp_path)
+    library_root = tmp_path / "lib" / "skills"
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+
+    # Incoming lock describes a monorepo skill: directory skillPath, parentUrl,
+    # read_only. owner_repo synthesised as local/<name> by file:// parsing.
+    incoming = tmp_path / "incoming.json"
+    incoming.write_text(json.dumps({
+        "version": 1,
+        "skills": {
+            "mkdocs": {
+                "source": f"local/{parent.name}",
+                "sourceType": "git",
+                "skillPath": "mkdocs",
+                "parentUrl": f"file://{parent}",
+                "readOnly": True,
+            }
+        },
+    }))
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["skill", "import", str(incoming)])
+    assert result.exit_code == 0, result.output
+    assert "1 added" in result.output
+
+    canonical = library_root / "mkdocs"
+    assert (canonical / "SKILL.md").exists(), "monorepo skill materialised"
+    lock = json.loads((library_root.parent / "skills-lock.json").read_text())
+    assert lock["skills"]["mkdocs"]["skillPath"] == "mkdocs"
+    assert lock["skills"]["mkdocs"].get("readOnly") is True
