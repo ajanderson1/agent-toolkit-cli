@@ -1,3 +1,5 @@
+import shutil
+import subprocess
 from pathlib import Path
 
 from click.testing import CliRunner
@@ -146,3 +148,52 @@ def test_skill_status_monorepo_dirty(tmp_path: Path, monkeypatch):
     assert result.exit_code == 0, result.output
     assert "mkdocs" in result.output
     assert "dirty" in result.output
+
+
+def _advance_upstream(env, upstream):
+    helper = upstream.parent / "status-advance-helper"
+    subprocess.run(["git", "clone", str(upstream), str(helper)],
+                   check=True, env=env, capture_output=True)
+    (helper / "UPSTREAM.md").write_text("upstream\n")
+    subprocess.run(["git", "-C", str(helper), "add", "-A"],
+                   check=True, env=env, capture_output=True)
+    subprocess.run(["git", "-C", str(helper), "commit", "-m", "up"],
+                   check=True, env=env, capture_output=True)
+    subprocess.run(["git", "-C", str(helper), "push", "origin", "main"],
+                   check=True, env=env, capture_output=True)
+
+
+def test_status_behind_still_reports_clean(git_sandbox, tmp_path, monkeypatch):
+    """Documents current behaviour: status is drift-blind — a clone behind
+    upstream reads 'clean'. See Gap Ledger §1."""
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    runner = CliRunner()
+    r = runner.invoke(main, ["skill", "add", str(git_sandbox.upstream),
+                             "--slug", "demo"])
+    assert r.exit_code == 0, r.output
+
+    # Advance upstream after the canonical was cloned.
+    _advance_upstream(git_sandbox.env, git_sandbox.upstream)
+
+    result = runner.invoke(main, ["skill", "status", "demo", "-g"])
+    assert result.exit_code == 0, result.output
+    assert "clean" in result.output      # drift invisible today
+    assert "behind" not in result.output  # the gap, pinned
+
+
+def test_status_missing_reports_missing(git_sandbox, tmp_path, monkeypatch):
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    runner = CliRunner()
+    r = runner.invoke(main, ["skill", "add", str(git_sandbox.upstream),
+                             "--slug", "demo"])
+    assert r.exit_code == 0, r.output
+    shutil.rmtree(library_root / "demo")
+    result = runner.invoke(main, ["skill", "status", "demo", "-g"])
+    assert result.exit_code == 0, result.output
+    assert "missing" in result.output
