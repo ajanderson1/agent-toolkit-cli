@@ -241,12 +241,21 @@ def checkout_new_branch(
     return GitResult(stdout=proc.stdout, stderr=proc.stderr)
 
 
-def checkout(repo: Path, *, ref: str, env: dict[str, str] | None) -> GitResult:
-    """`git checkout <ref>`. Caller owns ensuring the working tree is in a
-    state that can accept the switch (e.g. has just committed)."""
-    proc = _run(
-        ["git", "-C", str(repo), "checkout", ref], env=env,
-    )
+def checkout(
+    repo: Path, *, ref: str, env: dict[str, str] | None, force: bool = False,
+) -> GitResult:
+    """`git checkout [-f] <ref>`. Caller owns ensuring the working tree is in a
+    state that can accept the switch (e.g. has just committed).
+
+    `force=True` (`git checkout -f`) discards conflicting working-tree changes
+    to guarantee the switch — used to restore a SHARED monorepo clone to its
+    base ref even when a sibling subpath is dirty, so a failed push can't strand
+    the clone on a PR branch."""
+    cmd = ["git", "-C", str(repo), "checkout"]
+    if force:
+        cmd.append("-f")
+    cmd.append(ref)
+    proc = _run(cmd, env=env)
     return GitResult(stdout=proc.stdout, stderr=proc.stderr)
 
 
