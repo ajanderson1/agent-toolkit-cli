@@ -111,3 +111,34 @@ def test_owned_push_clean_subpath_reports_nothing(tmp_path, monkeypatch):
     r = CliRunner().invoke(cli, ["skill", "push", "--direct", "mkdocs", "-g"])
     assert r.exit_code == 0, r.output
     assert "nothing to push" in r.output.lower()
+
+
+def test_owned_status_subpath_scoped_and_marked(tmp_path, monkeypatch):
+    from agent_toolkit_cli.skill_paths import parent_clone_path
+
+    parent_url, _ = _setup_parent(tmp_path, monkeypatch)
+    _add_owned(parent_url, "mkdocs")
+    entry = _lock()["skills"]["mkdocs"]
+    sub = entry["skillPath"]
+    owner, repo = entry["source"].split("/", 1)
+    clone = parent_clone_path(owner, repo, ref=entry.get("ref"), env=None)
+
+    # Clean to start, and marked (owned).
+    r = CliRunner().invoke(cli, ["skill", "status", "mkdocs", "-g"])
+    assert r.exit_code == 0, r.output
+    assert "clean" in r.output
+    assert "(owned)" in r.output
+
+    # Dirty a SIBLING subpath only → mkdocs must still read clean.
+    sibling = next(
+        p for p in clone.iterdir()
+        if p.is_dir() and p.name not in (".git", sub)
+    )
+    (sibling / "SKILL.md").write_text("edited sibling\n")
+    r2 = CliRunner().invoke(cli, ["skill", "status", "mkdocs", "-g"])
+    assert "clean" in r2.output and "dirty" not in r2.output
+
+    # Dirty mkdocs' own subpath → now dirty.
+    (clone / sub / "SKILL.md").write_text("edited mkdocs\n")
+    r3 = CliRunner().invoke(cli, ["skill", "status", "mkdocs", "-g"])
+    assert "dirty" in r3.output
