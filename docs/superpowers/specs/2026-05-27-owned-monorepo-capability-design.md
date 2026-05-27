@@ -155,3 +155,14 @@ is specifically "unowned parent still refuses", proven via a non-`ajanderson1` o
 - **Subpath pathspec commits** — `git commit --only -- <path>` is the precise tool;
   must scrub `GIT_*` env (use `skill_git`'s existing `_scrub`) so commits land in the
   parent clone, not an outer repo (the #209 trap; conftest autouse fixture guards tests).
+- **Shared-clone PR-branch dance** — the PR path checks out a branch on the *shared*
+  `_parents/<owner>/<repo>/` clone, commits the subpath, pushes, then restores base via a
+  **plain** checkout (never `-f` — that would silently discard a sibling subpath's
+  uncommitted edits, the multi-skill-session workflow). Git's checkout either preserves
+  uncommitted work or refuses; it never drops it. **No concurrency lock** on the shared
+  clone: a second `push`/`update` on a sibling skill of the same monorepo, running in the
+  window between this push's branch-create and checkout-back, could advance `base_ref` and
+  make the checkout-back refuse — leaving the clone stranded on the PR branch
+  (**recoverable by hand; no data loss**). Unreachable in the normal single-user sequential
+  flow (the branch only ever moves the target subpath, so sibling files stay byte-identical
+  to base). A guarded stash-recovery is a deliberate follow-up, not gold-plated here.
