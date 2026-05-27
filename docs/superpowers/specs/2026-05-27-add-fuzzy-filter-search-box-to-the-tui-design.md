@@ -64,9 +64,12 @@ hidden row.
   content-header "N items" and the apply/status math, which operate over the
   full set, not the filtered view). The filter is a view concern; pending
   state and counts stay whole.
-- Toggling a column (`a`) acts on the **visible** rows only — filtering then
-  "All" is a natural "select all matching" gesture and matches user
-  expectation. Document this in the method.
+- Toggling a column (`a`) acts on **all** rows, regardless of the active
+  filter. The filter is purely a view over the rows; "All/None" stays a
+  whole-column operation so the filter never silently changes what an apply
+  would touch. `action_toggle_column` keeps iterating `self._rows`. (A user
+  who wants to limit the toggle scope clears the filter or toggles cells
+  individually.)
 
 ### 3. Filter events
 
@@ -139,6 +142,10 @@ New file `tests/test_tui/test_skill_grid_filter.py`:
 8. **toggle after filter targets a visible row** — filter to one slug, move
    into the table, `space`, assert the pending entry is for the visible slug
    (guards the index→row remap).
+9. **"All" ignores the filter** — grid with 3 slugs, set a filter that hides
+   one, press `a` on an agent column → pending entries cover **all** rows that
+   the column can link (not just the visible ones). Guards the design
+   decision that "All/None" stays whole-column.
 
 ## Risks
 
@@ -146,14 +153,14 @@ New file `tests/test_tui/test_skill_grid_filter.py`:
   `self._rows[coord.row]` must switch to the visible list. Test 8 guards the
   toggle path; the plan must enumerate each call-site so none is missed.
   Enumerated call-sites (verified against current `skill_grid.py`):
-  - **Switch to visible rows** (cursor-indexed or "act on what's shown"):
-    `action_info` (`coord.row` bounds + `self._rows[coord.row]`),
-    `_toggle_at` (same), `_context_for` (`row_index` bounds + index),
-    `action_toggle_column` (both the any-off scan loop and the apply loop —
-    "filter then All" = select-all-matching), and `_rebuild` (iterate
-    visible; `max_row` from visible length).
-  - **Keep whole-set** (full counts / status math, never cursor-indexed):
-    `row_count`, `row_slugs`, and the App's `_refresh_status_bar` rollup over
-    `grid._rows` (status reflects the whole library, not the filtered view).
+  - **Switch to visible rows** (cursor-indexed — must resolve against what's
+    shown): `action_info` (`coord.row` bounds + `self._rows[coord.row]`),
+    `_toggle_at` (same), `_context_for` (`row_index` bounds + index), and
+    `_rebuild` (iterate visible; `max_row` from visible length).
+  - **Keep whole-set** (full counts / status / column math, never
+    cursor-indexed): `row_count`, `row_slugs`, `action_toggle_column` (the
+    "All/None" toggle stays whole-column — see Approach §2), and the App's
+    `_refresh_status_bar` rollup over `grid._rows` (status reflects the whole
+    library, not the filtered view).
 - Textual `Input` swallows some keys; the Down/Tab handler must `stop()` the
   event to prevent default behaviour. Tests 5–6 are the guard.
