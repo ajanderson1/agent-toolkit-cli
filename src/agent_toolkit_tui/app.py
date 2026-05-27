@@ -140,6 +140,20 @@ class TUIApp(App):
         grid.set_scope(scope)
         grid.set_rows(build_skill_rows(scope=scope, home=home, project=project))
 
+    # ----- messages -------------------------------------------------------
+    def on_skill_grid_pending_changed(
+        self, event: SkillGrid.PendingChanged
+    ) -> None:
+        """Live-update the footer + status bar when the grid's pending set changes.
+
+        The grid posts PendingChanged from its user-driven toggle paths (cell
+        toggle via `space`, column toggle via `a`). Refreshing here keeps the
+        footer "Pending: N" label and the status-bar pending rollup in sync as
+        the user toggles cells, instead of only on apply/refresh/revert.
+        """
+        self._refresh_pending_label()
+        self._refresh_status_bar()
+
     # ----- actions --------------------------------------------------------
     def action_quit(self) -> None:
         n = 0
@@ -232,9 +246,15 @@ class TUIApp(App):
         for (scope, agent, slug), op in pending.items():
             adds, removes = by_slug[(scope, slug)]
             (adds if op == "link" else removes).add(agent)
+        # Count per (skill × harness) write, not per skill (#250). A skill
+        # toggled across three harnesses is one group but three writes, so the
+        # summary must read "applied: 3 ok" — not 1. Successful writes come
+        # from the InstallResult (created + removed symlinks); a failed group
+        # contributes its intended write count (adds + removes) symmetrically.
         ok = failed = 0
         errors: list[str] = []
         for (scope, slug), (adds, removes) in by_slug.items():
+            n_writes = len(adds) + len(removes)
             home = Path.home() if scope == "global" else None
             project = None if scope == "global" else Path.cwd()
             if scope == "project":
@@ -247,7 +267,7 @@ class TUIApp(App):
                     )
                 except InstallError as exc:
                     errors.append(f"{slug}: {exc}")
-                    failed += 1
+                    failed += n_writes
                     continue
             p = InstallPlan(
                 slug=slug, scope=scope, source=None, ref=None,
@@ -255,11 +275,11 @@ class TUIApp(App):
                 remove_agents=tuple(sorted(removes)),
             )
             try:
-                engine_apply(p, home=home, project=project, env=None)
-                ok += 1
+                result = engine_apply(p, home=home, project=project, env=None)
+                ok += len(result.created) + len(result.removed)
             except InstallError as exc:
                 errors.append(f"{slug}: {exc}")
-                failed += 1
+                failed += n_writes
         saved = grid.pending_entries() if failed else {}
         if failed == 0:
             grid.clear_pending()
@@ -275,7 +295,9 @@ class TUIApp(App):
             # Collapse the multi-line install error to single line for the footer
             # and push the full text into the cell-info modal channel via title.
             first = " ".join(errors[0].split())
-            extra = f" (+{failed - 1} more)" if failed > 1 else ""
+            # `failed` is now a per-harness write count (#250); the "+N more"
+            # hint counts additional failed *messages*, so base it on `errors`.
+            extra = f" (+{len(errors) - 1} more)" if len(errors) > 1 else ""
             self.query_one("#footer-pending", Static).update(
                 f"[red]apply failed[/] — {first}{extra}"
             )

@@ -20,6 +20,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical
 from textual.coordinate import Coordinate
+from textual.message import Message
 from textual.widgets import DataTable
 
 from agent_toolkit_cli.skill_agents import AGENTS
@@ -52,6 +53,18 @@ Op = Literal["link", "unlink"]
 
 class SkillGrid(Vertical):
     """One row per locked skill; interactive cells for INTERACTIVE_AGENTS."""
+
+    class PendingChanged(Message):
+        """Posted whenever the pending toggle set changes.
+
+        Carries the current pending count so the App can refresh the footer
+        "Pending: N" label live as the user toggles cells. The App owns the
+        footer text; the grid just announces the count.
+        """
+
+        def __init__(self, count: int) -> None:
+            super().__init__()
+            self.count = count
 
     DEFAULT_CSS = """
     SkillGrid { border: round $primary; }
@@ -94,6 +107,20 @@ class SkillGrid(Vertical):
 
     def pending_entries(self) -> dict[tuple[str, str, str], Op]:
         return dict(self._pending)
+
+    def _notify_pending(self) -> None:
+        """Announce the current pending count so the App can refresh the footer.
+
+        Posted from the user-driven toggle paths (`_toggle_at`,
+        `action_toggle_column`) — the cases where the count changes from inside
+        the widget and the App would otherwise never learn about it. The App's
+        own mutators (clear_pending / restore_pending / set_rows / set_scope)
+        deliberately do **not** notify: their callers already set the footer
+        line explicitly (e.g. the "applied: N ok" / "reverted" summaries), and a
+        message here would clobber that summary on the next event-loop turn.
+        Posting a message is safe even before mount (Textual queues it).
+        """
+        self.post_message(self.PendingChanged(len(self._pending)))
 
     def clear_pending(self) -> None:
         self._pending.clear()
@@ -349,6 +376,7 @@ class SkillGrid(Vertical):
                 continue
             self._pending[key] = target_op
         self._rebuild(table)
+        self._notify_pending()
 
     def action_open_column_info(self) -> None:
         """Open ColumnInfoModal for the column under the cursor, if registered."""
@@ -404,6 +432,7 @@ class SkillGrid(Vertical):
         else:
             self._pending[key] = "unlink" if cell.linked else "link"
         self._rebuild(table)
+        self._notify_pending()
 
     def _column_index(self, agent_name: str) -> int:
         # Layout: [0]=slug, [1..N]=INTERACTIVE_AGENTS, [N+1]=state, [N+2]=source.
