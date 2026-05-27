@@ -163,6 +163,7 @@ async def test_info_on_slug_column_shows_source():
         from textual.widgets import DataTable
         t = g.query_one("#skill-table", DataTable)
         t.cursor_coordinate = Coordinate(row=0, column=0)  # slug col
+        t.focus()  # filter Input is focused on open (#249); table needs focus to receive `i`
         await pilot.pause()
         await pilot.press("i")
         await pilot.pause()
@@ -188,6 +189,7 @@ async def test_info_on_slug_column_includes_description_when_present():
         g = a.query_one("#g", SkillGrid)
         t = g.query_one("#skill-table", DataTable)
         t.cursor_coordinate = Coordinate(row=0, column=0)
+        t.focus()  # filter Input is focused on open (#249); table needs focus to receive `i`
         await pilot.pause()
         await pilot.press("i")
         await pilot.pause()
@@ -214,6 +216,7 @@ async def test_info_on_slug_column_omits_description_when_empty():
         g = a.query_one("#g", SkillGrid)
         t = g.query_one("#skill-table", DataTable)
         t.cursor_coordinate = Coordinate(row=0, column=0)
+        t.focus()  # filter Input is focused on open (#249); table needs focus to receive `i`
         await pilot.pause()
         await pilot.press("i")
         await pilot.pause()
@@ -243,6 +246,7 @@ async def test_info_on_slug_column_library_state_renders_em_dash():
         g = a.query_one("#g", SkillGrid)
         t = g.query_one("#skill-table", DataTable)
         t.cursor_coordinate = Coordinate(row=0, column=0)
+        t.focus()  # filter Input is focused on open (#249); table needs focus to receive `i`
         await pilot.pause()
         await pilot.press("i")
         await pilot.pause()
@@ -273,6 +277,7 @@ async def test_info_on_slug_column_non_library_state_still_renders_word():
         g = a.query_one("#g", SkillGrid)
         t = g.query_one("#skill-table", DataTable)
         t.cursor_coordinate = Coordinate(row=0, column=0)
+        t.focus()  # filter Input is focused on open (#249); table needs focus to receive `i`
         await pilot.pause()
         await pilot.press("i")
         await pilot.pause()
