@@ -12,7 +12,12 @@ import click
 
 from agent_toolkit_cli import skill_git
 from agent_toolkit_cli.skill_lock import LockFile, read_lock, write_lock
-from agent_toolkit_cli.skill_paths import canonical_skill_dir, lock_file_path
+from agent_toolkit_cli.skill_paths import (
+    canonical_skill_dir,
+    lock_file_path,
+    parent_clone_path,
+    project_parents_root,
+)
 
 from ._common import scope_and_roots
 
@@ -65,6 +70,14 @@ def push_cmd(
                 f"`skill push` is rejected. Open a PR against the parent repo."
             )
             rejected = True
+            continue
+        if entry.parent_url is not None:
+            # Owned monorepo (read_only already excluded above): push the
+            # skill's subpath within the shared parent clone.
+            _push_monorepo(
+                entry, slug, scope=scope, project_root=project_root,
+                direct=direct,
+            )
             continue
         canonical = canonical_skill_dir(
             slug, scope=scope, home=home, project=project_root,
@@ -125,6 +138,59 @@ def _push_via_pr(canonical: Path, entry, slug: str) -> None:
             click.echo(f"  (rerun with --direct to push to {base_ref})")
     finally:
         skill_git.checkout(canonical, ref=base_ref, env=None)
+
+
+def _monorepo_parent_dir(entry, scope: str, project_root) -> Path:
+    owner, repo = entry.source.split("/", 1)
+    return parent_clone_path(
+        owner, repo, ref=entry.ref, env=None,
+        root=project_parents_root(project_root) if scope == "project" else None,
+    )
+
+
+def _push_monorepo(
+    entry, slug: str, *, scope: str, project_root, direct: bool,
+) -> None:
+    """Push an owned-monorepo skill's subpath within the shared parent clone.
+
+    Subpath-scoped commit + one PR branch per push: stage/commit only the
+    skill's `skill_path`, so a dirty sibling subpath sharing the parent clone
+    is never swept into the commit. The clone is always checked back to the
+    base ref afterward so a later `skill update` merges into the tracked ref.
+    """
+    parent_dir = _monorepo_parent_dir(entry, scope, project_root)
+    if not skill_git.is_git_repo(parent_dir):
+        click.echo(
+            f"{slug}: parent clone missing or not a git repo at {parent_dir}"
+        )
+        return
+    subpath = entry.skill_path or "."
+    if skill_git.status_path(parent_dir, subpath, env=None) == \
+            skill_git.GitWorkingTreeStatus.CLEAN:
+        click.echo(f"{slug}: clean — nothing to push")
+        return
+    base_ref = entry.ref or "main"
+    msg = f"skill({slug}): self-improvement {_utc_iso()}"
+    if direct:
+        skill_git.commit_paths(parent_dir, message=msg, paths=[subpath], env=None)
+        skill_git.push(parent_dir, ref=base_ref, env=None)
+        click.echo(f"{slug}: pushed (subpath {subpath} → {base_ref})")
+        return
+    branch = f"skill/self-improvement-{_utc_basic_iso()}-{_slug_for_ref(slug)}"
+    skill_git.checkout_new_branch(parent_dir, name=branch, env=None)
+    try:
+        skill_git.commit_paths(parent_dir, message=msg, paths=[subpath], env=None)
+        skill_git.push(parent_dir, ref=branch, env=None)
+        click.echo(f"{slug}: pushed branch {branch}")
+        pr_url = _open_pr(parent_dir, branch, base=base_ref, slug=slug)
+        if pr_url:
+            click.echo(f"  PR: {pr_url}")
+        else:
+            web = _branch_web_url(parent_dir, branch)
+            if web:
+                click.echo(f"  → open a PR: {web}")
+    finally:
+        skill_git.checkout(parent_dir, ref=base_ref, env=None)
 
 
 _REF_SAFE_RE = re.compile(r"[^a-zA-Z0-9._-]+")
