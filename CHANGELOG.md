@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.13.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.12.1...v2.13.0) (2026-05-27)
+
+
+### Features
+
+* add fuzzy-filter search box to the TUI ([#262](https://github.com/ajanderson1/agent-toolkit-cli/issues/262)) ([d6cb183](https://github.com/ajanderson1/agent-toolkit-cli/commit/d6cb18334c24d75676b13f3e66a5edaa4eebba9f))
+
+
+### Bug Fixes
+
+* shallow-clone source repos in skill import ([#259](https://github.com/ajanderson1/agent-toolkit-cli/issues/259)) ([#261](https://github.com/ajanderson1/agent-toolkit-cli/issues/261)) ([5af9a79](https://github.com/ajanderson1/agent-toolkit-cli/commit/5af9a791bac8066f503bc640cb1aa34d9339ffec))
+
 ## [2.12.1](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.12.0...v2.12.1) (2026-05-27)
 
 
