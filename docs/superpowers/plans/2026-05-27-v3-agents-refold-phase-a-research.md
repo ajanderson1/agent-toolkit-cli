@@ -4,7 +4,7 @@
 
 **Goal:** Produce a citation-grade `agent` (subagent) compatibility table covering all 54 supported harnesses in `docs/agent-toolkit/harness-matrix.md`, guarded by a parity test, and file the v3.0.0 epic GitHub issue with that table as its work surface — so Phase B (implementation) can be planned against hard data.
 
-**Architecture:** This is research-orchestration, not application code. The orchestrator dispatches ~9 research subagents (one per harness family), each returning a **markdown table fragment** of `agent`-row cells for its batch. The orchestrator assembles the fragments into one new `## Subagent (agent kind) support — all harnesses` section of the matrix doc (a 54-row, per-harness table — distinct from the legacy 5-column `kind × harness` grid, which is left untouched). A new parity test asserts every one of the 54 catalog harnesses appears exactly once in that table with a recognised verdict keyword. Finally a GitHub issue is filed linking the table.
+**Architecture:** This is research-orchestration, not application code. The orchestrator dispatches ~9 research subagents (one per harness family), each returning a **markdown table fragment** of `agent`-row cells for its batch. The orchestrator assembles the fragments into a freshly-created `docs/agent-toolkit/harness-matrix.md` (the v1 doc was deleted in the strip-back; we recreate it Phase-A-scoped to the `## Subagent (agent kind) support — all harnesses` section, a 54-row per-harness table). A new parity test asserts every one of the 54 catalog harnesses appears exactly once in that table with a recognised verdict keyword. Finally a GitHub issue is filed linking the table.
 
 **Tech Stack:** Python 3.12+, pytest (parity test), `gh` CLI (issue), the existing harness catalog `src/agent_toolkit_cli/skill_agents.py` (54 harnesses + `universal`), and the Task tool (research subagents). No runtime/CLI/TUI code changes in Phase A.
 
@@ -24,12 +24,12 @@ Phase B (adapters, install/lock kind-generalization, TUI `KindsSidebar`, CLI `ag
 
 | File | Responsibility | Phase A action |
 |---|---|---|
-| `docs/agent-toolkit/harness-matrix.md` | SSOT for `(kind × harness)` support. | **Modify** — append a new `## Subagent (agent kind) support — all harnesses` section (54-row table). Leave the existing 5-column grid and all prose untouched. |
+| `docs/agent-toolkit/harness-matrix.md` | SSOT for `(kind × harness)` support. | **Create** — the doc was deleted in the strip-back (commit `04aed66`, #164) and exists only at tag `v1.0.0`. Recreate it with a header + reused "Mechanisms" vocabulary + the new `## Subagent (agent kind) support — all harnesses` section (54-row table). The legacy 5-column grid is NOT reintroduced in Phase A. |
 | `tests/test_subagent_matrix.py` | Parity test for the new 54-row table. | **Create** — asserts all 54 catalog harnesses present, verdicts recognised, supported rows carry mechanism+path+citation. |
 | `docs/agent-toolkit/research/subagent-fragments/*.md` | Scratch storage for each research agent's returned fragment + "what I checked" trail. | **Create** (9 files) — input to assembly; kept in-repo as the audit trail behind each cell. |
 | GitHub issue (no file) | v3.0.0 epic tracking. | **Create** via `gh issue create`. |
 
-The verdict/mechanism vocabulary is **reused verbatim** from the existing matrix's "Mechanisms" section (`symlink`, `translate`, `config_file`, `config_file+folder`, `dual-symlink`, `unsupported (gap)`, `unsupported (by design)`) plus one new verdict `unknown` for time-boxed-no-evidence harnesses. Do not invent new mechanism words.
+The verdict/mechanism vocabulary is **reused verbatim** from the v1 matrix's "Mechanisms" section (`symlink`, `translate`, `config_file`, `config_file+folder`, `dual-symlink`, `unsupported (gap)`, `unsupported (by design)`) plus one new verdict `unknown` for time-boxed-no-evidence harnesses. Do not invent new mechanism words. The v1 Mechanisms prose is recoverable via `git show v1.0.0:docs/agent-toolkit/harness-matrix.md`.
 
 ---
 
@@ -390,12 +390,41 @@ git commit -m "docs(research): raw subagent-support fragments from 9 batches"
 
 The orchestrator merges all 9 fragments into one table. No agent writes this — single writer avoids races.
 
-- [ ] **Step 1: Append the new section to the matrix doc**
+- [ ] **Step 1: Create the matrix doc with header + Mechanisms + the new section**
 
-Open `docs/agent-toolkit/harness-matrix.md`. After the existing content (do not
-touch the legacy 5-column `kind × harness` grid or its prose), append:
+The doc was deleted in the strip-back (commit `04aed66`, #164); recreate it
+fresh. First recover the v1 "Mechanisms" prose to reuse the verdict vocabulary
+verbatim:
+
+```bash
+git show v1.0.0:docs/agent-toolkit/harness-matrix.md | sed -n '/^## Mechanisms/,/^## Matrix/p' > /tmp/v1-mechanisms.md
+```
+
+Create `docs/agent-toolkit/harness-matrix.md` with: (1) an H1 + intro paragraph,
+(2) the `## Mechanisms` section pasted from `/tmp/v1-mechanisms.md` but trimmed to
+the verdicts the subagent table actually uses (`symlink`, `translate`,
+`config_file`, `config_file+folder`, `dual-symlink`, `unsupported (gap)`,
+`unsupported (by design)`) plus a one-line `unknown` definition, and (3) the
+subagent section below. Do NOT reintroduce the legacy 5-column `kind × harness`
+grid — that is a Phase B concern when adapters land. Document layout:
 
 ````markdown
+# Harness compatibility matrix
+
+Single source of truth for which (asset-kind × harness) pairs are supported and
+how each is projected. As of v3.0.0 Phase A this doc covers the **`agent`
+(subagent) kind only**; the legacy multi-kind grid returns in Phase B alongside
+the adapters. A parity test (`tests/test_subagent_matrix.py`) fails if this doc
+and the catalog disagree.
+
+## Mechanisms
+
+<!-- paste the trimmed v1 Mechanisms bullets here: symlink, translate,
+     config_file, config_file+folder, dual-symlink, unsupported (gap),
+     unsupported (by design) -->
+- **unknown** — no public evidence of a subagent concept surfaced within the
+  time-boxed search. Distinct from "unsupported (by design)": absence of
+  evidence, not evidence of absence.
 
 ## Subagent (agent kind) support — all harnesses
 
@@ -405,18 +434,14 @@ the synthetic `universal` entry). It is the contract Phase B implements against 
 each `supported` row (mechanism = `symlink`/`translate`/`config_file`/`dual-symlink`)
 becomes one adapter behaviour. Guarded by `tests/test_subagent_matrix.py`.
 
-Verdict vocabulary matches the "Mechanisms" section above, plus `unknown —
-no public evidence found` for harnesses that resolved to no evidence within the
-time-boxed search.
-
 | Harness | Verdict | Mechanism | User path / Project path | Format (required/forbidden fields) | Citation |
 |---|---|---|---|---|---|
 <!-- one row per harness, merged from docs/agent-toolkit/research/subagent-fragments/batch-*.md -->
 ````
 
 Then paste the rows from every `batch-*.md` fragment, sorted alphabetically by
-harness name, between the header and the end of the section. Each row must match
-the parity-test row shape (harness in backticks, six pipe-delimited columns).
+harness name, into the table. Each row must match the parity-test row shape
+(harness in backticks, six pipe-delimited columns).
 
 - [ ] **Step 2: Run the parity test**
 
@@ -431,9 +456,9 @@ it (or downgrade the verdict to `unsupported (gap)` / `unknown` with a reason).
 - [ ] **Step 3: Run the full suite to confirm no regression**
 
 Run: `uv run pytest -q`
-Expected: PASS (the existing `tests/test_harness_matrix.py` for the legacy
-5-column grid is unaffected because the new section uses a different heading and
-row shape; the new test passes).
+Expected: PASS. The new `tests/test_subagent_matrix.py` goes green once the doc
+exists with the section; no legacy parity test is present on this branch (it was
+removed in the strip-back along with the doc), so there is nothing to regress.
 
 - [ ] **Step 4: Commit**
 
@@ -637,7 +662,7 @@ Expected: the parity test (`tests/test_subagent_matrix.py`) and full suite pass.
 - Spec "unknowns policy: time-box, mark unknown — no public evidence found" → Task 2 brief + new `unknown` verdict in Task 1 test vocabulary. ✓
 - Spec "GitHub issue capturing the v3.0.0 epic with the matrix as backbone, listing the supported-harness set as the Phase B work surface" → Tasks 5 (supported set) + 6 (issue). ✓
 - Spec Phase B items (adapters, install/lock kind-generalization, TUI sidebar, CLI agent verbs incl. import, open decisions) → captured as **unchecked** Phase B section in the issue (Task 6 Step 2), NOT as executable tasks here — correct, since Phase B is a separate plan per the approved scope decision. ✓
-- Spec "parity test … reintroduce it" → Task 1 creates `tests/test_subagent_matrix.py` (a new all-harness test; the legacy 5-column `tests/test_harness_matrix.py` is untouched and still guards the old grid). ✓
+- Spec "parity test … reintroduce it" → Task 1 creates `tests/test_subagent_matrix.py` (a new all-harness test). The v1 `tests/test_harness_matrix.py` and the matrix doc were both deleted in the strip-back (commit `04aed66`, #164) and exist only at tag `v1.0.0`; Task 4 recreates the doc fresh, Phase-A-scoped. The legacy 5-column grid + its test return in Phase B with the adapters. ✓
 
 **Placeholder scan:** No "TBD"/"implement later". The only intentional fill-ins
 are real data the engineer computes in-step (the verdict tally `N`s in Task 5,
