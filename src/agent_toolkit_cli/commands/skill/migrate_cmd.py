@@ -20,7 +20,13 @@ from agent_toolkit_cli.skill_install import (
     InstallPlan,
     apply as engine_apply,
 )
-from agent_toolkit_cli.skill_lock import add_entry, read_lock, write_lock
+from agent_toolkit_cli.skill_lock import (
+    LockEntry,
+    LockFile,
+    add_entry,
+    read_lock,
+    write_lock,
+)
 from agent_toolkit_cli.skill_migrate import (
     check_refusal,
     is_migratable,
@@ -46,6 +52,91 @@ def _trees_equal(a: Path, b: Path) -> bool:
     if mismatch or errors:
         return False
     return all(_trees_equal(a / sub, b / sub) for sub in cmp.common_dirs)
+
+
+def _migrate_one(
+    slug: str,
+    entry: LockEntry,
+    lock: LockFile,
+    lock_path: Path,
+    *,
+    parent_dir: Path,
+    parent_source: str,
+    parent_url: str,
+    parent_sha: str | None,
+    dry_run: bool,
+    migrated: list[str],
+    skipped: list[tuple[str, str]],
+) -> LockFile:
+    """Migrate a single eligible skill; return the (possibly updated) lock.
+
+    Appends to `migrated`/`skipped` as a side effect. Raising propagates to the
+    caller, which records the failure and moves on — one skill never aborts the
+    rest (spec: per-skill independence).
+    """
+    subpath = monorepo_subpath_for(slug)
+    mono_skill = parent_dir / subpath
+    in_monorepo = (mono_skill / "SKILL.md").exists()
+
+    clone = library_skill_path(slug)
+    sha_match = (
+        skill_git.is_git_repo(clone)
+        and entry.upstream_sha is not None
+        and skill_git.head_sha(clone, env=None) == entry.upstream_sha
+    )
+    tree_clean = (
+        not skill_git.is_git_repo(clone)
+        or skill_git.status(clone, env=None)
+        == skill_git.GitWorkingTreeStatus.CLEAN
+    )
+    content_matches = in_monorepo and _trees_equal(clone, mono_skill)
+
+    reason = check_refusal(
+        sha_match=sha_match, tree_clean=tree_clean,
+        content_matches=content_matches, in_monorepo=in_monorepo,
+    )
+    if reason is not None:
+        skipped.append((slug, reason.hint))
+        return lock
+
+    if dry_run:
+        migrated.append(slug)
+        return lock
+
+    # Layer 3: verify the replacement symlink first, then write the
+    # (reversible) lock, then do the irreversible delete + swap LAST.
+    new_entry = migrated_entry(
+        entry, slug=slug, parent_source=parent_source,
+        parent_url=parent_url, parent_sha=parent_sha,
+    )
+    tmp_link = clone.parent / f".{slug}.migrating"
+    if tmp_link.exists() or tmp_link.is_symlink():
+        tmp_link.unlink()
+    tmp_link.symlink_to(mono_skill, target_is_directory=True)
+    if not (tmp_link / "SKILL.md").exists():
+        tmp_link.unlink()
+        skipped.append((slug, "symlink verification failed"))
+        return lock
+
+    # Reversible step first.
+    lock = add_entry(lock, slug, new_entry)
+    write_lock(lock_path, lock)
+
+    # Irreversible step last.
+    shutil.rmtree(clone)
+    tmp_link.rename(clone)
+
+    try:
+        engine_apply(
+            InstallPlan(slug=slug, scope="global", source=None, ref=None,
+                        add_agents=(), remove_agents=()),
+            home=None, project=None, env=None,
+        )
+    except InstallError as exc:
+        click.echo(f"warning: reproject {slug} failed: {exc}", err=True)
+
+    migrated.append(slug)
+    return lock
 
 
 @click.command("migrate-to-monorepo", epilog="""\
@@ -99,68 +190,20 @@ def migrate_cmd(parent: str, dry_run: bool) -> None:
         entry = lock.skills[slug]
         if not is_migratable(entry):
             continue
-        subpath = monorepo_subpath_for(slug)
-        mono_skill = parent_dir / subpath
-        in_monorepo = (mono_skill / "SKILL.md").exists()
-
-        clone = library_skill_path(slug)
-        sha_match = (
-            skill_git.is_git_repo(clone)
-            and entry.upstream_sha is not None
-            and skill_git.head_sha(clone, env=None) == entry.upstream_sha
-        )
-        tree_clean = (
-            not skill_git.is_git_repo(clone)
-            or skill_git.status(clone, env=None)
-            == skill_git.GitWorkingTreeStatus.CLEAN
-        )
-        content_matches = in_monorepo and _trees_equal(clone, mono_skill)
-
-        reason = check_refusal(
-            sha_match=sha_match, tree_clean=tree_clean,
-            content_matches=content_matches, in_monorepo=in_monorepo,
-        )
-        if reason is not None:
-            skipped.append((slug, reason.hint))
-            continue
-
-        if dry_run:
-            migrated.append(slug)
-            continue
-
-        # Layer 3: verify the replacement symlink first, then write the
-        # (reversible) lock, then do the irreversible delete + swap LAST.
-        new_entry = migrated_entry(
-            entry, slug=slug, parent_source=parent_source,
-            parent_url=parent_url, parent_sha=parent_sha,
-        )
-        tmp_link = clone.parent / f".{slug}.migrating"
-        if tmp_link.exists() or tmp_link.is_symlink():
-            tmp_link.unlink()
-        tmp_link.symlink_to(mono_skill, target_is_directory=True)
-        if not (tmp_link / "SKILL.md").exists():
-            tmp_link.unlink()
-            skipped.append((slug, "symlink verification failed"))
-            continue
-
-        # Reversible step first.
-        lock = add_entry(lock, slug, new_entry)
-        write_lock(lock_path, lock)
-
-        # Irreversible step last.
-        shutil.rmtree(clone)
-        tmp_link.rename(clone)
-
+        # Isolate per-skill failures: an unexpected error on one skill (e.g. a
+        # filesystem error mid-swap) must not abort the others. The spec
+        # guarantees each skill is processed independently. `lock` is rebound
+        # inside, so re-read the current state on each turn rather than relying
+        # on a stale closure.
         try:
-            engine_apply(
-                InstallPlan(slug=slug, scope="global", source=None, ref=None,
-                            add_agents=(), remove_agents=()),
-                home=None, project=None, env=None,
+            lock = _migrate_one(
+                slug, entry, lock, lock_path,
+                parent_dir=parent_dir, parent_source=parent_source,
+                parent_url=parent_url, parent_sha=parent_sha,
+                dry_run=dry_run, migrated=migrated, skipped=skipped,
             )
-        except InstallError as exc:
-            click.echo(f"warning: reproject {slug} failed: {exc}", err=True)
-
-        migrated.append(slug)
+        except Exception as exc:  # noqa: BLE001 — boundary: report, don't abort
+            skipped.append((slug, f"error: {exc}"))
 
     _report(migrated, skipped, dry_run)
 

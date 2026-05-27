@@ -269,3 +269,33 @@ def test_migrate_dry_run_writes_nothing(tmp_path, monkeypatch):
     entry = _lock()["skills"]["journal"]
     assert "parentUrl" not in entry                       # nothing written
     assert not library_skill_path("journal").is_symlink()  # clone intact
+
+
+def test_migrate_isolates_per_skill_failure(tmp_path, monkeypatch):
+    """A skill raising mid-migration is reported as an error and does NOT
+    abort migration of the other eligible skills (spec: per-skill
+    independence)."""
+    parent_url, _, _, _ = _setup(
+        tmp_path, monkeypatch, slugs=("journal", "mkdocs"),
+    )
+    # Force the irreversible rmtree to blow up for `journal` only. The command
+    # calls `shutil.rmtree`, so patch it on the shutil module itself.
+    import shutil
+
+    real_rmtree = shutil.rmtree
+
+    def boom(path, *a, **k):
+        if str(path).endswith("/journal"):
+            raise OSError("disk gremlin")
+        return real_rmtree(path, *a, **k)
+
+    monkeypatch.setattr(shutil, "rmtree", boom)
+    r = CliRunner().invoke(cli, ["skill", "migrate-to-monorepo", parent_url])
+    assert r.exit_code == 0, r.output
+    # mkdocs still migrated despite journal's failure.
+    assert "parentUrl" in _lock()["skills"]["mkdocs"]
+    assert library_skill_path("mkdocs").is_symlink()
+    # journal reported as an error, not silently dropped.
+    assert "disk gremlin" in r.output
+    assert "Migrated 1" in r.output
+    assert "Skipped 1" in r.output
