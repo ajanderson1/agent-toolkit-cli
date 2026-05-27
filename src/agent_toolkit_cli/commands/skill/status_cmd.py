@@ -72,6 +72,17 @@ def status_cmd(
             if not skill_git.is_git_repo(parent_dir):
                 click.echo(f"{slug}\tcopy")
                 continue
+            if not entry.read_only:
+                # Owned monorepo: scope dirty state to this skill's subpath so
+                # sibling edits don't bleed in, and mark it writable.
+                subpath = entry.skill_path or "."
+                wt = skill_git.status_path(parent_dir, subpath, env=None)
+                state = (
+                    "dirty" if wt == skill_git.GitWorkingTreeStatus.DIRTY
+                    else "clean"
+                )
+                click.echo(f"{slug}\t{state} (owned)")
+                continue
             wt = skill_git.status(parent_dir, env=None)
         elif not skill_git.is_git_repo(canonical):
             click.echo(f"{slug}\tcopy")

@@ -286,6 +286,53 @@ def commit_all(
     return GitResult(stdout=proc.stdout, stderr=proc.stderr)
 
 
+def status_path(
+    repo: Path, path: str, *, env: dict[str, str] | None,
+) -> GitWorkingTreeStatus:
+    """Working-tree status scoped to a pathspec within `repo`.
+
+    `git status --porcelain -- <path>` — used so an owned-monorepo skill's
+    dirty state reflects only its own subpath, not sibling skills sharing the
+    parent clone. Goes through _run so GIT_* env is scrubbed (the #209 trap).
+    """
+    proc = _run(
+        ["git", "-C", str(repo), "status", "--porcelain", "--", path],
+        env=env,
+    )
+    return (
+        GitWorkingTreeStatus.CLEAN if not proc.stdout.strip()
+        else GitWorkingTreeStatus.DIRTY
+    )
+
+
+def commit_paths(
+    repo: Path, *, message: str, paths: list[str], env: dict[str, str] | None,
+) -> bool:
+    """Stage + commit ONLY `paths` within `repo`. Returns True if a commit was
+    made, False if nothing under `paths` was staged (clean subpath).
+
+    `git add -- <paths>` then `git commit -- <paths>`. The trailing pathspec on
+    commit keeps the commit scoped even if other parts of the tree are dirty —
+    the mechanism that isolates an owned-monorepo skill's push to its own
+    subpath. Pins the same synthetic identity as `commit_all()`/`merge()`.
+    Goes through _run so GIT_* env is scrubbed (the #209 trap).
+    """
+    _run(["git", "-C", str(repo), "add", "--", *paths], env=env)
+    # Detect whether anything is staged under the pathspec; if not, no-op.
+    staged = subprocess.run(
+        ["git", "-C", str(repo), "diff", "--cached", "--quiet", "--", *paths],
+        env=_scrub(env), capture_output=True, text=True,
+    )
+    if staged.returncode == 0:
+        return False  # nothing staged under the pathspec
+    _run(
+        ["git", "-C", str(repo), *_DEFAULT_IDENTITY,
+         "commit", "-m", message, "--", *paths],
+        env=env,
+    )
+    return True
+
+
 def head_sha(repo: Path, *, env: dict[str, str] | None) -> str:
     proc = _run(["git", "-C", str(repo), "rev-parse", "HEAD"], env=env)
     return proc.stdout.strip()

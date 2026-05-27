@@ -122,8 +122,20 @@ The lock file is JSON, schema-compatible with `vercel-labs/skills`'s `skills-loc
 | `skillPath` | Path within the repo to the skill's `SKILL.md`. Usually `SKILL.md` at root. |
 | `upstreamSha` | The remote HEAD at the most recent successful sync. |
 | `localSha` | Our additive field — the working copy's HEAD. **Ignored by `npx skills`.** Lets us reason about local-vs-upstream divergence without re-running git. |
+| `parentUrl` | Monorepo skills only — the parent repo cloned once into `_parents/<owner>/<repo>/`, with this skill symlinked in from `skillPath`. Absent for standalone (single-repo) skills. |
+| `readOnly` | `true` for a monorepo consumed read-only (e.g. `anthropics/skills`); `skill push` refuses it. **Omitted (falsey) for an *owned* monorepo** — see below. |
 
 Skills are sorted alphabetically on write. Unknown fields are preserved on round-trip so the file stays forward-compatible with both upstream additions and our own future fields.
+
+### Owned monorepos (writable)
+
+A monorepo is **owned** when its parent owner is `ajanderson1` (case-insensitive, per `is_owned_owner()`), or when `skill add --owned` is passed. An owned-monorepo entry carries `parentUrl` + `skillPath` but **no** `readOnly` field, so it is writable:
+
+- `skill push <slug>` stages and commits **only the skill's `skillPath` subpath** inside the shared parent clone (a dirty sibling subpath is not swept in) and opens one subpath-scoped PR per push against the parent's base ref.
+- `skill status <slug>` reports dirty state scoped to that subpath and marks it `<slug>\t<state> (owned)`.
+- `skill update <slug>` merges (never resets), so local owned edits survive.
+
+Read-only consumption of *others'* monorepos is unchanged: those entries keep `readOnly: true` and `skill push` still refuses them.
 
 ## Interop with `npx skills`
 
