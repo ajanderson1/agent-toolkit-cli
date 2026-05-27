@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "skills": {
+    "autonomous-run": {
+      "source": "ajanderson1/autonomous-run-skill",
+      "sourceType": "github",
+      "skillPath": "SKILL.md"
+    },
+    "cmux-pm": {
+      "source": "ajanderson1/cmux-pm-skill",
+      "sourceType": "github",
+      "skillPath": "SKILL.md"
+    },
+    "domain-manager": {
+      "source": "ajanderson1/domain-manager-skill",
+      "sourceType": "github",
+      "skillPath": "SKILL.md"
+    },
+    "journal": {
+      "source": "ajanderson1/journal-skill",
+      "sourceType": "github",
+      "skillPath": "SKILL.md"
+    },
+    "pinchtab": {
+      "source": "pinchtab/pinchtab",
+      "sourceType": "github",
+      "skillPath": "skills/pinchtab",
+      "parentUrl": "https://github.com/pinchtab/pinchtab",
+      "readOnly": true
+    },
+    "pocketsmith": {
+      "source": "ajanderson1/pocketsmith-skill",
+      "sourceType": "github",
+      "skillPath": "SKILL.md"
+    },
+    "skill-builder": {
+      "source": "ajanderson1/skill-builder-skill",
+      "sourceType": "github",
+      "skillPath": "SKILL.md"
+    }
+  }
+}
