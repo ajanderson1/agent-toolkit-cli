@@ -14,7 +14,9 @@ from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.css.query import NoMatches
 from textual.screen import ModalScreen
-from textual.widgets import Button, DataTable, Footer, Header, Label, Static
+from textual.widgets import (
+    Button, DataTable, Footer, Header, Input, Label, Static,
+)
 
 from agent_toolkit_tui import __version__
 from agent_toolkit_tui.skill_state import build_skill_rows
@@ -90,6 +92,7 @@ class TUIApp(App):
         Binding("ctrl+d", "diff", "Diff", priority=True),
         Binding("ctrl+r", "refresh", "Refresh", priority=True),
         Binding("ctrl+z", "revert", "Revert", priority=True),
+        Binding("slash", "focus_filter", "Filter", priority=True),
         Binding("s", "scope_toggle", "toggle scope"),
         Binding("i", "info_pass", "Info"),
         Binding("q", "quit", "Quit"),
@@ -120,8 +123,10 @@ class TUIApp(App):
         self._refresh_content_header()
         self._refresh_pending_label()
         self._refresh_status_bar()
+        # Focus the filter box on open (#249): typing immediately narrows the
+        # list, and Down/Tab drops focus into the table to pick a skill.
         try:
-            self.query_one("#skill-table", DataTable).focus()
+            self.query_one("#skill-filter", Input).focus()
         except Exception:
             pass
 
@@ -184,6 +189,13 @@ class TUIApp(App):
 
     def action_scope_toggle(self) -> None:
         self.action_scope("global" if self._scope == "project" else "project")
+
+    def action_focus_filter(self) -> None:
+        """`/` re-focuses the filter box (restores v1 muscle memory, #249)."""
+        try:
+            self.query_one("#skill-filter", Input).focus()
+        except NoMatches:
+            pass
 
     def action_info_pass(self) -> None:
         """Delegate `i` to the SkillGrid widget (visible in Footer hints)."""

@@ -72,6 +72,14 @@ Screen {
     height: 1fr;
 }
 
+/* Fuzzy-filter search box at the top of the grid (#249). Compact top bar
+   above the DataTable; focused on open so typing narrows the list. */
+SkillGrid Input#skill-filter {
+    height: 3;
+    border: round $primary 30%;
+    margin: 0 1 1 1;
+}
+
 /* DataTable header + cursor — kept consistent with the V3 styling but
    palette-neutral so gruvbox lights up correctly. */
 DataTable > .datatable--header {

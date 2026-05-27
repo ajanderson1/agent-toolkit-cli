@@ -109,6 +109,7 @@ async def test_press_i_on_slug_column_opens_cell_info():
         await pilot.pause()
         table = a.query_one("#skill-table", DataTable)
         table.cursor_coordinate = Coordinate(row=0, column=0)
+        table.focus()  # filter Input is focused on open (#249); table needs focus to receive `i`
         await pilot.pause()
         await pilot.press("i")
         await pilot.pause()
@@ -158,6 +159,7 @@ async def test_press_i_on_state_column_opens_modal():
         table = a.query_one("#skill-table", DataTable)
         state_col = len(INTERACTIVE_AGENTS) + 1
         table.cursor_coordinate = Coordinate(row=0, column=state_col)
+        table.focus()  # filter Input is focused on open (#249); table needs focus to receive `i`
         await pilot.pause()
         await pilot.press("i")
         await pilot.pause()

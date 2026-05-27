@@ -16,12 +16,14 @@ from __future__ import annotations
 
 from typing import Literal
 
+from textual import events
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical
 from textual.coordinate import Coordinate
+from textual.css.query import NoMatches
 from textual.message import Message
-from textual.widgets import DataTable
+from textual.widgets import DataTable, Input
 
 from agent_toolkit_cli.skill_agents import AGENTS
 from agent_toolkit_tui.column_info import COLUMN_INFO, get_column_info
@@ -49,6 +51,31 @@ _INFO_GLYPH     = "ⓘ"
 _GLOBAL_GLYPH   = "🌐"
 
 Op = Literal["link", "unlink"]
+
+
+class FilterInput(Input):
+    """Filter box that hands focus to the skill table on Down / Tab.
+
+    Down-arrow and Tab are the "I'm done typing, let me pick a skill" gesture
+    (#249). We intercept them here and move focus into the sibling
+    `#skill-table` DataTable, stopping the event so Tab does not run Textual's
+    default focus-cycle and Down does not get swallowed as a no-op cursor
+    move inside the (single-line) input. Every other key — including printable
+    characters that happen to match an App binding like `s`/`q` — falls
+    through to the Input's normal handling.
+    """
+
+    def on_key(self, event: events.Key) -> None:
+        if event.key in ("down", "tab"):
+            try:
+                self.screen.query_one("#skill-table", DataTable).focus()
+            except NoMatches:
+                # No table to hand focus to (not mounted yet) — let the key
+                # fall through to the Input's default handling rather than
+                # swallowing it.
+                return
+            event.stop()
+            event.prevent_default()
 
 
 class SkillGrid(Vertical):
@@ -83,6 +110,8 @@ class SkillGrid(Vertical):
         self._scope: Literal["global", "project"] = "global"
         # (scope, agent_name, slug) -> op
         self._pending: dict[tuple[str, str, str], Op] = {}
+        # Case-insensitive substring filter on slug (#249). "" = show all.
+        self._filter: str = ""
 
     @property
     def row_count(self) -> int:
@@ -144,15 +173,57 @@ class SkillGrid(Vertical):
         except Exception:
             return
         col_idx = self._column_index(agent_name)
+        # The table only renders visible rows, so the cursor row index must be
+        # the slug's position in the *visible* list, not the full set (#249).
+        visible_slugs = [r.slug for r in self._visible_rows()]
         try:
-            row_idx = self.row_slugs.index(row_slug)
+            row_idx = visible_slugs.index(row_slug)
         except ValueError:
             return
         table.cursor_coordinate = Coordinate(row=row_idx, column=col_idx)
+        # Positioning the cursor is a "navigate here to act on it" gesture, so
+        # take focus to the table — otherwise the filter Input (focused on open
+        # since #249) would swallow the next keypress (space/`i`) as text.
+        table.focus()
 
     def compose(self) -> ComposeResult:
+        # Filter box on top, table below — mirrors the v1 layout (#249).
+        yield FilterInput(placeholder="filter…", id="skill-filter")
         table = DataTable(id="skill-table", cursor_type="cell", zebra_stripes=True)
         yield table
+
+    # ----- filter ---------------------------------------------------------
+    def set_filter(self, text: str) -> None:
+        """Set the case-insensitive substring filter and rebuild the table."""
+        self._filter = text.strip().lower()
+        try:
+            table = self.query_one("#skill-table", DataTable)
+        except Exception:
+            return
+        self._rebuild(table)
+
+    def _visible_rows(self) -> list[SkillRow]:
+        """Rows after applying the active filter (case-insensitive substring).
+
+        The filter is purely a view over `self._rows`: it never changes the
+        full row set, the pending toggle state, or the apply/status math —
+        only what the table renders and what the cursor can land on.
+        """
+        if self._filter:
+            return [r for r in self._rows if self._filter in r.slug.lower()]
+        return list(self._rows)
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        if event.input.id == "skill-filter":
+            self.set_filter(event.value)
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        # Enter in the filter box is a convenience escape into the table.
+        if event.input.id == "skill-filter":
+            try:
+                self.query_one("#skill-table", DataTable).focus()
+            except Exception:
+                pass
 
     def on_mount(self) -> None:
         try:
@@ -180,7 +251,9 @@ class SkillGrid(Vertical):
         except Exception:
             return
         coord = table.cursor_coordinate
-        if coord.row >= len(self._rows):
+        # Cursor indexes the *visible* (filtered) rows, not the full set (#249).
+        visible = self._visible_rows()
+        if coord.row >= len(visible):
             return
 
         # Column-level info first: defer to ColumnInfoModal for registered keys.
@@ -191,7 +264,7 @@ class SkillGrid(Vertical):
             self.action_open_column_info()
             return
 
-        row = self._rows[coord.row]
+        row = visible[coord.row]
         scope = self._scope
         scope_flag = "-g" if scope == "global" else "-p"
 
@@ -403,9 +476,11 @@ class SkillGrid(Vertical):
         """
         if key != "universal":
             return None
-        if row_index < 0 or row_index >= len(self._rows):
+        # row_index comes from the table cursor → index the visible rows (#249).
+        visible = self._visible_rows()
+        if row_index < 0 or row_index >= len(visible):
             return None
-        row = self._rows[row_index]
+        row = visible[row_index]
         global_cell = row.cells.get(("universal", "global"))
         return {"global_linked": bool(global_cell and global_cell.linked)}
 
@@ -417,9 +492,11 @@ class SkillGrid(Vertical):
         agent = self._agent_for_column(coord.column)
         if agent is None:
             return
-        if coord.row >= len(self._rows):
+        # Cursor indexes the *visible* (filtered) rows, not the full set (#249).
+        visible = self._visible_rows()
+        if coord.row >= len(visible):
             return
-        row = self._rows[coord.row]
+        row = visible[coord.row]
         cell = row.cells.get((agent, self._scope))
         if cell is None or cell.skipped:
             return
@@ -478,15 +555,16 @@ class SkillGrid(Vertical):
         table.add_column(f"State {_INFO_GLYPH}", width=10)
         # Source is passive — no info panel, no glyph.
         table.add_column("Source", width=30)
-        for row in self._rows:
+        visible = self._visible_rows()
+        for row in visible:
             cells: list[str] = [row.slug]
             for agent in INTERACTIVE_AGENTS:
                 cells.append(self._cell_glyph(row=row, agent=agent))
             cells.append(_STATE_MARKUP.get(row.state, row.state))
             cells.append(row.source)
             table.add_row(*cells, key=f"skill:{row.slug}")
-        if self._rows:
-            max_row = len(self._rows) - 1
+        if visible:
+            max_row = len(visible) - 1
             # Layout: slug + N agent cols + state + source.
             max_col = 2 + len(INTERACTIVE_AGENTS)
             table.cursor_coordinate = Coordinate(
