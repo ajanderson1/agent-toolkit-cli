@@ -124,13 +124,15 @@ def import_cmd(ctx: click.Context, file: Path, latest: bool) -> None:
             extras=dict(entry.extras) if entry.read_only else {},
         )
         current = add_entry(current, slug, new_entry)
+        # Persist after EACH added skill, not once at the end. A ^C or crash
+        # mid-import (e.g. the SSH-only hang in #251) then leaves the lock
+        # recording exactly what landed on disk, so a re-run resumes cleanly
+        # instead of orphaning skill dirs the lock never knew about.
+        write_lock(library_lock_path(), current)
         landed = (local_sha or up_sha or "")[:7]
         suffix = f"(latest: {landed})" if latest else f"@ {landed}"
         click.echo(f"  added    {slug}  <- {entry.source} {suffix}")
         added.append((slug, landed, latest))
-
-    if added:
-        write_lock(library_lock_path(), current)
 
     click.echo(
         f"\nsummary: {len(added)} added, {len(skipped)} skipped, "

@@ -245,3 +245,61 @@ def test_clone_url_from_entry_extras_override_wins():
 def test_clone_url_from_entry_passthrough_for_local():
     e = LockEntry(source="/tmp/some-upstream", source_type="local")
     assert clone_url_from_entry(e) == "/tmp/some-upstream"
+
+
+# ── insteadOf rewriting — SSH-only host support (#251). _apply_insteadof reads
+# the user's git config; we isolate it via a fake HOME (.gitconfig) so the real
+# host config never leaks in and the autouse GIT_* scrub can't strip our setup.
+
+
+def _isolated_gitconfig(tmp_path: Path, monkeypatch, body: str) -> None:
+    home = tmp_path / "fake-home"
+    home.mkdir()
+    (home / ".gitconfig").write_text(body)
+    monkeypatch.setenv("HOME", str(home))
+    # git on some platforms reads XDG/explicit config too; pin those away.
+    monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+
+
+def test_clone_url_insteadof_rewrites_github(tmp_path: Path, monkeypatch):
+    _isolated_gitconfig(
+        tmp_path, monkeypatch,
+        '[url "git@github.com:"]\n'
+        '\tinsteadOf = https://github.com/\n',
+    )
+    e = LockEntry(source="foo/bar", source_type="github")
+    assert clone_url_from_entry(e) == "git@github.com:foo/bar.git"
+
+
+def test_clone_url_no_insteadof_passthrough(tmp_path: Path, monkeypatch):
+    _isolated_gitconfig(tmp_path, monkeypatch, "[user]\n\tname = nobody\n")
+    e = LockEntry(source="foo/bar", source_type="github")
+    assert clone_url_from_entry(e) == "https://github.com/foo/bar.git"
+
+
+def test_clone_url_insteadof_longest_match_wins(tmp_path: Path, monkeypatch):
+    # Two bases match; git (and us) pick the longest rewrite value.
+    _isolated_gitconfig(
+        tmp_path, monkeypatch,
+        '[url "ssh://git@host/"]\n'
+        '\tinsteadOf = https://\n'
+        '[url "git@github.com:"]\n'
+        '\tinsteadOf = https://github.com/\n',
+    )
+    e = LockEntry(source="foo/bar", source_type="github")
+    assert clone_url_from_entry(e) == "git@github.com:foo/bar.git"
+
+
+def test_clone_url_explicit_sourceurl_not_rewritten(tmp_path: Path, monkeypatch):
+    _isolated_gitconfig(
+        tmp_path, monkeypatch,
+        '[url "git@github.com:"]\n'
+        '\tinsteadOf = https://github.com/\n',
+    )
+    e = LockEntry(
+        source="foo/bar",
+        source_type="github",
+        extras={"sourceUrl": "https://github.com/foo/bar.git"},
+    )
+    # Explicit sourceUrl wins verbatim — git rewrites natively at clone time.
+    assert clone_url_from_entry(e) == "https://github.com/foo/bar.git"
