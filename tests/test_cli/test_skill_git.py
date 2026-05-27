@@ -10,6 +10,7 @@ from agent_toolkit_cli.skill_git import (
     clone,
     divergence,
     fetch,
+    fetch_ref,
     head_sha,
     merge,
     push,
@@ -17,6 +18,37 @@ from agent_toolkit_cli.skill_git import (
     reset_hard,
     status,
 )
+
+
+def _is_shallow(repo: Path, env: dict) -> bool:
+    out = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "--is-shallow-repository"],
+        check=True, env=env, capture_output=True, text=True,
+    ).stdout.strip()
+    return out == "true"
+
+
+def _file_url(path: Path) -> str:
+    """git ignores `--depth` for plain local-path clones ("--depth is ignored
+    in local clones") — only `file://` (and real remotes) honour it. Tests that
+    assert shallowness must therefore use a `file://` URL, mirroring the
+    https://github.com/... URLs `skill import` resolves in production."""
+    return f"file://{path}"
+
+
+def _advance_upstream_once(git_sandbox, *, name="UPSTREAM.md", body="newer\n"):
+    """Push one extra commit to the sandbox upstream so it has >1 commit —
+    a prerequisite for `--depth=1` to produce a genuinely shallow clone."""
+    helper = git_sandbox.upstream.parent / "depth-advance-helper"
+    subprocess.run(["git", "clone", str(git_sandbox.upstream), str(helper)],
+                   check=True, env=git_sandbox.env, capture_output=True)
+    (helper / name).write_text(body)
+    subprocess.run(["git", "-C", str(helper), "add", "-A"],
+                   check=True, env=git_sandbox.env, capture_output=True)
+    subprocess.run(["git", "-C", str(helper), "commit", "-m", "advance"],
+                   check=True, env=git_sandbox.env, capture_output=True)
+    subprocess.run(["git", "-C", str(helper), "push", "origin", "main"],
+                   check=True, env=git_sandbox.env, capture_output=True)
 
 
 def test_clone_creates_working_tree(git_sandbox, tmp_path: Path):
@@ -49,6 +81,73 @@ def test_clone_disables_prompt_and_batches_ssh(git_sandbox, tmp_path, monkeypatc
     env = captured["env"]
     assert env["GIT_TERMINAL_PROMPT"] == "0"
     assert "BatchMode=yes" in env["GIT_SSH_COMMAND"]
+
+
+def test_clone_depth_makes_shallow_repo(git_sandbox, tmp_path: Path):
+    """`depth=1` produces a shallow clone; the default stays full history (#259)."""
+    # Needs >1 commit upstream, else depth-1 already covers all history and
+    # git does not mark the clone shallow.
+    _advance_upstream_once(git_sandbox)
+    url = _file_url(git_sandbox.upstream)
+
+    shallow = tmp_path / "shallow"
+    clone(url, shallow, ref=None, env=git_sandbox.env, depth=1)
+    assert (shallow / "SKILL.md").exists()
+    assert _is_shallow(shallow, git_sandbox.env) is True
+
+    full = tmp_path / "full"
+    clone(url, full, ref=None, env=git_sandbox.env)
+    assert _is_shallow(full, git_sandbox.env) is False
+
+
+def test_clone_depth_preserves_prompt_and_ssh_hardening(
+    git_sandbox, tmp_path, monkeypatch
+):
+    """A shallow clone must keep the #251 env hardening (no-hang guarantee)."""
+    from agent_toolkit_cli import skill_git
+
+    captured: dict[str, dict] = {}
+    captured_cmd: dict[str, list] = {}
+    real_run = subprocess.run
+
+    def spy(cmd, **kwargs):
+        if cmd[:2] == ["git", "clone"]:
+            captured["env"] = dict(kwargs.get("env") or {})
+            captured_cmd["cmd"] = list(cmd)
+        return real_run(cmd, **kwargs)
+
+    monkeypatch.setattr(skill_git.subprocess, "run", spy)
+    clone(str(git_sandbox.upstream), tmp_path / "out", ref=None,
+          env=git_sandbox.env, depth=1)
+
+    env = captured["env"]
+    assert env["GIT_TERMINAL_PROMPT"] == "0"
+    assert "BatchMode=yes" in env["GIT_SSH_COMMAND"]
+    assert "--depth" in captured_cmd["cmd"]
+
+
+def test_fetch_ref_makes_old_sha_checkoutable(git_sandbox, tmp_path):
+    """On a depth-1 clone an older commit's tree is absent until fetch_ref
+    pulls it — then checkout of that sha succeeds (#259)."""
+    # The seed commit becomes the "old" sha once upstream advances past it.
+    old_sha = head_sha(git_sandbox.clone, env=git_sandbox.env)
+    _advance_upstream_once(git_sandbox)
+    url = _file_url(git_sandbox.upstream)
+
+    # Shallow clone of HEAD only — the old commit's tree is not present.
+    shallow = tmp_path / "shallow"
+    clone(url, shallow, ref=None, env=git_sandbox.env, depth=1)
+    with pytest.raises(subprocess.CalledProcessError):
+        subprocess.run(
+            ["git", "-C", str(shallow), "checkout", old_sha],
+            check=True, env=git_sandbox.env, capture_output=True,
+        )
+
+    # fetch_ref pulls just that commit; the checkout now succeeds.
+    fetch_ref(shallow, ref=old_sha, env=git_sandbox.env, depth=1)
+    from agent_toolkit_cli.skill_git import checkout
+    checkout(shallow, ref=old_sha, env=git_sandbox.env)
+    assert head_sha(shallow, env=git_sandbox.env) == old_sha
 
 
 def test_clone_respects_caller_ssh_command(git_sandbox, tmp_path, monkeypatch):

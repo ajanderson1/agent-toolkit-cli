@@ -85,7 +85,8 @@ def _run(
 
 
 def clone(
-    url: str, dest: Path, *, ref: str | None, env: dict[str, str] | None
+    url: str, dest: Path, *, ref: str | None, env: dict[str, str] | None,
+    depth: int | None = None,
 ) -> GitResult:
     """Clone `url` into `dest`, failing loudly rather than hanging.
 
@@ -95,8 +96,17 @@ def clone(
     fresh SSH-only host (#251). For the SSH transport we default
     `GIT_SSH_COMMAND` to BatchMode so a missing key / unknown host fails the
     same way; a caller-supplied `GIT_SSH_COMMAND` is respected.
+
+    `depth` (when set) passes `--depth <n>` for a shallow clone — used by
+    `skill import` to avoid transferring a fat monorepo's full history when
+    only one commit's tree is ever needed (#259). Defaults to `None` (full
+    clone) so every other caller is unchanged. A shallow clone has only the
+    cloned ref's tree; callers that then check out an *older* pinned commit
+    must `fetch_ref()` it first.
     """
     cmd = ["git", "clone"]
+    if depth is not None:
+        cmd += ["--depth", str(depth)]
     if ref:
         cmd += ["--branch", ref]
     cmd += [url, str(dest)]
@@ -111,6 +121,28 @@ def fetch(repo: Path, *, env: dict[str, str] | None) -> GitResult:
     proc = _run(
         ["git", "-C", str(repo), "fetch", "origin", "--prune"], env=env,
     )
+    return GitResult(stdout=proc.stdout, stderr=proc.stderr)
+
+
+def fetch_ref(
+    repo: Path, *, ref: str, env: dict[str, str] | None,
+    depth: int | None = None,
+) -> GitResult:
+    """Fetch a single `ref` (branch, tag, or full SHA) into `repo`.
+
+    Distinct from `fetch()` (which does `fetch origin --prune` for all refs):
+    this pulls exactly one ref, optionally shallow via `--depth`. Used by the
+    `skill import` shallow path — a depth-1 clone holds only the cloned ref's
+    tree, so the pinned commit must be fetched before it can be checked out
+    (#259). Fetching a SHA requires the remote to allow SHA-in-want (GitHub
+    does). Goes through `_run` so GIT_* env vars are scrubbed identically to
+    every other git call (see memory feedback_git_env_leak.md).
+    """
+    cmd = ["git", "-C", str(repo), "fetch"]
+    if depth is not None:
+        cmd += ["--depth", str(depth)]
+    cmd += ["origin", ref]
+    proc = _run(cmd, env=env)
     return GitResult(stdout=proc.stdout, stderr=proc.stderr)
 
 
