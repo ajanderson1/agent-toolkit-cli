@@ -248,6 +248,64 @@ def test_import_self_is_noop(installed_skill):
     assert installed_skill.lock_path.read_text() == before
 
 
+def test_import_persists_lock_incrementally_before_abort(
+    git_sandbox, tmp_path, monkeypatch
+):
+    """A skill that landed before an abort is already in the on-disk lock (#251).
+
+    Simulates ^C mid-import: the first skill clones fine, then the second
+    reconstruction raises KeyboardInterrupt (not caught by the per-skill
+    `except Exception`). With end-of-loop persistence the lock would be empty;
+    with per-skill persistence the first skill is recorded and a re-run resumes.
+    """
+    from agent_toolkit_cli import skill_git
+    from agent_toolkit_cli.commands import skill as skill_pkg
+
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+
+    sha = skill_git.head_sha(git_sandbox.clone, env=None)
+    incoming = tmp_path / "incoming.json"
+    # "aaa" sorts first (clones fine); "zzz" sorts second (we abort on it).
+    incoming.write_text(json.dumps({
+        "version": 1,
+        "skills": {
+            "aaa": {
+                "source": str(git_sandbox.upstream), "sourceType": "git",
+                "skillPath": "SKILL.md", "upstreamSha": sha, "localSha": sha,
+            },
+            "zzz": {
+                "source": str(git_sandbox.upstream), "sourceType": "git",
+                "skillPath": "SKILL.md", "upstreamSha": sha, "localSha": sha,
+            },
+        },
+    }))
+
+    real_reconstruct = skill_pkg.reconstruct_skill_into_library
+
+    def reconstruct_then_abort(parsed, slug, *, pin_sha):
+        if slug == "zzz":
+            raise KeyboardInterrupt
+        return real_reconstruct(parsed, slug, pin_sha=pin_sha)
+
+    monkeypatch.setattr(
+        skill_pkg, "reconstruct_skill_into_library", reconstruct_then_abort,
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["skill", "import", str(incoming)])
+    # The abort aborts the run (CliRunner surfaces KeyboardInterrupt as a
+    # non-zero SystemExit); the import did NOT complete normally.
+    assert result.exit_code != 0
+
+    # The first skill was persisted to the lock BEFORE the abort.
+    lock = json.loads((library_root.parent / "skills-lock.json").read_text())
+    assert "aaa" in lock["skills"], "incremental write should record the landed skill"
+    assert "zzz" not in lock["skills"]
+
+
 def test_import_appears_in_skill_help():
     runner = CliRunner()
     result = runner.invoke(main, ["skill", "--help"])

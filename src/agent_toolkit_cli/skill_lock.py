@@ -19,6 +19,8 @@ from __future__ import annotations
 
 import datetime as _dt
 import json
+import os
+import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -129,6 +131,49 @@ def _now_iso() -> str:
     return _dt.datetime.now(_dt.UTC).isoformat().replace("+00:00", "Z")
 
 
+def _apply_insteadof(url: str) -> str:
+    """Rewrite `url` per the user's git `url.<base>.insteadOf` config.
+
+    A fresh SSH-only host that synced a library from another machine has no
+    HTTPS credential helper; the canonical fix git documents for that setup is
+    ``url."git@github.com:".insteadOf = "https://github.com/"``. git applies
+    this natively at clone time, but we apply it here too so the resolved URL
+    is explicit and unit-testable, and so SSH-only hosts clone github/gitlab
+    sources over their working (SSH) transport instead of a doomed HTTPS one
+    (#251).
+
+    Reads git config read-only with a scrubbed env; any failure (no git, no
+    config) leaves the URL unchanged. When several bases match, the one whose
+    rewrite value is the longest wins — git's own precedence rule.
+    """
+    try:
+        proc = subprocess.run(
+            ["git", "config", "--get-regexp", r"^url\..*\.insteadof$"],
+            env={k: v for k, v in os.environ.items() if not k.startswith("GIT_")},
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, ValueError):
+        return url
+    if proc.returncode != 0 or not proc.stdout:
+        return url
+
+    best_rewrite = ""
+    best_base = ""
+    for line in proc.stdout.splitlines():
+        key, _, rewrite = line.partition(" ")
+        if not rewrite:
+            continue
+        # key is `url.<base>.insteadof`; strip the fixed prefix/suffix.
+        base = key[len("url."):-len(".insteadof")]
+        if url.startswith(rewrite) and len(rewrite) > len(best_rewrite):
+            best_rewrite = rewrite
+            best_base = base
+    if best_rewrite:
+        return best_base + url[len(best_rewrite):]
+    return url
+
+
 def clone_url_from_entry(e: LockEntry) -> str:
     """Resolve a LockEntry to a `git clone`-able URL.
 
@@ -136,14 +181,19 @@ def clone_url_from_entry(e: LockEntry) -> str:
     so the read path has to synthesise the URL the same way the v3 writer
     does — otherwise `ensure_project_canonical` hands git a bare owner/repo
     string and the clone fails (#159).
+
+    For synthesised github/gitlab HTTPS URLs we additionally honour the user's
+    `insteadOf` rewrites so SSH-only hosts clone over SSH (#251). An explicit
+    `sourceUrl` or a local path is returned verbatim — git still rewrites it
+    natively at clone time, but we don't second-guess an explicit URL.
     """
     url_from_extras = e.extras.get("sourceUrl")
     if isinstance(url_from_extras, str) and url_from_extras:
         return url_from_extras
     if e.source_type == "github" and "/" in e.source:
-        return f"https://github.com/{e.source}.git"
+        return _apply_insteadof(f"https://github.com/{e.source}.git")
     if e.source_type == "gitlab" and "/" in e.source:
-        return f"https://gitlab.com/{e.source}.git"
+        return _apply_insteadof(f"https://gitlab.com/{e.source}.git")
     return e.source
 
 

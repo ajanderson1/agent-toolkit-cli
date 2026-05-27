@@ -54,11 +54,21 @@ _IDENTITY_ALLOWLIST = {
 }
 
 
+# GIT_* vars that are safe to carry through the scrub. Unlike GIT_DIR /
+# GIT_INDEX_FILE these cannot redirect commits into a parent repo — they only
+# govern how git talks to a remote (whether it may prompt for credentials and
+# which ssh command to use). `clone()` sets them to fail loudly instead of
+# hanging on a missing credential (#251).
+_CLONE_PASSTHROUGH = {"GIT_TERMINAL_PROMPT", "GIT_SSH_COMMAND"}
+
+
 def _scrub(env: dict[str, str] | None) -> dict[str, str]:
     base = dict(env) if env is not None else os.environ.copy()
     return {
         k: v for k, v in base.items()
-        if not k.startswith("GIT_") or k in _IDENTITY_ALLOWLIST
+        if not k.startswith("GIT_")
+        or k in _IDENTITY_ALLOWLIST
+        or k in _CLONE_PASSTHROUGH
     }
 
 
@@ -77,11 +87,23 @@ def _run(
 def clone(
     url: str, dest: Path, *, ref: str | None, env: dict[str, str] | None
 ) -> GitResult:
+    """Clone `url` into `dest`, failing loudly rather than hanging.
+
+    Forces `GIT_TERMINAL_PROMPT=0` so a missing HTTPS credential helper makes
+    git exit non-zero (raising `GitError`) instead of blocking on an
+    interactive `Username for 'https://...'` prompt — the hang that bit a
+    fresh SSH-only host (#251). For the SSH transport we default
+    `GIT_SSH_COMMAND` to BatchMode so a missing key / unknown host fails the
+    same way; a caller-supplied `GIT_SSH_COMMAND` is respected.
+    """
     cmd = ["git", "clone"]
     if ref:
         cmd += ["--branch", ref]
     cmd += [url, str(dest)]
-    proc = _run(cmd, env=env)
+    clone_env = dict(env) if env is not None else os.environ.copy()
+    clone_env["GIT_TERMINAL_PROMPT"] = "0"
+    clone_env.setdefault("GIT_SSH_COMMAND", "ssh -o BatchMode=yes")
+    proc = _run(cmd, env=clone_env)
     return GitResult(stdout=proc.stdout, stderr=proc.stderr)
 
 

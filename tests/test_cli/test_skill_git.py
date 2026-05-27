@@ -31,6 +31,46 @@ def test_clone_failure_raises(tmp_path: Path):
         clone("file:///nonexistent.git", tmp_path / "x", ref=None, env={})
 
 
+def test_clone_disables_prompt_and_batches_ssh(git_sandbox, tmp_path, monkeypatch):
+    """Clone must fail loudly, never hang: GIT_TERMINAL_PROMPT=0 + BatchMode ssh (#251)."""
+    from agent_toolkit_cli import skill_git
+
+    captured: dict[str, dict] = {}
+    real_run = subprocess.run
+
+    def spy(cmd, **kwargs):
+        if cmd[:2] == ["git", "clone"]:
+            captured["env"] = dict(kwargs.get("env") or {})
+        return real_run(cmd, **kwargs)
+
+    monkeypatch.setattr(skill_git.subprocess, "run", spy)
+    clone(str(git_sandbox.upstream), tmp_path / "out", ref=None, env=git_sandbox.env)
+
+    env = captured["env"]
+    assert env["GIT_TERMINAL_PROMPT"] == "0"
+    assert "BatchMode=yes" in env["GIT_SSH_COMMAND"]
+
+
+def test_clone_respects_caller_ssh_command(git_sandbox, tmp_path, monkeypatch):
+    """A caller-provided GIT_SSH_COMMAND is not clobbered by the BatchMode default."""
+    from agent_toolkit_cli import skill_git
+
+    captured: dict[str, dict] = {}
+    real_run = subprocess.run
+
+    def spy(cmd, **kwargs):
+        if cmd[:2] == ["git", "clone"]:
+            captured["env"] = dict(kwargs.get("env") or {})
+        return real_run(cmd, **kwargs)
+
+    monkeypatch.setattr(skill_git.subprocess, "run", spy)
+    env = {**git_sandbox.env, "GIT_SSH_COMMAND": "ssh -i /custom/key"}
+    clone(str(git_sandbox.upstream), tmp_path / "out2", ref=None, env=env)
+
+    assert captured["env"]["GIT_SSH_COMMAND"] == "ssh -i /custom/key"
+    assert captured["env"]["GIT_TERMINAL_PROMPT"] == "0"
+
+
 def test_status_clean(git_sandbox):
     s = status(git_sandbox.clone, env=git_sandbox.env)
     assert s == GitWorkingTreeStatus.CLEAN
