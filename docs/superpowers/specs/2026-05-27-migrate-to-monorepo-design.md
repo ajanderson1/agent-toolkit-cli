@@ -113,7 +113,7 @@ Mirrors PR1's style in `tests/test_cli/test_skill_owned_monorepo.py`, using a fi
 
 ## Reporting
 
-End-of-run summary, bold per the CLI-output convention:
+End-of-run summary via plain `click.echo` (matching sibling skill commands `push`/`status`/`update`, which do not style stdout):
 
 ```
 Migrated 8: aj-workflow, bitwarden, conventions, kuma-uptime, mkdocs, obsidian, pocketsmith, skill-builder
