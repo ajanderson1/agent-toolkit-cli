@@ -146,10 +146,10 @@ class TUIApp(App):
     ) -> None:
         """Live-update the footer + status bar when the grid's pending set changes.
 
-        The grid posts PendingChanged after every toggle (cell or column),
-        revert, restore, and scope/row change. Refreshing here keeps the
-        footer "Pending: N" label and the status-bar pending rollup in sync
-        as the user toggles cells with `space`, instead of only on apply.
+        The grid posts PendingChanged from its user-driven toggle paths (cell
+        toggle via `space`, column toggle via `a`). Refreshing here keeps the
+        footer "Pending: N" label and the status-bar pending rollup in sync as
+        the user toggles cells, instead of only on apply/refresh/revert.
         """
         self._refresh_pending_label()
         self._refresh_status_bar()
