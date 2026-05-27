@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.12.1](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.12.0...v2.12.1) (2026-05-27)
+
+
+### Bug Fixes
+
+* release 2.12.1 (TUI counters [#250](https://github.com/ajanderson1/agent-toolkit-cli/issues/250), SSH-only import [#251](https://github.com/ajanderson1/agent-toolkit-cli/issues/251)) ([2be7797](https://github.com/ajanderson1/agent-toolkit-cli/commit/2be7797aec44f6317bdb9f39e8452e5932d59e77))
+
 ## [2.12.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.11.2...v2.12.0) (2026-05-26)
 
 
