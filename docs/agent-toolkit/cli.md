@@ -15,6 +15,7 @@ agent-toolkit-cli skill status [<slug>...] [-g|-p]
 agent-toolkit-cli skill update [<slug>...] [-g|-p]      # merge-aware
 agent-toolkit-cli skill push   [<slug>...] [-g|-p] [--direct]   # PR-branch by default
 agent-toolkit-cli skill remove <slug>... [-g|-p] [--force]          # alias: rm
+agent-toolkit-cli skill migrate-to-monorepo <parent> [--dry-run]   # re-home owned skills
 ```
 
 `<source>` accepts `owner/repo`, a full HTTPS URL, an SSH URL, or a local path. `-g/--global` and `-p/--project` select scope; default is global. `skill list --json` emits a JSON array (`slug`, `source`, `ref`, `upstream_sha`, `local_sha`, `scope`) for scripting; `-a/--agent <name>` filters to skills currently symlinked into that agent (or the `universal` token).
@@ -83,6 +84,12 @@ The parent repo is cloned once under `$AGENT_TOOLKIT_SKILLS_ROOT/_parents/<owner
 By default `skill push <slug>` creates a `skill/self-improvement-<timestamp>` branch in the canonical skill repo, pushes it, and opens a PR against the tracked ref via `gh pr create` (printing the PR URL). When `gh` is not installed or not authenticated the branch is still pushed and the command prints a hint with the branch's web URL so you can open the PR by hand.
 
 `--direct` opts into the pre-#221 behaviour: commit + push straight to the tracked ref and update `local_sha` in the lockfile. Use it for solo first-party skills where opening a PR for every self-improvement would be ceremony. The default path leaves `local_sha` alone — the next `skill update` picks up the merged change normally.
+
+## skill migrate-to-monorepo
+
+`skill migrate-to-monorepo <parent>` re-homes standalone owned per-skill entries into an owned monorepo once their skills have been folded into it. One-shot, idempotent, per-machine. For each owned standalone skill that now exists at `skills/<slug>` in the parent, it rewrites the lock entry to owned-monorepo-subpath shape, replaces the standalone clone dir with a symlink into the shared `_parents/<owner>/<repo>/` clone, and re-projects harness symlinks. See `docs/agent-toolkit/skill-lock.md` § *Re-homing standalone skills into an owned monorepo* for the before/after entry shapes.
+
+To never drop unpushed local work, it **skips** (leaves untouched) any skill whose `local_sha` ≠ `upstream_sha`, whose clone tree is dirty, or whose monorepo copy differs by content; the destructive clone-dir removal happens only after the replacement symlink is verified. Skills not yet in the monorepo are reported and left standalone. Re-running is a no-op. `--dry-run` prints the per-skill plan and writes nothing.
 
 Monorepo entries (`read_only: true`) reject both modes — sharing changes back means forking the parent yourself.
 
