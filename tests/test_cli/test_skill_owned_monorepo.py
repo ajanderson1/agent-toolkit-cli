@@ -135,12 +135,14 @@ def _hide_gh(monkeypatch, tmp_path):
     monkeypatch.setenv("PATH", str(bin_dir))
 
 
-def test_owned_push_pr_path_commits_subpath_and_restores_base(
+def test_owned_push_pr_path_commits_subpath_and_preserves_sibling(
     tmp_path, monkeypatch
 ):
     """The PR-branch path (no --direct): commits only the subpath onto a new
-    branch, pushes it, and force-restores the shared clone to base afterward —
-    even though a sibling subpath is left dirty."""
+    branch, pushes it, restores the shared clone to base afterward, AND leaves
+    a dirty sibling subpath's uncommitted edit intact (a plain checkout-back
+    carries it across; a `-f` restore would silently destroy in-progress work
+    on the exact multi-skill-in-one-monorepo workflow this feature targets)."""
     from agent_toolkit_cli.skill_paths import parent_clone_path
 
     parent_url, _ = _setup_parent(tmp_path, monkeypatch)
@@ -156,7 +158,8 @@ def test_owned_push_pr_path_commits_subpath_and_restores_base(
         p for p in clone.iterdir()
         if p.is_dir() and p.name not in (".git", sub)
     )
-    (sibling / "SKILL.md").write_text("edited sibling\n")
+    sibling_file = sibling / "SKILL.md"
+    sibling_file.write_text("edited sibling\n")
 
     # Hide gh only now — after setup/clone are done (which need cp/git on PATH).
     # git is invoked via the scrubbed env in skill_git, which keeps the real
@@ -186,6 +189,12 @@ def test_owned_push_pr_path_commits_subpath_and_restores_base(
     )
     changed = [ln for ln in show.stdout.splitlines() if ln.strip()]
     assert changed and all(p.startswith(f"{sub}/") for p in changed), changed
+
+    # CRITICAL: the sibling's uncommitted edit must survive the push. A `-f`
+    # restore would silently wipe it; a plain checkout-back preserves it.
+    assert sibling_file.read_text() == "edited sibling\n", (
+        "push destroyed an unpushed sibling subpath's in-progress edit"
+    )
 
 
 def test_owned_push_refuses_when_skillpath_missing(tmp_path, monkeypatch):

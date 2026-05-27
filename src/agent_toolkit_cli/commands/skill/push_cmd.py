@@ -164,9 +164,9 @@ def _push_monorepo(
 
     Subpath-scoped commit + one PR branch per push: stage/commit only the
     skill's `skill_path`, so a dirty sibling subpath sharing the parent clone
-    is never swept into the commit. The clone is always force-restored to the
-    base ref afterward so a dirty sibling can't strand it on a PR branch and
-    so a later `skill update` merges into the tracked ref.
+    is never swept into the commit. The clone is restored to the base ref
+    afterward via a plain checkout that preserves any sibling's uncommitted
+    edits, so a later `skill update` merges into the tracked ref.
     """
     parent_dir = _monorepo_parent_dir(entry, scope, project_root)
     if not skill_git.is_git_repo(parent_dir):
@@ -224,10 +224,15 @@ def _push_monorepo(
             if web:
                 click.echo(f"  → open a PR: {web}")
     finally:
-        # Force-restore to base: a dirty sibling subpath (carried onto the PR
-        # branch) would make a plain `git checkout` refuse and strand the
-        # SHARED clone on the PR branch, polluting every sibling's next push.
-        skill_git.checkout(parent_dir, ref=base_ref, force=True, env=None)
+        # Restore the SHARED clone to base. Use a PLAIN checkout, not `-f`:
+        # git carries a sibling subpath's uncommitted edits across the switch
+        # unharmed, and `-f` would silently DISCARD that in-progress sibling
+        # work on every push — the exact multi-skill-in-one-monorepo workflow
+        # this feature exists for. In the rare case a sibling's state makes the
+        # switch refuse, the GitError propagates to the per-slug handler in
+        # push_cmd (the clone may stay on the PR branch, recoverable by hand)
+        # rather than destroying unpushed sibling edits.
+        skill_git.checkout(parent_dir, ref=base_ref, env=None)
 
 
 _REF_SAFE_RE = re.compile(r"[^a-zA-Z0-9._-]+")
