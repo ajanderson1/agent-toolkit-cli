@@ -271,31 +271,234 @@ def test_migrate_dry_run_writes_nothing(tmp_path, monkeypatch):
     assert not library_skill_path("journal").is_symlink()  # clone intact
 
 
+def _fail_forward_swap_for(mig, monkeypatch, slug):
+    """Patch os.replace so the FORWARD swap into <slug>'s clone fails once.
+
+    The crash-safe swap does `os.replace(clone, trash)` then
+    `os.replace(tmp_link, clone)` then, on failure, `os.replace(trash, clone)`
+    to restore. We must fail only the forward swap (tmp_link -> clone) and let
+    the restore through, so the test exercises the real interrupted-swap path
+    rather than also breaking recovery. The forward swap's `src` is the
+    `.{slug}.migrating` temp link; key on that to distinguish it from restore.
+    """
+    real_replace = mig.os.replace
+
+    def boom(src, dst, *a, **k):
+        if str(src).endswith(f".{slug}.migrating") and str(dst).endswith(
+            f"/{slug}"
+        ):
+            raise OSError("swap interrupted")
+        return real_replace(src, dst, *a, **k)
+
+    monkeypatch.setattr(mig.os, "replace", boom)
+
+
 def test_migrate_isolates_per_skill_failure(tmp_path, monkeypatch):
-    """A skill raising mid-migration is reported as an error and does NOT
-    abort migration of the other eligible skills (spec: per-skill
-    independence)."""
+    """A skill failing mid-swap is reported as an error and does NOT abort
+    migration of the other eligible skills (spec: per-skill independence)."""
     parent_url, _, _, _ = _setup(
         tmp_path, monkeypatch, slugs=("journal", "mkdocs"),
     )
-    # Force the irreversible rmtree to blow up for `journal` only. The command
-    # calls `shutil.rmtree`, so patch it on the shutil module itself.
-    import shutil
-
-    real_rmtree = shutil.rmtree
-
-    def boom(path, *a, **k):
-        if str(path).endswith("/journal"):
-            raise OSError("disk gremlin")
-        return real_rmtree(path, *a, **k)
-
-    monkeypatch.setattr(shutil, "rmtree", boom)
+    _fail_forward_swap_for(_migcmd(), monkeypatch, "journal")
     r = CliRunner().invoke(cli, ["skill", "migrate-to-monorepo", parent_url])
     assert r.exit_code == 0, r.output
     # mkdocs still migrated despite journal's failure.
     assert "parentUrl" in _lock()["skills"]["mkdocs"]
     assert library_skill_path("mkdocs").is_symlink()
-    # journal reported as an error, not silently dropped.
-    assert "disk gremlin" in r.output
+    # journal reported as an error, not silently dropped, and recovered.
+    assert "swap interrupted" in r.output
     assert "Migrated 1" in r.output
     assert "Skipped 1" in r.output
+    # Crash-safety: journal's original clone survives (restored), no half-state.
+    assert not library_skill_path("journal").is_symlink()
+    assert (library_skill_path("journal") / "SKILL.md").exists()
+    assert "parentUrl" not in _lock()["skills"]["journal"]
+
+
+# --- crash-safety regression tests (adversarial review of PR #266) ----------
+
+
+def _migcmd():
+    """The migrate command *module* (for monkeypatching its internals).
+
+    `from ... import migrate_cmd` binds the click Command, not the module, so
+    import the module object explicitly.
+    """
+    import importlib
+    return importlib.import_module(
+        "agent_toolkit_cli.commands.skill.migrate_cmd"
+    )
+
+
+def test_migrate_swap_is_crash_safe_when_finalise_fails(tmp_path, monkeypatch):
+    """If the directory swap fails AFTER the clone is moved aside, the skill
+    must remain recoverable — the original clone is not lost and the lock is
+    not left claiming a migration that did not complete.
+
+    This is the highest-severity adversarial finding: the old code did
+    `rmtree(clone)` then `rename(tmp_link, clone)`; a failure between them
+    destroyed the clone (and its git history) while the lock already said
+    migrated, with no repair path on re-run.
+    """
+    parent_url, _, _, env = _setup(tmp_path, monkeypatch, slugs=("journal",))
+    journal_clone = library_skill_path("journal")
+    original_text = (journal_clone / "SKILL.md").read_text()
+
+    # Interrupt the forward swap (tmp_link -> clone) but let the restore run.
+    _fail_forward_swap_for(_migcmd(), monkeypatch, "journal")
+    r = CliRunner().invoke(cli, ["skill", "migrate-to-monorepo", parent_url])
+    assert r.exit_code == 0, r.output
+
+    # Recoverable: the clone content survives, either still at the clone path
+    # or restorable, and the lock does NOT falsely claim a completed migration.
+    assert "parentUrl" not in _lock()["skills"]["journal"], (
+        "lock must not claim migration when the swap failed"
+    )
+    assert journal_clone.exists(), "the original clone must not be destroyed"
+    assert (journal_clone / "SKILL.md").read_text() == original_text
+    assert not journal_clone.is_symlink(), (
+        "failed swap must leave the real clone, not a dangling symlink"
+    )
+    # The independent git history must survive — the core data-loss concern.
+    assert (journal_clone / ".git").exists(), (
+        "the clone's git history must not be lost on a failed swap"
+    )
+    # No orphaned sidecar/temp paths left behind for a future run to trip on.
+    assert not (journal_clone.parent / ".journal.migrating").exists()
+    assert not (journal_clone.parent / ".journal.trash").exists()
+    assert "journal" in r.output  # reported as failed/skipped, not silent
+
+
+def test_migrate_reproject_failure_is_surfaced_not_buried(tmp_path, monkeypatch):
+    """A reproject (engine_apply) failure AFTER the irreversible swap must be
+    surfaced loudly — the migration completed, but the user must be told the
+    harness symlinks need repair. It must NOT be a silent stderr warning under
+    a clean 'Migrated' banner, and the skill must NOT be mislabeled 'Skipped'.
+    """
+    from agent_toolkit_cli.skill_install import InstallError
+
+    parent_url, _, _, _ = _setup(tmp_path, monkeypatch, slugs=("journal",))
+    mig = _migcmd()
+
+    def boom_apply(*a, **k):
+        raise InstallError("conflicting symlink at projection path")
+
+    monkeypatch.setattr(mig, "engine_apply", boom_apply)
+    r = CliRunner().invoke(cli, ["skill", "migrate-to-monorepo", parent_url])
+    assert r.exit_code == 0, r.output
+    # The swap DID complete — lock + symlink reflect a migration.
+    assert "parentUrl" in _lock()["skills"]["journal"]
+    assert library_skill_path("journal").is_symlink()
+    # And the reproject failure is surfaced (loud, names a repair path), not
+    # buried as a success.
+    out = r.output.lower()
+    assert "reproject" in out or "doctor" in out
+    assert "conflicting symlink" in r.output
+
+
+def test_migrate_completed_migration_not_mislabeled_skipped(tmp_path,
+                                                            monkeypatch):
+    """If engine_apply raises a NON-InstallError after the swap, the skill is
+    still fully migrated — it must not be re-routed into 'Skipped' by the outer
+    boundary catch (which would lie about a completed, irreversible change).
+    """
+    parent_url, _, _, _ = _setup(tmp_path, monkeypatch, slugs=("journal",))
+    mig = _migcmd()
+
+    def boom_apply(*a, **k):
+        raise OSError("unexpected fs error during reproject")
+
+    monkeypatch.setattr(mig, "engine_apply", boom_apply)
+    r = CliRunner().invoke(cli, ["skill", "migrate-to-monorepo", parent_url])
+    assert r.exit_code == 0, r.output
+    assert "parentUrl" in _lock()["skills"]["journal"]
+    assert library_skill_path("journal").is_symlink()
+    # Must be counted as migrated, never skipped — the destructive half is done.
+    assert "Migrated 1" in r.output
+    assert "Skipped 1" not in r.output
+
+
+def test_migrate_recovers_leftover_migrating_symlink(tmp_path, monkeypatch):
+    """A `.{slug}.migrating` leftover from a crashed prior run, where the lock
+    already records the migration, must be reconciled on re-run rather than
+    skipped forever. After re-run the clone path resolves into the monorepo.
+    """
+    parent_url, parent, _, _ = _setup(tmp_path, monkeypatch, slugs=("journal",))
+    # Simulate a crash mid-swap: lock already migrated, clone dir gone, only a
+    # leftover `.journal.migrating` symlink points into the monorepo subpath.
+    import shutil as _sh
+    clone = library_skill_path("journal")
+    mono_skill = parent / "skills" / "journal"
+    cur = _lock()
+    cur["skills"]["journal"] = {
+        "source": parent_url, "sourceType": "git",
+        "skillPath": "skills/journal",
+        "upstreamSha": cur["skills"]["journal"]["upstreamSha"],
+        "parentUrl": parent_url,
+    }
+    library_lock_path().write_text(json.dumps(cur, indent=2) + "\n")
+    _sh.rmtree(clone)
+    leftover = clone.parent / ".journal.migrating"
+    leftover.symlink_to(mono_skill, target_is_directory=True)
+
+    r = CliRunner().invoke(cli, ["skill", "migrate-to-monorepo", parent_url])
+    assert r.exit_code == 0, r.output
+    # Recovered: clone path now resolves a real SKILL.md, leftover is gone.
+    assert clone.is_symlink()
+    assert (clone / "SKILL.md").exists()
+    assert not leftover.exists()
+
+
+# --- _trees_equal direct unit tests (gates the destructive swap) ------------
+
+
+def test_trees_equal_true_for_identical_nested(tmp_path):
+    mig = _migcmd()
+    a = tmp_path / "a"
+    b = tmp_path / "b"
+    for root in (a, b):
+        (root / "sub").mkdir(parents=True)
+        (root / "SKILL.md").write_text("# s\n")
+        (root / "sub" / "ref.md").write_text("ref\n")
+    assert mig._trees_equal(a, b) is True
+
+
+def test_trees_equal_false_for_nested_content_diff(tmp_path):
+    mig = _migcmd()
+    a = tmp_path / "a"
+    b = tmp_path / "b"
+    for root in (a, b):
+        (root / "sub").mkdir(parents=True)
+        (root / "SKILL.md").write_text("# s\n")
+    (a / "sub" / "ref.md").write_text("one\n")
+    (b / "sub" / "ref.md").write_text("two\n")
+    assert mig._trees_equal(a, b) is False
+
+
+def test_trees_equal_false_for_extra_file(tmp_path):
+    mig = _migcmd()
+    a = tmp_path / "a"
+    b = tmp_path / "b"
+    a.mkdir()
+    b.mkdir()
+    (a / "SKILL.md").write_text("# s\n")
+    (b / "SKILL.md").write_text("# s\n")
+    (a / "extra.md").write_text("x\n")
+    assert mig._trees_equal(a, b) is False
+
+
+def test_trees_equal_ignores_git_at_any_depth(tmp_path):
+    mig = _migcmd()
+    a = tmp_path / "a"
+    b = tmp_path / "b"
+    for root in (a, b):
+        root.mkdir()
+        (root / "SKILL.md").write_text("# s\n")
+    # A nested .git dir present only in `a` must not cause drift.
+    (a / "sub" / ".git").mkdir(parents=True)
+    (a / "sub" / ".git" / "HEAD").write_text("ref\n")
+    (a / "sub").mkdir(exist_ok=True)
+    (a / "sub" / "keep.md").write_text("k\n")
+    (b / "sub").mkdir()
+    (b / "sub" / "keep.md").write_text("k\n")
+    assert mig._trees_equal(a, b) is True

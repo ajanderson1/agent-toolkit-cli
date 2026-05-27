@@ -263,7 +263,14 @@ def write_lock(path: Path, lock: LockFile) -> None:
     if lock.version == 3:
         for k, v in lock.wrapper_extras.items():
             body[k] = v
-    path.write_text(json.dumps(body, indent=2) + "\n")
+    # Atomic write: a crash mid-write must not truncate the lock and lose every
+    # skill (read_lock returns an empty lock on JSONDecodeError). Write to a
+    # sibling temp file, then os.replace into place — replace is atomic on the
+    # same filesystem.
+    text = json.dumps(body, indent=2) + "\n"
+    tmp = path.with_name(f".{path.name}.tmp")
+    tmp.write_text(text)
+    os.replace(tmp, path)
 
 
 def add_entry(lock: LockFile, slug: str, entry: LockEntry) -> LockFile:

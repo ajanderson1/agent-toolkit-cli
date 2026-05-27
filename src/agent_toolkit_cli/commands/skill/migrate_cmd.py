@@ -9,6 +9,7 @@ See docs/superpowers/specs/2026-05-27-migrate-to-monorepo-design.md.
 from __future__ import annotations
 
 import filecmp
+import os
 import shutil
 from pathlib import Path
 
@@ -16,7 +17,6 @@ import click
 
 from agent_toolkit_cli import skill_git
 from agent_toolkit_cli.skill_install import (
-    InstallError,
     InstallPlan,
     apply as engine_apply,
 )
@@ -67,12 +67,13 @@ def _migrate_one(
     dry_run: bool,
     migrated: list[str],
     skipped: list[tuple[str, str]],
+    skipped_warnings: list[str],
 ) -> LockFile:
     """Migrate a single eligible skill; return the (possibly updated) lock.
 
-    Appends to `migrated`/`skipped` as a side effect. Raising propagates to the
-    caller, which records the failure and moves on — one skill never aborts the
-    rest (spec: per-skill independence).
+    Appends to `migrated`/`skipped`/`skipped_warnings` as a side effect.
+    Raising propagates to the caller, which records the failure and moves on —
+    one skill never aborts the rest (spec: per-skill independence).
     """
     subpath = monorepo_subpath_for(slug)
     mono_skill = parent_dir / subpath
@@ -103,12 +104,13 @@ def _migrate_one(
         migrated.append(slug)
         return lock
 
-    # Layer 3: verify the replacement symlink first, then write the
-    # (reversible) lock, then do the irreversible delete + swap LAST.
     new_entry = migrated_entry(
         entry, slug=slug, parent_source=parent_source,
         parent_url=parent_url, parent_sha=parent_sha,
     )
+
+    # Build + verify the replacement symlink before touching the clone, so a
+    # broken monorepo target aborts BEFORE any destructive step.
     tmp_link = clone.parent / f".{slug}.migrating"
     if tmp_link.exists() or tmp_link.is_symlink():
         tmp_link.unlink()
@@ -118,25 +120,91 @@ def _migrate_one(
         skipped.append((slug, "symlink verification failed"))
         return lock
 
-    # Reversible step first.
+    # Crash-safe swap. The old code did `rmtree(clone); rename(tmp_link, clone)`
+    # — a failure between them destroyed the clone (and its git history) while
+    # the lock already claimed migration, with no repair path. Instead move the
+    # clone aside to a trash sidecar with an atomic `os.replace`, swap the
+    # verified symlink in (also atomic), then delete the trash. A failure at any
+    # step leaves either the original clone or a recoverable trash dir, and the
+    # lock is only written once the swap has fully succeeded.
+    trash = clone.parent / f".{slug}.trash"
+    if trash.exists() or trash.is_symlink():
+        _remove_path(trash)
+    os.replace(clone, trash)         # clone -> trash (clone slot now free)
+    try:
+        os.replace(tmp_link, clone)  # verified symlink -> clone slot
+    except OSError:
+        # Swap failed after moving the clone aside: restore the original and
+        # report. Nothing irreversible has been lost; the lock is untouched.
+        if tmp_link.exists() or tmp_link.is_symlink():
+            tmp_link.unlink()
+        os.replace(trash, clone)
+        raise
+    shutil.rmtree(trash)
+
+    # The swap succeeded — now record it. The lock write is last among the
+    # state changes that define "migrated", and is itself atomic (write_lock).
     lock = add_entry(lock, slug, new_entry)
     write_lock(lock_path, lock)
 
-    # Irreversible step last.
-    shutil.rmtree(clone)
-    tmp_link.rename(clone)
+    _reproject(slug, skipped_warnings)
+    migrated.append(slug)
+    return lock
 
+
+def _reproject(slug: str, skipped_warnings: list[str]) -> None:
+    """Re-project harness symlinks after a completed swap.
+
+    The migration is already done and irreversible by the time this runs, so a
+    failure here must NOT be re-routed into the failure bucket (the skill IS
+    migrated) and must NOT be a silent stderr warning under a clean banner.
+    Surface it loudly on stdout with a repair hint, and record it so the final
+    report tells the user which skills still need `skill doctor -g`.
+    """
     try:
         engine_apply(
             InstallPlan(slug=slug, scope="global", source=None, ref=None,
                         add_agents=(), remove_agents=()),
             home=None, project=None, env=None,
         )
-    except InstallError as exc:
-        click.echo(f"warning: reproject {slug} failed: {exc}", err=True)
+    except Exception as exc:  # noqa: BLE001 — post-swap: never fail the migration
+        click.echo(
+            f"migrated {slug} but reproject failed ({exc}); "
+            f"run `agent-toolkit-cli skill doctor -g` to repair its symlinks",
+        )
+        skipped_warnings.append(slug)
 
-    migrated.append(slug)
-    return lock
+
+def _remove_path(path: Path) -> None:
+    """Remove a path whether it is a symlink, file, or directory."""
+    if path.is_symlink() or path.is_file():
+        path.unlink()
+    elif path.is_dir():
+        shutil.rmtree(path)
+
+
+def _recover_leftovers(lock: LockFile) -> None:
+    """Reconcile `.{slug}.migrating` leftovers from a crashed prior run.
+
+    A crash mid-swap (old code) could leave a `.{slug}.migrating` symlink and a
+    missing clone while the lock already records the migration. Such a skill is
+    no longer `is_migratable`, so the main loop skips it forever. Here, before
+    the loop, complete the swap for any leftover whose clone slot is free, or
+    drop a stale leftover whose clone is intact.
+    """
+    for slug, entry in lock.skills.items():
+        leftover = library_skill_path(slug).parent / f".{slug}.migrating"
+        if not (leftover.is_symlink() or leftover.exists()):
+            continue
+        clone = library_skill_path(slug)
+        clone_present = clone.exists() or clone.is_symlink()
+        if not clone_present and entry.parent_url is not None:
+            # Half-migrated: finish the swap.
+            os.replace(leftover, clone)
+            click.echo(f"recovered interrupted migration of {slug}")
+        else:
+            # Clone intact (or not a migrated entry): the leftover is stale.
+            leftover.unlink()
 
 
 @click.command("migrate-to-monorepo", epilog="""\
@@ -183,8 +251,14 @@ def migrate_cmd(parent: str, dry_run: bool) -> None:
     lock_path = library_lock_path()
     lock = read_lock(lock_path)
 
+    if not dry_run:
+        # Reconcile any half-migrated leftovers from a crashed prior run before
+        # the main loop, since a half-migrated entry is no longer migratable.
+        _recover_leftovers(lock)
+
     migrated: list[str] = []
     skipped: list[tuple[str, str]] = []
+    skipped_warnings: list[str] = []  # migrated, but reproject failed
 
     for slug in sorted(lock.skills):
         entry = lock.skills[slug]
@@ -201,15 +275,17 @@ def migrate_cmd(parent: str, dry_run: bool) -> None:
                 parent_dir=parent_dir, parent_source=parent_source,
                 parent_url=parent_url, parent_sha=parent_sha,
                 dry_run=dry_run, migrated=migrated, skipped=skipped,
+                skipped_warnings=skipped_warnings,
             )
         except Exception as exc:  # noqa: BLE001 — boundary: report, don't abort
             skipped.append((slug, f"error: {exc}"))
 
-    _report(migrated, skipped, dry_run)
+    _report(migrated, skipped, skipped_warnings, dry_run)
 
 
 def _report(
-    migrated: list[str], skipped: list[tuple[str, str]], dry_run: bool,
+    migrated: list[str], skipped: list[tuple[str, str]],
+    skipped_warnings: list[str], dry_run: bool,
 ) -> None:
     prefix = "Would migrate" if dry_run else "Migrated"
     if migrated:
@@ -218,5 +294,12 @@ def _report(
         click.echo(f"Skipped {len(skipped)}:")
         for slug, hint in skipped:
             click.echo(f"  {slug} — {hint}")
+    if skipped_warnings:
+        click.echo(
+            f"Reproject failed for {len(skipped_warnings)} "
+            f"(migrated, symlinks need repair): "
+            f"{', '.join(skipped_warnings)} — run "
+            f"`agent-toolkit-cli skill doctor -g`",
+        )
     if not migrated and not skipped:
         click.echo("Nothing to migrate (no owned per-skill entries).")
