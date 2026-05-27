@@ -142,3 +142,42 @@ def test_owned_status_subpath_scoped_and_marked(tmp_path, monkeypatch):
     (clone / sub / "SKILL.md").write_text("edited mkdocs\n")
     r3 = CliRunner().invoke(cli, ["skill", "status", "mkdocs", "-g"])
     assert "dirty" in r3.output
+
+
+def test_owned_update_merges_not_resets_local_edits(tmp_path, monkeypatch):
+    """skill update on an owned monorepo must NOT discard a local committed
+    edit in the parent clone — it fetches + merges, never resets."""
+    from agent_toolkit_cli.skill_paths import parent_clone_path
+
+    parent_url, parent = _setup_parent(tmp_path, monkeypatch)
+    _add_owned(parent_url, "mkdocs")
+    entry = _lock()["skills"]["mkdocs"]
+    sub = entry["skillPath"]
+    owner, repo = entry["source"].split("/", 1)
+    clone = parent_clone_path(owner, repo, ref=entry.get("ref"), env=None)
+
+    # Commit a local edit in the clone (a self-improvement not yet pushed).
+    marker = clone / sub / "LOCAL_EDIT.md"
+    marker.write_text("local self-improvement\n")
+    env = scrub_git_env()
+    for cmd in (
+        ["git", "-C", str(clone), "add", "--", sub],
+        ["git", "-C", str(clone), "-c", "user.email=t@t", "-c", "user.name=t",
+         "commit", "-q", "-m", "local edit"],
+    ):
+        subprocess.run(cmd, check=True, env=env)
+
+    # Advance the upstream parent with an unrelated commit so update has
+    # something to merge.
+    (parent / "TOPLEVEL.md").write_text("upstream change\n")
+    for cmd in (
+        ["git", "-C", str(parent), "add", "."],
+        ["git", "-C", str(parent), "-c", "user.email=t@t", "-c", "user.name=t",
+         "commit", "-q", "-m", "upstream"],
+    ):
+        subprocess.run(cmd, check=True, env=env)
+
+    r = CliRunner().invoke(cli, ["skill", "update", "mkdocs", "-g"])
+    assert r.exit_code == 0, r.output
+    # The local edit survived the update (merge, not reset).
+    assert marker.exists(), "skill update discarded a local owned edit"
