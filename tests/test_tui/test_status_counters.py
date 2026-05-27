@@ -102,10 +102,8 @@ async def test_footer_pending_counts_three_harnesses():
         assert "Pending: 3" in _footer_text(app)
 
 
-@pytest.mark.asyncio
-async def test_pending_changed_message_carries_count():
-    grid = SkillGrid([_row("j")])
-    # Posting before mount is safe; the count travels with the message.
+def test_pending_changed_message_carries_count():
+    # The count travels with the message so the App can render "Pending: N".
     msg = SkillGrid.PendingChanged(2)
     assert msg.count == 2
 
