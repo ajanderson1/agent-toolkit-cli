@@ -10,6 +10,7 @@ Algorithm changes are explicitly out of scope for the issue.
 from __future__ import annotations
 
 import pytest
+from textual.coordinate import Coordinate
 from textual.widgets import DataTable, Input
 
 from agent_toolkit_tui.app import TUIApp
@@ -36,16 +37,11 @@ def _slugs(grid: SkillGrid) -> list[str]:
 
 @pytest.mark.asyncio
 async def test_visible_rows_substring():
-    grid = SkillGrid([_row("alpha"), _row("beta"), _row("gamma")],
-                     id="skill-grid")
     app = TUIApp()
     async with app.run_test() as pilot:
-        # Replace the app's grid rows so we control the data set.
-        app.query_one("#skill-grid", SkillGrid).set_rows(
-            [_row("alpha"), _row("beta"), _row("gamma")]
-        )
-        await pilot.pause()
         g = app.query_one("#skill-grid", SkillGrid)
+        g.set_rows([_row("alpha"), _row("beta"), _row("gamma")])
+        await pilot.pause()
         g.set_filter("a")
         await pilot.pause()
         # "a" appears in alpha, beta, gamma — all three.
@@ -191,3 +187,63 @@ async def test_tab_moves_focus_to_table():
         await pilot.pause()
         assert app.focused is not None
         assert app.focused.id == "skill-table"
+
+
+# ----- edge cases: cursor clamp + zero match -------------------------------
+
+@pytest.mark.asyncio
+async def test_toggle_after_filter_from_stale_high_cursor():
+    """Cursor parked on a high row, then a filter collapses the list — the
+    next toggle must hit the surviving *visible* row, not a stale index.
+
+    This is the headline cursor-index-drift risk: _rebuild clamps the cursor
+    to the visible range, and _toggle_at resolves against _visible_rows().
+    """
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        app._scope = "global"
+        g = app.query_one("#skill-grid", SkillGrid)
+        g.set_scope("global")
+        g.set_rows([_row("aaa"), _row("bbb"), _row("ccc"),
+                    _row("ddd"), _row("eee")])
+        await pilot.pause()
+        table = g.query_one("#skill-table", DataTable)
+        # Park the cursor on the last row's claude-code column.
+        cc_col = 1 + list(INTERACTIVE_AGENTS).index("claude-code")
+        table.cursor_coordinate = Coordinate(row=4, column=cc_col)
+        await pilot.pause()
+        # Collapse the list to a single row whose slug sorts first.
+        g.set_filter("aaa")
+        await pilot.pause()
+        assert [r.slug for r in g._visible_rows()] == ["aaa"]
+        # The cursor should have clamped into range; toggling hits "aaa".
+        table.focus()
+        g.action_toggle_cell()
+        await pilot.pause()
+        assert list(g.pending_entries().keys()) == [("global", "claude-code", "aaa")]
+
+
+@pytest.mark.asyncio
+async def test_zero_match_filter_is_safe_noop():
+    """A filter matching nothing renders an empty table; info/toggle no-op.
+
+    Guards the bounds checks in action_info / _toggle_at / _context_for when
+    _visible_rows() is empty — no crash, no spurious pending entry, no modal.
+    """
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        app._scope = "global"
+        g = app.query_one("#skill-grid", SkillGrid)
+        g.set_scope("global")
+        g.set_rows([_row("alpha"), _row("beta"), _row("gamma")])
+        await pilot.pause()
+        g.set_filter("zzz-nomatch")
+        await pilot.pause()
+        assert g._visible_rows() == []
+        # No row to act on — these must be safe no-ops, not crashes.
+        g.action_toggle_cell()
+        g.action_info()
+        await pilot.pause()
+        assert g.pending_entries() == {}
+        # No CellInfoScreen / modal was pushed (still on the base screen).
+        assert app.screen is app.screen_stack[0]

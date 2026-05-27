@@ -21,6 +21,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical
 from textual.coordinate import Coordinate
+from textual.css.query import NoMatches
 from textual.message import Message
 from textual.widgets import DataTable, Input
 
@@ -68,7 +69,10 @@ class FilterInput(Input):
         if event.key in ("down", "tab"):
             try:
                 self.screen.query_one("#skill-table", DataTable).focus()
-            except Exception:
+            except NoMatches:
+                # No table to hand focus to (not mounted yet) — let the key
+                # fall through to the Input's default handling rather than
+                # swallowing it.
                 return
             event.stop()
             event.prevent_default()
