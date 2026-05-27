@@ -51,7 +51,7 @@ the synthetic `universal` entry). It is the contract Phase B implements against 
 each `supported` row (mechanism = `symlink`/`translate`/`config_file`/`config_file+folder`/`dual-symlink`)
 becomes one adapter behaviour. Guarded by `tests/test_subagent_matrix.py`.
 Per-harness "what I checked" evidence trails and v1 baseline deltas live in
-`docs/agent-toolkit/research/subagent-fragments/`.
+`docs/agent-toolkit/research/subagent-fragments/`. Tracked in #252.
 
 **Summary (Phase A):** 28 supported · 11 unsupported (gap) · 10 unsupported (by design) · 5 unknown.
 
