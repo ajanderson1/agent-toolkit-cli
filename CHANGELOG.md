@@ -1,5 +1,22 @@
 # Changelog
 
+## [2.12.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.11.2...v2.12.0) (2026-05-26)
+
+
+### Features
+
+* **skill:** add import command skeleton (guard + notes) ([cc3b104](https://github.com/ajanderson1/agent-toolkit-cli/commit/cc3b1046646b9be183249d358368e4e3e4c8d5e2))
+* **skill:** cross-machine library sync via `skill import` ([40fe639](https://github.com/ajanderson1/agent-toolkit-cli/commit/40fe639f95d31e93c6808787e2b05d1d23f9188a))
+* **skill:** extract reconstruct_skill_into_library helper ([5432e48](https://github.com/ajanderson1/agent-toolkit-cli/commit/5432e48b1bd3cf57257889c6deed818811e6fa16))
+* **skill:** import adds new single-repo skill pinned to recorded sha ([a370ec0](https://github.com/ajanderson1/agent-toolkit-cli/commit/a370ec0379f3ed2961f7ba9155d60f9803a9a5ed))
+* **skill:** import reconstructs monorepo entries via parent symlink ([c879305](https://github.com/ajanderson1/agent-toolkit-cli/commit/c879305598a4841f4dca4e839f9c71af3e379f5f))
+
+
+### Documentation
+
+* skill import (cross-machine library sync) design spec ([98651df](https://github.com/ajanderson1/agent-toolkit-cli/commit/98651df4bc0c3426cdaa404b505cb170e4f14e2d))
+* skill import implementation plan ([a54d355](https://github.com/ajanderson1/agent-toolkit-cli/commit/a54d355c83a8ca2b8ceb4e753e23fad2b7839098))
+
 ## [2.11.2](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.11.1...v2.11.2) (2026-05-25)
 
 
