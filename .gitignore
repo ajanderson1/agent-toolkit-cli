@@ -27,3 +27,10 @@ assets/verification/
 # Audit run artifacts
 audit/.last-run.tsv
 audit/.*.log
+
+# Per-harness skill projection layer (symlinks + embedded clones into ~/.agent-toolkit)
+.agents/
+.pi/
+
+# cmux-pm overseer runtime state
+.cmux-pm/
