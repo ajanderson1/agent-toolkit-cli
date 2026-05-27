@@ -164,3 +164,108 @@ def test_migrated_entry_has_owned_monorepo_shape():
     assert new.local_sha is None
     assert new.read_only is False
     assert new.source_type == "github"
+
+
+def test_migrate_skips_sha_diverged(tmp_path, monkeypatch):
+    parent_url, _, _, env = _setup(tmp_path, monkeypatch, slugs=("journal",))
+    # Local commit in the clone so head != recorded upstream_sha.
+    clone = library_skill_path("journal")
+    (clone / "SKILL.md").write_text("# journal\nlocal edit\n")
+    _commit_all(clone, env, msg="local improvement")
+    r = CliRunner().invoke(cli, ["skill", "migrate-to-monorepo", parent_url])
+    assert r.exit_code == 0, r.output
+    entry = _lock()["skills"]["journal"]
+    assert entry["source"] == "ajanderson1/journal-skill"  # untouched
+    assert "parentUrl" not in entry
+    assert not library_skill_path("journal").is_symlink()  # clone preserved
+    assert "Skipped 1" in r.output
+    assert "journal" in r.output
+
+
+def test_migrate_skips_dirty_tree(tmp_path, monkeypatch):
+    parent_url, _, _, _ = _setup(tmp_path, monkeypatch, slugs=("journal",))
+    # Uncommitted edit: head == upstream_sha but tree dirty.
+    (library_skill_path("journal") / "SKILL.md").write_text("# journal\nWIP\n")
+    r = CliRunner().invoke(cli, ["skill", "migrate-to-monorepo", parent_url])
+    assert r.exit_code == 0, r.output
+    assert "parentUrl" not in _lock()["skills"]["journal"]
+    assert not library_skill_path("journal").is_symlink()
+    assert "Skipped 1" in r.output
+
+
+def test_migrate_skips_content_drift(tmp_path, monkeypatch):
+    parent_url, parent, _, env = _setup(tmp_path, monkeypatch, slugs=("journal",))
+    # Diverge the MONOREPO copy so it differs from the clean, in-sync clone.
+    (parent / "skills" / "journal" / "SKILL.md").write_text("# journal\nDRIFT\n")
+    _commit_all(parent, env, msg="monorepo drift")
+    r = CliRunner().invoke(cli, ["skill", "migrate-to-monorepo", parent_url])
+    assert r.exit_code == 0, r.output
+    assert "parentUrl" not in _lock()["skills"]["journal"]   # untouched
+    assert not library_skill_path("journal").is_symlink()    # clone preserved
+    assert "Skipped 1" in r.output
+
+
+def test_migrate_skips_owned_not_in_monorepo(tmp_path, monkeypatch):
+    # Monorepo has only journal; repo-recon owned entry exists but isn't folded.
+    parent_url, parent, _, env = _setup(tmp_path, monkeypatch, slugs=("journal",))
+    clone = library_skill_path("repo-recon")
+    clone.mkdir(parents=True)
+    (clone / "SKILL.md").write_text("# repo-recon\n")
+    _git(["init", "-q", "-b", "main"], clone, env)
+    _commit_all(clone, env)
+    sha = subprocess.run(["git", "-C", str(clone), "rev-parse", "HEAD"],
+                         check=True, capture_output=True, text=True,
+                         env=env).stdout.strip()
+    cur = _lock()
+    cur["skills"]["repo-recon"] = {
+        "source": "ajanderson1/repo-recon-skill", "sourceType": "github",
+        "skillPath": "SKILL.md", "upstreamSha": sha, "localSha": sha,
+    }
+    library_lock_path().write_text(json.dumps(cur, indent=2) + "\n")
+    r = CliRunner().invoke(cli, ["skill", "migrate-to-monorepo", parent_url])
+    assert r.exit_code == 0, r.output
+    assert "parentUrl" in _lock()["skills"]["journal"]        # migrated
+    assert "parentUrl" not in _lock()["skills"]["repo-recon"] # skipped
+    assert not library_skill_path("repo-recon").is_symlink()
+    assert "Migrated 1" in r.output
+    assert "Skipped 1" in r.output
+
+
+def test_migrate_never_touches_third_party_readonly(tmp_path, monkeypatch):
+    parent_url, _, _, _ = _setup(tmp_path, monkeypatch, slugs=("journal",))
+    cur = _lock()
+    cur["skills"]["pdf"] = {
+        "source": "anthropics/skills", "sourceType": "github",
+        "skillPath": "skills/pdf", "upstreamSha": "x",
+        "parentUrl": "https://github.com/anthropics/skills", "readOnly": True,
+    }
+    library_lock_path().write_text(json.dumps(cur, indent=2) + "\n")
+    r = CliRunner().invoke(cli, ["skill", "migrate-to-monorepo", parent_url])
+    assert r.exit_code == 0, r.output
+    pdf = _lock()["skills"]["pdf"]
+    assert pdf["source"] == "anthropics/skills"   # untouched
+    assert pdf["readOnly"] is True
+
+
+def test_migrate_is_idempotent(tmp_path, monkeypatch):
+    parent_url, _, _, _ = _setup(tmp_path, monkeypatch, slugs=("journal",))
+    r1 = CliRunner().invoke(cli, ["skill", "migrate-to-monorepo", parent_url])
+    assert r1.exit_code == 0, r1.output
+    assert "Migrated 1" in r1.output
+    # Second run: journal now has parentUrl -> ineligible -> no-op.
+    r2 = CliRunner().invoke(cli, ["skill", "migrate-to-monorepo", parent_url])
+    assert r2.exit_code == 0, r2.output
+    assert "Migrated 1" not in r2.output
+    assert library_skill_path("journal").is_symlink()  # still a symlink
+    assert "parentUrl" in _lock()["skills"]["journal"]
+
+
+def test_migrate_dry_run_writes_nothing(tmp_path, monkeypatch):
+    parent_url, _, _, _ = _setup(tmp_path, monkeypatch, slugs=("journal",))
+    r = CliRunner().invoke(
+        cli, ["skill", "migrate-to-monorepo", parent_url, "--dry-run"])
+    assert r.exit_code == 0, r.output
+    assert "Would migrate 1" in r.output
+    entry = _lock()["skills"]["journal"]
+    assert "parentUrl" not in entry                       # nothing written
+    assert not library_skill_path("journal").is_symlink()  # clone intact
