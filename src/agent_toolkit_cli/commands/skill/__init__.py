@@ -215,10 +215,13 @@ Examples:
 @click.option("--ref", default=None, help="Branch or tag to clone.")
 @click.option("--skill", "skill_name_flag", default=None,
               help="Pick one skill from a monorepo by SKILL.md `name:`.")
+@click.option("--owned", is_flag=True,
+              help="Treat the monorepo parent as owned (writable). Implied "
+                   "for known owned owners; this forces it for any parent.")
 @click.pass_context
 def add(
     ctx: click.Context, source: str, slug: str | None,
-    ref: str | None, skill_name_flag: str | None,
+    ref: str | None, skill_name_flag: str | None, owned: bool,
 ) -> None:
     """Add SOURCE to the library.
 
@@ -247,8 +250,14 @@ def add(
         parsed = dataclasses.replace(parsed, skill_name=skill_name_flag)
 
     if parsed.subpath or parsed.skill_name:
-        _add_monorepo(parsed, slug)
+        _add_monorepo(parsed, slug, owned=owned)
     else:
+        if owned:
+            raise click.UsageError(
+                "--owned only applies to a monorepo add (use --skill, a "
+                "subpath, or owner/repo/<path>); a single-skill repo is "
+                "pushed via its own remote."
+            )
         _add_single(parsed, slug)
 
 
@@ -305,15 +314,17 @@ def _add_single(parsed: ParsedSource, slug: str | None) -> None:
     click.echo(f"added {slug} to library <- {parsed.url}")
 
 
-def _add_monorepo(parsed: ParsedSource, slug: str | None) -> None:
+def _add_monorepo(parsed: ParsedSource, slug: str | None, *, owned: bool = False) -> None:
     """Clone parent, resolve subpath, symlink library canonical into it."""
     from agent_toolkit_cli.skill_install import _symlink_or_copy
     from agent_toolkit_cli.skill_lock import LockEntry, add_entry, read_lock, write_lock
+    from agent_toolkit_cli.skill_ownership import is_owned_owner
     from agent_toolkit_cli.skill_paths import parent_clone_path
 
     if parsed.owner_repo is None:
         raise click.UsageError("monorepo source must resolve to owner/repo")
     owner, repo = parsed.owner_repo.split("/", 1)
+    owned_flag = owned or is_owned_owner(owner)
 
     parent_dir = parent_clone_path(owner, repo, ref=parsed.ref, env=None)
     if not parent_dir.exists():
@@ -379,7 +390,7 @@ def _add_monorepo(parsed: ParsedSource, slug: str | None) -> None:
         upstream_sha=parent_sha,
         local_sha=None,
         parent_url=parsed.url,
-        read_only=True,
+        read_only=not owned_flag,
         extras={"materialised": materialised} if materialised == "copy" else {},
     )
     write_lock(lock_path, add_entry(lock, final_slug, entry))
