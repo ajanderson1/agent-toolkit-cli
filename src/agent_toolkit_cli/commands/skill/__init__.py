@@ -63,8 +63,19 @@ def _reconstruct_single(
     library_dir = library_skill_path(slug)
     if not library_dir.exists():
         library_dir.parent.mkdir(parents=True, exist_ok=True)
-        skill_git.clone(parsed.url, library_dir, ref=parsed.ref, env=None)
+        # Shallow clone — import only ever needs one commit's tree, never the
+        # full history (#259). A fat monorepo source (pinchtab: 32 MB) would
+        # otherwise dominate the whole run. `depth=1` no-ops to a full clone
+        # for plain-local-path sources (git ignores --depth there) — harmless,
+        # since real sources are https://github.com/... remotes.
+        skill_git.clone(
+            parsed.url, library_dir, ref=parsed.ref, env=None, depth=1,
+        )
     if pin_sha and skill_git.is_git_repo(library_dir):
+        # The depth-1 clone only holds branch HEAD's tree, so the pinned
+        # (possibly older) commit must be fetched before it can be checked
+        # out. fetch_ref of a SHA git already has is a cheap no-op.
+        skill_git.fetch_ref(library_dir, ref=pin_sha, env=None, depth=1)
         skill_git.checkout(library_dir, ref=pin_sha, env=None)
     if skill_git.is_git_repo(library_dir):
         upstream_sha = skill_git.remote_head_sha(
@@ -89,7 +100,11 @@ def _reconstruct_monorepo(
     parent_dir = parent_clone_path(owner, repo, ref=parsed.ref, env=None)
     if not parent_dir.exists():
         parent_dir.parent.mkdir(parents=True, exist_ok=True)
-        skill_git.clone(parsed.url, parent_dir, ref=parsed.ref, env=None)
+        # Shallow — the monorepo skill pins to parent HEAD and we only symlink
+        # one subpath's tree, so the parent's full history is pure waste (#259).
+        skill_git.clone(
+            parsed.url, parent_dir, ref=parsed.ref, env=None, depth=1,
+        )
     else:
         try:
             skill_git.fetch(parent_dir, env=None)

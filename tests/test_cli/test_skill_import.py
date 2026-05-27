@@ -58,8 +58,14 @@ def test_import_empty_file_imports_nothing_but_prints_notes(tmp_path, monkeypatc
     assert NOTE_AGENTS in result.output
 
 
-def _write_incoming_for(upstream: Path, slug: str, sha: str, dest: Path) -> Path:
-    """Write a v1 lock naming one single-repo skill pinned to `sha`."""
+def _write_incoming_for(
+    upstream: Path | str, slug: str, sha: str, dest: Path
+) -> Path:
+    """Write a v1 lock naming one single-repo skill pinned to `sha`.
+
+    `upstream` may be a path or a `file://` URL string — passed through to the
+    lock's `source` verbatim (don't wrap a `file://` URL in Path, which
+    collapses the `//` and makes git misread `file:` as an ssh host)."""
     dest.write_text(json.dumps({
         "version": 1,
         "skills": {
@@ -304,6 +310,170 @@ def test_import_persists_lock_incrementally_before_abort(
     lock = json.loads((library_root.parent / "skills-lock.json").read_text())
     assert "aaa" in lock["skills"], "incremental write should record the landed skill"
     assert "zzz" not in lock["skills"]
+
+
+def _is_shallow(repo: Path) -> bool:
+    import subprocess
+    out = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "--is-shallow-repository"],
+        check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    return out == "true"
+
+
+def test_import_single_pinned_old_sha_lands_exact_tree(
+    make_behind, tmp_path, monkeypatch
+):
+    """The bug's core: import a single-repo skill pinned to a NON-HEAD older
+    commit. A naive `clone --depth=1 + checkout <old_sha>` fails ('unable to
+    read tree'); the fetch-pin-then-checkout path must land that exact commit
+    with the right tree (#259)."""
+    from agent_toolkit_cli import skill_git
+
+    sandbox = make_behind  # upstream advanced one commit past the clone's HEAD
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+
+    old_sha = skill_git.head_sha(sandbox.clone, env=None)  # the seed commit
+    # file:// so --depth genuinely shallows (plain local paths ignore --depth),
+    # mirroring the https://github.com/... URLs import resolves in production.
+    incoming = _write_incoming_for(
+        f"file://{sandbox.upstream}", "demo", old_sha,
+        tmp_path / "incoming.json",
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["skill", "import", str(incoming)])
+    assert result.exit_code == 0, result.output
+    assert "1 added" in result.output
+
+    landed = library_root / "demo"
+    assert skill_git.head_sha(landed, env=None) == old_sha
+    # The pinned (old) commit's tree: seed had SKILL.md but NOT the advance file.
+    assert (landed / "SKILL.md").exists()
+    assert not (landed / "UPSTREAM.md").exists(), (
+        "landed tree must be the pinned old commit, not upstream HEAD"
+    )
+
+
+def test_import_single_records_unchanged_shas(make_behind, tmp_path, monkeypatch):
+    """Shallow path preserves SHA semantics: localSha = pinned commit,
+    upstreamSha = branch tip (#259)."""
+    from agent_toolkit_cli import skill_git
+
+    sandbox = make_behind
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+
+    old_sha = skill_git.head_sha(sandbox.clone, env=None)
+    incoming = _write_incoming_for(
+        f"file://{sandbox.upstream}", "demo", old_sha,
+        tmp_path / "incoming.json",
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["skill", "import", str(incoming)])
+    assert result.exit_code == 0, result.output
+
+    lock = json.loads((library_root.parent / "skills-lock.json").read_text())
+    entry = lock["skills"]["demo"]
+    assert entry["localSha"] == old_sha, "localSha = pinned commit"
+    # upstreamSha = branch tip, which is strictly newer than the pinned sha.
+    assert entry["upstreamSha"] != old_sha, "upstreamSha = branch tip"
+    landed_branch_tip = skill_git.remote_head_sha(
+        library_root / "demo", ref="main", env=None
+    )
+    assert entry["upstreamSha"] == landed_branch_tip
+
+
+def test_import_single_clone_is_shallow(make_behind, tmp_path, monkeypatch):
+    """End-to-end proof the perf fix engaged: the imported library clone is
+    shallow (#259)."""
+    from agent_toolkit_cli import skill_git
+
+    sandbox = make_behind
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+
+    old_sha = skill_git.head_sha(sandbox.clone, env=None)
+    incoming = _write_incoming_for(
+        f"file://{sandbox.upstream}", "demo", old_sha,
+        tmp_path / "incoming.json",
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["skill", "import", str(incoming)])
+    assert result.exit_code == 0, result.output
+    assert _is_shallow(library_root / "demo") is True
+
+
+def test_import_latest_single_is_shallow_branch_head(
+    make_behind, tmp_path, monkeypatch
+):
+    """`--latest` lands branch HEAD as a shallow clone (#259)."""
+    from agent_toolkit_cli import skill_git
+
+    sandbox = make_behind
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+
+    old_sha = skill_git.head_sha(sandbox.clone, env=None)
+    incoming = _write_incoming_for(
+        f"file://{sandbox.upstream}", "demo", old_sha,
+        tmp_path / "incoming.json",
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main, ["skill", "import", str(incoming), "--latest"]
+    )
+    assert result.exit_code == 0, result.output
+
+    landed = library_root / "demo"
+    assert skill_git.head_sha(landed, env=None) != old_sha, "should be HEAD"
+    assert (landed / "UPSTREAM.md").exists(), "branch HEAD has the advance file"
+    assert _is_shallow(landed) is True
+
+
+def test_import_monorepo_clone_is_shallow(tmp_path, monkeypatch):
+    """Monorepo parent clone is shallow and the subpath tree materialises (#259)."""
+    from tests.test_cli.test_skill_update_monorepo import _init_parent
+    parent = _init_parent(tmp_path)
+    library_root = tmp_path / "lib" / "skills"
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+
+    incoming = tmp_path / "incoming.json"
+    incoming.write_text(json.dumps({
+        "version": 1,
+        "skills": {
+            "mkdocs": {
+                "source": f"local/{parent.name}",
+                "sourceType": "git",
+                "skillPath": "mkdocs",
+                "parentUrl": f"file://{parent}",
+                "readOnly": True,
+            }
+        },
+    }))
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["skill", "import", str(incoming)])
+    assert result.exit_code == 0, result.output
+    assert (library_root / "mkdocs" / "SKILL.md").exists()
+
+    # The parent clone (symlink target's repo) must be shallow.
+    from agent_toolkit_cli.skill_paths import parent_clone_path
+    owner, repo = f"local/{parent.name}".split("/", 1)
+    parent_dir = parent_clone_path(owner, repo, ref=None, env=None)
+    assert _is_shallow(parent_dir) is True
 
 
 def test_import_appears_in_skill_help():
