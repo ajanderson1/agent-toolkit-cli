@@ -1,4 +1,4 @@
-"""Pure path-computation helpers for the skill lock-file model.
+"""Skill-flavoured facade over `_paths_core.py`.
 
 v2.2 model — library vs install:
 
@@ -14,14 +14,25 @@ v2.2 model — library vs install:
   canonical_skill_dir(slug, scope='global') now delegates to library_skill_path.
   canonical_skill_dir(slug, scope='project') is unchanged.
   The `home` parameter is accepted but IGNORED at global scope (legacy callers).
+
+Public symbols (`canonical_skill_dir`, `lock_file_path`, `library_root`,
+`library_skill_path`, `library_lock_path`, `project_id`,
+`project_store_root`, `project_parents_root`, `parent_clone_path`,
+`agent_projection_dir`, `harness_projection_dir`, `SUPPORTED_HARNESSES`,
+`Scope`) are preserved verbatim — implementations delegate to
+`_paths_core` where the binding-driven helpers live.
 """
 from __future__ import annotations
 
 import hashlib
-import os
 from pathlib import Path
 from typing import Literal
 
+from agent_toolkit_cli._paths_core import (
+    SKILL_BINDING,
+    library_lock_path_for_kind,
+    library_root_for_kind,
+)
 from agent_toolkit_cli.skill_agents import AGENTS, UnknownAgentError
 
 Scope = Literal["project", "global"]
@@ -35,6 +46,29 @@ def _root(scope: Scope, home: Path | None, project: Path | None) -> Path:
     if project is None:
         raise ValueError("project scope requires project")
     return project
+
+
+def library_root(env: dict[str, str] | None = None) -> Path:
+    """Return the root of the global skill library.
+
+    Thin shim over `_paths_core.library_root_for_kind(SKILL_BINDING, …)`.
+    Honors $AGENT_TOOLKIT_SKILLS_ROOT for backward compatibility.
+    """
+    return library_root_for_kind(SKILL_BINDING, env)
+
+
+def library_skill_path(slug: str, *, env: dict[str, str] | None = None) -> Path:
+    """Return the canonical library path for a single skill slug."""
+    return library_root(env) / slug
+
+
+def library_lock_path(env: dict[str, str] | None = None) -> Path:
+    """Return the path of the global skills-lock.json for v2.2+.
+
+    Thin shim over `_paths_core.library_lock_path_for_kind(SKILL_BINDING, …)`.
+    Lives at <library_root>.parent / "skills-lock.json" by default.
+    """
+    return library_lock_path_for_kind(SKILL_BINDING, env)
 
 
 def canonical_skill_dir(
@@ -70,35 +104,15 @@ def lock_file_path(
     Global scope: delegates to library_lock_path(). The `home` parameter is
     accepted for backward compatibility but ignored.
 
-    Project scope: <project>/skills-lock.json (unchanged from v2.1).
+    Project scope: <project>/<binding.lock_filename> — uses the binding so
+    PR2's agent lock at project scope lands at <project>/agents-lock.json
+    automatically.
     """
     if scope == "global":
         return library_lock_path()
     if project is None:
         raise ValueError("project scope requires project")
-    return project / "skills-lock.json"
-
-
-def library_root(env: dict[str, str] | None = None) -> Path:
-    """Return the root of the global skill library.
-
-    Respects $AGENT_TOOLKIT_SKILLS_ROOT when set to a non-empty, non-whitespace
-    string.  Falls back to ~/.agent-toolkit/skills/.
-
-    The `env` parameter exists so callers can inject a fake environment in
-    tests without monkeypatching os.environ.
-    """
-    resolved = (env if env is not None else os.environ).get(
-        "AGENT_TOOLKIT_SKILLS_ROOT", ""
-    ).strip()
-    if resolved:
-        return Path(resolved)
-    return Path.home() / ".agent-toolkit" / "skills"
-
-
-def library_skill_path(slug: str, *, env: dict[str, str] | None = None) -> Path:
-    """Return the canonical library path for a single skill slug."""
-    return library_root(env) / slug
+    return project / SKILL_BINDING.lock_filename
 
 
 def project_id(project: Path) -> str:
@@ -135,41 +149,15 @@ def parent_clone_path(
     env: dict[str, str] | None = None,
     root: Path | None = None,
 ) -> Path:
-    """Where a monorepo parent is cloned, shared across all skills from it.
-
-    Global scope (root=None): <library_root>/_parents/<owner>/<repo>[@<ref>]/
-    so the cache is inside the AGENT_TOOLKIT_SKILLS_ROOT blast radius and
-    travels with --toolkit-repo overrides.
-
-    Project scope: pass root=project_store_root(project) (see project_parents_root)
-    so the cache is <store_root>/_parents/<owner>/<repo>[@<ref>]/.
-    """
-    # env is only consulted when root is None (global scope).
+    """Where a monorepo parent is cloned, shared across all skills from it."""
     base = root if root is not None else library_root(env)
     leaf = repo if ref is None else f"{repo}@{ref}"
     return base / "_parents" / owner / leaf
 
 
 def project_parents_root(project: Path) -> Path:
-    """Root under which a project's monorepo `_parents/` cache lives.
-
-    This is the per-project external store (project_store_root), the same
-    directory that holds project canonical skill dirs. Passed as `root=` to
-    parent_clone_path().
-    """
+    """Root under which a project's monorepo `_parents/` cache lives."""
     return project_store_root(project)
-
-
-def library_lock_path(env: dict[str, str] | None = None) -> Path:
-    """Return the path of the global skills-lock.json for v2.2+.
-
-    Lives at <library_root>.parent / "skills-lock.json", i.e.
-    ~/.agent-toolkit/skills-lock.json by default.
-
-    DO NOT confuse with lock_file_path(), which returns the skills.sh-compatible
-    path (~/.agents/.skill-lock.json).  That function is unchanged until Phase 2-6.
-    """
-    return library_root(env).parent / "skills-lock.json"
 
 
 def agent_projection_dir(
@@ -181,15 +169,11 @@ def agent_projection_dir(
         raise UnknownAgentError(agent_name)
     cfg = AGENTS[agent_name]
     if scope == "global":
-        # global_skills_dir is absolute; ignore home (resolved at import time).
         return cfg.global_skills_dir / slug
     project_root = _root(scope, home, project)
     return project_root / cfg.skills_dir / slug
 
 
-# Backwards-compatible aliases for the v2.0.0 5-harness shortcut. These
-# resolve to the same agent_projection_dir() and use skills.sh's canonical
-# agent names internally.
 _SHORTCUT_TO_AGENT = {
     "claude":   "claude-code",
     "codex":    "codex",
@@ -205,8 +189,7 @@ def harness_projection_dir(
     harness: str, slug: str, *,
     scope: Scope, home: Path | None, project: Path | None,
 ) -> Path:
-    """Legacy 5-harness shortcut → agent_projection_dir(). Used by older code
-    paths and tests; new code should call agent_projection_dir() directly."""
+    """Legacy 5-harness shortcut → agent_projection_dir()."""
     if harness not in _SHORTCUT_TO_AGENT:
         raise ValueError(f"unknown harness: {harness}")
     return agent_projection_dir(
