@@ -17,7 +17,8 @@ from agent_toolkit_cli.skill_agents import (
 
 def test_catalog_has_55_entries():
     """54 real agents + 1 synthetic 'universal' pseudo-entry."""
-    assert len(AGENTS) == 55
+    # +1 for general-skill (PR1 of v3.0.0, coexists with universal)
+    assert len(AGENTS) == 56
 
 
 def test_every_entry_key_matches_its_name():
@@ -82,3 +83,28 @@ def test_well_known_universality():
     assert is_universal("gemini-cli") is True
     assert is_universal("claude-code") is False
     assert is_universal("pi") is False
+
+
+def test_general_skill_entry_exists_and_resolves_to_dotagents_skills():
+    from agent_toolkit_cli.skill_agents import AGENTS
+    assert "general-skill" in AGENTS
+    cfg = AGENTS["general-skill"]
+    assert cfg.skills_dir == ".agents/skills"
+    assert cfg.show_in_universal_list is False
+    assert cfg.is_universal is True  # by skills_dir membership
+
+
+def test_universal_and_general_skill_coexist_with_same_dir():
+    """PR1 ships both. The `universal` synthetic is removed in PR3."""
+    from agent_toolkit_cli.skill_agents import AGENTS
+    assert AGENTS["universal"].skills_dir == AGENTS["general-skill"].skills_dir
+    assert AGENTS["universal"].global_skills_dir == AGENTS["general-skill"].global_skills_dir
+
+
+def test_get_universal_agents_does_not_include_general_skill():
+    """Both `universal` and `general-skill` set show_in_universal_list=False,
+    so neither appears in the legacy 'universal agents' listing."""
+    from agent_toolkit_cli.skill_agents import get_universal_agents
+    listed = get_universal_agents()
+    assert "universal" not in listed
+    assert "general-skill" not in listed

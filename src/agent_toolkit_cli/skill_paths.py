@@ -149,7 +149,16 @@ def parent_clone_path(
     env: dict[str, str] | None = None,
     root: Path | None = None,
 ) -> Path:
-    """Where a monorepo parent is cloned, shared across all skills from it."""
+    """Where a monorepo parent is cloned, shared across all skills from it.
+
+    Global scope (root=None): <library_root>/_parents/<owner>/<repo>[@<ref>]/
+    so the cache is inside the AGENT_TOOLKIT_SKILLS_ROOT blast radius and
+    travels with --toolkit-repo overrides.
+
+    Project scope: pass root=project_store_root(project) (see project_parents_root)
+    so the cache is <store_root>/_parents/<owner>/<repo>[@<ref>]/.
+    """
+    # env is only consulted when root is None (global scope).
     base = root if root is not None else library_root(env)
     leaf = repo if ref is None else f"{repo}@{ref}"
     return base / "_parents" / owner / leaf

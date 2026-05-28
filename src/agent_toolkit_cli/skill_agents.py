@@ -437,6 +437,14 @@ AGENTS: dict[str, AgentConfig] = {
         show_in_universal_list=False,
         detect_installed=lambda: False,
     ),
+    "general-skill": AgentConfig(
+        name="general-skill",
+        display_name="General (skills)",
+        skills_dir=".agents/skills",
+        global_skills_dir=XDG_CONFIG / "agents/skills",
+        show_in_universal_list=False,
+        detect_installed=lambda: False,
+    ),
 }
 
 
