@@ -58,9 +58,10 @@ def test_canonical_agent_dir_project(tmp_path):
     project = tmp_path / "proj"
     project.mkdir()
     canonical = agent_paths.canonical_agent_dir("foo", scope="project", project=project)
-    # External store; specifics defined by project_store_root.
-    assert canonical.name == "foo"
-    assert "projects" in str(canonical)
+    # Pin the exact path: must equal project_store_root(project) / slug, not
+    # merely "any path with 'projects' in it" (that substring check would
+    # silently accept e.g. /tmp/old-projects-archive/foo).
+    assert canonical == agent_paths.project_store_root(project) / "foo"
 
 
 def test_lock_file_path_global(tmp_path, monkeypatch):

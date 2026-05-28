@@ -2,6 +2,8 @@
 
 v3.0.0 PR2 — mirrors `skill_paths.py` for the agent (subagent) kind.
 
+v3.0.0 model — library vs install:
+
   Global scope canonical lives in the library at
   ~/.agent-toolkit/agents/<slug>/. Each library entry is a real git
   working tree. Harnesses reach a library agent via a file/symlink/registry
@@ -30,6 +32,9 @@ from agent_toolkit_cli._paths_core import (
     library_root_for_kind,
 )
 # Shared helpers (independent of kind) re-exported from skill_paths.
+# Re-exporting (rather than hoisting into _paths_core) is deliberate: it
+# avoids touching PR1's frozen public surface mid-cycle. Hoist to a kind-
+# agnostic module once both facades have shipped and stabilised (PR3+).
 from agent_toolkit_cli.skill_paths import (
     SUPPORTED_HARNESSES,
     agent_projection_dir,
