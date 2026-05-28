@@ -127,6 +127,15 @@ def _current_linked_agents(
     home: Path | None, project: Path | None,
     universal_bundle_link: Callable[[str], Path] | None = None,
 ) -> tuple[str, ...]:
+    """Return agents whose symlink currently resolves to our canonical.
+
+    Includes the synthetic 'universal' bundle token at global scope when
+    `universal_bundle_link(slug)` is a symlink to the library canonical.
+    Synthetic catalog entries (`'universal'`, `'general-skill'`) are
+    skipped from the per-agent iteration — they're handled separately
+    (universal via the injected bundle link; general-skill via PR3's
+    rename).
+    """
     canonical = canonical_skill_dir(
         slug, scope=scope, home=home, project=project,
     )

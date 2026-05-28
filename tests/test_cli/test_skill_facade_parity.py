@@ -29,3 +29,47 @@ def test_skill_paths_public_surface_preserved():
     actual = set(dir(m))
     missing = SKILL_PATHS_PUBLIC - actual
     assert not missing, f"skill_paths lost public names: {sorted(missing)}"
+
+
+SKILL_INSTALL_PUBLIC = {
+    "InstallError",
+    "LockMismatchError",
+    "DirtyCanonicalError",
+    "InstallPlan",
+    "InstallResult",
+    "plan",
+    "apply",
+    "install",
+    "uninstall",
+    "migrate_project_canonical",
+    "ensure_project_canonical",
+    "_universal_bundle_link",     # used by tests + ensure_project_canonical
+    "_project_universal_link",    # used by ensure_project_canonical
+}
+
+
+def test_skill_install_public_surface_preserved():
+    import agent_toolkit_cli.skill_install as m
+    actual = set(dir(m))
+    missing = SKILL_INSTALL_PUBLIC - actual
+    assert not missing, f"skill_install lost public names: {sorted(missing)}"
+
+
+SKILL_LOCK_PUBLIC = {
+    "LockEntry",
+    "LockFile",
+    "SUPPORTED_VERSIONS",
+    "read_lock",
+    "write_lock",
+    "add_entry",
+    "remove_entry",
+    "clone_url_from_entry",
+    "_apply_insteadof",  # private but referenced in skill_import tests
+}
+
+
+def test_skill_lock_public_surface_preserved():
+    import agent_toolkit_cli.skill_lock as m
+    actual = set(dir(m))
+    missing = SKILL_LOCK_PUBLIC - actual
+    assert not missing, f"skill_lock lost public names: {sorted(missing)}"

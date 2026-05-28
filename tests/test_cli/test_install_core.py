@@ -5,8 +5,6 @@ code 'skill' anywhere; they do not exercise file-system side effects.
 """
 from __future__ import annotations
 
-import pytest
-
 from agent_toolkit_cli._install_core import (
     InstallError,
     LockMismatchError,
