@@ -1,7 +1,10 @@
 """AGENT_BINDING mirrors SKILL_BINDING for the agent kind."""
 from __future__ import annotations
 
+import dataclasses
 from pathlib import Path
+
+import pytest
 
 from agent_toolkit_cli._paths_core import (
     AGENT_BINDING,
@@ -25,8 +28,6 @@ def test_agent_binding_fields():
 
 
 def test_agent_binding_is_frozen():
-    import dataclasses
-    import pytest
     # Real check: trying to mutate raises FrozenInstanceError
     with pytest.raises(dataclasses.FrozenInstanceError):
         AGENT_BINDING.kind = "other"  # type: ignore[misc]
