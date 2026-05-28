@@ -70,6 +70,10 @@ def test_v3_writer_emits_agent_path(tmp_path):
     )
     lock = add_entry(lock, "foo", entry)
     write_lock(lock_path, lock)
+    body = json.loads(lock_path.read_text())
+    # agentPath must NOT appear at the wrapper level — it's a per-entry field.
+    assert "agentPath" not in body
+
 
     body = json.loads(lock_path.read_text())
     assert body["skills"]["foo"]["agentPath"] == "agents/foo.md"
@@ -136,6 +140,23 @@ def test_skill_path_and_agent_path_coexist(tmp_path):
     assert re.skills["skill1"].agent_path is None
     assert re.skills["agent1"].skill_path is None
     assert re.skills["agent1"].agent_path == "agents/foo.md"
+
+
+def test_skill_path_and_agent_path_on_same_entry(tmp_path):
+    """Both fields are first-class on the dataclass and round-trip together
+    on the SAME entry, not just on distinct entries (defends against a future
+    refactor that mutually excludes them)."""
+    lock_path = tmp_path / "mixed-entry.json"
+    lock = LockFile(version=3, skills={})
+    mixed = LockEntry(
+        source="ajanderson1/hybrid", source_type="github",
+        skill_path="SKILL.md", agent_path="agents/foo.md",
+    )
+    lock = add_entry(lock, "hybrid", mixed)
+    write_lock(lock_path, lock)
+    re = read_lock(lock_path)
+    assert re.skills["hybrid"].skill_path == "SKILL.md"
+    assert re.skills["hybrid"].agent_path == "agents/foo.md"
 
 
 def test_v1_writer_omits_agent_path_when_none(tmp_path):
