@@ -199,6 +199,12 @@ def _resolve_agents(agents_str: str, scope: str) -> tuple[str, ...]:
     unknown = [p for p in parts if p != "universal" and p not in AGENTS]
     if unknown:
         raise click.UsageError(f"unknown agent(s): {', '.join(unknown)}")
+    synthetic = [p for p in parts if p == "general-skill"]
+    if synthetic:
+        raise click.UsageError(
+            f"general-skill is a synthetic catalog entry, not a usable agent token: "
+            f"{', '.join(synthetic)}"
+        )
     return tuple(parts)
 
 
