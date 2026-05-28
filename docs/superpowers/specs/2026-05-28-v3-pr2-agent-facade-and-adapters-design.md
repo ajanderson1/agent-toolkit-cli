@@ -256,3 +256,153 @@ The writing-plans skill should produce a plan suitable for
 (facade × 3 modules; mechanism × 4 modules + their tests; parity test
 extension; scope guard; smoke harness; doc updates). TDD throughout.
 Fresh implementer subagent per task with two-stage review after each.
+
+---
+
+# Addendum: Risk resolution (research findings, 2026-05-28)
+
+This section documents the live verification of every assumption the spec
+above made. Each finding **overrides** any conflicting statement earlier
+in the spec. The five research clusters were dispatched as background
+subagents during the spec-acceptance gate; findings here are cited to
+upstream docs / source so PR3..PR5 inherit verified ground truth.
+
+## Spec-level corrections triggered by research
+
+These supersede earlier sections of this spec. Build phase MUST follow
+these, not the original text.
+
+### Correction A: Mechanism taxonomy collapses 4 → 3
+
+| Original spec | Verified mechanism | Why |
+|---|---|---|
+| `symlink` (14) | **`symlink` (15)** — gains `pi` | `pi` writes a single .md per slug to `~/.pi/agent/agents/`. No second write site. Phase A's "dual-symlink" was a misread of cross-harness convergence (which is a *read* convention, not a write convention). |
+| `translate` (9) | **`translate` (10)** — gains `codex` | Codex auto-discovers `~/.codex/agents/*.toml`. No `config.toml` registration. Adapter writes one TOML per agent — translate-class behaviour. |
+| `config_file+folder` (4) | **`config_file+folder` (3)** — loses `codex`, gains nothing | Now: `aider-desk`, `dexto`, `firebender`. `codex` moves out. |
+| `dual_symlink` (1) | **REMOVED** — empty group | `pi` was the only member; it's actually plain symlink. |
+
+**Build implication:** `agent_adapters/` package ships **three** mechanism
+modules: `symlink.py`, `translate.py`, `config_file_folder.py`. The
+`dual_symlink.py` file proposed in Decision 3 is NOT created.
+
+### Correction B: Lockfile `agent_path` is a real LockEntry field, NOT extras
+
+Original Decision 2 said "use `LockEntry.extras['agent_path']`". After
+re-reading `skill_lock.py`, `skill_path: str | None = None` is a real
+top-level field on `LockEntry`, serialised explicitly as `"skillPath"`
+in both v1 and v3. Adding `agent_path` to `extras` breaks symmetry.
+
+**Resolved:** add `agent_path: str | None = None` as a real top-level
+field on `LockEntry`. Serialise as `"agentPath"` (camelCase parity with
+`skillPath`, `sourceUrl`, `skillFolderHash`). Read it back in both
+`_entry_from_dict_v1` and `_entry_from_dict_v3`. Append `"agentPath"`
+to `_V1_ENTRY_FIELDS` and `_V3_ENTRY_FIELDS` so it's recognised as a
+known key (not stashed into `extras` on read).
+
+**Collision check (Cluster E):** vercel-labs/skills @ v1.5.9 has no
+`extras` bag, no `agent_path`/`agentPath`/`agent_file` key, no `agent`
+kind concept. Collision risk = **none**. `agentPath` camelCase matches
+upstream conventions in case vercel adopts an agent kind later.
+
+### Correction C: AgentConfig field name
+
+Original spec proposed `agent_mechanism` as the new field. To avoid
+overloading the word "agent" (which already means "harness" in this
+catalog AND now means "asset kind"), the field is renamed:
+
+**`agent_mechanism` → `subagent_mechanism`**.
+
+The field's domain (which harnesses support subagent installation, and
+how) makes "subagent" the precise term. The literal values stay the same:
+`Literal["symlink", "translate", "config_file_folder", "none"]`
+(dual_symlink dropped per Correction A).
+
+## Per-harness verified facts (28 cells)
+
+Format: harness name → mechanism, global path, project path, format,
+required frontmatter, key adapter quirks, citation.
+
+### symlink (15 cells — write single .md to harness's agents/ dir)
+
+| Harness | Global path | Project path | Format / required | Quirks | Cite |
+|---|---|---|---|---|---|
+| `augment` | `~/.augment/agents/<slug>.md` | `.augment/agents/<slug>.md` | md+frontmatter; `name` req | `tools`/`disabled_tools` mutually exclusive | Phase A batch-8 |
+| `claude-code` | `~/.claude/agents/<slug>.md` | `.claude/agents/<slug>.md` | md+frontmatter; `name`+`description` req | Recursive discovery; 15 optional fields; extras ignored | Phase A batch-1 |
+| `codebuddy` | `~/.codebuddy/agents/<slug>.md` | `.codebuddy/agents/<slug>.md` | md+frontmatter; `name`+`description` req | `name` must be lowercase+hyphens | Phase A batch-8 |
+| `command-code` | `~/.commandcode/agents/<slug>.md` | `.commandcode/agents/<slug>.md` | md+frontmatter | Reserved names blocked: `explore`, `plan`, `review`, `general` | Phase A batch-1 |
+| `cortex` | `~/.snowflake/cortex/agents/<slug>.md` | `.cortex/agents/<slug>.md` | md+frontmatter | **DO NOT write to `~/.claude/agents/` or `.claude/agents/`** (claude-code's territory; collision). Cortex reads those as convergence; never writes there. | https://docs.snowflake.com/en/user-guide/cortex-code/extensibility |
+| `cursor` | `~/.cursor/agents/<slug>.md` | `.cursor/agents/<slug>.md` | md+frontmatter; nothing required | Optional: `name`, `description`, `model` (default `inherit`), `readonly`, `is_background`. Strict-mode UNVERIFIED. | https://cursor.com/docs/subagents |
+| `droid` | `~/.factory/droids/<slug>.md` | `.factory/droids/<slug>.md` | md+frontmatter | Dir is `droids/` not `agents/`; name restricted `lc/digits/-/_` | Phase A batch-7 |
+| `forgecode` | `~/.forge/agents/<slug>.md` | `.forge/agents/<slug>.md` | md+frontmatter | `id` auto-derived from filename; project > global; legacy `~/forge/agents/` global also read | Phase A batch-8 |
+| `junie` | `~/.junie/agents/<slug>.md` | `.junie/agents/<slug>.md` | md+frontmatter | Also reads `~/.agents/` + `.agents/` as fallback global (skill territory — DO NOT write there) | Phase A batch-6 |
+| `kode` | `~/.claude/agents/<slug>.md` AND `~/.kode/agents/<slug>.md` (kode reads both) | `.claude/agents/<slug>.md` | md+frontmatter; `description` req | `model` deprecated → `model_name`. Write to `~/.kode/agents/` (kode-private); `.claude/agents/` is claude-code adapter's job. | Phase A batch-1 |
+| `neovate` | `~/.neovate/agents/<slug>.md` | `.neovate/agents/<slug>.md` | md+frontmatter | `name` ≤64, `description` ≤1024. Also reads `.claude/agents/` (don't write there from neovate adapter). | Phase A batch-4 |
+| `pi` | `~/.pi/agent/agents/<slug>.md` (env override `$PI_CODING_AGENT_DIR/agents/`) | `.pi/agents/<slug>.md` | md+frontmatter | Optional: `description`, `tools`, `model`, `thinking`, `max_turns`. **DO NOT write to `~/.agents/` or `.agents/`** (those are pi *skills* paths per the @tintinweb/pi-subagents README). | https://github.com/tintinweb/pi-subagents |
+| `pochi` | `~/.pochi/agents/<name>.md` | `.pochi/agents/<name>.md` | md+frontmatter; `description` req | Spawn via `newTask(<name>)` allowlist | Phase A batch-9 |
+| `qoder` | `~/.qoder/agents/<name>.md` | `.qoder/agents/<name>.md` | md+frontmatter; `name`+`description` req | Optional: `tools` (comma-sep), `skills`, `mcpServers` | Phase A batch-6 |
+| `rovodev` | `~/.rovodev/subagents/<slug>.md` | `.rovodev/subagents/<slug>.md` | md+frontmatter; `name`+`description`+`tools` (list) req | Dir is `subagents/` not `agents/` | Phase A batch-7 |
+
+### translate (10 cells — reshape frontmatter / non-md format)
+
+| Harness | Global path | Project path | Format | Required | Adapter must do / not do | Cite |
+|---|---|---|---|---|---|---|
+| `codex` | `~/.codex/agents/<name>.toml` | `.codex/agents/<name>.toml` | TOML | `name`, `description`, `developer_instructions` | Map our canonical prompt → `developer_instructions`. Optional: `model`, `model_reasoning_effort`, `sandbox_mode`, `mcp_servers`, `skills.config`, `nickname_candidates`. **DO NOT touch `[agents]` in `config.toml`** (global knobs, not registration). | https://developers.openai.com/codex/subagents |
+| `devin` | `~/.config/devin/agents/<profile>/AGENT.md` | `.devin/agents/<profile>/AGENT.md` AND `.agents/agents/<profile>/AGENT.md` | md+frontmatter (file named literally `AGENT.md`) | none | `{profile}` has **no user-default**; adapter requires a `profile` arg (or default convention slug like `default`). Devin also reads `.claude/agents/*.md` and auto-translates `tools`↔`allowed-tools`. | https://cli.devin.ai/docs/subagents |
+| `gemini-cli` | `~/.gemini/agents/<slug>.md` | `.gemini/agents/<slug>.md` | md+frontmatter; **zod `.strict()`** | `name`, `description` | Adapter must filter frontmatter to allowed 10-field set (`name`, `description`, `display_name`, `tools`, `mcp_servers`, `model`, `temperature`, `max_turns`, `timeout_mins`, `kind`). Extras throw at load time. | https://github.com/google-gemini/gemini-cli/blob/main/packages/core/src/agents/agentLoader.ts |
+| `github-copilot` | `~/.copilot/agents/<name>.agent.md` | `.github/agents/<name>.agent.md` (NOT `.copilot/`) | md+frontmatter | `description` (string) | Always emit `.agent.md` suffix (works in CLI + IDE + Cloud Coding Agent). Optional pass-through: `name`, `target`, `tools`, `model`, `disable-model-invocation`, `user-invocable`, `infer`, `mcp-servers`, `metadata`. No documented reserved-name list. | https://docs.github.com/en/copilot/reference/custom-agents-configuration |
+| `kilo` | `~/.config/kilo/agent/<slug>.md` (singular `agent/`) | `.kilo/agents/<slug>.md` (plural `agents/`) | md+frontmatter | none documented | Must inject `mode: subagent` in frontmatter to restrict to `task`-tool invocation. Note global path is singular, project path is plural — adapter must handle the asymmetry. | Phase A batch-6 |
+| `kiro-cli` | `~/.kiro/agents/<name>.json` | `.kiro/agents/<name>.json` | JSON (not markdown) | none | Filename (sans `.json`) = agent ID (overridable via explicit `name`). Always emit `prompt` (no implicit fallback). `prompt` accepts `file://` URI for externalization. | https://kiro.dev/docs/cli/custom-agents/configuration-reference/ |
+| `mistral-vibe` | `~/.vibe/agents/<name>.toml` | `.vibe/agents/<name>.toml` | TOML | `agent_type` (must be exactly `"subagent"`), `display_name`, `description`, `safety`, `enabled_tools` | `safety` enum: `"safe"|"neutral"|"destructive"|"yolo"` (cosmetic only — doesn't enforce; pair with restrictive `enabled_tools`). Adapter default `safety = "neutral"`. | https://docs.mistral.ai/mistral-vibe/agents-skills |
+| `mux` | `~/.mux/agents/<slug>.md` | `.mux/agents/<slug>.md` | md+frontmatter | top-level `subagent:` block with nested `runnable: true` | **Nested form is mandatory** — flat `runnable: true` silently leaves the agent un-spawnable. Optional inside `subagent`: `skip_init_hook`, `append_prompt`. Non-recursive; project overrides user. | https://mux.coder.com/agents |
+| `opencode` | `~/.config/opencode/agents/<slug>.md` (PLURAL) | `.opencode/agents/<slug>.md` (PLURAL) | md+frontmatter | none documented | Must inject `mode: subagent`. **Write to plural `agents/` only** — the singular `agent/` path is a CLI bug (issue #14410); docs and runtime loader prefer plural. | https://opencode.ai/docs/agents/ |
+| `qwen-code` | `~/.qwen/agents/<slug>.md` | `.qwen/agents/<slug>.md` | md+frontmatter (NOT strict, despite being "Gemini-derived") | none | System prompt = markdown body (NOT a `systemPrompt` frontmatter key — Phase A claim was WRONG). Optional pass-through: `name`, `description`, `model`, `approvalMode`, `tools`, `disallowedTools`. | https://qwenlm.github.io/qwen-code-docs/en/users/features/sub-agents/ |
+
+### config_file+folder (3 cells — registry-pointed)
+
+| Harness | Definition path | Registry file | Registry edit | Spawnable marker | Cite |
+|---|---|---|---|---|---|
+| `aider-desk` | `~/.aider-desk/agents/<slug>/config.json` (per-slug subdir) | `~/.aider-desk/agents/order.json` (controls sort) | Hot-reloaded; use atomic rename | `subagent.enabled: true` in config.json | Phase A batch-3 |
+| `dexto` | `~/.dexto/agents/<agent-id>/<slug>.yml` (YAML, per-agent subdir) | Inside *parent agent's* `tools[].type: agent-spawner` block, `allowedAgents: [...]` array | Per-agent config edit (must touch parent agent's yml to make this agent spawnable). **NO project-scope convention** — global-only writes. | `agent-spawner.allowedAgents` list membership | https://docs.dexto.ai/docs/guides/installing-custom-agents |
+| `firebender` | `~/.firebender/agents/<slug>.md` (global, location flexible) OR `.firebender/agents/<slug>.md` (project) | `firebender.json` top-level `{"agents": [...]}` array of string paths | Atomic rename (`os.replace`) — hot-reloaded by IntelliJ plugin watcher. NO CLI exists; must edit JSON ourselves. Round-trip JSON preserving insertion order + unrelated keys. | `callable: true` in agent .md frontmatter, NOT in firebender.json | https://docs.firebender.com/multi-agent/subagents |
+
+### Dropped harness: dual_symlink mechanism (0 cells)
+
+`pi` reclassified to `symlink` per Cluster B finding. Mechanism removed
+from the taxonomy entirely; no `dual_symlink.py` adapter file is created.
+
+## Open items the research did not fully resolve
+
+These are noted so the build-phase implementer subagents know to either
+defer (with a TODO and a sensible default) or surface a safety stop.
+
+| Open item | Spec disposition |
+|---|---|
+| **`cursor` strict-mode** — docs silent on whether extras are rejected | Adapter emits only the documented optional set; if cursor adds strict-mode later, adapter is already conservative. Acceptable defer. |
+| **`devin` profile default** — no built-in convention for "default" profile name | Adapter requires `profile` arg from caller; if omitted, default to `"default"` (a project-convention slug). Surface in adapter docstring. |
+| **`github-copilot` reserved names** — no documented denylist | Adapter does not implement a denylist. If GitHub publishes one, PR2.5 adds it. |
+| **`opencode` singular-bug timing** — CLI #14410 may be fixed someday | Adapter writes plural only (docs-canonical). Fix re-checks doc URL quarterly via a `# cite: <url>` comment in the adapter; no runtime check. |
+| **`codex` API churn** — multiple May 2026 PRs in codex agent loader | Pin `# cite: developers.openai.com/codex/subagents (verified 2026-05-28)` in adapter. PR3+ may need to re-verify if codex contract shifts. |
+| **`codex` #19399 Windows loader bug + #15250 named-invocation gap** — projection succeeds ≠ runtime usability | Acceptance criterion #3 (smoke test) catches projection. Runtime usability is the user's problem; out of PR2 scope. |
+| **`dexto` parent-agent edit** — making a new agent spawnable requires editing another agent's yml | Adapter writes the new agent's yml; documents in adapter docstring that the user must register it as spawnable from a parent agent. Out of PR2 scope to traverse the parent-graph. |
+| **`junie` `~/.agents/` and `.agents/` reads** — junie reads these as fallback globals, but those paths are skill territory | Adapter writes only to `~/.junie/agents/` and `.junie/agents/`. Junie cross-reading skill paths is a layering issue out of PR2's scope. |
+| **`kode` and `neovate` claude-path reads** — both read `~/.claude/agents/` as a convergence | Adapters write only to harness-private paths (`~/.kode/`, `~/.neovate/`). Convergence is a PR3 / PR5 concern (the "shared symlink" question the issue's Open #5 raises). |
+
+## How this addendum's findings feed into PR3..PR5
+
+- **PR3** (`universal`→`general` rename + cross-harness convergence): now
+  has a clean list of the cross-harness *read* paths (`~/.claude/agents/`
+  is read by 4 harnesses: cortex, kode, neovate, devin). The convergence
+  question — single shared symlink vs per-harness explicit slot — gets
+  to weigh actual data, not speculation.
+- **PR4** (CLI `agent` verb group): can rely on the same engine PR2 ships.
+  No verb needs codex's `config.toml` mutation logic (correction A makes
+  the engine simpler than originally planned).
+- **PR5** (TUI `KindsSidebar`): unaffected by these findings.
+
+## Citation freshness contract
+
+Every adapter file gets a `# cite: <URL> (verified YYYY-MM-DD)` comment
+at the top of the per-cell quirks dict. A subsequent PR (or a quarterly
+audit skill) can re-fetch the URL and check whether the contract has
+drifted. This is the cheapest sustainable answer to the "active churn"
+problem cluster A flagged for codex.
