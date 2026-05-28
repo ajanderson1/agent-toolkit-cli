@@ -42,10 +42,10 @@ def library_root_for_kind(binding: KindBinding, env: dict[str, str] | None = Non
         override = resolved_env.get("AGENT_TOOLKIT_SKILLS_ROOT", "").strip()
         if override:
             return Path(override)
-    # Resolve $HOME from the supplied env so tests are not coupled to the
-    # process-wide os.environ when they monkeypatch HOME.
-    home = Path(resolved_env.get("HOME") or str(Path.home()))
-    return home / ".agent-toolkit" / binding.library_subdir
+    # Use Path.home() to match the existing skill_paths.library_root() exactly.
+    # monkeypatch.setenv("HOME", ...) is honoured because Path.home() reads
+    # $HOME from os.environ, which monkeypatch updates.
+    return Path.home() / ".agent-toolkit" / binding.library_subdir
 
 
 def library_lock_path_for_kind(binding: KindBinding, env: dict[str, str] | None = None) -> Path:
