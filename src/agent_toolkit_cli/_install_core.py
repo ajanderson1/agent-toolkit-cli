@@ -30,6 +30,7 @@ class InstallError(RuntimeError):
 
 
 def _doctor_hint(slug: str, scope: str) -> str:
+    """Suggest the doctor command that clears a blocking stray symlink."""
     flag = "-g" if scope == "global" else "-p"
     return f"\n  Run: agent-toolkit-cli skill doctor {flag}  (removes stray symlinks)"
 
@@ -43,6 +44,12 @@ class DirtyCanonicalError(InstallError):
 
 
 def _symlink_or_copy(src: Path, dest: Path) -> str:
+    """Materialise `dest` to refer to `src`. Try symlink; fall back to copy.
+
+    Returns 'symlink' or 'copy' so the caller can record the materialisation
+    mode in the lock entry's extras (relevant for `update`: copy-mode needs
+    re-copy, symlink-mode just needs the parent to be re-pulled).
+    """
     if dest.exists() or dest.is_symlink():
         raise InstallError(f"{dest}: refusing to overwrite existing path")
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -82,6 +89,20 @@ class InstallResult:
 def _should_skip_symlink(
     *, agent_name: str, scope: Scope, project: Path | None,
 ) -> tuple[bool, str]:
+    """Return (skip?, reason). Mirrors installer.ts:296-323 with v2.2 adjustments.
+
+    v2.2 semantics (post-store relocation):
+      - Global + universal: SKIPPED. ~/.agents/skills/<slug> → library is
+        created via the universal bundle path in apply().
+      - Project + universal: NOT skipped. Canonical is in the external store;
+        each universal agent gets <project>/.agents/skills/<slug> → store.
+      - Global + non-universal: NOT skipped (symlink → library).
+      - Project + non-universal: NOT skipped. The agent root dir is auto-created
+        by apply() via link.parent.mkdir(parents=True, exist_ok=True).
+
+    The special "universal" bundle token is handled in apply() before
+    _should_skip_symlink is called; it never reaches here as an agent_name.
+    """
     cfg = get_agent(agent_name)
     if cfg.is_universal and scope == "global":
         return True, "universal-global"
