@@ -51,7 +51,7 @@ def _catalog_harnesses() -> set[str]:
     """All catalog harness names except synthetic pseudo-entries.
 
     `skill_agents.AGENTS` is a dict[str, AgentConfig] keyed by harness name.
-    `universal` and `general-skill` (added in PR1 of v3.0.0) are synthetic —
+    `universal` and `general-skill` (added in #252) are synthetic —
     they resolve to the shared `.agents/skills` convergence path and are not
     real harnesses, so they're excluded from the harness-support matrix.
     """

@@ -1,0 +1,161 @@
+"""Kind-agnostic install engine. Bound by per-kind facades (skill_install,
+future agent_install). All public symbols are re-exported from the facades
+so existing call sites keep working.
+
+PR1 boundary: any helper that has to know whether the asset is a skill or
+an agent (e.g. _universal_bundle_link, _project_universal_link) lives in
+the facade, NOT here. The core takes a KindBinding when it needs to know
+the canonical dirname, lock filename, or general-harness name.
+"""
+from __future__ import annotations
+
+import shutil
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Callable, Iterable, Literal
+
+from agent_toolkit_cli.skill_agents import (
+    AGENTS, UnknownAgentError, get_agent,
+)
+from agent_toolkit_cli.skill_paths import (
+    Scope,
+    agent_projection_dir,
+    canonical_skill_dir,
+)
+from agent_toolkit_cli.skill_source import ParsedSource
+
+
+class InstallError(RuntimeError):
+    """Base error for install failures."""
+
+
+def _doctor_hint(slug: str, scope: str) -> str:
+    flag = "-g" if scope == "global" else "-p"
+    return f"\n  Run: agent-toolkit-cli skill doctor {flag}  (removes stray symlinks)"
+
+
+class LockMismatchError(InstallError):
+    """Canonical exists on disk but lock entry source differs from request."""
+
+
+class DirtyCanonicalError(InstallError):
+    """Full-remove requested against dirty canonical without --force."""
+
+
+def _symlink_or_copy(src: Path, dest: Path) -> str:
+    if dest.exists() or dest.is_symlink():
+        raise InstallError(f"{dest}: refusing to overwrite existing path")
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        dest.symlink_to(src, target_is_directory=True)
+        return "symlink"
+    except OSError:
+        shutil.copytree(src, dest)
+        return "copy"
+
+
+@dataclass(frozen=True)
+class InstallPlan:
+    slug: str
+    scope: Scope
+    source: ParsedSource | None
+    ref: str | None
+    add_agents: tuple[str, ...]
+    remove_agents: tuple[str, ...]
+
+    def is_noop(self) -> bool:
+        return (self.source is None
+                and not self.add_agents
+                and not self.remove_agents)
+
+
+@dataclass(frozen=True)
+class InstallResult:
+    plan: InstallPlan
+    canonical_path: Path
+    created: tuple[Path, ...]
+    removed: tuple[Path, ...]
+    skipped: tuple[str, ...]
+    lock_action: Literal["added", "updated", "unchanged"]
+
+
+def _should_skip_symlink(
+    *, agent_name: str, scope: Scope, project: Path | None,
+) -> tuple[bool, str]:
+    cfg = get_agent(agent_name)
+    if cfg.is_universal and scope == "global":
+        return True, "universal-global"
+    return False, ""
+
+
+def plan(
+    *,
+    slug: str,
+    scope: Scope,
+    source: ParsedSource | None = None,
+    ref: str | None = None,
+    target_agents: Iterable[str] = (),
+    home: Path | None = None,
+    project: Path | None = None,
+    universal_bundle_link: Callable[[str], Path] | None = None,
+) -> InstallPlan:
+    """Compute the minimal add/remove delta to reach target_agents.
+
+    `universal_bundle_link` is injected by the facade — it is the kind-
+    specific function that returns the per-slug bundle path (e.g.
+    `~/.agents/skills/<slug>` for skills). Defaults to None for callers
+    that do not need it (most plan-only computations).
+    """
+    for n in target_agents:
+        if n not in AGENTS:
+            raise UnknownAgentError(n)
+    current = _current_linked_agents(
+        slug=slug, scope=scope, home=home, project=project,
+        universal_bundle_link=universal_bundle_link,
+    )
+    target = tuple(target_agents)
+    add = tuple(n for n in target if n not in current)
+    remove = tuple(n for n in current if n not in target)
+    return InstallPlan(
+        slug=slug, scope=scope, source=source, ref=ref,
+        add_agents=add, remove_agents=remove,
+    )
+
+
+def _current_linked_agents(
+    *, slug: str, scope: Scope,
+    home: Path | None, project: Path | None,
+    universal_bundle_link: Callable[[str], Path] | None = None,
+) -> tuple[str, ...]:
+    canonical = canonical_skill_dir(
+        slug, scope=scope, home=home, project=project,
+    )
+    canonical_real = canonical.resolve() if canonical.exists() else canonical
+
+    linked: list[str] = []
+
+    if scope == "global" and universal_bundle_link is not None:
+        bundle_link = universal_bundle_link(slug)
+        if bundle_link.is_symlink() and bundle_link.resolve() == canonical_real:
+            linked.append("universal")
+
+    for name in AGENTS:
+        # Skip synthetic catalog entries — they're handled separately (universal
+        # via the injected bundle link, general-skill via PR3's rename).
+        if name == "universal":
+            continue
+        if name == "general-skill":
+            continue
+
+        skip, _ = _should_skip_symlink(
+            agent_name=name, scope=scope, project=project,
+        )
+        if skip:
+            continue
+
+        link = agent_projection_dir(
+            name, slug, scope=scope, home=home, project=project,
+        )
+        if link.is_symlink() and link.resolve() == canonical_real:
+            linked.append(name)
+    return tuple(linked)
