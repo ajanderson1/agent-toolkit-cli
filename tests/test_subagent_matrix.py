@@ -51,11 +51,11 @@ def _catalog_harnesses() -> set[str]:
     """All catalog harness names except synthetic pseudo-entries.
 
     `skill_agents.AGENTS` is a dict[str, AgentConfig] keyed by harness name.
-    `universal` and `general-skill` (added in #252) are synthetic —
-    they resolve to the shared `.agents/skills` convergence path and are not
-    real harnesses, so they're excluded from the harness-support matrix.
+    `universal`, `general-skill` (added in PR1 of #252), and `general-agent`
+    (added in PR2 of #252) are synthetic — they resolve to convergence paths
+    and are not real harnesses, so they're excluded from the harness-support matrix.
     """
-    return set(skill_agents.AGENTS) - {"universal", "general-skill"}
+    return set(skill_agents.AGENTS) - {"universal", "general-skill", "general-agent"}
 
 
 def _parse_section() -> dict[str, dict[str, str]]:

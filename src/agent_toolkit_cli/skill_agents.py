@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Literal
 
 
 # Resolve env-overridable home dirs once at import time (matching TS source).
@@ -37,6 +37,9 @@ class AgentConfig:
     global_skills_dir: Path
     detect_installed: Callable[[], bool]
     show_in_universal_list: bool = True
+    subagent_mechanism: Literal[
+        "symlink", "translate", "config_file_folder", "none"
+    ] = "none"
 
     @property
     def is_universal(self) -> bool:
@@ -444,6 +447,15 @@ AGENTS: dict[str, AgentConfig] = {
         global_skills_dir=XDG_CONFIG / "agents/skills",
         show_in_universal_list=False,
         detect_installed=lambda: False,
+    ),
+    "general-agent": AgentConfig(
+        name="general-agent",
+        display_name="General (agents)",
+        skills_dir=".agents/agents",
+        global_skills_dir=XDG_CONFIG / "agents/agents",
+        show_in_universal_list=False,
+        detect_installed=lambda: False,
+        subagent_mechanism="none",  # synthetic — not a real installable harness
     ),
 }
 

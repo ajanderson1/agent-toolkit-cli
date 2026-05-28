@@ -16,7 +16,8 @@ from agent_toolkit_cli.skill_agents import (
 def test_catalog_size():
     """54 real agents + 1 synthetic 'universal' pseudo-entry."""
     # +1 for general-skill (PR1 of v3.0.0, coexists with universal)
-    assert len(AGENTS) == 56
+    # +1 for general-agent (PR2 of v3.0.0)
+    assert len(AGENTS) == 57
 
 
 def test_every_entry_key_matches_its_name():
@@ -128,3 +129,45 @@ def test_resolve_agents_rejects_general_skill_token():
         _resolve_agents("general-skill", "global")
     with pytest.raises(click.UsageError, match="general-skill is a synthetic"):
         _resolve_agents("claude-code,general-skill", "global")
+
+
+def test_agentconfig_has_subagent_mechanism_field():
+    from agent_toolkit_cli.skill_agents import AGENTS, AgentConfig
+
+    cfg = AGENTS["claude-code"]
+    assert hasattr(cfg, "subagent_mechanism")
+
+
+def test_subagent_mechanism_default_is_none():
+    """Unset cells default to 'none' so existing callers continue working.
+    'amp' is not in the 28 supported list per the matrix, so its mechanism
+    stays 'none' even after Task 11 wires the supported cells."""
+    from agent_toolkit_cli.skill_agents import AGENTS
+
+    assert AGENTS["amp"].subagent_mechanism == "none"
+
+
+def test_subagent_mechanism_field_annotation():
+    """The field exists on AgentConfig with the documented annotation."""
+    from agent_toolkit_cli.skill_agents import AgentConfig
+    from typing import get_type_hints
+
+    hints = get_type_hints(AgentConfig)
+    assert "subagent_mechanism" in hints
+
+
+def test_general_agent_synthetic_present():
+    from agent_toolkit_cli.skill_agents import AGENTS
+
+    assert "general-agent" in AGENTS
+    cfg = AGENTS["general-agent"]
+    assert cfg.skills_dir == ".agents/agents"  # parallel to general-skill but agents dir
+    assert cfg.show_in_universal_list is False
+    assert cfg.subagent_mechanism == "none"  # not a real harness
+
+
+def test_catalog_size_after_general_agent():
+    """56 (current main, with general-skill) + 1 (general-agent) = 57."""
+    from agent_toolkit_cli.skill_agents import AGENTS
+
+    assert len(AGENTS) == 57
