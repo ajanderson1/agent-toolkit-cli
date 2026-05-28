@@ -28,6 +28,14 @@ SKILL_BINDING = KindBinding(
     general_harness_name="general-skill",
 )
 
+AGENT_BINDING = KindBinding(
+    kind="agent",
+    canonical_dirname="agents",
+    library_subdir="agents",
+    lock_filename="agents-lock.json",
+    general_harness_name="general-agent",
+)
+
 
 INSTRUCTIONS_BINDING = KindBinding(
     kind="instructions",
