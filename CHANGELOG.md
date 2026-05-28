@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.14.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.13.0...v2.14.0) (2026-05-28)
+
+
+### Features
+
+* owned-monorepo support for skill add/push/update/status ([#260](https://github.com/ajanderson1/agent-toolkit-cli/issues/260)) ([#264](https://github.com/ajanderson1/agent-toolkit-cli/issues/264)) ([ed03bf5](https://github.com/ajanderson1/agent-toolkit-cli/commit/ed03bf53e138b4154f4a4fe43c7c40caf2617182))
+* skill migrate-to-monorepo ([#258](https://github.com/ajanderson1/agent-toolkit-cli/issues/258) PR2) ([#266](https://github.com/ajanderson1/agent-toolkit-cli/issues/266)) ([89a22f8](https://github.com/ajanderson1/agent-toolkit-cli/commit/89a22f8ff92d6e31c551cb6098e3776cebb7b649))
+
 ## [2.13.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.12.1...v2.13.0) (2026-05-27)
 
 
