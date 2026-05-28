@@ -103,3 +103,28 @@ def test_get_universal_agents_does_not_include_general_skill():
     listed = get_universal_agents()
     assert "universal" not in listed
     assert "general-skill" not in listed
+
+
+def test_list_cmd_rejects_general_skill_token():
+    """general-skill is in AGENTS but the CLI must reject it as a token."""
+    import click as _click  # noqa: F401 — for type clarity
+    from click.testing import CliRunner
+
+    from agent_toolkit_cli.cli import main
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["skill", "list", "-g", "-a", "general-skill"])
+    assert result.exit_code != 0
+    assert "general-skill is a synthetic" in result.output
+
+
+def test_resolve_agents_rejects_general_skill_token():
+    """_resolve_agents() must fail-loud on general-skill."""
+    import click
+
+    from agent_toolkit_cli.commands.skill import _resolve_agents
+
+    with pytest.raises(click.UsageError, match="general-skill is a synthetic"):
+        _resolve_agents("general-skill", "global")
+    with pytest.raises(click.UsageError, match="general-skill is a synthetic"):
+        _resolve_agents("claude-code,general-skill", "global")

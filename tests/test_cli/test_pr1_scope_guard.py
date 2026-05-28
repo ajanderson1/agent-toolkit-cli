@@ -18,6 +18,11 @@ ALLOWED = {
     "src/agent_toolkit_cli/skill_install.py",
     # Additive:
     "src/agent_toolkit_cli/skill_agents.py",
+    # CLI-token validators (added late: fail-loud on general-skill synthetic).
+    # In scope here because rejecting the half-wired synthetic at the validator
+    # is a fail-loud guard, NOT the caller-logic refactor reserved for PR3.
+    "src/agent_toolkit_cli/commands/skill/list_cmd.py",
+    "src/agent_toolkit_cli/commands/skill/__init__.py",
     # Matrix-test synthetic exclusion (parallel to existing universal exclusion):
     "tests/test_subagent_matrix.py",
     # Tests:
