@@ -5,24 +5,23 @@ agent_path as a real field (Task 2), and the format is the same.
 """
 from __future__ import annotations
 
-
-AGENT_LOCK_PUBLIC = frozenset({
-    "LockEntry",
-    "LockFile",
-    "SUPPORTED_VERSIONS",
-    "read_lock",
-    "write_lock",
-    "add_entry",
-    "remove_entry",
-    "clone_url_from_entry",
-})
+from agent_toolkit_cli.agent_lock import __all__ as AGENT_LOCK_PUBLIC
 
 
 def test_agent_lock_public_surface_preserved():
+    """The module's __all__ IS the surface contract; this test pins it
+    against the names the rest of PR2 (and PR4/PR5) will rely on."""
     from agent_toolkit_cli import agent_lock
     public = {name for name in dir(agent_lock) if not name.startswith("_")}
-    for symbol in AGENT_LOCK_PUBLIC:
+    expected = {
+        "LockEntry", "LockFile", "SUPPORTED_VERSIONS",
+        "read_lock", "write_lock", "add_entry", "remove_entry",
+        "clone_url_from_entry",
+    }
+    for symbol in expected:
         assert symbol in public, f"agent_lock public surface missing: {symbol}"
+    # __all__ exists AND matches the expected contract.
+    assert set(AGENT_LOCK_PUBLIC) == expected
 
 
 def test_agent_lock_reexports_match_skill_lock():
@@ -41,6 +40,9 @@ def test_agent_lock_round_trip_with_agent_path(tmp_path):
     )
 
     lock_path = tmp_path / "agents-lock.json"
+    # `skills` is the kind-blind entries-by-slug dict (per PR2 spec Correction B);
+    # the same struct holds both skill and agent entries — distinguished by
+    # which `*_path` field is populated on each LockEntry.
     lock = LockFile(version=1, skills={})
     entry = LockEntry(
         source="ajanderson1/test",

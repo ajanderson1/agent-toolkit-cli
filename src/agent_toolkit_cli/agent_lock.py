@@ -7,12 +7,11 @@ on the LockEntry, both serialised explicitly per Task 2.
 
 The file's only purpose is to give callers (PR4 CLI verbs, PR5 TUI)
 a kind-aligned import path: `from agent_toolkit_cli.agent_lock import …`
-instead of reaching into `skill_lock` directly. No behavioural divergence
-is introduced; a future PR may add agent-specific helpers here.
+instead of reaching into `skill_lock` directly. No behavioural divergence.
 """
 from __future__ import annotations
 
-from agent_toolkit_cli.skill_lock import (  # noqa: F401
+from agent_toolkit_cli.skill_lock import (
     SUPPORTED_VERSIONS,
     LockEntry,
     LockFile,
@@ -22,3 +21,17 @@ from agent_toolkit_cli.skill_lock import (  # noqa: F401
     remove_entry,
     write_lock,
 )
+
+# Machine-checked re-export contract: any caller doing `from agent_lock
+# import *` gets exactly these names; ruff/pyflakes treat membership as
+# usage so `# noqa: F401` is unnecessary.
+__all__ = [
+    "SUPPORTED_VERSIONS",
+    "LockEntry",
+    "LockFile",
+    "add_entry",
+    "clone_url_from_entry",
+    "read_lock",
+    "remove_entry",
+    "write_lock",
+]
