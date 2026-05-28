@@ -119,6 +119,7 @@ def plan(
     home: Path | None = None,
     project: Path | None = None,
     universal_bundle_link: Callable[[str], Path] | None = None,
+    synthetic_names: frozenset[str] = frozenset(),
 ) -> InstallPlan:
     """Compute the minimal add/remove delta to reach target_agents.
 
@@ -126,6 +127,11 @@ def plan(
     specific function that returns the per-slug bundle path (e.g.
     `~/.agents/skills/<slug>` for skills). Defaults to None for callers
     that do not need it (most plan-only computations).
+
+    `synthetic_names` is the set of catalog tokens that are virtual entries
+    rather than real harness symlink targets (e.g. the skill facade injects
+    `frozenset({"universal", "general-skill"})`). The core treats it as
+    opaque — it never names a specific kind's synthetics itself.
     """
     for n in target_agents:
         if n not in AGENTS:
@@ -133,6 +139,7 @@ def plan(
     current = _current_linked_agents(
         slug=slug, scope=scope, home=home, project=project,
         universal_bundle_link=universal_bundle_link,
+        synthetic_names=synthetic_names,
     )
     target = tuple(target_agents)
     add = tuple(n for n in target if n not in current)
@@ -147,15 +154,19 @@ def _current_linked_agents(
     *, slug: str, scope: Scope,
     home: Path | None, project: Path | None,
     universal_bundle_link: Callable[[str], Path] | None = None,
+    synthetic_names: frozenset[str] = frozenset(),
 ) -> tuple[str, ...]:
     """Return agents whose symlink currently resolves to our canonical.
 
     Includes the synthetic 'universal' bundle token at global scope when
     `universal_bundle_link(slug)` is a symlink to the library canonical.
-    Synthetic catalog entries (`'universal'`, `'general-skill'`) are
-    skipped from the per-agent iteration — they're handled separately
-    (universal via the injected bundle link; general-skill via PR3's
-    rename).
+
+    `synthetic_names` enumerates catalog tokens that are virtual entries
+    (handled separately from real harness symlinks) and are skipped from
+    the per-agent iteration. The core treats the set as opaque: each
+    facade injects the synthetics for its own kind (skills inject the
+    pair containing the universal bundle token and the general projection
+    token; agents will inject their own).
     """
     canonical = canonical_skill_dir(
         slug, scope=scope, home=home, project=project,
@@ -170,11 +181,10 @@ def _current_linked_agents(
             linked.append("universal")
 
     for name in AGENTS:
-        # Skip synthetic catalog entries — they're handled separately (universal
-        # via the injected bundle link, general-skill via PR3's rename).
-        if name == "universal":
-            continue
-        if name == "general-skill":
+        # Skip facade-injected synthetic catalog tokens — they're handled
+        # by the facade (e.g. the universal bundle link above), not by the
+        # per-agent symlink scan.
+        if name in synthetic_names:
             continue
 
         skip, _ = _should_skip_symlink(

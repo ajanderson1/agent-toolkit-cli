@@ -53,6 +53,9 @@ from agent_toolkit_cli.skill_paths import (
 )
 from agent_toolkit_cli.skill_source import ParsedSource
 
+# Catalog tokens that are virtual entries, not real harness symlink targets.
+_SKILL_SYNTHETIC_NAMES: frozenset[str] = frozenset({"universal", "general-skill"})
+
 
 def _universal_bundle_link(slug: str) -> Path:
     """The ~/.agents/skills/<slug> path used for universal-bundle installs at global scope."""
@@ -91,6 +94,7 @@ def plan(
         slug=slug, scope=scope, source=source, ref=ref,
         target_agents=target_agents, home=home, project=project,
         universal_bundle_link=_universal_bundle_link,
+        synthetic_names=_SKILL_SYNTHETIC_NAMES,
     )
 
 
@@ -107,6 +111,7 @@ def _current_linked_agents(
     return _core_current_linked_agents(
         slug=slug, scope=scope, home=home, project=project,
         universal_bundle_link=_universal_bundle_link,
+        synthetic_names=_SKILL_SYNTHETIC_NAMES,
     )
 
 

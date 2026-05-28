@@ -1,8 +1,6 @@
 """Tests for the agents catalog (skill_agents.py)."""
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 
 from agent_toolkit_cli.skill_agents import (
