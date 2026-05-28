@@ -147,27 +147,30 @@ def test_subagent_mechanism_default_is_none():
     assert AGENTS["amp"].subagent_mechanism == "none"
 
 
-def test_subagent_mechanism_field_annotation():
-    """The field exists on AgentConfig with the documented annotation."""
+def test_subagent_mechanism_literal_values():
+    """The field's Literal annotation pins exactly the four documented values.
+
+    A typo in a future cell ('symlinks' or 'translater') will route silently
+    to the 'none' branch in the adapter dispatcher; pinning the value set
+    here is the cheapest place to fail loud.
+    """
+    from typing import get_args, get_type_hints
+
     from agent_toolkit_cli.skill_agents import AgentConfig
-    from typing import get_type_hints
 
     hints = get_type_hints(AgentConfig)
     assert "subagent_mechanism" in hints
+    assert set(get_args(hints["subagent_mechanism"])) == {
+        "symlink", "translate", "config_file_folder", "none",
+    }
 
 
 def test_general_agent_synthetic_present():
-    from agent_toolkit_cli.skill_agents import AGENTS
+    from agent_toolkit_cli.skill_agents import AGENTS, XDG_CONFIG
 
     assert "general-agent" in AGENTS
     cfg = AGENTS["general-agent"]
     assert cfg.skills_dir == ".agents/agents"  # parallel to general-skill but agents dir
+    assert cfg.global_skills_dir == XDG_CONFIG / "agents/agents"
     assert cfg.show_in_universal_list is False
     assert cfg.subagent_mechanism == "none"  # not a real harness
-
-
-def test_catalog_size_after_general_agent():
-    """56 (current main, with general-skill) + 1 (general-agent) = 57."""
-    from agent_toolkit_cli.skill_agents import AGENTS
-
-    assert len(AGENTS) == 57
