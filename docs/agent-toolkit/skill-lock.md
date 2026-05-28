@@ -137,6 +137,20 @@ A monorepo is **owned** when its parent owner is `ajanderson1` (case-insensitive
 
 Read-only consumption of *others'* monorepos is unchanged: those entries keep `readOnly: true` and `skill push` still refuses them.
 
+### Re-homing standalone skills into an owned monorepo
+
+`skill migrate-to-monorepo <parent>` (one-shot, idempotent, per-machine) re-homes a standalone owned per-skill entry into an owned monorepo once the skill has been folded into it. It rewrites the entry from own-repo shape to owned-monorepo-subpath shape:
+
+| | own-repo (before) | owned-monorepo-subpath (after) |
+|---|---|---|
+| `source` | `ajanderson1/<slug>-skill` | `ajanderson1/<parent-repo>` |
+| `skillPath` | `SKILL.md` | `skills/<slug>` |
+| `localSha` | present | dropped |
+| `parentUrl` | absent | set to the parent repo URL |
+| `readOnly` | absent | absent (owned → writable) |
+
+The standalone clone dir at `~/.agent-toolkit/skills/<slug>/` is replaced by a symlink into the shared `_parents/<owner>/<parent-repo>/skills/<slug>`, and harness symlinks are re-projected. To never drop unpushed local work, migration **skips** (leaves untouched) any skill whose `localSha` ≠ `upstreamSha`, whose clone tree is dirty, or whose monorepo copy differs from the local clone by content; the destructive clone-dir removal happens only after the replacement symlink is verified. Skills not yet present in the monorepo are reported and left standalone. Re-running is a no-op (a migrated entry has `parentUrl` and is no longer eligible).
+
 ## Interop with `npx skills`
 
 A lock file written by `agent-toolkit-cli skill add` is parseable by `npx skills@latest ls`. We have a smoke test that confirms this (`tests/test_cli/test_skill_interop.py`); it runs whenever `npx` is available on `$PATH`.
