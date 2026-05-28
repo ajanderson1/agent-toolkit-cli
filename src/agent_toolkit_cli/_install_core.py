@@ -118,10 +118,17 @@ def plan(
     target_agents: Iterable[str] = (),
     home: Path | None = None,
     project: Path | None = None,
+    canonical_dir_resolver: Callable[..., Path] | None = None,
     universal_bundle_link: Callable[[str], Path] | None = None,
     synthetic_names: frozenset[str] = frozenset(),
 ) -> InstallPlan:
     """Compute the minimal add/remove delta to reach target_agents.
+
+    `canonical_dir_resolver` is the kind-specific resolver returning the
+    canonical install directory for a slug at a given scope (e.g.
+    `canonical_skill_dir` for skills, `canonical_agent_dir` for agents).
+    Required so the core stays kind-blind; defaults to canonical_skill_dir
+    for backward compatibility with callers that haven't migrated yet.
 
     `universal_bundle_link` is injected by the facade — it is the kind-
     specific function that returns the per-slug bundle path (e.g.
@@ -138,6 +145,7 @@ def plan(
             raise UnknownAgentError(n)
     current = _current_linked_agents(
         slug=slug, scope=scope, home=home, project=project,
+        canonical_dir_resolver=canonical_dir_resolver,
         universal_bundle_link=universal_bundle_link,
         synthetic_names=synthetic_names,
     )
@@ -153,10 +161,16 @@ def plan(
 def _current_linked_agents(
     *, slug: str, scope: Scope,
     home: Path | None, project: Path | None,
+    canonical_dir_resolver: Callable[..., Path] | None = None,
     universal_bundle_link: Callable[[str], Path] | None = None,
     synthetic_names: frozenset[str] = frozenset(),
 ) -> tuple[str, ...]:
     """Return agents whose symlink currently resolves to our canonical.
+
+    `canonical_dir_resolver` is the kind-specific canonical resolver
+    (e.g. `canonical_skill_dir`, `canonical_agent_dir`). Required so the
+    scan compares against the correct canonical path for the asset kind;
+    defaults to `canonical_skill_dir` for backward compatibility.
 
     Includes the synthetic 'universal' bundle token at global scope when
     `universal_bundle_link(slug)` is a symlink to the library canonical.
@@ -166,9 +180,10 @@ def _current_linked_agents(
     the per-agent iteration. The core treats the set as opaque: each
     facade injects the synthetics for its own kind (skills inject the
     pair containing the universal bundle token and the general projection
-    token; agents will inject their own).
+    token; agents inject their own).
     """
-    canonical = canonical_skill_dir(
+    resolver = canonical_dir_resolver if canonical_dir_resolver is not None else canonical_skill_dir
+    canonical = resolver(
         slug, scope=scope, home=home, project=project,
     )
     canonical_real = canonical.resolve() if canonical.exists() else canonical

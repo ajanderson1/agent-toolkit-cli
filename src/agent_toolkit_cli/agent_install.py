@@ -61,6 +61,7 @@ def plan(
     return _core_plan(
         slug=slug, scope=scope, source=source, ref=ref,
         target_agents=target_agents, home=home, project=project,
+        canonical_dir_resolver=canonical_agent_dir,
         universal_bundle_link=None,
         synthetic_names=_AGENT_SYNTHETIC_NAMES,
     )
@@ -70,9 +71,12 @@ def _current_linked_agents(
     *, slug: str, scope: Scope,
     home: Path | None, project: Path | None,
 ) -> tuple[str, ...]:
-    """Mirror of skill_install._current_linked_agents but binding the agent synthetics."""
+    """Mirror of skill_install._current_linked_agents binding the agent
+    synthetics AND the agent canonical resolver — so the projection scan
+    compares against ~/.agent-toolkit/agents/<slug>/, not the skill canonical."""
     return _core_current_linked_agents(
         slug=slug, scope=scope, home=home, project=project,
+        canonical_dir_resolver=canonical_agent_dir,
         universal_bundle_link=None,
         synthetic_names=_AGENT_SYNTHETIC_NAMES,
     )

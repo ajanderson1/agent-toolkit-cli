@@ -93,6 +93,7 @@ def plan(
     return _core_plan(
         slug=slug, scope=scope, source=source, ref=ref,
         target_agents=target_agents, home=home, project=project,
+        canonical_dir_resolver=canonical_skill_dir,
         universal_bundle_link=_universal_bundle_link,
         synthetic_names=_SKILL_SYNTHETIC_NAMES,
     )
@@ -110,6 +111,7 @@ def _current_linked_agents(
     """
     return _core_current_linked_agents(
         slug=slug, scope=scope, home=home, project=project,
+        canonical_dir_resolver=canonical_skill_dir,
         universal_bundle_link=_universal_bundle_link,
         synthetic_names=_SKILL_SYNTHETIC_NAMES,
     )
