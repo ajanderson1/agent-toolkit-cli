@@ -1,8 +1,8 @@
 """Kind-agnostic path/lock-filename core. Bound by per-kind facades.
 
 A `KindBinding` carries everything the path helpers need to know about a
-specific asset kind. `SKILL_BINDING` is the only binding PR1 instantiates;
-`AGENT_BINDING` arrives in PR2.
+specific asset kind. `SKILL_BINDING` and `AGENT_BINDING` are the two
+bindings instantiated today (PR1 cut the seam; PR2 added the agent kind).
 """
 from __future__ import annotations
 
