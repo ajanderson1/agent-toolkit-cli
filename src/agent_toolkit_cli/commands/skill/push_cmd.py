@@ -107,7 +107,7 @@ def push_cmd(
                 click.echo(f"{slug}: clean — nothing to push")
                 continue
             if div in (skill_git.Divergence.BEHIND, skill_git.Divergence.DIVERGED):
-                click.echo(f"{slug}: clean but {div.value} origin — not pushing")
+                click.echo(f"{slug}: clean but {div.value} from origin — not pushing")
                 continue
             # AHEAD: committed-but-unpushed work to publish (already committed,
             # so no commit step — just push HEAD).
@@ -281,7 +281,7 @@ def _push_monorepo(
             click.echo(f"{slug}: clean — nothing to push")
             return
         if div in (skill_git.Divergence.BEHIND, skill_git.Divergence.DIVERGED):
-            click.echo(f"{slug}: clean but {div.value} origin — not pushing")
+            click.echo(f"{slug}: clean but {div.value} from origin — not pushing")
             return
         # AHEAD: publish already-committed work. No commit_paths — the subpath
         # is clean, so there is nothing to stage; we push HEAD as-is.

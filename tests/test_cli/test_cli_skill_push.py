@@ -572,6 +572,38 @@ def test_push_clean_up_to_date_still_noop(git_sandbox, tmp_path, monkeypatch):
     assert "nothing to push" in result.output
 
 
+def test_push_clean_behind_does_not_push(git_sandbox, tmp_path, monkeypatch):
+    """#280: a clean clone that is BEHIND origin must NOT be routed into the
+    AHEAD push arm — it reports honestly and pushes nothing, but also does NOT
+    claim 'nothing to push' (the false-clean the fix removes)."""
+    runner, root = _setup_global_demo(git_sandbox, tmp_path, monkeypatch)
+    canonical = root / "demo"
+
+    # Advance the upstream via a sibling clone so our clone falls behind.
+    helper = tmp_path / "behind-helper"
+    subprocess.run(["git", "clone", str(git_sandbox.upstream), str(helper)],
+                   check=True, env=git_sandbox.env, capture_output=True)
+    (helper / "UP.md").write_text("upstream advance\n")
+    subprocess.run(["git", "-C", str(helper), "add", "-A"],
+                   check=True, env=git_sandbox.env, capture_output=True)
+    subprocess.run(["git", "-C", str(helper), "commit", "-m", "up"],
+                   check=True, env=git_sandbox.env, capture_output=True)
+    subprocess.run(["git", "-C", str(helper), "push", "origin", "main"],
+                   check=True, env=git_sandbox.env, capture_output=True)
+    # Refresh our clone's remote-tracking ref so divergence() sees BEHIND.
+    subprocess.run(["git", "-C", str(canonical), "fetch", "origin"],
+                   check=True, env=git_sandbox.env, capture_output=True)
+
+    head_before = _rev_parse(canonical, "HEAD", git_sandbox.env)
+    result = runner.invoke(main, ["skill", "push", "demo", "-g", "--direct"])
+    assert result.exit_code == 0, result.output
+    assert "nothing to push" not in result.output
+    assert "pushed" not in result.output
+    assert "behind" in result.output.lower()
+    # Nothing was pushed; HEAD unchanged.
+    assert _rev_parse(canonical, "HEAD", git_sandbox.env) == head_before
+
+
 def test_push_dirty_direct_pushes(git_sandbox, tmp_path, monkeypatch):
     """Dirty working tree + --direct commits and pushes; HEAD reaches the remote.
 
