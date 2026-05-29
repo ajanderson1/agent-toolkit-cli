@@ -1,7 +1,8 @@
-"""config_file_folder mechanism: 3 cells, each requires registry mutation.
+"""config_file_folder mechanism: 4 cells, each requires registry mutation.
 
 Per spec addendum:
   - aider-desk: per-slug subdir with `config.json`; subagent.enabled marks spawnable.
+  - codex: per-slug `.toml` + [agents.<role>] entry in config.toml; role req description.
   - dexto: per-slug subdir with `<slug>.yml`; global-only (no project convention).
   - firebender: per-slug `.md` + atomic mutation of `firebender.json` agents array.
 
@@ -12,6 +13,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import textwrap
 from pathlib import Path
@@ -214,14 +216,102 @@ class _FirebenderAdapter:
             _atomic_write(fb_json, json.dumps(body, indent=2) + "\n")
 
 
+# ── codex ────────────────────────────────────────────────────────────────
+
+class _CodexAdapter:
+    """Codex agent adapter.
+
+    Writes ~/.codex/agents/<slug>.toml (global) or .codex/agents/<slug>.toml
+    (project) and mutates config.toml to add an [agents.<role>] section that
+    points at the TOML file via config_file=. The role declaration requires
+    a description field; the agent file requires developer_instructions.
+
+    Per matrix: developers.openai.com/codex/subagents + codex-rs/config/src/config_toml.rs:649-691
+    """
+
+    def install(
+        self,
+        slug: str,
+        content_path: Path,
+        *,
+        scope: str,
+        home: Path | None = None,
+        project: Path | None = None,
+    ) -> Path:
+        _check_scope(scope, "codex")
+        base = _resolve_base("codex", scope, home, project, ".codex")
+        agents_dir = base / "agents"
+        agents_dir.mkdir(parents=True, exist_ok=True)
+        toml_path = agents_dir / f"{slug}.toml"
+        # Produce a minimal TOML with developer_instructions from content.
+        source_text = content_path.read_text()
+        # Escape any triple-quoted strings by using single-quoted TOML multiline.
+        escaped = source_text.replace("'''", "''\\''")
+        toml_path.write_text(
+            f"developer_instructions = '''\n{escaped}\n'''\n"
+        )
+        # Mutate config.toml: add/update [agents.<slug>] section.
+        config_toml = base / "config.toml"
+        if config_toml.exists():
+            existing = config_toml.read_text()
+        else:
+            existing = ""
+        section_header = f"[agents.{slug}]"
+        role_block = (
+            f"\n{section_header}\n"
+            f'description = "imported by agent-toolkit-cli"\n'
+            f'config_file = "agents/{slug}.toml"\n'
+        )
+        if section_header in existing:
+            # Replace the existing [agents.<slug>] block.
+            existing = re.sub(
+                rf"\[agents\.{re.escape(slug)}\][^\[]*",
+                role_block.lstrip("\n"),
+                existing,
+                flags=re.DOTALL,
+            )
+            _atomic_write(config_toml, existing)
+        else:
+            _atomic_write(config_toml, existing.rstrip("\n") + role_block)
+        return toml_path
+
+    def uninstall(
+        self,
+        slug: str,
+        *,
+        scope: str,
+        home: Path | None = None,
+        project: Path | None = None,
+    ) -> None:
+        _check_scope(scope, "codex")
+        try:
+            base = _resolve_base("codex", scope, home, project, ".codex")
+        except ValueError:
+            return
+        toml_path = base / "agents" / f"{slug}.toml"
+        if toml_path.exists():
+            toml_path.unlink()
+        config_toml = base / "config.toml"
+        if config_toml.exists():
+            existing = config_toml.read_text()
+            cleaned = re.sub(
+                rf"\[agents\.{re.escape(slug)}\][^\[]*",
+                "",
+                existing,
+                flags=re.DOTALL,
+            )
+            _atomic_write(config_toml, cleaned)
+
+
 _ADAPTERS: dict[str, type] = {
     "aider-desk": _AiderDeskAdapter,
+    "codex": _CodexAdapter,
     "dexto": _DextoAdapter,
     "firebender": _FirebenderAdapter,
 }
 
 
-def adapter_for(harness: str) -> _AiderDeskAdapter | _DextoAdapter | _FirebenderAdapter:
+def adapter_for(harness: str) -> _AiderDeskAdapter | _CodexAdapter | _DextoAdapter | _FirebenderAdapter:
     """Return the config_file_folder-mechanism adapter for `harness`."""
     cls = _ADAPTERS.get(harness)
     if cls is None:

@@ -125,3 +125,74 @@ def test_supported_rows_have_mechanism_path_citation(rows):
     assert not incomplete, (
         f"Supported rows missing mechanism/path/citation: {sorted(incomplete)}"
     )
+
+
+# Verdict prefix → expected AgentConfig.subagent_mechanism value.
+# config_file+folder rows use the Python identifier config_file_folder.
+# dual-symlink rows were reclassified to the symlink mechanism per spec
+# addendum Correction A (the ~/.agents/ user-scope slot is a skills path).
+_VERDICT_PREFIX_TO_MECHANISM: dict[str, str] = {
+    "symlink": "symlink",
+    "translate": "translate",
+    "config_file+folder": "config_file_folder",
+    "config_file": "config_file_folder",
+    "dual-symlink": "symlink",
+}
+
+
+def test_supported_rows_have_matching_adapter(rows):
+    """Every harness-matrix row with a supported-mechanism verdict must
+    have a corresponding agent_adapters.get_adapter() implementation.
+
+    Acceptance criterion #5 (spec): every supported matrix row has a
+    subagent_mechanism value on its AgentConfig matching the row's verdict
+    prefix, AND get_adapter(harness) returns an installable adapter.
+    """
+    from agent_toolkit_cli.agent_adapters import (
+        UnsupportedMechanismError,
+        get_adapter,
+    )
+
+    supported_prefixes = tuple(_VERDICT_PREFIX_TO_MECHANISM)
+    failures: list[str] = []
+
+    for harness, row in rows.items():
+        verdict = row["verdict"].lower()
+        if not verdict.startswith(supported_prefixes):
+            continue  # unsupported (gap/by design) or unknown — skip
+
+        # Determine which prefix matched.
+        matched_prefix = next(
+            p for p in sorted(_VERDICT_PREFIX_TO_MECHANISM, key=len, reverse=True)
+            if verdict.startswith(p)
+        )
+        expected_mech = _VERDICT_PREFIX_TO_MECHANISM[matched_prefix]
+
+        if harness not in skill_agents.AGENTS:
+            failures.append(
+                f"{harness}: matrix-listed as supported but missing from AGENTS catalog"
+            )
+            continue
+
+        actual_mech = skill_agents.AGENTS[harness].subagent_mechanism
+        if actual_mech != expected_mech:
+            failures.append(
+                f"{harness}: matrix verdict prefix '{matched_prefix}' expects "
+                f"subagent_mechanism='{expected_mech}', got '{actual_mech}'"
+            )
+            continue
+
+        # Adapter must be importable and have install/uninstall.
+        try:
+            adapter = get_adapter(harness)
+        except UnsupportedMechanismError as exc:
+            failures.append(f"{harness}: get_adapter raised UnsupportedMechanismError: {exc}")
+            continue
+
+        missing = [m for m in ("install", "uninstall") if not hasattr(adapter, m)]
+        if missing:
+            failures.append(
+                f"{harness}: adapter missing methods: {missing}"
+            )
+
+    assert not failures, "Matrix parity failures:\n" + "\n".join(failures)

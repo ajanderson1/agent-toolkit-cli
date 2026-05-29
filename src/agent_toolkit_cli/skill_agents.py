@@ -146,7 +146,7 @@ AGENTS: dict[str, AgentConfig] = {
         skills_dir=".agents/skills",
         global_skills_dir=CODEX_HOME / "skills",
         detect_installed=lambda: CODEX_HOME.exists() or Path("/etc/codex").exists(),
-        subagent_mechanism="translate",
+        subagent_mechanism="config_file_folder",
     ),
     "command-code": AgentConfig(
         name="command-code",
