@@ -1,4 +1,11 @@
-# v3.0.0 PR2: Agent facade + 28 projection adapters — Implementation Plan
+# v3.1.0 PR2: Agent facade + 28 projection adapters — Implementation Plan
+
+> **Roadmap note:** this plan was written under the v3.0.0 milestone and
+> the body refers to "v3.0.0 PR2" throughout — the agent kind was
+> renumbered to v3.1.0 after build completion. Code-block strings that
+> embedded "v3.0.0 PR2" reflect what the implementer wrote at build
+> time (now baked into commits + docstrings); they are not edited
+> here.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
