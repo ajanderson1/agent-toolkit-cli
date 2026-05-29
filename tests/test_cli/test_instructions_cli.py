@@ -185,3 +185,49 @@ def test_status_reports_conflict_when_pointer_points_elsewhere(tmp_path, monkeyp
 
     result = runner.invoke(main, ["instructions", "status", "--scope", "project"])
     assert "conflict" in result.output.lower()
+
+
+def test_doctor_reports_orphan_pointer_when_canonical_gone(tmp_path, monkeypatch):
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / "AGENTS.md").write_text("# canon\n")
+    monkeypatch.chdir(project)
+
+    runner = CliRunner()
+    runner.invoke(main, ["instructions", "install", "--scope", "project", "--harness", "claude-code"])
+    (project / "AGENTS.md").unlink()  # canonical gone; pointer dangles
+
+    result = runner.invoke(main, ["instructions", "doctor", "--scope", "project"])
+    assert result.exit_code != 0
+    assert "orphan" in result.output.lower()
+
+
+def test_doctor_clean_exit_zero(tmp_path, monkeypatch):
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / "AGENTS.md").write_text("# canon\n")
+    monkeypatch.chdir(project)
+
+    runner = CliRunner()
+    runner.invoke(main, ["instructions", "install", "--scope", "project", "--harness", "claude-code"])
+
+    result = runner.invoke(main, ["instructions", "doctor", "--scope", "project"])
+    assert result.exit_code == 0, result.output
+    assert "clean" in result.output.lower()
+
+
+def test_doctor_reports_conflict(tmp_path, monkeypatch):
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / "AGENTS.md").write_text("# canon\n")
+    monkeypatch.chdir(project)
+
+    runner = CliRunner()
+    runner.invoke(main, ["instructions", "install", "--scope", "project", "--harness", "claude-code"])
+    # Replace symlink with a real file.
+    (project / "CLAUDE.md").unlink()
+    (project / "CLAUDE.md").write_text("user authored\n")
+
+    result = runner.invoke(main, ["instructions", "doctor", "--scope", "project"])
+    assert result.exit_code != 0
+    assert "conflict" in result.output.lower()
