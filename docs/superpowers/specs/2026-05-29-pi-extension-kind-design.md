@@ -41,34 +41,49 @@ for this kind; the grid collapses to Pi-only columns.
 
 ## 2. Verified Pi discovery contract (load-bearing)
 
-Read from Pi source at `pi-mono/packages/coding-agent/src/core/` (verify against
-the installed `@earendil-works/pi-coding-agent` version at implementation time):
+**Verified against the INSTALLED Pi: `@earendil-works/pi-coding-agent@0.77.0`**
+(Homebrew global, `pi` → `dist/cli.js`). The `pi-mono` source tree is an older
+`0.54.2` and has drifted — target 0.77.0 behaviour, treat `pi-mono` as a stale
+reference. Citations below are from the installed `dist/` unless noted.
 
-- **Discovery roots** (`resource-loader.ts:787,793`): Pi scans
-  - `~/.pi/agent/extensions/` — **global / "user" scope**
-  - `<cwd>/.pi/extensions/` — **project scope**
-  (`CONFIG_DIR_NAME` = `.pi`). Project-scope dirs confirmed in the wild across
-  multiple repos.
-- **Symlinks are first-class** (`loader.ts:447,453`): `discoverExtensionsInDir`
-  explicitly branches on `entry.isSymbolicLink()` for both files and
-  directories. A symlinked directory is resolved exactly like a real directory.
-- **Entry-point contract** (`loader.ts:resolveExtensionEntries`): a directory
-  loads if it contains
-  1. a `package.json` with a `pi.extensions` field (declared paths), **or**
-  2. an `index.ts` / `index.js`.
-  Loose `*.ts` / `*.js` files directly under `extensions/` also load.
-  No recursion beyond one level.
-- **`settings.json` has two distinct arrays** (`settings-manager.ts:80`):
+- **Discovery roots:** Pi scans, **per scope**:
+  - `~/.pi/agent/extensions/` — **global / "user" scope** (`loader.js:461`)
+  - `<cwd>/.pi/extensions/` — **project scope** (`loader.js:458`,
+    `package-manager.js:1841`); `CONFIG_DIR_NAME = ".pi"` (`config.js:367`).
+  Project-scope dirs confirmed in the wild across multiple repos.
+- **Discovery order is PROJECT-FIRST then global** in 0.77.0 (reversed from
+  0.54.2). Combined with a precedence-rank dedup (below), **project wins over
+  global** on a same-path collision.
+- **Symlinks are first-class** (`loader.js:447,453`): `discoverExtensionsInDir`
+  branches on `entry.isSymbolicLink()` for both files and directories. A
+  symlinked directory is resolved exactly like a real directory.
+- **Entry-point contract** (`loader.js` `resolveExtensionEntries`): a directory
+  loads if it contains (1) a `package.json` with a `pi.extensions` field, **or**
+  (2) an `index.ts` / `index.js`. Loose `*.ts` / `*.js` files directly under
+  `extensions/` also load. No recursion beyond one level.
+- **`settings.json` has two distinct arrays, each PER-SCOPE**
+  (`settings-manager.js:48-49` global vs project file):
   - `packages[]` — registry refs (`npm:<spec>`, `git:<url>`) Pi resolves into
-    `~/.pi/agent/npm/node_modules/`.
-  - `extensions[]` — explicit list of local extension file/dir paths.
-  Both feed the same load pipeline. `setGlobalExtensions` /
-  `setProjectExtensions` write the project vs global copies
-  (`settings-manager.ts:710,717`).
+    `~/.pi/agent/npm/` (user) **or** `<cwd>/.pi/npm/` (project).
+    **Project-scoped `packages[]` IS fully supported** — read additively with
+    global, project winning on name collision (`package-manager.js:673-676`,
+    writer `setProjectPackages` `settings-manager.js:591-596`).
+  - `extensions[]` — explicit local file/dir paths. Relative entries resolve
+    against the **scope base dir** (`~/.pi/agent` global, `<cwd>/.pi` project) —
+    `package-manager.js:682-683`, `resolvePathFromBase` `:1662-1664`.
+
+- **Conflict / precedence** (no `detectExtensionConflicts` fn; it's a numeric
+  rank + first-wins canonical-path dedup, `package-manager.js:53-58,1940-1948`):
+  project+settings (0) > project+auto-discovered (1) > user+settings (2) >
+  user+auto-discovered (3) > package resource (4). Dedup keys on the
+  **realpath-canonicalized** path; genuine same-slug-different-file collisions
+  fall through to last-write-wins in the runner's registration maps.
 
 **Conclusion:** a symlink projected into `extensions/` is loaded identically to a
-hand-placed extension. The existing skill projection engine therefore works for
-git/local extensions **unchanged**.
+hand-placed extension; the skill projection engine works for git/local
+extensions **unchanged**. Because project-scoped `packages[]` is real, **npm rows
+get a genuine project cell** (not `—`), and an extension can be project-scoped
+without touching global.
 
 ---
 
@@ -103,19 +118,30 @@ npm:<spec>          ───────────(NOT stored)─────
 ## 4. Architecture
 
 `pi-extension` is a **third `KindBinding`** on the v3.1.0-generalized machinery.
-No new lock design (per decision: inherit whatever v3.1.0 lands — per-kind file
-or `kind` discriminator).
+No new lock design. **The lock decision is confirmed** (PR #267 foundation +
+open PR #268 agent facade, `feat/252-v3-pr2-agent-facade-adapters`):
+
+- **Per-kind separate lock files** — `skills-lock.json`, `agents-lock.json`,
+  and here **`pi-extensions-lock.json`** (global at `~/.agent-toolkit/`, project
+  at `./.pi-extensions-lock.json`).
+- **No `kind` discriminator field on entries.** One shared `LockEntry` /
+  `LockFile` struct (`skill_lock.py`), keyed by slug, separated by *file*.
+- Kinds that need a canonical-path pointer add a **parallel first-class field**
+  (skills: `skillPath`, agents: `agentPath`). If pi-extension store-owned rows
+  need one, add `piExtensionPath` — **not** a `kind` tag. Registry-tracked npm
+  rows need no path field; `source` + `source_type="npm"` on the shared struct
+  suffice.
 
 ### 4.1 New / changed modules
 
 | Module | Change |
 |---|---|
-| `_paths_core.py` | add `PI_EXTENSION_BINDING` (`kind="pi-extension"`, `canonical_dirname="pi-extensions"`, `library_subdir="pi-extensions"`, `lock_filename` per v3.1.0, `general_harness_name` n/a — Pi-only). |
+| `_paths_core.py` | add `PI_EXTENSION_BINDING` (`kind="pi-extension"`, `canonical_dirname="pi-extensions"`, `library_subdir="pi-extensions"`, `lock_filename="pi-extensions-lock.json"`, `general_harness_name` n/a — Pi-only). |
 | `pi_extension_install.py` | new facade over `_install_core`, mirroring `skill_install` / future `agent_install`. Handles the **store-owned** projection (symlink into the two Pi extension dirs). |
 | `_pi_settings.py` | **the one genuinely new module.** Read/write `settings.json` `packages[]` (and read `extensions[]` for inventory). Pure config edit; never shells out to `pi`. JSON read-modify-write that preserves unknown keys and formatting as much as practical. |
 | `pi_extension` command group | `add` (global-only), `install`, `uninstall`, `remove`, `import`, `list`, `status`, `update`, `push`, `reset`; `doctor` learns the kind. Registered in `cli.py` alongside `skill`. |
 | TUI: kind sidebar | `pi-extension` becomes a selectable kind. When active, grid shows Pi-only columns. |
-| TUI: grid | Pi-only column set: `EXTENSION | Pi (global) | Pi (project) | State | Source`. npm rows render their two scope cells per Pi's `packages[]` reality (project scope shown as `—` if Pi has no project `packages[]`; confirm at impl time). |
+| TUI: grid | Pi-only column set: `EXTENSION | Pi (global) | Pi (project) | State | Source`. npm rows render **both** scope cells as real toggles — project-scoped `packages[]` is confirmed supported (global → `~/.pi/agent/settings.json`, project → `<cwd>/.pi/settings.json`). |
 
 ### 4.2 Reused unchanged
 
@@ -145,7 +171,7 @@ EXTENSION        Pi(g)  Pi(p)   State      Source
 status-bar         ✔      ☐     clean      git:.../status-bar      (store-owned)
 supacode           ✔      ☐     untracked  local dir               (importable)
 superset-hooks     ✔      ☐     untracked  loose .ts               (importable)
-rpiv-i18n          ✔      —     —          npm:@juicesharp/rpiv-i18n (tracked)
+rpiv-i18n          ✔      ☐     tracked    npm:@juicesharp/rpiv-i18n (tracked)
 ```
 
 `State` reuses the skill state vocabulary (`clean` / `dirty` / `missing` /
@@ -235,13 +261,28 @@ to finish factoring `skill_*` onto the `kind` dimension; flag in the plan.)
 
 ---
 
-## 11. Open items for the plan
+## 11. Open items — RESOLVED (research 2026-05-29)
 
-1. Confirm the installed Pi version's loader matches the `pi-mono` source read
-   here (esp. project-scope `packages[]` support — drives whether npm rows show
-   a project cell or `—`).
-2. Confirm v3.1.0's final lock shape so `PI_EXTENSION_BINDING.lock_filename` /
-   discriminator is set correctly.
-3. Decide the `extensions[]` (explicit-path) surface: fold into inventory as
-   `source = local:<path>` tracked rows, or treat as untracked-importable. Prior
-   gen (#109) recommended folding in; revisit under the owned-store model.
+1. **Installed Pi version & loader drift — RESOLVED.** Installed is
+   `@earendil-works/pi-coding-agent@0.77.0`, NOT the `pi-mono` 0.54.2 source.
+   Discovery is project-first/global-second with project-wins precedence (§2).
+   Project-scope `packages[]` IS supported → npm rows get a real project cell.
+   **Target 0.77.0**; re-verify the loader at impl time only if the installed
+   version has moved.
+2. **v3.1.0 lock shape — RESOLVED.** Per-kind separate file
+   (`pi-extensions-lock.json`), no `kind` discriminator, shared `LockEntry`
+   struct, parallel `piExtensionPath` field if a pointer is needed (§4). Decided
+   and implemented on PR #267 + #268.
+3. **`extensions[]` (explicit-path) surface — open, low-stakes.** Decide in PR2:
+   fold into inventory as `source = local:<path>` tracked rows (prior gen #109
+   recommendation), or treat as untracked-importable. Default: treat as
+   untracked-importable for symmetry with loose `extensions/` entries, since the
+   owned-store model prefers adoption over a parallel tracked-path channel.
+
+## 12. Dependency note
+
+Open PR #268 (`feat/252-v3-pr2-agent-facade-adapters`) carries the agent facade
++ the lock `agentPath` field this design's pattern mirrors. PR1 here should land
+**after** #268 merges (or rebase onto it) so `pi_extension_install` /
+`pi_extension_paths` can follow the same facade + parallel-path-field shape the
+agent kind establishes. Flag in the plan whether to branch from #268.
