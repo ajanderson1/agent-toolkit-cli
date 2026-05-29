@@ -1,14 +1,19 @@
 # Harness compatibility matrix
 
 Single source of truth for which (asset-kind × harness) pairs are supported and
-how each is projected. As of v3.0.0 Phase A this doc covers the **`agent`
-(subagent) kind only**; the legacy multi-kind grid (the v1 `skill | command |
-hook | plugin | mcp | pi-extension` table, removed in the strip-back) returns in
-Phase B alongside the projection adapters. A parity test
-(`tests/test_subagent_matrix.py`) fails if this doc and the harness catalog
-(`src/agent_toolkit_cli/skill_agents.py`) disagree.
+how each is projected. This doc currently covers two kinds, each in its own
+section below:
 
-## Mechanisms
+- the **`agent` (subagent) kind** — v3.0.0 Phase A deliverable for #252
+  (v3.1.0 milestone). Parity test: `tests/test_subagent_matrix.py`.
+- the **`instructions` kind** — v3.0.0 Phase A deliverable for #269
+  (v3.0.0 milestone). Parity test: `tests/test_instructions_matrix.py`.
+
+The legacy multi-kind grid (the v1 `skill | command | hook | plugin | mcp |
+pi-extension` table, removed in the strip-back) returns alongside the
+projection adapters as each kind lands.
+
+## Mechanisms — agent (subagent) kind
 
 How an `agent` (subagent) asset is projected into a harness:
 
@@ -126,7 +131,7 @@ By mechanism: **symlink** (Claude-compatible markdown drop-in) — `augment`,
 | `windsurf` | unsupported (by design) |  |  | Cascade single-agent; parallel sessions are full agents not file-defined; AGENTS.md=context | https://docs.windsurf.com/windsurf/cascade/agents-md |
 | `zencoder` | unsupported (by design) |  |  | Zen Agents marketplace/UI-defined; no local file-drop dir | https://zencoder.ai/blog/introducing-zen-agents... |
 
-## Notes for Phase B
+## Notes for Phase B — agent (subagent) kind
 
 - **Mechanism normalization:** the research fragments labelled several
   Claude-compatible markdown drop-ins as `config_file+folder`; that was the
@@ -151,3 +156,125 @@ By mechanism: **symlink** (Claude-compatible markdown drop-in) — `augment`,
   `kode`, `neovate`, `cortex`, and `devin` (Claude-compatibility layers). A single
   symlink into `~/.claude/agents/` may satisfy multiple harnesses — a Phase B
   optimization to weigh against per-harness slot explicitness.
+
+## Instruction-file (`instructions` kind) support — all harnesses
+
+This table is the **v3.0.0 Phase A deliverable** for the `instructions` kind:
+for every harness in the catalog, what file does the harness load by **default**
+(no flags, no config) as its root project/global instruction context, and can a
+per-harness pointer symlink to a canonical `AGENTS.md` satisfy it? It is the
+contract Phase B implements against — each `symlink`-verdict row becomes one
+pointer (e.g. `CLAUDE.md → AGENTS.md`). Guarded by
+`tests/test_instructions_matrix.py`. Per-harness "what I checked" evidence
+trails live in `docs/agent-toolkit/research/instructions-fragments/`. Tracked in
+#269.
+
+### Mechanisms (instructions kind)
+
+This kind has only **one action verdict**. The five-cell vocabulary is:
+
+- **native** — harness reads `AGENTS.md` by default at one or both scopes. No
+  pointer needed; this set is the per-kind "general" column.
+- **symlink** — harness reads a fixed own-name file by default (e.g.
+  `CLAUDE.md`, `GEMINI.md`, `IFLOW.md`). Adapter creates a same-name pointer
+  symlink → `AGENTS.md`.
+- **unsupported (gap)** — harness reads only via config opt-in or explicit flag,
+  OR reads a directory (not a single root file), OR support is unshipped/
+  defunct. A same-name pointer can't satisfy it and we don't mutate config.
+- **unsupported (by design)** — no root instruction-file concept at all.
+- **unknown — no public evidence found** — bounded search surfaced no default
+  instruction-file convention.
+
+There is no `translate`, no `config_file`, no `dual-symlink` for this kind.
+Pointer symlinks only.
+
+**Summary (Phase A):** 39 native · 7 symlink · 4 unsupported (gap) · 2 unsupported (by design) · 2 unknown.
+
+**Symlink set (Phase B work surface, alphabetical):** `augment`, `claude-code`, `codebuddy`, `gemini-cli`, `iflow-cli`, `replit`, `tabnine-cli`.
+
+These 7 are the per-harness pointer targets the `instructions` kind will create.
+All 39 native readers cost zero adapter work — the canonical `AGENTS.md` 
+satisfies them as-is.
+
+| Harness | Verdict | Default file | Project / Global path | Reads AGENTS.md natively? | Mechanism | Citation |
+|---|---|---|---|---|---|---|
+| `adal` | native | `AGENTS.md` | `./AGENTS.md` (nearest while walking up from cwd) / none documented (project-only auto-load) | yes |  | https://codingagents.md/agents/adal/ ; https://docs.sylph.ai/ |
+| `aider-desk` | unsupported (gap) | none (rule files toggled via UI / External Rules extension) | n/a — rule files live under user-chosen folders, enabled per-profile via UI | no |  | github.com/hotovo/aider-desk — README "Rule Files" / "External Rules extension"; no auto-loaded root file documented in README or main `AGENTS.md` |
+| `amp` | native | `AGENTS.md` | `./AGENTS.md` / `~/.config/amp/AGENTS.md` (global rules via Amp settings, AGENTS.md primary) | yes |  | https://ampcode.com/agent.md (Amp publishes the AGENTS.md spec page) |
+| `antigravity` | native | `AGENTS.md` + `GEMINI.md` | `./AGENTS.md` (workspace root) / `~/.gemini/AGENTS.md` | yes |  | [Antigravity 1.20.3 changelog (2026-03-05)](https://discuss.ai.google.dev/t/antigravity-update-1-20-3-2026-3-5/129320): "Added support for reading rules from AGENTS.md in addition to GEMINI.md." |
+| `augment` | symlink | `CLAUDE.md` (with `AGENTS.md` as documented fallback) | `./CLAUDE.md` (workspace root) / `~/.augment/rules/` (directory loader; no fixed root file at user scope) | no (CLAUDE.md takes precedence over AGENTS.md per official rule chain) | symlink | https://docs.augmentcode.com/cli/rules |
+| `bob` | native | `AGENTS.md` | `./AGENTS.md` / none (global-only) — global is `~/.bob/rules/*.md` (a *rules* directory, not AGENTS.md) | yes |  | https://bob.ibm.com/docs/ide/configuration/rules ("`AGENTS.md` file in your workspace root … Automatically loaded by default") and https://bob.ibm.com/docs/ide/getting-started/tutorials/start-a-project ("Bob automatically applies the `AGENTS.md` to new conversations") |
+| `claude-code` | symlink | `CLAUDE.md` | `./CLAUDE.md` or `./.claude/CLAUDE.md` / `~/.claude/CLAUDE.md` | no | symlink | https://code.claude.com/docs/en/memory § "AGENTS.md" ("Claude Code reads `CLAUDE.md`, not `AGENTS.md`") |
+| `cline` | native | `AGENTS.md` | `./AGENTS.md` / none (global-only-via-UI; no global file path) | yes |  | https://github.com/cline/cline/pull/7437 merged 2025-11-13; CHANGELOG entry "Add AGENTS.md support" in v3.37.0 (https://github.com/cline/cline/blob/main/CHANGELOG.md) |
+| `codearts-agent` | unknown — no public evidence found | none | none / none | no |  | Searched `support.huaweicloud.com` CodeArts docs, JetBrains Marketplace listing, Pandaily/Tiger Brokers public-beta coverage, Baidu-wiki entries — no documented default root instruction-file convention |
+| `codebuddy` | symlink | `CODEBUDDY.md` | `./CODEBUDDY.md` (recursive up from cwd) / `~/.codebuddy/CODEBUDDY.md` | no (own-name preferred; AGENTS.md only as fallback when CODEBUDDY.md absent) | symlink | https://www.codebuddy.ai/docs/cli/memory |
+| `codemaker` | unsupported (by design) | none | none / none | no |  | https://github.com/codemakerai/codemaker-cli README ("Context-aware source code generation … Generating source code documentation … Fixing syntax"; usage is `codemaker generate docs **/*.java`) |
+| `codestudio` | unknown — no public evidence found | none | none / none | no |  | (exhaustive search: ByteDance/Trae, Alibaba/Qoder, Baidu/Comate, Tencent/CodeBuddy, Volcano Engine — no product literally named "codestudio" found) |
+| `codex` | native | `AGENTS.md` | `<git-root>/AGENTS.md` (walks git-root → cwd) / `~/.codex/AGENTS.md` (or `AGENTS.override.md`; honors `$CODEX_HOME`) | yes |  | https://developers.openai.com/codex/guides/agents-md |
+| `command-code` | native | `AGENTS.md` | `./AGENTS.md` / none (project-only — no documented user-level instruction file) | yes |  | https://commandcode.ai/features § "AGENTS.md Project Memory" ("Define project-level instructions, code style guidelines, and architecture notes. Automatically loaded every session.") |
+| `continue` | unsupported (gap) | none (uses `.continue/rules/` directory) | `./.continue/rules/` / `~/.continue/rules/` | no |  | https://docs.continue.dev/customize/deep-dives/rules ; https://github.com/continuedev/continue/issues/6716 |
+| `cortex` | native | `AGENTS.md` | `./AGENTS.md` / none (project-only) | yes |  | https://docs.snowflake.com/en/user-guide/cortex-code/cortex-code-snowsight ("Create an `AGENTS.md` file … Cortex Code will automatically include in every conversation. Copy it to the root directory of your workspace"); `~/.snowflake/cortex/` CLI-config tree documents `skills/`, `agents/`, `commands/` but no global `AGENTS.md` |
+| `crush` | native | `AGENTS.md` | `./AGENTS.md` / none (global-only) | yes |  | charmbracelet/crush `internal/config/config.go` — `defaultContextPaths` includes `AGENTS.md` / `agents.md` / `Agents.md`; `InitializeAs` JSON-schema `default=AGENTS.md` |
+| `cursor` | native | `AGENTS.md` (also `.cursor/rules/*.mdc`) | `./AGENTS.md` / Cursor Settings > Rules (UI, not file) | yes |  | https://cursor.com/docs/rules |
+| `deepagents` | unsupported (gap) | none (memory middleware requires explicit `agentId` + source paths) | none (no auto-load) / none (no auto-load) | no |  | https://deepagentsdk.dev/docs/guides/agent-memory ("Create memory middleware" requires `createAgentMemoryMiddleware({ agentId })`; project memory only loads via `requestProjectApproval`) |
+| `devin` | native | `AGENTS.md` | `./AGENTS.md` / none (project-only) | yes |  | https://docs.devin.ai/onboard-devin/agents-md ("Just put an `AGENTS.md` file in your project root … Devin will look for the file before it starts coding") and https://docs.devin.ai/onboard-devin/knowledge-onboarding (Knowledge is the user/global-scope mechanism, separate from `AGENTS.md`) |
+| `dexto` | native | `AGENTS.md` (priority over `CLAUDE.md`, then `GEMINI.md`) | `<workspaceRoot>/AGENTS.md` / none (global-only AGENTS.md not auto-loaded; only `~/.dexto/commands/` is global) | yes |  | https://github.com/truffle-ai/dexto/blob/main/packages/agent-management/src/config/discover-prompts.ts (`AGENT_INSTRUCTION_FILES = ['agents.md', 'claude.md', 'gemini.md']`, `discoverAgentInstructionFile`) |
+| `droid` | native | `AGENTS.md` | `./AGENTS.md` / `~/.factory/AGENTS.md` | yes |  | https://docs.factory.ai/cli/configuration/agents-md ("Agents look for AGENTS.md in this order (first match wins): 1. `./AGENTS.md` in the current working directory … 4. Personal override: `~/.factory/AGENTS.md`. Agents read it automatically; no extra flags required.") |
+| `firebender` | native | `AGENTS.md` | `./AGENTS.md` (also `./.firebender/AGENTS.md`) / `~/.firebender/AGENTS.md` | yes |  | https://docs.firebender.com/api-reference/agents-md.md ("automatically discovered… No configuration in `firebender.json` is required"); changelog v0.15.5 (2026-01-28) https://docs.firebender.com/about/changelog |
+| `forgecode` | native | `AGENTS.md` | `./AGENTS.md` (recursively: env `base_path` → git root → cwd) / `none (project-only)` | yes |  | https://forgecode.dev/docs/custom-rules-guide/ |
+| `gemini-cli` | symlink | `GEMINI.md` | `./GEMINI.md` / `~/.gemini/GEMINI.md` | no | symlink | [`packages/core/src/tools/memoryTool.ts`](https://github.com/google-gemini/gemini-cli/blob/main/packages/core/src/tools/memoryTool.ts) — `export const DEFAULT_CONTEXT_FILENAME = 'GEMINI.md';` + [`docs/cli/gemini-md.md`](https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/gemini-md.md) |
+| `github-copilot` | native | `AGENTS.md` | `./AGENTS.md` (repo root) / `$HOME/.copilot/copilot-instructions.md` (different name at user scope) | yes (project scope) |  | https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-custom-instructions ; https://github.blog/changelog/2025-08-28-copilot-coding-agent-now-supports-agents-md-custom-instructions/ |
+| `goose` | native | `.goosehints` (and `AGENTS.md`) | `./.goosehints` and `./AGENTS.md` / `~/.config/goose/.goosehints` and `~/.config/goose/AGENTS.md` (XDG; on macOS `~/Library/Application Support/Block/goose/`) | yes |  | block/goose `crates/goose/src/hints/load_hints.rs` — `get_context_filenames()` defaults to `[".goosehints", "AGENTS.md"]`; `load_hints_from_directory` reads both project-cwd and `Paths::in_config_dir(...)` |
+| `hermes-agent` | native | `AGENTS.md` | `./AGENTS.md` (cwd top-level only; nested injected lazily via tool results) / `none (project-only — global persona uses separate `~/.hermes/SOUL.md`)` | yes |  | https://hermes-agent.nousresearch.com/docs/guides/tips |
+| `iflow-cli` | symlink | `IFLOW.md` | `./IFLOW.md` / `~/.iflow/IFLOW.md` | no | symlink | [`platform.iflow.cn` Memory docs](https://platform.iflow.cn/en/cli/configuration/iflow) — default name `IFLOW.md`, custom names require `contextFileName` setting; confirmed in DeepWiki Command Reference |
+| `junie` | native | `AGENTS.md` | `./.junie/AGENTS.md` (preferred) or `./AGENTS.md` (fallback) / `~/.junie/AGENTS.md` | yes |  | https://junie.jetbrains.com/docs/guidelines-and-memory.html |
+| `kilo` | native | `AGENTS.md` | `./AGENTS.md` / none (project-only) | yes |  | https://kilo.ai/docs/agent-behavior/agents-md |
+| `kimi-cli` | native | `AGENTS.md` | `<git-root>/AGENTS.md` (walks git-root → cwd, plus `.kimi/AGENTS.md`) / none (global-only AGENTS.md not documented; user config lives at `~/.kimi/config.toml`) | yes |  | https://moonshotai.github.io/kimi-cli/en/release-notes/changelog.html (v1.29.0 2026-04-01) |
+| `kiro-cli` | native | `AGENTS.md` | `./AGENTS.md` (workspace root) / `~/.kiro/steering/AGENTS.md` | yes |  | https://kiro.dev/docs/cli/steering/ |
+| `kode` | native | `AGENTS.md` | `./AGENTS.md` (prefers `AGENTS.override.md`) / none (project-only; `~/.kode.json` is JSON config, not an instruction file) | yes |  | https://github.com/shareAI-lab/Kode-cli README § "AGENTS.md Standard Support" ("Native support for the OpenAI-initiated standard format … prefers `AGENTS.override.md` over `AGENTS.md`") |
+| `mcpjam` | unsupported (by design) | none | none / none | no |  | https://www.mcpjam.com/ ; https://github.com/MCPJam/inspector |
+| `mistral-vibe` | native | `AGENTS.md` | `./AGENTS.md` (walk up from cwd, trusted dirs only) / `~/.vibe/AGENTS.md` (or `$VIBE_HOME/AGENTS.md`) | yes |  | https://docs.mistral.ai/mistral-vibe/agents-skills |
+| `mux` | native | `AGENTS.md` | `<workspace>/AGENTS.md` / `~/.mux/AGENTS.md` | yes |  | https://mux.coder.com/agents/instruction-files ("Mux picks the first matching base file: 1. AGENTS.md 2. AGENT.md 3. CLAUDE.md"; "Precedence: workspace … then global `~/.mux/AGENTS.md`") |
+| `neovate` | native | `AGENTS.md` (project also walks for `CLAUDE.md`, `NEOVATE.md`; global also checks `NEOVATE.md` and `~/.claude/CLAUDE.md`) | `<cwd>/AGENTS.md` walking up to filesystem root / `~/.neovate/AGENTS.md` | yes |  | https://github.com/neovateai/neovate-code/blob/master/src/rules.ts (`getLlmsRules`, `projectRuleNames`/`globalRuleNames` starting with `'AGENTS.md'`) |
+| `openclaw` | native | `AGENTS.md` | none (global/workspace-only) / `~/.openclaw/workspace/AGENTS.md` | yes |  | https://docs.openclaw.ai/concepts/system-prompt + https://github.com/openclaw/openclaw README ("Injected prompt files: `AGENTS.md`, `SOUL.md`, `TOOLS.md`"; "Workspace root: `~/.openclaw/workspace`") |
+| `opencode` | native | `AGENTS.md` | `./AGENTS.md` / `~/.config/opencode/AGENTS.md` | yes |  | https://opencode.ai/docs/rules/ |
+| `openhands` | native | `AGENTS.md` | `./AGENTS.md` (workspace root) / none documented (project-only auto-load) | yes |  | https://docs.openhands.dev/sdk/guides/skill |
+| `pi` | native | `AGENTS.md` | `./AGENTS.md` / `~/.pi/agent/AGENTS.md` | yes |  | https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/README.md (current upstream README documents AGENTS.md loaded at startup from cwd + parents + `~/.pi/agent/AGENTS.md`) |
+| `pochi` | native | `README.pochi.md` OR `AGENTS.md` (treated identically) | `./AGENTS.md` (or `./README.pochi.md`) / `~/.pochi/README.pochi.md` (AGENTS.md alternative implied — docs say files are "treated identically") | yes |  | https://docs.getpochi.com/rules/ |
+| `qoder` | native | `AGENTS.md` | `./AGENTS.md` (also `.qoder/rules/`) / none (project-only) | yes |  | https://docs.qoder.com/user-guide/rules |
+| `qwen-code` | native | `QWEN.md` + `AGENTS.md` | `./AGENTS.md` (or `./QWEN.md`) / `~/.qwen/AGENTS.md` (or `~/.qwen/QWEN.md`) | yes |  | [PR #2018](https://github.com/QwenLM/qwen-code/pull/2018) merged 2026-03-02 in `packages/core/src/tools/memoryTool.ts` adds `AGENT_CONTEXT_FILENAME = 'AGENTS.md'` and sets `currentGeminiMdFilename = [DEFAULT_CONTEXT_FILENAME, AGENT_CONTEXT_FILENAME]` (closes [#2006](https://github.com/QwenLM/qwen-code/issues/2006)) |
+| `replit` | symlink | `replit.md` | `./replit.md` (project root only) / none (project-only) | no | symlink | https://docs.replit.com/replitai/replit-dot-md |
+| `roo` | native | `AGENTS.md` | `./AGENTS.md` / `~/.roo/rules/` (directory, not single file) | yes |  | https://roocodeinc.github.io/Roo-Code/features/custom-instructions |
+| `rovodev` | native | `AGENTS.md` | `./AGENTS.md` / `~/.rovodev/AGENTS.md` | yes |  | https://paul-hackenberger.medium.com/atlassian-rovodev-the-king-of-kontext-6bd7a77b5b37 ("Place an `AGENTS.md` file in your repository root … Rovo Dev reads this automatically" and "Create an `AGENTS.md` file in your `~/.rovodev` folder … Rovo Dev reads these files automatically, giving every interaction team-specific context") |
+| `tabnine-cli` | symlink | `TABNINE.md` | `./TABNINE.md` / unclear (no documented global `TABNINE.md` path; `~/.tabnine/guidelines/*.md` is a *directory* of guidelines, not the same file) | no | symlink | https://docs.tabnine.com/main/getting-started/tabnine-cli/getting-started/quickstart ("Add project context with a `TABNINE.md` file in your project root") and https://docs.tabnine.com/main/getting-started/tabnine-cli/features/agent-skills ("Unlike `TABNINE.md` project instructions (which load automatically on every session), skills load only when relevant") |
+| `trae` | unsupported (gap) | `project_rules.md` (in `.trae/rules/` directory) | `./.trae/rules/project_rules.md` / `./.trae/rules/user_rules.md` (workspace-level "user rules", not OS-global) | no |  | https://docs.trae.ai/ide/rules?_lang=en ; https://github.com/Trae-AI/Trae/issues/1911 |
+| `trae-cn` | native | `AGENTS.md` (alongside `.trae/rules/project_rules.md`) | `./AGENTS.md` (and nested sub-directory `AGENTS.md`) / `./.trae/rules/user_rules.md` | yes |  | https://forum.trae.cn/t/topic/52 ; Trae CN changelog 2026-04-15 ("Rules 支持嵌套：子仓目录下的 Rule 文件（包括 AGENTS.md）") |
+| `warp` | native | `AGENTS.md` | `./AGENTS.md` (all caps required) / none (global-only-via-UI; Warp Drive Personal > Rules) | yes |  | https://docs.warp.dev/agent-platform/capabilities/rules/ ("Project Rules… stored in an `AGENTS.md` file… filename must be in all caps") |
+| `windsurf` | native | `AGENTS.md` | `./AGENTS.md` (project root) / Cascade memories UI + `global_rules.md` via "Manage memories" | yes |  | https://docs.windsurf.com/windsurf/cascade/agents-md |
+| `zencoder` | native | `AGENTS.md` | `./AGENTS.md` / none documented (the `.zencoder/rules/*.md` tree is a *directory* of rules, not a global `AGENTS.md`) | yes |  | Feb 2026 Zencoder changelog reports "AGENTS.md support — agent instructions are now resolved from AGENTS.md files at the CLI level" (https://docs.zencoder.ai/changelog/february-2026, surfaced via search; page returns 403 to anonymous fetch) |
+
+## Notes for Phase B — instructions kind
+
+- **Massively native-skewed result.** 39/54 harnesses (72%) read `AGENTS.md`
+  natively at one or both scopes. The `AGENTS.md` standard has become the
+  cross-harness default since the spec was drafted (2026-05-27) — the priors
+  table understated this. The Phase B implementation surface is just the 7
+  `symlink`-verdict harnesses, not the larger set the spec anticipated.
+- **Project-only natives.** Several `native` harnesses (e.g. `command-code`,
+  `kode`) read `AGENTS.md` at project scope but have no documented global/user
+  instruction-file path. The lockfile must allow `scope="project"` entries
+  with no global pointer, even when the harness is `native`.
+- **Workspace-bound natives.** `openclaw` reads `AGENTS.md` only from its single
+  global workspace (`~/.openclaw/workspace/AGENTS.md`), not from per-project
+  cwd. Treated as `native` because the bucket discriminator is "reads AGENTS.md
+  by default with no flags" — the global-only scoping is documented in the
+  fragment.
+- **Both-by-default natives.** Some `native` harnesses (e.g. `qwen-code`,
+  `antigravity`) load both `AGENTS.md` AND a legacy own-name file by default.
+  No pointer needed; the legacy file remains harmless.
+- **`continue` reclassified `gap`.** The spec's priors list assumed `continue`
+  was unsupported; current upstream loads `.continue/rules/*.md` directories
+  but no single root file → file-vs-directory rule → `gap`.
+- **Per-kind "general" set is large.** Per the sibling spec's per-kind general
+  model, the 39 `native` readers ARE the "general" column for this kind —
+  rendered in the TUI as informational (always satisfied, no toggle).
