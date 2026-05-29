@@ -55,7 +55,12 @@ AGENTS: dict[str, AgentConfig] = {
         skills_dir=".aider-desk/skills",
         global_skills_dir=HOME / ".aider-desk/skills",
         detect_installed=lambda: (HOME / ".aider-desk").exists(),
-        subagent_mechanism="config_file_folder",
+        # Adapter implemented in agent_adapters/config_file_folder.py but
+        # disabled in PR2: mutating a third-party config file (config.json
+        # + order.json) is higher blast-radius than the single-file
+        # mechanisms and needs deeper smoke coverage. Follow-up issue tracks
+        # re-enabling all 4 config_file_folder cells together.
+        subagent_mechanism="none",
     ),
     "amp": AgentConfig(
         name="amp",
@@ -146,7 +151,12 @@ AGENTS: dict[str, AgentConfig] = {
         skills_dir=".agents/skills",
         global_skills_dir=CODEX_HOME / "skills",
         detect_installed=lambda: CODEX_HOME.exists() or Path("/etc/codex").exists(),
-        subagent_mechanism="config_file_folder",
+        # Disabled in PR2 (see aider-desk comment). Also: codex classification
+        # is contested between docs (translate; auto-discovers
+        # ~/.codex/agents/*.toml) and source (config_file+folder; requires
+        # [agents.<role>] in config.toml). Disable until the classification
+        # is reconciled and a smoke harness exercises both paths.
+        subagent_mechanism="none",
     ),
     "command-code": AgentConfig(
         name="command-code",
@@ -208,7 +218,11 @@ AGENTS: dict[str, AgentConfig] = {
         skills_dir=".agents/skills",
         global_skills_dir=HOME / ".agents/skills",
         detect_installed=lambda: (HOME / ".dexto").exists(),
-        subagent_mechanism="config_file_folder",
+        # Disabled in PR2 (see aider-desk comment). Dexto also requires
+        # parent-agent allowedAgents editing to make the new agent spawnable
+        # (PR2 explicitly out of scope) — the writes-only adapter we ship
+        # produces an agent that loads but cannot be spawned.
+        subagent_mechanism="none",
     ),
     "droid": AgentConfig(
         name="droid",
@@ -224,7 +238,10 @@ AGENTS: dict[str, AgentConfig] = {
         skills_dir=".agents/skills",
         global_skills_dir=HOME / ".firebender/skills",
         detect_installed=lambda: (HOME / ".firebender").exists(),
-        subagent_mechanism="config_file_folder",
+        # Disabled in PR2 (see aider-desk comment). Atomic mutation of a
+        # third-party firebender.json that the IntelliJ plugin hot-reloads
+        # needs deeper smoke + a live IDE test before we trust it.
+        subagent_mechanism="none",
     ),
     "forgecode": AgentConfig(
         name="forgecode",

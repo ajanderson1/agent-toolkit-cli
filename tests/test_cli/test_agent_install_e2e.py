@@ -9,20 +9,31 @@ from __future__ import annotations
 import pytest
 
 
-# 28 supported harnesses (mechanism doesn't matter for this smoke test —
+# 24 PR2-enabled harnesses (mechanism doesn't matter for this smoke test —
 # whatever subagent_mechanism is set in skill_agents.py, the e2e flow
 # should produce ≥1 on-disk file inside HOME or XDG_CONFIG_HOME).
+#
+# Note: the 4 config_file_folder cells (aider-desk, codex, dexto,
+# firebender) are intentionally DISABLED for PR2 (subagent_mechanism=none
+# in skill_agents.py) — see PR2_DISABLED_PENDING_DEEPER_SMOKE below. The
+# adapter implementations exist in agent_adapters/config_file_folder.py
+# and are tested as units (test_config_file_folder.py), but not exercised
+# end-to-end here pending the follow-up issue on third-party config-file
+# mutation safety.
 SUPPORTED_HARNESSES = [
     # symlink (15)
     "augment", "claude-code", "codebuddy", "command-code", "cortex",
     "cursor", "droid", "forgecode", "junie", "kode", "neovate", "pi",
     "pochi", "qoder", "rovodev",
-    # translate (9 — codex moved to config_file_folder in Task 12)
+    # translate (9)
     "devin", "gemini-cli", "github-copilot", "kilo",
     "kiro-cli", "mistral-vibe", "mux", "opencode", "qwen-code",
-    # config_file_folder (4 — codex joined per Task 12)
-    "aider-desk", "codex", "dexto", "firebender",
 ]
+
+
+PR2_DISABLED_PENDING_DEEPER_SMOKE = frozenset({
+    "aider-desk", "codex", "dexto", "firebender",
+})
 
 
 @pytest.fixture(autouse=True)
@@ -62,7 +73,7 @@ def test_install_one_harness_creates_projection(harness, fake_canonical, tmp_pat
     result = apply(plan, home=tmp_path)
     # Either the harness is supported and produces ≥1 file, OR it raises
     # UnsupportedMechanismError (recorded as 'skipped'). Smoke asserts the
-    # supported case — none of the 28 cells should be skipped.
+    # PR2-enabled cells must NOT be skipped + must produce ≥1 file inside tmp.
     assert harness not in result.skipped, f"{harness} unexpectedly skipped"
     assert len(result.created) >= 1, f"{harness} produced no projection"
     for path in result.created:
@@ -72,3 +83,32 @@ def test_install_one_harness_creates_projection(harness, fake_canonical, tmp_pat
         assert str(tmp_path) in path_str, (
             f"{harness}: projection at {path} escaped tmp_path"
         )
+
+
+@pytest.mark.parametrize("harness", sorted(PR2_DISABLED_PENDING_DEEPER_SMOKE))
+def test_pr2_disabled_cells_skip_cleanly(harness, fake_canonical, tmp_path):
+    """The 4 config_file_folder cells are intentionally disabled in PR2.
+
+    Confirms the disable is in effect: apply() records each as 'skipped',
+    creates no files, and surfaces UnsupportedMechanismError cleanly. If
+    someone re-enables a cell by flipping the literal back from 'none' to
+    'config_file_folder' WITHOUT also adding deeper smoke coverage, this
+    test starts failing — fail-loud, not silent re-enable.
+    """
+    from agent_toolkit_cli._install_core import InstallPlan
+    from agent_toolkit_cli.agent_install import apply
+
+    plan = InstallPlan(
+        slug="smoke-agent", scope="global", source=None, ref=None,
+        add_agents=(harness,), remove_agents=(),
+    )
+    result = apply(plan, home=tmp_path)
+    assert harness in result.skipped, (
+        f"{harness} is meant to be PR2-disabled (subagent_mechanism='none') "
+        f"but apply() did not record it as skipped. If you re-enabled it, "
+        f"also remove it from PR2_DISABLED_PENDING_DEEPER_SMOKE and add it "
+        f"back to SUPPORTED_HARNESSES."
+    )
+    assert len(result.created) == 0, (
+        f"{harness} disabled but produced files: {result.created}"
+    )

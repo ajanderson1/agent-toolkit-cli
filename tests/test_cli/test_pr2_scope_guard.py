@@ -44,6 +44,9 @@ ALLOWED = {
     # Modified existing tests:
     "tests/test_cli/test_skill_agents.py",
     "tests/test_subagent_matrix.py",
+    # PR1-era test whose defensive allowlist needed one new line for the
+    # kind_noun='skill' default param added in PR2 (commit 8e403d8).
+    "tests/test_cli/test_install_core.py",
 }
 
 ALLOWED_PREFIXES = (

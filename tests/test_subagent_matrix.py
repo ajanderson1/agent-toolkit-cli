@@ -140,9 +140,21 @@ _VERDICT_PREFIX_TO_MECHANISM: dict[str, str] = {
 }
 
 
+# Cells the matrix classifies as supported but PR2 intentionally ships with
+# subagent_mechanism='none'. Adapter implementations exist (and are unit-
+# tested in test_config_file_folder.py) but the cells are disabled at the
+# catalog level pending deeper smoke coverage of third-party config-file
+# mutation. Re-enabling requires updating both this set AND the literal in
+# skill_agents.py. Tracked by a follow-up issue filed after PR2 merges.
+PR2_DISABLED_DESPITE_MATRIX_SUPPORT = frozenset({
+    "aider-desk", "codex", "dexto", "firebender",
+})
+
+
 def test_supported_rows_have_matching_adapter(rows):
     """Every harness-matrix row with a supported-mechanism verdict must
-    have a corresponding agent_adapters.get_adapter() implementation.
+    have a corresponding agent_adapters.get_adapter() implementation,
+    UNLESS the cell is in PR2_DISABLED_DESPITE_MATRIX_SUPPORT.
 
     Acceptance criterion #5 (spec): every supported matrix row has a
     subagent_mechanism value on its AgentConfig matching the row's verdict
@@ -175,6 +187,20 @@ def test_supported_rows_have_matching_adapter(rows):
             continue
 
         actual_mech = skill_agents.AGENTS[harness].subagent_mechanism
+
+        # PR2-disabled cells: matrix says supported, catalog says 'none'.
+        # The disable is documented + tested elsewhere (the e2e suite has a
+        # parametrized test_pr2_disabled_cells_skip_cleanly). Skip the
+        # adapter-importability check here.
+        if harness in PR2_DISABLED_DESPITE_MATRIX_SUPPORT:
+            if actual_mech != "none":
+                failures.append(
+                    f"{harness}: in PR2_DISABLED_DESPITE_MATRIX_SUPPORT but "
+                    f"subagent_mechanism='{actual_mech}' (must be 'none'). "
+                    f"If you re-enabled it, also remove from the set."
+                )
+            continue
+
         if actual_mech != expected_mech:
             failures.append(
                 f"{harness}: matrix verdict prefix '{matched_prefix}' expects "
