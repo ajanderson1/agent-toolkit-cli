@@ -97,7 +97,24 @@ def push_cmd(
             )
             continue
         if skill_git.status(canonical, env=None) == skill_git.GitWorkingTreeStatus.CLEAN:
-            click.echo(f"{slug}: clean — nothing to push")
+            # A clean working tree is not the whole story: a committed-but-
+            # unpushed change leaves the tree clean yet HEAD ahead of origin.
+            # Reporting "nothing to push" here silently strands that work
+            # (#280). Classify divergence before declaring nothing to do.
+            ref = entry.ref or "main"
+            div = _clean_divergence(canonical, ref)
+            if div is skill_git.Divergence.UP_TO_DATE:
+                click.echo(f"{slug}: clean — nothing to push")
+                continue
+            if div in (skill_git.Divergence.BEHIND, skill_git.Divergence.DIVERGED):
+                click.echo(f"{slug}: clean but {div.value} from origin — not pushing")
+                continue
+            # AHEAD: committed-but-unpushed work to publish (already committed,
+            # so no commit step — just push HEAD).
+            if direct:
+                _push_committed_direct(canonical, entry, slug, lock, lock_path, ref)
+            else:
+                _push_committed_via_pr(canonical, entry, slug, ref)
             continue
         if direct:
             _push_direct(canonical, entry, slug, lock, lock_path)
@@ -133,6 +150,62 @@ def _push_via_pr(canonical: Path, entry, slug: str) -> None:
     skill_git.checkout_new_branch(canonical, name=branch, env=None)
     msg = f"self-improvement: {_utc_iso()}"
     skill_git.commit_all(canonical, message=msg, env=None)
+    try:
+        skill_git.push(canonical, ref=branch, env=None)
+        click.echo(f"{slug}: pushed branch {branch}")
+        pr_url = _open_pr(canonical, branch, base=base_ref, slug=slug)
+        if pr_url:
+            click.echo(f"  PR: {pr_url}")
+        else:
+            web = _branch_web_url(canonical, branch)
+            if web:
+                click.echo(f"  → open a PR: {web}")
+            click.echo(f"  (rerun with --direct to push to {base_ref})")
+    finally:
+        skill_git.checkout(canonical, ref=base_ref, env=None)
+
+
+def _clean_divergence(repo: Path, ref: str) -> skill_git.Divergence:
+    """Classify a clean repo's HEAD vs origin/<ref> so `push` can tell a
+    committed-but-unpushed clone (AHEAD) from a truly-nothing-to-push one
+    (#280). Reads local refs only (no fetch), so an unpushed commit reliably
+    shows AHEAD regardless of fetch freshness — same stance as
+    `status._divergence_suffix`.
+
+    A clone whose origin ref can't be resolved (detached / missing remote-
+    tracking ref) raises GitError; treat that as UP_TO_DATE so an
+    unclassifiable repo falls back to today's "nothing to push" rather than
+    blindly pushing — mirrors the swallow-to-empty behaviour in `status`.
+    """
+    try:
+        return skill_git.divergence(repo, ref=ref, env=None)
+    except skill_git.GitError:
+        return skill_git.Divergence.UP_TO_DATE
+
+
+def _push_committed_direct(
+    canonical: Path,
+    entry,
+    slug: str,
+    lock: LockFile,
+    lock_path: Path,
+    ref: str,
+) -> None:
+    """Push already-committed work straight to the tracked ref. No commit step
+    — the working tree is clean and HEAD is ahead of origin (#280)."""
+    skill_git.push(canonical, ref=ref, env=None)
+    entry.local_sha = skill_git.head_sha(canonical, env=None)
+    write_lock(lock_path, lock)
+    click.echo(f"{slug}: pushed (committed-but-unpushed → {ref})")
+
+
+def _push_committed_via_pr(canonical: Path, entry, slug: str, base_ref: str) -> None:
+    """Open a PR for already-committed work. Branches at the current HEAD
+    (which carries the ahead commits) and pushes that branch — no commit step,
+    unlike `_push_via_pr`. The canonical repo is restored to base afterward so
+    a later `skill update` merges into the tracked ref (#280)."""
+    branch = f"skill/self-improvement-{_utc_basic_iso()}-{_slug_for_ref(slug)}"
+    skill_git.checkout_new_branch(canonical, name=branch, env=None)
     try:
         skill_git.push(canonical, ref=branch, env=None)
         click.echo(f"{slug}: pushed branch {branch}")
@@ -194,11 +267,32 @@ def _push_monorepo(
             f"  warning: {entry.source} is not a known owned owner; pushing "
             f"because the lock entry is writable (added with --owned?)."
         )
+    base_ref = entry.ref or "main"
     if skill_git.status_path(parent_dir, subpath, env=None) == \
             skill_git.GitWorkingTreeStatus.CLEAN:
-        click.echo(f"{slug}: clean — nothing to push")
+        # Clean subpath doesn't mean nothing to push: the shared clone may hold
+        # committed-but-unpushed work — this skill's own or a sibling's (#280).
+        # Divergence is a whole-clone property, so we publish the clone's
+        # unpushed commits regardless of which skill triggered the push; the
+        # floor is "never silently report clean — nothing to push when the
+        # clone is ahead of origin".
+        div = _clean_divergence(parent_dir, base_ref)
+        if div is skill_git.Divergence.UP_TO_DATE:
+            click.echo(f"{slug}: clean — nothing to push")
+            return
+        if div in (skill_git.Divergence.BEHIND, skill_git.Divergence.DIVERGED):
+            click.echo(f"{slug}: clean but {div.value} from origin — not pushing")
+            return
+        # AHEAD: publish already-committed work. No commit_paths — the subpath
+        # is clean, so there is nothing to stage; we push HEAD as-is.
+        if direct:
+            skill_git.push(parent_dir, ref=base_ref, env=None)
+            entry.local_sha = skill_git.head_sha(parent_dir, env=None)
+            write_lock(lock_path, lock)
+            click.echo(f"{slug}: pushed (committed-but-unpushed → {base_ref})")
+            return
+        _push_monorepo_committed_via_pr(parent_dir, slug, base_ref)
         return
-    base_ref = entry.ref or "main"
     msg = f"skill({slug}): self-improvement {_utc_iso()}"
     if direct:
         skill_git.commit_paths(parent_dir, message=msg, paths=[subpath], env=None)
@@ -232,6 +326,37 @@ def _push_monorepo(
         # switch refuse, the GitError propagates to the per-slug handler in
         # push_cmd (the clone may stay on the PR branch, recoverable by hand)
         # rather than destroying unpushed sibling edits.
+        skill_git.checkout(parent_dir, ref=base_ref, env=None)
+
+
+def _push_monorepo_committed_via_pr(
+    parent_dir: Path, slug: str, base_ref: str,
+) -> None:
+    """Open a PR for an owned-monorepo clone's already-committed work (#280).
+
+    Branches at the clone's current HEAD (which carries the ahead commits) and
+    pushes that branch — no `commit_paths`, the subpath is clean. The shared
+    clone is restored to base with the same PLAIN-checkout discipline as
+    `_push_monorepo` so a dirty sibling subpath's in-progress edit survives.
+    """
+    branch = (
+        f"skill/self-improvement-{_utc_basic_iso()}-"
+        f"{_slug_for_ref(slug)}-{secrets.token_hex(2)}"
+    )
+    skill_git.checkout_new_branch(parent_dir, name=branch, env=None)
+    try:
+        skill_git.push(parent_dir, ref=branch, env=None)
+        click.echo(f"{slug}: pushed branch {branch}")
+        pr_url = _open_pr(parent_dir, branch, base=base_ref, slug=slug)
+        if pr_url:
+            click.echo(f"  PR: {pr_url}")
+        else:
+            web = _branch_web_url(parent_dir, branch)
+            if web:
+                click.echo(f"  → open a PR: {web}")
+    finally:
+        # Plain checkout, not `-f` — preserve a dirty sibling subpath's edits
+        # (same rationale as `_push_monorepo`'s restore).
         skill_git.checkout(parent_dir, ref=base_ref, env=None)
 
 
