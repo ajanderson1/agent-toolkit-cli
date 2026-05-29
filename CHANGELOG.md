@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.14.2](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.14.1...v2.14.2) (2026-05-29)
+
+
+### Bug Fixes
+
+* non-TTY prompt crash + monorepo status/cache staleness ([#274](https://github.com/ajanderson1/agent-toolkit-cli/issues/274), [#276](https://github.com/ajanderson1/agent-toolkit-cli/issues/276)) ([#279](https://github.com/ajanderson1/agent-toolkit-cli/issues/279)) ([2679522](https://github.com/ajanderson1/agent-toolkit-cli/commit/267952288c6b3eb1aca42cb47c4b0725d12cad3d))
+
+
+### Documentation
+
+* pi-extension-kind design + repoint project lock to skills monorepo ([#277](https://github.com/ajanderson1/agent-toolkit-cli/issues/277)) ([2563360](https://github.com/ajanderson1/agent-toolkit-cli/commit/2563360453356dffb1d7830d1809734bd70e6519))
+
 ## [2.14.1](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.14.0...v2.14.1) (2026-05-29)
 
 
