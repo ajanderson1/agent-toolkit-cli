@@ -47,3 +47,14 @@ def test_not_swept_into_extras(tmp_path):
     e = read_lock(p).skills["ext"]
     assert e.pi_extension_path == "ext"
     assert "piExtensionPath" not in e.extras
+
+
+def test_pi_extension_lock_reexports():
+    from agent_toolkit_cli import pi_extension_lock as pel
+
+    assert pel.LockEntry is not None
+    assert pel.LockFile is not None
+    assert callable(pel.read_lock)
+    assert callable(pel.write_lock)
+    assert callable(pel.add_entry)
+    assert callable(pel.remove_entry)
