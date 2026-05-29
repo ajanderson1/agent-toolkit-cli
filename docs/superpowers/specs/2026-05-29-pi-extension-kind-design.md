@@ -119,7 +119,7 @@ npm:<spec>          ───────────(NOT stored)─────
 
 `pi-extension` is a **third `KindBinding`** on the v3.1.0-generalized machinery.
 No new lock design. **The lock decision is confirmed** (PR #267 foundation +
-open PR #268 agent facade, `feat/252-v3-pr2-agent-facade-adapters`):
+open PR #270 agent facade, `feat/252-v3-pr2-agent-facade-adapters`):
 
 - **Per-kind separate lock files** — `skills-lock.json`, `agents-lock.json`,
   and here **`pi-extensions-lock.json`** (global at `~/.agent-toolkit/`, project
@@ -272,7 +272,7 @@ to finish factoring `skill_*` onto the `kind` dimension; flag in the plan.)
 2. **v3.1.0 lock shape — RESOLVED.** Per-kind separate file
    (`pi-extensions-lock.json`), no `kind` discriminator, shared `LockEntry`
    struct, parallel `piExtensionPath` field if a pointer is needed (§4). Decided
-   and implemented on PR #267 + #268.
+   and implemented on PR #267 + #270.
 3. **`extensions[]` (explicit-path) surface — open, low-stakes.** Decide in PR2:
    fold into inventory as `source = local:<path>` tracked rows (prior gen #109
    recommendation), or treat as untracked-importable. Default: treat as
@@ -281,8 +281,8 @@ to finish factoring `skill_*` onto the `kind` dimension; flag in the plan.)
 
 ## 12. Dependency note
 
-Open PR #268 (`feat/252-v3-pr2-agent-facade-adapters`) carries the agent facade
+Open PR #270 (`feat/252-v3-pr2-agent-facade-adapters`) carries the agent facade
 + the lock `agentPath` field this design's pattern mirrors. PR1 here should land
-**after** #268 merges (or rebase onto it) so `pi_extension_install` /
+**after** #270 merges (or rebase onto it) so `pi_extension_install` /
 `pi_extension_paths` can follow the same facade + parallel-path-field shape the
-agent kind establishes. Flag in the plan whether to branch from #268.
+agent kind establishes. Flag in the plan whether to branch from #270.
