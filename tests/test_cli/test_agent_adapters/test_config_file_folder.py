@@ -133,3 +133,57 @@ def test_install_with_invalid_scope_raises(tmp_path, fake_content):
     adapter = config_file_folder.adapter_for("aider-desk")
     with pytest.raises(ValueError, match="global.*project"):
         adapter.install("test", fake_content, scope="globall", home=tmp_path)
+
+
+# ── Regression tests for code-quality review findings ──
+
+def test_dexto_yml_is_parseable_yaml_with_multiline_body(tmp_path):
+    """Regression: an earlier emitter used `source: |\\n  {text}` which only
+    indented the first line of a multi-line body — every subsequent line
+    started at column 0 and broke the YAML block-scalar contract. Verify
+    the emitted .yml parses cleanly with a strict YAML loader."""
+    import yaml  # pyyaml is a project dep
+    content = tmp_path / "multi.md"
+    content.write_text(
+        "---\nname: multi-test\n---\n\n"
+        "Line one.\nLine two.\nLine three with body that has\nmultiple paragraphs.\n"
+    )
+    from agent_toolkit_cli.agent_adapters import config_file_folder
+    adapter = config_file_folder.adapter_for("dexto")
+    yml_path = adapter.install("multi-test", content, scope="global", home=tmp_path)
+    body = yaml.safe_load(yml_path.read_text())
+    assert body["name"] == "multi-test"
+    assert "Line one." in body["source"]
+    assert "Line three" in body["source"]
+
+
+def test_firebender_install_replaces_callable_false_with_true(tmp_path):
+    """Regression: install means 'make spawnable' — an existing
+    `callable: false` in the input frontmatter must be overwritten, not
+    silently preserved (which would leave the agent un-spawnable)."""
+    content = tmp_path / "disabled.md"
+    content.write_text("---\nname: x\ncallable: false\n---\n\nBody.\n")
+    from agent_toolkit_cli.agent_adapters import config_file_folder
+    adapter = config_file_folder.adapter_for("firebender")
+    md = adapter.install("x", content, scope="global", home=tmp_path)
+    text = md.read_text()
+    assert "callable: true" in text
+    assert "callable: false" not in text
+
+
+def test_firebender_project_scope_stores_relative_path_in_json(tmp_path, fake_content):
+    """Regression: firebender.json entries must be relative to .firebender/
+    so the project can be checked in and relocated. Absolute paths would
+    break referential integrity across machines."""
+    project = tmp_path / "myproj"
+    project.mkdir()
+    from agent_toolkit_cli.agent_adapters import config_file_folder
+    adapter = config_file_folder.adapter_for("firebender")
+    adapter.install("test-agent", fake_content, scope="project", project=project)
+    fb_json = project / ".firebender" / "firebender.json"
+    body = json.loads(fb_json.read_text())
+    # Every entry must be a relative path (no leading / and no project root)
+    for p in body["agents"]:
+        assert not p.startswith("/"), f"absolute path in firebender.json: {p}"
+        assert str(project) not in p, f"project root leaked into entry: {p}"
+        assert p.startswith("agents/"), f"expected 'agents/<slug>.md', got: {p}"

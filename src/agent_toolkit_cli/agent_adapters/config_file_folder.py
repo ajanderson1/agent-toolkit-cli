@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import textwrap
 from pathlib import Path
 
 from agent_toolkit_cli.skill_agents import UnknownAgentError
@@ -113,10 +114,16 @@ class _DextoAdapter:
         subdir = base / "agents" / slug
         subdir.mkdir(parents=True, exist_ok=True)
         yml = subdir / f"{slug}.yml"
+        # YAML block-scalar (`|`) requires EVERY line of the block to be
+        # indented by at least the declared amount — textwrap.indent applies
+        # the prefix to every line, not just the first. Single-line content
+        # would also work with naive interpolation, but real agent files are
+        # multi-line.
+        source_block = textwrap.indent(content_path.read_text().strip(), "  ")
         yml.write_text(
             f"name: {slug}\n"
             f"description: imported by agent-toolkit-cli\n"
-            f"source: |\n  {content_path.read_text().strip()}\n"
+            f"source: |\n{source_block}\n"
         )
         return yml
 
@@ -154,12 +161,15 @@ class _FirebenderAdapter:
         base = _resolve_base("firebender", scope, home, project, ".firebender")
         md = base / "agents" / f"{slug}.md"
         md.parent.mkdir(parents=True, exist_ok=True)
-        # Inject callable: true into frontmatter.
+        # Inject callable: true into frontmatter. Spec requires this be true
+        # for the agent to be spawnable, so an existing `callable: false` is
+        # replaced (NOT preserved) — install always means "make it callable".
         text = content_path.read_text()
         if text.startswith("---\n"):
             head, _, rest = text[4:].partition("\n---\n")
-            if "callable:" not in head:
-                head = head + "\ncallable: true"
+            # Strip any existing callable: <anything> line, then append true.
+            head_lines = [ln for ln in head.split("\n") if not ln.strip().startswith("callable:")]
+            head = "\n".join(head_lines) + "\ncallable: true"
             text = "---\n" + head + "\n---\n" + rest
         else:
             text = "---\ncallable: true\n---\n" + text
@@ -170,7 +180,11 @@ class _FirebenderAdapter:
             body = json.loads(fb_json.read_text())
         else:
             body = {"agents": []}
-        rel = str(md.relative_to(base) if scope == "global" else md)
+        # Always store the path relative to `base` — absolute paths in
+        # firebender.json would break checkin and project relocation. base
+        # is the .firebender root for both scopes, so the registry entry
+        # always reads like "agents/<slug>.md".
+        rel = str(md.relative_to(base))
         if rel not in body.get("agents", []):
             body.setdefault("agents", []).append(rel)
         _atomic_write(fb_json, json.dumps(body, indent=2) + "\n")
