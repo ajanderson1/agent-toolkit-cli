@@ -34,7 +34,6 @@ from ._common import scope_and_roots, validate_agent_names
 from .doctor_cmd import doctor_cmd
 from .import_cmd import import_cmd
 from .list_cmd import list_cmd
-from .migrate_cmd import migrate_cmd
 from .push_cmd import push_cmd
 from .reset_cmd import reset_cmd
 from .status_cmd import status_cmd
@@ -818,7 +817,6 @@ def _count_linked(slug: str, scope: str, home: Path | None, project: Path | None
 
 skill.add_command(import_cmd)
 skill.add_command(list_cmd)
-skill.add_command(migrate_cmd)
 skill.add_command(status_cmd)
 skill.add_command(update_cmd)
 skill.add_command(push_cmd)
