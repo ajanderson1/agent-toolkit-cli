@@ -1,9 +1,10 @@
 """Kind-agnostic path/lock-filename core. Bound by per-kind facades.
 
 A `KindBinding` carries everything the path helpers need to know about a
-specific asset kind. `SKILL_BINDING`, `INSTRUCTIONS_BINDING`, and
-`AGENT_BINDING` are the three bindings instantiated today (PR1 cut the seam;
-the instructions kind and the agent kind were added in their own PRs).
+specific asset kind. `SKILL_BINDING`, `INSTRUCTIONS_BINDING`, `AGENT_BINDING`,
+and `PI_EXTENSION_BINDING` are the four bindings instantiated today (PR1 cut
+the seam; the instructions, agent, and pi-extension kinds were added in their
+own PRs).
 """
 from __future__ import annotations
 
@@ -44,6 +45,15 @@ AGENT_BINDING = KindBinding(
     library_subdir="agents",
     lock_filename="agents-lock.json",
     general_harness_name="general-agent",
+)
+
+
+PI_EXTENSION_BINDING = KindBinding(
+    kind="pi-extension",
+    canonical_dirname="pi-extensions",
+    library_subdir="pi-extensions",
+    lock_filename="pi-extensions-lock.json",
+    general_harness_name="general-pi-extension",
 )
 
 

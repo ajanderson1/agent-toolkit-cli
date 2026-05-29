@@ -35,6 +35,7 @@ class LockEntry:
     ref: str | None = None
     skill_path: str | None = None
     agent_path: str | None = None
+    pi_extension_path: str | None = None
     upstream_sha: str | None = None
     local_sha: str | None = None
     parent_url: str | None = None
@@ -52,12 +53,12 @@ class LockFile:
 # v1 entry field names; v3 entry adds sourceUrl, skillFolderHash,
 # installedAt, updatedAt (and lacks upstreamSha/localSha/ref).
 _V1_ENTRY_FIELDS = {
-    "source", "sourceType", "ref", "skillPath", "agentPath", "upstreamSha", "localSha",
-    "parentUrl", "readOnly",
+    "source", "sourceType", "ref", "skillPath", "agentPath", "piExtensionPath",
+    "upstreamSha", "localSha", "parentUrl", "readOnly",
 }
 _V3_ENTRY_FIELDS = {
     "source", "sourceType", "sourceUrl", "ref", "skillPath", "agentPath",
-    "skillFolderHash", "installedAt", "updatedAt", "pluginName",
+    "piExtensionPath", "skillFolderHash", "installedAt", "updatedAt", "pluginName",
     "parentUrl", "readOnly",
 }
 # Wrapper-level fields v3 carries outside `skills`.
@@ -72,6 +73,7 @@ def _entry_from_dict_v1(d: dict) -> LockEntry:
         ref=d.get("ref"),
         skill_path=d.get("skillPath"),
         agent_path=d.get("agentPath"),
+        pi_extension_path=d.get("piExtensionPath"),
         upstream_sha=d.get("upstreamSha"),
         local_sha=d.get("localSha"),
         parent_url=d.get("parentUrl"),
@@ -88,6 +90,7 @@ def _entry_from_dict_v3(d: dict) -> LockEntry:
         ref=d.get("ref"),
         skill_path=d.get("skillPath"),
         agent_path=d.get("agentPath"),
+        pi_extension_path=d.get("piExtensionPath"),
         # v3 uses skillFolderHash for the upstream pin.
         upstream_sha=d.get("skillFolderHash"),
         # v3 has no local_sha concept; leave None.
@@ -113,6 +116,8 @@ def _entry_to_dict_v1(e: LockEntry) -> dict:
         out["skillPath"] = e.skill_path
     if e.agent_path is not None:
         out["agentPath"] = e.agent_path
+    if e.pi_extension_path is not None:
+        out["piExtensionPath"] = e.pi_extension_path
     if e.upstream_sha is not None:
         out["upstreamSha"] = e.upstream_sha
     if e.local_sha is not None:
@@ -215,6 +220,8 @@ def _entry_to_dict_v3(e: LockEntry) -> dict:
         out["skillPath"] = e.skill_path
     if e.agent_path is not None:
         out["agentPath"] = e.agent_path
+    if e.pi_extension_path is not None:
+        out["piExtensionPath"] = e.pi_extension_path
     if e.parent_url is not None:
         out["parentUrl"] = e.parent_url
     if e.read_only:

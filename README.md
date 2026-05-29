@@ -49,6 +49,15 @@ agent-toolkit-cli instructions doctor    [--scope project|global]
 
 Most harnesses read `AGENTS.md` natively, so the canonical file satisfies them as-is. The seven that read a fixed own-name file instead (`claude-code` → `CLAUDE.md`, `gemini-cli` → `GEMINI.md`, plus `augment`, `codebuddy`, `iflow-cli`, `replit`, `tabnine-cli`) get a same-name pointer symlink → `AGENTS.md`. `install` writes an `instructions-lock.json` and reconciles the pointers; it never clobbers a real file or foreign symlink. Default scope is `project` (pointers are project-rooted); the global canonical lives at `~/.agent-toolkit/AGENTS.md`. Per-harness verdicts come from [`docs/agent-toolkit/harness-matrix.md`](docs/agent-toolkit/harness-matrix.md).
 
+### Pi extensions — read-only inventory (Pi-only)
+
+```text
+agent-toolkit-cli pi-extension list   [-g|-p] [--json]
+agent-toolkit-cli pi-extension status [<slug>...] [-g|-p]
+```
+
+A Pi-only command group for Pi extensions. PR1 ships the read-only verbs `list` (alias `ls`) and `status`, which surface a unified inventory of every extension Pi could load — **store-owned** (owned git repos in the library), **untracked** (loose entries already in `~/.pi/agent/extensions/` or `<project>/.pi/extensions/`), and **npm** (`packages[]` in Pi's `settings.json`). Origin is a column, not a gate. Write verbs (`add`/`install`/`import`/…) and the TUI grid arrive in later releases.
+
 ### TUI
 
 ```text
