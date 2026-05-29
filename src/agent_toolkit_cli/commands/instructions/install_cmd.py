@@ -7,6 +7,7 @@ import click
 
 from agent_toolkit_cli import instructions_install, instructions_paths
 from agent_toolkit_cli.instructions_adapters import SUPPORTED_HARNESSES
+from agent_toolkit_cli.instructions_adapters.symlink import PointerConflictError
 from agent_toolkit_cli.instructions_lock import (
     InstructionsLockEntry,
     add_entry,
@@ -47,12 +48,18 @@ def install_cmd(ctx: click.Context, scope: str, harnesses: tuple[str, ...]) -> N
             )
         raise click.ClickException(f"{h!r}: not in the harness catalog")
 
+    # Global-scope pointer slots use {HOME} templates and need a real home;
+    # project templates ignore it. Passing None for global silently breaks
+    # install, so compute the home explicitly per scope.
+    home = None if scope == "project" else Path.home()
+
     lock_path = instructions_paths.lock_file_path(scope, project_root)
-    lock = read_lock(lock_path)
-    existing = lock.instructions.get("AGENTS.md")
+    prior = read_lock(lock_path)
+    prior_existed = lock_path.exists()
+    existing = prior.instructions.get("AGENTS.md")
     new_harnesses = sorted({*(existing.harnesses if existing else []), *targets})
     new = add_entry(
-        lock,
+        prior,
         "AGENTS.md",
         InstructionsLockEntry(
             scope=scope,
@@ -60,13 +67,22 @@ def install_cmd(ctx: click.Context, scope: str, harnesses: tuple[str, ...]) -> N
             harnesses=new_harnesses,
         ),
     )
+    # apply() reads the lock from disk, so the entry must be written first — but
+    # if reconcile fails the lock would lie. Write, then roll back on failure so
+    # the lock only ever reflects reality.
     write_lock(lock_path, new)
-
     try:
         plan = instructions_install.apply(
-            scope=scope, project_root=project_root, home=None
+            scope=scope, project_root=project_root, home=home
         )
-    except instructions_install.CanonicalMissingError as exc:
+    except (
+        instructions_install.CanonicalMissingError,
+        PointerConflictError,
+    ) as exc:
+        if prior_existed:
+            write_lock(lock_path, prior)
+        else:
+            lock_path.unlink(missing_ok=True)
         raise click.ClickException(str(exc)) from exc
 
     for act in plan.actions:

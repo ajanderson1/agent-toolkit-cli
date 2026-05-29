@@ -6,6 +6,7 @@ import json
 from click.testing import CliRunner
 
 from agent_toolkit_cli.cli import main
+from agent_toolkit_cli.instructions_adapters.symlink import PointerConflictError
 
 
 def test_instructions_group_registered():
@@ -231,3 +232,146 @@ def test_doctor_reports_conflict(tmp_path, monkeypatch):
     result = runner.invoke(main, ["instructions", "doctor", "--scope", "project"])
     assert result.exit_code != 0
     assert "conflict" in result.output.lower()
+
+
+# --- Global scope (BUG 1: home=None silently breaks global install) ---------
+
+
+def _global_home(tmp_path, monkeypatch):
+    """Point HOME at a tmp dir and seed the canonical global AGENTS.md.
+
+    Path.home() reads $HOME, so this isolates every global path:
+    the lock (~/.agent-toolkit/instructions-lock.json), the canonical
+    (~/.agent-toolkit/AGENTS.md) and the pointer (~/.claude/CLAUDE.md).
+    """
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    # Some platforms also read USERPROFILE; keep them aligned.
+    monkeypatch.setenv("USERPROFILE", str(home))
+    toolkit = home / ".agent-toolkit"
+    toolkit.mkdir(parents=True)
+    (toolkit / "AGENTS.md").write_text("# global canon\n")
+    return home
+
+
+def test_install_global_creates_pointer_and_truthful_lock(tmp_path, monkeypatch):
+    """Global install MUST create the symlink, and the lock must only claim
+    success when the symlink actually exists."""
+    home = _global_home(tmp_path, monkeypatch)
+
+    runner = CliRunner()
+    result = runner.invoke(main, [
+        "instructions", "install",
+        "--scope", "global",
+        "--harness", "claude-code",
+    ])
+    assert result.exit_code == 0, result.output
+
+    pointer = home / ".claude" / "CLAUDE.md"
+    assert pointer.is_symlink(), "global install did not create the pointer symlink"
+    assert pointer.resolve() == (home / ".agent-toolkit" / "AGENTS.md").resolve()
+
+    lock = json.loads((home / ".agent-toolkit" / "instructions-lock.json").read_text())
+    assert lock["instructions"]["AGENTS.md"]["harnesses"] == ["claude-code"]
+    assert lock["instructions"]["AGENTS.md"]["scope"] == "global"
+
+
+def test_status_global_reports_ok(tmp_path, monkeypatch):
+    _global_home(tmp_path, monkeypatch)
+
+    runner = CliRunner()
+    runner.invoke(main, [
+        "instructions", "install", "--scope", "global", "--harness", "claude-code",
+    ])
+
+    result = runner.invoke(main, ["instructions", "status", "--scope", "global"])
+    assert result.exit_code == 0, result.output
+    assert "claude-code" in result.output
+    assert "ok" in result.output.lower()
+
+
+def test_doctor_global_clean(tmp_path, monkeypatch):
+    _global_home(tmp_path, monkeypatch)
+
+    runner = CliRunner()
+    runner.invoke(main, [
+        "instructions", "install", "--scope", "global", "--harness", "claude-code",
+    ])
+
+    result = runner.invoke(main, ["instructions", "doctor", "--scope", "global"])
+    assert result.exit_code == 0, result.output
+    assert "clean" in result.output.lower()
+
+
+def test_uninstall_global_removes_pointer_and_clears_lock(tmp_path, monkeypatch):
+    home = _global_home(tmp_path, monkeypatch)
+
+    runner = CliRunner()
+    runner.invoke(main, [
+        "instructions", "install", "--scope", "global", "--harness", "claude-code",
+    ])
+    assert (home / ".claude" / "CLAUDE.md").is_symlink()
+
+    result = runner.invoke(main, ["instructions", "uninstall", "--scope", "global"])
+    assert result.exit_code == 0, result.output
+
+    assert not (home / ".claude" / "CLAUDE.md").exists()
+    lock = json.loads((home / ".agent-toolkit" / "instructions-lock.json").read_text())
+    assert lock["instructions"] == {}
+
+
+# --- BUG 2: lock must not claim success if apply() fails --------------------
+
+
+def test_install_failure_leaves_no_lock_entry(tmp_path, monkeypatch):
+    """CanonicalMissingError must NOT leave a lock claiming the harness installed."""
+    project = tmp_path / "proj"
+    project.mkdir()
+    # No AGENTS.md → apply() raises CanonicalMissingError.
+    monkeypatch.chdir(project)
+
+    runner = CliRunner()
+    result = runner.invoke(main, [
+        "instructions", "install", "--scope", "project", "--harness", "claude-code",
+    ])
+    assert result.exit_code != 0
+    assert "AGENTS.md" in result.output
+
+    lock_file = project / "instructions-lock.json"
+    if lock_file.exists():
+        lock = json.loads(lock_file.read_text())
+        assert lock.get("instructions", {}) == {}, (
+            "lock claims install succeeded even though apply() failed"
+        )
+
+
+def test_install_pointer_conflict_is_clean_clickexception(tmp_path, monkeypatch):
+    """A real user file in the pointer slot yields a clean ClickException
+    (not a raw traceback) and leaves the user's file intact."""
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / "AGENTS.md").write_text("# canon\n")
+    # User authored their own CLAUDE.md (a real file, not our symlink).
+    (project / "CLAUDE.md").write_text("user authored\n")
+    monkeypatch.chdir(project)
+
+    runner = CliRunner()
+    result = runner.invoke(main, [
+        "instructions", "install", "--scope", "project", "--harness", "claude-code",
+    ])
+    assert result.exit_code != 0
+    # Clean ClickException — no raw traceback surfaced, no uncaught exception.
+    assert "Traceback" not in result.output
+    assert not isinstance(result.exception, PointerConflictError), (
+        "PointerConflictError leaked as an uncaught traceback"
+    )
+    assert "real file" in result.output.lower() or "refused" in result.output.lower()
+
+    # User's file untouched.
+    assert (project / "CLAUDE.md").read_text() == "user authored\n"
+    # Lock must not claim claude-code installed.
+    lock_file = project / "instructions-lock.json"
+    if lock_file.exists():
+        lock = json.loads(lock_file.read_text())
+        assert lock.get("instructions", {}) == {}
