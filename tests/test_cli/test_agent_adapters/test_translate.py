@@ -324,3 +324,28 @@ def test_install_xdg_template_without_home_raises(tmp_path, fake_content, monkey
     adapter = translate.adapter_for("devin")
     with pytest.raises(ValueError, match="requires home="):
         adapter.install("test", fake_content, scope="global", home=None)
+
+
+def test_github_copilot_install_raises_when_description_missing(tmp_path):
+    """github-copilot REQUIRES `description` in frontmatter; emitter raises
+    ValueError if it's absent (per spec addendum + verified docs)."""
+    content = tmp_path / "no-desc.md"
+    content.write_text("---\nname: test-agent\n---\n\nBody.\n")
+    from agent_toolkit_cli.agent_adapters import translate
+    adapter = translate.adapter_for("github-copilot")
+    with pytest.raises(ValueError, match="description"):
+        adapter.install("test-agent", content, scope="global", home=tmp_path)
+
+
+def test_mistral_vibe_install_raises_on_invalid_safety(tmp_path):
+    """mistral-vibe `safety` must be one of safe|neutral|destructive|yolo
+    (verified via Mistral docs). Anything else raises ValueError rather than
+    silently writing a TOML the runtime will reject at load."""
+    content = tmp_path / "bad-safety.md"
+    content.write_text(
+        "---\nname: test\ndescription: test\nsafety: tornado\n---\n\nBody.\n"
+    )
+    from agent_toolkit_cli.agent_adapters import translate
+    adapter = translate.adapter_for("mistral-vibe")
+    with pytest.raises(ValueError, match="safety"):
+        adapter.install("test", content, scope="global", home=tmp_path)
