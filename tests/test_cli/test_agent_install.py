@@ -33,10 +33,6 @@ def test_plan_shim_passes_no_universal_bundle_link(tmp_path, monkeypatch):
     assert p.remove_agents == ()
 
 
-@pytest.mark.xfail(
-    strict=False,
-    reason="requires subagent_mechanism literals set in Task 11",
-)
 def test_apply_dispatches_to_adapter_for_supported_harness(tmp_path, monkeypatch):
     """apply() invokes the symlink adapter for claude-code and writes the file.
 
@@ -55,7 +51,7 @@ def test_apply_dispatches_to_adapter_for_supported_harness(tmp_path, monkeypatch
         slug="test-agent", scope="global", source=None, ref=None,
         add_agents=("claude-code",), remove_agents=(),
     )
-    result = apply(plan_obj)
+    result = apply(plan_obj, home=tmp_path)
     expected = tmp_path / ".claude" / "agents" / "test-agent.md"
     assert expected in result.created
     assert expected.exists()

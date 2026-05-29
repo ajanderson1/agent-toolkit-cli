@@ -66,12 +66,6 @@ def test_dispatcher_handles_every_subagent_mechanism_literal():
         )
 
 
-@pytest.mark.xfail(
-    strict=False,
-    reason="subagent_mechanism literals are set in Task 11; "
-           "test body runs but get_adapter('claude-code') currently routes "
-           "to UnsupportedMechanismError because mechanism is still 'none'.",
-)
 def test_get_adapter_returns_callable():
     """For a harness with a real mechanism, returns an object with install/uninstall."""
     from agent_toolkit_cli.agent_adapters import get_adapter

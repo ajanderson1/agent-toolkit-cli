@@ -55,6 +55,7 @@ AGENTS: dict[str, AgentConfig] = {
         skills_dir=".aider-desk/skills",
         global_skills_dir=HOME / ".aider-desk/skills",
         detect_installed=lambda: (HOME / ".aider-desk").exists(),
+        subagent_mechanism="config_file_folder",
     ),
     "amp": AgentConfig(
         name="amp",
@@ -76,6 +77,7 @@ AGENTS: dict[str, AgentConfig] = {
         skills_dir=".augment/skills",
         global_skills_dir=HOME / ".augment/skills",
         detect_installed=lambda: (HOME / ".augment").exists(),
+        subagent_mechanism="symlink",
     ),
     "bob": AgentConfig(
         name="bob",
@@ -90,6 +92,7 @@ AGENTS: dict[str, AgentConfig] = {
         skills_dir=".claude/skills",
         global_skills_dir=CLAUDE_HOME / "skills",
         detect_installed=lambda: CLAUDE_HOME.exists(),
+        subagent_mechanism="symlink",
     ),
     "openclaw": AgentConfig(
         name="openclaw",
@@ -121,6 +124,7 @@ AGENTS: dict[str, AgentConfig] = {
         global_skills_dir=HOME / ".codebuddy/skills",
         detect_installed=lambda: (Path.cwd() / ".codebuddy").exists()
         or (HOME / ".codebuddy").exists(),
+        subagent_mechanism="symlink",
     ),
     "codemaker": AgentConfig(
         name="codemaker",
@@ -142,6 +146,7 @@ AGENTS: dict[str, AgentConfig] = {
         skills_dir=".agents/skills",
         global_skills_dir=CODEX_HOME / "skills",
         detect_installed=lambda: CODEX_HOME.exists() or Path("/etc/codex").exists(),
+        subagent_mechanism="translate",
     ),
     "command-code": AgentConfig(
         name="command-code",
@@ -149,6 +154,7 @@ AGENTS: dict[str, AgentConfig] = {
         skills_dir=".commandcode/skills",
         global_skills_dir=HOME / ".commandcode/skills",
         detect_installed=lambda: (HOME / ".commandcode").exists(),
+        subagent_mechanism="symlink",
     ),
     "continue": AgentConfig(
         name="continue",
@@ -164,6 +170,7 @@ AGENTS: dict[str, AgentConfig] = {
         skills_dir=".cortex/skills",
         global_skills_dir=HOME / ".snowflake/cortex/skills",
         detect_installed=lambda: (HOME / ".snowflake/cortex").exists(),
+        subagent_mechanism="symlink",
     ),
     "crush": AgentConfig(
         name="crush",
@@ -178,6 +185,7 @@ AGENTS: dict[str, AgentConfig] = {
         skills_dir=".agents/skills",
         global_skills_dir=HOME / ".cursor/skills",
         detect_installed=lambda: (HOME / ".cursor").exists(),
+        subagent_mechanism="symlink",
     ),
     "deepagents": AgentConfig(
         name="deepagents",
@@ -192,6 +200,7 @@ AGENTS: dict[str, AgentConfig] = {
         skills_dir=".devin/skills",
         global_skills_dir=XDG_CONFIG / "devin/skills",
         detect_installed=lambda: (XDG_CONFIG / "devin").exists(),
+        subagent_mechanism="translate",
     ),
     "dexto": AgentConfig(
         name="dexto",
@@ -199,6 +208,7 @@ AGENTS: dict[str, AgentConfig] = {
         skills_dir=".agents/skills",
         global_skills_dir=HOME / ".agents/skills",
         detect_installed=lambda: (HOME / ".dexto").exists(),
+        subagent_mechanism="config_file_folder",
     ),
     "droid": AgentConfig(
         name="droid",
@@ -206,6 +216,7 @@ AGENTS: dict[str, AgentConfig] = {
         skills_dir=".factory/skills",
         global_skills_dir=HOME / ".factory/skills",
         detect_installed=lambda: (HOME / ".factory").exists(),
+        subagent_mechanism="symlink",
     ),
     "firebender": AgentConfig(
         name="firebender",
@@ -213,6 +224,7 @@ AGENTS: dict[str, AgentConfig] = {
         skills_dir=".agents/skills",
         global_skills_dir=HOME / ".firebender/skills",
         detect_installed=lambda: (HOME / ".firebender").exists(),
+        subagent_mechanism="config_file_folder",
     ),
     "forgecode": AgentConfig(
         name="forgecode",
@@ -220,6 +232,7 @@ AGENTS: dict[str, AgentConfig] = {
         skills_dir=".forge/skills",
         global_skills_dir=HOME / ".forge/skills",
         detect_installed=lambda: (HOME / ".forge").exists(),
+        subagent_mechanism="symlink",
     ),
     "gemini-cli": AgentConfig(
         name="gemini-cli",
@@ -227,6 +240,7 @@ AGENTS: dict[str, AgentConfig] = {
         skills_dir=".agents/skills",
         global_skills_dir=HOME / ".gemini/skills",
         detect_installed=lambda: (HOME / ".gemini").exists(),
+        subagent_mechanism="translate",
     ),
     "github-copilot": AgentConfig(
         name="github-copilot",
@@ -234,6 +248,7 @@ AGENTS: dict[str, AgentConfig] = {
         skills_dir=".agents/skills",
         global_skills_dir=HOME / ".copilot/skills",
         detect_installed=lambda: (HOME / ".copilot").exists(),
+        subagent_mechanism="translate",
     ),
     "goose": AgentConfig(
         name="goose",
@@ -255,6 +270,7 @@ AGENTS: dict[str, AgentConfig] = {
         skills_dir=".junie/skills",
         global_skills_dir=HOME / ".junie/skills",
         detect_installed=lambda: (HOME / ".junie").exists(),
+        subagent_mechanism="symlink",
     ),
     "iflow-cli": AgentConfig(
         name="iflow-cli",
@@ -269,6 +285,7 @@ AGENTS: dict[str, AgentConfig] = {
         skills_dir=".kilocode/skills",
         global_skills_dir=HOME / ".kilocode/skills",
         detect_installed=lambda: (HOME / ".kilocode").exists(),
+        subagent_mechanism="translate",
     ),
     "kimi-cli": AgentConfig(
         name="kimi-cli",
@@ -283,6 +300,7 @@ AGENTS: dict[str, AgentConfig] = {
         skills_dir=".kiro/skills",
         global_skills_dir=HOME / ".kiro/skills",
         detect_installed=lambda: (HOME / ".kiro").exists(),
+        subagent_mechanism="translate",
     ),
     "kode": AgentConfig(
         name="kode",
@@ -290,6 +308,7 @@ AGENTS: dict[str, AgentConfig] = {
         skills_dir=".kode/skills",
         global_skills_dir=HOME / ".kode/skills",
         detect_installed=lambda: (HOME / ".kode").exists(),
+        subagent_mechanism="symlink",
     ),
     "mcpjam": AgentConfig(
         name="mcpjam",
@@ -304,6 +323,7 @@ AGENTS: dict[str, AgentConfig] = {
         skills_dir=".vibe/skills",
         global_skills_dir=VIBE_HOME / "skills",
         detect_installed=lambda: VIBE_HOME.exists(),
+        subagent_mechanism="translate",
     ),
     "mux": AgentConfig(
         name="mux",
@@ -311,6 +331,7 @@ AGENTS: dict[str, AgentConfig] = {
         skills_dir=".mux/skills",
         global_skills_dir=HOME / ".mux/skills",
         detect_installed=lambda: (HOME / ".mux").exists(),
+        subagent_mechanism="translate",
     ),
     "opencode": AgentConfig(
         name="opencode",
@@ -318,6 +339,7 @@ AGENTS: dict[str, AgentConfig] = {
         skills_dir=".agents/skills",
         global_skills_dir=XDG_CONFIG / "opencode/skills",
         detect_installed=lambda: (XDG_CONFIG / "opencode").exists(),
+        subagent_mechanism="translate",
     ),
     "openhands": AgentConfig(
         name="openhands",
@@ -332,6 +354,7 @@ AGENTS: dict[str, AgentConfig] = {
         skills_dir=".pi/skills",
         global_skills_dir=HOME / ".pi/agent/skills",
         detect_installed=lambda: (HOME / ".pi/agent").exists(),
+        subagent_mechanism="symlink",
     ),
     "qoder": AgentConfig(
         name="qoder",
@@ -339,6 +362,7 @@ AGENTS: dict[str, AgentConfig] = {
         skills_dir=".qoder/skills",
         global_skills_dir=HOME / ".qoder/skills",
         detect_installed=lambda: (HOME / ".qoder").exists(),
+        subagent_mechanism="symlink",
     ),
     "qwen-code": AgentConfig(
         name="qwen-code",
@@ -346,6 +370,7 @@ AGENTS: dict[str, AgentConfig] = {
         skills_dir=".qwen/skills",
         global_skills_dir=HOME / ".qwen/skills",
         detect_installed=lambda: (HOME / ".qwen").exists(),
+        subagent_mechanism="translate",
     ),
     "replit": AgentConfig(
         name="replit",
@@ -361,6 +386,7 @@ AGENTS: dict[str, AgentConfig] = {
         skills_dir=".rovodev/skills",
         global_skills_dir=HOME / ".rovodev/skills",
         detect_installed=lambda: (HOME / ".rovodev").exists(),
+        subagent_mechanism="symlink",
     ),
     "roo": AgentConfig(
         name="roo",
@@ -417,6 +443,7 @@ AGENTS: dict[str, AgentConfig] = {
         skills_dir=".neovate/skills",
         global_skills_dir=HOME / ".neovate/skills",
         detect_installed=lambda: (HOME / ".neovate").exists(),
+        subagent_mechanism="symlink",
     ),
     "pochi": AgentConfig(
         name="pochi",
@@ -424,6 +451,7 @@ AGENTS: dict[str, AgentConfig] = {
         skills_dir=".pochi/skills",
         global_skills_dir=HOME / ".pochi/skills",
         detect_installed=lambda: (HOME / ".pochi").exists(),
+        subagent_mechanism="symlink",
     ),
     "adal": AgentConfig(
         name="adal",
