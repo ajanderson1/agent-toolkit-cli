@@ -6,6 +6,7 @@ from pathlib import Path
 
 import click
 
+from agent_toolkit_cli.commands.instructions import instructions
 from agent_toolkit_cli.commands.skill import skill
 
 
@@ -42,6 +43,7 @@ def main(ctx: click.Context, project_root: Path | None) -> None:
 main.add_command(skill)
 # Plural alias for muscle memory (matches `npx -y skills`). See #180.
 main.add_command(skill, name="skills")
+main.add_command(instructions)
 
 
 if __name__ == "__main__":
