@@ -63,9 +63,17 @@ def _expand(template: str, *, home: Path, project: Path, slug: str) -> Path:
     )
 
 
+@pytest.fixture(autouse=True)
+def _clean_pi_env(monkeypatch):
+    """Every test starts with PI_CODING_AGENT_DIR unset — pi-specific tests
+    that need the override set it explicitly. Prevents dev-shell env from
+    breaking the parametrized pi cell (pi-template default falls back to
+    home= when env is absent)."""
+    monkeypatch.delenv("PI_CODING_AGENT_DIR", raising=False)
+
+
 @pytest.mark.parametrize("harness, global_tpl, project_tpl", SYMLINK_CELLS)
-def test_symlink_install_global(harness, global_tpl, project_tpl, tmp_path, monkeypatch, fake_content):
-    monkeypatch.setenv("HOME", str(tmp_path))
+def test_symlink_install_global(harness, global_tpl, project_tpl, tmp_path, fake_content):
     from agent_toolkit_cli.agent_adapters import symlink
     adapter = symlink.adapter_for(harness)
     expected = _expand(global_tpl, home=tmp_path, project=tmp_path / "p", slug="test-agent")
@@ -89,8 +97,7 @@ def test_symlink_install_project(harness, global_tpl, project_tpl, tmp_path, fak
 
 
 @pytest.mark.parametrize("harness, global_tpl, project_tpl", SYMLINK_CELLS)
-def test_symlink_uninstall_idempotent(harness, global_tpl, project_tpl, tmp_path, monkeypatch, fake_content):
-    monkeypatch.setenv("HOME", str(tmp_path))
+def test_symlink_uninstall_idempotent(harness, global_tpl, project_tpl, tmp_path, fake_content):
     from agent_toolkit_cli.agent_adapters import symlink
     adapter = symlink.adapter_for(harness)
     adapter.install("test-agent", fake_content, scope="global", home=tmp_path)
@@ -104,7 +111,6 @@ def test_symlink_uninstall_idempotent(harness, global_tpl, project_tpl, tmp_path
 
 def test_pi_global_path_honours_env_override(tmp_path, monkeypatch, fake_content):
     """pi's $PI_CODING_AGENT_DIR overrides the default ~/.pi/agent/agents/ path."""
-    monkeypatch.setenv("HOME", str(tmp_path))
     custom = tmp_path / "custom_pi"
     monkeypatch.setenv("PI_CODING_AGENT_DIR", str(custom))
     from agent_toolkit_cli.agent_adapters import symlink
@@ -112,3 +118,51 @@ def test_pi_global_path_honours_env_override(tmp_path, monkeypatch, fake_content
     result = adapter.install("test-agent", fake_content, scope="global", home=tmp_path)
     assert result == custom / "agents" / "test-agent.md"
     assert result.exists()
+
+
+# ── Fail-loud behaviour (regressions if the silent-fallback branches return) ──
+
+def test_adapter_for_unknown_harness_raises():
+    """symlink.adapter_for must raise UnknownAgentError for any harness
+    not in the CELLS dict — independent of the dispatcher layer's check."""
+    from agent_toolkit_cli.agent_adapters import symlink
+    from agent_toolkit_cli.skill_agents import UnknownAgentError
+    with pytest.raises(UnknownAgentError):
+        symlink.adapter_for("nonexistent-harness-xyz")
+
+
+def test_install_with_invalid_scope_raises(tmp_path, fake_content):
+    """Bad scope must raise ValueError (not bare KeyError) so call sites see
+    a domain-shaped error, not implementation-shape leakage."""
+    from agent_toolkit_cli.agent_adapters import symlink
+    adapter = symlink.adapter_for("claude-code")
+    with pytest.raises(ValueError, match="global.*project"):
+        adapter.install("test", fake_content, scope="globall", home=tmp_path)
+
+
+def test_install_global_without_home_raises(tmp_path, fake_content):
+    """Fail-loud: scope='global' without home= would silently write to
+    './{HOME}/.claude/agents/...' under cwd. Must raise ValueError."""
+    from agent_toolkit_cli.agent_adapters import symlink
+    adapter = symlink.adapter_for("claude-code")
+    with pytest.raises(ValueError, match="requires home="):
+        adapter.install("test", fake_content, scope="global", home=None)
+
+
+def test_install_project_without_project_raises(tmp_path, fake_content):
+    """Fail-loud: scope='project' without project= would silently write to
+    './{PROJECT}/.claude/agents/...' under cwd. Must raise ValueError."""
+    from agent_toolkit_cli.agent_adapters import symlink
+    adapter = symlink.adapter_for("claude-code")
+    with pytest.raises(ValueError, match="requires project="):
+        adapter.install("test", fake_content, scope="project", project=None)
+
+
+def test_pi_install_global_without_env_or_home_raises(tmp_path, fake_content):
+    """Fail-loud: pi template needs either env override OR explicit home=.
+    Without both, must raise ValueError — not silently fall back to the
+    real user's Path.home()."""
+    from agent_toolkit_cli.agent_adapters import symlink
+    adapter = symlink.adapter_for("pi")
+    with pytest.raises(ValueError, match="PI_CODING_AGENT_DIR"):
+        adapter.install("test", fake_content, scope="global", home=None)

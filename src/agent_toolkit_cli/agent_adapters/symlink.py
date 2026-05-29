@@ -52,11 +52,27 @@ CELLS: dict[str, dict[str, str]] = {
 
 
 def _expand(template: str, *, home: Path | None, project: Path | None, slug: str) -> Path:
-    """Expand {HOME}/{PROJECT}/{SLUG}/{PI_AGENT_DIR} placeholders."""
+    """Expand {HOME}/{PROJECT}/{SLUG}/{PI_AGENT_DIR} placeholders.
+
+    Fail-loud: if the template needs {HOME} or {PROJECT} but the
+    corresponding arg is None, raise ValueError rather than leaving the
+    literal placeholder in the path (which would silently write to
+    `./{HOME}/...` under cwd). Same rule for {PI_AGENT_DIR}: needs either
+    PI_CODING_AGENT_DIR env or an explicit home= — never silently falls
+    back to the real user's `Path.home()`.
+    """
     out = template.replace("{SLUG}", slug)
-    if home is not None:
+    if "{HOME}" in out:
+        if home is None:
+            raise ValueError(
+                f"symlink._expand: template {template!r} requires home= but None was passed"
+            )
         out = out.replace("{HOME}", str(home))
-    if project is not None:
+    if "{PROJECT}" in out:
+        if project is None:
+            raise ValueError(
+                f"symlink._expand: template {template!r} requires project= but None was passed"
+            )
         out = out.replace("{PROJECT}", str(project))
     if "{PI_AGENT_DIR}" in out:
         env_path = os.environ.get("PI_CODING_AGENT_DIR")
@@ -65,8 +81,14 @@ def _expand(template: str, *, home: Path | None, project: Path | None, slug: str
         elif home is not None:
             out = out.replace("{PI_AGENT_DIR}", str(home / ".pi" / "agent"))
         else:
-            out = out.replace("{PI_AGENT_DIR}", str(Path.home() / ".pi" / "agent"))
+            raise ValueError(
+                "symlink._expand: pi template needs either PI_CODING_AGENT_DIR "
+                "env or an explicit home= argument; both are missing"
+            )
     return Path(out)
+
+
+_VALID_SCOPES = frozenset({"global", "project"})
 
 
 class _SymlinkAdapter:
@@ -83,6 +105,17 @@ class _SymlinkAdapter:
         self.harness = harness
         self._cell = CELLS[harness]
 
+    def _resolve_dest(
+        self, slug: str, *, scope: str,
+        home: Path | None, project: Path | None,
+    ) -> Path:
+        """Validate scope + expand the cell's template, fail-loud on bad input."""
+        if scope not in _VALID_SCOPES:
+            raise ValueError(
+                f"{self.harness}: scope must be 'global' or 'project', got {scope!r}"
+            )
+        return _expand(self._cell[scope], home=home, project=project, slug=slug)
+
     def install(
         self,
         slug: str,
@@ -92,8 +125,7 @@ class _SymlinkAdapter:
         home: Path | None = None,
         project: Path | None = None,
     ) -> Path:
-        template = self._cell[scope]
-        dest = _expand(template, home=home, project=project, slug=slug)
+        dest = self._resolve_dest(slug, scope=scope, home=home, project=project)
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(content_path, dest)
         return dest
@@ -106,8 +138,7 @@ class _SymlinkAdapter:
         home: Path | None = None,
         project: Path | None = None,
     ) -> None:
-        template = self._cell[scope]
-        dest = _expand(template, home=home, project=project, slug=slug)
+        dest = self._resolve_dest(slug, scope=scope, home=home, project=project)
         if dest.exists() or dest.is_symlink():
             dest.unlink()
 
