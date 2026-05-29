@@ -7,6 +7,7 @@ from pathlib import Path
 import click
 
 from agent_toolkit_cli.commands.instructions import instructions
+from agent_toolkit_cli.commands.pi_extension import pi_extension
 from agent_toolkit_cli.commands.skill import skill
 
 
@@ -44,6 +45,7 @@ main.add_command(skill)
 # Plural alias for muscle memory (matches `npx -y skills`). See #180.
 main.add_command(skill, name="skills")
 main.add_command(instructions)
+main.add_command(pi_extension)
 
 
 if __name__ == "__main__":
