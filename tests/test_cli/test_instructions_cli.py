@@ -125,3 +125,27 @@ def test_uninstall_leaves_foreign_files_alone(tmp_path, monkeypatch):
     assert result.exit_code == 0
 
     assert (project / "CLAUDE.md").read_text() == "user authored\n"
+
+
+def test_list_shows_verdict_per_harness():
+    runner = CliRunner()
+    result = runner.invoke(main, ["instructions", "list"])
+    assert result.exit_code == 0, result.output
+
+    # Spot-check: must include the 7 symlink-verdict harnesses and at least
+    # one native and one gap harness.
+    for h in ("claude-code", "gemini-cli", "codex", "continue"):
+        assert h in result.output, f"missing {h} in output"
+    assert "symlink" in result.output
+    assert "native" in result.output
+
+
+def test_list_json_format():
+    runner = CliRunner()
+    result = runner.invoke(main, ["instructions", "list", "--format", "json"])
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert isinstance(data, list)
+    by_harness = {row["harness"]: row for row in data}
+    assert by_harness["claude-code"]["verdict"] == "symlink"
+    assert by_harness["codex"]["verdict"] == "native"
