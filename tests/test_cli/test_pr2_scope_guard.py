@@ -38,6 +38,7 @@ ALLOWED = {
     "tests/test_cli/test_agent_adapters/test_symlink.py",
     "tests/test_cli/test_agent_adapters/test_translate.py",
     "tests/test_cli/test_agent_adapters/test_config_file_folder.py",
+    "tests/test_cli/test_agent_install_roundtrip.py",
     "tests/test_cli/test_pr2_scope_guard.py",
     # Deleted (Task 1 cleanup):
     "tests/test_cli/test_pr1_scope_guard.py",
