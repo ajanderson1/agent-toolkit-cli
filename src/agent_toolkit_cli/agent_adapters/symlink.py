@@ -10,6 +10,7 @@ import os
 import shutil
 from pathlib import Path
 
+from agent_toolkit_cli.agent_adapters import _guard_foreign
 from agent_toolkit_cli.skill_agents import UnknownAgentError
 
 
@@ -116,6 +117,18 @@ class _SymlinkAdapter:
             )
         return _expand(self._cell[scope], home=home, project=project, slug=slug)
 
+    def destination(
+        self, slug: str, *, scope: str,
+        home: Path | None = None, project: Path | None = None,
+    ) -> Path:
+        """Return the on-disk path this adapter installs to. Read-only.
+
+        Used by the facade's agent-aware 'currently linked' scan to test
+        whether this harness already holds a projection (dest.exists()),
+        since adapters write real files — never symlinks at the skill path.
+        """
+        return self._resolve_dest(slug, scope=scope, home=home, project=project)
+
     def install(
         self,
         slug: str,
@@ -124,8 +137,10 @@ class _SymlinkAdapter:
         scope: str,
         home: Path | None = None,
         project: Path | None = None,
+        overwrite: bool = False,
     ) -> Path:
         dest = self._resolve_dest(slug, scope=scope, home=home, project=project)
+        _guard_foreign(dest, harness=self.harness, overwrite=overwrite)
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(content_path, dest)
         return dest

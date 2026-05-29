@@ -18,6 +18,7 @@ import shutil
 import textwrap
 from pathlib import Path
 
+from agent_toolkit_cli.agent_adapters import _guard_foreign
 from agent_toolkit_cli.skill_agents import UnknownAgentError
 
 
@@ -57,6 +58,14 @@ def _resolve_base(
 # ── aider-desk ───────────────────────────────────────────────────────────
 
 class _AiderDeskAdapter:
+    def destination(
+        self, slug: str, *, scope: str,
+        home: Path | None = None, project: Path | None = None,
+    ) -> Path:
+        _check_scope(scope, "aider-desk")
+        base = _resolve_base("aider-desk", scope, home, project, ".aider-desk")
+        return base / "agents" / slug / "config.json"
+
     def install(
         self,
         slug: str,
@@ -65,12 +74,14 @@ class _AiderDeskAdapter:
         scope: str,
         home: Path | None = None,
         project: Path | None = None,
+        overwrite: bool = False,
     ) -> Path:
         _check_scope(scope, "aider-desk")
         base = _resolve_base("aider-desk", scope, home, project, ".aider-desk")
         subdir = base / "agents" / slug
-        subdir.mkdir(parents=True, exist_ok=True)
         cfg = subdir / "config.json"
+        _guard_foreign(cfg, harness="aider-desk", overwrite=overwrite)
+        subdir.mkdir(parents=True, exist_ok=True)
         text = content_path.read_text()
         body = {
             "name": slug,
@@ -98,6 +109,17 @@ class _AiderDeskAdapter:
 # ── dexto ────────────────────────────────────────────────────────────────
 
 class _DextoAdapter:
+    def destination(
+        self, slug: str, *, scope: str,
+        home: Path | None = None, project: Path | None = None,
+    ) -> Path:
+        _check_scope(scope, "dexto")
+        if scope != "global":
+            raise ValueError("dexto: no project-scope convention exists; global-only writes")
+        if home is None:
+            raise ValueError("dexto: scope='global' requires home= argument")
+        return home / ".dexto" / "agents" / slug / f"{slug}.yml"
+
     def install(
         self,
         slug: str,
@@ -106,6 +128,7 @@ class _DextoAdapter:
         scope: str,
         home: Path | None = None,
         project: Path | None = None,
+        overwrite: bool = False,
     ) -> Path:
         _check_scope(scope, "dexto")
         if scope != "global":
@@ -114,8 +137,9 @@ class _DextoAdapter:
             raise ValueError("dexto: scope='global' requires home= argument")
         base = home / ".dexto"
         subdir = base / "agents" / slug
-        subdir.mkdir(parents=True, exist_ok=True)
         yml = subdir / f"{slug}.yml"
+        _guard_foreign(yml, harness="dexto", overwrite=overwrite)
+        subdir.mkdir(parents=True, exist_ok=True)
         # YAML block-scalar (`|`) requires EVERY line of the block to be
         # indented by at least the declared amount — textwrap.indent applies
         # the prefix to every line, not just the first. Single-line content
@@ -150,6 +174,14 @@ class _DextoAdapter:
 # ── firebender ───────────────────────────────────────────────────────────
 
 class _FirebenderAdapter:
+    def destination(
+        self, slug: str, *, scope: str,
+        home: Path | None = None, project: Path | None = None,
+    ) -> Path:
+        _check_scope(scope, "firebender")
+        base = _resolve_base("firebender", scope, home, project, ".firebender")
+        return base / "agents" / f"{slug}.md"
+
     def install(
         self,
         slug: str,
@@ -158,10 +190,14 @@ class _FirebenderAdapter:
         scope: str,
         home: Path | None = None,
         project: Path | None = None,
+        overwrite: bool = False,
     ) -> Path:
         _check_scope(scope, "firebender")
         base = _resolve_base("firebender", scope, home, project, ".firebender")
         md = base / "agents" / f"{slug}.md"
+        # Guard only our per-slug .md — firebender.json is a shared registry
+        # we intentionally append-merge (see below), never clobber.
+        _guard_foreign(md, harness="firebender", overwrite=overwrite)
         md.parent.mkdir(parents=True, exist_ok=True)
         # Inject callable: true into frontmatter. Spec requires this be true
         # for the agent to be spawnable, so an existing `callable: false` is
@@ -229,6 +265,14 @@ class _CodexAdapter:
     Per matrix: developers.openai.com/codex/subagents + codex-rs/config/src/config_toml.rs:649-691
     """
 
+    def destination(
+        self, slug: str, *, scope: str,
+        home: Path | None = None, project: Path | None = None,
+    ) -> Path:
+        _check_scope(scope, "codex")
+        base = _resolve_base("codex", scope, home, project, ".codex")
+        return base / "agents" / f"{slug}.toml"
+
     def install(
         self,
         slug: str,
@@ -237,12 +281,16 @@ class _CodexAdapter:
         scope: str,
         home: Path | None = None,
         project: Path | None = None,
+        overwrite: bool = False,
     ) -> Path:
         _check_scope(scope, "codex")
         base = _resolve_base("codex", scope, home, project, ".codex")
         agents_dir = base / "agents"
-        agents_dir.mkdir(parents=True, exist_ok=True)
         toml_path = agents_dir / f"{slug}.toml"
+        # Guard only our per-slug .toml — config.toml is a shared registry
+        # we mutate by section, never clobber.
+        _guard_foreign(toml_path, harness="codex", overwrite=overwrite)
+        agents_dir.mkdir(parents=True, exist_ok=True)
         # Produce a minimal TOML with developer_instructions from content.
         source_text = content_path.read_text()
         # Escape any triple-quoted strings by using single-quoted TOML multiline.

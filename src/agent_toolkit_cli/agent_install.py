@@ -22,13 +22,16 @@ from agent_toolkit_cli._install_core import (
     InstallPlan,  # noqa: F401  re-exported
     InstallResult,
     LockMismatchError,
-    _current_linked_agents as _core_current_linked_agents,
     plan as _core_plan,
 )
 from agent_toolkit_cli.agent_paths import (
     Scope,
     canonical_agent_dir,
     lock_file_path,
+)
+from agent_toolkit_cli.skill_agents import (
+    AGENTS as _AGENTS,
+    UnknownAgentError as _UnknownAgentError,
 )
 from agent_toolkit_cli.skill_source import ParsedSource
 
@@ -51,8 +54,16 @@ def plan(
     """Compute the minimal add/remove delta to reach target_agents.
 
     Thin facade over `_install_core.plan` that binds the agent-specific
-    synthetic-name set. Agents have no universal-bundle concept, so
+    synthetic-name set AND injects an adapter-aware "currently linked"
+    scanner. Agents have no universal-bundle concept, so
     universal_bundle_link=None.
+
+    The injected scanner is essential: the core's built-in scan looks for a
+    SYMLINK at the SKILL projection path, but agent adapters write REAL FILES
+    at agent-specific destinations. Without the override the scan always
+    returns () for agents, which (a) makes a full-remove plan empty (uninstall
+    orphans every file — the PR #268 bug) and (b) makes every re-install
+    spuriously re-add already-installed harnesses.
     """
     return _core_plan(
         slug=slug, scope=scope, source=source, ref=ref,
@@ -60,22 +71,55 @@ def plan(
         canonical_dir_resolver=canonical_agent_dir,
         universal_bundle_link=None,
         synthetic_names=_AGENT_SYNTHETIC_NAMES,
+        current_linked_resolver=_current_linked_agents,
     )
 
 
 def _current_linked_agents(
     *, slug: str, scope: Scope,
     home: Path | None, project: Path | None,
+    canonical_dir_resolver=None,
+    universal_bundle_link=None,
+    synthetic_names: frozenset[str] = frozenset(),
 ) -> tuple[str, ...]:
-    """Mirror of skill_install._current_linked_agents binding the agent
-    synthetics AND the agent canonical resolver — so the projection scan
-    compares against ~/.agent-toolkit/agents/<slug>/, not the skill canonical."""
-    return _core_current_linked_agents(
-        slug=slug, scope=scope, home=home, project=project,
-        canonical_dir_resolver=canonical_agent_dir,
-        universal_bundle_link=None,
-        synthetic_names=_AGENT_SYNTHETIC_NAMES,
-    )
+    """Adapter-aware "currently linked" scan for the agent kind.
+
+    Diverges from the core's symlink-at-skill-path scan: for each supported
+    harness (subagent_mechanism != 'none'), ask its adapter where it WOULD
+    install (adapter.destination(...)) and test whether that real file
+    exists. A harness whose destination exists is "currently linked".
+
+    Synthetic tokens (general-agent) are skipped. Unsupported harnesses
+    (mechanism='none', incl. the 4 PR2-disabled config_file_folder cells)
+    raise UnsupportedMechanismError from get_adapter() and are skipped.
+    Adapters that fail-loud on a destination they cannot resolve (e.g. dexto
+    at project scope) are treated as not-linked rather than crashing the scan.
+
+    The kwargs `canonical_dir_resolver`/`universal_bundle_link` are accepted
+    only to satisfy the core's `current_linked_resolver` call signature; they
+    are irrelevant to the agent kind and ignored.
+    """
+    from agent_toolkit_cli.agent_adapters import UnsupportedMechanismError
+
+    linked: list[str] = []
+    for name in _AGENTS:
+        if name in synthetic_names or name in _AGENT_SYNTHETIC_NAMES:
+            continue
+        try:
+            adapter = agent_adapters.get_adapter(name)
+        except UnsupportedMechanismError:
+            continue
+        try:
+            dest = adapter.destination(
+                slug, scope=scope, home=home, project=project,
+            )
+        except (ValueError, _UnknownAgentError):
+            # Adapter can't resolve a destination for this scope/args (e.g.
+            # dexto project scope) — it cannot be linked here. Skip.
+            continue
+        if dest.exists() or dest.is_symlink():
+            linked.append(name)
+    return tuple(linked)
 
 
 def apply(
@@ -128,6 +172,12 @@ def apply(
     # the on-disk shape at the destination.
     content_path = canonical / f"{plan.slug}.md"
 
+    # Tool-ownership signal: a lock entry for this slug means agent-toolkit-cli
+    # already installed it, so re-writing our own destination files is an
+    # allowed refresh (overwrite=True). A fresh install (no lock entry) refuses
+    # to clobber a pre-existing foreign file at any destination.
+    overwrite = existing_entry is not None
+
     created: list[Path] = []
     skipped: list[str] = []
 
@@ -142,6 +192,7 @@ def apply(
         out = adapter.install(
             plan.slug, content_path,
             scope=plan.scope, home=home, project=project,
+            overwrite=overwrite,
         )
         created.append(out)
 
@@ -229,25 +280,58 @@ def uninstall(
     project: Path | None,
     harnesses: tuple[str, ...],
 ) -> None:
-    """Full removal — every projection + canonical tree."""
-    p = plan(
-        slug=slug, scope=scope,
-        source=None, ref=None,
-        target_agents=(),
-        home=home, project=project,
+    """Full removal — every projected file + lock entry (+ canonical at global).
+
+    Unlike the skill facade's verbatim copy this previously cloned, the agent
+    kind cannot rely on the core's symlink-at-skill-path scan to discover
+    projections: adapters write REAL FILES, so the scan returned () and every
+    projected file was ORPHANED (PR #268). The fix is twofold:
+
+      1. We call each requested harness's adapter.uninstall() DIRECTLY, so the
+         real destination files are removed regardless of what plan() computed.
+         `harnesses` is the explicit set the caller installed; passing it makes
+         removal independent of any scan. Adapters are idempotent (no-op if the
+         destination is already gone), so over-listing a harness is harmless.
+      2. The lock entry is dropped at BOTH scopes (the old code dropped it only
+         for project scope, leaving a global lock that lied about state).
+
+    Global scope additionally rmtree's the canonical library entry. Project
+    scope preserves the external canonical (dirty-work survives; doctor's
+    orphan sweep reclaims it) — matching the skill facade's project posture.
+    """
+    from agent_toolkit_cli.agent_adapters import UnsupportedMechanismError
+    from agent_toolkit_cli.agent_lock import (
+        read_lock, remove_entry, write_lock,
     )
-    apply(p, home=home, project=project, env=None)
+
+    # 1. Remove every projected file via its own adapter (idempotent).
+    for name in harnesses:
+        if name in _AGENT_SYNTHETIC_NAMES:
+            continue
+        try:
+            adapter = agent_adapters.get_adapter(name)
+        except (UnsupportedMechanismError, _UnknownAgentError):
+            continue
+        try:
+            adapter.uninstall(slug, scope=scope, home=home, project=project)
+        except ValueError:
+            # Adapter can't resolve a destination for these args (e.g. a
+            # {HOME}-template harness called with home=None, or dexto at
+            # project scope). There is nothing to remove there — treat as a
+            # no-op rather than crashing the uninstall.
+            continue
+
+    # 2. Drop the lock entry (both scopes).
+    lock_path = lock_file_path(scope=scope, home=home, project=project)
+    lock = read_lock(lock_path)
+    if slug in lock.skills:
+        write_lock(lock_path, remove_entry(lock, slug))
 
     if scope == "project":
-        from agent_toolkit_cli.agent_lock import (
-            read_lock, remove_entry, write_lock,
-        )
-        lock_path = lock_file_path(scope="project", project=project)
-        lock = read_lock(lock_path)
-        if slug in lock.skills:
-            write_lock(lock_path, remove_entry(lock, slug))
+        # External canonical preserved (dirty-work survival); doctor reclaims it.
         return
 
+    # 3. Global scope: drop the canonical library entry.
     canonical = canonical_agent_dir(
         slug, scope=scope, home=home, project=project,
     )

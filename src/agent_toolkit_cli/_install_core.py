@@ -139,6 +139,7 @@ def plan(
     canonical_dir_resolver: Callable[..., Path] | None = None,
     universal_bundle_link: Callable[[str], Path] | None = None,
     synthetic_names: frozenset[str] = frozenset(),
+    current_linked_resolver: Callable[..., tuple[str, ...]] | None = None,
 ) -> InstallPlan:
     """Compute the minimal add/remove delta to reach target_agents.
 
@@ -157,11 +158,20 @@ def plan(
     rather than real harness symlink targets (e.g. the skill facade injects
     `frozenset({"universal", "general-skill"})`). The core treats it as
     opaque — it never names a specific kind's synthetics itself.
+
+    `current_linked_resolver` overrides the built-in `_current_linked_agents`
+    scan. The skill facade leaves it None (the symlink-at-projection-path scan
+    is correct for skills). The agent facade injects an adapter-aware scanner
+    that resolves each harness's REAL destination and tests `dest.exists()` —
+    because agent adapters write real files, never symlinks at the skill path,
+    so the built-in scan always returns () for the agent kind (the PR #268 bug).
+    Called with the same keyword args as `_current_linked_agents`.
     """
     for n in target_agents:
         if n not in AGENTS:
             raise UnknownAgentError(n)
-    current = _current_linked_agents(
+    scanner = current_linked_resolver if current_linked_resolver is not None else _current_linked_agents
+    current = scanner(
         slug=slug, scope=scope, home=home, project=project,
         canonical_dir_resolver=canonical_dir_resolver,
         universal_bundle_link=universal_bundle_link,
