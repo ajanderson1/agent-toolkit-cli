@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from agent_toolkit_cli import pi_extension_paths as pep
 
 

@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from agent_toolkit_cli._paths_core import (
     PI_EXTENSION_BINDING,
     library_lock_path_for_kind,
