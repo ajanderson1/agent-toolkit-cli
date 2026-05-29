@@ -102,7 +102,11 @@ def build_inventory(
             else:
                 rec.project_loaded = rec.project_loaded or loaded
 
-    # 3. npm packages[] (registry-tracked).
+    # 3. npm packages[] (registry-tracked). Precedence: store-owned > npm >
+    # untracked. Like the loose pass, we never clobber a higher-precedence
+    # origin — a store-owned slug that is also listed as npm: keeps its
+    # store-owned identity; we only record the npm presence (the *_loaded
+    # flag). npm does upgrade a slug first seen as loose/untracked.
     for scope, _ in scopes:
         for spec in _pi_settings.read_packages(scope=scope, home=home, project=project):
             if not spec.startswith("npm:"):
@@ -111,8 +115,9 @@ def build_inventory(
             rec = by_slug.setdefault(
                 slug, InventoryRecord(slug=slug, origin="npm", source=spec)
             )
-            rec.origin = "npm"
-            rec.source = spec
+            if rec.origin != "store-owned":
+                rec.origin = "npm"
+                rec.source = spec
             if scope == "global":
                 rec.global_loaded = True
             else:
