@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.14.1](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.14.0...v2.14.1) (2026-05-29)
+
+
+### Bug Fixes
+
+* correct monorepo handling for nested (multi-segment) skill paths ([#271](https://github.com/ajanderson1/agent-toolkit-cli/issues/271)) ([63e1271](https://github.com/ajanderson1/agent-toolkit-cli/commit/63e12710c479e62e8f85fb4f72e360123c965b99))
+
 ## [2.14.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.13.0...v2.14.0) (2026-05-28)
 
 
