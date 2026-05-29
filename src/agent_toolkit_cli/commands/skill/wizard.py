@@ -5,9 +5,10 @@ hook that bypasses real I/O for unit tests.
 """
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import questionary
 
@@ -15,6 +16,32 @@ from agent_toolkit_cli.skill_agents import (
     AGENTS, detect_installed_agents,
     get_non_universal_agents, get_universal_agents,
 )
+
+
+def _interactive() -> bool:
+    """True only when both stdin and stdout are real TTYs.
+
+    questionary/prompt_toolkit raises `OSError: [Errno 22]` from `selectors`
+    when driven over a pty or redirected stdio (CI, scripts, agents, or a
+    `script -q /dev/null` wrapper) instead of degrading gracefully (#274).
+    Gate every prompt on this so non-interactive callers get a safe default
+    (treated as "no answer", same as a Ctrl-C / None) rather than a crash.
+    """
+    try:
+        return sys.stdin.isatty() and sys.stdout.isatty()
+    except (OSError, ValueError):
+        return False
+
+
+def _ask(question: Any) -> Any:
+    """`question.ask()` that returns None instead of raising on bad stdio."""
+    if not _interactive():
+        return None
+    try:
+        return question.ask()
+    except OSError:
+        # prompt_toolkit hit unusable stdio mid-prompt — treat as no answer.
+        return None
 
 
 @dataclass(frozen=True)
@@ -63,10 +90,10 @@ def select_agents_to_add(
             label, value=name, checked=(name in detected),
         ))
 
-    agents_choice = questionary.checkbox(
+    agents_choice = _ask(questionary.checkbox(
         f"Which additional agents do you want to install '{slug}' to?",
         choices=choices,
-    ).ask()
+    ))
     if agents_choice is None:
         return AgentSelection(agents=(), scope="global")
 
@@ -75,14 +102,14 @@ def select_agents_to_add(
     # creates the <project>/.agents/skills/<slug> symlink.
     selected = tuple(universal_agents) + tuple(agents_choice)
 
-    scope_choice = questionary.select(
+    scope_choice = _ask(questionary.select(
         "Scope:",
         choices=[
             questionary.Choice("global  (~/.agents/skills/<slug>)", value="global"),
             questionary.Choice("project (./.agents/skills/<slug>)", value="project"),
         ],
         default="global",
-    ).ask()
+    ))
     if scope_choice is None:
         return AgentSelection(agents=(), scope="global")
 
@@ -106,9 +133,9 @@ def select_slug_to_remove(
         )
         for slug in installed_slugs
     ]
-    answer = questionary.checkbox(
+    answer = _ask(questionary.checkbox(
         "Which skills do you want to remove?", choices=choices,
-    ).ask()
+    ))
     if answer is None:
         return SlugSelection(slugs=())
     return SlugSelection(slugs=tuple(answer))
@@ -120,7 +147,7 @@ def select_remove_mode(
 ) -> RemoveMode:
     if _io_for_test is not None:
         return _io_for_test
-    mode_choice = questionary.select(
+    mode_choice = _ask(questionary.select(
         f"How thoroughly to remove '{slug}'?",
         choices=[
             questionary.Choice(
@@ -131,11 +158,13 @@ def select_remove_mode(
                 value="full"),
         ],
         default="full",
-    ).ask()
+    ))
     if mode_choice is None:
+        # No TTY / cancelled: refuse to delete without an explicit answer.
+        # Callers can bypass this prompt entirely with --force.
         return RemoveMode(mode="full", confirmed=False)
     questionary.print("\nThis will delete:", style="bold fg:yellow")
     for p in will_delete:
         questionary.print(f"  {p}")
-    confirmed = questionary.confirm("Confirm?", default=False).ask()
+    confirmed = _ask(questionary.confirm("Confirm?", default=False))
     return RemoveMode(mode=mode_choice, confirmed=bool(confirmed))
