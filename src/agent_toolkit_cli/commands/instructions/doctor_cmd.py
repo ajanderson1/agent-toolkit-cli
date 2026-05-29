@@ -26,6 +26,7 @@ def doctor_cmd(ctx: click.Context, scope: str) -> None:
         project_root = obj if obj else Path.cwd()
         canonical = instructions_paths.project_canonical_agents_md(project_root)
     else:
+        home = Path.home()
         canonical = instructions_paths.global_canonical_agents_md()
 
     findings: list[str] = []

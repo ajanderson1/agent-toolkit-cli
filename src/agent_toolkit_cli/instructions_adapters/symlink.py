@@ -20,6 +20,13 @@ class PointerConflictError(RuntimeError):
     """A real file or foreign symlink occupies the pointer slot; refused."""
 
 
+class MissingHomeError(RuntimeError):
+    """A {HOME} template was expanded with home=None — a caller bug, not a
+    legitimately-skippable cell. Distinct from the ValueError raised when a
+    harness simply has no slot for the requested scope, so callers can keep
+    swallowing the latter while failing loud on the former."""
+
+
 class UnknownHarnessError(KeyError):
     """`harness` is not in the instructions-kind CELLS table."""
 
@@ -63,7 +70,9 @@ def _expand(template: str, *, home: Path | None, project: Path | None, pointer_n
     out = template.replace("{POINTER_NAME}", pointer_name)
     if "{HOME}" in out:
         if home is None:
-            raise ValueError(f"_expand: template {template!r} needs home= but None was passed")
+            raise MissingHomeError(
+                f"_expand: template {template!r} needs home= but None was passed"
+            )
         out = out.replace("{HOME}", str(home))
     if "{PROJECT}" in out:
         if project is None:

@@ -18,11 +18,14 @@ from agent_toolkit_cli import instructions_install
 @click.pass_context
 def uninstall_cmd(ctx: click.Context, scope: str) -> None:
     project_root = None
+    home = None
     if scope == "project":
         obj = ctx.find_root().params.get("project_root")
         project_root = obj if obj else Path.cwd()
+    else:
+        home = Path.home()
 
     instructions_install.uninstall(
-        scope=scope, project_root=project_root, home=None
+        scope=scope, project_root=project_root, home=home
     )
     click.echo(f"uninstalled instructions pointers at {scope} scope")
