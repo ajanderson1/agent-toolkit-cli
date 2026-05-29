@@ -51,3 +51,27 @@ def test_status_lists_origin(tmp_path, monkeypatch):
     assert result.exit_code == 0
     assert "@scope/rpiv-i18n" in result.output
     assert "npm" in result.output
+
+
+def _seed_project_npm(project: Path):
+    s = project / ".pi" / "settings.json"
+    s.parent.mkdir(parents=True, exist_ok=True)
+    s.write_text(_json.dumps({"packages": ["npm:@scope/proj-only"]}))
+
+
+def test_list_project_json(tmp_path, monkeypatch):
+    # Separate HOME (so no global rows leak in) makes the project row
+    # unambiguous; -p selects project scope, cwd is the project root.
+    home = tmp_path / "home"
+    project = tmp_path / "proj"
+    home.mkdir()
+    project.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    _seed_project_npm(project)
+    monkeypatch.chdir(project)
+    result = CliRunner().invoke(main, ["pi-extension", "list", "-p", "--json"])
+    assert result.exit_code == 0
+    rows = {r["slug"]: r for r in _json.loads(result.output)}
+    assert rows["@scope/proj-only"]["origin"] == "npm"
+    assert rows["@scope/proj-only"]["projectLoaded"] is True
+    assert rows["@scope/proj-only"]["globalLoaded"] is False
