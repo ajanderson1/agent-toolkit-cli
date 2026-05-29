@@ -506,10 +506,10 @@ def _rev_parse(canonical, ref, env):
     ).stdout.strip()
 
 
-def test_push_clean_with_commits_ahead_drops_them(git_sandbox, tmp_path, monkeypatch):
-    """Documents the clean-gap BUG: a clean tree with local commits ahead of
-    origin reports 'nothing to push' and the commits never reach the remote.
-    See Gap Ledger §4 — Spec 2 fixes this."""
+def test_push_clean_with_commits_ahead_pushes_them(git_sandbox, tmp_path, monkeypatch):
+    """#280 (Gap Ledger §4) fix: a clean tree with local commits ahead of
+    origin is NOT 'nothing to push' — `--direct` publishes the committed work
+    and HEAD reaches the remote. (This test previously pinned the bug.)"""
     runner, root = _setup_global_demo(git_sandbox, tmp_path, monkeypatch)
     canonical = root / "demo"
     # Commit locally (clean working tree, but ahead of origin).
@@ -521,11 +521,55 @@ def test_push_clean_with_commits_ahead_drops_them(git_sandbox, tmp_path, monkeyp
 
     result = runner.invoke(main, ["skill", "push", "demo", "-g", "--direct"])
     assert result.exit_code == 0, result.output
-    assert "nothing to push" in result.output  # the bug, pinned
+    assert "nothing to push" not in result.output
+    assert "pushed" in result.output
 
-    # Prove the commit did NOT reach the remote.
+    # The committed-but-unpushed work reached the remote.
     assert _rev_parse(canonical, "HEAD", git_sandbox.env) \
-        != _rev_parse(canonical, "origin/main", git_sandbox.env)
+        == _rev_parse(canonical, "origin/main", git_sandbox.env)
+
+
+def test_push_clean_ahead_default_opens_pr_branch(git_sandbox, tmp_path, monkeypatch):
+    """#280: clean tree + committed-ahead work in default (PR) mode pushes a
+    `skill/self-improvement-*` branch carrying the commit, leaves `main`
+    untouched, and prints the PR URL."""
+    _install_gh_stub(tmp_path, monkeypatch, pr_url="https://github.com/x/y/pull/77")
+    runner, root = _setup_global_demo(git_sandbox, tmp_path, monkeypatch)
+    canonical = root / "demo"
+    main_before = _upstream_main_sha(git_sandbox.upstream, git_sandbox.env)
+
+    (canonical / "NEW.md").write_text("ahead commit\n")
+    subprocess.run(["git", "-C", str(canonical), "add", "-A"],
+                   check=True, env=git_sandbox.env, capture_output=True)
+    subprocess.run(["git", "-C", str(canonical), "commit", "-m", "ahead"],
+                   check=True, env=git_sandbox.env, capture_output=True)
+
+    result = runner.invoke(main, ["skill", "push", "demo", "-g"])
+    assert result.exit_code == 0, result.output
+    assert "nothing to push" not in result.output
+    assert "pushed branch skill/self-improvement-" in result.output
+    assert "https://github.com/x/y/pull/77" in result.output
+
+    # main untouched — the commit lives on the PR branch.
+    assert _upstream_main_sha(git_sandbox.upstream, git_sandbox.env) == main_before
+    heads = _upstream_heads(git_sandbox.upstream, git_sandbox.env)
+    pr_heads = [h for h in heads if h.startswith("skill/self-improvement-")]
+    assert len(pr_heads) == 1, heads
+    # Canonical repo restored to base so a later `skill update` merges correctly.
+    head_branch = subprocess.run(
+        ["git", "-C", str(canonical), "rev-parse", "--abbrev-ref", "HEAD"],
+        check=True, env=git_sandbox.env, capture_output=True, text=True,
+    ).stdout.strip()
+    assert head_branch == "main", head_branch
+
+
+def test_push_clean_up_to_date_still_noop(git_sandbox, tmp_path, monkeypatch):
+    """#280 guard: a genuinely up-to-date clean clone still prints
+    'clean — nothing to push' (UP_TO_DATE is the only true nothing-to-push)."""
+    runner, root = _setup_global_demo(git_sandbox, tmp_path, monkeypatch)
+    result = runner.invoke(main, ["skill", "push", "demo", "-g", "--direct"])
+    assert result.exit_code == 0, result.output
+    assert "nothing to push" in result.output
 
 
 def test_push_dirty_direct_pushes(git_sandbox, tmp_path, monkeypatch):

@@ -113,6 +113,94 @@ def test_owned_push_clean_subpath_reports_nothing(tmp_path, monkeypatch):
     assert "nothing to push" in r.output.lower()
 
 
+def _commit_subpath(clone: Path, sub: str, body: str) -> None:
+    """Commit an edit to `clone/sub` so the clone is clean but 1 ahead of
+    origin (the committed-but-unpushed state #280 fixes)."""
+    (clone / sub / "SKILL.md").write_text(body)
+    env = scrub_git_env()
+    for cmd in (
+        ["git", "-C", str(clone), "add", "--", sub],
+        ["git", "-C", str(clone), "-c", "user.email=t@t", "-c", "user.name=t",
+         "commit", "-q", "-m", "local committed edit"],
+    ):
+        subprocess.run(cmd, check=True, env=env)
+
+
+def _clone_for_mkdocs(clone_lookup_entry) -> Path:
+    from agent_toolkit_cli.skill_paths import parent_clone_path
+    owner, repo = clone_lookup_entry["source"].split("/", 1)
+    return parent_clone_path(owner, repo, ref=clone_lookup_entry.get("ref"), env=None)
+
+
+def test_owned_push_committed_ahead_direct_pushes(tmp_path, monkeypatch):
+    """#280: an owned-monorepo clone with a committed-but-unpushed subpath edit
+    (clean tree, ahead of origin) must NOT report 'nothing to push' under
+    --direct — it publishes the committed work to the remote."""
+    parent_url, _ = _setup_parent(tmp_path, monkeypatch)
+    _add_owned(parent_url, "mkdocs")
+    entry = _lock()["skills"]["mkdocs"]
+    sub = entry["skillPath"]
+    clone = _clone_for_mkdocs(entry)
+
+    _commit_subpath(clone, sub, "committed but unpushed\n")
+
+    r = CliRunner().invoke(cli, ["skill", "push", "--direct", "mkdocs", "-g"])
+    assert r.exit_code == 0, r.output
+    assert "nothing to push" not in r.output.lower()
+    assert "pushed" in r.output.lower()
+
+    # The committed work reached origin (parent is updateInstead, so main moved).
+    env = scrub_git_env()
+    head = subprocess.run(
+        ["git", "-C", str(clone), "rev-parse", "HEAD"],
+        capture_output=True, text=True, env=env, check=True,
+    ).stdout.strip()
+    origin = subprocess.run(
+        ["git", "-C", str(clone), "rev-parse", "origin/main"],
+        capture_output=True, text=True, env=env, check=True,
+    ).stdout.strip()
+    assert head == origin, "committed-but-unpushed work did not reach origin"
+
+
+def test_owned_push_committed_ahead_default_opens_pr(tmp_path, monkeypatch):
+    """#280: same committed-ahead state in default (PR) mode pushes a
+    `skill/self-improvement-*` branch carrying the commit and restores the
+    shared clone to base, rather than reporting 'nothing to push'."""
+    parent_url, _ = _setup_parent(tmp_path, monkeypatch)
+    _add_owned(parent_url, "mkdocs")
+    entry = _lock()["skills"]["mkdocs"]
+    sub = entry["skillPath"]
+    clone = _clone_for_mkdocs(entry)
+
+    _commit_subpath(clone, sub, "committed but unpushed\n")
+
+    _hide_gh(monkeypatch, tmp_path)
+    r = CliRunner().invoke(cli, ["skill", "push", "mkdocs", "-g"])
+    assert r.exit_code == 0, r.output
+    assert "nothing to push" not in r.output.lower()
+    assert "pushed branch skill/self-improvement-" in r.output
+
+    env = scrub_git_env()
+    # Clone restored to base, not stranded on the PR branch.
+    branch = subprocess.run(
+        ["git", "-C", str(clone), "rev-parse", "--abbrev-ref", "HEAD"],
+        capture_output=True, text=True, env=env, check=True,
+    ).stdout.strip()
+    assert branch == "main", f"shared clone stranded on {branch!r}"
+
+    # The PR branch carries the committed work.
+    pr_branch = next(
+        ln.split("pushed branch ", 1)[1].strip()
+        for ln in r.output.splitlines() if "pushed branch " in ln
+    )
+    show = subprocess.run(
+        ["git", "-C", str(clone), "show", "--name-only", "--format=", pr_branch],
+        capture_output=True, text=True, env=env, check=True,
+    )
+    changed = [ln for ln in show.stdout.splitlines() if ln.strip()]
+    assert changed and all(p.startswith(f"{sub}/") for p in changed), changed
+
+
 def _hide_gh(monkeypatch, tmp_path):
     """Build a PATH that retains git (and its git-* sub-helpers) but excludes
     `gh`, so `shutil.which('gh')` returns None and _open_pr returns None — the
