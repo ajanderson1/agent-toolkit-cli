@@ -196,3 +196,29 @@ def test_supported_rows_have_matching_adapter(rows):
             )
 
     assert not failures, "Matrix parity failures:\n" + "\n".join(failures)
+
+
+def test_every_catalog_supported_mechanism_appears_in_matrix(rows):
+    """Inverse of test_supported_rows_have_matching_adapter.
+
+    If an AgentConfig has subagent_mechanism != 'none' but the harness
+    isn't a supported row in harness-matrix.md, the catalog and matrix
+    are out of sync. Catches the case where someone wires an adapter for
+    a harness without first documenting/verifying its support in the matrix.
+    """
+    supported_prefixes = tuple(_VERDICT_PREFIX_TO_MECHANISM)
+    catalog_with_real_mechanism = {
+        name for name, cfg in skill_agents.AGENTS.items()
+        if cfg.subagent_mechanism != "none"
+        and name not in {"universal", "general-skill", "general-agent"}
+    }
+    matrix_supported = {
+        h for h, row in rows.items()
+        if row["verdict"].lower().startswith(supported_prefixes)
+    }
+    orphans = catalog_with_real_mechanism - matrix_supported
+    assert not orphans, (
+        "Catalog has subagent_mechanism set on harnesses NOT listed as "
+        f"supported in harness-matrix.md: {sorted(orphans)}.\n"
+        "Either add the row to the matrix, or set subagent_mechanism='none'."
+    )

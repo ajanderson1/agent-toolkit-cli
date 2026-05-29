@@ -29,10 +29,15 @@ class InstallError(RuntimeError):
     """Base error for install failures."""
 
 
-def _doctor_hint(slug: str, scope: str) -> str:
-    """Suggest the doctor command that clears a blocking stray symlink."""
+def _doctor_hint(slug: str, scope: str, kind_noun: str = "skill") -> str:
+    """Suggest the doctor command that clears a blocking stray symlink.
+
+    `kind_noun` is the CLI noun for the asset kind ("skill" today; "agent"
+    once PR4 adds the agent CLI verb group). Defaults to "skill" so existing
+    skill-facade callers keep their current error message verbatim.
+    """
     flag = "-g" if scope == "global" else "-p"
-    return f"\n  Run: agent-toolkit-cli skill doctor {flag}  (removes stray symlinks)"
+    return f"\n  Run: agent-toolkit-cli {kind_noun} doctor {flag}  (removes stray symlinks)"
 
 
 class LockMismatchError(InstallError):
@@ -102,6 +107,19 @@ def _should_skip_symlink(
 
     The special "universal" bundle token is handled in apply() before
     _should_skip_symlink is called; it never reaches here as an agent_name.
+
+    KNOWN LATENT (PR2 of #252, deferred to PR3 cleanup): this helper is
+    called from `_current_linked_agents` which the agent facade also uses.
+    `is_universal` is currently a SKILL concept (skills_dir == ".agents/skills");
+    7 cells supporting agent install ALSO have is_universal=True (codex, cursor,
+    dexto, firebender, gemini-cli, github-copilot, opencode). When the agent
+    facade's `plan()` runs at global scope, those 7 harnesses are silently
+    skipped from the "what's currently linked?" scan even though they are
+    legitimate agent install targets. Today the symptom is hidden because
+    `agent_install.apply()` dispatches via `agent_adapters.get_adapter()`
+    instead of consulting this skip predicate. PR3 (universal→general rename)
+    is the natural place to extract the skip predicate into a facade-injected
+    Callable, parallel to `canonical_dir_resolver` and `universal_bundle_link`.
     """
     cfg = get_agent(agent_name)
     if cfg.is_universal and scope == "global":

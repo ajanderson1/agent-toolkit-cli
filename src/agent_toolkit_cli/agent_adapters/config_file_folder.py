@@ -311,8 +311,14 @@ _ADAPTERS: dict[str, type] = {
 }
 
 
-def adapter_for(harness: str) -> _AiderDeskAdapter | _CodexAdapter | _DextoAdapter | _FirebenderAdapter:
-    """Return the config_file_folder-mechanism adapter for `harness`."""
+def adapter_for(harness: str):
+    """Return the config_file_folder-mechanism adapter for `harness`.
+
+    Returns an `AgentAdapter`-shaped object (Protocol; see
+    `agent_adapters/__init__.py`). The concrete classes are intentionally
+    private — callers should rely only on the Protocol surface so a 5th
+    cell can land without touching every call site.
+    """
     cls = _ADAPTERS.get(harness)
     if cls is None:
         raise UnknownAgentError(harness)
