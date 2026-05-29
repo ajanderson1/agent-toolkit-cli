@@ -149,3 +149,39 @@ def test_list_json_format():
     by_harness = {row["harness"]: row for row in data}
     assert by_harness["claude-code"]["verdict"] == "symlink"
     assert by_harness["codex"]["verdict"] == "native"
+
+
+def test_status_reports_present_and_missing(tmp_path, monkeypatch):
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / "AGENTS.md").write_text("# canon\n")
+    monkeypatch.chdir(project)
+
+    runner = CliRunner()
+    runner.invoke(main, ["instructions", "install", "--scope", "project", "--harness", "claude-code"])
+
+    # Remove the pointer to simulate drift.
+    (project / "CLAUDE.md").unlink()
+
+    result = runner.invoke(main, ["instructions", "status", "--scope", "project"])
+    assert result.exit_code == 0
+    assert "claude-code" in result.output
+    assert "missing" in result.output.lower()
+
+
+def test_status_reports_conflict_when_pointer_points_elsewhere(tmp_path, monkeypatch):
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / "AGENTS.md").write_text("# canon\n")
+    (project / "OTHER.md").write_text("other\n")
+    monkeypatch.chdir(project)
+
+    runner = CliRunner()
+    runner.invoke(main, ["instructions", "install", "--scope", "project", "--harness", "claude-code"])
+
+    # Replace our symlink with one pointing at OTHER.md.
+    (project / "CLAUDE.md").unlink()
+    (project / "CLAUDE.md").symlink_to(project / "OTHER.md")
+
+    result = runner.invoke(main, ["instructions", "status", "--scope", "project"])
+    assert "conflict" in result.output.lower()
