@@ -65,3 +65,18 @@ def test_multi_match_without_source_falls_back_to_subpath_flag(tmp_path):
     msg = str(exc.value)
     assert "skills/youtube-transcript" in msg
     assert "plugins/youtube-transcript/skills" in msg
+
+
+def test_multi_match_explains_skills_sh_cannot_disambiguate(tmp_path):
+    """A skills.sh URL (/owner/repo/<name>) resolves by frontmatter name and
+    cannot disambiguate a shared name — the error must say so and offer the
+    shorthand/tree escape hatch."""
+    _write_skill(tmp_path, "a/aj-flow", "aj-flow")
+    _write_skill(tmp_path, "b/aj-flow", "aj-flow")
+    with pytest.raises(click.ClickException) as exc:
+        _resolve_skill_name_to_subpath(tmp_path, "aj-flow", source="owner/repo")
+    msg = str(exc.value)
+    assert "cannot disambiguate" in msg
+    assert "skill add owner/repo/a/aj-flow" in msg
+    assert "skill add owner/repo/b/aj-flow" in msg
+    assert "tree URL" in msg

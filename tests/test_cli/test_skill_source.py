@@ -111,6 +111,22 @@ def test_github_shorthand_ref_with_subpath_rejected():
         parse_source("o/r@main/skills/foo")
 
 
+def test_github_shorthand_trailing_ref_after_subpath_rejected():
+    """`owner/repo/sub/skill@ref` must not silently absorb @ref into the
+    subpath (which fails later with a confusing 'SKILL.md not found'). Reject
+    and point at --ref / the tree URL."""
+    with pytest.raises(SourceParseError, match="trailing '@<ref>'"):
+        parse_source("ajanderson1/personal_skills/aj-workflows/aj-flow@v1")
+
+
+def test_github_shorthand_trailing_ref_error_names_alternatives():
+    with pytest.raises(SourceParseError) as exc:
+        parse_source("o/r/a/b@v1")
+    msg = str(exc.value)
+    assert "https://github.com/o/r/tree/v1/a/b" in msg
+    assert "skill add o/r/a/b --ref v1" in msg
+
+
 def test_github_shorthand_slash_ref_rejected():
     """#198 reproduction: `o/r@feature/branch` previously parsed silently as
     ref='feature', subpath='branch'. Now rejected."""

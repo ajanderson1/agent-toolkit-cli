@@ -8,9 +8,11 @@ from pathlib import Path
 
 import pytest
 
+from agent_toolkit_cli import skill_install
+from agent_toolkit_cli._install_core import InstallPlan
 from agent_toolkit_cli.skill_install import InstallError, install, uninstall
 from agent_toolkit_cli.skill_paths import canonical_skill_dir
-from agent_toolkit_cli.skill_source import parse_source
+from agent_toolkit_cli.skill_source import ParsedSource, parse_source
 
 
 def test_install_creates_canonical_and_symlinks(git_sandbox, tmp_path: Path):
@@ -68,6 +70,27 @@ def test_install_refuses_to_overwrite_unrelated_symlink(git_sandbox, tmp_path: P
     msg = str(excinfo.value)
     assert "skill doctor -p" in msg
     assert "stray symlinks" in msg
+
+
+def test_apply_refuses_monorepo_source_with_subpath(tmp_path: Path, monkeypatch):
+    """apply() only records single-skill (repo-root) lock entries. A source
+    carrying a subpath is a monorepo source, which apply() would silently
+    mis-record as skillPath='SKILL.md' with no parentUrl. It must fail loud
+    instead — the monorepo add path writes those entries, not apply()."""
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(tmp_path / "lib" / "skills"))
+    src = ParsedSource(
+        type="github",
+        url="https://github.com/ajanderson1/personal_skills",
+        owner_repo="ajanderson1/personal_skills",
+        ref=None,
+        subpath="aj-workflows/aj-flow",
+    )
+    plan = InstallPlan(
+        slug="aj-flow", scope="global", source=src, ref=None,
+        add_agents=(), remove_agents=(),
+    )
+    with pytest.raises(InstallError, match="monorepo source"):
+        skill_install.apply(plan, home=None, project=None)
 
 
 def test_uninstall_removes_canonical_and_symlinks(git_sandbox, tmp_path: Path):

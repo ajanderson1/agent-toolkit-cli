@@ -460,7 +460,11 @@ def _resolve_skill_name_to_subpath(
         raise click.ClickException(
             f"skill {skill_name!r} matches multiple SKILL.md files: "
             f"{', '.join(subpaths)}.\n"
-            f"Address one by its explicit subpath:\n{hints}"
+            f"The skills.sh URL form (/owner/repo/<name>) and a bare name "
+            f"cannot disambiguate when two skills share a frontmatter name.\n"
+            f"Address one by its explicit subpath instead:\n{hints}\n"
+            f"  (shorthand: <owner>/<repo>/<subpath>; or tree URL: "
+            f"https://github.com/<owner>/<repo>/tree/<ref>/<subpath>)"
         )
     return str(matches[0])
 
