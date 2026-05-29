@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.14.3](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.14.2...v2.14.3) (2026-05-29)
+
+
+### Bug Fixes
+
+* skill push publishes committed-but-unpushed changes instead of reporting clean ([#280](https://github.com/ajanderson1/agent-toolkit-cli/issues/280)) ([#281](https://github.com/ajanderson1/agent-toolkit-cli/issues/281)) ([0001723](https://github.com/ajanderson1/agent-toolkit-cli/commit/00017238bd50c4e87ca40b7a74c3873f1b3281d5))
+
 ## [2.14.2](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.14.1...v2.14.2) (2026-05-29)
 
 
