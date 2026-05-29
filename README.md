@@ -37,6 +37,18 @@ The CLI uses the 55-agent catalog ported from [vercel-labs/skills](https://githu
 
 The parent clone lives at `<library>/_parents/<owner>/<repo>/` and is yours to edit — local commits are first-class. `skill update` runs `git fetch` + `git merge` on that clone, so your work merges with upstream like any normal git repo. On conflict the clone is left mid-merge; resolve in place and re-run `skill update`. The TUI reports each monorepo skill's `state` as `clean` or `dirty`, same semantics as per-skill repos. `skill push` still refuses monorepo entries — sharing changes back upstream means forking the parent yourself.
 
+### Instructions — link a canonical `AGENTS.md` across harnesses
+
+```text
+agent-toolkit-cli instructions install   [--scope project|global] [--harness <name>]...
+agent-toolkit-cli instructions uninstall [--scope project|global]
+agent-toolkit-cli instructions list      [--format table|json]
+agent-toolkit-cli instructions status    [--scope project|global]
+agent-toolkit-cli instructions doctor    [--scope project|global]
+```
+
+Most harnesses read `AGENTS.md` natively, so the canonical file satisfies them as-is. The seven that read a fixed own-name file instead (`claude-code` → `CLAUDE.md`, `gemini-cli` → `GEMINI.md`, plus `augment`, `codebuddy`, `iflow-cli`, `replit`, `tabnine-cli`) get a same-name pointer symlink → `AGENTS.md`. `install` writes an `instructions-lock.json` and reconciles the pointers; it never clobbers a real file or foreign symlink. Default scope is `project` (pointers are project-rooted); the global canonical lives at `~/.agent-toolkit/AGENTS.md`. Per-harness verdicts come from [`docs/agent-toolkit/harness-matrix.md`](docs/agent-toolkit/harness-matrix.md).
+
 ### TUI
 
 ```text

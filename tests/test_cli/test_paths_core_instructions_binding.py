@@ -1,0 +1,44 @@
+"""INSTRUCTIONS_BINDING parallels SKILL_BINDING and AGENT_BINDING."""
+from __future__ import annotations
+
+from agent_toolkit_cli._paths_core import (
+    INSTRUCTIONS_BINDING,
+    KindBinding,
+    library_lock_path_for_kind,
+    library_root_for_kind,
+)
+
+
+def test_instructions_binding_is_a_kindbinding():
+    assert isinstance(INSTRUCTIONS_BINDING, KindBinding)
+
+
+def test_instructions_binding_field_values():
+    """The fields the catalog/library/lock layout depends on."""
+    assert INSTRUCTIONS_BINDING.kind == "instructions"
+    assert INSTRUCTIONS_BINDING.canonical_dirname == "instructions"
+    assert INSTRUCTIONS_BINDING.library_subdir == "instructions"
+    assert INSTRUCTIONS_BINDING.lock_filename == "instructions-lock.json"
+    assert INSTRUCTIONS_BINDING.general_harness_name == "general-instructions"
+
+
+def test_library_root_for_instructions_kind(monkeypatch, tmp_path):
+    """Library root resolves to ~/.agent-toolkit/instructions/."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    root = library_root_for_kind(INSTRUCTIONS_BINDING)
+    assert root == tmp_path / ".agent-toolkit" / "instructions"
+
+
+def test_library_lock_path_for_instructions_kind(monkeypatch, tmp_path):
+    """Lock lives at ~/.agent-toolkit/instructions-lock.json."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    lock = library_lock_path_for_kind(INSTRUCTIONS_BINDING)
+    assert lock == tmp_path / ".agent-toolkit" / "instructions-lock.json"
+
+
+def test_instructions_binding_does_not_honour_skill_env_override(monkeypatch, tmp_path):
+    """The SKILLS_ROOT env override is skill-specific; instructions ignores it."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", "/some/other/path")
+    root = library_root_for_kind(INSTRUCTIONS_BINDING)
+    assert root == tmp_path / ".agent-toolkit" / "instructions"

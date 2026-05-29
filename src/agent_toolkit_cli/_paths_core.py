@@ -29,6 +29,15 @@ SKILL_BINDING = KindBinding(
 )
 
 
+INSTRUCTIONS_BINDING = KindBinding(
+    kind="instructions",
+    canonical_dirname="instructions",
+    library_subdir="instructions",
+    lock_filename="instructions-lock.json",
+    general_harness_name="general-instructions",
+)
+
+
 def library_root_for_kind(binding: KindBinding, env: dict[str, str] | None = None) -> Path:
     """Return the library root for a given kind.
 
