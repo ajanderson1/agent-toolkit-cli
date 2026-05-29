@@ -127,6 +127,20 @@ def apply(
         LockEntry, add_entry, read_lock, write_lock,
     )
 
+    # apply() handles only single-skill (repo-root) sources: it clones the
+    # source flat into the canonical and records skillPath="SKILL.md" with no
+    # parentUrl. A source carrying a subpath is a monorepo source, which would
+    # be cloned and recorded incorrectly here. Monorepo entries are written by
+    # commands.skill._add_monorepo (which always builds its plan with
+    # source=None), so a monorepo source reaching apply() is internal misuse —
+    # refuse it loudly before any clone happens.
+    if plan.source is not None and plan.source.subpath:
+        raise InstallError(
+            f"{plan.slug}: apply() cannot install a monorepo source "
+            f"(subpath={plan.source.subpath!r}); monorepo skills are installed "
+            f"by the monorepo add path. This is an internal misuse of apply()."
+        )
+
     canonical = canonical_skill_dir(
         plan.slug, scope=plan.scope, home=home, project=project,
     )
@@ -247,6 +261,9 @@ def apply(
     # Update lock.
     lock_action: Literal["added", "updated", "unchanged"] = "unchanged"
     if plan.source is not None:
+        # Monorepo sources were refused at the top of apply(); only
+        # single-skill (repo-root) sources reach here, so skillPath="SKILL.md"
+        # is correct.
         if skill_git.is_git_repo(canonical):
             upstream_sha = skill_git.remote_head_sha(
                 canonical, ref=plan.ref or "main", env=env,

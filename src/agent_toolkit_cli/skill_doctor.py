@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Callable, Literal
 
 from agent_toolkit_cli import skill_git
+from agent_toolkit_cli._install_core import InstallError
 from agent_toolkit_cli.skill_agents import AGENTS
 from agent_toolkit_cli.skill_install import _should_skip_symlink, _universal_bundle_link
 from agent_toolkit_cli.skill_lock import (
@@ -305,9 +306,28 @@ def _make_reclone_action(
     *, slug: str, scope: Scope, home: Path | None, project: Path | None,
     entry: LockEntry,
 ) -> FixAction:
+    """Repair a missing canonical.
+
+    Single-skill repo: clone the repo root flat into the canonical dir.
+
+    Monorepo skill (entry.parent_url set): clone the PARENT repo into the
+    shared `_parents/<owner>/<repo>` cache and re-symlink the canonical to
+    `parent/<skill_path>`, mirroring skill_install.ensure_project_canonical.
+    A flat `git clone <parent_url> <canonical>` would dump the whole parent
+    repo into the slug dir (SKILL.md would sit at <canonical>/<skill_path>/
+    instead of <canonical>/), so the monorepo branch is required for correct
+    repair — especially for nested skill_paths like 'aj-workflows/aj-flow'.
+    """
     canonical = canonical_skill_dir(slug, scope=scope, home=home, project=project)
-    url = clone_url_from_entry(entry)
     ref = entry.ref or "main"
+
+    if entry.parent_url is not None:
+        return _make_monorepo_reclone_action(
+            slug=slug, scope=scope, project=project, entry=entry, ref=ref,
+            canonical=canonical,
+        )
+
+    url = clone_url_from_entry(entry)
 
     def _apply() -> None:
         if canonical.exists():
@@ -318,6 +338,63 @@ def _make_reclone_action(
     return FixAction(
         description=f"Re-clone {slug} from {url}",
         shell_preview=f"git clone --branch {ref} {url} {canonical}",
+        apply=_apply,
+    )
+
+
+def _make_monorepo_reclone_action(
+    *, slug: str, scope: Scope, project: Path | None, entry: LockEntry,
+    ref: str, canonical: Path,
+) -> FixAction:
+    """Repair a missing monorepo canonical: clone parent → symlink subpath.
+
+    Clones (or reuses) the parent repo in the shared `_parents/` cache and
+    points the canonical symlink at `parent/<skill_path>`. Idempotent and
+    depth-agnostic: `skill_path` may be a multi-segment path.
+    """
+    from agent_toolkit_cli.skill_paths import (
+        parent_clone_path, project_parents_root,
+    )
+
+    if entry.skill_path is None:
+        raise InstallError(f"{slug}: monorepo lock entry missing skillPath")
+    parts = entry.source.split("/", 1)
+    if len(parts) != 2:
+        raise InstallError(
+            f"{slug}: monorepo lock entry has non-owner/repo source "
+            f"{entry.source!r}"
+        )
+    owner, repo = parts
+    parents_root = None if scope == "global" else project_parents_root(project)
+    parent_dir = parent_clone_path(owner, repo, ref=entry.ref, root=parents_root)
+    skill_path = entry.skill_path
+
+    def _apply() -> None:
+        if canonical.exists():
+            return  # idempotent (symlink already resolves)
+        if not parent_dir.exists():
+            parent_dir.parent.mkdir(parents=True, exist_ok=True)
+            skill_git.clone(entry.parent_url, parent_dir, ref=entry.ref, env=None)
+        skill_root = parent_dir / skill_path
+        if not (skill_root / "SKILL.md").exists():
+            raise InstallError(
+                f"{slug}: {skill_path}/SKILL.md not found in parent clone "
+                f"at {parent_dir}"
+            )
+        if canonical.is_symlink():
+            canonical.unlink()  # broken symlink: parent clone was gone
+        canonical.parent.mkdir(parents=True, exist_ok=True)
+        canonical.symlink_to(skill_root)
+
+    return FixAction(
+        description=(
+            f"Re-clone parent {entry.source} and re-link {slug} "
+            f"→ {skill_path}"
+        ),
+        shell_preview=(
+            f"git clone --branch {ref} {entry.parent_url} {parent_dir} && "
+            f"ln -s {parent_dir / skill_path} {canonical}"
+        ),
         apply=_apply,
     )
 

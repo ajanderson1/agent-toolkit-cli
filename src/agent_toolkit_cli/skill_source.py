@@ -222,6 +222,24 @@ def parse_source(input_: str) -> ParsedSource:
                 f"  • --ref flag (any ref):         "
                 f"skill add {m['owner']}/{m['repo']}/{m['subpath']} --ref <ref>"
             )
+        # A trailing '@<ref>' AFTER a subpath (e.g. owner/repo/group/skill@v1)
+        # is absorbed into the subpath group by the regex (the ref group only
+        # matches an '@' immediately after <repo>). Rather than silently treat
+        # 'group/skill@v1' as a literal path — which fails later with a
+        # confusing 'SKILL.md not found' — reject it and name the unambiguous
+        # forms, mirroring the @<ref>/<subpath> guard above. Refs may contain
+        # '/' and '@' is a legal path char, so the parser cannot safely guess.
+        if m["subpath"] and "@" in m["subpath"]:
+            sub, _, maybe_ref = m["subpath"].rpartition("@")
+            raise SourceParseError(
+                f"Ambiguous shorthand '{input_}': a trailing '@<ref>' after a "
+                f"subpath is not supported because refs may contain '/' and "
+                f"'@' is a legal path character. Use one of:\n"
+                f"  • URL form (refs without '/'):  "
+                f"https://github.com/{m['owner']}/{m['repo']}/tree/{maybe_ref}/{sub}\n"
+                f"  • --ref flag (any ref):         "
+                f"skill add {m['owner']}/{m['repo']}/{sub} --ref {maybe_ref}"
+            )
         owner_repo = f"{m['owner']}/{m['repo']}"
         ref = _sanitize_ref(m["ref"]) if m["ref"] else None
         subpath = _sanitize_subpath(m["subpath"]) if m["subpath"] else None
