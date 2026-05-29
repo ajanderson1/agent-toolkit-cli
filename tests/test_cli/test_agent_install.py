@@ -1,7 +1,6 @@
 """agent_install.py — facade binding AGENT_BINDING + dispatching adapters."""
 from __future__ import annotations
 
-import pytest
 
 
 def test_agent_install_public_surface():

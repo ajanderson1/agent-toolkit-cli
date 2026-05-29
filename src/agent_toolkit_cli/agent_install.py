@@ -30,10 +30,6 @@ from agent_toolkit_cli.agent_paths import (
     canonical_agent_dir,
     lock_file_path,
 )
-from agent_toolkit_cli.skill_agents import (
-    AGENTS,
-    UnknownAgentError,
-)
 from agent_toolkit_cli.skill_source import ParsedSource
 
 # Catalog tokens that are virtual entries, not real harness install targets.

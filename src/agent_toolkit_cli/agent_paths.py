@@ -48,6 +48,26 @@ from agent_toolkit_cli.skill_paths import (
 Scope = Literal["project", "global"]
 
 
+# Machine-checked re-export contract. ruff/pyflakes treat __all__ membership
+# as use, so the re-exports above stay even without internal callers.
+__all__ = [
+    "AGENT_BINDING",
+    "Scope",
+    "SUPPORTED_HARNESSES",
+    "agent_projection_dir",
+    "canonical_agent_dir",
+    "harness_projection_dir",
+    "library_agent_path",
+    "library_lock_path",
+    "library_root",
+    "lock_file_path",
+    "parent_clone_path",
+    "project_id",
+    "project_parents_root",
+    "project_store_root",
+]
+
+
 def library_root(env: dict[str, str] | None = None) -> Path:
     """Return the root of the global agent library.
 

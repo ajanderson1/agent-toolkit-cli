@@ -211,7 +211,7 @@ _COPILOT_ALLOWED = frozenset({
 def _emit_github_copilot(fm: dict[str, Any], body: str, slug: str) -> str:
     if "description" not in fm:
         raise ValueError(
-            f"github-copilot: 'description' is required in frontmatter but was not found"
+            "github-copilot: 'description' is required in frontmatter but was not found"
         )
     filtered = {k: v for k, v in fm.items() if k in _COPILOT_ALLOWED}
     return _emit_yaml_frontmatter(filtered, body)
@@ -273,7 +273,7 @@ def _emit_mistral_vibe_toml(fm: dict[str, Any], body: str, slug: str) -> str:
     if isinstance(tools, str):
         tools = [tools]
     lines = [
-        f'agent_type = "subagent"',
+        'agent_type = "subagent"',
         f'display_name = {_toml_str(fm.get("display_name", fm.get("name", slug)))}',
         f'description = {_toml_str(fm.get("description", ""))}',
         f'safety = {_toml_str(safety)}',

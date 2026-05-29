@@ -7,9 +7,7 @@ docs/superpowers/specs/2026-05-28-v3-pr2-agent-facade-and-adapters-design.md
 from __future__ import annotations
 
 import json
-import os
 import tomllib
-from pathlib import Path
 
 import pytest
 
