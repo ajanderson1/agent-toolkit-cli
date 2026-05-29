@@ -50,10 +50,19 @@ def doctor_cmd(
                 click.echo("  (report-only — no automatic fix)")
             continue
         click.echo(f"  fix:    {f.fix_action.shell_preview}")
-        ans = click.prompt(
-            "  apply?", default="N", show_default=False,
-            type=click.Choice(["y", "N", "q"], case_sensitive=False),
-        )
+        try:
+            ans = click.prompt(
+                "  apply?", default="N", show_default=False,
+                type=click.Choice(["y", "N", "q"], case_sensitive=False),
+            )
+        except (click.Abort, EOFError, OSError):
+            # Non-interactive stdio with no answer left to read (CI / pty /
+            # closed pipe): stop prompting and report-only rather than crash
+            # or loop (#274). Fixes are still reachable via a real terminal.
+            click.echo("\n  (no input available — stopping; nothing applied)")
+            quit_loop = True
+            skipped += 1
+            continue
         ans = ans.lower()
         if ans == "y":
             try:

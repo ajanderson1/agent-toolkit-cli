@@ -40,6 +40,46 @@ def test_select_remove_mode_test_hook():
     assert result.mode == "full"
 
 
+def test_wizard_non_tty_returns_safe_default_not_oserror(monkeypatch):
+    """#274: under non-TTY stdio the wizard must degrade, not crash.
+
+    Real questionary/prompt_toolkit raises OSError [Errno 22] from selectors
+    when stdin/stdout aren't TTYs. The `_interactive()` gate must short-circuit
+    so callers get a None-equivalent ("no answer") instead of the exception.
+    """
+    from agent_toolkit_cli.commands.skill import wizard
+
+    # Force the non-interactive path. The `_ask` gate short-circuits before
+    # `.ask()` (the call that hits prompt_toolkit/selectors and raises OSError),
+    # so each wizard returns its safe default instead of crashing.
+    monkeypatch.setattr(wizard, "_interactive", lambda: False)
+    monkeypatch.setattr(wizard.questionary, "print", lambda *a, **kw: None)
+
+    mode = select_remove_mode(slug="x", will_delete=("/tmp/x",))
+    assert mode.confirmed is False  # refuses to delete without an answer
+
+    slugs = select_slug_to_remove(
+        installed_slugs=("a",), slug_descriptions={"a": ""},
+    )
+    assert slugs.slugs == ()
+
+    agents = select_agents_to_add(slug="x", canonical_path=Path("/tmp/x"))
+    assert agents.agents == ()
+
+
+def test_ask_swallows_oserror_from_prompt(monkeypatch):
+    """#274: even if stdio looks like a TTY, an OSError mid-prompt → None."""
+    from agent_toolkit_cli.commands.skill import wizard
+
+    monkeypatch.setattr(wizard, "_interactive", lambda: True)
+
+    class _BadQuestion:
+        def ask(self):
+            raise OSError(22, "Invalid argument")
+
+    assert wizard._ask(_BadQuestion()) is None
+
+
 def test_skill_add_never_invokes_wizard(git_sandbox, tmp_path, monkeypatch):
     """v2.2: skill add is non-interactive; wizard is never called."""
     library_root = tmp_path / "lib" / "skills"

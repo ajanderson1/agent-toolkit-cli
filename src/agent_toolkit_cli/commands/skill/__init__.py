@@ -106,8 +106,19 @@ def _reconstruct_monorepo(
             parsed.url, parent_dir, ref=parsed.ref, env=None, depth=1,
         )
     else:
+        # Refresh the cached parent so a *growing* monorepo resolves later-added
+        # skills. The cache is a depth-1 shallow clone (line 105), so we must
+        # fetch the specific ref's current tip (fetch_ref advances even a shallow
+        # clone) and then hard-reset the working tree onto it. Without this, the
+        # tree stays pinned at the first add's commit and the subpath read below
+        # fails "SKILL.md not found" for any skill pushed after this cache was
+        # first cloned (#276). The parent is a read-only cache, so the reset is
+        # safe. Best-effort: a fetch failure (offline) falls back to the cached
+        # tree, which still resolves already-present skills.
+        ref = parsed.ref or "main"
         try:
-            skill_git.fetch(parent_dir, env=None)
+            skill_git.fetch_ref(parent_dir, ref=ref, env=None)
+            skill_git.reset_hard(parent_dir, ref=ref, env=None)
         except Exception:
             pass
     if parsed.subpath:
@@ -340,11 +351,20 @@ def _add_monorepo(parsed: ParsedSource, slug: str | None, *, owned: bool = False
         except Exception as exc:
             raise click.ClickException(f"parent clone failed: {exc}") from exc
     else:
+        # Refresh the existing parent cache so a *growing* monorepo resolves
+        # skills added after this cache was first cloned. fetch() alone advances
+        # the remote-tracking ref but leaves the working tree pinned at the old
+        # commit, so the subpath resolution below would not see the new skill
+        # (#276). fetch_ref advances even a shallow clone; the hard reset moves
+        # the working tree onto it. The parent is a read-only cache, so the
+        # reset is safe.
+        ref = parsed.ref or "main"
         try:
-            skill_git.fetch(parent_dir, env=None)
+            skill_git.fetch_ref(parent_dir, ref=ref, env=None)
+            skill_git.reset_hard(parent_dir, ref=ref, env=None)
         except Exception as exc:
             click.echo(
-                f"warning: fetch failed for existing parent {parent_dir}: {exc}",
+                f"warning: parent refresh failed for {parent_dir}: {exc}",
                 err=True,
             )
 

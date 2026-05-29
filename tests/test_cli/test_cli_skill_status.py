@@ -150,6 +150,48 @@ def test_skill_status_monorepo_dirty(tmp_path: Path, monkeypatch):
     assert "dirty" in result.output
 
 
+def test_skill_status_monorepo_owned_ahead_unpushed(tmp_path: Path, monkeypatch):
+    """#276: a committed-but-unpushed edit in an owned monorepo parent leaves
+    the working tree clean yet HEAD ahead of origin. status must surface the
+    unpushed commit, not just report 'clean (owned)'."""
+    from tests.conftest import scrub_git_env
+
+    parent = _init_parent(tmp_path)
+    library = tmp_path / "library"
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library / "skills"))
+
+    runner = CliRunner()
+    r = runner.invoke(
+        main, ["skill", "add", f"file://{parent}", "--skill", "mkdocs", "--owned"]
+    )
+    assert r.exit_code == 0, r.output
+
+    candidates = list((library / "skills" / "_parents").glob("*/*"))
+    assert len(candidates) == 1, candidates
+    parent_clone = candidates[0]
+
+    # Commit a change in the parent clone → clean tree, 1 commit ahead of origin.
+    (parent_clone / "mkdocs" / "SKILL.md").write_text(
+        "---\nname: mkdocs\ndescription: edited\n---\nbody\n"
+    )
+    env = scrub_git_env()
+    for cmd in (
+        ["git", "-c", "user.email=t@t", "-c", "user.name=t", "add", "-A"],
+        ["git", "-c", "user.email=t@t", "-c", "user.name=t",
+         "commit", "-q", "-m", "local edit"],
+    ):
+        subprocess.run(cmd, cwd=parent_clone, check=True, env=env)
+
+    result = runner.invoke(main, ["skill", "status", "-g"])
+    assert result.exit_code == 0, result.output
+    assert "mkdocs" in result.output
+    assert "owned" in result.output
+    # The whole point of #276: the unpushed commit is visible.
+    assert "unpushed" in result.output
+    # Working tree is clean — must NOT be mislabelled dirty.
+    assert "dirty" not in result.output
+
+
 def _advance_upstream(env, upstream):
     helper = upstream.parent / "status-advance-helper"
     subprocess.run(["git", "clone", str(upstream), str(helper)],

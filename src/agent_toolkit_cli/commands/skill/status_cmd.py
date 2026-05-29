@@ -1,6 +1,8 @@
 """skill status subcommand."""
 from __future__ import annotations
 
+from pathlib import Path
+
 import click
 
 from agent_toolkit_cli import skill_git
@@ -13,6 +15,26 @@ from agent_toolkit_cli.skill_paths import (
 )
 
 from ._common import scope_and_roots
+
+
+def _divergence_suffix(parent_dir: Path, ref: str) -> str:
+    """`, ahead N`/`, behind N`/`, diverged` marker for a monorepo parent, or
+    "" when up-to-date or the comparison can't be made.
+
+    Reads local refs only (no fetch), so an unpushed local commit reliably
+    shows as ahead of the last-known origin. Never raises into the status loop.
+    """
+    try:
+        div = skill_git.divergence(parent_dir, ref=ref, env=None)
+    except Exception:
+        return ""
+    if div is skill_git.Divergence.AHEAD:
+        return ", ahead (unpushed)"
+    if div is skill_git.Divergence.BEHIND:
+        return ", behind"
+    if div is skill_git.Divergence.DIVERGED:
+        return ", diverged"
+    return ""
 
 
 @click.command("status", epilog="""\
@@ -81,7 +103,14 @@ def status_cmd(
                     "dirty" if wt == skill_git.GitWorkingTreeStatus.DIRTY
                     else "clean"
                 )
-                click.echo(f"{slug}\t{state} (owned)")
+                # A clean working tree is not the whole story: a committed but
+                # unpushed change leaves the tree clean yet HEAD ahead of
+                # origin. Surface it so "clean" doesn't read as "in sync with
+                # remote" (#276). divergence() reads local refs only (no fetch),
+                # so an unpushed commit shows as AHEAD against the last-known
+                # origin regardless of fetch freshness.
+                suffix = _divergence_suffix(parent_dir, entry.ref or "main")
+                click.echo(f"{slug}\t{state} (owned){suffix}")
                 continue
             wt = skill_git.status(parent_dir, env=None)
         elif not skill_git.is_git_repo(canonical):
