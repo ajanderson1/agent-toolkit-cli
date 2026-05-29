@@ -91,3 +91,37 @@ def test_install_all_default_targets_all_symlink_harnesses(tmp_path, monkeypatch
         if cell["project"]:
             pointer_name = cell["pointer_name"]
             assert (project / pointer_name).is_symlink(), f"missing pointer: {harness} → {pointer_name}"
+
+
+def test_uninstall_removes_pointers_and_clears_lock(tmp_path, monkeypatch):
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / "AGENTS.md").write_text("# canon\n")
+    monkeypatch.chdir(project)
+
+    runner = CliRunner()
+    runner.invoke(main, ["instructions", "install", "--scope", "project", "--harness", "claude-code"])
+    assert (project / "CLAUDE.md").is_symlink()
+
+    result = runner.invoke(main, ["instructions", "uninstall", "--scope", "project"])
+    assert result.exit_code == 0, result.output
+
+    assert not (project / "CLAUDE.md").exists()
+    lock = json.loads((project / "instructions-lock.json").read_text())
+    assert lock["instructions"] == {}
+
+
+def test_uninstall_leaves_foreign_files_alone(tmp_path, monkeypatch):
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / "AGENTS.md").write_text("# canon\n")
+    # User has authored their own CLAUDE.md.
+    (project / "CLAUDE.md").write_text("user authored\n")
+    monkeypatch.chdir(project)
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["instructions", "uninstall", "--scope", "project"])
+    # No lock entry to clear, no symlink to remove — exits cleanly.
+    assert result.exit_code == 0
+
+    assert (project / "CLAUDE.md").read_text() == "user authored\n"
