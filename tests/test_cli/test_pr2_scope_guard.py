@@ -45,6 +45,13 @@ ALLOWED = {
     # Modified existing tests:
     "tests/test_cli/test_skill_agents.py",
     "tests/test_subagent_matrix.py",
+    # Cross-PR reconciliation: the instructions-kind matrix test (landed on
+    # main via the instructions PRs) asserts every catalog harness appears in
+    # the instructions table. PR2 adds the `general-agent` synthetic, which is
+    # an agent-kind convergence pseudo-entry — not an instruction-file harness
+    # — so it must join the instructions test's synthetic-exclusion set
+    # alongside `universal` and `general-skill`. One-line exclusion edit.
+    "tests/test_instructions_matrix.py",
     # PR1-era test whose defensive allowlist needed one new line for the
     # kind_noun='skill' default param added in PR2 (commit 8e403d8).
     "tests/test_cli/test_install_core.py",

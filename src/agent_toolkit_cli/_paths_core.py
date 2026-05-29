@@ -1,8 +1,9 @@
 """Kind-agnostic path/lock-filename core. Bound by per-kind facades.
 
 A `KindBinding` carries everything the path helpers need to know about a
-specific asset kind. `SKILL_BINDING` and `AGENT_BINDING` are the two
-bindings instantiated today (PR1 cut the seam; PR2 added the agent kind).
+specific asset kind. `SKILL_BINDING`, `INSTRUCTIONS_BINDING`, and
+`AGENT_BINDING` are the three bindings instantiated today (PR1 cut the seam;
+the instructions kind and the agent kind were added in their own PRs).
 """
 from __future__ import annotations
 
@@ -28,21 +29,21 @@ SKILL_BINDING = KindBinding(
     general_harness_name="general-skill",
 )
 
-AGENT_BINDING = KindBinding(
-    kind="agent",
-    canonical_dirname="agents",
-    library_subdir="agents",
-    lock_filename="agents-lock.json",
-    general_harness_name="general-agent",
-)
-
-
 INSTRUCTIONS_BINDING = KindBinding(
     kind="instructions",
     canonical_dirname="instructions",
     library_subdir="instructions",
     lock_filename="instructions-lock.json",
     general_harness_name="general-instructions",
+)
+
+
+AGENT_BINDING = KindBinding(
+    kind="agent",
+    canonical_dirname="agents",
+    library_subdir="agents",
+    lock_filename="agents-lock.json",
+    general_harness_name="general-agent",
 )
 
 
