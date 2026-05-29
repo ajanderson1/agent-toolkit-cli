@@ -90,6 +90,7 @@ def test_install_core_has_no_hardcoded_skill_string():
             or "skill_git" in line      # cross-kind git helpers (PR2 renames)
             or "canonical_skill_dir" in line  # imported from skill_paths facade
             or "agent-toolkit-cli skill doctor" in line  # facade-level CLI hint
+            or 'kind_noun: str = "skill"' in line  # _doctor_hint default (PR2)
             or stripped.startswith("#")
             or stripped.startswith('"""')
             or stripped.startswith("'''")

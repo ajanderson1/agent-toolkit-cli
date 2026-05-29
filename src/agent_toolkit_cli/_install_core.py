@@ -29,10 +29,15 @@ class InstallError(RuntimeError):
     """Base error for install failures."""
 
 
-def _doctor_hint(slug: str, scope: str) -> str:
-    """Suggest the doctor command that clears a blocking stray symlink."""
+def _doctor_hint(slug: str, scope: str, kind_noun: str = "skill") -> str:
+    """Suggest the doctor command that clears a blocking stray symlink.
+
+    `kind_noun` is the CLI noun for the asset kind ("skill" today; "agent"
+    once PR4 adds the agent CLI verb group). Defaults to "skill" so existing
+    skill-facade callers keep their current error message verbatim.
+    """
     flag = "-g" if scope == "global" else "-p"
-    return f"\n  Run: agent-toolkit-cli skill doctor {flag}  (removes stray symlinks)"
+    return f"\n  Run: agent-toolkit-cli {kind_noun} doctor {flag}  (removes stray symlinks)"
 
 
 class LockMismatchError(InstallError):
@@ -102,6 +107,19 @@ def _should_skip_symlink(
 
     The special "universal" bundle token is handled in apply() before
     _should_skip_symlink is called; it never reaches here as an agent_name.
+
+    KNOWN LATENT (PR2 of #252, deferred to PR3 cleanup): this helper is
+    called from `_current_linked_agents` which the agent facade also uses.
+    `is_universal` is currently a SKILL concept (skills_dir == ".agents/skills");
+    7 cells supporting agent install ALSO have is_universal=True (codex, cursor,
+    dexto, firebender, gemini-cli, github-copilot, opencode). When the agent
+    facade's `plan()` runs at global scope, those 7 harnesses are silently
+    skipped from the "what's currently linked?" scan even though they are
+    legitimate agent install targets. Today the symptom is hidden because
+    `agent_install.apply()` dispatches via `agent_adapters.get_adapter()`
+    instead of consulting this skip predicate. PR3 (universal→general rename)
+    is the natural place to extract the skip predicate into a facade-injected
+    Callable, parallel to `canonical_dir_resolver` and `universal_bundle_link`.
     """
     cfg = get_agent(agent_name)
     if cfg.is_universal and scope == "global":
@@ -118,10 +136,18 @@ def plan(
     target_agents: Iterable[str] = (),
     home: Path | None = None,
     project: Path | None = None,
+    canonical_dir_resolver: Callable[..., Path] | None = None,
     universal_bundle_link: Callable[[str], Path] | None = None,
     synthetic_names: frozenset[str] = frozenset(),
+    current_linked_resolver: Callable[..., tuple[str, ...]] | None = None,
 ) -> InstallPlan:
     """Compute the minimal add/remove delta to reach target_agents.
+
+    `canonical_dir_resolver` is the kind-specific resolver returning the
+    canonical install directory for a slug at a given scope (e.g.
+    `canonical_skill_dir` for skills, `canonical_agent_dir` for agents).
+    Required so the core stays kind-blind; defaults to canonical_skill_dir
+    for backward compatibility with callers that haven't migrated yet.
 
     `universal_bundle_link` is injected by the facade — it is the kind-
     specific function that returns the per-slug bundle path (e.g.
@@ -132,12 +158,22 @@ def plan(
     rather than real harness symlink targets (e.g. the skill facade injects
     `frozenset({"universal", "general-skill"})`). The core treats it as
     opaque — it never names a specific kind's synthetics itself.
+
+    `current_linked_resolver` overrides the built-in `_current_linked_agents`
+    scan. The skill facade leaves it None (the symlink-at-projection-path scan
+    is correct for skills). The agent facade injects an adapter-aware scanner
+    that resolves each harness's REAL destination and tests `dest.exists()` —
+    because agent adapters write real files, never symlinks at the skill path,
+    so the built-in scan always returns () for the agent kind (the PR #268 bug).
+    Called with the same keyword args as `_current_linked_agents`.
     """
     for n in target_agents:
         if n not in AGENTS:
             raise UnknownAgentError(n)
-    current = _current_linked_agents(
+    scanner = current_linked_resolver if current_linked_resolver is not None else _current_linked_agents
+    current = scanner(
         slug=slug, scope=scope, home=home, project=project,
+        canonical_dir_resolver=canonical_dir_resolver,
         universal_bundle_link=universal_bundle_link,
         synthetic_names=synthetic_names,
     )
@@ -153,10 +189,16 @@ def plan(
 def _current_linked_agents(
     *, slug: str, scope: Scope,
     home: Path | None, project: Path | None,
+    canonical_dir_resolver: Callable[..., Path] | None = None,
     universal_bundle_link: Callable[[str], Path] | None = None,
     synthetic_names: frozenset[str] = frozenset(),
 ) -> tuple[str, ...]:
     """Return agents whose symlink currently resolves to our canonical.
+
+    `canonical_dir_resolver` is the kind-specific canonical resolver
+    (e.g. `canonical_skill_dir`, `canonical_agent_dir`). Required so the
+    scan compares against the correct canonical path for the asset kind;
+    defaults to `canonical_skill_dir` for backward compatibility.
 
     Includes the synthetic 'universal' bundle token at global scope when
     `universal_bundle_link(slug)` is a symlink to the library canonical.
@@ -166,9 +208,10 @@ def _current_linked_agents(
     the per-agent iteration. The core treats the set as opaque: each
     facade injects the synthetics for its own kind (skills inject the
     pair containing the universal bundle token and the general projection
-    token; agents will inject their own).
+    token; agents inject their own).
     """
-    canonical = canonical_skill_dir(
+    resolver = canonical_dir_resolver if canonical_dir_resolver is not None else canonical_skill_dir
+    canonical = resolver(
         slug, scope=scope, home=home, project=project,
     )
     canonical_real = canonical.resolve() if canonical.exists() else canonical

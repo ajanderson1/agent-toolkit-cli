@@ -51,11 +51,11 @@ def _catalog_harnesses() -> set[str]:
     """All catalog harness names except synthetic pseudo-entries.
 
     `skill_agents.AGENTS` is a dict[str, AgentConfig] keyed by harness name.
-    `universal` and `general-skill` (added in #252) are synthetic —
-    they resolve to the shared `.agents/skills` convergence path and are not
-    real harnesses, so they're excluded from the harness-support matrix.
+    `universal`, `general-skill` (added in PR1 of #252), and `general-agent`
+    (added in PR2 of #252) are synthetic — they resolve to convergence paths
+    and are not real harnesses, so they're excluded from the harness-support matrix.
     """
-    return set(skill_agents.AGENTS) - {"universal", "general-skill"}
+    return set(skill_agents.AGENTS) - {"universal", "general-skill", "general-agent"}
 
 
 def _parse_section() -> dict[str, dict[str, str]]:
@@ -124,4 +124,127 @@ def test_supported_rows_have_mechanism_path_citation(rows):
     }
     assert not incomplete, (
         f"Supported rows missing mechanism/path/citation: {sorted(incomplete)}"
+    )
+
+
+# Verdict prefix → expected AgentConfig.subagent_mechanism value.
+# config_file+folder rows use the Python identifier config_file_folder.
+# dual-symlink rows were reclassified to the symlink mechanism per spec
+# addendum Correction A (the ~/.agents/ user-scope slot is a skills path).
+_VERDICT_PREFIX_TO_MECHANISM: dict[str, str] = {
+    "symlink": "symlink",
+    "translate": "translate",
+    "config_file+folder": "config_file_folder",
+    "config_file": "config_file_folder",
+    "dual-symlink": "symlink",
+}
+
+
+# Cells the matrix classifies as supported but PR2 intentionally ships with
+# subagent_mechanism='none'. Adapter implementations exist (and are unit-
+# tested in test_config_file_folder.py) but the cells are disabled at the
+# catalog level pending deeper smoke coverage of third-party config-file
+# mutation. Re-enabling requires updating both this set AND the literal in
+# skill_agents.py. Tracked by a follow-up issue filed after PR2 merges.
+PR2_DISABLED_DESPITE_MATRIX_SUPPORT = frozenset({
+    "aider-desk", "codex", "dexto", "firebender",
+})
+
+
+def test_supported_rows_have_matching_adapter(rows):
+    """Every harness-matrix row with a supported-mechanism verdict must
+    have a corresponding agent_adapters.get_adapter() implementation,
+    UNLESS the cell is in PR2_DISABLED_DESPITE_MATRIX_SUPPORT.
+
+    Acceptance criterion #5 (spec): every supported matrix row has a
+    subagent_mechanism value on its AgentConfig matching the row's verdict
+    prefix, AND get_adapter(harness) returns an installable adapter.
+    """
+    from agent_toolkit_cli.agent_adapters import (
+        UnsupportedMechanismError,
+        get_adapter,
+    )
+
+    supported_prefixes = tuple(_VERDICT_PREFIX_TO_MECHANISM)
+    failures: list[str] = []
+
+    for harness, row in rows.items():
+        verdict = row["verdict"].lower()
+        if not verdict.startswith(supported_prefixes):
+            continue  # unsupported (gap/by design) or unknown — skip
+
+        # Determine which prefix matched.
+        matched_prefix = next(
+            p for p in sorted(_VERDICT_PREFIX_TO_MECHANISM, key=len, reverse=True)
+            if verdict.startswith(p)
+        )
+        expected_mech = _VERDICT_PREFIX_TO_MECHANISM[matched_prefix]
+
+        if harness not in skill_agents.AGENTS:
+            failures.append(
+                f"{harness}: matrix-listed as supported but missing from AGENTS catalog"
+            )
+            continue
+
+        actual_mech = skill_agents.AGENTS[harness].subagent_mechanism
+
+        # PR2-disabled cells: matrix says supported, catalog says 'none'.
+        # The disable is documented + tested elsewhere (the e2e suite has a
+        # parametrized test_pr2_disabled_cells_skip_cleanly). Skip the
+        # adapter-importability check here.
+        if harness in PR2_DISABLED_DESPITE_MATRIX_SUPPORT:
+            if actual_mech != "none":
+                failures.append(
+                    f"{harness}: in PR2_DISABLED_DESPITE_MATRIX_SUPPORT but "
+                    f"subagent_mechanism='{actual_mech}' (must be 'none'). "
+                    f"If you re-enabled it, also remove from the set."
+                )
+            continue
+
+        if actual_mech != expected_mech:
+            failures.append(
+                f"{harness}: matrix verdict prefix '{matched_prefix}' expects "
+                f"subagent_mechanism='{expected_mech}', got '{actual_mech}'"
+            )
+            continue
+
+        # Adapter must be importable and have install/uninstall.
+        try:
+            adapter = get_adapter(harness)
+        except UnsupportedMechanismError as exc:
+            failures.append(f"{harness}: get_adapter raised UnsupportedMechanismError: {exc}")
+            continue
+
+        missing = [m for m in ("install", "uninstall") if not hasattr(adapter, m)]
+        if missing:
+            failures.append(
+                f"{harness}: adapter missing methods: {missing}"
+            )
+
+    assert not failures, "Matrix parity failures:\n" + "\n".join(failures)
+
+
+def test_every_catalog_supported_mechanism_appears_in_matrix(rows):
+    """Inverse of test_supported_rows_have_matching_adapter.
+
+    If an AgentConfig has subagent_mechanism != 'none' but the harness
+    isn't a supported row in harness-matrix.md, the catalog and matrix
+    are out of sync. Catches the case where someone wires an adapter for
+    a harness without first documenting/verifying its support in the matrix.
+    """
+    supported_prefixes = tuple(_VERDICT_PREFIX_TO_MECHANISM)
+    catalog_with_real_mechanism = {
+        name for name, cfg in skill_agents.AGENTS.items()
+        if cfg.subagent_mechanism != "none"
+        and name not in {"universal", "general-skill", "general-agent"}
+    }
+    matrix_supported = {
+        h for h, row in rows.items()
+        if row["verdict"].lower().startswith(supported_prefixes)
+    }
+    orphans = catalog_with_real_mechanism - matrix_supported
+    assert not orphans, (
+        "Catalog has subagent_mechanism set on harnesses NOT listed as "
+        f"supported in harness-matrix.md: {sorted(orphans)}.\n"
+        "Either add the row to the matrix, or set subagent_mechanism='none'."
     )
