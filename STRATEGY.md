@@ -77,5 +77,8 @@ everywhere you run agents, so control and ownership don't stop at one machine.
 
 - **v3.0.0 refold** - reintroduce the subagent `agent` kind, managed the same
   git-native, scoped way as skills. No fixed date.
+- **v3.2.0** - pi-extension kind (read-only inventory: list/status), instructions
+  asset kind (link AGENTS.md/CLAUDE.md across harnesses), and agent facade with
+  28 projection adapters.
 - **MCP support (potential)** - extend the same ownership and scope model to MCP
   servers. Exploratory; not committed.
