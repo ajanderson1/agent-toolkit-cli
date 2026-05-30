@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.2.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.15.0...v3.2.0) (2026-05-30)
+
+
+### Documentation
+
+* add v3.2.0 milestone to strategy ([#290](https://github.com/ajanderson1/agent-toolkit-cli/issues/290)) ([f27ce47](https://github.com/ajanderson1/agent-toolkit-cli/commit/f27ce4713a5b355a6e24f83fa66b2e4c0e61b74b))
+
 ## [2.15.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.14.3...v2.15.0) (2026-05-30)
 
 
