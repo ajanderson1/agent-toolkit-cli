@@ -4,8 +4,7 @@
   "packages": {
     ".": {
       "package-name": "agent-toolkit",
-      "include-component-in-tag": false,
-      "release-as": "3.2.0"
+      "include-component-in-tag": false
     }
   },
   "include-v-in-tag": true,
