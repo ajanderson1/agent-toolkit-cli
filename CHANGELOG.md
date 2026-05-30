@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.15.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.14.3...v2.15.0) (2026-05-30)
+
+
+### Features
+
+* instructions asset kind — link AGENTS.md/CLAUDE.md across harnesses ([#269](https://github.com/ajanderson1/agent-toolkit-cli/issues/269)) ([#283](https://github.com/ajanderson1/agent-toolkit-cli/issues/283)) ([ef73ce6](https://github.com/ajanderson1/agent-toolkit-cli/commit/ef73ce6ce35992cbe46a48b0e18b2c8ae66b5b60))
+* pi-extension kind PR1 — read-only inventory (list/status) ([#273](https://github.com/ajanderson1/agent-toolkit-cli/issues/273)) ([#286](https://github.com/ajanderson1/agent-toolkit-cli/issues/286)) ([aff5467](https://github.com/ajanderson1/agent-toolkit-cli/commit/aff546768fe9301f1b495a5f2c2a32ee22241fc6))
+
+
+### Documentation
+
+* v3 follow-up plans + decisions (pi-ext PR2 write-path, extensions[] classification, agent PR3-5, disabled-cells) ([#287](https://github.com/ajanderson1/agent-toolkit-cli/issues/287)) ([5328e60](https://github.com/ajanderson1/agent-toolkit-cli/commit/5328e6031df0777f9f7eff594d3c9cddcb9dee75))
+
 ## [2.14.3](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.14.2...v2.14.3) (2026-05-29)
 
 
