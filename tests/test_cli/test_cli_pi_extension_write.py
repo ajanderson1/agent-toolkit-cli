@@ -244,8 +244,14 @@ def test_full_loop_store_owned_then_inventory(tmp_path, monkeypatch, git_sandbox
     assert rows["demo"]["globalLoaded"] is False  # added, not installed
 
     # Write index.ts into the cloned canonical so _discover_loose flags it loaded.
+    # Commit it so the repo is not dirty (remove's dirty-guard uses git status).
     canonical = pep.library_pi_extension_path("demo", env={})
     (canonical / "index.ts").write_text("export default {}")
+    import subprocess as _sp
+    _sp.run(["git", "-C", str(canonical), "add", "index.ts"],
+            check=True, capture_output=True, env=git_sandbox.env)
+    _sp.run(["git", "-C", str(canonical), "commit", "-m", "add index.ts"],
+            check=True, capture_output=True, env=git_sandbox.env)
 
     # install -> projected, inventory shows loaded
     assert runner.invoke(main, ["pi-extension", "install", "demo", "-g"]).exit_code == 0
