@@ -3,12 +3,15 @@ skill version parametrized on the pi-extensions lock filename."""
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal
 
 import click
 
 from agent_toolkit_cli._paths_core import PI_EXTENSION_BINDING
 
 _LOCK_FILENAME = PI_EXTENSION_BINDING.lock_filename
+
+Scope = Literal["project", "global"]
 
 
 def scope_and_roots(
@@ -17,7 +20,7 @@ def scope_and_roots(
     ctx_project: Path | None,
     *,
     read_only: bool = False,
-) -> tuple[str, Path | None, Path | None]:
+) -> tuple[Scope, Path | None, Path | None]:
     if global_ and project:
         raise click.UsageError("use either -g/--global or -p/--project, not both")
     if global_:

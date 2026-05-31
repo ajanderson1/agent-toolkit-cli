@@ -76,18 +76,25 @@ def build_inventory(
     if project is not None:
         scopes.append(("project", project))
 
-    # 1. Store-owned (from the kind lock).
+    # 1. Lock-backed entries: store-owned (git/https/ssh/local) or npm-tracked.
+    # source_type="npm" rows are registry-tracked (no store copy); all other
+    # source_types are store-owned (cloned into the library). Precedence is
+    # resolved in passes 2 and 3: loose/untracked never overwrites a lock row.
     for scope, _ in scopes:
         try:
             lock = read_lock(lock_file_path(scope=scope, home=home, project=project))
         except FileNotFoundError:
             continue
         for slug, entry in lock.skills.items():
+            origin: Origin = "npm" if entry.source_type == "npm" else "store-owned"
             rec = by_slug.setdefault(
                 slug,
-                InventoryRecord(slug=slug, origin="store-owned", source=entry.source),
+                InventoryRecord(slug=slug, origin=origin, source=entry.source),
             )
-            rec.origin = "store-owned"
+            # A slug that appears in both scopes: store-owned beats npm in the
+            # global lock. Project lock rows refine the loaded flags only.
+            if rec.origin != "store-owned" or origin == "store-owned":
+                rec.origin = origin
             rec.source = entry.source
 
     # 2. Loose / untracked entries already in Pi's extensions/ dirs.
