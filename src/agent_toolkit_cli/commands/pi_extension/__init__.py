@@ -6,8 +6,10 @@ from __future__ import annotations
 import click
 
 from agent_toolkit_cli.commands.pi_extension.add_cmd import add_cmd
+from agent_toolkit_cli.commands.pi_extension.install_cmd import install_cmd
 from agent_toolkit_cli.commands.pi_extension.list_cmd import list_cmd
 from agent_toolkit_cli.commands.pi_extension.status_cmd import status_cmd
+from agent_toolkit_cli.commands.pi_extension.uninstall_cmd import uninstall_cmd
 
 
 @click.group(name="pi-extension")
@@ -19,3 +21,5 @@ pi_extension.add_command(list_cmd)
 pi_extension.add_command(status_cmd)
 pi_extension.add_command(list_cmd, name="ls")
 pi_extension.add_command(add_cmd)
+pi_extension.add_command(install_cmd)
+pi_extension.add_command(uninstall_cmd)

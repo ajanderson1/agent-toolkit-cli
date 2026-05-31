@@ -85,19 +85,18 @@ def test_store_owned_install_uninstall_project_round_trip(tmp_path, monkeypatch,
 
     proj = tmp_path / "proj"
     proj.mkdir()
+    monkeypatch.chdir(proj)  # scope_and_roots falls back to cwd for -p
     link = pep.pi_extension_dir("demo", scope="project", project=proj)
     canonical = pep.library_pi_extension_path("demo", env={})
 
-    r = CliRunner().invoke(main, ["pi-extension", "install", "demo", "-p"],
-                           obj={"project_root": proj})
+    r = CliRunner().invoke(main, ["pi-extension", "install", "demo", "-p"])
     assert r.exit_code == 0, r.output
     assert link.is_symlink() and link.resolve() == canonical.resolve()
     # project lock entry written AFTER projection
     proj_lock = read_lock(proj / "pi-extensions-lock.json")
     assert "demo" in proj_lock.skills
 
-    r = CliRunner().invoke(main, ["pi-extension", "uninstall", "demo", "-p"],
-                           obj={"project_root": proj})
+    r = CliRunner().invoke(main, ["pi-extension", "uninstall", "demo", "-p"])
     assert r.exit_code == 0, r.output
     assert not link.exists() and not link.is_symlink()   # ASSERT GONE
     assert canonical.exists()                            # global store preserved
@@ -148,8 +147,8 @@ def test_npm_install_project_scope(tmp_path, monkeypatch):
     CliRunner().invoke(main, ["pi-extension", "add", "npm:bar"])
     proj = tmp_path / "proj"
     proj.mkdir()
-    r = CliRunner().invoke(main, ["pi-extension", "install", "bar", "-p"],
-                           obj={"project_root": proj})
+    monkeypatch.chdir(proj)  # scope_and_roots falls back to cwd for -p
+    r = CliRunner().invoke(main, ["pi-extension", "install", "bar", "-p"])
     assert r.exit_code == 0, r.output
     assert "npm:bar" in _pi_settings.read_packages(scope="project", project=proj)
     # global settings untouched
