@@ -1,5 +1,18 @@
 # Changelog
 
+## [3.4.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v3.3.0...v3.4.0) (2026-05-31)
+
+
+### Features
+
+* agent kind CLI group (add/install/uninstall/remove/list/status/+lifecycle) ([#297](https://github.com/ajanderson1/agent-toolkit-cli/issues/297)) ([e2e89f6](https://github.com/ajanderson1/agent-toolkit-cli/commit/e2e89f6daf4e47e13603ba17f6182692078d560d)), closes [#252](https://github.com/ajanderson1/agent-toolkit-cli/issues/252)
+* agent kind PR4 — enable aider-desk + dexto subagent cells (self-owned writes) ([#252](https://github.com/ajanderson1/agent-toolkit-cli/issues/252)) ([#300](https://github.com/ajanderson1/agent-toolkit-cli/issues/300)) ([c82d406](https://github.com/ajanderson1/agent-toolkit-cli/commit/c82d406f55232308308983900c72457d626b7946))
+
+
+### Refactors
+
+* agent kind PR3 — universal→general rename + per-kind arch guard ([#252](https://github.com/ajanderson1/agent-toolkit-cli/issues/252)) ([#299](https://github.com/ajanderson1/agent-toolkit-cli/issues/299)) ([3822077](https://github.com/ajanderson1/agent-toolkit-cli/commit/3822077041ff60d775d0fafc9e7b54780d3abdde))
+
 ## [3.3.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v3.2.0...v3.3.0) (2026-05-31)
 
 
