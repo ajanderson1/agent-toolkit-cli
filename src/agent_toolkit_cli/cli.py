@@ -6,6 +6,7 @@ from pathlib import Path
 
 import click
 
+from agent_toolkit_cli.commands.agent import agent
 from agent_toolkit_cli.commands.instructions import instructions
 from agent_toolkit_cli.commands.pi_extension import pi_extension
 from agent_toolkit_cli.commands.skill import skill
@@ -46,6 +47,7 @@ main.add_command(skill)
 main.add_command(skill, name="skills")
 main.add_command(instructions)
 main.add_command(pi_extension)
+main.add_command(agent)
 
 
 if __name__ == "__main__":
