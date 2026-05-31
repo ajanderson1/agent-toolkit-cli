@@ -79,10 +79,11 @@ def uninstall_cmd(
     except click.UsageError:
         raise
 
-    # agent_install.uninstall() directly calls each adapter's uninstall()
-    # and drops the lock entry. This is the correct path that avoids the
-    # orphaned-projection bug (result.removed is empty from apply() — see
-    # agent_install.apply() code: the removed list is never populated).
+    # agent_install.uninstall() directly calls each adapter's uninstall() to
+    # remove the projection files; the library canonical AND the lock entry are
+    # KEPT (#303 — `uninstall` detaches, `agent remove` deletes). This is the
+    # correct path that avoids the orphaned-projection bug (result.removed is
+    # empty from apply() — see agent_install.apply(): removed is never populated).
     #
     # Pass explicit home=Path.home() for global scope so adapters can resolve
     # {HOME} path templates (home=None causes ValueError in symlink._expand).

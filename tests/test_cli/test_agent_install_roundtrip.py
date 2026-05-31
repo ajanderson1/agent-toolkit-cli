@@ -150,6 +150,57 @@ def test_roundtrip_project_removes_projected_files(tmp_path, monkeypatch):
     )
 
 
+# ── Test 1c: remove() at PROJECT scope — drops lock, KEEPS external canonical ─
+
+def test_remove_project_scope_preserves_external_canonical(tmp_path, monkeypatch):
+    """`remove(scope="project")` drops the project lock entry but PRESERVES the
+    external canonical (dirty-work survival; doctor's orphan sweep reclaims it).
+
+    Distinct from global `remove()` (which rmtrees the canonical) and from
+    project `uninstall()` (which keeps the lock). Guards the project branch of
+    the contract split that has no CLI surface yet (agent remove is global-only).
+    """
+    monkeypatch.setenv("HOME", str(tmp_path))
+    project = tmp_path / "proj"
+    project.mkdir()
+    from agent_toolkit_cli.agent_install import apply, remove
+    from agent_toolkit_cli.agent_lock import read_lock
+    from agent_toolkit_cli.agent_paths import lock_file_path
+    from agent_toolkit_cli._install_core import InstallPlan
+    from agent_toolkit_cli.skill_source import ParsedSource
+
+    canonical = _seed_project_canonical(project)
+    src = ParsedSource(
+        type="github", url="https://github.com/x/rt-agent", owner_repo="x/rt-agent",
+        ref=None, subpath=None,
+    )
+    apply(
+        InstallPlan(
+            slug="rt-agent", scope="project", source=src, ref=None,
+            add_agents=("claude-code",), remove_agents=(),
+        ),
+        project=project,
+    )
+    cc = project / ".claude" / "agents" / "rt-agent.md"
+    lock_path = lock_file_path(scope="project", project=project)
+    assert cc.exists()
+    assert "rt-agent" in read_lock(lock_path).skills
+
+    remove(
+        slug="rt-agent", scope="project", home=None, project=project,
+        harnesses=("claude-code",),
+    )
+
+    assert not cc.exists(), "project remove must remove the projection"
+    assert canonical.exists(), (
+        "project-scope remove must PRESERVE the external canonical "
+        "(matches skill remove; doctor reclaims orphans)"
+    )
+    assert "rt-agent" not in read_lock(lock_path).skills, (
+        "project remove must drop the project lock entry"
+    )
+
+
 # ── Test 2: idempotency — second install of same targets does not error ──────
 
 def test_double_install_is_safe_and_idempotent(tmp_path, monkeypatch):
