@@ -216,11 +216,11 @@ AGENTS: dict[str, AgentConfig] = {
         skills_dir=".agents/skills",
         global_skills_dir=HOME / ".agents/skills",
         detect_installed=lambda: (HOME / ".dexto").exists(),
-        # Disabled in PR2 (see aider-desk comment). Dexto also requires
-        # parent-agent allowedAgents editing to make the new agent spawnable
-        # (PR2 explicitly out of scope) — the writes-only adapter we ship
-        # produces an agent that loads but cannot be spawned.
-        subagent_mechanism="none",
+        # PR4 (#252): enabled — writes only self-owned per-slug files under
+        # .dexto/agents/<slug>/ (no shared-config mutation). Global-only by
+        # construction (no project-scope convention in dexto). Guarded by
+        # _guard_foreign + .<slug>.yml.attk sentinel.
+        subagent_mechanism="config_file_folder",
     ),
     "droid": AgentConfig(
         name="droid",

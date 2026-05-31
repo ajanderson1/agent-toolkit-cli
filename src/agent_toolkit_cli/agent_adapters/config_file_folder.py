@@ -154,6 +154,9 @@ class _DextoAdapter:
             f"description: imported by agent-toolkit-cli\n"
             f"source: |\n{source_block}\n"
         )
+        # Write the .attk sentinel so _guard_foreign recognises this as our
+        # own file on future re-installs (without requiring the lock system).
+        _sentinel_path(yml).write_text("")
         return yml
 
     def uninstall(
