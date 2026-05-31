@@ -30,6 +30,8 @@ packages = ["src/agent_toolkit_cli", "src/agent_toolkit_tui"]
 # Ship the harness matrix (the human-facing SSOT under docs/) inside the wheel so
 # `instructions list` can read it via importlib.resources on packaged installs.
 # Without this, docs/ is not packaged and the command crashes (#305).
+# The destination is the real agent_toolkit_cli.data subpackage (has __init__.py),
+# so resource resolution doesn't depend on PEP-420 namespace handling.
 [tool.hatch.build.targets.wheel.force-include]
 "docs/agent-toolkit/harness-matrix.md" = "agent_toolkit_cli/data/harness-matrix.md"
 

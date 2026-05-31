@@ -8,16 +8,24 @@ nothing tested the packaged path: CI ran from the source tree where the
 repo-relative fallback masked the bug, so a wheel that shipped no matrix passed
 CI and crashed for every real user.
 
-These tests build an actual wheel via the project's build backend and assert the
-matrix is bundled byte-identically with the SSOT. Drop the force-include block and
-`test_wheel_bundles_harness_matrix` goes red — which is exactly the regression that
-shipped in #305.
+These tests build real artifacts via the project's build driver and assert the
+matrix survives packaging:
+
+- the wheel ships it byte-identically with the SSOT (drop the force-include block
+  and `test_wheel_bundles_harness_matrix` goes red — exactly the #305 regression);
+- the sdist retains docs/ so the sdist→wheel rebuild can still find it;
+- a real installed CLI, invoked from outside the repo, prints the matrix.
+
+Skip-policy: only skip when the build *driver* is unavailable (uv not on PATH).
+A build/install that actually runs and FAILS is a hard failure — a guard that
+skip-greens on its own subject would be worthless (#305 review).
 """
 from __future__ import annotations
 
 import shutil
 import subprocess
 import sys
+import tarfile
 import zipfile
 from pathlib import Path
 
@@ -26,31 +34,38 @@ import pytest
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _SSOT = _REPO_ROOT / "docs" / "agent-toolkit" / "harness-matrix.md"
 _WHEEL_MEMBER = "agent_toolkit_cli/data/harness-matrix.md"
+_SDIST_DOC_SUFFIX = "docs/agent-toolkit/harness-matrix.md"
 
 
-def _build_wheel(out_dir: Path) -> Path:
-    """Build a wheel into out_dir with `uv build`, the project's build driver.
-
-    uv is the canonical tool for this repo (CI provisions it via setup-uv) and
-    drives the hatchling backend without needing `build`/`hatchling` importable
-    in the test venv. Skips (rather than fails) if uv is absent or the build
-    can't run in the sandbox; when it does build, the asserts below are hard.
-    """
+def _uv() -> str:
     uv = shutil.which("uv")
     if uv is None:  # pragma: no cover - env without uv on PATH
-        pytest.skip("uv not on PATH; cannot build a wheel to check packaging")
+        pytest.skip("uv not on PATH; cannot build artifacts to check packaging")
+    return uv
+
+
+def _build(target: str, out_dir: Path, glob: str) -> Path:
+    """Build a wheel or sdist into out_dir with `uv build`.
+
+    Skips only when uv is absent. If uv runs and the build returns non-zero, that
+    is a hard failure: the build is the thing under test, so a broken build must
+    not skip-green past the guard.
+    """
+    out_dir.mkdir(parents=True, exist_ok=True)
     proc = subprocess.run(
-        [uv, "build", "--wheel", "--out-dir", str(out_dir)],
+        [_uv(), "build", f"--{target}", "--out-dir", str(out_dir)],
         cwd=_REPO_ROOT,
         capture_output=True,
         text=True,
         timeout=300,
     )
-    if proc.returncode != 0:  # pragma: no cover - sandbox/network constraints
-        pytest.skip(f"wheel build failed (likely sandbox/network):\n{proc.stderr[-2000:]}")
-    wheels = sorted(out_dir.glob("*.whl"))
-    assert wheels, f"build produced no wheel: {proc.stdout}\n{proc.stderr}"
-    return wheels[-1]
+    assert proc.returncode == 0, (
+        f"uv build --{target} failed (rc={proc.returncode}):\n"
+        f"STDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}"
+    )
+    artifacts = sorted(out_dir.glob(glob))
+    assert artifacts, f"build produced no {glob}: {proc.stdout}\n{proc.stderr}"
+    return artifacts[-1]
 
 
 def test_wheel_bundles_harness_matrix(tmp_path):
@@ -59,7 +74,7 @@ def test_wheel_bundles_harness_matrix(tmp_path):
     This is the test that would have caught #305: remove the force-include block
     from pyproject.toml and this assertion fails.
     """
-    wheel = _build_wheel(tmp_path)
+    wheel = _build("wheel", tmp_path, "*.whl")
     with zipfile.ZipFile(wheel) as zf:
         names = zf.namelist()
         assert _WHEEL_MEMBER in names, (
@@ -74,13 +89,34 @@ def test_wheel_bundles_harness_matrix(tmp_path):
     )
 
 
+def test_sdist_retains_matrix_for_wheel_rebuild(tmp_path):
+    """The sdist keeps docs/agent-toolkit/harness-matrix.md.
+
+    `pip install <sdist>` rebuilds the wheel, whose force-include reads the matrix
+    from docs/. If a future include/exclude trims docs/ out of the sdist, that
+    rebuild produces a matrix-less wheel and the #305 crash returns for sdist
+    consumers — while the wheel-only test above stays green. This pins the
+    sdist→wheel coupling.
+    """
+    sdist = _build("sdist", tmp_path, "*.tar.gz")
+    with tarfile.open(sdist) as tf:
+        members = tf.getnames()
+    assert any(m.endswith(_SDIST_DOC_SUFFIX) for m in members), (
+        f"{_SDIST_DOC_SUFFIX} missing from sdist — a wheel rebuilt from this sdist "
+        f"cannot force-include the matrix (#305)."
+    )
+
+
 def test_instructions_list_runs_from_installed_wheel(tmp_path):
     """`instructions list` exits 0 from a real install, invoked outside the repo.
 
-    Running from tmp_path (not the repo) means the source-tree fallback cannot
-    fire, so success proves the packaged-resource path works — the actual #305 fix.
+    Running with cwd outside the repo means the source-tree fallback cannot fire,
+    so success proves the packaged-resource path works — the actual #305 fix. We
+    assert the install genuinely can't see a repo doc (belt-and-braces: if the
+    fallback could ever satisfy the command, this test would be testing the wrong
+    path).
     """
-    wheel = _build_wheel(tmp_path / "dist")
+    wheel = _build("wheel", tmp_path / "dist", "*.whl")
     venv = tmp_path / "venv"
     subprocess.run([sys.executable, "-m", "venv", str(venv)], check=True, timeout=120)
     bindir = "Scripts" if sys.platform == "win32" else "bin"
@@ -91,8 +127,14 @@ def test_instructions_list_runs_from_installed_wheel(tmp_path):
         text=True,
         timeout=300,
     )
-    if pip.returncode != 0:  # pragma: no cover - sandbox/network constraints
-        pytest.skip(f"pip install of wheel failed (likely sandbox/network):\n{pip.stderr[-2000:]}")
+    assert pip.returncode == 0, f"pip install of the wheel failed:\n{pip.stderr}"
+
+    # cwd is a tmp dir with no docs/ tree, so the parents[4] source-tree fallback
+    # resolves to a non-existent path: the command can only succeed via the
+    # packaged resource.
+    workdir = tmp_path / "elsewhere"
+    workdir.mkdir()
+    assert not (workdir / "docs").exists()
 
     cli = venv / bindir / "agent-toolkit-cli"
     for args in (["instructions", "list"], ["instructions", "list", "--format", "json"]):
@@ -100,7 +142,7 @@ def test_instructions_list_runs_from_installed_wheel(tmp_path):
             [str(cli), *args],
             capture_output=True,
             text=True,
-            cwd=tmp_path,  # outside the repo: no source-tree fallback possible
+            cwd=workdir,
             timeout=60,
         )
         assert run.returncode == 0, f"{args} exited {run.returncode}: {run.stderr}"
