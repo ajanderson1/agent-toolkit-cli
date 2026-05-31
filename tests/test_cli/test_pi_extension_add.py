@@ -2,8 +2,6 @@
 
 Lock-after-clone, idempotency, npm record, store-owned clone.
 """
-from pathlib import Path
-
 import pytest
 
 from agent_toolkit_cli import pi_extension_add as pea

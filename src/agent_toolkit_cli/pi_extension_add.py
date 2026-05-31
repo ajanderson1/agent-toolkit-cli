@@ -70,11 +70,12 @@ def add(
     except SourceParseError as exc:
         raise AddError(str(exc)) from exc
 
-    ext_slug = slug or _derive_slug(parsed)
-    if not ext_slug:
+    ext_slug_maybe: str | None = slug or _derive_slug(parsed)
+    if not ext_slug_maybe:
         raise AddError(
             f"Cannot derive a slug from {source!r}; pass --slug explicitly"
         )
+    ext_slug = ext_slug_maybe  # narrowed: not None past this point
 
     canonical = library_pi_extension_path(ext_slug, env={})
     if canonical.exists():
