@@ -97,8 +97,14 @@ def _should_skip_symlink(
     """Return (skip?, reason). Mirrors installer.ts:296-323 with v2.2 adjustments.
 
     v2.2 semantics (post-store relocation):
-      - Global + universal: SKIPPED. ~/.agents/skills/<slug> → library is
-        created via the universal bundle path in apply().
+      - Global + universal (skill-only, no real agent mechanism): SKIPPED.
+        ~/.agents/skills/<slug> → library is created via the universal bundle
+        path in apply(). These are "pure universal" cells: is_universal=True
+        AND subagent_mechanism='none' (e.g. codex, amp, cline).
+      - Global + dual-flagged (is_universal=True + real subagent_mechanism):
+        NOT skipped. The cell has a real agent adapter that handles install
+        independently of the skill-kind universal bundle (e.g. cursor has
+        subagent_mechanism='symlink'; gemini-cli has 'translate'). PR3 fix.
       - Project + universal: NOT skipped. Canonical is in the external store;
         each universal agent gets <project>/.agents/skills/<slug> → store.
       - Global + non-universal: NOT skipped (symlink → library).
@@ -108,21 +114,20 @@ def _should_skip_symlink(
     The special "universal" bundle token is handled in apply() before
     _should_skip_symlink is called; it never reaches here as an agent_name.
 
-    KNOWN LATENT (PR2 of #252, deferred to PR3 cleanup): this helper is
-    called from `_current_linked_agents` which the agent facade also uses.
-    `is_universal` is currently a SKILL concept (skills_dir == ".agents/skills");
-    7 cells supporting agent install ALSO have is_universal=True (codex, cursor,
-    dexto, firebender, gemini-cli, github-copilot, opencode). When the agent
-    facade's `plan()` runs at global scope, those 7 harnesses are silently
-    skipped from the "what's currently linked?" scan even though they are
-    legitimate agent install targets. Today the symptom is hidden because
-    `agent_install.apply()` dispatches via `agent_adapters.get_adapter()`
-    instead of consulting this skip predicate. PR3 (universal→general rename)
-    is the natural place to extract the skip predicate into a facade-injected
-    Callable, parallel to `canonical_dir_resolver` and `universal_bundle_link`.
+    PR3 (universal→general rename) made this predicate kind-aware: a cell
+    that is both skill-universal (skills_dir == ".agents/skills") AND has a
+    real agent adapter (subagent_mechanism != "none") must NOT be skipped —
+    the agent-kind adapter handles the install via get_adapter(), and the
+    skill-kind universal bundle still covers it for the skills path.
+    The agent facade's plan() injects its own adapter-aware scanner and never
+    calls this predicate; it is called only in the SKILL-kind path via
+    _current_linked_agents and skill_install.apply().
     """
     cfg = get_agent(agent_name)
-    if cfg.is_universal and scope == "global":
+    # Skip only "pure universal" cells: is_universal with no real agent mechanism.
+    # Dual-flagged cells (is_universal + real subagent_mechanism) must NOT be
+    # skipped — their agent adapter handles the install independently.
+    if cfg.is_universal and scope == "global" and cfg.subagent_mechanism == "none":
         return True, "universal-global"
     return False, ""
 
