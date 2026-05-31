@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import click
 
+from agent_toolkit_cli.commands.pi_extension.add_cmd import add_cmd
 from agent_toolkit_cli.commands.pi_extension.list_cmd import list_cmd
 from agent_toolkit_cli.commands.pi_extension.status_cmd import status_cmd
 
@@ -17,3 +18,4 @@ def pi_extension() -> None:
 pi_extension.add_command(list_cmd)
 pi_extension.add_command(status_cmd)
 pi_extension.add_command(list_cmd, name="ls")
+pi_extension.add_command(add_cmd)
