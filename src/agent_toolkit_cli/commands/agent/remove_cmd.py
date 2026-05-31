@@ -57,14 +57,16 @@ def remove_cmd(slug: str, force: bool) -> None:
                 f"push/commit them or re-run with --force"
             )
 
-    # Remove all harness projections first (idempotent — adapters handle missing files).
+    # Full removal: harness projections + lock entry + canonical. `remove()` is
+    # the destructive counterpart to `uninstall()` (issue #303): `uninstall`
+    # detaches projections only and KEEPS the library, so `remove` must own the
+    # canonical + lock deletion explicitly. (idempotent — adapters handle
+    # missing files.)
     # Pass explicit home=Path.home() so adapters can resolve {HOME} templates
     # correctly (home=None causes ValueError in _expand for global templates).
-    agent_install.uninstall(
+    agent_install.remove(
         slug=slug, scope="global", home=Path.home(), project=None,
         harnesses=_all_enabled_harnesses(),
     )
 
-    # agent_install.uninstall() already removes the lock entry and canonical
-    # at global scope — nothing more to do.
     click.echo(f"removed {slug}")
