@@ -8,6 +8,7 @@ import click
 from agent_toolkit_cli.commands.pi_extension.add_cmd import add_cmd
 from agent_toolkit_cli.commands.pi_extension.install_cmd import install_cmd
 from agent_toolkit_cli.commands.pi_extension.list_cmd import list_cmd
+from agent_toolkit_cli.commands.pi_extension.remove_cmd import remove_cmd
 from agent_toolkit_cli.commands.pi_extension.status_cmd import status_cmd
 from agent_toolkit_cli.commands.pi_extension.uninstall_cmd import uninstall_cmd
 
@@ -23,3 +24,4 @@ pi_extension.add_command(list_cmd, name="ls")
 pi_extension.add_command(add_cmd)
 pi_extension.add_command(install_cmd)
 pi_extension.add_command(uninstall_cmd)
+pi_extension.add_command(remove_cmd)
