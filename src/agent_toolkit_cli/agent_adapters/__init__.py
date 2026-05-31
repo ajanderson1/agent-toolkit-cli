@@ -42,15 +42,38 @@ class AgentProjectionConflictError(InstallError):
     """
 
 
+def _sentinel_path(dest: Path) -> Path:
+    """Return the `.attk` sidecar sentinel path for a given destination file.
+
+    The sentinel (e.g. `config.json` → `.config.json.attk`) marks a file as
+    tool-owned. `_guard_foreign` reads it to distinguish our own previously-
+    written files (allow refresh) from foreign user files (refuse to clobber).
+    Adapters must write the sentinel alongside the main file and remove it on
+    uninstall.
+    """
+    return dest.parent / f".{dest.name}.attk"
+
+
 def _guard_foreign(dest: Path, *, harness: str, overwrite: bool) -> None:
     """Refuse to clobber a foreign file at `dest` unless overwrite is allowed.
 
-    `overwrite=True` means the facade has confirmed this slug is tool-owned
-    (a lock entry exists), so refreshing our own previously-written file is
-    fine. `overwrite=False` (a fresh install) refuses any pre-existing path.
+    Two signals permit overwriting a pre-existing file:
+      1. `overwrite=True` — the facade confirmed this slug is tool-owned via
+         the lock (used by agent_install.apply() when a lock entry exists).
+      2. Sentinel present — `.<dest.name>.attk` exists alongside `dest`, written
+         by a previous install via this tool. Allows adapter-level re-install
+         without requiring the caller to set up a full lock entry (used by
+         direct adapter tests and the sentinel-based idempotency contract).
+
+    Foreign files (dest exists, no sentinel, overwrite=False) raise
+    AgentProjectionConflictError (an InstallError subclass) so the error
+    surfaces as a clean user-facing message, not a bare traceback.
     """
     if overwrite:
         return
+    sentinel = _sentinel_path(dest)
+    if sentinel.exists():
+        return  # our own file — recognised by the .attk sidecar
     if dest.exists() or dest.is_symlink():
         raise AgentProjectionConflictError(
             f"{harness}: refusing to overwrite existing path {dest} — "
@@ -117,6 +140,7 @@ __all__ = [
     "AgentAdapter",
     "AgentProjectionConflictError",
     "UnsupportedMechanismError",
+    "_sentinel_path",
     "get_adapter",
 ]
 

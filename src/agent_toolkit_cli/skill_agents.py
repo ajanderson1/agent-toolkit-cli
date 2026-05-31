@@ -55,12 +55,10 @@ AGENTS: dict[str, AgentConfig] = {
         skills_dir=".aider-desk/skills",
         global_skills_dir=HOME / ".aider-desk/skills",
         detect_installed=lambda: (HOME / ".aider-desk").exists(),
-        # Adapter implemented in agent_adapters/config_file_folder.py but
-        # disabled in PR2: mutating a third-party config file (config.json
-        # + order.json) is higher blast-radius than the single-file
-        # mechanisms and needs deeper smoke coverage. Follow-up issue tracks
-        # re-enabling all 4 config_file_folder cells together.
-        subagent_mechanism="none",
+        # PR4 (#252): enabled — writes only self-owned per-slug files under
+        # .aider-desk/agents/<slug>/ (no shared-config mutation). Guarded by
+        # _guard_foreign + .config.json.attk sentinel; both scopes supported.
+        subagent_mechanism="config_file_folder",
     ),
     "amp": AgentConfig(
         name="amp",

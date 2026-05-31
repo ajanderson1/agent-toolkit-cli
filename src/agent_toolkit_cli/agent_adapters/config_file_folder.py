@@ -18,7 +18,7 @@ import shutil
 import textwrap
 from pathlib import Path
 
-from agent_toolkit_cli.agent_adapters import _guard_foreign
+from agent_toolkit_cli.agent_adapters import _guard_foreign, _sentinel_path
 from agent_toolkit_cli.skill_agents import UnknownAgentError
 
 
@@ -89,6 +89,9 @@ class _AiderDeskAdapter:
             "source": text,
         }
         cfg.write_text(json.dumps(body, indent=2) + "\n")
+        # Write the .attk sentinel so _guard_foreign recognises this as our
+        # own file on future re-installs (without requiring the lock system).
+        _sentinel_path(cfg).write_text("")
         return cfg
 
     def uninstall(
