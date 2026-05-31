@@ -38,7 +38,7 @@ def test_skill_synthetic_names_include_general_skill():
 
 def test_general_agent_catalog_entry_exists():
     """Catalog already ships 'general-agent' (PR2). This test pins the shape."""
-    from agent_toolkit_cli.skill_agents import AGENTS, XDG_CONFIG
+    from agent_toolkit_cli.skill_agents import AGENTS
     assert "general-agent" in AGENTS
     cfg = AGENTS["general-agent"]
     assert cfg.display_name == "General (agents)"
