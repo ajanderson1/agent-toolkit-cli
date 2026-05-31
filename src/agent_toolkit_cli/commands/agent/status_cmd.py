@@ -53,15 +53,31 @@ def status_cmd(
     try:
         lock = read_lock(lock_file_path(scope=scope, home=home, project=project_root))
     except FileNotFoundError:
-        click.echo("no agents found")
+        # No lock file at all — name the scope so the wrong-scope case is legible
+        # (the reporter's `list -g` vs bare `status` confusion in #304).
+        click.echo(f"no agents in the {scope} library")
         return
 
-    targets = dict(sorted(lock.skills.items()))
-    if slugs:
-        wanted = set(slugs)
-        targets = {k: v for k, v in targets.items() if k in wanted}
+    # An empty-but-present lock must not render as a blank screen: name the scope,
+    # matching `agent list`'s non-blank empty handling (#304 bug 1).
+    if not lock.skills:
+        click.echo(f"no agents in the {scope} library")
+        return
 
-    for slug, entry in targets.items():
+    if slugs:
+        # Report each requested slug, flagging the ones absent from the library —
+        # never let a no-match filter masquerade as an empty library.
+        for slug in slugs:
+            entry = lock.skills.get(slug)
+            if entry is None:
+                click.echo(f"{slug}\tnot found")
+                continue
+            harnesses = _projected_harnesses(slug, scope, home, project_root)
+            projected = ", ".join(harnesses) if harnesses else "-"
+            click.echo(f"{slug}\t{entry.source}\t{projected}")
+        return
+
+    for slug, entry in sorted(lock.skills.items()):
         harnesses = _projected_harnesses(slug, scope, home, project_root)
         projected = ", ".join(harnesses) if harnesses else "-"
         click.echo(f"{slug}\t{entry.source}\t{projected}")

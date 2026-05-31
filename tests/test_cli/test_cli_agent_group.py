@@ -469,6 +469,86 @@ def test_status_shows_projected_harnesses_after_install(
 
 
 # ---------------------------------------------------------------------------
+# status empty-state honesty (#304 bug 1)
+#
+# Regression guard for the scope-default mismatch + silent-blank trap: an empty
+# library must produce a *scope-named*, non-blank message — never a blank screen
+# (the prior behaviour when the lock existed but had no entries) and never a
+# scope-blind message that hides which lock was searched.
+# ---------------------------------------------------------------------------
+
+
+def test_status_empty_global_names_scope_not_blank(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`status -g` on an empty global library prints a non-blank, scope-named line."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    r = CliRunner().invoke(main, ["agent", "status", "-g"])
+    assert r.exit_code == 0, r.output
+    assert r.output.strip() != "", "status must not print a blank screen for an empty library"
+    assert "global" in r.output.lower(), f"empty message should name the scope: {r.output!r}"
+
+
+def test_status_empty_present_lock_is_not_silent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A lock file that exists but has no entries must not render as a blank screen.
+
+    Mirrors `agent list`, which prints a message in this case. The prior
+    `status` render loop simply didn't iterate, leaving stdout empty.
+    """
+    monkeypatch.setenv("HOME", str(tmp_path))
+    # Force an empty-but-present global lock on disk.
+    from agent_toolkit_cli.agent_lock import LockFile, write_lock
+    from agent_toolkit_cli.agent_paths import library_lock_path
+    write_lock(library_lock_path(), LockFile(version=1, skills={}))
+
+    r = CliRunner().invoke(main, ["agent", "status", "-g"])
+    assert r.exit_code == 0, r.output
+    assert r.output.strip() != "", "empty-but-present lock must not render blank"
+    assert "global" in r.output.lower()
+
+
+def test_status_default_scope_in_project_names_project(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Bare `status` from a project dir with a project lock names the *project* scope.
+
+    This is the wrong-scope confusion the reporter hit: `list -g` (explicit
+    global) showed the agent while bare `status` defaulted to project scope and
+    found that project's (empty) lock. The empty message must name `project` so
+    the mismatch is legible.
+    """
+    monkeypatch.setenv("HOME", str(tmp_path))
+    project = tmp_path / "proj"
+    project.mkdir()
+    # Empty project lock so read_only default-scope resolves to project.
+    from agent_toolkit_cli.agent_lock import LockFile, write_lock
+    from agent_toolkit_cli.agent_paths import lock_file_path
+    write_lock(lock_file_path(scope="project", project=project),
+               LockFile(version=1, skills={}))
+
+    r = CliRunner().invoke(main, ["--project", str(project), "agent", "status"])
+    assert r.exit_code == 0, r.output
+    assert "project" in r.output.lower(), f"empty message should name project scope: {r.output!r}"
+
+
+def test_status_unknown_slug_is_not_empty_library_claim(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Filtering to an absent slug must not claim the whole library is empty."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _seed_global_canonical(tmp_path)
+    _write_global_lock(tmp_path)
+
+    r = CliRunner().invoke(main, ["agent", "status", "ghost-agent", "-g"])
+    assert r.exit_code == 0, r.output
+    # The library is NOT empty (demo-agent is present) — so don't say it is.
+    assert "ghost-agent" in r.output, f"unknown slug should be named: {r.output!r}"
+    assert "not found" in r.output.lower()
+
+
+# ---------------------------------------------------------------------------
 # install refused without global lock entry
 # ---------------------------------------------------------------------------
 
