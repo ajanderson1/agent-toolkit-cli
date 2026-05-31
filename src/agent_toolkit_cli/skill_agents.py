@@ -40,6 +40,11 @@ class AgentConfig:
     subagent_mechanism: Literal[
         "symlink", "translate", "config_file_folder", "none"
     ] = "none"
+    # Human-readable reason why subagent_mechanism='none' for this cell.
+    # Required for cells that are intentionally disabled (not just unclassified).
+    # Surfaced in doctor output and capability listings so users understand why
+    # a harness is not installable rather than seeing a silent omission.
+    disabled_reason: str = ""
 
     @property
     def is_universal(self) -> bool:
@@ -55,12 +60,10 @@ AGENTS: dict[str, AgentConfig] = {
         skills_dir=".aider-desk/skills",
         global_skills_dir=HOME / ".aider-desk/skills",
         detect_installed=lambda: (HOME / ".aider-desk").exists(),
-        # Adapter implemented in agent_adapters/config_file_folder.py but
-        # disabled in PR2: mutating a third-party config file (config.json
-        # + order.json) is higher blast-radius than the single-file
-        # mechanisms and needs deeper smoke coverage. Follow-up issue tracks
-        # re-enabling all 4 config_file_folder cells together.
-        subagent_mechanism="none",
+        # PR4 (#252): enabled — writes only self-owned per-slug files under
+        # .aider-desk/agents/<slug>/ (no shared-config mutation). Guarded by
+        # _guard_foreign + .config.json.attk sentinel; both scopes supported.
+        subagent_mechanism="config_file_folder",
     ),
     "amp": AgentConfig(
         name="amp",
@@ -151,12 +154,16 @@ AGENTS: dict[str, AgentConfig] = {
         skills_dir=".agents/skills",
         global_skills_dir=CODEX_HOME / "skills",
         detect_installed=lambda: CODEX_HOME.exists() or Path("/etc/codex").exists(),
-        # Disabled in PR2 (see aider-desk comment). Also: codex classification
-        # is contested between docs (translate; auto-discovers
-        # ~/.codex/agents/*.toml) and source (config_file+folder; requires
-        # [agents.<role>] in config.toml). Disable until the classification
-        # is reconciled and a smoke harness exercises both paths.
+        # Intentionally disabled: codex subagent discovery is registry-gated —
+        # a self-owned agents/<slug>.toml is NOT loaded without a matching
+        # [agents.<slug>] block in the shared config.toml. No escape hatch
+        # exists. Enabling requires mutating the shared config.toml, which
+        # needs an explicit AJ decision (PR5a). See companion decision doc.
         subagent_mechanism="none",
+        disabled_reason=(
+            "registry-gated shared config.toml — no safe escape hatch; "
+            "pending AJ decision (PR5a)"
+        ),
     ),
     "command-code": AgentConfig(
         name="command-code",
@@ -218,11 +225,11 @@ AGENTS: dict[str, AgentConfig] = {
         skills_dir=".agents/skills",
         global_skills_dir=HOME / ".agents/skills",
         detect_installed=lambda: (HOME / ".dexto").exists(),
-        # Disabled in PR2 (see aider-desk comment). Dexto also requires
-        # parent-agent allowedAgents editing to make the new agent spawnable
-        # (PR2 explicitly out of scope) — the writes-only adapter we ship
-        # produces an agent that loads but cannot be spawned.
-        subagent_mechanism="none",
+        # PR4 (#252): enabled — writes only self-owned per-slug files under
+        # .dexto/agents/<slug>/ (no shared-config mutation). Global-only by
+        # construction (no project-scope convention in dexto). Guarded by
+        # _guard_foreign + .<slug>.yml.attk sentinel.
+        subagent_mechanism="config_file_folder",
     ),
     "droid": AgentConfig(
         name="droid",
@@ -238,10 +245,15 @@ AGENTS: dict[str, AgentConfig] = {
         skills_dir=".agents/skills",
         global_skills_dir=HOME / ".firebender/skills",
         detect_installed=lambda: (HOME / ".firebender").exists(),
-        # Disabled in PR2 (see aider-desk comment). Atomic mutation of a
-        # third-party firebender.json that the IntelliJ plugin hot-reloads
-        # needs deeper smoke + a live IDE test before we trust it.
+        # Intentionally disabled: the adapter mutates the shared firebender.json
+        # which the IntelliJ plugin hot-reloads. A botched atomic write is
+        # immediately visible to a running IDE and the file may be re-serialised
+        # by the plugin (dropping our entry). Needs AJ decision to overturn.
         subagent_mechanism="none",
+        disabled_reason=(
+            "would mutate a hot-reloaded IDE registry (firebender.json); "
+            "pending AJ decision to accept shared-config mutation (PR5a)"
+        ),
     ),
     "forgecode": AgentConfig(
         name="forgecode",

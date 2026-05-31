@@ -140,14 +140,16 @@ _VERDICT_PREFIX_TO_MECHANISM: dict[str, str] = {
 }
 
 
-# Cells the matrix classifies as supported but PR2 intentionally ships with
-# subagent_mechanism='none'. Adapter implementations exist (and are unit-
-# tested in test_config_file_folder.py) but the cells are disabled at the
-# catalog level pending deeper smoke coverage of third-party config-file
-# mutation. Re-enabling requires updating both this set AND the literal in
-# skill_agents.py. Tracked by a follow-up issue filed after PR2 merges.
+# Cells the matrix classifies as supported but that remain intentionally
+# disabled (subagent_mechanism='none') pending an explicit AJ decision on
+# shared-config mutation (PR5a). Both cells write to a shared registry file
+# owned by a third-party tool; aider-desk + dexto were enabled in PR4 because
+# they write only self-owned per-slug files. Re-enabling codex or firebender
+# requires updating both this set AND the literal in skill_agents.py.
+# Both disabled cells MUST carry a non-empty disabled_reason (see
+# test_reasoned_disabled_cells_have_reason below).
 PR2_DISABLED_DESPITE_MATRIX_SUPPORT = frozenset({
-    "aider-desk", "codex", "dexto", "firebender",
+    "codex", "firebender",
 })
 
 
@@ -247,4 +249,78 @@ def test_every_catalog_supported_mechanism_appears_in_matrix(rows):
         "Catalog has subagent_mechanism set on harnesses NOT listed as "
         f"supported in harness-matrix.md: {sorted(orphans)}.\n"
         "Either add the row to the matrix, or set subagent_mechanism='none'."
+    )
+
+
+# ── PR4 additions: aider-desk + dexto supported; codex + firebender reasoned ─
+
+
+def test_aider_desk_and_dexto_are_supported_via_config_file_folder():
+    """PR4: aider-desk + dexto must have subagent_mechanism='config_file_folder'.
+
+    Locks the PR4 enable. If someone reverts either cell to 'none', this test
+    fails loudly so the PR4 install-machinery tests (test_aider_desk_dexto_cells)
+    cannot be silently broken by a catalog revert.
+    """
+    from agent_toolkit_cli.skill_agents import AGENTS
+
+    for harness in ("aider-desk", "dexto"):
+        cfg = AGENTS[harness]
+        assert cfg.subagent_mechanism == "config_file_folder", (
+            f"{harness}: expected subagent_mechanism='config_file_folder' "
+            f"(enabled in PR4), got {cfg.subagent_mechanism!r}. "
+            "If you reverted the catalog, re-apply the PR4 change."
+        )
+
+
+def test_reasoned_disabled_cells_have_reason():
+    """codex + firebender must carry a non-empty disabled_reason string.
+
+    The reason is surfaced in doctor/capability output so users understand
+    WHY the cell is not installable rather than seeing a silent omission.
+    A cell with subagent_mechanism='none' and no reason is treated as
+    unclassified (like `amp`), NOT intentionally-disabled — the distinction
+    matters for UX and for future PR5a planning.
+    """
+    from agent_toolkit_cli.skill_agents import AGENTS
+
+    for harness in ("codex", "firebender"):
+        cfg = AGENTS[harness]
+        assert cfg.subagent_mechanism == "none", (
+            f"{harness}: expected to remain disabled (mechanism='none') — "
+            "do not enable without an explicit AJ decision (PR5a)."
+        )
+        assert cfg.disabled_reason, (
+            f"{harness}: has subagent_mechanism='none' (intentionally disabled) "
+            "but disabled_reason is empty. Add a human-readable reason string "
+            "to AgentConfig so doctor/capability listings explain the omission."
+        )
+
+
+def test_dexto_is_global_only_by_construction(rows):
+    """dexto: adapter raises ValueError at project scope; matrix entry documents global-only."""
+    import pytest
+
+    from agent_toolkit_cli.agent_adapters import get_adapter
+    from agent_toolkit_cli.skill_agents import AGENTS
+
+    cfg = AGENTS["dexto"]
+    assert cfg.subagent_mechanism == "config_file_folder", (
+        "dexto must be enabled (PR4); if reverted, fix the catalog."
+    )
+    adapter = get_adapter("dexto")
+    with pytest.raises(ValueError, match="(?i)global.only|dexto"):
+        adapter.destination("any-slug", scope="project", project=None)
+
+
+def test_pr4_disabled_set_is_two_cells():
+    """PR2_DISABLED_DESPITE_MATRIX_SUPPORT must contain exactly {codex, firebender}.
+
+    Locks the PR4 reduction from 4 → 2. If aider-desk or dexto are re-added to
+    the disabled set, this test fails before the install-machinery tests run.
+    """
+    assert PR2_DISABLED_DESPITE_MATRIX_SUPPORT == frozenset({"codex", "firebender"}), (
+        f"Expected disabled set {{codex, firebender}}, got "
+        f"{PR2_DISABLED_DESPITE_MATRIX_SUPPORT}. "
+        "aider-desk + dexto were enabled in PR4 and must not be re-disabled here."
     )
