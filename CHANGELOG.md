@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.5.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v3.4.0...v3.5.0) (2026-05-31)
+
+
+### Features
+
+* agent kind TUI tab — completes agent-native TUI parity ([#252](https://github.com/ajanderson1/agent-toolkit-cli/issues/252)) ([#301](https://github.com/ajanderson1/agent-toolkit-cli/issues/301)) ([48a5430](https://github.com/ajanderson1/agent-toolkit-cli/commit/48a543074ffdbc974425994473c758209e53dc62))
+
 ## [3.4.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v3.3.0...v3.4.0) (2026-05-31)
 
 
