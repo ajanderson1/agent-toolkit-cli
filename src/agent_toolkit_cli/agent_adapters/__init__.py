@@ -7,6 +7,27 @@ PR2 ships three mechanism modules:
 
 Per-cell quirks (path-template, required frontmatter, format) live in
 per-cell dicts INSIDE the mechanism module. Mechanism = code path; cell = data row.
+
+Architecture note — #252 "generalize install/lock/paths to a kind dimension" CLOSED AS OBSOLETE:
+
+#252 originally anticipated a single install module with a `kind=` discriminator
+parameter (one module handling all asset kinds at runtime).  The project instead
+shipped PARALLEL MODULES PER KIND, now fact across four kinds:
+
+  skills       → skill_install.py / skill_lock.py / skill_paths.py
+  agents       → agent_install.py / agent_lock.py / agent_paths.py   (PR #268)
+  instructions → instructions_install.py / instructions_lock.py / instructions_paths.py
+  pi-extension → pi_extension_install.py / pi_extension_lock.py / pi_extension_paths.py
+
+The shared seam is a kind-agnostic core (_install_core.py) that each facade binds
+via injected callables (canonical_dir_resolver, universal_bundle_link, synthetic_names,
+current_linked_resolver).  The lockfile did NOT gain a `kind` field — each kind
+has its own lock filename and a per-kind path field on the shared LockEntry
+(skillPath / agentPath / piExtensionPath).
+
+This dispatcher (get_adapter()) is the single SSOT for the agent kind's mechanism
+catalog — no parallel registry exists.  The `kind=` discriminator design is
+superseded.  Refs: #252, #268, plan 2026-05-30-agent-kind-pr3-5-plan.md § PR3.
 """
 from __future__ import annotations
 
