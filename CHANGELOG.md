@@ -1,5 +1,14 @@
 # Changelog
 
+## [3.3.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v3.2.0...v3.3.0) (2026-05-31)
+
+
+### Features
+
+* pi-extension kind PR2a — write path (settings writer + add/install/uninstall/remove) ([#293](https://github.com/ajanderson1/agent-toolkit-cli/issues/293)) ([293fdda](https://github.com/ajanderson1/agent-toolkit-cli/commit/293fddaadb57ea38efa0e9a5c7fa7006b65ce315))
+* pi-extension kind PR2b — git lifecycle + adoption (import/update/push/reset/doctor) ([#295](https://github.com/ajanderson1/agent-toolkit-cli/issues/295)) ([82cce74](https://github.com/ajanderson1/agent-toolkit-cli/commit/82cce741389baf2f40bde73a0ae8186f7d4c5246))
+* pi-extension kind PR3 — TUI grid + kind sidebar (agent-native parity) ([#296](https://github.com/ajanderson1/agent-toolkit-cli/issues/296)) ([e8f442a](https://github.com/ajanderson1/agent-toolkit-cli/commit/e8f442ad1084a0e226d52736601ef0ae57adc4fe))
+
 ## [3.2.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v2.15.0...v3.2.0) (2026-05-30)
 
 
