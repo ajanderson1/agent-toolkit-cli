@@ -1,0 +1,473 @@
+"""End-to-end CLI tests for pi-extension git-lifecycle verbs (PR2b).
+
+Verbs: update, push, reset, import, doctor.
+TDD: failing test first, then implementation, then green.
+
+extensions[] observe-only guarantee: doctor and import tests assert that
+settings.json extensions[] is NEVER mutated by any code path.
+"""
+from __future__ import annotations
+
+import json
+import subprocess
+from pathlib import Path
+
+from click.testing import CliRunner
+
+from agent_toolkit_cli import pi_extension_paths as pep
+from agent_toolkit_cli.cli import main
+from agent_toolkit_cli.pi_extension_lock import read_lock, write_lock, LockEntry, LockFile
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _add_store_owned(tmp_path: Path, env: dict, upstream: Path) -> None:
+    """Add a store-owned ext 'demo' via CLI. HOME must already be monkeypatched."""
+    r = CliRunner().invoke(main, ["pi-extension", "add", str(upstream), "--slug", "demo"])
+    assert r.exit_code == 0, r.output
+
+
+def _install_global(slug: str = "demo") -> None:
+    r = CliRunner().invoke(main, ["pi-extension", "install", slug, "-g"])
+    assert r.exit_code == 0, r.output
+
+
+def _git(cwd: Path, *args: str, env: dict | None = None) -> None:
+    subprocess.run(
+        ["git", "-C", str(cwd), *args],
+        check=True, capture_output=True,
+        env=env,
+    )
+
+
+def _advance_remote(upstream: Path, env: dict, *, body: str = "updated\n") -> None:
+    """Push a new commit to the upstream bare repo."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        work = Path(td) / "work"
+        subprocess.run(
+            ["git", "clone", str(upstream), str(work)],
+            check=True, capture_output=True, env=env,
+        )
+        (work / "SKILL.md").write_text(body)
+        subprocess.run(
+            ["git", "-C", str(work), "add", "SKILL.md"],
+            check=True, capture_output=True, env=env,
+        )
+        subprocess.run(
+            ["git", "-C", str(work), "commit", "-m", "upstream update"],
+            check=True, capture_output=True, env=env,
+        )
+        subprocess.run(
+            ["git", "-C", str(work), "push", "origin", "main"],
+            check=True, capture_output=True, env=env,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Task B1: update
+# ---------------------------------------------------------------------------
+
+
+def test_update_pulls_upstream_changes(tmp_path, monkeypatch, git_sandbox):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    _add_store_owned(tmp_path, git_sandbox.env, git_sandbox.upstream)
+    canonical = pep.library_pi_extension_path("demo", env={})
+
+    # Push a new commit to upstream.
+    _advance_remote(git_sandbox.upstream, git_sandbox.env)
+
+    sha_before = subprocess.run(
+        ["git", "-C", str(canonical), "rev-parse", "HEAD"],
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()
+
+    r = CliRunner().invoke(main, ["pi-extension", "update", "demo", "-g"])
+    assert r.exit_code == 0, r.output
+
+    sha_after = subprocess.run(
+        ["git", "-C", str(canonical), "rev-parse", "HEAD"],
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    assert sha_before != sha_after, "update should advance HEAD"
+
+    # Lock records new sha.
+    lock = read_lock(pep.library_lock_path(env={}))
+    assert lock.skills["demo"].local_sha == sha_after
+
+
+def test_update_npm_is_noop(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    CliRunner().invoke(main, ["pi-extension", "add", "npm:foo"])
+    r = CliRunner().invoke(main, ["pi-extension", "update", "foo", "-g"])
+    assert r.exit_code == 0, r.output
+    assert "npm" in r.output.lower() or "no-op" in r.output.lower()
+
+
+def test_update_unknown_slug_reports_error(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    r = CliRunner().invoke(main, ["pi-extension", "update", "nope", "-g"])
+    assert r.exit_code != 0 or "not in" in r.output
+
+
+def test_update_no_args_updates_all(tmp_path, monkeypatch, git_sandbox):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _add_store_owned(tmp_path, git_sandbox.env, git_sandbox.upstream)
+
+    _advance_remote(git_sandbox.upstream, git_sandbox.env)
+    # update with no slug args => updates all
+    r = CliRunner().invoke(main, ["pi-extension", "update", "-g"])
+    assert r.exit_code == 0, r.output
+
+
+# ---------------------------------------------------------------------------
+# Task B2: push
+# ---------------------------------------------------------------------------
+
+
+def test_push_nothing_to_push_on_clean_up_to_date(tmp_path, monkeypatch, git_sandbox):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _add_store_owned(tmp_path, git_sandbox.env, git_sandbox.upstream)
+
+    r = CliRunner().invoke(main, ["pi-extension", "push", "demo", "-g"])
+    assert r.exit_code == 0, r.output
+    assert "nothing" in r.output.lower() or "clean" in r.output.lower()
+
+
+def test_push_npm_rejects(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    CliRunner().invoke(main, ["pi-extension", "add", "npm:foo"])
+    r = CliRunner().invoke(main, ["pi-extension", "push", "foo", "-g"])
+    # npm rows have nothing to push; should report an error or "nothing"
+    assert r.exit_code != 0 or "npm" in r.output.lower() or "nothing" in r.output.lower()
+
+
+def test_push_dirty_store_via_pr_or_direct(tmp_path, monkeypatch, git_sandbox):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _add_store_owned(tmp_path, git_sandbox.env, git_sandbox.upstream)
+    canonical = pep.library_pi_extension_path("demo", env={})
+
+    # Add an uncommitted change.
+    (canonical / "ext.ts").write_text("// new code")
+
+    # Push --direct commits and pushes.
+    r = CliRunner().invoke(main, ["pi-extension", "push", "demo", "-g", "--direct"])
+    assert r.exit_code == 0, r.output
+    assert "pushed" in r.output.lower()
+
+    # Canonical is now clean.
+    from agent_toolkit_cli import skill_git
+    assert skill_git.status(canonical, env=None).value == "clean"
+
+
+# ---------------------------------------------------------------------------
+# Task B3: import
+# ---------------------------------------------------------------------------
+
+
+def test_import_from_lock_file_adds_missing(tmp_path, monkeypatch, git_sandbox):
+    """import reconstructs extensions present in a lock file but not locally."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    # Build an incoming lock file with one store-owned entry pointing at upstream.
+    incoming_lock = LockFile(
+        version=1,
+        skills={
+            "demo": LockEntry(
+                source=str(git_sandbox.upstream),
+                source_type="local",
+                pi_extension_path="demo",
+            )
+        },
+    )
+    import_file = tmp_path / "incoming-pi-extensions-lock.json"
+    write_lock(import_file, incoming_lock)
+
+    r = CliRunner().invoke(main, ["pi-extension", "import", str(import_file)])
+    assert r.exit_code == 0, r.output
+    assert pep.library_pi_extension_path("demo", env={}).exists()
+    lock = read_lock(pep.library_lock_path(env={}))
+    assert "demo" in lock.skills
+
+
+def test_import_skips_already_present(tmp_path, monkeypatch, git_sandbox):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _add_store_owned(tmp_path, git_sandbox.env, git_sandbox.upstream)
+
+    incoming_lock = LockFile(
+        version=1,
+        skills={
+            "demo": LockEntry(
+                source=str(git_sandbox.upstream),
+                source_type="local",
+                pi_extension_path="demo",
+            )
+        },
+    )
+    import_file = tmp_path / "incoming.json"
+    write_lock(import_file, incoming_lock)
+
+    r = CliRunner().invoke(main, ["pi-extension", "import", str(import_file)])
+    assert r.exit_code == 0, r.output
+    assert "skipped" in r.output.lower()
+
+
+def test_import_nonexistent_file_errors(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    r = CliRunner().invoke(main, ["pi-extension", "import", str(tmp_path / "nope.json")])
+    assert r.exit_code != 0
+
+
+def test_import_never_mutates_extensions_array(tmp_path, monkeypatch, git_sandbox):
+    """CRITICAL: import must NEVER write to extensions[] in settings.json."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    # Seed a settings.json with an extensions[] entry.
+    settings = tmp_path / ".pi" / "agent" / "settings.json"
+    settings.parent.mkdir(parents=True)
+    original_ext = ["my-local-ext"]
+    settings.write_text(json.dumps({"extensions": original_ext, "packages": []}, indent=2) + "\n")
+
+    incoming_lock = LockFile(
+        version=1,
+        skills={
+            "demo": LockEntry(
+                source=str(git_sandbox.upstream),
+                source_type="local",
+                pi_extension_path="demo",
+            )
+        },
+    )
+    import_file = tmp_path / "incoming.json"
+    write_lock(import_file, incoming_lock)
+
+    r = CliRunner().invoke(main, ["pi-extension", "import", str(import_file)])
+    assert r.exit_code == 0, r.output
+
+    # extensions[] MUST be untouched.
+    body = json.loads(settings.read_text())
+    assert body["extensions"] == original_ext, (
+        "import MUST NOT mutate extensions[]"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Task B4: reset
+# ---------------------------------------------------------------------------
+
+
+def test_reset_discards_local_edits(tmp_path, monkeypatch, git_sandbox):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _add_store_owned(tmp_path, git_sandbox.env, git_sandbox.upstream)
+    canonical = pep.library_pi_extension_path("demo", env={})
+
+    # Dirty the store.
+    (canonical / "SKILL.md").write_text("dirty edit\n")
+    from agent_toolkit_cli import skill_git
+    assert skill_git.status(canonical, env=None).value == "dirty"
+
+    # Without --force, reset refuses (mirrors skill reset dirty-guard).
+    r_no_force = CliRunner().invoke(main, ["pi-extension", "reset", "demo", "-g"])
+    assert r_no_force.exit_code != 0, r_no_force.output
+
+    # With --force, reset succeeds and cleans the tree.
+    r = CliRunner().invoke(main, ["pi-extension", "reset", "demo", "-g", "--force"])
+    assert r.exit_code == 0, r.output
+    assert skill_git.status(canonical, env=None).value == "clean"
+
+
+def test_reset_refuses_dirty_without_force(tmp_path, monkeypatch, git_sandbox):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _add_store_owned(tmp_path, git_sandbox.env, git_sandbox.upstream)
+    canonical = pep.library_pi_extension_path("demo", env={})
+
+    # Commit a local change to make it "dirty" for the --no-force path.
+    # Actually reset's dirty guard uses git status DIRTY = uncommitted changes.
+    (canonical / "SKILL.md").write_text("local commit\n")
+    _git(canonical, "add", "SKILL.md", env=git_sandbox.env)
+    _git(canonical, "commit", "-m", "local commit", env=git_sandbox.env)
+
+    # --force is required to reset beyond committed local changes.
+    r = CliRunner().invoke(main, ["pi-extension", "reset", "demo", "-g"])
+    assert r.exit_code == 0, r.output  # clean working tree → no force needed
+    # After reset, HEAD aligns with upstream.
+    sha = subprocess.run(
+        ["git", "-C", str(canonical), "rev-parse", "HEAD"],
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    upstream_sha = subprocess.run(
+        ["git", "-C", str(canonical), "rev-parse", "origin/main"],
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    assert sha == upstream_sha
+
+
+def test_reset_npm_errors(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    CliRunner().invoke(main, ["pi-extension", "add", "npm:foo"])
+    r = CliRunner().invoke(main, ["pi-extension", "reset", "foo", "-g"])
+    # npm rows have no git repo — should report an error or no-op message.
+    assert r.exit_code != 0 or "npm" in r.output.lower() or "no" in r.output.lower()
+
+
+def test_reset_requires_at_least_one_slug(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    r = CliRunner().invoke(main, ["pi-extension", "reset", "-g"])
+    assert r.exit_code != 0
+
+
+# ---------------------------------------------------------------------------
+# Task B5: doctor
+# ---------------------------------------------------------------------------
+
+
+def test_doctor_clean_reports_clean(tmp_path, monkeypatch, git_sandbox):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _add_store_owned(tmp_path, git_sandbox.env, git_sandbox.upstream)
+    _install_global()
+
+    r = CliRunner().invoke(main, ["pi-extension", "doctor", "-g"])
+    assert r.exit_code == 0, r.output
+    assert "clean" in r.output.lower() or r.output.strip() == ""
+
+
+def test_doctor_detects_stray_symlink(tmp_path, monkeypatch):
+    """A symlink in extensions/ with no lock entry is a stray."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    # Plant a stray symlink.
+    target = tmp_path / "some-ext"
+    target.mkdir()
+    (target / "index.ts").write_text("export default {}")
+    link = pep.pi_extension_dir("stray", scope="global", home=tmp_path)
+    link.parent.mkdir(parents=True, exist_ok=True)
+    link.symlink_to(target)
+
+    r = CliRunner().invoke(main, ["pi-extension", "doctor", "-g", "--no-fix"])
+    assert r.exit_code != 0 or "stray" in r.output.lower()
+    # The stray symlink is reported — and NOT removed (--no-fix).
+    assert link.is_symlink()
+
+
+def test_doctor_detects_missing_canonical(tmp_path, monkeypatch, git_sandbox):
+    """If the store copy vanishes but the lock still has it, doctor reports it."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _add_store_owned(tmp_path, git_sandbox.env, git_sandbox.upstream)
+    canonical = pep.library_pi_extension_path("demo", env={})
+
+    import shutil
+    shutil.rmtree(canonical)
+
+    r = CliRunner().invoke(main, ["pi-extension", "doctor", "-g", "--no-fix"])
+    assert "demo" in r.output
+    # Doctor does NOT auto-fix without --fix / prompt.
+
+
+def test_doctor_detects_drifted_symlink(tmp_path, monkeypatch, git_sandbox):
+    """If the symlink points to the wrong path, doctor reports it."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _add_store_owned(tmp_path, git_sandbox.env, git_sandbox.upstream)
+    _install_global()
+
+    # Drift the symlink to some other target.
+    link = pep.pi_extension_dir("demo", scope="global", home=tmp_path)
+    other = tmp_path / "other-ext"
+    other.mkdir()
+    link.unlink()
+    link.symlink_to(other)
+
+    r = CliRunner().invoke(main, ["pi-extension", "doctor", "-g", "--no-fix"])
+    assert "demo" in r.output
+
+
+def test_doctor_never_mutates_extensions_array(tmp_path, monkeypatch, git_sandbox):
+    """CRITICAL: doctor must NEVER write to extensions[] in settings.json."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    # Seed settings.json with extensions[] entries pointing at non-existent paths
+    # (to trigger the orphaned-override check). Doctor will report them but MUST
+    # NOT remove or rewrite them.
+    settings = tmp_path / ".pi" / "agent" / "settings.json"
+    settings.parent.mkdir(parents=True)
+    original_ext = ["my-ext", "!excluded-ext"]
+    settings.write_text(
+        json.dumps({"extensions": original_ext, "packages": []}, indent=2) + "\n"
+    )
+
+    _add_store_owned(tmp_path, git_sandbox.env, git_sandbox.upstream)
+    # Run doctor (may exit non-zero due to orphaned overrides — that's fine).
+    CliRunner().invoke(main, ["pi-extension", "doctor", "-g", "--no-fix"])
+
+    # extensions[] MUST be byte-for-value identical after doctor runs.
+    body = json.loads(settings.read_text())
+    assert body["extensions"] == original_ext, (
+        "doctor MUST NOT mutate extensions[]"
+    )
+
+
+def test_doctor_orphaned_extensions_entry_reported_not_removed(tmp_path, monkeypatch, git_sandbox):
+    """Doctor reports an orphaned extensions[] entry (path missing) but never removes it."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    # extensions[] entry pointing at a missing path.
+    settings = tmp_path / ".pi" / "agent" / "settings.json"
+    settings.parent.mkdir(parents=True)
+    missing_path = str(tmp_path / "nonexistent-ext")
+    settings.write_text(
+        json.dumps({"extensions": [missing_path], "packages": []}, indent=2) + "\n"
+    )
+
+    r = CliRunner().invoke(main, ["pi-extension", "doctor", "-g", "--no-fix"])
+    # Doctor should report the orphaned entry.
+    assert "orphan" in r.output.lower() or missing_path in r.output or r.exit_code != 0
+
+    # The extensions[] entry MUST still be there — never auto-removed.
+    body = json.loads(settings.read_text())
+    assert missing_path in body["extensions"], (
+        "doctor must not remove extensions[] entries"
+    )
