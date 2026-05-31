@@ -1,13 +1,30 @@
 """The Textual App + main() entry point for agent-toolkit-tui.
 
-Skill-only cockpit over the v2.3 `agent-toolkit-cli skill` surface. Reads the
-library lock + project filesystem directly via `agent_toolkit_cli.*` modules;
-applies pending toggles by calling `skill_install.apply` in-process.
+Skill + Pi-extension cockpit over the v3 `agent-toolkit-cli` surface. Reads
+locks + filesystem directly via `agent_toolkit_cli.*` modules and applies
+pending toggles by calling the shipped CLI facades in-process.
+
+Layout (matches existing CSS scaffold in css/app.tcss):
+
+  Header
+  Horizontal#main
+    Vertical#kinds-sidebar
+      Static.rail-header
+      OptionList#kinds-list  ("skill" / "pi-extension")
+    Vertical#content
+      Horizontal#content-header-row
+        Static#content-header
+        [ScopeToggle — skill kind only]
+      SkillGrid | PiGrid   (swapped by action_kind)
+  Static#status-bar
+  Static#footer-pending
+  Footer
 """
 from __future__ import annotations
 
 from collections import defaultdict
 from pathlib import Path
+from typing import Literal, cast
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -15,12 +32,21 @@ from textual.containers import Horizontal, Vertical
 from textual.css.query import NoMatches
 from textual.screen import ModalScreen
 from textual.widgets import (
-    Button, DataTable, Footer, Header, Input, Label, Static,
+    Button, Footer, Header, Input, Label, OptionList, Static,
 )
+from textual.widgets.option_list import Option
 
 from agent_toolkit_tui import __version__
+from agent_toolkit_tui.pi_extension_state import build_pi_rows
 from agent_toolkit_tui.skill_state import build_skill_rows
-from agent_toolkit_tui.widgets import ScopeToggle, SkillGrid
+from agent_toolkit_tui.widgets import PiGrid, ScopeToggle, SkillGrid
+
+Kind = Literal["skill", "pi-extension"]
+
+_KIND_LABELS: dict[Kind, str] = {
+    "skill": "Skill",
+    "pi-extension": "Pi Extension",
+}
 
 
 class ConfirmDiscardScreen(ModalScreen[bool]):
@@ -82,7 +108,7 @@ class ConfirmDiscardScreen(ModalScreen[bool]):
 
 
 class TUIApp(App):
-    """agent-toolkit-tui — Textual cockpit over `agent-toolkit-cli skill`."""
+    """agent-toolkit-tui — Textual cockpit over `agent-toolkit-cli`."""
 
     CSS_PATH = "css/app.tcss"
     TITLE = "agent-toolkit-tui"
@@ -101,15 +127,25 @@ class TUIApp(App):
     def __init__(self) -> None:
         super().__init__()
         self._scope: str = "project"
+        self._active_kind: Kind = "skill"
         self.sub_title = f"v{__version__}"
 
     def compose(self) -> ComposeResult:
         yield Header()
-        with Vertical(id="content"):
-            with Horizontal(id="content-header-row"):
-                yield Static(self._build_content_header(), id="content-header")
-                yield ScopeToggle(active=self._scope, id="scope-toggle")
-            yield SkillGrid([], id="skill-grid")
+        with Horizontal(id="main"):
+            with Vertical(id="kinds-sidebar"):
+                yield Static("Kind", classes="rail-header")
+                yield OptionList(
+                    Option("skill", id="kind-skill"),
+                    Option("pi-extension", id="kind-pi-extension"),
+                    id="kinds-list",
+                )
+            with Vertical(id="content"):
+                with Horizontal(id="content-header-row"):
+                    yield Static(self._build_content_header(), id="content-header")
+                    yield ScopeToggle(active=self._scope, id="scope-toggle")
+                yield SkillGrid([], id="skill-grid")
+                yield PiGrid([], id="pi-grid")
         yield Static("", id="status-bar")
         yield Static("", id="footer-pending")
         yield Footer()
@@ -119,18 +155,67 @@ class TUIApp(App):
             self.theme = "gruvbox"
         except Exception:
             pass
+        # Start with skill kind active; hide pi-grid initially.
+        self._show_kind("skill")
         self._refresh_skill_view()
         self._refresh_content_header()
         self._refresh_pending_label()
         self._refresh_status_bar()
-        # Focus the filter box on open (#249): typing immediately narrows the
-        # list, and Down/Tab drops focus into the table to pick a skill.
+        # Focus the filter box on open (#249).
         try:
             self.query_one("#skill-filter", Input).focus()
         except Exception:
             pass
 
-    # ----- skill-view ----------------------------------------------------
+    # ----- kind switching ----------------------------------------------------
+
+    def _show_kind(self, kind: Kind) -> None:
+        """Show the active grid and hide the inactive one."""
+        try:
+            skill_grid = self.query_one("#skill-grid", SkillGrid)
+            pi_grid = self.query_one("#pi-grid", PiGrid)
+            scope_toggle = self.query_one("#scope-toggle", ScopeToggle)
+        except NoMatches:
+            return
+
+        if kind == "skill":
+            skill_grid.display = True
+            pi_grid.display = False
+            scope_toggle.display = True
+        else:
+            skill_grid.display = False
+            pi_grid.display = True
+            scope_toggle.display = False
+
+    def on_option_list_option_selected(
+        self, event: OptionList.OptionSelected
+    ) -> None:
+        """Handle sidebar kind selection."""
+        if event.option_list.id != "kinds-list":
+            return
+        opt_id = event.option.id
+        if opt_id == "kind-skill":
+            self.action_kind("skill")
+        elif opt_id == "kind-pi-extension":
+            self.action_kind("pi-extension")
+
+    def action_kind(self, kind: str) -> None:
+        if kind not in ("skill", "pi-extension"):
+            return
+        if kind == self._active_kind:
+            return
+        self._active_kind = kind  # type: ignore[assignment]
+        self._show_kind(kind)  # type: ignore[arg-type]
+        if kind == "skill":
+            self._refresh_skill_view()
+        else:
+            self._refresh_pi_view()
+        self._refresh_content_header()
+        self._refresh_pending_label()
+        self._refresh_status_bar()
+
+    # ----- skill-view --------------------------------------------------------
+
     def _scope_to_roots(self) -> tuple[str, Path | None, Path | None]:
         if self._scope == "global":
             return "global", Path.home(), None
@@ -145,25 +230,41 @@ class TUIApp(App):
         grid.set_scope(scope)
         grid.set_rows(build_skill_rows(scope=scope, home=home, project=project))
 
-    # ----- messages -------------------------------------------------------
+    # ----- pi-view -----------------------------------------------------------
+
+    def _refresh_pi_view(self) -> None:
+        try:
+            grid = self.query_one("#pi-grid", PiGrid)
+        except NoMatches:
+            return
+        grid.set_rows(build_pi_rows(home=Path.home(), project=Path.cwd()))
+
+    # ----- messages ----------------------------------------------------------
+
     def on_skill_grid_pending_changed(
         self, event: SkillGrid.PendingChanged
     ) -> None:
-        """Live-update the footer + status bar when the grid's pending set changes.
-
-        The grid posts PendingChanged from its user-driven toggle paths (cell
-        toggle via `space`, column toggle via `a`). Refreshing here keeps the
-        footer "Pending: N" label and the status-bar pending rollup in sync as
-        the user toggles cells, instead of only on apply/refresh/revert.
-        """
+        """Live-update footer + status bar when the skill grid's pending set changes."""
         self._refresh_pending_label()
         self._refresh_status_bar()
 
-    # ----- actions --------------------------------------------------------
+    def on_pi_grid_pending_changed(
+        self, event: PiGrid.PendingChanged
+    ) -> None:
+        """Live-update footer + status bar when the pi grid's pending set changes."""
+        self._refresh_pending_label()
+        self._refresh_status_bar()
+
+    # ----- actions -----------------------------------------------------------
+
     def action_quit(self) -> None:
         n = 0
         try:
-            n = len(self.query_one("#skill-grid", SkillGrid).pending_entries())
+            n += len(self.query_one("#skill-grid", SkillGrid).pending_entries())
+        except NoMatches:
+            pass
+        try:
+            n += len(self.query_one("#pi-grid", PiGrid).pending_entries())
         except NoMatches:
             pass
         if n == 0:
@@ -198,45 +299,79 @@ class TUIApp(App):
             pass
 
     def action_info_pass(self) -> None:
-        """Delegate `i` to the SkillGrid widget (visible in Footer hints)."""
-        try:
-            grid = self.query_one("#skill-grid", SkillGrid)
-        except NoMatches:
-            return
-        grid.action_info()
+        """Delegate `i` to the active grid widget."""
+        if self._active_kind == "skill":
+            try:
+                sgrid = self.query_one("#skill-grid", SkillGrid)
+            except NoMatches:
+                return
+            sgrid.action_info()
+        else:
+            try:
+                pgrid = self.query_one("#pi-grid", PiGrid)
+            except NoMatches:
+                return
+            pgrid.action_info()
 
     def action_refresh(self) -> None:
-        self._refresh_skill_view()
+        if self._active_kind == "skill":
+            self._refresh_skill_view()
+        else:
+            self._refresh_pi_view()
         self._refresh_pending_label()
         self._refresh_content_header()
         self._refresh_status_bar()
 
     def action_revert(self) -> None:
-        try:
-            grid = self.query_one("#skill-grid", SkillGrid)
-        except NoMatches:
-            return
-        n = len(grid.pending_entries())
-        grid.clear_pending()
-        self._refresh_pending_label()
-        self.query_one("#footer-pending", Static).update(
-            f"reverted: {n} pending cleared"
-        )
+        if self._active_kind == "skill":
+            try:
+                sgrid = self.query_one("#skill-grid", SkillGrid)
+            except NoMatches:
+                return
+            n = len(sgrid.pending_entries())
+            sgrid.clear_pending()
+            self._refresh_pending_label()
+            self.query_one("#footer-pending", Static).update(
+                f"reverted: {n} pending cleared"
+            )
+        else:
+            try:
+                pgrid = self.query_one("#pi-grid", PiGrid)
+            except NoMatches:
+                return
+            n = len(pgrid.pending_entries())
+            pgrid.clear_pending()
+            self._refresh_pending_label()
+            self.query_one("#footer-pending", Static).update(
+                f"reverted: {n} pending cleared"
+            )
 
     def action_diff(self) -> None:
-        try:
-            grid = self.query_one("#skill-grid", SkillGrid)
-        except NoMatches:
-            return
-        pending = grid.pending_entries()
-        n_link = sum(1 for op in pending.values() if op == "link")
-        n_unlink = sum(1 for op in pending.values() if op == "unlink")
+        if self._active_kind == "skill":
+            try:
+                sgrid = self.query_one("#skill-grid", SkillGrid)
+            except NoMatches:
+                return
+            s_pending = sgrid.pending_entries()
+            n_link = sum(1 for op in s_pending.values() if op == "link")
+            n_unlink = sum(1 for op in s_pending.values() if op == "unlink")
+        else:
+            try:
+                pgrid = self.query_one("#pi-grid", PiGrid)
+            except NoMatches:
+                return
+            p_pending = pgrid.pending_entries()
+            n_link = sum(1 for op in p_pending.values() if op == "link")
+            n_unlink = sum(1 for op in p_pending.values() if op == "unlink")
         self.query_one("#footer-pending", Static).update(
             f"diff: {n_link} would-link, {n_unlink} would-unlink"
         )
 
     def action_apply(self) -> None:
-        self._apply_skill_pending()
+        if self._active_kind == "skill":
+            self._apply_skill_pending()
+        else:
+            self._apply_pi_pending()
 
     def _apply_skill_pending(self) -> None:
         from agent_toolkit_cli.skill_install import (
@@ -258,11 +393,6 @@ class TUIApp(App):
         for (scope, agent, slug), op in pending.items():
             adds, removes = by_slug[(scope, slug)]
             (adds if op == "link" else removes).add(agent)
-        # Count per (skill × harness) write, not per skill (#250). A skill
-        # toggled across three harnesses is one group but three writes, so the
-        # summary must read "applied: 3 ok" — not 1. Successful writes come
-        # from the InstallResult (created + removed symlinks); a failed group
-        # contributes its intended write count (adds + removes) symmetrically.
         ok = failed = 0
         errors: list[str] = []
         for (scope, slug), (adds, removes) in by_slug.items():
@@ -300,15 +430,8 @@ class TUIApp(App):
             grid.restore_pending(saved)
         self._refresh_pending_label()
         self._refresh_status_bar()
-        # Surface failures so they aren't clobbered by the summary line. The
-        # full error (incl. the doctor hint) is shown; the summary is appended
-        # only when everything succeeded.
         if errors:
-            # Collapse the multi-line install error to single line for the footer
-            # and push the full text into the cell-info modal channel via title.
             first = " ".join(errors[0].split())
-            # `failed` is now a per-harness write count (#250); the "+N more"
-            # hint counts additional failed *messages*, so base it on `errors`.
             extra = f" (+{len(errors) - 1} more)" if len(errors) > 1 else ""
             self.query_one("#footer-pending", Static).update(
                 f"[red]apply failed[/] — {first}{extra}"
@@ -324,13 +447,153 @@ class TUIApp(App):
                 f"applied: {ok} ok, {failed} failed"
             )
 
-    # ----- header + status -----------------------------------------------
-    def _build_content_header(self) -> str:
+    def _apply_pi_pending(self) -> None:
+        from agent_toolkit_cli import _pi_settings, pi_extension_install
+        from agent_toolkit_cli.pi_extension_lock import (
+            LockEntry, add_entry, read_lock, remove_entry, write_lock,
+        )
+        from agent_toolkit_cli.pi_extension_paths import (
+            library_lock_path, lock_file_path,
+        )
+
         try:
-            n = self.query_one("#skill-grid", SkillGrid).row_count
-        except (NoMatches, Exception):
-            n = 0
-        return f"  [b]Skill[/]   [dim]·[/]   {n} items"
+            grid = self.query_one("#pi-grid", PiGrid)
+        except NoMatches:
+            return
+        pending = grid.pending_entries()
+        if not pending:
+            return
+
+        home = Path.home()
+        ok = failed = 0
+        errors: list[str] = []
+
+        # Read the global library lock once — it is the universe of slugs.
+        try:
+            glob_lock = read_lock(library_lock_path(env={}))
+        except Exception as exc:
+            self.query_one("#footer-pending", Static).update(
+                f"[red]apply failed[/] — could not read global lock: {exc}"
+            )
+            self.notify(
+                str(exc),
+                title="Apply: could not read global lock",
+                severity="error",
+                timeout=12,
+            )
+            return
+
+        _Scope = Literal["global", "project"]
+        for (scope_str, slug), op in pending.items():
+            scope = cast(_Scope, scope_str)
+            project = Path.cwd() if scope == "project" else None
+            entry = glob_lock.skills.get(slug)
+            if entry is None:
+                # Untracked slug — no lock entry, skip (guard: should not
+                # reach here because untracked rows are non-interactive).
+                continue
+
+            try:
+                if entry.source_type == "npm":
+                    # npm: add or remove from packages[] in settings.json.
+                    if op == "link":
+                        _pi_settings.add_package(
+                            entry.source,
+                            scope=scope,
+                            home=home,
+                            project=project,
+                        )
+                    else:
+                        _pi_settings.remove_package(
+                            entry.source,
+                            scope=scope,
+                            home=home,
+                            project=project,
+                        )
+                    ok += 1
+                else:
+                    # store-owned: project the symlink, then update project lock.
+                    action: pi_extension_install.Action = (
+                        "install" if op == "link" else "uninstall"
+                    )
+                    p = pi_extension_install.plan(
+                        slug=slug,
+                        scope=scope,
+                        action=action,
+                        home=home,
+                        project=project,
+                    )
+                    pi_extension_install.apply(p, home=home, project=project)
+                    ok += 1
+
+                    # Update project lock after a successful projection.
+                    if scope == "project" and project is not None:
+                        proj_lock_path = lock_file_path(
+                            scope="project", project=project
+                        )
+                        proj_lock = read_lock(proj_lock_path)
+                        if op == "link" and slug not in proj_lock.skills:
+                            write_lock(
+                                proj_lock_path,
+                                add_entry(
+                                    proj_lock,
+                                    slug,
+                                    LockEntry(
+                                        source=entry.source,
+                                        source_type=entry.source_type,
+                                        ref=entry.ref,
+                                        pi_extension_path=entry.pi_extension_path,
+                                    ),
+                                ),
+                            )
+                        elif op == "unlink" and slug in proj_lock.skills:
+                            write_lock(
+                                proj_lock_path,
+                                remove_entry(proj_lock, slug),
+                            )
+
+            except (pi_extension_install.InstallError, _pi_settings.PiSettingsError) as exc:
+                errors.append(f"{slug}: {exc}")
+                failed += 1
+
+        if failed == 0:
+            grid.clear_pending()
+        self._refresh_pi_view()
+        self._refresh_pending_label()
+        self._refresh_status_bar()
+
+        if errors:
+            first = " ".join(errors[0].split())
+            extra = f" (+{len(errors) - 1} more)" if len(errors) > 1 else ""
+            self.query_one("#footer-pending", Static).update(
+                f"[red]apply failed[/] — {first}{extra}"
+            )
+            self.notify(
+                "\n\n".join(errors),
+                title=f"Apply: {ok} ok, {failed} failed",
+                severity="error",
+                timeout=12,
+            )
+        else:
+            self.query_one("#footer-pending", Static).update(
+                f"applied: {ok} ok, {failed} failed"
+            )
+
+    # ----- header + status ---------------------------------------------------
+
+    def _build_content_header(self) -> str:
+        kind_label = _KIND_LABELS.get(self._active_kind, self._active_kind)
+        if self._active_kind == "skill":
+            try:
+                n = self.query_one("#skill-grid", SkillGrid).row_count
+            except (NoMatches, Exception):
+                n = 0
+        else:
+            try:
+                n = self.query_one("#pi-grid", PiGrid).row_count
+            except (NoMatches, Exception):
+                n = 0
+        return f"  [b]{kind_label}[/]   [dim]·[/]   {n} items"
 
     def _refresh_content_header(self) -> None:
         try:
@@ -343,7 +606,11 @@ class TUIApp(App):
     def _refresh_pending_label(self) -> None:
         n = 0
         try:
-            n = len(self.query_one("#skill-grid", SkillGrid).pending_entries())
+            n += len(self.query_one("#skill-grid", SkillGrid).pending_entries())
+        except Exception:
+            pass
+        try:
+            n += len(self.query_one("#pi-grid", PiGrid).pending_entries())
         except Exception:
             pass
         try:
@@ -352,36 +619,57 @@ class TUIApp(App):
             pass
 
     def _refresh_status_bar(self) -> None:
-        """Roll up SkillGrid rows into linked / pending / drifted / stray / broken counts."""
-        linked = drifted = stray = broken = 0
-        try:
-            grid = self.query_one("#skill-grid", SkillGrid)
-        except (NoMatches, Exception):
-            grid = None
-        if grid is not None:
-            scope = self._scope_to_roots()[0]
-            for row in grid._rows:
-                if row.state in ("missing", "copy"):
-                    broken += 1
-                for (agent, sc), cell in row.cells.items():
-                    if sc != scope:
-                        continue
-                    if cell.drift:
-                        drifted += 1
-                    elif cell.stray:
-                        stray += 1
-                    elif cell.linked:
-                        linked += 1
-            pending = len(grid.pending_entries())
+        """Roll up active grid rows into status counts."""
+        if getattr(self, "_active_kind", "skill") == "skill":
+            linked = drifted = stray = broken = 0
+            try:
+                grid = self.query_one("#skill-grid", SkillGrid)
+            except (NoMatches, Exception):
+                grid = None
+            if grid is not None:
+                scope = self._scope_to_roots()[0]
+                for row in grid._rows:
+                    if row.state in ("missing", "copy"):
+                        broken += 1
+                    for (agent, sc), cell in row.cells.items():
+                        if sc != scope:
+                            continue
+                        if cell.drift:
+                            drifted += 1
+                        elif cell.stray:
+                            stray += 1
+                        elif cell.linked:
+                            linked += 1
+                pending = len(grid.pending_entries())
+            else:
+                pending = 0
+            text = (
+                f"  [b green]{linked}[/] linked   "
+                f"[b yellow]{pending}[/] pending   "
+                f"[b orange3]{drifted}[/] drifted   "
+                f"[b yellow]{stray}[/] stray   "
+                f"[b red]{broken}[/] broken"
+            )
         else:
-            pending = 0
-        text = (
-            f"  [b green]{linked}[/] linked   "
-            f"[b yellow]{pending}[/] pending   "
-            f"[b orange3]{drifted}[/] drifted   "
-            f"[b yellow]{stray}[/] stray   "
-            f"[b red]{broken}[/] broken"
-        )
+            loaded_global = loaded_project = 0
+            try:
+                grid_pi = self.query_one("#pi-grid", PiGrid)
+            except (NoMatches, Exception):
+                grid_pi = None
+            if grid_pi is not None:
+                for pi_row in grid_pi._rows:
+                    if pi_row.global_cell.global_loaded:
+                        loaded_global += 1
+                    if pi_row.project_cell.project_loaded:
+                        loaded_project += 1
+                pending = len(grid_pi.pending_entries())
+            else:
+                pending = 0
+            text = (
+                f"  [b green]{loaded_global}[/] global   "
+                f"[b cyan]{loaded_project}[/] project   "
+                f"[b yellow]{pending}[/] pending"
+            )
         try:
             self.query_one("#status-bar", Static).update(text)
         except Exception:
