@@ -361,7 +361,7 @@ class SkillGrid(Vertical):
         )
         if cell.skipped:
             return (
-                f"Universal agent — no symlink needed.\n"
+                f"General agent — no symlink needed.\n"
                 f"Skill lives at {canonical}."
             )
         if pending == "link":
@@ -547,9 +547,11 @@ class SkillGrid(Vertical):
         table.add_column(f"SKILL {_INFO_GLYPH}", width=20)
         for agent in INTERACTIVE_AGENTS:
             # Every interactive agent column exposes either a column-info
-            # modal (Universal) or per-cell info (Claude Code, Pi via
-            # CellInfoScreen) — glyph them all.
-            base = "Universal" if agent == "universal" else AGENTS[agent].display_name
+            # modal (General) or per-cell info (Claude Code, Pi via
+            # CellInfoScreen) — glyph them all. The "universal" token is the
+            # load-bearing bundle key; only its display label is "General"
+            # (v3 universal→general rename, #304 bug 3).
+            base = "General" if agent == "universal" else AGENTS[agent].display_name
             table.add_column(f"{base} {_INFO_GLYPH}", width=14)
         # State has a column-info modal → glyph it.
         table.add_column(f"State {_INFO_GLYPH}", width=10)

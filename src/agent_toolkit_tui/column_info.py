@@ -45,7 +45,9 @@ def _universal_info(context: dict | None = None) -> ColumnInfo:
         "  so you may not need it at project scope too.",
     ] if show_marker else []
     return ColumnInfo(
-        title="Universal bundle",
+        # Display label only — the registry key + function name keep the
+        # load-bearing "universal" token (v3 universal→general rename, #304).
+        title="General bundle",
         lines=description + bullets + indicator_note,
     )
 
