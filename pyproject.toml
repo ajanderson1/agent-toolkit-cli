@@ -27,6 +27,20 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/agent_toolkit_cli", "src/agent_toolkit_tui"]
 
+# Ship the harness matrix (the human-facing SSOT under docs/) inside the wheel so
+# `instructions list` can read it via importlib.resources on packaged installs.
+# Without this, docs/ is not packaged and the command crashes (#305).
+# The destination is the real agent_toolkit_cli.data subpackage (has __init__.py),
+# so resource resolution doesn't depend on PEP-420 namespace handling.
+#
+# NOTE (#305 redux): this block was added in #308 but silently dropped when the
+# release-please PR (#309), branched off the pre-#308 commit, merged on top and
+# overwrote pyproject.toml — re-shipping the crash in v3.5.1. The packaging guard
+# in tests/test_cli/test_instructions_packaging.py builds a real wheel, so it now
+# fails on main whenever this block is absent, closing the merge-ordering gap.
+[tool.hatch.build.targets.wheel.force-include]
+"docs/agent-toolkit/harness-matrix.md" = "agent_toolkit_cli/data/harness-matrix.md"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
