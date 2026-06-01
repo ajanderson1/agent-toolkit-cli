@@ -1,5 +1,14 @@
 # Changelog
 
+## [3.5.1](https://github.com/ajanderson1/agent-toolkit-cli/compare/v3.5.0...v3.5.1) (2026-06-01)
+
+
+### Bug Fixes
+
+* **303:** agent uninstall must be non-destructive ([#306](https://github.com/ajanderson1/agent-toolkit-cli/issues/306)) ([86f5aea](https://github.com/ajanderson1/agent-toolkit-cli/commit/86f5aea84fccc6c72d6695cec4595727a3d968fb))
+* agent-kind minor fixes — status scope, add validation, TUI label ([#304](https://github.com/ajanderson1/agent-toolkit-cli/issues/304)) ([#307](https://github.com/ajanderson1/agent-toolkit-cli/issues/307)) ([9d39ed8](https://github.com/ajanderson1/agent-toolkit-cli/commit/9d39ed8f498ae8db94cf3a98210be9ce2813ac67))
+* instructions list crashes on packaged installs ([#305](https://github.com/ajanderson1/agent-toolkit-cli/issues/305)) ([#308](https://github.com/ajanderson1/agent-toolkit-cli/issues/308)) ([2ef5712](https://github.com/ajanderson1/agent-toolkit-cli/commit/2ef57128362eed1666fc88bac6d1a0362e7a4798))
+
 ## [3.5.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v3.4.0...v3.5.0) (2026-05-31)
 
 
