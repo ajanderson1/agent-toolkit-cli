@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.5.2](https://github.com/ajanderson1/agent-toolkit-cli/compare/v3.5.1...v3.5.2) (2026-06-01)
+
+
+### Bug Fixes
+
+* restore wheel force-include of harness matrix ([#305](https://github.com/ajanderson1/agent-toolkit-cli/issues/305) redux) ([#310](https://github.com/ajanderson1/agent-toolkit-cli/issues/310)) ([7c74c0b](https://github.com/ajanderson1/agent-toolkit-cli/commit/7c74c0b95cd0f8f1e7f4fc72145e2bc7fc6a731e))
+
 ## [3.5.1](https://github.com/ajanderson1/agent-toolkit-cli/compare/v3.5.0...v3.5.1) (2026-06-01)
 
 
