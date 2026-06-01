@@ -1,12 +1,19 @@
 """Round-trip + idempotency + foreign-file-guard tests for agent_install.
 
-Regression coverage for the PR #268 blocking bug: agent_install.uninstall()
-copied skill_install.uninstall() verbatim, relying on the skill-centric
-`_current_linked_agents` scan (symlink + skill projection path) to populate
-`plan.remove_agents`. For the agent kind that scan ALWAYS returns () because
-adapters write real files at agent-specific destinations, never symlinks at
-the skill projection path. Result: uninstall dropped the lock entry + canonical
-but ORPHANED every projected file. These tests prove the fix.
+Two regressions are guarded here:
+
+1. PR #268 (orphaned projections): agent_install.uninstall() relied on the
+   skill-centric scan which always returned () for the agent kind, so projected
+   real files were ORPHANED. Fixed by removing each requested harness's real
+   file via its own adapter. The "projection GONE after uninstall" assertions
+   below guard this.
+
+2. #303 (destructive uninstall): uninstall() ALSO deleted the library canonical
+   and dropped the lock entry — `remove` behaviour under the `uninstall` name,
+   inverting its own CLI contract. `agent uninstall` must be NON-DESTRUCTIVE:
+   projections gone, but canonical + lock entry KEPT (mirrors `skill uninstall`;
+   the destructive path lives in `agent_install.remove()`). The "canonical
+   PRESENT / lock PRESENT after uninstall" assertions below guard this.
 """
 from __future__ import annotations
 
@@ -45,11 +52,13 @@ def _seed_project_canonical(project, slug="rt-agent"):
 # ── Test 1a: round-trip install → uninstall removes the real projected files ─
 
 def test_roundtrip_global_removes_projected_files(tmp_path, monkeypatch):
-    """Install ≥2 harnesses globally, then uninstall; destinations must be GONE.
+    """Install ≥2 harnesses globally, then uninstall.
 
-    Proves the orphaned-projection bug is fixed: uninstall must delete the
-    real files the adapters wrote (claude-code .md, gemini-cli .md), not just
-    the canonical + lock entry.
+    Guards both regressions:
+    - PR #268: the real projected files (claude-code .md, gemini-cli .md) are
+      deleted, not orphaned.
+    - #303: uninstall is NON-DESTRUCTIVE — the library canonical and the lock
+      entry are KEPT (only `agent remove` deletes those).
     """
     monkeypatch.setenv("HOME", str(tmp_path))
     from agent_toolkit_cli.agent_install import apply, uninstall
@@ -89,14 +98,16 @@ def test_roundtrip_global_removes_projected_files(tmp_path, monkeypatch):
 
     assert not cc.exists(), "claude-code projection ORPHANED after uninstall"
     assert not gem.exists(), "gemini-cli projection ORPHANED after uninstall"
-    assert not canonical.exists(), "canonical not removed on global uninstall"
-    assert "rt-agent" not in read_lock(lock_path).skills, "lock entry not dropped"
+    assert canonical.exists(), "uninstall must KEEP the library canonical (#303)"
+    assert "rt-agent" in read_lock(lock_path).skills, (
+        "uninstall must KEEP the lock entry (#303)"
+    )
 
 
 # ── Test 1b: same round-trip at PROJECT scope ────────────────────────────────
 
 def test_roundtrip_project_removes_projected_files(tmp_path, monkeypatch):
-    """Project-scope round-trip: projected files gone + lock entry dropped."""
+    """Project-scope round-trip: projected files gone, canonical + lock KEPT (#303)."""
     monkeypatch.setenv("HOME", str(tmp_path))
     project = tmp_path / "proj"
     project.mkdir()
@@ -106,7 +117,7 @@ def test_roundtrip_project_removes_projected_files(tmp_path, monkeypatch):
     from agent_toolkit_cli._install_core import InstallPlan
     from agent_toolkit_cli.skill_source import ParsedSource
 
-    _seed_project_canonical(project)
+    canonical = _seed_project_canonical(project)
     src = ParsedSource(
         type="github", url="https://github.com/x/rt-agent", owner_repo="x/rt-agent",
         ref=None, subpath=None,
@@ -133,7 +144,61 @@ def test_roundtrip_project_removes_projected_files(tmp_path, monkeypatch):
 
     assert not cc.exists(), "claude-code projection ORPHANED (project scope)"
     assert not gem.exists(), "gemini-cli projection ORPHANED (project scope)"
-    assert "rt-agent" not in read_lock(lock_path).skills, "project lock not dropped"
+    assert canonical.exists(), "project uninstall must KEEP the canonical (#303)"
+    assert "rt-agent" in read_lock(lock_path).skills, (
+        "project uninstall must KEEP the lock entry (#303)"
+    )
+
+
+# ── Test 1c: remove() at PROJECT scope — drops lock, KEEPS external canonical ─
+
+def test_remove_project_scope_preserves_external_canonical(tmp_path, monkeypatch):
+    """`remove(scope="project")` drops the project lock entry but PRESERVES the
+    external canonical (dirty-work survival; doctor's orphan sweep reclaims it).
+
+    Distinct from global `remove()` (which rmtrees the canonical) and from
+    project `uninstall()` (which keeps the lock). Guards the project branch of
+    the contract split that has no CLI surface yet (agent remove is global-only).
+    """
+    monkeypatch.setenv("HOME", str(tmp_path))
+    project = tmp_path / "proj"
+    project.mkdir()
+    from agent_toolkit_cli.agent_install import apply, remove
+    from agent_toolkit_cli.agent_lock import read_lock
+    from agent_toolkit_cli.agent_paths import lock_file_path
+    from agent_toolkit_cli._install_core import InstallPlan
+    from agent_toolkit_cli.skill_source import ParsedSource
+
+    canonical = _seed_project_canonical(project)
+    src = ParsedSource(
+        type="github", url="https://github.com/x/rt-agent", owner_repo="x/rt-agent",
+        ref=None, subpath=None,
+    )
+    apply(
+        InstallPlan(
+            slug="rt-agent", scope="project", source=src, ref=None,
+            add_agents=("claude-code",), remove_agents=(),
+        ),
+        project=project,
+    )
+    cc = project / ".claude" / "agents" / "rt-agent.md"
+    lock_path = lock_file_path(scope="project", project=project)
+    assert cc.exists()
+    assert "rt-agent" in read_lock(lock_path).skills
+
+    remove(
+        slug="rt-agent", scope="project", home=None, project=project,
+        harnesses=("claude-code",),
+    )
+
+    assert not cc.exists(), "project remove must remove the projection"
+    assert canonical.exists(), (
+        "project-scope remove must PRESERVE the external canonical "
+        "(matches skill remove; doctor reclaims orphans)"
+    )
+    assert "rt-agent" not in read_lock(lock_path).skills, (
+        "project remove must drop the project lock entry"
+    )
 
 
 # ── Test 2: idempotency — second install of same targets does not error ──────

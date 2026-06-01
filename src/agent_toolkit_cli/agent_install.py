@@ -280,31 +280,28 @@ def uninstall(
     project: Path | None,
     harnesses: tuple[str, ...],
 ) -> None:
-    """Full removal — every projected file + lock entry (+ canonical at global).
+    """Detach — remove the requested harnesses' projection files only.
 
-    Unlike the skill facade's verbatim copy this previously cloned, the agent
-    kind cannot rely on the core's symlink-at-skill-path scan to discover
-    projections: adapters write REAL FILES, so the scan returned () and every
-    projected file was ORPHANED (PR #268). The fix is twofold:
+    NON-DESTRUCTIVE (issue #303): keeps the library canonical AND the lock
+    entry at BOTH scopes, mirroring `skill uninstall` ("Library/project
+    canonical untouched") and the CLI command's own contract ("Keeps the
+    canonical library entry. Use `agent remove` to fully drop from the
+    library."). The destructive path lives in `remove()`.
 
-      1. We call each requested harness's adapter.uninstall() DIRECTLY, so the
-         real destination files are removed regardless of what plan() computed.
-         `harnesses` is the explicit set the caller installed; passing it makes
-         removal independent of any scan. Adapters are idempotent (no-op if the
-         destination is already gone), so over-listing a harness is harmless.
-      2. The lock entry is dropped at BOTH scopes (the old code dropped it only
-         for project scope, leaving a global lock that lied about state).
-
-    Global scope additionally rmtree's the canonical library entry. Project
-    scope preserves the external canonical (dirty-work survives; doctor's
-    orphan sweep reclaims it) — matching the skill facade's project posture.
+    The agent kind cannot rely on the core's symlink-at-skill-path scan to
+    discover projections: adapters write REAL FILES, so the scan returned ()
+    and every projected file was ORPHANED (PR #268). We therefore call each
+    requested harness's adapter.uninstall() DIRECTLY, so the real destination
+    files are removed regardless of what plan() would compute. `harnesses` is
+    the explicit set the caller installed; passing it makes removal independent
+    of any scan. Adapters are idempotent (no-op if the destination is already
+    gone), so over-listing a harness is harmless.
     """
     from agent_toolkit_cli.agent_adapters import UnsupportedMechanismError
-    from agent_toolkit_cli.agent_lock import (
-        read_lock, remove_entry, write_lock,
-    )
 
-    # 1. Remove every projected file via its own adapter (idempotent).
+    # Remove every requested projected file via its own adapter (idempotent).
+    # The canonical and the lock entry are deliberately left intact — see the
+    # docstring (#303). `remove()` owns library deletion.
     for name in harnesses:
         if name in _AGENT_SYNTHETIC_NAMES:
             continue
@@ -320,6 +317,36 @@ def uninstall(
             # project scope). There is nothing to remove there — treat as a
             # no-op rather than crashing the uninstall.
             continue
+
+
+def remove(
+    *,
+    slug: str,
+    scope: Scope,
+    home: Path | None,
+    project: Path | None,
+    harnesses: tuple[str, ...],
+) -> None:
+    """Full removal — projections + lock entry + canonical (global scope).
+
+    The destructive counterpart to `uninstall()` (issue #303). Called by
+    `agent remove`. Steps:
+
+      1. Detach all requested harness projections via `uninstall()` (idempotent).
+      2. Drop the lock entry at BOTH scopes (the global library lock no longer
+         claims a slug we are deleting).
+      3. Global scope: rmtree the canonical library entry. Project scope
+         preserves the external canonical (dirty-work survives; doctor's orphan
+         sweep reclaims it) — matching `skill remove`'s project posture.
+    """
+    from agent_toolkit_cli.agent_lock import (
+        read_lock, remove_entry, write_lock,
+    )
+
+    # 1. Remove every projected file (idempotent, non-destructive to library).
+    uninstall(
+        slug=slug, scope=scope, home=home, project=project, harnesses=harnesses,
+    )
 
     # 2. Drop the lock entry (both scopes).
     lock_path = lock_file_path(scope=scope, home=home, project=project)

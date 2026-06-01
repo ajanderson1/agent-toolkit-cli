@@ -130,9 +130,9 @@ def test_add_has_no_project_flag(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 def test_install_uninstall_global_round_trip(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Global-scope install→uninstall: projected files created then truly removed."""
+    """Global-scope install→uninstall: projections removed, canonical + lock KEPT (#303)."""
     monkeypatch.setenv("HOME", str(tmp_path))
-    _seed_global_canonical(tmp_path)
+    canonical = _seed_global_canonical(tmp_path)
     _write_global_lock(tmp_path)
 
     runner = CliRunner()
@@ -157,10 +157,13 @@ def test_install_uninstall_global_round_trip(
     assert not cc.exists(), f"claude-code projection ORPHANED after uninstall: {cc}"
     assert not gem.exists(), f"gemini-cli projection ORPHANED after uninstall: {gem}"
 
-    # Lock entry also cleared.
+    # #303: uninstall is non-destructive — canonical + lock entry are KEPT.
     from agent_toolkit_cli.agent_lock import read_lock
     from agent_toolkit_cli.agent_paths import library_lock_path
-    assert "demo-agent" not in read_lock(library_lock_path()).skills
+    assert canonical.exists(), "uninstall must KEEP the library canonical (#303)"
+    assert "demo-agent" in read_lock(library_lock_path()).skills, (
+        "uninstall must KEEP the lock entry (#303)"
+    )
 
 
 def test_install_uninstall_project_round_trip(
@@ -367,6 +370,61 @@ def test_remove_drops_projections_and_canonical(
     from agent_toolkit_cli.agent_lock import read_lock
     from agent_toolkit_cli.agent_paths import library_lock_path
     assert "demo-agent" not in read_lock(library_lock_path()).skills
+
+
+def test_uninstall_vs_remove_distinct_effects(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#303: `uninstall` and `remove` must have DISTINCT effects.
+
+    uninstall detaches one harness but KEEPS the library (canonical + lock), so
+    a re-install re-projects from the intact canonical. remove deletes the whole
+    library copy. Same fixture, two commands, opposite library outcomes.
+    """
+    monkeypatch.setenv("HOME", str(tmp_path))
+    canonical = _seed_global_canonical(tmp_path)
+    _write_global_lock(tmp_path)
+
+    from agent_toolkit_cli.agent_lock import read_lock
+    from agent_toolkit_cli.agent_paths import library_lock_path
+
+    runner = CliRunner()
+    cc = _cc_dest(tmp_path)
+
+    # install → projection present
+    assert runner.invoke(
+        main, ["agent", "install", "demo-agent", "-g", "--harnesses", "claude-code"],
+    ).exit_code == 0
+    assert cc.exists()
+
+    # uninstall → projection GONE, but library (canonical + lock) KEPT
+    r_uninstall = runner.invoke(
+        main, ["agent", "uninstall", "demo-agent", "-g", "--harnesses", "claude-code"],
+    )
+    assert r_uninstall.exit_code == 0, r_uninstall.output
+    assert not cc.exists(), "uninstall must remove the projection"
+    assert canonical.exists(), "uninstall must KEEP the canonical (distinct from remove)"
+    assert "demo-agent" in read_lock(library_lock_path()).skills, (
+        "uninstall must KEEP the lock entry (distinct from remove)"
+    )
+    # The agent is still in the library → `list -g` shows it.
+    r_list = runner.invoke(main, ["agent", "list", "-g"])
+    assert "demo-agent" in r_list.output, "uninstalled agent must still be listed"
+
+    # re-install from the intact canonical → projection back, no re-clone needed
+    assert runner.invoke(
+        main, ["agent", "install", "demo-agent", "-g", "--harnesses", "claude-code"],
+    ).exit_code == 0
+    assert cc.exists(), "re-install after uninstall must re-project from the canonical"
+
+    # remove → projection GONE, canonical GONE, lock GONE
+    r_remove = runner.invoke(main, ["agent", "remove", "demo-agent"])
+    assert r_remove.exit_code == 0, r_remove.output
+    assert not cc.exists(), "remove must remove the projection"
+    assert not canonical.exists(), "remove must delete the canonical (distinct from uninstall)"
+    assert "demo-agent" not in read_lock(library_lock_path()).skills, (
+        "remove must drop the lock entry (distinct from uninstall)"
+    )
 
 
 # ---------------------------------------------------------------------------
