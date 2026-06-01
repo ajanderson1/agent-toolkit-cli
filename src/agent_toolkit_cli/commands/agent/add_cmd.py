@@ -90,6 +90,20 @@ def add_cmd(source: str, slug: str | None, ref: str | None) -> None:
         except skill_git.GitError as exc:
             raise click.ClickException(f"clone failed: {exc}") from exc
 
+    # Fail loud at add time if the content file the lock will point at is absent
+    # (#304 bug 2 / #283 lock-honesty class). Without this, `add` writes a lock
+    # entry asserting `<slug>.md` exists, then `install` silently no-ops while
+    # printing success. The clone stays on disk — a re-run with a `--slug` that
+    # matches the source's content file is idempotent via the `exists()` guard
+    # above. Mirrors doctor's `missing-content-file` check.
+    content_file = canonical / f"{final_slug}.md"
+    if not content_file.exists():
+        raise click.ClickException(
+            f"{final_slug}: content file {final_slug}.md absent in source "
+            f"{parsed.url!r}; expected <slug>.md at the repo root. "
+            f"Pass --slug to match the source's content file."
+        )
+
     if skill_git.is_git_repo(canonical):
         try:
             upstream_sha: str | None = skill_git.remote_head_sha(

@@ -13,9 +13,11 @@ def test_universal_entry_is_registered():
 
 
 def test_get_column_info_universal_returns_columninfo():
+    # Token stays "universal" (load-bearing bundle key); the display title is
+    # "General" after the v3 universal→general rename (#304 bug 3).
     info = get_column_info("universal")
     assert isinstance(info, ColumnInfo)
-    assert info.title.lower().startswith("universal")
+    assert info.title.lower().startswith("general")
     # At least one harness should be listed.
     assert info.lines
     # The description block is the first paragraph above the bullet list.

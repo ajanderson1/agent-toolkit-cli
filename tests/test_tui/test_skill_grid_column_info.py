@@ -37,9 +37,9 @@ async def test_columns_have_info_glyph_except_source():
         await pilot.pause()
         table = a.query_one("#skill-table", DataTable)
         labels = [str(c.label) for c in table.columns.values()]
-        # Layout: SKILL | Universal | Claude Code | Pi | State | Source
+        # Layout: SKILL | General | Claude Code | Pi | State | Source
         assert labels[0] == "SKILL ⓘ", f"slug label: {labels[0]!r}"
-        assert labels[1] == "Universal ⓘ", f"universal label: {labels[1]!r}"
+        assert labels[1] == "General ⓘ", f"general label: {labels[1]!r}"
         assert labels[2] == "Claude Code ⓘ", f"claude-code label: {labels[2]!r}"
         assert labels[3] == "Pi ⓘ", f"pi label: {labels[3]!r}"
         assert labels[-2] == "State ⓘ", f"state label: {labels[-2]!r}"
@@ -219,7 +219,7 @@ async def test_full_header_row():
         table = a.query_one("#skill-table", DataTable)
         labels = [str(c.label) for c in table.columns.values()]
         assert labels == [
-            "SKILL ⓘ", "Universal ⓘ", "Claude Code ⓘ", "Pi ⓘ",
+            "SKILL ⓘ", "General ⓘ", "Claude Code ⓘ", "Pi ⓘ",
             "State ⓘ", "Source",
         ], f"unexpected header row: {labels!r}"
 

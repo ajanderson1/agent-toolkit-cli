@@ -338,6 +338,86 @@ def test_add_unknown_source_errors(
     assert r.exit_code != 0 or "error" in r.output.lower()
 
 
+# ---------------------------------------------------------------------------
+# add content-file validation (#304 bug 2) — fail loud when <slug>.md is absent
+#
+# add hardcodes agent_path=f"{slug}.md"; before #304 it never verified the file
+# existed in the clone, so it would write a lock entry pointing at a missing
+# file and a later `install` would silently no-op while printing success
+# (the #283 lock-honesty class). add must now refuse at add time.
+# ---------------------------------------------------------------------------
+
+
+def _local_agent_repo(parent: Path, *, content_filename: str | None) -> Path:
+    """Build a local git repo to use as an `agent add` source.
+
+    If `content_filename` is given, the repo contains that one markdown file;
+    if None, the repo has only a README (no <slug>.md) — the malformed case.
+    Returns an absolute path (so parse_source classifies it as `local`).
+    """
+    import subprocess
+
+    from tests.conftest import scrub_git_env
+
+    repo = parent / "agent-src"
+    repo.mkdir()
+    env = scrub_git_env()
+    env.update({
+        "GIT_AUTHOR_NAME": "Test User",
+        "GIT_AUTHOR_EMAIL": "test@example.invalid",
+        "GIT_COMMITTER_NAME": "Test User",
+        "GIT_COMMITTER_EMAIL": "test@example.invalid",
+    })
+    subprocess.run(["git", "init", "--initial-branch=main", str(repo)],
+                   check=True, env=env, capture_output=True)
+    if content_filename is not None:
+        (repo / content_filename).write_text(_CONTENT)
+    else:
+        (repo / "README.md").write_text("# no agent content here\n")
+    subprocess.run(["git", "-C", str(repo), "add", "-A"],
+                   check=True, env=env, capture_output=True)
+    subprocess.run(["git", "-C", str(repo), "commit", "-m", "seed"],
+                   check=True, env=env, capture_output=True)
+    return repo.resolve()
+
+
+def test_add_refuses_when_content_file_absent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """add of a source whose <slug>.md is absent fails loud and writes no lock entry."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    # Source repo has only README.md — no `my-agent.md`.
+    src = _local_agent_repo(tmp_path, content_filename=None)
+
+    r = CliRunner().invoke(main, ["agent", "add", str(src), "--slug", "my-agent"])
+
+    assert r.exit_code != 0, f"add should fail when <slug>.md is absent:\n{r.output}"
+    assert "my-agent.md" in r.output, f"error must name the expected file: {r.output!r}"
+
+    # The honesty contract: no lock entry pointing at a missing file.
+    from agent_toolkit_cli.agent_lock import read_lock
+    from agent_toolkit_cli.agent_paths import library_lock_path
+    lock = read_lock(library_lock_path())
+    assert "my-agent" not in lock.skills, "add wrote a lock entry despite missing content file"
+
+
+def test_add_succeeds_when_content_file_present(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Happy-path guard: add of a source containing <slug>.md still writes the lock entry."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    src = _local_agent_repo(tmp_path, content_filename="my-agent.md")
+
+    r = CliRunner().invoke(main, ["agent", "add", str(src), "--slug", "my-agent"])
+
+    assert r.exit_code == 0, f"add should succeed when <slug>.md is present:\n{r.output}"
+    from agent_toolkit_cli.agent_lock import read_lock
+    from agent_toolkit_cli.agent_paths import library_lock_path
+    lock = read_lock(library_lock_path())
+    assert "my-agent" in lock.skills, "happy-path add did not write a lock entry"
+    assert lock.skills["my-agent"].agent_path == "my-agent.md"
+
+
 def test_remove_not_in_library_errors(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -527,6 +607,86 @@ def test_status_shows_projected_harnesses_after_install(
 
 
 # ---------------------------------------------------------------------------
+# status empty-state honesty (#304 bug 1)
+#
+# Regression guard for the scope-default mismatch + silent-blank trap: an empty
+# library must produce a *scope-named*, non-blank message — never a blank screen
+# (the prior behaviour when the lock existed but had no entries) and never a
+# scope-blind message that hides which lock was searched.
+# ---------------------------------------------------------------------------
+
+
+def test_status_empty_global_names_scope_not_blank(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`status -g` on an empty global library prints a non-blank, scope-named line."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    r = CliRunner().invoke(main, ["agent", "status", "-g"])
+    assert r.exit_code == 0, r.output
+    assert r.output.strip() != "", "status must not print a blank screen for an empty library"
+    assert "global" in r.output.lower(), f"empty message should name the scope: {r.output!r}"
+
+
+def test_status_empty_present_lock_is_not_silent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A lock file that exists but has no entries must not render as a blank screen.
+
+    Mirrors `agent list`, which prints a message in this case. The prior
+    `status` render loop simply didn't iterate, leaving stdout empty.
+    """
+    monkeypatch.setenv("HOME", str(tmp_path))
+    # Force an empty-but-present global lock on disk.
+    from agent_toolkit_cli.agent_lock import LockFile, write_lock
+    from agent_toolkit_cli.agent_paths import library_lock_path
+    write_lock(library_lock_path(), LockFile(version=1, skills={}))
+
+    r = CliRunner().invoke(main, ["agent", "status", "-g"])
+    assert r.exit_code == 0, r.output
+    assert r.output.strip() != "", "empty-but-present lock must not render blank"
+    assert "global" in r.output.lower()
+
+
+def test_status_default_scope_in_project_names_project(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Bare `status` from a project dir with a project lock names the *project* scope.
+
+    This is the wrong-scope confusion the reporter hit: `list -g` (explicit
+    global) showed the agent while bare `status` defaulted to project scope and
+    found that project's (empty) lock. The empty message must name `project` so
+    the mismatch is legible.
+    """
+    monkeypatch.setenv("HOME", str(tmp_path))
+    project = tmp_path / "proj"
+    project.mkdir()
+    # Empty project lock so read_only default-scope resolves to project.
+    from agent_toolkit_cli.agent_lock import LockFile, write_lock
+    from agent_toolkit_cli.agent_paths import lock_file_path
+    write_lock(lock_file_path(scope="project", project=project),
+               LockFile(version=1, skills={}))
+
+    r = CliRunner().invoke(main, ["--project", str(project), "agent", "status"])
+    assert r.exit_code == 0, r.output
+    assert "project" in r.output.lower(), f"empty message should name project scope: {r.output!r}"
+
+
+def test_status_unknown_slug_is_not_empty_library_claim(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Filtering to an absent slug must not claim the whole library is empty."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _seed_global_canonical(tmp_path)
+    _write_global_lock(tmp_path)
+
+    r = CliRunner().invoke(main, ["agent", "status", "ghost-agent", "-g"])
+    assert r.exit_code == 0, r.output
+    # The library is NOT empty (demo-agent is present) — so don't say it is.
+    assert "ghost-agent" in r.output, f"unknown slug should be named: {r.output!r}"
+    assert "not found" in r.output.lower()
+
+
+# ---------------------------------------------------------------------------
 # install refused without global lock entry
 # ---------------------------------------------------------------------------
 
@@ -654,18 +814,33 @@ def test_full_loop_with_git_sandbox(
 
     runner = CliRunner()
 
-    # `agent add` needs a content file — create it in the upstream and seed
-    # the canonical manually (since the upstream is a bare git repo used for
-    # cloning, we manipulate the canonical directly post-add by seeding it).
+    # Seed the upstream with the <slug>.md content file BEFORE add. Since #304,
+    # `agent add` validates that `<slug>.md` exists in the cloned source and
+    # refuses otherwise, so the loop must use an honest source: push
+    # `sandbox-agent.md` into the upstream via a throwaway clone, then add.
+    import subprocess
+    seed2 = tmp_path / "loop-seed"
+    subprocess.run(
+        ["git", "clone", str(git_sandbox.upstream), str(seed2)],  # type: ignore[union-attr]
+        check=True, env=git_sandbox.env, capture_output=True,  # type: ignore[union-attr]
+    )
+    (seed2 / "sandbox-agent.md").write_text(_CONTENT)
+    subprocess.run(["git", "-C", str(seed2), "add", "sandbox-agent.md"],
+                   check=True, env=git_sandbox.env, capture_output=True)  # type: ignore[union-attr]
+    subprocess.run(["git", "-C", str(seed2), "commit", "-m", "add agent content"],
+                   check=True, env=git_sandbox.env, capture_output=True)  # type: ignore[union-attr]
+    subprocess.run(["git", "-C", str(seed2), "push", "origin", "main"],
+                   check=True, env=git_sandbox.env, capture_output=True)  # type: ignore[union-attr]
+
     r_add = runner.invoke(
         main, ["agent", "add", str(git_sandbox.upstream), "--slug", "sandbox-agent"],  # type: ignore[union-attr]
     )
     assert r_add.exit_code == 0, r_add.output
 
-    # Seed the <slug>.md content file the adapter needs.
+    # The content file came down with the clone — no manual canonical seeding.
     from agent_toolkit_cli.agent_paths import canonical_agent_dir
     canonical = canonical_agent_dir("sandbox-agent", scope="global")
-    (canonical / "sandbox-agent.md").write_text(_CONTENT)
+    assert (canonical / "sandbox-agent.md").exists(), "content file not cloned"
 
     # install → projected.
     r_install = runner.invoke(
@@ -682,10 +857,9 @@ def test_full_loop_with_git_sandbox(
     data = {d["slug"]: d for d in json.loads(r_list.output)}
     assert data["sandbox-agent"]["projected"] is True
 
-    # remove → projections + canonical gone.
-    # --force is used because we wrote sandbox-agent.md directly to the canonical
-    # (uncommitted) — the dirty-guard would otherwise refuse.
-    r_remove = runner.invoke(main, ["agent", "remove", "sandbox-agent", "--force"])
+    # remove → projections + canonical gone. The canonical is a clean clone
+    # (content file committed upstream), so no --force is needed.
+    r_remove = runner.invoke(main, ["agent", "remove", "sandbox-agent"])
     assert r_remove.exit_code == 0, r_remove.output
     assert not cc.exists(), "projection still present after remove"
     assert not canonical.exists(), "canonical still present after remove"
