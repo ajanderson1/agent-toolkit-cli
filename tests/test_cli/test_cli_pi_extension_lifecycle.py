@@ -471,3 +471,43 @@ def test_doctor_orphaned_extensions_entry_reported_not_removed(tmp_path, monkeyp
     assert missing_path in body["extensions"], (
         "doctor must not remove extensions[] entries"
     )
+
+
+def test_doctor_squatted_projection_reported(tmp_path, monkeypatch, git_sandbox):
+    """Fix #314: doctor emits squatted_projection when a real non-symlink dir
+    squats the projection slot of a store-owned slug, and does NOT touch the
+    foreign dir (report-only, clobber-safety preserved).
+    """
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    # Add a store-owned slug to the lock (adds canonical to the store).
+    _add_store_owned(tmp_path, git_sandbox.env, git_sandbox.upstream)
+
+    # Plant a REAL non-symlink directory at the projection path with index.ts.
+    link = pep.pi_extension_dir("demo", scope="global", home=tmp_path)
+    link.parent.mkdir(parents=True, exist_ok=True)
+    assert not link.exists(), "projection path must be free before test setup"
+    link.mkdir()
+    (link / "index.ts").write_text("export default {}")
+
+    # Run doctor (--no-fix so no prompt is needed).
+    r = CliRunner().invoke(main, ["pi-extension", "doctor", "-g", "--no-fix"])
+
+    # Doctor must find a problem (non-zero exit, finding in output).
+    assert r.exit_code != 0, (
+        f"doctor must exit non-zero when projection is squatted; got 0.\n"
+        f"Output:\n{r.output}"
+    )
+    assert "squatted_projection" in r.output, (
+        f"Expected 'squatted_projection' in doctor output.\n{r.output}"
+    )
+    assert "demo" in r.output
+
+    # CRITICAL: the foreign dir must be untouched — doctor never deletes user data.
+    assert link.exists() and not link.is_symlink(), (
+        "doctor must not remove or modify the foreign dir (clobber-safety)."
+    )
+    assert (link / "index.ts").exists()

@@ -13,6 +13,7 @@ from agent_toolkit_cli import _pi_settings
 from agent_toolkit_cli.pi_extension_lock import read_lock
 from agent_toolkit_cli.pi_extension_paths import (
     Scope,
+    library_pi_extension_path,
     lock_file_path,
     pi_extension_dir,
 )
@@ -60,6 +61,24 @@ def _discover_loose(root: Path) -> list[tuple[str, bool]]:
     return out
 
 
+def _is_store_owned_symlink(slug: str, path: Path, rec: InventoryRecord) -> bool:
+    """Return True iff path qualifies as a loaded projection for this record.
+
+    For non-store-owned records (untracked, npm) any loadable path counts.
+    For store-owned records the path must be a symlink that resolves to the
+    toolkit's canonical store copy for slug — a foreign non-symlink squatting
+    the slot does NOT qualify, even if it has index.ts/index.js.
+    """
+    if rec.origin != "store-owned":
+        return True
+    if not path.is_symlink():
+        return False
+    try:
+        return path.resolve() == library_pi_extension_path(slug).resolve()
+    except Exception:
+        return False
+
+
 def _npm_slug(spec: str) -> str:
     # "npm:@scope/name" -> "@scope/name"; "git:github.com/o/r" -> "github.com/o/r"
     return spec.split(":", 1)[1] if ":" in spec else spec
@@ -104,10 +123,15 @@ def build_inventory(
             rec = by_slug.setdefault(
                 slug, InventoryRecord(slug=slug, origin="untracked", source="local")
             )
+            # For store-owned slugs, only count the path as loaded when it is
+            # actually our symlink to canonical — a foreign non-symlink squatter
+            # must not propagate a false globalLoaded=True (fixes #314).
+            ext_path = root / slug
+            effective_loaded = loaded and _is_store_owned_symlink(slug, ext_path, rec)
             if scope == "global":
-                rec.global_loaded = rec.global_loaded or loaded
+                rec.global_loaded = rec.global_loaded or effective_loaded
             else:
-                rec.project_loaded = rec.project_loaded or loaded
+                rec.project_loaded = rec.project_loaded or effective_loaded
 
     # 3. npm packages[] (registry-tracked). Precedence: store-owned > npm >
     # untracked. Like the loose pass, we never clobber a higher-precedence

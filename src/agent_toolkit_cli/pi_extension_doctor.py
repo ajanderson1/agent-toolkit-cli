@@ -41,7 +41,8 @@ FindingKind = Literal[
     "drifted_symlink",
     "stray_symlink",
     "dirty_tree",
-    "orphaned_override",   # extensions[] entry whose path is missing on disk
+    "orphaned_override",    # extensions[] entry whose path is missing on disk
+    "squatted_projection",  # projection slot occupied by a foreign non-symlink entry
 ]
 
 
@@ -150,8 +151,10 @@ def _check_slug(
     except ValueError:
         return findings  # scope params incomplete
 
+    # Hoist canonical_path so both the is_symlink and elif arms can reference it.
+    canonical_path = library_pi_extension_path(slug)
+
     if link.is_symlink():
-        canonical_path = library_pi_extension_path(slug)
         target = link.resolve()
         if target != canonical_path.resolve():
             findings.append(Finding(
@@ -163,6 +166,24 @@ def _check_slug(
                 ),
                 fix_action=_make_relink_action(link=link, canonical=canonical_path),
             ))
+    elif link.exists():
+        # A real non-symlink file/dir is squatting the projection slot that
+        # should hold our symlink.  pi-extension install already refuses to
+        # overwrite it; doctor surfaces the problem so the user can act.
+        # fix_action is intentionally None — we never auto-delete user data.
+        findings.append(Finding(
+            kind="squatted_projection", slug=slug, scope=scope,
+            path=link,
+            detail=(
+                f"{link} is occupied by a real "
+                f"{'directory' if link.is_dir() else 'file'} "
+                f"(not a symlink owned by the toolkit). "
+                f"Expected: our symlink → {canonical_path}. "
+                f"The slot is squatted — pi-extension install already refuses "
+                f"to overwrite it. Remove or relocate the foreign entry manually."
+            ),
+            fix_action=None,
+        ))
 
     return findings
 
