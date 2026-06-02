@@ -149,7 +149,12 @@ def apply(*, scope: Scope, project_root: Path | None, home: Path | None) -> Plan
 def uninstall(
     *, scope: Scope, project_root: Path | None, home: Path | None
 ) -> None:
-    """Remove all our pointers and clear the lock entry at this scope."""
+    """Remove all our pointers and clear the lock entry at this scope.
+
+    When the last entry is removed the lock file is deleted entirely rather
+    than written back as an empty ``{}`` object (issue #312).  If entries
+    remain after removal (partial uninstall) the residual lock is written back.
+    """
     canonical = _resolve_canonical(scope, project_root)
     owned = _list_currently_owned(canonical, scope, project_root, home)
     for harness in owned:
@@ -162,4 +167,7 @@ def uninstall(
     new = lock
     for slug in list(lock.instructions.keys()):
         new = remove_entry(new, slug)
-    write_lock(lock_path, new)
+    if new.instructions:
+        write_lock(lock_path, new)
+    elif lock_path.exists():
+        lock_path.unlink()

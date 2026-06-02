@@ -96,6 +96,38 @@ def test_uninstall_removes_pointers(project):
     assert not (project / "GEMINI.md").exists()
     # Lock entry cleared at project scope.
     assert read_lock(lock_path).instructions == {}
+    # Lock file itself is deleted when the last entry is removed (issue #312).
+    assert not lock_path.exists()
+
+
+def test_install_uninstall_roundtrip_leaves_no_lock_file(project):
+    """install → uninstall round-trip leaves no instructions-lock.json (issue #312).
+
+    Regression test: previously uninstall() called write_lock() even when the
+    resulting lock was empty, leaving a stray ``{}``-like file on disk.
+    """
+    lock_path = project / "instructions-lock.json"
+    write_lock(
+        lock_path,
+        InstructionsLockFile(
+            version=1,
+            instructions={
+                "AGENTS.md": InstructionsLockEntry(
+                    scope="project", source="AGENTS.md",
+                    harnesses=["claude-code"],
+                ),
+            },
+        ),
+    )
+    instructions_install.apply(scope="project", project_root=project, home=None)
+    assert lock_path.exists(), "sanity: lock file must exist after install"
+
+    instructions_install.uninstall(scope="project", project_root=project, home=None)
+
+    # The lock file must be absent — no stray empty {} on disk.
+    assert not lock_path.exists(), (
+        "instructions-lock.json must be deleted when the last entry is removed"
+    )
 
 
 def test_apply_prunes_pointer_removed_from_lock(project):
