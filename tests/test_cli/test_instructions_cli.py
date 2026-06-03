@@ -108,8 +108,8 @@ def test_uninstall_removes_pointers_and_clears_lock(tmp_path, monkeypatch):
     assert result.exit_code == 0, result.output
 
     assert not (project / "CLAUDE.md").exists()
-    lock = json.loads((project / "instructions-lock.json").read_text())
-    assert lock["instructions"] == {}
+    # Lock file is deleted when the last entry is removed (issue #312).
+    assert not (project / "instructions-lock.json").exists()
 
 
 def test_uninstall_leaves_foreign_files_alone(tmp_path, monkeypatch):
@@ -317,8 +317,8 @@ def test_uninstall_global_removes_pointer_and_clears_lock(tmp_path, monkeypatch)
     assert result.exit_code == 0, result.output
 
     assert not (home / ".claude" / "CLAUDE.md").exists()
-    lock = json.loads((home / ".agent-toolkit" / "instructions-lock.json").read_text())
-    assert lock["instructions"] == {}
+    # Lock file is deleted when the last entry is removed (issue #312).
+    assert not (home / ".agent-toolkit" / "instructions-lock.json").exists()
 
 
 # --- BUG 2: lock must not claim success if apply() fails --------------------
