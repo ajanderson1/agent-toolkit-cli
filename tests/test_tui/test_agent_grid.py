@@ -13,7 +13,7 @@ Widget-level:
 8. set_scope clears pending
 
 App-level:
-9.  sidebar lists 3 kinds (skill / pi-extension / agent)
+9.  sidebar lists 4 kinds (instruction / skill / pi-extension / agent)
 10. switch to agent shows AgentGrid, hides SkillGrid + PiGrid
 11. switch back to skill shows SkillGrid
 12. ctrl+s routes to _apply_agent_pending when agent active
@@ -295,7 +295,11 @@ async def test_set_scope_clears_pending():
 
 @pytest.mark.asyncio
 async def test_kind_sidebar_lists_three_kinds():
-    """The sidebar OptionList must include skill, pi-extension, and agent."""
+    """The sidebar OptionList must include all four kinds: instruction, skill, pi-extension, agent.
+
+    Updated in #319: instruction is now first in the sidebar (above skill).
+    Original assertion "three kinds" updated to four to match the new ordering.
+    """
     from agent_toolkit_tui.app import TUIApp
 
     app = TUIApp()
@@ -303,9 +307,12 @@ async def test_kind_sidebar_lists_three_kinds():
         await pilot.pause()
         ol = app.query_one("#kinds-list", OptionList)
         prompts = [str(ol.get_option_at_index(i).prompt) for i in range(ol.option_count)]
+        assert "Instruction" in prompts
         assert "skill" in prompts
         assert "pi-extension" in prompts
         assert "agent" in prompts
+        # Instruction must appear first (above skill).
+        assert prompts.index("Instruction") < prompts.index("skill")
 
 
 @pytest.mark.asyncio

@@ -96,6 +96,14 @@ AgentGrid DataTable {
     height: 1fr;
 }
 
+/* Instruction grid — mirrors PiGrid/AgentGrid styling. */
+InstructionGrid {
+    height: 1fr;
+}
+InstructionGrid DataTable {
+    height: 1fr;
+}
+
 /* DataTable header + cursor — kept consistent with the V3 styling but
    palette-neutral so gruvbox lights up correctly. */
 DataTable > .datatable--header {

@@ -38,16 +38,18 @@ from textual.widgets.option_list import Option
 
 from agent_toolkit_tui import __version__
 from agent_toolkit_tui.agent_state import build_agent_rows
+from agent_toolkit_tui.instruction_state import build_instruction_rows
 from agent_toolkit_tui.pi_extension_state import build_pi_rows
 from agent_toolkit_tui.skill_state import build_skill_rows
-from agent_toolkit_tui.widgets import AgentGrid, PiGrid, ScopeToggle, SkillGrid
+from agent_toolkit_tui.widgets import AgentGrid, InstructionGrid, PiGrid, ScopeToggle, SkillGrid
 
-Kind = Literal["skill", "pi-extension", "agent"]
+Kind = Literal["skill", "pi-extension", "agent", "instruction"]
 
-_KIND_LABELS: dict[Kind, str] = {
+_KIND_LABELS: dict[str, str] = {
     "skill": "Skill",
     "pi-extension": "Pi Extension",
     "agent": "Agent",
+    "instruction": "Instruction",
 }
 
 
@@ -138,6 +140,9 @@ class TUIApp(App):
             with Vertical(id="kinds-sidebar"):
                 yield Static("Kind", classes="rail-header")
                 yield OptionList(
+                    # Instruction renders FIRST — above all other kinds.
+                    Option("Instruction", id="kind-instruction"),
+                    None,  # visual separator between instruction and the rest
                     Option("skill", id="kind-skill"),
                     Option("pi-extension", id="kind-pi-extension"),
                     Option("agent", id="kind-agent"),
@@ -147,6 +152,7 @@ class TUIApp(App):
                 with Horizontal(id="content-header-row"):
                     yield Static(self._build_content_header(), id="content-header")
                     yield ScopeToggle(active=self._scope, id="scope-toggle")
+                yield InstructionGrid([], id="instruction-grid")
                 yield SkillGrid([], id="skill-grid")
                 yield PiGrid([], id="pi-grid")
                 yield AgentGrid([], id="agent-grid")
@@ -159,7 +165,7 @@ class TUIApp(App):
             self.theme = "gruvbox"
         except Exception:
             pass
-        # Start with skill kind active; hide pi-grid and agent-grid initially.
+        # Start with skill kind active; hide instruction-grid, pi-grid and agent-grid initially.
         self._show_kind("skill")
         self._refresh_skill_view()
         self._refresh_content_header()
@@ -176,6 +182,7 @@ class TUIApp(App):
     def _show_kind(self, kind: Kind) -> None:
         """Show the active grid and hide the inactive ones."""
         try:
+            instr_grid = self.query_one("#instruction-grid", InstructionGrid)
             skill_grid = self.query_one("#skill-grid", SkillGrid)
             pi_grid = self.query_one("#pi-grid", PiGrid)
             agent_grid = self.query_one("#agent-grid", AgentGrid)
@@ -183,17 +190,26 @@ class TUIApp(App):
         except NoMatches:
             return
 
-        if kind == "skill":
+        if kind == "instruction":
+            instr_grid.display = True
+            skill_grid.display = False
+            pi_grid.display = False
+            agent_grid.display = False
+            scope_toggle.display = False
+        elif kind == "skill":
+            instr_grid.display = False
             skill_grid.display = True
             pi_grid.display = False
             agent_grid.display = False
             scope_toggle.display = True
         elif kind == "pi-extension":
+            instr_grid.display = False
             skill_grid.display = False
             pi_grid.display = True
             agent_grid.display = False
             scope_toggle.display = False
         else:  # "agent"
+            instr_grid.display = False
             skill_grid.display = False
             pi_grid.display = False
             agent_grid.display = True
@@ -206,7 +222,9 @@ class TUIApp(App):
         if event.option_list.id != "kinds-list":
             return
         opt_id = event.option.id
-        if opt_id == "kind-skill":
+        if opt_id == "kind-instruction":
+            self.action_kind("instruction")
+        elif opt_id == "kind-skill":
             self.action_kind("skill")
         elif opt_id == "kind-pi-extension":
             self.action_kind("pi-extension")
@@ -214,7 +232,7 @@ class TUIApp(App):
             self.action_kind("agent")
 
     def action_kind(self, kind: str) -> None:
-        if kind not in ("skill", "pi-extension", "agent"):
+        if kind not in ("skill", "pi-extension", "agent", "instruction"):
             return
         if kind == self._active_kind:
             return
@@ -224,6 +242,8 @@ class TUIApp(App):
             self._refresh_skill_view()
         elif kind == "pi-extension":
             self._refresh_pi_view()
+        elif kind == "instruction":
+            self._refresh_instruction_view()
         else:
             self._refresh_agent_view()
         self._refresh_content_header()
@@ -266,6 +286,15 @@ class TUIApp(App):
         grid.set_scope(scope)  # type: ignore[arg-type]
         grid.set_rows(build_agent_rows(scope=scope, home=home, project=project))  # type: ignore[arg-type]
 
+    # ----- instruction-view --------------------------------------------------
+
+    def _refresh_instruction_view(self) -> None:
+        try:
+            grid = self.query_one("#instruction-grid", InstructionGrid)
+        except NoMatches:
+            return
+        grid.set_rows(build_instruction_rows(home=Path.home(), project=Path.cwd()))
+
     # ----- messages ----------------------------------------------------------
 
     def on_skill_grid_pending_changed(
@@ -289,10 +318,21 @@ class TUIApp(App):
         self._refresh_pending_label()
         self._refresh_status_bar()
 
+    def on_instruction_grid_pending_changed(
+        self, event: InstructionGrid.PendingChanged
+    ) -> None:
+        """Live-update footer + status bar when the instruction grid's pending set changes."""
+        self._refresh_pending_label()
+        self._refresh_status_bar()
+
     # ----- actions -----------------------------------------------------------
 
     def action_quit(self) -> None:
         n = 0
+        try:
+            n += len(self.query_one("#instruction-grid", InstructionGrid).pending_entries())
+        except NoMatches:
+            pass
         try:
             n += len(self.query_one("#skill-grid", SkillGrid).pending_entries())
         except NoMatches:
@@ -353,6 +393,12 @@ class TUIApp(App):
             except NoMatches:
                 return
             pgrid.action_info()
+        elif self._active_kind == "instruction":
+            try:
+                igrid = self.query_one("#instruction-grid", InstructionGrid)
+            except NoMatches:
+                return
+            igrid.action_info()
         else:
             try:
                 agrid = self.query_one("#agent-grid", AgentGrid)
@@ -365,6 +411,8 @@ class TUIApp(App):
             self._refresh_skill_view()
         elif self._active_kind == "pi-extension":
             self._refresh_pi_view()
+        elif self._active_kind == "instruction":
+            self._refresh_instruction_view()
         else:
             self._refresh_agent_view()
         self._refresh_pending_label()
@@ -394,6 +442,17 @@ class TUIApp(App):
             self.query_one("#footer-pending", Static).update(
                 f"reverted: {n} pending cleared"
             )
+        elif self._active_kind == "instruction":
+            try:
+                igrid = self.query_one("#instruction-grid", InstructionGrid)
+            except NoMatches:
+                return
+            n = len(igrid.pending_entries())
+            igrid.clear_pending()
+            self._refresh_pending_label()
+            self.query_one("#footer-pending", Static).update(
+                f"reverted: {n} pending cleared"
+            )
         else:
             try:
                 agrid = self.query_one("#agent-grid", AgentGrid)
@@ -419,6 +478,12 @@ class TUIApp(App):
             except NoMatches:
                 return
             all_ops = list(pgrid.pending_entries().values())
+        elif self._active_kind == "instruction":
+            try:
+                igrid = self.query_one("#instruction-grid", InstructionGrid)
+            except NoMatches:
+                return
+            all_ops = list(igrid.pending_entries().values())
         else:
             try:
                 agrid = self.query_one("#agent-grid", AgentGrid)
@@ -436,6 +501,8 @@ class TUIApp(App):
             self._apply_skill_pending()
         elif self._active_kind == "pi-extension":
             self._apply_pi_pending()
+        elif self._active_kind == "instruction":
+            self._apply_instruction_pending()
         else:
             self._apply_agent_pending()
 
@@ -748,6 +815,69 @@ class TUIApp(App):
                 f"applied: {ok} ok, {failed} failed"
             )
 
+    def _apply_instruction_pending(self) -> None:
+        from agent_toolkit_cli import instructions_install
+        from agent_toolkit_cli.instructions_adapters.symlink import PointerConflictError
+
+        try:
+            grid = self.query_one("#instruction-grid", InstructionGrid)
+        except NoMatches:
+            return
+        pending = grid.pending_entries()
+        if not pending:
+            return
+
+        ok = failed = 0
+        errors: list[str] = []
+
+        for (scope, harness, slug), op in pending.items():
+            effective_home = Path.home() if scope == "global" else None
+            project = None if scope == "global" else Path.cwd()
+
+            try:
+                if op == "link":
+                    instructions_install.apply(
+                        scope=scope,  # type: ignore[arg-type]
+                        project_root=project,
+                        home=effective_home,
+                    )
+                    ok += 1
+                else:  # "unlink"
+                    instructions_install.uninstall(
+                        scope=scope,  # type: ignore[arg-type]
+                        project_root=project,
+                        home=effective_home,
+                    )
+                    ok += 1
+            except (PointerConflictError, instructions_install.CanonicalMissingError, ValueError) as exc:
+                errors.append(f"{slug} @ {scope}: {exc}")
+                failed += 1
+
+        saved = grid.pending_entries() if failed else {}
+        if failed == 0:
+            grid.clear_pending()
+        self._refresh_instruction_view()
+        if saved:
+            grid.restore_pending(saved)
+        self._refresh_pending_label()
+        self._refresh_status_bar()
+        if errors:
+            first = " ".join(errors[0].split())
+            extra = f" (+{len(errors) - 1} more)" if len(errors) > 1 else ""
+            self.query_one("#footer-pending", Static).update(
+                f"[red]apply failed[/] — {first}{extra}"
+            )
+            self.notify(
+                "\n\n".join(errors),
+                title=f"Apply: {ok} ok, {failed} failed",
+                severity="error",
+                timeout=12,
+            )
+        else:
+            self.query_one("#footer-pending", Static).update(
+                f"applied: {ok} ok, {failed} failed"
+            )
+
     # ----- header + status ---------------------------------------------------
 
     def _build_content_header(self) -> str:
@@ -760,6 +890,11 @@ class TUIApp(App):
         elif self._active_kind == "pi-extension":
             try:
                 n = self.query_one("#pi-grid", PiGrid).row_count
+            except (NoMatches, Exception):
+                n = 0
+        elif self._active_kind == "instruction":
+            try:
+                n = self.query_one("#instruction-grid", InstructionGrid).row_count
             except (NoMatches, Exception):
                 n = 0
         else:
@@ -779,6 +914,10 @@ class TUIApp(App):
 
     def _refresh_pending_label(self) -> None:
         n = 0
+        try:
+            n += len(self.query_one("#instruction-grid", InstructionGrid).pending_entries())
+        except Exception:
+            pass
         try:
             n += len(self.query_one("#skill-grid", SkillGrid).pending_entries())
         except Exception:
@@ -847,6 +986,27 @@ class TUIApp(App):
             text = (
                 f"  [b green]{loaded_global}[/] global   "
                 f"[b cyan]{loaded_project}[/] project   "
+                f"[b yellow]{pending}[/] pending"
+            )
+        elif active == "instruction":
+            linked_global = linked_project = 0
+            try:
+                grid_instr = self.query_one("#instruction-grid", InstructionGrid)
+            except (NoMatches, Exception):
+                grid_instr = None
+            if grid_instr is not None:
+                for instr_row in grid_instr._rows:
+                    if instr_row.general_linked:
+                        if instr_row.scope == "global":
+                            linked_global += 1
+                        else:
+                            linked_project += 1
+                pending = len(grid_instr.pending_entries())
+            else:
+                pending = 0
+            text = (
+                f"  [b green]{linked_global}[/] global   "
+                f"[b cyan]{linked_project}[/] project   "
                 f"[b yellow]{pending}[/] pending"
             )
         else:  # "agent"
