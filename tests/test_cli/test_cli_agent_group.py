@@ -418,6 +418,131 @@ def test_add_succeeds_when_content_file_present(
     assert lock.skills["my-agent"].agent_path == "my-agent.md"
 
 
+# ---------------------------------------------------------------------------
+# #313 — clone-before-validate orphan cleanup
+#
+# Regression guard: `agent add <src>` (no --slug) that fails the content-file
+# check because the derived slug (from repo name "agent-src") doesn't match
+# the actual content file ("actual-name.md") must leave NO stray canonical.
+# Before #313 the clone sat at agents/agent-src/ with no lock entry,
+# invisible to `remove` and `doctor`.
+# ---------------------------------------------------------------------------
+
+
+def test_add_no_slug_leaves_no_orphan(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """add without --slug that fails slug-mismatch check leaves no orphan canonical (#313)."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    # Source repo has "actual-name.md", but the repo dir is named "agent-src",
+    # so the derived slug would be "agent-src", not "actual-name".
+    src = _local_agent_repo(tmp_path, content_filename="actual-name.md")
+
+    r = CliRunner().invoke(main, ["agent", "add", str(src)])  # no --slug
+
+    assert r.exit_code != 0, (
+        f"add should fail when derived slug doesn't match content file:\n{r.output}"
+    )
+
+    # #313 fix: the clone at agents/agent-src/ must be removed on failure.
+    from agent_toolkit_cli.agent_paths import library_agent_path
+    orphan_path = library_agent_path("agent-src")
+    assert not orphan_path.exists(), (
+        f"add left an orphan canonical at {orphan_path} — #313 regression"
+    )
+
+    # No lock entry for the derived slug either.
+    from agent_toolkit_cli.agent_lock import read_lock
+    from agent_toolkit_cli.agent_paths import library_lock_path
+    lock = read_lock(library_lock_path())
+    assert "agent-src" not in lock.skills, "add wrote a lock entry for the orphaned slug"
+
+
+def test_add_no_slug_idempotent_reuse_not_broken(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Idempotent re-run with correct --slug reuses pre-existing clone (#313/#283).
+
+    If a canonical already exists (perhaps from a previous partial run),
+    `add` with the correct --slug must succeed and not remove the pre-existing
+    directory. This guards the intentional idempotent-reuse path.
+    """
+    monkeypatch.setenv("HOME", str(tmp_path))
+    src = _local_agent_repo(tmp_path, content_filename="actual-name.md")
+
+    # First run: add with the correct --slug → success and canonical on disk.
+    r1 = CliRunner().invoke(main, ["agent", "add", str(src), "--slug", "actual-name"])
+    assert r1.exit_code == 0, f"first add should succeed:\n{r1.output}"
+
+    from agent_toolkit_cli.agent_paths import library_agent_path
+    canonical = library_agent_path("actual-name")
+    assert canonical.exists(), "first add must leave canonical on disk"
+
+    # Second run (idempotent): same slug — must not remove the canonical.
+    r2 = CliRunner().invoke(main, ["agent", "add", str(src), "--slug", "actual-name"])
+    assert r2.exit_code == 0, f"idempotent re-add should succeed:\n{r2.output}"
+    assert canonical.exists(), "idempotent re-add must not remove the canonical"
+
+
+# ---------------------------------------------------------------------------
+# #313 — doctor orphan-canonical detection
+# ---------------------------------------------------------------------------
+
+
+def test_doctor_detects_orphan_canonical(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """doctor --no-fix reports orphan-canonical when a canonical dir has no lock entry (#313)."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    # Plant a stray canonical (no lock entry) simulating a failed add.
+    from agent_toolkit_cli.agent_paths import library_agent_path
+    stray = library_agent_path("stray-orphan")
+    stray.mkdir(parents=True, exist_ok=True)
+    (stray / "stray-orphan.md").write_text(_CONTENT)
+
+    r = CliRunner().invoke(main, ["agent", "doctor", "-g", "--no-fix"])
+    assert r.exit_code != 0, f"doctor should report findings:\n{r.output}"
+    assert "orphan-canonical" in r.output, (
+        f"doctor must report orphan-canonical kind: {r.output!r}"
+    )
+    assert "stray-orphan" in r.output, (
+        f"doctor must name the stray slug: {r.output!r}"
+    )
+
+
+def test_doctor_fixes_orphan_canonical(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """doctor with fix=y removes an orphan canonical directory (#313)."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    from agent_toolkit_cli.agent_paths import library_agent_path
+    stray = library_agent_path("stray-orphan")
+    stray.mkdir(parents=True, exist_ok=True)
+    (stray / "stray-orphan.md").write_text(_CONTENT)
+
+    # Apply the fix by answering "y" to the prompt.
+    r = CliRunner().invoke(main, ["agent", "doctor", "-g"], input="y\n")
+    assert r.exit_code == 0, f"doctor should exit 0 after fixing all findings:\n{r.output}"
+    assert not stray.exists(), (
+        f"doctor should have removed the stray canonical at {stray}"
+    )
+
+
+def test_doctor_clean_not_affected_by_orphan_check(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """doctor on a fully clean library (no orphans) still reports all clean (#313 non-regression)."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _seed_global_canonical(tmp_path)
+    _write_global_lock(tmp_path)
+
+    r = CliRunner().invoke(main, ["agent", "doctor", "-g"])
+    assert r.exit_code == 0, r.output
+    assert "clean" in r.output.lower(), f"expected 'all clean', got: {r.output!r}"
+
+
 def test_remove_not_in_library_errors(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:

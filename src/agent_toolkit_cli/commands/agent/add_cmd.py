@@ -8,6 +8,7 @@ Lock is written ONLY after a successful clone (#283 class of bug).
 """
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 import click
@@ -83,12 +84,14 @@ def add_cmd(source: str, slug: str | None, ref: str | None) -> None:
         return
 
     canonical = library_agent_path(final_slug)
+    fresh_clone = False
     if not canonical.exists():
         canonical.parent.mkdir(parents=True, exist_ok=True)
         try:
             skill_git.clone(parsed.url, canonical, ref=parsed.ref, env=None)
         except skill_git.GitError as exc:
             raise click.ClickException(f"clone failed: {exc}") from exc
+        fresh_clone = True
 
     # Fail loud at add time if the content file the lock will point at is absent
     # (#304 bug 2 / #283 lock-honesty class). Without this, `add` writes a lock
@@ -96,8 +99,16 @@ def add_cmd(source: str, slug: str | None, ref: str | None) -> None:
     # printing success. The clone stays on disk — a re-run with a `--slug` that
     # matches the source's content file is idempotent via the `exists()` guard
     # above. Mirrors doctor's `missing-content-file` check.
+    #
+    # #313 cleanup: if *this invocation* created the canonical (fresh_clone)
+    # and the content-file check fails, remove the just-created clone so we
+    # don't leave an unreclaimable orphan. Only fires for a fresh clone — a
+    # pre-existing canonical (idempotent re-run with correct --slug) is left
+    # alone.
     content_file = canonical / f"{final_slug}.md"
     if not content_file.exists():
+        if fresh_clone:
+            shutil.rmtree(canonical, ignore_errors=True)
         raise click.ClickException(
             f"{final_slug}: content file {final_slug}.md absent in source "
             f"{parsed.url!r}; expected <slug>.md at the repo root. "

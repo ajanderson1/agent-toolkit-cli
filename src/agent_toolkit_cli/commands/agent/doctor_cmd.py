@@ -5,11 +5,13 @@ Detects:
   - missing content file (canonical exists but <slug>.md absent)
   - dirty working trees (uncommitted changes in the canonical)
   - orphaned projections (projection file exists but no lock entry)
+  - orphan canonicals (canonical directory present but no lock entry)
 
 Repair actions are offered interactively unless --no-fix is given.
 """
 from __future__ import annotations
 
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -93,6 +95,33 @@ def _diagnose(
                     ))
             except skill_git.GitError:
                 pass
+
+    # 4. Orphan canonicals — directories under the library base with no lock
+    # entry. This catches the #313 class of orphan: a clone left behind by a
+    # failed `agent add` (slug mismatch, no --slug) before the lock is written.
+    # Only run when no slug filter is active (targeted run won't see orphans)
+    # and only for global scope (the library is global-only; project scope has
+    # no canonical directory layout to walk).
+    if not slugs and scope == "global":
+        library_base = library_agent_path("__probe__").parent
+        if library_base.is_dir():
+            lock_slugs = set(lock.skills.keys())
+            for child in sorted(library_base.iterdir()):
+                if not child.is_dir():
+                    continue
+                if child.name not in lock_slugs:
+                    orphan = child
+                    findings.append(Finding(
+                        slug=child.name,
+                        kind="orphan-canonical",
+                        scope=scope,
+                        path=orphan,
+                        detail="canonical directory has no lock entry",
+                        fix_action=FixAction(
+                            shell_preview=f"rm -rf {orphan}",
+                            apply=lambda p=orphan: shutil.rmtree(p),
+                        ),
+                    ))
 
     return findings
 
