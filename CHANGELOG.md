@@ -1,5 +1,14 @@
 # Changelog
 
+## [3.5.3](https://github.com/ajanderson1/agent-toolkit-cli/compare/v3.5.2...v3.5.3) (2026-06-03)
+
+
+### Bug Fixes
+
+* clean up orphan canonical on failed agent add, teach doctor to detect them ([#313](https://github.com/ajanderson1/agent-toolkit-cli/issues/313)) ([#316](https://github.com/ajanderson1/agent-toolkit-cli/issues/316)) ([b8ce543](https://github.com/ajanderson1/agent-toolkit-cli/commit/b8ce5432247121506052fa31fadbf65c542167c0))
+* delete instructions-lock.json when last entry removed ([#317](https://github.com/ajanderson1/agent-toolkit-cli/issues/317)) ([8dd9912](https://github.com/ajanderson1/agent-toolkit-cli/commit/8dd991250bc1dc7d638e846a61ee48c21d6dcdc1))
+* doctor squatted_projection finding + inventory symlink-ownership gate ([#314](https://github.com/ajanderson1/agent-toolkit-cli/issues/314)) ([#315](https://github.com/ajanderson1/agent-toolkit-cli/issues/315)) ([89eb5e9](https://github.com/ajanderson1/agent-toolkit-cli/commit/89eb5e979e5f4f4428da5d1f4c25035988f691a7))
+
 ## [3.5.2](https://github.com/ajanderson1/agent-toolkit-cli/compare/v3.5.1...v3.5.2) (2026-06-01)
 
 
