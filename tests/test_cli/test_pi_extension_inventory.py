@@ -145,3 +145,45 @@ def test_npm_pass_does_not_downgrade_store_owned(tmp_path, monkeypatch):
     assert rec.source == "github.com/o/dual"
     # ...but the npm presence is still recorded.
     assert rec.global_loaded is True
+
+
+def test_store_owned_squatted_projection_not_loaded(tmp_path, monkeypatch):
+    """Fix #314: a foreign non-symlink dir squatting a store-owned slug's
+    projection path must NOT produce global_loaded=True.
+
+    The lock says 'status-bar' is store-owned, but instead of our symlink the
+    projection slot holds a real directory (the foreign squatter).  Inventory
+    must report global_loaded=False — it must NOT lie about health.
+    """
+    monkeypatch.setenv("HOME", str(tmp_path))
+    # Write a global lock with one store-owned slug.
+    lock = tmp_path / ".agent-toolkit" / "pi-extensions-lock.json"
+    lock.parent.mkdir(parents=True)
+    lock.write_text(json.dumps({
+        "version": 1,
+        "skills": {"status-bar": {
+            "source": "github.com/o/status-bar",
+            "sourceType": "github",
+            "piExtensionPath": "status-bar",
+        }},
+    }) + "\n")
+
+    # Seed a REAL (non-symlink) directory at the projection path with index.ts
+    # so _discover_loose would normally consider it loaded.
+    proj_path = tmp_path / ".pi" / "agent" / "extensions" / "status-bar"
+    proj_path.mkdir(parents=True)
+    (proj_path / "index.ts").write_text("export default {}")
+
+    records = build_inventory(home=tmp_path)
+    rec = {r.slug: r for r in records}["status-bar"]
+
+    # origin comes from lock → store-owned.
+    assert rec.origin == "store-owned"
+    # The squatter is NOT our symlink → must NOT be treated as loaded (#314).
+    assert rec.global_loaded is False, (
+        "A foreign non-symlink dir squatting the projection path must not "
+        "produce global_loaded=True for a store-owned slug."
+    )
+
+    # Sanity: the foreign dir must still exist (never touched by inventory).
+    assert proj_path.exists() and not proj_path.is_symlink()
