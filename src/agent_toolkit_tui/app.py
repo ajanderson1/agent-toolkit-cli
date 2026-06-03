@@ -830,7 +830,15 @@ class TUIApp(App):
         ok = failed = 0
         errors: list[str] = []
 
-        for (scope, harness, slug), op in pending.items():
+        # Collapse per-harness entries to distinct (scope, op) reconcile operations.
+        # apply(scope=...) and uninstall(scope=...) reconcile the ENTIRE scope at
+        # once, so calling them once per harness entry would double-count ok/failed
+        # and issue redundant filesystem operations.
+        reconcile_ops: set[tuple[str, str]] = {
+            (scope, op) for (scope, _harness, _slug), op in pending.items()
+        }
+
+        for scope, op in sorted(reconcile_ops):
             effective_home = Path.home() if scope == "global" else None
             project = None if scope == "global" else Path.cwd()
 
@@ -850,7 +858,7 @@ class TUIApp(App):
                     )
                     ok += 1
             except (PointerConflictError, instructions_install.CanonicalMissingError, ValueError) as exc:
-                errors.append(f"{slug} @ {scope}: {exc}")
+                errors.append(f"{op} @ {scope}: {exc}")
                 failed += 1
 
         saved = grid.pending_entries() if failed else {}

@@ -294,7 +294,7 @@ async def test_set_scope_clears_pending():
 
 
 @pytest.mark.asyncio
-async def test_kind_sidebar_lists_three_kinds():
+async def test_kind_sidebar_lists_four_kinds():
     """The sidebar OptionList must include all four kinds: instruction, skill, pi-extension, agent.
 
     Updated in #319: instruction is now first in the sidebar (above skill).
