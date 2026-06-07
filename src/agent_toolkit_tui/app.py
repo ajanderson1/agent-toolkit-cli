@@ -123,7 +123,7 @@ class TUIApp(App):
         Binding("ctrl+r", "refresh", "Refresh", priority=True),
         Binding("ctrl+z", "revert", "Revert", priority=True),
         Binding("slash", "focus_filter", "Filter", priority=True),
-        Binding("s", "scope_toggle", "toggle scope"),
+        Binding("ctrl+g", "scope_toggle", "toggle scope", priority=True),
         Binding("i", "info_pass", "Info"),
         Binding("q", "quit", "Quit"),
     ]
