@@ -88,6 +88,14 @@ PiGrid DataTable {
     height: 1fr;
 }
 
+/* Instruction grid — mirrors AgentGrid styling. */
+InstructionGrid {
+    height: 1fr;
+}
+InstructionGrid DataTable {
+    height: 1fr;
+}
+
 /* Agent grid — mirrors SkillGrid styling. */
 AgentGrid {
     height: 1fr;
