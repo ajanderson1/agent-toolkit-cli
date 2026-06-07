@@ -515,17 +515,25 @@ class TUIApp(App):
     def _apply_instruction_pending(self) -> None:
         """Apply pending instruction pointer toggles.
 
-        Apply semantics (different from skill/agent):
-        1. Group pending toggles by (scope, slug) → (adds, removes) of harnesses.
-        2. Read the scope lock; mutate the slug entry's harnesses list.
-           If no entry exists and there are adds, create one with source="AGENTS.md".
-        3. write_lock().
-        4. instructions_install.apply(scope=...) to reconcile pointers.
-        5. CanonicalMissingError / PointerConflictError → apply error path.
+        Apply semantics (different from skill/agent): instructions_install.apply
+        reconciles the WHOLE scope lock to disk — it takes no per-harness
+        add/remove. So per scope we:
+          1. Mutate every pending slug entry's harnesses list (adds/removes);
+             an entry left with no harnesses is pruned (matches the CLI's
+             uninstall #312 contract — never leave an empty stub).
+          2. write_lock(), then call apply() ONCE for the scope.
+          3. On failure (CanonicalMissingError / PointerConflictError) roll the
+             lock back to its prior state — apply() reads the lock from disk, so
+             a failed reconcile would otherwise leave the lock lying about disk.
+             Mirrors commands/instructions/install_cmd.py's rollback contract.
         """
         from agent_toolkit_cli import instructions_install
+        from agent_toolkit_cli.instructions_adapters.symlink import (
+            PointerConflictError,
+        )
         from agent_toolkit_cli.instructions_lock import (
-            InstructionsLockEntry, add_entry, read_lock, write_lock,
+            InstructionsLockEntry, add_entry, read_lock, remove_entry,
+            write_lock,
         )
         from agent_toolkit_cli.instructions_paths import lock_file_path
 
@@ -537,75 +545,95 @@ class TUIApp(App):
         if not pending:
             return
 
-        # Group by (scope, slug) → (adds set, removes set) of harnesses.
-        by_slug: dict[tuple[str, str], tuple[set[str], set[str]]] = defaultdict(
-            lambda: (set(), set())
+        # Group by scope → {slug: (adds set, removes set)}. apply() is
+        # whole-lock, so all mutations for a scope are written before its single
+        # apply() call — this also keeps ok/failed counts correct if the lock
+        # ever holds more than one slug per scope (the keyed-by-slug shape the
+        # lock model is forward-compatible with).
+        by_scope: dict[str, dict[str, tuple[set[str], set[str]]]] = defaultdict(
+            lambda: defaultdict(lambda: (set(), set()))
         )
         for (scope, harness, slug), op in pending.items():
-            adds, removes = by_slug[(scope, slug)]
+            adds, removes = by_scope[scope][slug]
             (adds if op == "link" else removes).add(harness)
 
         ok = failed = 0
         errors: list[str] = []
 
-        for (scope, slug), (adds, removes) in by_slug.items():
+        for scope, slugs in by_scope.items():
             home = Path.home() if scope == "global" else None
             project = None if scope == "global" else Path.cwd()
+            n_writes = sum(len(a) + len(r) for a, r in slugs.values())
 
-            # Read the current lock for this scope.
             lpath = lock_file_path(scope, project)  # type: ignore[arg-type]
-            lock = read_lock(lpath)
+            prior = read_lock(lpath)
+            prior_existed = lpath.exists()
 
-            # Mutate the slug entry's harnesses list, then write it back via
-            # the lock model's add_entry helper (returns a new lock).
-            if slug in lock.instructions:
-                entry = lock.instructions[slug]
-                new_harnesses = list(entry.harnesses)
-                for h in adds:
-                    if h not in new_harnesses:
-                        new_harnesses.append(h)
-                for h in removes:
-                    if h in new_harnesses:
-                        new_harnesses.remove(h)
-                updated_entry = InstructionsLockEntry(
-                    scope=entry.scope,
-                    source=entry.source,
-                    harnesses=new_harnesses,
-                )
-                updated_lock = add_entry(lock, slug, updated_entry)
-            elif adds:
-                # No entry yet — create one.
-                updated_lock = add_entry(
-                    lock,
-                    slug,
-                    InstructionsLockEntry(
-                        scope=scope,  # type: ignore[arg-type]
-                        source="AGENTS.md",
-                        harnesses=sorted(adds),
-                    ),
-                )
-            else:
-                # Only removes and no existing entry — nothing to do.
-                continue
+            # Apply every slug mutation onto a working copy of the lock.
+            updated_lock = prior
+            for slug, (adds, removes) in slugs.items():
+                if slug in updated_lock.instructions:
+                    entry = updated_lock.instructions[slug]
+                    new_harnesses = list(entry.harnesses)
+                    for h in adds:
+                        if h not in new_harnesses:
+                            new_harnesses.append(h)
+                    for h in removes:
+                        if h in new_harnesses:
+                            new_harnesses.remove(h)
+                    if new_harnesses:
+                        updated_lock = add_entry(
+                            updated_lock,
+                            slug,
+                            InstructionsLockEntry(
+                                scope=entry.scope,
+                                source=entry.source,
+                                harnesses=new_harnesses,
+                            ),
+                        )
+                    else:
+                        # No harnesses left — prune the entry rather than
+                        # writing an empty stub the CLI would never produce.
+                        updated_lock = remove_entry(updated_lock, slug)
+                elif adds:
+                    updated_lock = add_entry(
+                        updated_lock,
+                        slug,
+                        InstructionsLockEntry(
+                            scope=scope,  # type: ignore[arg-type]
+                            source="AGENTS.md",
+                            harnesses=sorted(adds),
+                        ),
+                    )
+                # else: only removes and no existing entry — nothing to do.
 
-            write_lock(lpath, updated_lock)
-
-            # Reconcile pointers via instructions_install.apply().
+            # Write the mutated lock, reconcile once, roll back on failure.
+            if updated_lock.instructions:
+                write_lock(lpath, updated_lock)
+            elif prior_existed:
+                # Lock emptied entirely — delete it (#312), don't write `{}`.
+                lpath.unlink()
             try:
                 plan = instructions_install.apply(
                     scope=scope,  # type: ignore[arg-type]
                     project_root=project,
-                    home=home if home else Path.home(),
+                    home=home,
                 )
                 created = sum(1 for a in plan.actions if a.action == "create")
                 removed = sum(1 for a in plan.actions if a.action == "remove")
                 ok += created + removed
-            except instructions_install.CanonicalMissingError as exc:
-                errors.append(f"{slug}: {exc}")
-                failed += len(adds) + len(removes)
-            except Exception as exc:
-                errors.append(f"{slug}: {exc}")
-                failed += len(adds) + len(removes)
+            except (
+                instructions_install.CanonicalMissingError,
+                PointerConflictError,
+            ) as exc:
+                # Reconcile failed — restore the lock to its prior state so it
+                # never claims an install that did not land on disk.
+                if prior_existed:
+                    write_lock(lpath, prior)
+                else:
+                    lpath.unlink(missing_ok=True)
+                errors.append(f"{scope}: {exc}")
+                failed += n_writes
 
         saved = grid.pending_entries() if failed else {}
         if failed == 0:

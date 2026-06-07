@@ -638,6 +638,154 @@ async def test_apply_canonical_missing_surfaces_error(monkeypatch, tmp_path: Pat
 
 
 @pytest.mark.asyncio
+async def test_apply_rolls_back_lock_on_reconcile_failure(monkeypatch, tmp_path: Path):
+    """A failed reconcile must restore the lock so it never claims an install
+    that did not land on disk (mirrors install_cmd.py's rollback contract)."""
+    from agent_toolkit_tui.app import TUIApp
+    import agent_toolkit_cli.instructions_install as _ii
+    import agent_toolkit_cli.instructions_paths as _ip
+
+    def fake_apply(*, scope, project_root=None, home=None):
+        raise _ii.CanonicalMissingError("no AGENTS.md")
+
+    monkeypatch.setattr(_ii, "apply", fake_apply)
+    monkeypatch.setattr(
+        "agent_toolkit_tui.app.build_instruction_rows",
+        lambda **kw: [],
+    )
+
+    lock_file = tmp_path / "instructions-lock.json"
+    monkeypatch.setattr(
+        _ip, "lock_file_path",
+        lambda scope, project_root: lock_file,
+    )
+
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        app._active_kind = "instruction"
+        app._scope = "global"
+        grid = app.query_one("#instruction-grid", InstructionGrid)
+        grid.set_rows([_unlinked_row()])
+        # Fresh scope: lock does not exist yet, user queues a link.
+        grid.restore_pending({("global", "claude-code", "AGENTS.md"): "link"})
+        await pilot.pause()
+
+        app._apply_instruction_pending()
+
+    # The lock must NOT exist afterward — it was absent before, the reconcile
+    # failed, so rollback deletes it rather than leaving a lying entry.
+    assert not lock_file.exists(), "lock must be rolled back (deleted) on reconcile failure"
+
+
+@pytest.mark.asyncio
+async def test_apply_rolls_back_to_prior_lock_on_failure(monkeypatch, tmp_path: Path):
+    """When a lock already existed, a failed reconcile restores its prior content."""
+    from agent_toolkit_tui.app import TUIApp
+    import agent_toolkit_cli.instructions_install as _ii
+    import agent_toolkit_cli.instructions_paths as _ip
+
+    def fake_apply(*, scope, project_root=None, home=None):
+        raise _ii.CanonicalMissingError("no AGENTS.md")
+
+    monkeypatch.setattr(_ii, "apply", fake_apply)
+    monkeypatch.setattr(
+        "agent_toolkit_tui.app.build_instruction_rows",
+        lambda **kw: [],
+    )
+
+    lock_file = tmp_path / "instructions-lock.json"
+    prior_payload = {
+        "version": 1,
+        "instructions": {
+            "AGENTS.md": {
+                "scope": "global",
+                "source": "AGENTS.md",
+                "harnesses": ["gemini-cli"],
+            }
+        },
+    }
+    lock_file.write_text(json.dumps(prior_payload) + "\n")
+
+    monkeypatch.setattr(
+        _ip, "lock_file_path",
+        lambda scope, project_root: lock_file,
+    )
+
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        app._active_kind = "instruction"
+        app._scope = "global"
+        grid = app.query_one("#instruction-grid", InstructionGrid)
+        grid.set_rows([_unlinked_row()])
+        grid.restore_pending({("global", "claude-code", "AGENTS.md"): "link"})
+        await pilot.pause()
+
+        app._apply_instruction_pending()
+
+    # Prior content restored verbatim — no claude-code leaked in.
+    restored = json.loads(lock_file.read_text())
+    assert restored["instructions"]["AGENTS.md"]["harnesses"] == ["gemini-cli"]
+
+
+@pytest.mark.asyncio
+async def test_apply_unlink_last_harness_prunes_lock(monkeypatch, tmp_path: Path):
+    """Removing the sole harness deletes the lock file rather than leaving an
+    empty stub (matches the CLI uninstall #312 contract)."""
+    from agent_toolkit_tui.app import TUIApp
+    import agent_toolkit_cli.instructions_install as _ii
+    import agent_toolkit_cli.instructions_paths as _ip
+
+    def fake_apply(*, scope, project_root=None, home=None):
+        action = MagicMock()
+        action.action = "remove"
+        p = MagicMock()
+        p.actions = [action]
+        return p
+
+    monkeypatch.setattr(_ii, "apply", fake_apply)
+    monkeypatch.setattr(
+        "agent_toolkit_tui.app.build_instruction_rows",
+        lambda **kw: [],
+    )
+
+    lock_file = tmp_path / "instructions-lock.json"
+    lock_file.write_text(json.dumps({
+        "version": 1,
+        "instructions": {
+            "AGENTS.md": {
+                "scope": "global",
+                "source": "AGENTS.md",
+                "harnesses": ["claude-code"],
+            }
+        },
+    }) + "\n")
+
+    monkeypatch.setattr(
+        _ip, "lock_file_path",
+        lambda scope, project_root: lock_file,
+    )
+
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        app._active_kind = "instruction"
+        app._scope = "global"
+        grid = app.query_one("#instruction-grid", InstructionGrid)
+        grid.set_rows([_linked_row()])
+        grid.restore_pending({("global", "claude-code", "AGENTS.md"): "unlink"})
+        await pilot.pause()
+
+        app._apply_instruction_pending()
+        footer = str(app.query_one("#footer-pending", Static).render())
+
+    assert "applied:" in footer
+    # Lock emptied → deleted, not written back as an empty stub.
+    assert not lock_file.exists(), "lock must be deleted when no harnesses remain (#312)"
+
+
+@pytest.mark.asyncio
 async def test_conflict_slot_not_clobbered(monkeypatch, tmp_path: Path):
     """A conflict cell queued for link is a no-op: real file must still exist."""
     from agent_toolkit_tui.app import TUIApp
