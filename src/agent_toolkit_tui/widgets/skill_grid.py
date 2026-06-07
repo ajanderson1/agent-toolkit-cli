@@ -543,8 +543,14 @@ class SkillGrid(Vertical):
     def _rebuild(self, table: DataTable) -> None:
         saved = table.cursor_coordinate
         # Preserve the viewport: clear() resets scroll to the top, so a toggle
-        # would jump the pane (#321). Save the offset and restore it after the
-        # cursor is set (cursor-set can auto-scroll; restoring last wins).
+        # would jump the pane (#321). Save the offset and restore it below.
+        # On the toggle path (cursor + rows unchanged) the restored cursor stays
+        # inside the restored viewport, so Textual's deferred
+        # `_scroll_cursor_into_view` (scheduled by the cursor-set after clear()
+        # flags a dimension update) is a no-op and our offset holds. On a
+        # content-shrinking rebuild (filter/scope) that deferred cursor-scroll
+        # runs after this synchronous restore and lands the viewport around the
+        # clamped cursor — acceptable (cursor stays visible), not the toggle case.
         saved_scroll = (table.scroll_x, table.scroll_y)
         table.clear(columns=True)
         # Slug column has cell-info (the slug-cell panel) → glyph it.

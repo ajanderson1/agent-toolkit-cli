@@ -44,15 +44,26 @@ table.scroll_to(x=saved_scroll_x, y=saved_scroll_y,  # then pin the viewport
                 animate=False, force=True)
 ```
 
-- `scroll_to(..., animate=False, force=True)` sets the offset immediately (no
-  animation, force past the "already at target" short-circuit). Restoring AFTER
-  setting `cursor_coordinate` is essential: setting the cursor can trigger an
-  auto-scroll-to-cursor that would otherwise win.
-- Verified API on Textual 8.2.5: `scroll_x`/`scroll_y` (current offset),
-  `scroll_to(x, y, *, animate, force, immediate)`.
+- `scroll_to(..., animate=False, force=True)` sets the offset synchronously
+  (no animation; `ScrollView.scroll_to` applies it inline; `force` past the
+  "already at target" short-circuit). Verified on Textual 8.2.5.
+- **Mechanism (corrected after self-review):** `clear()` flags a dimension
+  update, so the subsequent `cursor_coordinate` set schedules a *deferred*
+  `_scroll_cursor_into_view` via `call_after_refresh` — which runs on the NEXT
+  refresh, *after* this synchronous `scroll_to`. So this is NOT a "last write
+  wins" race. On the **toggle path** (the #321 case: cursor + rows unchanged),
+  the restored cursor stays inside the restored viewport, so that deferred
+  cursor-scroll finds the cursor already visible and is a **no-op** — the
+  restored offset holds. (Confirmed across multiple message-pump turns.)
+- On a **content-shrinking rebuild** (filter narrow / scope flip with fewer
+  rows) the deferred cursor-scroll *does* run after the restore and lands the
+  viewport around the (clamped) cursor — the cursor stays visible, which is
+  acceptable and not a regression (those paths reset to 0 before this fix).
+  This fix targets the toggle case; it does not claim to pin the viewport on
+  content changes.
 - The restored offset is clamped by Textual to the new content's max scroll, so
-  if the rebuild shortened the list the offset can't exceed valid range (no
-  manual clamp needed; `scroll_to` handles it).
+  a shortened list can't over-scroll (no manual clamp; `scroll_to` handles it).
+  Guarded by `test_shrinking_rebuild_clamps_scroll_within_range`.
 
 ## Scope of change
 

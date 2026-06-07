@@ -327,8 +327,10 @@ class InstructionGrid(Vertical):
         """Rebuild the DataTable from current rows + pending. Never named _render_*."""
         saved = table.cursor_coordinate
         # Preserve the viewport across clear() (#321): clear() resets scroll to
-        # the top, so a toggle would jump the pane. Restore after the cursor is
-        # set (cursor-set can auto-scroll; restoring last wins).
+        # the top, so a toggle would jump the pane. Restore the offset below.
+        # On the toggle path (cursor unchanged) the restored cursor stays in the
+        # restored viewport, so Textual's deferred _scroll_cursor_into_view is a
+        # no-op and the offset holds. See skill_grid._rebuild for the full note.
         saved_scroll = (table.scroll_x, table.scroll_y)
         table.clear(columns=True)
         # Slug column.

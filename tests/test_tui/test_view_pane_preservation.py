@@ -187,3 +187,48 @@ async def test_instruction_grid_toggle_preserves_scroll_offset():
         assert table.scroll_y == scroll_before, (
             f"instruction grid viewport jumped: {scroll_before} -> {table.scroll_y}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Robustness of the saved-scroll restore on non-toggle rebuilds (boundary cases
+# the toggle tests don't reach). These document behavior the self-review flagged:
+# on a content-shrinking rebuild the restore is clamped (no over-scroll), and an
+# empty rebuild is a safe no-op.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_shrinking_rebuild_clamps_scroll_within_range():
+    """A rebuild that shortens the list must leave scroll within [0, max] — the
+    restored offset can't over-scroll past the new (shorter) content."""
+    rows = [_row(f"skill-{i:02d}") for i in range(60)]
+    app = _ConstrainedApp(rows)
+    async with app.run_test(size=(80, 24)) as pilot:
+        await pilot.pause()
+        table = app.query_one("#skill-table", DataTable)
+        await _scroll_with_cursor_mid_pane(pilot, table)  # scrolled near y=20
+
+        # Shrink the row set far below the saved offset, then rebuild.
+        grid = app.query_one("#g", SkillGrid)
+        grid.set_rows([_row("only-0"), _row("only-1")])
+        await pilot.pause()
+
+        assert 0 <= table.scroll_y <= table.max_scroll_y, (
+            f"scroll out of range after shrink: scroll_y={table.scroll_y}, "
+            f"max={table.max_scroll_y}"
+        )
+
+
+@pytest.mark.asyncio
+async def test_empty_rebuild_is_safe_noop():
+    """Rebuilding to an empty grid must not raise and leaves scroll at 0."""
+    rows = [_row(f"skill-{i:02d}") for i in range(60)]
+    app = _ConstrainedApp(rows)
+    async with app.run_test(size=(80, 24)) as pilot:
+        await pilot.pause()
+        table = app.query_one("#skill-table", DataTable)
+        grid = app.query_one("#g", SkillGrid)
+        grid.set_rows([])  # _rebuild over an empty set — scroll_to(0,0) no-op
+        await pilot.pause()
+        assert table.scroll_y == 0
+        assert grid.row_count == 0
