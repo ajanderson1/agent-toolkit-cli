@@ -71,6 +71,40 @@ async def test_scope_toggle_click_dispatches_action_scope():
         assert app.scope_calls == ["global"]
 
 
+@pytest.mark.asyncio
+async def test_s_key_in_filter_does_not_toggle_scope():
+    """On load the skills filter has focus; pressing `s` must insert literal
+    text and NOT toggle scope (#320)."""
+    from textual.widgets import Input
+
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        before = app._scope  # type: ignore[attr-defined]
+        filter_input = app.query_one("#skill-filter", Input)
+        assert app.focused is filter_input, "filter should have focus on load"
+        await pilot.press("s")
+        await pilot.pause()
+        assert app._scope == before, "`s` must not toggle scope anymore"  # type: ignore[attr-defined]
+        assert "s" in filter_input.value, "`s` should be inserted as filter text"
+
+
+@pytest.mark.asyncio
+async def test_ctrl_g_toggles_scope_even_with_filter_focus():
+    """`ctrl+g` toggles scope even while the filter block has focus (#320)."""
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        before = app._scope  # type: ignore[attr-defined]
+        await pilot.press("ctrl+g")
+        await pilot.pause()
+        assert app._scope != before, "`ctrl+g` must toggle scope"  # type: ignore[attr-defined]
+        # And it flips back.
+        await pilot.press("ctrl+g")
+        await pilot.pause()
+        assert app._scope == before  # type: ignore[attr-defined]
+
+
 def test_scope_to_roots_project_mode_passes_home():
     """In project scope the TUI must pass Path.home() so build_skill_rows
     can populate (agent, 'global') cells for the indicator (#188)."""
