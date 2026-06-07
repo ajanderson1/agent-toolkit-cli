@@ -90,6 +90,25 @@ async def test_s_key_in_filter_does_not_toggle_scope():
 
 
 @pytest.mark.asyncio
+async def test_s_key_with_table_focus_does_not_toggle_scope():
+    """The discriminating case: with the skills TABLE focused (not the filter),
+    `s` must STILL not toggle scope — proves the binding was removed, not just
+    swallowed by the Input. This assertion is False on the old `s`-bound app
+    and True after the rebind (#320)."""
+    from textual.widgets import DataTable
+
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        before = app._scope  # type: ignore[attr-defined]
+        app.query_one("#skill-table", DataTable).focus()
+        await pilot.pause()
+        await pilot.press("s")
+        await pilot.pause()
+        assert app._scope == before, "`s` must not toggle scope from the table either"  # type: ignore[attr-defined]
+
+
+@pytest.mark.asyncio
 async def test_ctrl_g_toggles_scope_even_with_filter_focus():
     """`ctrl+g` toggles scope even while the filter block has focus (#320)."""
     app = TUIApp()
