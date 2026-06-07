@@ -10,12 +10,12 @@ Layout (matches existing CSS scaffold in css/app.tcss):
   Horizontal#main
     Vertical#kinds-sidebar
       Static.rail-header
-      OptionList#kinds-list  ("skill" / "pi-extension" / "agent")
+      OptionList#kinds-list  ("instruction" / separator / "skill" / "pi-extension" / "agent")
     Vertical#content
       Horizontal#content-header-row
         Static#content-header
-        [ScopeToggle — skill and agent kinds only]
-      SkillGrid | PiGrid | AgentGrid   (swapped by action_kind)
+        [ScopeToggle — skill, instruction, and agent kinds only]
+      InstructionGrid | SkillGrid | PiGrid | AgentGrid   (swapped by action_kind)
   Static#status-bar
   Static#footer-pending
   Footer
@@ -38,13 +38,15 @@ from textual.widgets.option_list import Option
 
 from agent_toolkit_tui import __version__
 from agent_toolkit_tui.agent_state import build_agent_rows
+from agent_toolkit_tui.instruction_state import build_instruction_rows
 from agent_toolkit_tui.pi_extension_state import build_pi_rows
 from agent_toolkit_tui.skill_state import build_skill_rows
-from agent_toolkit_tui.widgets import AgentGrid, PiGrid, ScopeToggle, SkillGrid
+from agent_toolkit_tui.widgets import AgentGrid, InstructionGrid, PiGrid, ScopeToggle, SkillGrid
 
-Kind = Literal["skill", "pi-extension", "agent"]
+Kind = Literal["instruction", "skill", "pi-extension", "agent"]
 
 _KIND_LABELS: dict[Kind, str] = {
+    "instruction": "Instruction",
     "skill": "Skill",
     "pi-extension": "Pi Extension",
     "agent": "Agent",
@@ -138,6 +140,8 @@ class TUIApp(App):
             with Vertical(id="kinds-sidebar"):
                 yield Static("Kind", classes="rail-header")
                 yield OptionList(
+                    Option("instruction", id="kind-instruction"),
+                    Option("─────────────", id="kind-separator", disabled=True),
                     Option("skill", id="kind-skill"),
                     Option("pi-extension", id="kind-pi-extension"),
                     Option("agent", id="kind-agent"),
@@ -147,6 +151,7 @@ class TUIApp(App):
                 with Horizontal(id="content-header-row"):
                     yield Static(self._build_content_header(), id="content-header")
                     yield ScopeToggle(active=self._scope, id="scope-toggle")
+                yield InstructionGrid([], id="instruction-grid")
                 yield SkillGrid([], id="skill-grid")
                 yield PiGrid([], id="pi-grid")
                 yield AgentGrid([], id="agent-grid")
@@ -159,7 +164,7 @@ class TUIApp(App):
             self.theme = "gruvbox"
         except Exception:
             pass
-        # Start with skill kind active; hide pi-grid and agent-grid initially.
+        # Start with skill kind active; hide others initially.
         self._show_kind("skill")
         self._refresh_skill_view()
         self._refresh_content_header()
@@ -176,6 +181,7 @@ class TUIApp(App):
     def _show_kind(self, kind: Kind) -> None:
         """Show the active grid and hide the inactive ones."""
         try:
+            instruction_grid = self.query_one("#instruction-grid", InstructionGrid)
             skill_grid = self.query_one("#skill-grid", SkillGrid)
             pi_grid = self.query_one("#pi-grid", PiGrid)
             agent_grid = self.query_one("#agent-grid", AgentGrid)
@@ -183,17 +189,26 @@ class TUIApp(App):
         except NoMatches:
             return
 
-        if kind == "skill":
+        if kind == "instruction":
+            instruction_grid.display = True
+            skill_grid.display = False
+            pi_grid.display = False
+            agent_grid.display = False
+            scope_toggle.display = True
+        elif kind == "skill":
+            instruction_grid.display = False
             skill_grid.display = True
             pi_grid.display = False
             agent_grid.display = False
             scope_toggle.display = True
         elif kind == "pi-extension":
+            instruction_grid.display = False
             skill_grid.display = False
             pi_grid.display = True
             agent_grid.display = False
             scope_toggle.display = False
         else:  # "agent"
+            instruction_grid.display = False
             skill_grid.display = False
             pi_grid.display = False
             agent_grid.display = True
@@ -206,7 +221,12 @@ class TUIApp(App):
         if event.option_list.id != "kinds-list":
             return
         opt_id = event.option.id
-        if opt_id == "kind-skill":
+        # Guard against separator or unknown options.
+        if opt_id is None or opt_id == "kind-separator":
+            return
+        if opt_id == "kind-instruction":
+            self.action_kind("instruction")
+        elif opt_id == "kind-skill":
             self.action_kind("skill")
         elif opt_id == "kind-pi-extension":
             self.action_kind("pi-extension")
@@ -214,13 +234,15 @@ class TUIApp(App):
             self.action_kind("agent")
 
     def action_kind(self, kind: str) -> None:
-        if kind not in ("skill", "pi-extension", "agent"):
+        if kind not in ("instruction", "skill", "pi-extension", "agent"):
             return
         if kind == self._active_kind:
             return
         self._active_kind = kind  # type: ignore[assignment]
         self._show_kind(kind)  # type: ignore[arg-type]
-        if kind == "skill":
+        if kind == "instruction":
+            self._refresh_instruction_view()
+        elif kind == "skill":
             self._refresh_skill_view()
         elif kind == "pi-extension":
             self._refresh_pi_view()
@@ -230,12 +252,23 @@ class TUIApp(App):
         self._refresh_pending_label()
         self._refresh_status_bar()
 
-    # ----- skill-view --------------------------------------------------------
+    # ----- instruction-view --------------------------------------------------
 
     def _scope_to_roots(self) -> tuple[str, Path | None, Path | None]:
         if self._scope == "global":
             return "global", Path.home(), None
         return "project", Path.home(), Path.cwd()
+
+    def _refresh_instruction_view(self) -> None:
+        try:
+            grid = self.query_one("#instruction-grid", InstructionGrid)
+        except NoMatches:
+            return
+        scope, home, project = self._scope_to_roots()
+        grid.set_scope(scope)  # type: ignore[arg-type]
+        grid.set_rows(build_instruction_rows(scope=scope, home=home, project=project))  # type: ignore[arg-type]
+
+    # ----- skill-view --------------------------------------------------------
 
     def _refresh_skill_view(self) -> None:
         try:
@@ -268,6 +301,13 @@ class TUIApp(App):
 
     # ----- messages ----------------------------------------------------------
 
+    def on_instruction_grid_pending_changed(
+        self, event: InstructionGrid.PendingChanged
+    ) -> None:
+        """Live-update footer + status bar when the instruction grid's pending set changes."""
+        self._refresh_pending_label()
+        self._refresh_status_bar()
+
     def on_skill_grid_pending_changed(
         self, event: SkillGrid.PendingChanged
     ) -> None:
@@ -293,6 +333,10 @@ class TUIApp(App):
 
     def action_quit(self) -> None:
         n = 0
+        try:
+            n += len(self.query_one("#instruction-grid", InstructionGrid).pending_entries())
+        except NoMatches:
+            pass
         try:
             n += len(self.query_one("#skill-grid", SkillGrid).pending_entries())
         except NoMatches:
@@ -322,7 +366,9 @@ class TUIApp(App):
             self.query_one("#scope-toggle", ScopeToggle).set_active(scope)
         except NoMatches:
             pass
-        if self._active_kind == "agent":
+        if self._active_kind == "instruction":
+            self._refresh_instruction_view()
+        elif self._active_kind == "agent":
             self._refresh_agent_view()
         else:
             self._refresh_skill_view()
@@ -341,7 +387,13 @@ class TUIApp(App):
 
     def action_info_pass(self) -> None:
         """Delegate `i` to the active grid widget."""
-        if self._active_kind == "skill":
+        if self._active_kind == "instruction":
+            try:
+                igrid = self.query_one("#instruction-grid", InstructionGrid)
+            except NoMatches:
+                return
+            igrid.action_info()
+        elif self._active_kind == "skill":
             try:
                 sgrid = self.query_one("#skill-grid", SkillGrid)
             except NoMatches:
@@ -361,7 +413,9 @@ class TUIApp(App):
             agrid.action_info()
 
     def action_refresh(self) -> None:
-        if self._active_kind == "skill":
+        if self._active_kind == "instruction":
+            self._refresh_instruction_view()
+        elif self._active_kind == "skill":
             self._refresh_skill_view()
         elif self._active_kind == "pi-extension":
             self._refresh_pi_view()
@@ -372,7 +426,18 @@ class TUIApp(App):
         self._refresh_status_bar()
 
     def action_revert(self) -> None:
-        if self._active_kind == "skill":
+        if self._active_kind == "instruction":
+            try:
+                igrid = self.query_one("#instruction-grid", InstructionGrid)
+            except NoMatches:
+                return
+            n = len(igrid.pending_entries())
+            igrid.clear_pending()
+            self._refresh_pending_label()
+            self.query_one("#footer-pending", Static).update(
+                f"reverted: {n} pending cleared"
+            )
+        elif self._active_kind == "skill":
             try:
                 sgrid = self.query_one("#skill-grid", SkillGrid)
             except NoMatches:
@@ -407,12 +472,18 @@ class TUIApp(App):
             )
 
     def action_diff(self) -> None:
-        if self._active_kind == "skill":
+        if self._active_kind == "instruction":
+            try:
+                igrid = self.query_one("#instruction-grid", InstructionGrid)
+            except NoMatches:
+                return
+            all_ops: list[str] = list(igrid.pending_entries().values())
+        elif self._active_kind == "skill":
             try:
                 sgrid = self.query_one("#skill-grid", SkillGrid)
             except NoMatches:
                 return
-            all_ops: list[str] = list(sgrid.pending_entries().values())
+            all_ops = list(sgrid.pending_entries().values())
         elif self._active_kind == "pi-extension":
             try:
                 pgrid = self.query_one("#pi-grid", PiGrid)
@@ -432,12 +503,162 @@ class TUIApp(App):
         )
 
     def action_apply(self) -> None:
-        if self._active_kind == "skill":
+        if self._active_kind == "instruction":
+            self._apply_instruction_pending()
+        elif self._active_kind == "skill":
             self._apply_skill_pending()
         elif self._active_kind == "pi-extension":
             self._apply_pi_pending()
         else:
             self._apply_agent_pending()
+
+    def _apply_instruction_pending(self) -> None:
+        """Apply pending instruction pointer toggles.
+
+        Apply semantics (different from skill/agent): instructions_install.apply
+        reconciles the WHOLE scope lock to disk — it takes no per-harness
+        add/remove. So per scope we:
+          1. Mutate every pending slug entry's harnesses list (adds/removes);
+             an entry left with no harnesses is pruned (matches the CLI's
+             uninstall #312 contract — never leave an empty stub).
+          2. write_lock(), then call apply() ONCE for the scope.
+          3. On failure (CanonicalMissingError / PointerConflictError) roll the
+             lock back to its prior state — apply() reads the lock from disk, so
+             a failed reconcile would otherwise leave the lock lying about disk.
+             Mirrors commands/instructions/install_cmd.py's rollback contract.
+        """
+        from agent_toolkit_cli import instructions_install
+        from agent_toolkit_cli.instructions_adapters.symlink import (
+            PointerConflictError,
+        )
+        from agent_toolkit_cli.instructions_lock import (
+            InstructionsLockEntry, add_entry, read_lock, remove_entry,
+            write_lock,
+        )
+        from agent_toolkit_cli.instructions_paths import lock_file_path
+
+        try:
+            grid = self.query_one("#instruction-grid", InstructionGrid)
+        except NoMatches:
+            return
+        pending = grid.pending_entries()
+        if not pending:
+            return
+
+        # Group by scope → {slug: (adds set, removes set)}. apply() is
+        # whole-lock, so all mutations for a scope are written before its single
+        # apply() call — this also keeps ok/failed counts correct if the lock
+        # ever holds more than one slug per scope (the keyed-by-slug shape the
+        # lock model is forward-compatible with).
+        by_scope: dict[str, dict[str, tuple[set[str], set[str]]]] = defaultdict(
+            lambda: defaultdict(lambda: (set(), set()))
+        )
+        for (scope, harness, slug), op in pending.items():
+            adds, removes = by_scope[scope][slug]
+            (adds if op == "link" else removes).add(harness)
+
+        ok = failed = 0
+        errors: list[str] = []
+
+        for scope, slugs in by_scope.items():
+            home = Path.home() if scope == "global" else None
+            project = None if scope == "global" else Path.cwd()
+            n_writes = sum(len(a) + len(r) for a, r in slugs.values())
+
+            lpath = lock_file_path(scope, project)  # type: ignore[arg-type]
+            prior = read_lock(lpath)
+            prior_existed = lpath.exists()
+
+            # Apply every slug mutation onto a working copy of the lock.
+            updated_lock = prior
+            for slug, (adds, removes) in slugs.items():
+                if slug in updated_lock.instructions:
+                    entry = updated_lock.instructions[slug]
+                    new_harnesses = list(entry.harnesses)
+                    for h in adds:
+                        if h not in new_harnesses:
+                            new_harnesses.append(h)
+                    for h in removes:
+                        if h in new_harnesses:
+                            new_harnesses.remove(h)
+                    if new_harnesses:
+                        updated_lock = add_entry(
+                            updated_lock,
+                            slug,
+                            InstructionsLockEntry(
+                                scope=entry.scope,
+                                source=entry.source,
+                                harnesses=new_harnesses,
+                            ),
+                        )
+                    else:
+                        # No harnesses left — prune the entry rather than
+                        # writing an empty stub the CLI would never produce.
+                        updated_lock = remove_entry(updated_lock, slug)
+                elif adds:
+                    updated_lock = add_entry(
+                        updated_lock,
+                        slug,
+                        InstructionsLockEntry(
+                            scope=scope,  # type: ignore[arg-type]
+                            source="AGENTS.md",
+                            harnesses=sorted(adds),
+                        ),
+                    )
+                # else: only removes and no existing entry — nothing to do.
+
+            # Write the mutated lock, reconcile once, roll back on failure.
+            if updated_lock.instructions:
+                write_lock(lpath, updated_lock)
+            elif prior_existed:
+                # Lock emptied entirely — delete it (#312), don't write `{}`.
+                lpath.unlink()
+            try:
+                plan = instructions_install.apply(
+                    scope=scope,  # type: ignore[arg-type]
+                    project_root=project,
+                    home=home,
+                )
+                created = sum(1 for a in plan.actions if a.action == "create")
+                removed = sum(1 for a in plan.actions if a.action == "remove")
+                ok += created + removed
+            except (
+                instructions_install.CanonicalMissingError,
+                PointerConflictError,
+            ) as exc:
+                # Reconcile failed — restore the lock to its prior state so it
+                # never claims an install that did not land on disk.
+                if prior_existed:
+                    write_lock(lpath, prior)
+                else:
+                    lpath.unlink(missing_ok=True)
+                errors.append(f"{scope}: {exc}")
+                failed += n_writes
+
+        saved = grid.pending_entries() if failed else {}
+        if failed == 0:
+            grid.clear_pending()
+        self._refresh_instruction_view()
+        if saved:
+            grid.restore_pending(saved)
+        self._refresh_pending_label()
+        self._refresh_status_bar()
+        if errors:
+            first = " ".join(errors[0].split())
+            extra = f" (+{len(errors) - 1} more)" if len(errors) > 1 else ""
+            self.query_one("#footer-pending", Static).update(
+                f"[red]apply failed[/] — {first}{extra}"
+            )
+            self.notify(
+                "\n\n".join(errors),
+                title=f"Apply: {ok} ok, {failed} failed",
+                severity="error",
+                timeout=12,
+            )
+        else:
+            self.query_one("#footer-pending", Static).update(
+                f"applied: {ok} ok, {failed} failed"
+            )
 
     def _apply_skill_pending(self) -> None:
         from agent_toolkit_cli.skill_install import (
@@ -752,7 +973,12 @@ class TUIApp(App):
 
     def _build_content_header(self) -> str:
         kind_label = _KIND_LABELS.get(self._active_kind, self._active_kind)
-        if self._active_kind == "skill":
+        if self._active_kind == "instruction":
+            try:
+                n = self.query_one("#instruction-grid", InstructionGrid).row_count
+            except (NoMatches, Exception):
+                n = 0
+        elif self._active_kind == "skill":
             try:
                 n = self.query_one("#skill-grid", SkillGrid).row_count
             except (NoMatches, Exception):
@@ -780,6 +1006,10 @@ class TUIApp(App):
     def _refresh_pending_label(self) -> None:
         n = 0
         try:
+            n += len(self.query_one("#instruction-grid", InstructionGrid).pending_entries())
+        except Exception:
+            pass
+        try:
             n += len(self.query_one("#skill-grid", SkillGrid).pending_entries())
         except Exception:
             pass
@@ -799,7 +1029,28 @@ class TUIApp(App):
     def _refresh_status_bar(self) -> None:
         """Roll up active grid rows into status counts."""
         active = getattr(self, "_active_kind", "skill")
-        if active == "skill":
+        if active == "instruction":
+            linked = 0
+            try:
+                grid_instr = self.query_one("#instruction-grid", InstructionGrid)
+            except (NoMatches, Exception):
+                grid_instr = None
+            if grid_instr is not None:
+                scope = self._scope_to_roots()[0]
+                for instr_row in grid_instr._rows:
+                    for (harness, sc), icell in instr_row.cells.items():
+                        if sc != scope:
+                            continue
+                        if icell.linked:
+                            linked += 1
+                pending = len(grid_instr.pending_entries())
+            else:
+                pending = 0
+            text = (
+                f"  [b green]{linked}[/] linked   "
+                f"[b yellow]{pending}[/] pending"
+            )
+        elif active == "skill":
             linked = drifted = stray = broken = 0
             try:
                 grid = self.query_one("#skill-grid", SkillGrid)
