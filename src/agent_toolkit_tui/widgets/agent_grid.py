@@ -273,6 +273,10 @@ class AgentGrid(Vertical):
     def _rebuild(self, table: DataTable) -> None:
         """Rebuild the DataTable from current rows + pending. Never named _render_*."""
         saved = table.cursor_coordinate
+        # Preserve the viewport across clear() (#321): clear() resets scroll to
+        # the top, so a toggle would jump the pane. Restore after the cursor is
+        # set (cursor-set can auto-scroll; restoring last wins).
+        saved_scroll = (table.scroll_x, table.scroll_y)
         table.clear(columns=True)
         # Slug column — info glyph since `i` works on it.
         table.add_column(f"AGENT {_INFO_GLYPH}", width=22)
@@ -299,6 +303,10 @@ class AgentGrid(Vertical):
                 row=min(saved.row, max_row),
                 column=min(saved.column, max_col),
             )
+        # Pin the viewport back (clamped by Textual to the new content range).
+        table.scroll_to(
+            x=saved_scroll[0], y=saved_scroll[1], animate=False, force=True
+        )
 
     def _cell_glyph(self, *, row: AgentRow, harness: str) -> str:
         """Return the display glyph for a harness cell. Never named _render_*."""

@@ -542,6 +542,10 @@ class SkillGrid(Vertical):
 
     def _rebuild(self, table: DataTable) -> None:
         saved = table.cursor_coordinate
+        # Preserve the viewport: clear() resets scroll to the top, so a toggle
+        # would jump the pane (#321). Save the offset and restore it after the
+        # cursor is set (cursor-set can auto-scroll; restoring last wins).
+        saved_scroll = (table.scroll_x, table.scroll_y)
         table.clear(columns=True)
         # Slug column has cell-info (the slug-cell panel) → glyph it.
         table.add_column(f"SKILL {_INFO_GLYPH}", width=20)
@@ -573,6 +577,10 @@ class SkillGrid(Vertical):
                 row=min(saved.row, max_row),
                 column=min(saved.column, max_col),
             )
+        # Pin the viewport back (clamped by Textual to the new content range).
+        table.scroll_to(
+            x=saved_scroll[0], y=saved_scroll[1], animate=False, force=True
+        )
 
     def _cell_glyph(self, *, row: SkillRow, agent: str) -> str:
         cell = row.cells.get((agent, self._scope))

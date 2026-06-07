@@ -286,6 +286,10 @@ class PiGrid(Vertical):
 
     def _rebuild(self, table: DataTable) -> None:
         saved = table.cursor_coordinate
+        # Preserve the viewport across clear() (#321): clear() resets scroll to
+        # the top, so a toggle would jump the pane. Restore after the cursor is
+        # set (cursor-set can auto-scroll; restoring last wins).
+        saved_scroll = (table.scroll_x, table.scroll_y)
         table.clear(columns=True)
         table.add_column(f"EXTENSION {_INFO_GLYPH}", width=24)
         table.add_column(f"Pi (global) {_INFO_GLYPH}", width=14)
@@ -310,6 +314,10 @@ class PiGrid(Vertical):
                 row=min(saved.row, max_row),
                 column=min(saved.column, max_col),
             )
+        # Pin the viewport back (clamped by Textual to the new content range).
+        table.scroll_to(
+            x=saved_scroll[0], y=saved_scroll[1], animate=False, force=True
+        )
 
     def _cell_glyph(self, *, row: PiExtensionRow, scope: str) -> str:
         """Return the display glyph for a scope cell. Never named _render_*."""
