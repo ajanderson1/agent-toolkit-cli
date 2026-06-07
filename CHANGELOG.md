@@ -1,5 +1,18 @@
 # Changelog
 
+## [3.6.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v3.5.3...v3.6.0) (2026-06-07)
+
+
+### Features
+
+* **tui:** add instruction kind to the TUI ([#323](https://github.com/ajanderson1/agent-toolkit-cli/issues/323)) ([5484480](https://github.com/ajanderson1/agent-toolkit-cli/commit/5484480d4ed5c08945f48495e5684736c0c781e8)), closes [#319](https://github.com/ajanderson1/agent-toolkit-cli/issues/319)
+
+
+### Bug Fixes
+
+* **tui:** preserve view-pane position when toggling a checkbox ([#326](https://github.com/ajanderson1/agent-toolkit-cli/issues/326)) ([d5961f5](https://github.com/ajanderson1/agent-toolkit-cli/commit/d5961f5726653aee26809e369b1f04ae1a1e8c51)), closes [#321](https://github.com/ajanderson1/agent-toolkit-cli/issues/321)
+* **tui:** rebind scope toggle from 's' to ctrl+g ([#325](https://github.com/ajanderson1/agent-toolkit-cli/issues/325)) ([9ceba4b](https://github.com/ajanderson1/agent-toolkit-cli/commit/9ceba4bf6883844b81bc77565a32df1067624277)), closes [#320](https://github.com/ajanderson1/agent-toolkit-cli/issues/320)
+
 ## [3.5.3](https://github.com/ajanderson1/agent-toolkit-cli/compare/v3.5.2...v3.5.3) (2026-06-03)
 
 
