@@ -47,10 +47,12 @@ def render_table(
     Formatting rules:
     - Per-column width = max display_width across all cells in that column
       (header included when given).
-    - Each cell is left-padded to the column width by appending spaces:
-      ``pad = col_width - display_width(cell)`` trailing spaces appended.
+    - Each cell is left-aligned (right-padded) to the column width by appending
+      ``pad = col_width - display_width(cell)`` spaces.
     - Columns are separated by two spaces (``"  "``).
-    - The **last** column is never right-padded (no trailing whitespace).
+    - The **last** column is never padded, and each rendered row is right-
+      stripped, so no line ever ends in trailing whitespace — even when the
+      final cell is empty.
     """
     if not rows:
         return ""
@@ -74,7 +76,10 @@ def render_table(
             else:
                 # Last column: no trailing padding.
                 parts.append(cell)
-        return "  ".join(parts)
+        # rstrip guards the case where the final cell is empty (e.g. an unsynced
+        # skill's blank short-sha): the gutter would otherwise leave the row
+        # ending in two trailing spaces.
+        return "  ".join(parts).rstrip(" ")
 
     lines: list[str] = []
     if headers is not None:

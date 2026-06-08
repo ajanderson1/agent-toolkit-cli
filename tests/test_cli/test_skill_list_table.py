@@ -84,6 +84,27 @@ def test_skill_list_no_trailing_whitespace(tmp_path: Path, monkeypatch) -> None:
         assert not line.endswith(" "), f"trailing whitespace in: {line!r}"
 
 
+def test_skill_list_no_trailing_whitespace_unsynced_sha(tmp_path: Path, monkeypatch) -> None:
+    """A skill with no upstream sha renders a blank final column with no trailing space.
+
+    `skill list` builds the last column as ``(e.upstream_sha or "")[:7]``; a
+    newly-added, not-yet-synced skill has ``upstream_sha=None`` → an empty final
+    cell. The two-space gutter must not leak through as trailing whitespace.
+    Regression for #336.
+    """
+    library_root = tmp_path / "lib" / "skills"
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    _write_skill_lock(library_root, {
+        "synced-skill": _skill_entry("https://example.com/a", sha="abc1234"),
+        "unsynced-skill": _skill_entry("https://example.com/b", sha=None),
+    })
+
+    result = CliRunner().invoke(main, ["skill", "list", "-g"])
+    assert result.exit_code == 0, result.output
+    for line in result.output.splitlines():
+        assert not line.endswith(" "), f"trailing whitespace in: {line!r}"
+
+
 def test_skill_list_empty_state_unchanged(tmp_path: Path, monkeypatch) -> None:
     """Empty lock must still print the standard empty-state message."""
     library_root = tmp_path / "lib" / "skills"

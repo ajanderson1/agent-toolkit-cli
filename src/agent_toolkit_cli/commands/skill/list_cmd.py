@@ -98,7 +98,7 @@ def _emit_table(
     scope: str = "global",
     project_flag_explicit: bool = False,
 ) -> None:
-    """Print the human-readable tab-separated table to stdout."""
+    """Print the human-readable column-aligned table to stdout."""
     if not lock.skills:
         if project_flag_explicit and scope == "project":
             click.echo(

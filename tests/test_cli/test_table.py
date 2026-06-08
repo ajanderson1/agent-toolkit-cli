@@ -102,19 +102,57 @@ def test_glyph_column_alignment():
 
 
 def test_genuinely_wide_codepoints_do_not_break_alignment():
-    """A column with CJK chars (display-width 2) must align the next column correctly."""
+    """A column with CJK chars (display-width 2) must align the next column correctly.
+
+    Asserts the structural invariant — both second-column cells start at the same
+    *display* offset — rather than matching a hand-computed literal. "中" has
+    display_width 2, "a" has display_width 1, so col 0's display width is 2 and
+    the gutter starts at display offset 2 in both rows.
+    """
     rows = [
         ["中", "x"],
         ["a", "y"],
     ]
     rendered = render_table(rows)
     lines = rendered.splitlines()
-    # "中" has display_width=2, "a" has display_width=1.
-    # Col 0 width = 2. "a" gets 1 trailing space, "中" gets 0.
-    # Both lines should have "  " gutter after the padded col 0.
-    assert "中  x" in lines[0]
-    # "a" padded to width 2 → "a " then gutter "  " → "a   y"
-    assert "a   y" in lines[1]
+
+    # Measure where each second-column value begins, in *display* columns. The
+    # value is the final token; the prefix before it (padded col 0 + gutter)
+    # must have the same display width on every row for the column to align.
+    second_values = {"x", "y"}
+    prefix_widths = set()
+    for line in lines:
+        value = next(v for v in second_values if line.endswith(v))
+        prefix = line[: -len(value)]
+        prefix_widths.add(display_width(prefix))
+    assert len(prefix_widths) == 1, (
+        f"second column starts at different display offsets {prefix_widths}: {lines!r}"
+    )
+    # Sanity: that offset is col0 display width (2 for 中) + the 2-space gutter.
+    assert prefix_widths == {2 + 2}
+    assert {line[-1] for line in lines} == second_values
+
+
+def test_empty_last_column_has_no_trailing_whitespace():
+    """When the final cell is empty, the gutter must not leak as trailing space.
+
+    This is the helper-level regression for #336: ``"  ".join`` would otherwise
+    glue the gutter onto an empty last cell. The earlier column must still pad so
+    rows stay aligned; only the trailing run of spaces is stripped.
+    """
+    rows = [
+        ["short", "main", "abc1234"],
+        ["a-much-longer-slug", "main", ""],
+    ]
+    rendered = render_table(rows)
+    lines = rendered.splitlines()
+    for line in lines:
+        assert not line.endswith(" "), f"trailing whitespace in: {line!r}"
+    # The row whose last cell is empty ends at its (non-empty) penultimate column.
+    assert lines[1].endswith("main")
+    # Alignment of the middle column is preserved despite the rstrip.
+    offsets = {line.find("main") for line in lines}
+    assert len(offsets) == 1, f"middle column misaligned: {offsets} in {lines!r}"
 
 
 def test_header_row_widens_columns():
