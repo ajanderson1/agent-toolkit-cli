@@ -1,6 +1,8 @@
 """`instructions doctor` — find conflicting/orphan/stray pointers."""
 from __future__ import annotations
 
+from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 
 import click
@@ -9,6 +11,22 @@ from agent_toolkit_cli import instructions_paths
 from agent_toolkit_cli.instructions_adapters import SUPPORTED_HARNESSES
 from agent_toolkit_cli.instructions_adapters.symlink import _pointer_path
 from agent_toolkit_cli.instructions_lock import read_lock
+
+
+@dataclass
+class FixAction:
+    """A repair the user can opt into for a finding."""
+
+    shell_preview: str
+    apply: Callable[[], None]
+
+
+@dataclass
+class Finding:
+    """One doctor finding. `fix_action=None` means report-only."""
+
+    message: str
+    fix_action: "FixAction | None" = None
 
 
 @click.command(help="Find conflicting/orphan/stray pointers vs the lock.")
