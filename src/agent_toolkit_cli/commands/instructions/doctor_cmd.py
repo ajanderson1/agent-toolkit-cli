@@ -4,17 +4,16 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 import click
 
 from agent_toolkit_cli import instructions_install, instructions_paths
 from agent_toolkit_cli.instructions_adapters import SUPPORTED_HARNESSES
-from agent_toolkit_cli.instructions_adapters.symlink import (
-    PointerConflictError,
-    _pointer_path,
-)
+from agent_toolkit_cli.instructions_adapters.symlink import _pointer_path
 from agent_toolkit_cli.instructions_lock import (
     InstructionsLockEntry,
+    Scope,
     add_entry,
     read_lock,
     write_lock,
@@ -34,16 +33,31 @@ class Finding:
     """One doctor finding. `fix_action=None` means report-only."""
 
     message: str
-    fix_action: "FixAction | None" = None
+    fix_action: FixAction | None = None
 
 
-def _adopt_harness_for(pointer: Path, harness: str) -> str:
+def _adopt_harness_for(
+    pointer: Path,
+    harness: str,
+    *,
+    scope: str,
+    project_root: Path | None,
+    home: Path | None,
+) -> str:
     """Derive the canonical adopting harness for a slot.
 
-    The CLAUDE.md slot is shared by augment + claude-code; claude-code is the
-    canonical adopter. Otherwise the scanning harness owns its slot.
+    At project scope, augment + claude-code physically *share* one path
+    ({PROJECT}/CLAUDE.md); claude-code is the canonical adopter for that shared
+    slot. The match must be by path, not by filename: at global scope the slots
+    are distinct (~/.augment/CLAUDE.md vs ~/.claude/CLAUDE.md) yet both named
+    CLAUDE.md, so a name check would misadopt augment's own global file as
+    claude-code. Otherwise the scanning harness owns its slot.
     """
-    if pointer.name == "CLAUDE.md":
+    try:
+        claude_slot = _pointer_path("claude-code", scope, project_root, home)
+    except ValueError:
+        claude_slot = None
+    if claude_slot is not None and pointer == claude_slot:
         return "claude-code"
     return harness
 
@@ -54,8 +68,8 @@ def _unmanaged_finding(
     harness: str,
     canonical: Path,
     scope: str,
-    project_root: "Path | None",
-    home: "Path | None",
+    project_root: Path | None,
+    home: Path | None,
     lock_path: Path,
 ) -> Finding:
     """Build an unmanaged finding. Report-only if canonical already has content."""
@@ -66,7 +80,9 @@ def _unmanaged_finding(
             f"AGENTS.md already exists — adopt skipped (content merge is out of scope)"
         ))
 
-    adopt_harness = _adopt_harness_for(pointer, harness)
+    adopt_harness = _adopt_harness_for(
+        pointer, harness, scope=scope, project_root=project_root, home=home,
+    )
 
     def _apply() -> None:
         # Re-assert the guard (a non-empty AGENTS.md may have appeared).
@@ -81,15 +97,22 @@ def _unmanaged_finding(
         existing = prior.instructions.get("AGENTS.md")
         new_harnesses = sorted({*(existing.harnesses if existing else []), adopt_harness})
         new = add_entry(prior, "AGENTS.md", InstructionsLockEntry(
-            scope=scope,  # type: ignore[arg-type]
+            scope=cast("Scope", scope),
             source="AGENTS.md",
             harnesses=new_harnesses,
         ))
         write_lock(lock_path, new)
         try:
             instructions_install.apply(scope=scope, project_root=project_root, home=home)
-        except (instructions_install.CanonicalMissingError, PointerConflictError) as exc:
-            # Roll back: restore the real file and the prior lock.
+        except Exception as exc:
+            # Roll back on ANY failure — not just the two domain errors. apply()
+            # can fail on perms/ENOSPC, or succeed on the adopted slot then raise
+            # on a *different* wanted slot (leaving a symlink it created). Undo
+            # everything: drop any symlink apply() laid at our slot, restore the
+            # user's real file, then restore the prior lock. Never leave AGENTS.md
+            # renamed + lock written with the slot un-pointed (a lying lock).
+            if pointer.is_symlink():
+                pointer.unlink()
             if canonical.exists() and not pointer.exists():
                 canonical.rename(pointer)
             if prior_existed:
