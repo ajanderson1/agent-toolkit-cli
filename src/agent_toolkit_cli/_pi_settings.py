@@ -137,3 +137,51 @@ def remove_package(
         return
     data["packages"] = [p for p in packages if p != spec]
     _write_atomic(path, data)
+
+
+def _npm_identity(spec_or_slug: str) -> str:
+    """Reduce an npm spec/slug to its bare package identity.
+
+    Strips a leading ``npm:`` scheme and a trailing ``@version`` without
+    eating the leading ``@`` of a scoped package name:
+      ``npm:@scope/name@1.2.3`` -> ``@scope/name``
+      ``npm:foo@1.2.3``         -> ``foo``
+      ``foo``                   -> ``foo``
+
+    npm specs only: a non-npm source (e.g. ``https://...``) would normalize
+    wrong via ``split(":", 1)``; every call site guards on npm. Unlike
+    ``_npm_slug`` this also strips the trailing ``@version``.
+    """
+    s = spec_or_slug
+    if ":" in s:
+        s = s.split(":", 1)[1]  # drop a leading npm: scheme
+    scoped = s.startswith("@")
+    body = s[1:] if scoped else s
+    body = body.split("@", 1)[0]  # drop a trailing @version
+    return ("@" + body) if scoped else body
+
+
+def remove_package_by_identity(
+    spec_or_slug: str,
+    *,
+    scope: Scope,
+    home: Path | None = None,
+    project: Path | None = None,
+) -> None:
+    """Remove every packages[] entry whose npm identity matches.
+
+    Unlike exact-match ``remove_package`` this catches drift between the
+    lock's stored source and the literal packages[] string (missing
+    ``npm:`` prefix, version-pinned variants). No-op if the file is missing
+    or nothing matches. Raises PiSettingsError on malformed settings.json."""
+    path = settings_path(scope=scope, home=home, project=project)
+    if not path.exists():
+        return
+    data = _load(path)
+    packages = _string_list(data, "packages", path)
+    target = _npm_identity(spec_or_slug)
+    kept = [p for p in packages if _npm_identity(p) != target]
+    if len(kept) == len(packages):
+        return
+    data["packages"] = kept
+    _write_atomic(path, data)
