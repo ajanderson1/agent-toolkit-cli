@@ -47,7 +47,8 @@ def doctor_cmd(ctx: click.Context, scope: str) -> None:
         home = Path.home()
         canonical = instructions_paths.global_canonical_agents_md()
 
-    findings: list[str] = []
+    findings: list[Finding] = []
+    conflict_paths: set[Path] = set()
 
     lock_path = instructions_paths.lock_file_path(scope, project_root)
     lock = read_lock(lock_path)
@@ -67,7 +68,7 @@ def doctor_cmd(ctx: click.Context, scope: str) -> None:
 
     # Orphan: lock says ON but canonical is gone.
     if wanted and not canonical.exists():
-        findings.append(f"orphan: canonical AGENTS.md missing at {canonical}")
+        findings.append(Finding(message=f"orphan: canonical AGENTS.md missing at {canonical}"))
 
     # Conflict: lock says ON but pointer is a real file or points elsewhere.
     for harness in sorted(wanted):
@@ -76,13 +77,14 @@ def doctor_cmd(ctx: click.Context, scope: str) -> None:
         except ValueError:
             continue
         if pointer.exists() and not pointer.is_symlink():
-            findings.append(
-                f"conflict: {harness} pointer at {pointer} is a real file (not ours)"
-            )
+            conflict_paths.add(pointer)
+            findings.append(Finding(
+                message=f"conflict: {harness} pointer at {pointer} is a real file (not ours)"
+            ))
         elif pointer.is_symlink() and pointer.resolve() != canonical.resolve():
-            findings.append(
-                f"conflict: {harness} pointer at {pointer} → {pointer.resolve()} (not canonical)"
-            )
+            findings.append(Finding(
+                message=f"conflict: {harness} pointer at {pointer} → {pointer.resolve()} (not canonical)"
+            ))
 
     # Stray: a pointer-shaped symlink at a harness slot, pointing at canonical,
     # but not recorded in the lock. (Manual mkdir + ln scenario.) Skip slots that
@@ -98,14 +100,16 @@ def doctor_cmd(ctx: click.Context, scope: str) -> None:
             pointer.is_symlink()
             and pointer.resolve() == canonical.resolve()
         ):
-            findings.append(
-                f"stray: {harness} pointer at {pointer} points at canonical "
-                "but isn't recorded in the lock"
-            )
+            findings.append(Finding(
+                message=(
+                    f"stray: {harness} pointer at {pointer} points at canonical "
+                    "but isn't recorded in the lock"
+                )
+            ))
 
     if not findings:
         click.echo("clean — no findings at this scope")
         return
     for f in findings:
-        click.echo(f)
+        click.echo(f.message)
     ctx.exit(1)
