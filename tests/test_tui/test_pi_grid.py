@@ -311,6 +311,7 @@ async def test_apply_store_owned_global(monkeypatch):
     from agent_toolkit_tui.app import TUIApp
     import agent_toolkit_cli.pi_extension_install as _pi_install
     import agent_toolkit_cli.pi_extension_lock as _lock
+    import agent_toolkit_cli.pi_extension_ops as _ops
 
     applied_calls: list[Any] = []
 
@@ -320,19 +321,23 @@ async def test_apply_store_owned_global(monkeypatch):
     def fake_apply(p, *, home=None, project=None):
         applied_calls.append((p, scope, home, project))
 
+    entry = MagicMock()
+    entry.source_type = "git"
+    entry.source = "git@github.com:x/alpha"
+    entry.ref = "main"
+    entry.pi_extension_path = None
+
     def fake_read_lock(path):
         lf = MagicMock()
-        entry = MagicMock()
-        entry.source_type = "git"
-        entry.source = "git@github.com:x/alpha"
-        entry.ref = "main"
-        entry.pi_extension_path = None
         lf.skills = {"alpha": entry}
         return lf
 
     monkeypatch.setattr(_pi_install, "plan", fake_plan)
     monkeypatch.setattr(_pi_install, "apply", fake_apply)
     monkeypatch.setattr(_lock, "read_lock", fake_read_lock)
+    # The app reads the global lock to learn the slug universe; the delegated
+    # core (pi_extension_ops) re-reads its own entry via _global_entry.
+    monkeypatch.setattr(_ops, "_global_entry", lambda slug: entry)
     monkeypatch.setattr("agent_toolkit_cli.pi_extension_paths.library_lock_path", lambda env=None: Path("/fake/lock"))
 
     scope = "global"
@@ -356,10 +361,12 @@ async def test_apply_store_owned_global(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_apply_npm_global_and_project(monkeypatch):
-    """Apply npm link for global and unlink for project: calls add/remove_package."""
+    """Apply npm link for global and unlink for project: delegates to
+    add_package (link) and remove_package_by_identity (unlink, drift-tolerant)."""
     from agent_toolkit_tui.app import TUIApp
     import agent_toolkit_cli._pi_settings as _settings
     import agent_toolkit_cli.pi_extension_lock as _lock
+    import agent_toolkit_cli.pi_extension_ops as _ops
 
     add_calls: list[Any] = []
     remove_calls: list[Any] = []
@@ -370,19 +377,23 @@ async def test_apply_npm_global_and_project(monkeypatch):
     def fake_remove(spec, *, scope, home=None, project=None):
         remove_calls.append({"spec": spec, "scope": scope, "home": home, "project": project})
 
+    entry = MagicMock()
+    entry.source_type = "npm"
+    entry.source = "npm:@scope/pkg"
+    entry.ref = None
+    entry.pi_extension_path = None
+
     def fake_read_lock(path):
         lf = MagicMock()
-        entry = MagicMock()
-        entry.source_type = "npm"
-        entry.source = "npm:@scope/pkg"
-        entry.ref = None
-        entry.pi_extension_path = None
         lf.skills = {"@scope/pkg": entry}
         return lf
 
     monkeypatch.setattr(_settings, "add_package", fake_add)
-    monkeypatch.setattr(_settings, "remove_package", fake_remove)
+    # Delegated npm uninstall goes through remove_package_by_identity (#333):
+    # drift-tolerant, unlike the old exact-match remove_package.
+    monkeypatch.setattr(_settings, "remove_package_by_identity", fake_remove)
     monkeypatch.setattr(_lock, "read_lock", fake_read_lock)
+    monkeypatch.setattr(_ops, "_global_entry", lambda slug: entry)
     monkeypatch.setattr("agent_toolkit_cli.pi_extension_paths.library_lock_path", lambda env=None: Path("/fake/lock"))
 
     app = TUIApp()
@@ -403,7 +414,7 @@ async def test_apply_npm_global_and_project(monkeypatch):
     assert "applied:" in footer
     # add_package called for global scope
     assert any(c["scope"] == "global" and c["spec"] == "npm:@scope/pkg" for c in add_calls)
-    # remove_package called for project scope
+    # remove_package_by_identity called for project scope
     assert any(c["scope"] == "project" and c["spec"] == "npm:@scope/pkg" for c in remove_calls)
 
 
@@ -413,6 +424,7 @@ async def test_apply_store_owned_project_writes_lock(monkeypatch, tmp_path):
     from agent_toolkit_tui.app import TUIApp
     import agent_toolkit_cli.pi_extension_install as _pi_install
     import agent_toolkit_cli.pi_extension_lock as _lock
+    import agent_toolkit_cli.pi_extension_ops as _ops
     from agent_toolkit_cli.skill_lock import LockFile
 
     proj_lock = LockFile(version=1, skills={})
@@ -425,15 +437,16 @@ async def test_apply_store_owned_project_writes_lock(monkeypatch, tmp_path):
 
     written: list[Any] = []
 
+    entry = MagicMock()
+    entry.source_type = "git"
+    entry.source = "git@github.com:x/alpha"
+    entry.ref = "main"
+    entry.pi_extension_path = None
+
     def fake_read_lock(path):
         if "projects" in str(path) or ".pi-extension-lock" in str(path):
             return proj_lock
         lf = MagicMock()
-        entry = MagicMock()
-        entry.source_type = "git"
-        entry.source = "git@github.com:x/alpha"
-        entry.ref = "main"
-        entry.pi_extension_path = None
         lf.skills = {"alpha": entry}
         return lf
 
@@ -452,6 +465,14 @@ async def test_apply_store_owned_project_writes_lock(monkeypatch, tmp_path):
     monkeypatch.setattr(_lock, "read_lock", fake_read_lock)
     monkeypatch.setattr(_lock, "write_lock", fake_write_lock)
     monkeypatch.setattr(_lock, "add_entry", fake_add_entry)
+    # The project-lock bookkeeping after projection now lives in the delegated
+    # core (pi_extension_ops), which binds these names at import — patch them
+    # there too so the project write is observed (#333).
+    monkeypatch.setattr(_ops, "_global_entry", lambda slug: entry)
+    monkeypatch.setattr(_ops, "read_lock", fake_read_lock)
+    monkeypatch.setattr(_ops, "write_lock", fake_write_lock)
+    monkeypatch.setattr(_ops, "add_entry", fake_add_entry)
+    monkeypatch.setattr(_ops, "lock_file_path", fake_lock_file_path)
     monkeypatch.setattr("agent_toolkit_cli.pi_extension_paths.library_lock_path", lambda env=None: Path("/fake/lock"))
     monkeypatch.setattr("agent_toolkit_cli.pi_extension_paths.lock_file_path", fake_lock_file_path)
 
@@ -478,6 +499,7 @@ async def test_apply_install_error_surfaces_notify_and_footer(monkeypatch):
     from agent_toolkit_tui.app import TUIApp
     import agent_toolkit_cli.pi_extension_install as _pi_install
     import agent_toolkit_cli.pi_extension_lock as _lock
+    import agent_toolkit_cli.pi_extension_ops as _ops
 
     notify_calls: list[Any] = []
 
@@ -487,19 +509,21 @@ async def test_apply_install_error_surfaces_notify_and_footer(monkeypatch):
     def fake_apply_err(p, *, home=None, project=None):
         raise _pi_install.InstallError("symlink conflict at /fake/path")
 
+    entry = MagicMock()
+    entry.source_type = "git"
+    entry.source = "git@github.com:x/alpha"
+    entry.ref = "main"
+    entry.pi_extension_path = None
+
     def fake_read_lock(path):
         lf = MagicMock()
-        entry = MagicMock()
-        entry.source_type = "git"
-        entry.source = "git@github.com:x/alpha"
-        entry.ref = "main"
-        entry.pi_extension_path = None
         lf.skills = {"alpha": entry}
         return lf
 
     monkeypatch.setattr(_pi_install, "plan", fake_plan)
     monkeypatch.setattr(_pi_install, "apply", fake_apply_err)
     monkeypatch.setattr(_lock, "read_lock", fake_read_lock)
+    monkeypatch.setattr(_ops, "_global_entry", lambda slug: entry)
     monkeypatch.setattr("agent_toolkit_cli.pi_extension_paths.library_lock_path", lambda env=None: Path("/fake/lock"))
 
     app = TUIApp()
@@ -532,24 +556,27 @@ async def test_apply_pi_settings_error_surfaces(monkeypatch):
     from agent_toolkit_tui.app import TUIApp
     import agent_toolkit_cli._pi_settings as _settings
     import agent_toolkit_cli.pi_extension_lock as _lock
+    import agent_toolkit_cli.pi_extension_ops as _ops
 
     notify_calls: list[Any] = []
 
     def fake_add_err(spec, *, scope, home=None, project=None):
         raise _settings.PiSettingsError("malformed JSON at /fake/settings.json")
 
+    entry = MagicMock()
+    entry.source_type = "npm"
+    entry.source = "npm:bad-pkg"
+    entry.ref = None
+    entry.pi_extension_path = None
+
     def fake_read_lock(path):
         lf = MagicMock()
-        entry = MagicMock()
-        entry.source_type = "npm"
-        entry.source = "npm:bad-pkg"
-        entry.ref = None
-        entry.pi_extension_path = None
         lf.skills = {"bad-pkg": entry}
         return lf
 
     monkeypatch.setattr(_settings, "add_package", fake_add_err)
     monkeypatch.setattr(_lock, "read_lock", fake_read_lock)
+    monkeypatch.setattr(_ops, "_global_entry", lambda slug: entry)
     monkeypatch.setattr("agent_toolkit_cli.pi_extension_paths.library_lock_path", lambda env=None: Path("/fake/lock"))
 
     app = TUIApp()

@@ -745,13 +745,11 @@ class TUIApp(App):
             )
 
     def _apply_pi_pending(self) -> None:
-        from agent_toolkit_cli import _pi_settings, pi_extension_install
-        from agent_toolkit_cli.pi_extension_lock import (
-            LockEntry, add_entry, read_lock, remove_entry, write_lock,
+        from agent_toolkit_cli import (
+            _pi_settings, pi_extension_install, pi_extension_ops,
         )
-        from agent_toolkit_cli.pi_extension_paths import (
-            library_lock_path, lock_file_path,
-        )
+        from agent_toolkit_cli.pi_extension_lock import read_lock
+        from agent_toolkit_cli.pi_extension_paths import library_lock_path
 
         try:
             grid = self.query_one("#pi-grid", PiGrid)
@@ -784,71 +782,20 @@ class TUIApp(App):
         for (scope_str, slug), op in pending.items():
             scope = cast(_Scope, scope_str)
             project = Path.cwd() if scope == "project" else None
-            entry = glob_lock.skills.get(slug)
-            if entry is None:
-                # Untracked slug — no lock entry, skip (guard: should not
-                # reach here because untracked rows are non-interactive).
+            if slug not in glob_lock.skills:
+                # Untracked slug — no lock entry, skip (untracked rows are
+                # non-interactive; guard mirrors the old behaviour).
                 continue
-
             try:
-                if entry.source_type == "npm":
-                    # npm: add or remove from packages[] in settings.json.
-                    if op == "link":
-                        _pi_settings.add_package(
-                            entry.source,
-                            scope=scope,
-                            home=home,
-                            project=project,
-                        )
-                    else:
-                        _pi_settings.remove_package(
-                            entry.source,
-                            scope=scope,
-                            home=home,
-                            project=project,
-                        )
-                    ok += 1
+                if op == "link":
+                    pi_extension_ops.install(
+                        slug=slug, scope=scope, home=home, project=project
+                    )
                 else:
-                    # store-owned: project the symlink, then update project lock.
-                    action: pi_extension_install.Action = (
-                        "install" if op == "link" else "uninstall"
+                    pi_extension_ops.uninstall(
+                        slug=slug, scope=scope, home=home, project=project
                     )
-                    p = pi_extension_install.plan(
-                        slug=slug,
-                        scope=scope,
-                        action=action,
-                        home=home,
-                        project=project,
-                    )
-                    pi_extension_install.apply(p, home=home, project=project)
-                    ok += 1
-
-                    # Update project lock after a successful projection.
-                    if scope == "project" and project is not None:
-                        proj_lock_path = lock_file_path(
-                            scope="project", project=project
-                        )
-                        proj_lock = read_lock(proj_lock_path)
-                        if op == "link" and slug not in proj_lock.skills:
-                            write_lock(
-                                proj_lock_path,
-                                add_entry(
-                                    proj_lock,
-                                    slug,
-                                    LockEntry(
-                                        source=entry.source,
-                                        source_type=entry.source_type,
-                                        ref=entry.ref,
-                                        pi_extension_path=entry.pi_extension_path,
-                                    ),
-                                ),
-                            )
-                        elif op == "unlink" and slug in proj_lock.skills:
-                            write_lock(
-                                proj_lock_path,
-                                remove_entry(proj_lock, slug),
-                            )
-
+                ok += 1
             except (pi_extension_install.InstallError, _pi_settings.PiSettingsError) as exc:
                 errors.append(f"{slug}: {exc}")
                 failed += 1
