@@ -435,6 +435,28 @@ def test_doctor_unmanaged_does_not_clobber_existing_agents(tmp_path, monkeypatch
     assert (project / "CLAUDE.md").read_text() == "# different\n"
 
 
+def test_doctor_adopt_global(tmp_path, monkeypatch):
+    home = _global_home(tmp_path, monkeypatch)
+    # _global_home seeds ~/.agent-toolkit/AGENTS.md — remove it so adoption is unambiguous.
+    (home / ".agent-toolkit" / "AGENTS.md").unlink()
+    # Real, unmanaged file at the global claude-code slot.
+    (home / ".claude").mkdir(parents=True, exist_ok=True)
+    (home / ".claude" / "CLAUDE.md").write_text("# global instructions\n")
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["instructions", "doctor", "--scope", "global"], input="y\n")
+    assert result.exit_code == 0, result.output
+
+    agents = home / ".agent-toolkit" / "AGENTS.md"
+    pointer = home / ".claude" / "CLAUDE.md"
+    assert agents.is_file() and agents.read_text() == "# global instructions\n"
+    assert pointer.is_symlink() and pointer.resolve() == agents.resolve()
+
+    again = runner.invoke(main, ["instructions", "doctor", "--scope", "global"])
+    assert again.exit_code == 0, again.output
+    assert "clean" in again.output.lower()
+
+
 def test_install_pointer_conflict_is_clean_clickexception(tmp_path, monkeypatch):
     """A real user file in the pointer slot yields a clean ClickException
     (not a raw traceback) and leaves the user's file intact."""
