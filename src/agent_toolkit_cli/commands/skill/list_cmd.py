@@ -112,6 +112,10 @@ def _emit_table(
         return
     for slug in slugs:
         e = lock.skills[slug]
-        ref = e.ref or "main"
+        # Show the pinned ref when one is recorded; otherwise the upstream's
+        # default branch (resolved lazily by update/status), not a hardcoded
+        # `main` that lies for `master`-based repos. `list` is display-only and
+        # has no clone path in scope, so an unpinned entry shows `(default)`.
+        ref = e.ref or "(default)"
         short = (e.upstream_sha or "")[:7]
         click.echo(f"{slug}\t{e.source}\t{ref}\t{short}")

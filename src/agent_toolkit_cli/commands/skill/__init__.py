@@ -79,7 +79,9 @@ def _reconstruct_single(
         skill_git.checkout(library_dir, ref=pin_sha, env=None)
     if skill_git.is_git_repo(library_dir):
         upstream_sha = skill_git.remote_head_sha(
-            library_dir, ref=parsed.ref or "main", env=None,
+            library_dir,
+            ref=skill_git.resolve_ref(parsed.ref, library_dir),
+            env=None,
         )
         local_sha = skill_git.head_sha(library_dir, env=None)
     else:
@@ -115,7 +117,7 @@ def _reconstruct_monorepo(
         # first cloned (#276). The parent is a read-only cache, so the reset is
         # safe. Best-effort: a fetch failure (offline) falls back to the cached
         # tree, which still resolves already-present skills.
-        ref = parsed.ref or "main"
+        ref = skill_git.resolve_ref(parsed.ref, parent_dir)
         try:
             skill_git.fetch_ref(parent_dir, ref=ref, env=None)
             skill_git.reset_hard(parent_dir, ref=ref, env=None)
@@ -312,7 +314,9 @@ def _add_single(parsed: ParsedSource, slug: str | None) -> None:
 
     if skill_git.is_git_repo(library_dir):
         upstream_sha = skill_git.remote_head_sha(
-            library_dir, ref=parsed.ref or "main", env=None,
+            library_dir,
+            ref=skill_git.resolve_ref(parsed.ref, library_dir),
+            env=None,
         )
         local_sha = skill_git.head_sha(library_dir, env=None)
     else:
@@ -358,7 +362,7 @@ def _add_monorepo(parsed: ParsedSource, slug: str | None, *, owned: bool = False
         # (#276). fetch_ref advances even a shallow clone; the hard reset moves
         # the working tree onto it. The parent is a read-only cache, so the
         # reset is safe.
-        ref = parsed.ref or "main"
+        ref = skill_git.resolve_ref(parsed.ref, parent_dir)
         try:
             skill_git.fetch_ref(parent_dir, ref=ref, env=None)
             skill_git.reset_hard(parent_dir, ref=ref, env=None)

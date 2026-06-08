@@ -17,6 +17,25 @@ from agent_toolkit_cli.skill_paths import (
 from ._common import scope_and_roots
 
 
+def _summary(repo, *, before: str, after: str) -> str:
+    """One-line change summary for an update.
+
+    `up to date` when the clone didn't move; otherwise the changed-file count,
+    `+ins/-dels` line delta, and the `before→after` short SHAs — so a refresh
+    shows what actually changed instead of a bare `updated`.
+    """
+    if before == after:
+        return "up to date"
+    files, ins, dels = skill_git.diff_shortstat(
+        repo, base=before, head=after, env=None,
+    )
+    plural = "file" if files == 1 else "files"
+    return (
+        f"updated · {files} {plural} +{ins}/-{dels} "
+        f"({before[:7]}→{after[:7]})"
+    )
+
+
 @click.command("update", epilog="""\
 Examples:
 
@@ -71,8 +90,9 @@ def update_cmd(
                 )
                 had_conflict = True
                 continue
-            ref = entry.ref or "main"
             skill_git.fetch(parent_dir, env=None)
+            ref = skill_git.resolve_ref(entry.ref, parent_dir)
+            before = skill_git.head_sha(parent_dir, env=None)
             try:
                 skill_git.merge(parent_dir, ref=ref, env=None)
             except skill_git.GitError as exc:
@@ -84,6 +104,7 @@ def update_cmd(
                 click.echo(exc.stderr)
                 had_conflict = True
                 continue
+            after = skill_git.head_sha(parent_dir, env=None)
             # Copy-mode entries need an explicit re-copy because the library
             # canonical is a stale snapshot of the parent's subfolder, not a
             # live symlink.
@@ -93,9 +114,16 @@ def update_cmd(
                 if library_dir.exists():
                     shutil.rmtree(library_dir)
                 shutil.copytree(skill_root, library_dir)
-            entry.upstream_sha = skill_git.head_sha(parent_dir, env=None)
+            entry.upstream_sha = after
+            # Backfill the detected ref so status/push/reset (and the next
+            # update) read it instead of re-detecting or falling back to main.
+            if entry.ref is None:
+                entry.ref = ref
             write_lock(lock_path, lock)
-            click.echo(f"{slug}: updated (parent {entry.source} @ {ref})")
+            click.echo(
+                f"{slug}: {_summary(parent_dir, before=before, after=after)} "
+                f"(parent {entry.source} @ {ref})"
+            )
             continue
         canonical = canonical_skill_dir(
             slug, scope=scope, home=home, project=project_root,
@@ -107,8 +135,9 @@ def update_cmd(
             )
             had_conflict = True
             continue
-        ref = entry.ref or "main"
         skill_git.fetch(canonical, env=None)
+        ref = skill_git.resolve_ref(entry.ref, canonical)
+        before = skill_git.head_sha(canonical, env=None)
         try:
             skill_git.merge(canonical, ref=ref, env=None)
         except skill_git.GitError as exc:
@@ -118,11 +147,14 @@ def update_cmd(
             click.echo(exc.stderr)
             had_conflict = True
             continue
-        entry.local_sha = skill_git.head_sha(canonical, env=None)
+        after = skill_git.head_sha(canonical, env=None)
+        entry.local_sha = after
         entry.upstream_sha = skill_git.remote_head_sha(
             canonical, ref=ref, env=None,
         )
+        if entry.ref is None:
+            entry.ref = ref
         write_lock(lock_path, lock)
-        click.echo(f"{slug}: updated")
+        click.echo(f"{slug}: {_summary(canonical, before=before, after=after)}")
     if had_conflict:
         ctx.exit(1)

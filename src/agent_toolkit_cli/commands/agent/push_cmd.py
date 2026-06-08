@@ -73,7 +73,7 @@ def push_cmd(
             continue
 
         entry = lock.skills[slug]
-        ref = entry.ref or "main"
+        ref = skill_git.resolve_ref(entry.ref, canonical)
         wt = skill_git.status(canonical, env=None)
 
         if wt == skill_git.GitWorkingTreeStatus.CLEAN:

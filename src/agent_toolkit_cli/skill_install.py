@@ -268,7 +268,9 @@ def apply(
         # is correct.
         if skill_git.is_git_repo(canonical):
             upstream_sha = skill_git.remote_head_sha(
-                canonical, ref=plan.ref or "main", env=env,
+                canonical,
+                ref=skill_git.resolve_ref(plan.ref, canonical, env=env),
+                env=env,
             )
             local_sha = skill_git.head_sha(canonical, env=env)
         else:
@@ -472,7 +474,11 @@ def install(
     if canonical.exists() and skill_git.is_git_repo(canonical):
         skill_git.fetch(canonical, env=env)
         try:
-            skill_git.merge(canonical, ref=parsed.ref or "main", env=env)
+            skill_git.merge(
+                canonical,
+                ref=skill_git.resolve_ref(parsed.ref, canonical, env=env),
+                env=env,
+            )
         except skill_git.GitError:
             pass
 

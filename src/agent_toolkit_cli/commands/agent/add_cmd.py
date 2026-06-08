@@ -118,7 +118,9 @@ def add_cmd(source: str, slug: str | None, ref: str | None) -> None:
     if skill_git.is_git_repo(canonical):
         try:
             upstream_sha: str | None = skill_git.remote_head_sha(
-                canonical, ref=parsed.ref or "main", env=None,
+                canonical,
+                ref=skill_git.resolve_ref(parsed.ref, canonical),
+                env=None,
             )
         except skill_git.GitError:
             upstream_sha = None

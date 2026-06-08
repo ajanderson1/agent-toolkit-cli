@@ -159,13 +159,15 @@ def test_update_behind_fast_forwards(git_sandbox, tmp_path, monkeypatch):
     assert (root / "demo" / "UPSTREAM.md").exists()
 
 
-def test_update_up_to_date_still_says_updated(git_sandbox, tmp_path, monkeypatch):
-    """Documents current behaviour: update prints 'updated' even when already
-    current — no 'already up to date'. See Gap Ledger §2."""
+def test_update_up_to_date_says_up_to_date(git_sandbox, tmp_path, monkeypatch):
+    """A no-op update reports `up to date`, not a misleading `updated`. The
+    summary distinguishes "nothing moved" from a real refresh (previously
+    Gap Ledger §2 — both printed `updated`)."""
     runner, root = _setup_global_demo(git_sandbox, tmp_path, monkeypatch)
     result = runner.invoke(main, ["skill", "update", "demo", "-g"])
     assert result.exit_code == 0, result.output
-    assert "updated" in result.output
+    assert "up to date" in result.output
+    assert "updated ·" not in result.output
 
 
 def test_update_conflict_exits_nonzero_and_is_terse(git_sandbox, tmp_path, monkeypatch):

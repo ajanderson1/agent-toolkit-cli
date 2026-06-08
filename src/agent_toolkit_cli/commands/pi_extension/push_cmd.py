@@ -78,7 +78,7 @@ def push_cmd(
             )
             continue
 
-        ref = entry.ref or "main"
+        ref = skill_git.resolve_ref(entry.ref, canonical)
         wt = skill_git.status(canonical, env=None)
         if wt == skill_git.GitWorkingTreeStatus.CLEAN:
             # Clean tree: check for committed-but-unpushed work (#280).

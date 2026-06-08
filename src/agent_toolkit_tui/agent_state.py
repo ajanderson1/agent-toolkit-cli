@@ -110,7 +110,7 @@ def build_agent_rows(
         rows.append(AgentRow(
             slug=slug,
             source=entry.source,
-            ref=entry.ref or "main",
+            ref=entry.ref or "(default)",
             cells=cells,
         ))
     return rows

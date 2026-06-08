@@ -12,18 +12,28 @@ from tests.conftest import scrub_git_env
 FIXTURE = Path(__file__).parent.parent / "fixtures" / "monorepo_skills"
 
 
-def _init_parent(tmp_path: Path) -> Path:
+def _init_parent(tmp_path: Path, *, branch: str = "main") -> Path:
     parent = tmp_path / "parent"
     subprocess.run(["cp", "-R", str(FIXTURE), str(parent)], check=True)
     env = scrub_git_env()
     for cmd in (
-        ["git", "init", "-q", "-b", "main"],
+        ["git", "init", "-q", "-b", branch],
         ["git", "-c", "user.email=t@t", "-c", "user.name=t", "add", "."],
         ["git", "-c", "user.email=t@t", "-c", "user.name=t",
          "commit", "-q", "-m", "init"],
     ):
         subprocess.run(cmd, cwd=parent, check=True, env=env)
     return parent
+
+
+def _commit_in(repo: Path, *, message: str = "update") -> None:
+    env = scrub_git_env()
+    for cmd in (
+        ["git", "-c", "user.email=t@t", "-c", "user.name=t", "add", "."],
+        ["git", "-c", "user.email=t@t", "-c", "user.name=t",
+         "commit", "-q", "-m", message],
+    ):
+        subprocess.run(cmd, cwd=repo, check=True, env=env)
 
 
 def test_update_monorepo_pulls_parent_and_reflects_new_content(
@@ -332,3 +342,84 @@ def test_update_monorepo_merges_without_global_git_identity(
     ).stdout.strip()
     assert head_author == "agent-toolkit-cli <noreply@agent-toolkit-cli>", \
         f"merge commit must use synthetic identity, got: {head_author}"
+
+
+def test_update_monorepo_default_branch_is_master_not_main(
+    tmp_path, monkeypatch,
+):
+    """Regression: a parent repo whose default branch is `master` (e.g.
+    upstash/context7) must update cleanly. The pre-fix code hardcoded an
+    `origin/main` merge target, producing
+    `merge: origin/main - not something we can merge` for every master-based
+    upstream. The lock entry carries no explicit `ref`, so the command must
+    detect the parent's actual default branch."""
+    parent = _init_parent(tmp_path, branch="master")
+    parent_url = f"file://{parent}"
+    library = tmp_path / "library"
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library / "skills"))
+
+    runner = CliRunner()
+    r1 = runner.invoke(cli, ["skill", "add", parent_url, "--skill", "mkdocs"])
+    assert r1.exit_code == 0, r1.output
+
+    # Mutate the parent on master.
+    (parent / "mkdocs" / "SKILL.md").write_text(
+        "---\nname: mkdocs\ndescription: updated\n---\nmaster body\n"
+    )
+    _commit_in(parent)
+
+    r2 = runner.invoke(cli, ["skill", "update", "mkdocs", "-g"])
+    assert r2.exit_code == 0, r2.output
+    assert "not something we can merge" not in r2.output, r2.output
+
+    canonical = library / "skills" / "mkdocs"
+    assert "master body" in (canonical / "SKILL.md").read_text()
+
+
+def test_update_summary_reports_files_and_line_counts(tmp_path, monkeypatch):
+    """`skill update` prints a one-line change summary: file count, +/- line
+    counts, and the before→after short SHAs when the parent advanced."""
+    parent = _init_parent(tmp_path)
+    parent_url = f"file://{parent}"
+    library = tmp_path / "library"
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library / "skills"))
+
+    runner = CliRunner()
+    r1 = runner.invoke(cli, ["skill", "add", parent_url, "--skill", "mkdocs"])
+    assert r1.exit_code == 0, r1.output
+
+    # Add two new lines to one file upstream.
+    (parent / "mkdocs" / "SKILL.md").write_text(
+        "---\nname: mkdocs\ndescription: A test skill.\n---\n"
+        "# mkdocs\nline one\nline two\n"
+    )
+    _commit_in(parent)
+
+    r2 = runner.invoke(cli, ["skill", "update", "mkdocs", "-g"])
+    assert r2.exit_code == 0, r2.output
+    line = next(ln for ln in r2.output.splitlines() if ln.startswith("mkdocs:"))
+    # Summary must mention the file count and an additive line delta.
+    assert "1 file" in line, line
+    assert "+" in line, line
+    # before→after short SHAs (7-hex each) joined by an arrow.
+    import re
+    assert re.search(r"[0-9a-f]{7}→[0-9a-f]{7}", line), line
+
+
+def test_update_summary_says_up_to_date_on_noop(tmp_path, monkeypatch):
+    """When nothing moved upstream, `skill update` must say `up to date`,
+    not the misleading bare `updated`."""
+    parent = _init_parent(tmp_path)
+    parent_url = f"file://{parent}"
+    library = tmp_path / "library"
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library / "skills"))
+
+    runner = CliRunner()
+    r1 = runner.invoke(cli, ["skill", "add", parent_url, "--skill", "mkdocs"])
+    assert r1.exit_code == 0, r1.output
+
+    # No upstream change — immediate re-run.
+    r2 = runner.invoke(cli, ["skill", "update", "mkdocs", "-g"])
+    assert r2.exit_code == 0, r2.output
+    line = next(ln for ln in r2.output.splitlines() if ln.startswith("mkdocs:"))
+    assert "up to date" in line, line
