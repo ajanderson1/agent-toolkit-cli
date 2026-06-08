@@ -417,6 +417,24 @@ def test_doctor_unmanaged_non_tty_does_not_mutate(tmp_path, monkeypatch):
     assert "no input available" in result.output.lower()
 
 
+def test_doctor_unmanaged_does_not_clobber_existing_agents(tmp_path, monkeypatch):
+    """Real CLAUDE.md + non-empty AGENTS.md: reported but report-only; 'y' must not destroy either."""
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / "AGENTS.md").write_text("# real canon\n")
+    (project / "CLAUDE.md").write_text("# different\n")
+    monkeypatch.chdir(project)
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["instructions", "doctor", "--scope", "project"], input="y\n")
+    # Reported as unmanaged (real file, not in lock) but adopt is skipped → exit 1.
+    assert result.exit_code != 0, result.output
+    assert "unmanaged" in result.output.lower()
+    # Neither file destroyed.
+    assert (project / "AGENTS.md").read_text() == "# real canon\n"
+    assert (project / "CLAUDE.md").read_text() == "# different\n"
+
+
 def test_install_pointer_conflict_is_clean_clickexception(tmp_path, monkeypatch):
     """A real user file in the pointer slot yields a clean ClickException
     (not a raw traceback) and leaves the user's file intact."""
