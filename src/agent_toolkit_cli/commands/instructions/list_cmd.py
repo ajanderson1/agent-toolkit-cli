@@ -8,6 +8,8 @@ from pathlib import Path
 
 import click
 
+from agent_toolkit_cli.table import render_table
+
 # The harness matrix is the human-facing SSOT at <repo-root>/docs/agent-toolkit/
 # harness-matrix.md. It is force-included into the wheel as package data
 # (see pyproject.toml) so packaged installs can read it via importlib.resources
@@ -80,7 +82,5 @@ def list_cmd(fmt: str) -> None:
     if fmt == "json":
         click.echo(_json.dumps(rows, indent=2))
         return
-    width = max(len(r["harness"]) for r in rows)
-    click.echo(f"{'HARNESS':<{width}}  VERDICT          DEFAULT FILE")
-    for r in rows:
-        click.echo(f"{r['harness']:<{width}}  {r['verdict']:<15}  {r['default_file']}")
+    table_rows = [[r["harness"], r["verdict"], r["default_file"]] for r in rows]
+    click.echo(render_table(table_rows, headers=["HARNESS", "VERDICT", "DEFAULT FILE"]))

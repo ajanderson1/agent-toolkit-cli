@@ -6,6 +6,7 @@ import json
 import click
 
 from agent_toolkit_cli.skill_agents import AGENTS
+from agent_toolkit_cli.table import render_table
 from agent_toolkit_cli.skill_install import _current_linked_agents
 from agent_toolkit_cli.skill_lock import LockFile, read_lock
 from agent_toolkit_cli.skill_paths import lock_file_path
@@ -110,6 +111,7 @@ def _emit_table(
     if not slugs:
         click.echo(f"(no skills linked into {agent})")
         return
+    rows = []
     for slug in slugs:
         e = lock.skills[slug]
         # Show the pinned ref when one is recorded; otherwise the upstream's
@@ -118,4 +120,5 @@ def _emit_table(
         # has no clone path in scope, so an unpinned entry shows `(default)`.
         ref = e.ref or "(default)"
         short = (e.upstream_sha or "")[:7]
-        click.echo(f"{slug}\t{e.source}\t{ref}\t{short}")
+        rows.append([slug, e.source, ref, short])
+    click.echo(render_table(rows))
