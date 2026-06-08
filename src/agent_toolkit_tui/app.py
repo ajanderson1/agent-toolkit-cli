@@ -34,7 +34,7 @@ from textual.screen import ModalScreen
 from textual.widgets import (
     Button, Footer, Header, Input, Label, OptionList, Static,
 )
-from textual.widgets.option_list import Option
+from textual.widgets.option_list import Option, OptionDoesNotExist
 
 from agent_toolkit_tui import __version__
 from agent_toolkit_tui.agent_state import build_agent_rows
@@ -188,6 +188,16 @@ class TUIApp(App):
             scope_toggle = self.query_one("#scope-toggle", ScopeToggle)
         except NoMatches:
             return
+
+        # Keep the sidebar highlight in lock-step with the displayed grid (#328).
+        # This is the choke point both on_mount and action_kind call, so every
+        # kind switch — however triggered — moves the highlight, not just a
+        # direct click on the option.
+        try:
+            kinds_list = self.query_one("#kinds-list", OptionList)
+            kinds_list.highlighted = kinds_list.get_option_index(f"kind-{kind}")
+        except (NoMatches, OptionDoesNotExist):
+            pass
 
         if kind == "instruction":
             instruction_grid.display = True
