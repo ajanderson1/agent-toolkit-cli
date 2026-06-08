@@ -281,3 +281,33 @@ def test_full_loop_npm_then_inventory(tmp_path, monkeypatch):
     rows = {r["slug"]: r for r in json.loads(out.output)}
     assert rows["@scope/foo"]["origin"] == "npm"
     assert rows["@scope/foo"]["globalLoaded"] is True
+
+
+def test_npm_global_uninstall_removes_drifted_packages_entry(tmp_path, monkeypatch):
+    """#333: uninstall -g must remove a packages[] entry even when it drifted
+    from the lock's stored source (here: version-pinned + no npm: prefix)."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    # lock records npm:foo (via add); user/Pi wrote a drift variant into settings.
+    CliRunner().invoke(main, ["pi-extension", "add", "npm:foo"])
+    settings = tmp_path / ".pi" / "agent" / "settings.json"
+    settings.parent.mkdir(parents=True, exist_ok=True)
+    settings.write_text(json.dumps({"packages": ["foo@1.2.3", "npm:keep"]}) + "\n")
+
+    r = CliRunner().invoke(main, ["pi-extension", "uninstall", "foo", "-g"])
+    assert r.exit_code == 0, r.output
+    assert json.loads(settings.read_text())["packages"] == ["npm:keep"]
+
+
+def test_npm_global_uninstall_malformed_settings_is_clean_error(tmp_path, monkeypatch):
+    """#333 parity: a malformed settings.json surfaces as a clean Click error
+    (exit != 0), not an uncaught PiSettingsError traceback — matching the TUI."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    CliRunner().invoke(main, ["pi-extension", "add", "npm:foo"])
+    settings = tmp_path / ".pi" / "agent" / "settings.json"
+    settings.parent.mkdir(parents=True, exist_ok=True)
+    settings.write_text("{ not json")
+
+    r = CliRunner().invoke(main, ["pi-extension", "uninstall", "foo", "-g"])
+    assert r.exit_code != 0
+    # Clean Click error, not an unhandled traceback.
+    assert r.exception is None or isinstance(r.exception, SystemExit)
