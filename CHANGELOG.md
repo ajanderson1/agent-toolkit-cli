@@ -1,5 +1,17 @@
 # Changelog
 
+## [3.6.1](https://github.com/ajanderson1/agent-toolkit-cli/compare/v3.6.0...v3.6.1) (2026-06-08)
+
+
+### Bug Fixes
+
+* **skill:** detect upstream default branch instead of assuming main ([#332](https://github.com/ajanderson1/agent-toolkit-cli/issues/332)) ([a46099f](https://github.com/ajanderson1/agent-toolkit-cli/commit/a46099ff00590ce4607d281a2e8f3a08c36c020c))
+
+
+### Documentation
+
+* **mcp:** v3 foundations plan + empty-{} failure-mode note ([b6c45c2](https://github.com/ajanderson1/agent-toolkit-cli/commit/b6c45c22a5ba12339a9b89c2007358acccbfa13e))
+
 ## [3.6.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v3.5.3...v3.6.0) (2026-06-07)
 
 
