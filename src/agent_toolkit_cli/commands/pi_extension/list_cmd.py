@@ -6,6 +6,7 @@ import json
 import click
 
 from agent_toolkit_cli.commands.pi_extension._common import scope_and_roots
+from agent_toolkit_cli.table import render_table
 from agent_toolkit_cli.pi_extension_inventory import build_inventory
 
 
@@ -40,7 +41,9 @@ def list_cmd(
     if not records:
         click.echo("no pi extensions found")
         return
-    for r in records:
-        g = "✔" if r.global_loaded else "☐"
-        p = "✔" if r.project_loaded else "☐"
-        click.echo(f"{r.slug}\t{g}\t{p}\t{r.origin}\t{r.source}")
+    rows = [
+        [r.slug, "✔" if r.global_loaded else "☐", "✔" if r.project_loaded else "☐",
+         r.origin, r.source]
+        for r in records
+    ]
+    click.echo(render_table(rows))

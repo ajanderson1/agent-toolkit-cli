@@ -11,6 +11,7 @@ import json
 import click
 
 from agent_toolkit_cli.agent_lock import read_lock
+from agent_toolkit_cli.table import render_table
 from agent_toolkit_cli.agent_paths import lock_file_path
 from agent_toolkit_cli.commands.agent._common import scope_and_roots
 
@@ -93,8 +94,10 @@ def list_cmd(
         click.echo("no agents found")
         return
 
+    rows = []
     for slug, entry in sorted(lock.skills.items()):
         n = _count_projections(slug, scope, home, project_root)
         marker = "✔" if n > 0 else "☐"
         ref_display = f"@{entry.ref}" if entry.ref else ""
-        click.echo(f"{marker}  {slug}\t{entry.source}{ref_display}\t[{n} harnesses]")
+        rows.append([marker, slug, f"{entry.source}{ref_display}", f"[{n} harnesses]"])
+    click.echo(render_table(rows))
