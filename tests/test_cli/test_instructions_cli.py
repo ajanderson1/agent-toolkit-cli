@@ -376,6 +376,47 @@ def test_doctor_unmanaged_dedupes_shared_slot(tmp_path, monkeypatch):
     assert result.output.lower().count("unmanaged:") == 1, result.output
 
 
+def test_doctor_adopt_renames_and_symlinks(tmp_path, monkeypatch):
+    """`y` at the prompt: CLAUDE.md → AGENTS.md (content kept), CLAUDE.md becomes a symlink, lock written, re-run clean."""
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / "CLAUDE.md").write_text("# my instructions\n")
+    monkeypatch.chdir(project)
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["instructions", "doctor", "--scope", "project"], input="y\n")
+    assert result.exit_code == 0, result.output  # adopted → nothing skipped
+
+    agents = project / "AGENTS.md"
+    pointer = project / "CLAUDE.md"
+    assert agents.is_file() and agents.read_text() == "# my instructions\n"
+    assert pointer.is_symlink() and pointer.resolve() == agents.resolve()
+
+    lock = json.loads((project / "instructions-lock.json").read_text())
+    assert "claude-code" in lock["instructions"]["AGENTS.md"]["harnesses"]
+
+    # Round-trip: doctor is now clean.
+    again = runner.invoke(main, ["instructions", "doctor", "--scope", "project"])
+    assert again.exit_code == 0, again.output
+    assert "clean" in again.output.lower()
+
+
+def test_doctor_unmanaged_non_tty_does_not_mutate(tmp_path, monkeypatch):
+    """No --no-fix, but no input available (non-TTY): finding reported, nothing adopted, exit 1."""
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / "CLAUDE.md").write_text("# x\n")
+    monkeypatch.chdir(project)
+
+    runner = CliRunner()
+    # No `input=` → click.prompt hits EOF → the except guard fires.
+    result = runner.invoke(main, ["instructions", "doctor", "--scope", "project"])
+    assert result.exit_code != 0, result.output
+    assert (project / "CLAUDE.md").is_file() and not (project / "CLAUDE.md").is_symlink()
+    assert not (project / "AGENTS.md").exists()
+    assert "no input available" in result.output.lower()
+
+
 def test_install_pointer_conflict_is_clean_clickexception(tmp_path, monkeypatch):
     """A real user file in the pointer slot yields a clean ClickException
     (not a raw traceback) and leaves the user's file intact."""

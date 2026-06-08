@@ -7,10 +7,18 @@ from pathlib import Path
 
 import click
 
-from agent_toolkit_cli import instructions_paths
+from agent_toolkit_cli import instructions_install, instructions_paths
 from agent_toolkit_cli.instructions_adapters import SUPPORTED_HARNESSES
-from agent_toolkit_cli.instructions_adapters.symlink import _pointer_path
-from agent_toolkit_cli.instructions_lock import read_lock
+from agent_toolkit_cli.instructions_adapters.symlink import (
+    PointerConflictError,
+    _pointer_path,
+)
+from agent_toolkit_cli.instructions_lock import (
+    InstructionsLockEntry,
+    add_entry,
+    read_lock,
+    write_lock,
+)
 
 
 @dataclass
@@ -27,6 +35,17 @@ class Finding:
 
     message: str
     fix_action: "FixAction | None" = None
+
+
+def _adopt_harness_for(pointer: Path, harness: str) -> str:
+    """Derive the canonical adopting harness for a slot.
+
+    The CLAUDE.md slot is shared by augment + claude-code; claude-code is the
+    canonical adopter. Otherwise the scanning harness owns its slot.
+    """
+    if pointer.name == "CLAUDE.md":
+        return "claude-code"
+    return harness
 
 
 def _unmanaged_finding(
@@ -46,10 +65,49 @@ def _unmanaged_finding(
             f"unmanaged: real file at {pointer} is not in the lock; "
             f"AGENTS.md already exists — adopt skipped (content merge is out of scope)"
         ))
-    return Finding(message=(
-        f"unmanaged: real file at {pointer} is not in the lock "
-        f"(adopt → rename to AGENTS.md + symlink {pointer.name})"
-    ))
+
+    adopt_harness = _adopt_harness_for(pointer, harness)
+
+    def _apply() -> None:
+        # Re-assert the guard (a non-empty AGENTS.md may have appeared).
+        if canonical.exists() and canonical.stat().st_size > 0:
+            raise click.ClickException(
+                f"{canonical} already exists with content — refusing to clobber"
+            )
+        prior = read_lock(lock_path)
+        prior_existed = lock_path.exists()
+        # Rename BEFORE writing the lock so a failure never leaves a lying lock.
+        pointer.rename(canonical)
+        existing = prior.instructions.get("AGENTS.md")
+        new_harnesses = sorted({*(existing.harnesses if existing else []), adopt_harness})
+        new = add_entry(prior, "AGENTS.md", InstructionsLockEntry(
+            scope=scope,  # type: ignore[arg-type]
+            source="AGENTS.md",
+            harnesses=new_harnesses,
+        ))
+        write_lock(lock_path, new)
+        try:
+            instructions_install.apply(scope=scope, project_root=project_root, home=home)
+        except (instructions_install.CanonicalMissingError, PointerConflictError) as exc:
+            # Roll back: restore the real file and the prior lock.
+            if canonical.exists() and not pointer.exists():
+                canonical.rename(pointer)
+            if prior_existed:
+                write_lock(lock_path, prior)
+            else:
+                lock_path.unlink(missing_ok=True)
+            raise click.ClickException(str(exc)) from exc
+
+    return Finding(
+        message=f"unmanaged: real file at {pointer} is not in the lock",
+        fix_action=FixAction(
+            shell_preview=(
+                f"mv {pointer.name} AGENTS.md && "
+                f"instructions install --harness {adopt_harness}"
+            ),
+            apply=_apply,
+        ),
+    )
 
 
 @click.command(help="Find conflicting/orphan/stray pointers vs the lock.")
@@ -154,6 +212,44 @@ def doctor_cmd(ctx: click.Context, scope: str, no_fix: bool) -> None:
     if not findings:
         click.echo("clean — no findings at this scope")
         return
+
+    fixed = skipped = 0
+    quit_loop = False
     for f in findings:
+        click.echo("")
         click.echo(f.message)
-    ctx.exit(1)
+        if f.fix_action is None or no_fix or quit_loop:
+            skipped += 1
+            if f.fix_action is None:
+                click.echo("  (report-only — no automatic fix)")
+            continue
+        click.echo(f"  fix:    {f.fix_action.shell_preview}")
+        try:
+            ans = click.prompt(
+                "  apply?", default="N", show_default=False,
+                type=click.Choice(["y", "N", "q"], case_sensitive=False),
+            )
+        except (click.Abort, EOFError, OSError):
+            click.echo("\n  (no input available — stopping; nothing applied)")
+            quit_loop = True
+            skipped += 1
+            continue
+        ans = ans.lower()
+        if ans == "y":
+            try:
+                f.fix_action.apply()
+                click.echo("  adopted.")
+                fixed += 1
+            except Exception as exc:
+                click.echo(f"  adopt failed: {exc}")
+                skipped += 1
+        elif ans == "q":
+            quit_loop = True
+            skipped += 1
+        else:
+            skipped += 1
+
+    click.echo("")
+    click.echo(f"summary: {len(findings)} findings, {fixed} fixed, {skipped} skipped")
+    if skipped > 0:
+        ctx.exit(1)
