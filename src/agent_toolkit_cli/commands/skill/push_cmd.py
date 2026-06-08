@@ -101,7 +101,7 @@ def push_cmd(
             # unpushed change leaves the tree clean yet HEAD ahead of origin.
             # Reporting "nothing to push" here silently strands that work
             # (#280). Classify divergence before declaring nothing to do.
-            ref = entry.ref or "main"
+            ref = skill_git.resolve_ref(entry.ref, canonical)
             div = _clean_divergence(canonical, ref)
             if div is skill_git.Divergence.UP_TO_DATE:
                 click.echo(f"{slug}: clean — nothing to push")
@@ -133,14 +133,16 @@ def _push_direct(
 ) -> None:
     msg = f"self-improvement: {_utc_iso()}"
     skill_git.commit_all(canonical, message=msg, env=None)
-    skill_git.push(canonical, ref=entry.ref or "main", env=None)
+    skill_git.push(
+        canonical, ref=skill_git.resolve_ref(entry.ref, canonical), env=None,
+    )
     entry.local_sha = skill_git.head_sha(canonical, env=None)
     write_lock(lock_path, lock)
     click.echo(f"{slug}: pushed")
 
 
 def _push_via_pr(canonical: Path, entry, slug: str) -> None:
-    base_ref = entry.ref or "main"
+    base_ref = skill_git.resolve_ref(entry.ref, canonical)
     branch = f"skill/self-improvement-{_utc_basic_iso()}-{_slug_for_ref(slug)}"
     # checkout -b then immediately commit_all — the working-tree changes
     # carry onto the new branch and become the first commit. The branch is
@@ -267,7 +269,7 @@ def _push_monorepo(
             f"  warning: {entry.source} is not a known owned owner; pushing "
             f"because the lock entry is writable (added with --owned?)."
         )
-    base_ref = entry.ref or "main"
+    base_ref = skill_git.resolve_ref(entry.ref, parent_dir)
     if skill_git.status_path(parent_dir, subpath, env=None) == \
             skill_git.GitWorkingTreeStatus.CLEAN:
         # Clean subpath doesn't mean nothing to push: the shared clone may hold

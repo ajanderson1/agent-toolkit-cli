@@ -67,7 +67,7 @@ def update_cmd(
             had_error = True
             continue
 
-        ref = entry.ref or "main"
+        ref = skill_git.resolve_ref(entry.ref, canonical)
         skill_git.fetch(canonical, env=None)
         try:
             skill_git.merge(canonical, ref=ref, env=None)
@@ -86,6 +86,11 @@ def update_cmd(
             )
         except skill_git.GitError:
             pass  # remote ref missing; keep old upstream_sha
+        # Memoise the detected default branch (parity with skill update) so the
+        # next run reads it from the lock instead of re-detecting. Merge-success
+        # path only, so always a real, mergeable branch.
+        if entry.ref is None:
+            entry.ref = ref
         write_lock(lock_path, lock)
         click.echo(f"{slug}: updated")
 

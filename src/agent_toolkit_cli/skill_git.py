@@ -265,6 +265,101 @@ def remote_url(repo: Path, *, env: dict[str, str] | None) -> str:
     return proc.stdout.strip()
 
 
+def default_branch(repo: Path, *, env: dict[str, str] | None) -> str | None:
+    """Best-effort detection of origin's default branch (e.g. `main`,
+    `master`).
+
+    Reads `git symbolic-ref refs/remotes/origin/HEAD`, which a normal `clone`
+    sets to track the remote's HEAD. When that ref is missing (some shallow or
+    mirror clones don't populate it) we ask git to recompute it via
+    `git remote set-head origin --auto` and re-read. Returns the bare branch
+    name, or `None` if it still can't be determined — callers fall back to
+    their own default rather than guessing `main`, which silently broke every
+    `master`-based upstream (the upstash/context7 trap).
+    """
+    def _read() -> str | None:
+        try:
+            proc = _run(
+                ["git", "-C", str(repo), "symbolic-ref",
+                 "refs/remotes/origin/HEAD"],
+                env=env,
+            )
+        except GitError:
+            return None
+        ref = proc.stdout.strip()
+        prefix = "refs/remotes/origin/"
+        return ref[len(prefix):] if ref.startswith(prefix) else None
+
+    branch = _read()
+    if branch is not None:
+        return branch
+    # origin/HEAD not set — ask git to recompute it from the remote, then retry.
+    try:
+        _run(
+            ["git", "-C", str(repo), "remote", "set-head", "origin", "--auto"],
+            env=env,
+        )
+    except GitError:
+        return None
+    return _read()
+
+
+def resolve_ref(
+    ref: str | None, repo: Path | None, *, env: dict[str, str] | None = None,
+) -> str:
+    """The branch to operate against: an explicit `ref`, else the upstream's
+    detected default branch, else `"main"`.
+
+    Centralises the fix for the assumption that every upstream's default branch
+    is `main` — which silently broke every `master`-based repo such as
+    upstash/context7 (`merge: origin/main - not something we can merge`). When
+    `ref` is None and `repo` is a real clone, we read the clone's
+    `origin/HEAD`; only if that can't be determined do we fall back to `"main"`,
+    preserving prior behaviour for `main` repos and for callers with no clone
+    yet. Takes the bare ref value (not a lock entry) so both `entry.ref` and
+    parse-time `parsed.ref` callers, across every asset kind, share one path.
+    `env` is threaded to the detection git calls for callers that run under a
+    custom environment (the install engines).
+    """
+    if ref:
+        return ref
+    if repo is not None and is_git_repo(repo):
+        detected = default_branch(repo, env=env)
+        if detected:
+            return detected
+    return "main"
+
+
+def diff_shortstat(
+    repo: Path, *, base: str, head: str, env: dict[str, str] | None
+) -> tuple[int, int, int]:
+    """Return `(files_changed, insertions, deletions)` between two commits.
+
+    Parses `git diff --shortstat <base> <head>`. An empty diff (no movement)
+    returns `(0, 0, 0)`. Used by `skill update` to print a one-line change
+    summary so a refresh shows what actually moved instead of a bare
+    `updated`. Goes through `_run` so GIT_* env is scrubbed like every other
+    call.
+    """
+    proc = _run(
+        ["git", "-C", str(repo), "diff", "--shortstat", base, head], env=env,
+    )
+    text = proc.stdout.strip()
+    if not text:
+        return (0, 0, 0)
+    files = insertions = deletions = 0
+    for chunk in text.split(","):
+        chunk = chunk.strip()
+        n = int(chunk.split()[0])
+        if "file" in chunk:
+            files = n
+        elif "insertion" in chunk:
+            insertions = n
+        elif "deletion" in chunk:
+            deletions = n
+    return (files, insertions, deletions)
+
+
 def commit_all(
     repo: Path, *, message: str, env: dict[str, str] | None,
 ) -> GitResult:

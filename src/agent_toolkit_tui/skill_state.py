@@ -210,7 +210,7 @@ def build_skill_rows(
             # truth for the description anyway.
             description = _read_skill_description(library_skill_path(slug))
         rows.append(SkillRow(
-            slug=slug, source=entry.source, ref=entry.ref or "main",
+            slug=slug, source=entry.source, ref=entry.ref or "(default)",
             state=state, cells=cells,
             description=description,
         ))

@@ -319,7 +319,11 @@ def _make_reclone_action(
     repair — especially for nested skill_paths like 'aj-workflows/aj-flow'.
     """
     canonical = canonical_skill_dir(slug, scope=scope, home=home, project=project)
-    ref = entry.ref or "main"
+    # Repair clones a fresh repo, so there's no local clone to detect the
+    # default branch from. Pass the pinned ref when one exists; otherwise pass
+    # None so `git clone` follows the remote's own default branch — forcing
+    # `--branch main` would fail outright for a `master`-based upstream.
+    ref = entry.ref
 
     if entry.parent_url is not None:
         return _make_monorepo_reclone_action(
@@ -335,16 +339,17 @@ def _make_reclone_action(
         canonical.parent.mkdir(parents=True, exist_ok=True)
         skill_git.clone(url, canonical, ref=ref, env=None)
 
+    preview_ref = f" --branch {ref}" if ref else ""
     return FixAction(
         description=f"Re-clone {slug} from {url}",
-        shell_preview=f"git clone --branch {ref} {url} {canonical}",
+        shell_preview=f"git clone{preview_ref} {url} {canonical}",
         apply=_apply,
     )
 
 
 def _make_monorepo_reclone_action(
     *, slug: str, scope: Scope, project: Path | None, entry: LockEntry,
-    ref: str, canonical: Path,
+    ref: str | None, canonical: Path,
 ) -> FixAction:
     """Repair a missing monorepo canonical: clone parent → symlink subpath.
 
@@ -392,7 +397,8 @@ def _make_monorepo_reclone_action(
             f"→ {skill_path}"
         ),
         shell_preview=(
-            f"git clone --branch {ref} {entry.parent_url} {parent_dir} && "
+            f"git clone{f' --branch {ref}' if ref else ''} "
+            f"{entry.parent_url} {parent_dir} && "
             f"ln -s {parent_dir / skill_path} {canonical}"
         ),
         apply=_apply,

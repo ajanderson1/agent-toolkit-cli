@@ -97,7 +97,7 @@ def import_cmd(ctx: click.Context, file: Path, latest: bool) -> None:
             if skill_git.is_git_repo(canonical):
                 try:
                     upstream_sha: str | None = skill_git.remote_head_sha(
-                        canonical, ref=ref or "main", env=None,
+                        canonical, ref=skill_git.resolve_ref(ref, canonical), env=None,
                     )
                 except skill_git.GitError:
                     upstream_sha = None

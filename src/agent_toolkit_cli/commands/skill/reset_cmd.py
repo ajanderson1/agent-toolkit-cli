@@ -93,7 +93,7 @@ def reset_cmd(
                     )
                     had_error = True
                     continue
-            ref = entry.ref or "main"
+            ref = skill_git.resolve_ref(entry.ref, parent_dir)
             try:
                 skill_git.fetch(parent_dir, env=None)
                 skill_git.reset_hard(parent_dir, ref=ref, env=None)
@@ -101,6 +101,8 @@ def reset_cmd(
                 raise click.ClickException(
                     f"{slug}: git failed during parent reset\n{exc.stderr}"
                 ) from exc
+            if entry.ref is None:
+                entry.ref = ref
             if entry.extras.get("materialised") == "copy":
                 library_dir = library_skill_path(slug)
                 skill_root = parent_dir / entry.skill_path
@@ -136,7 +138,7 @@ def reset_cmd(
                 had_error = True
                 continue
 
-        ref = entry.ref or "main"
+        ref = skill_git.resolve_ref(entry.ref, canonical)
         try:
             skill_git.fetch(canonical, env=None)
             skill_git.reset_hard(canonical, ref=ref, env=None)
@@ -149,6 +151,8 @@ def reset_cmd(
         entry.upstream_sha = skill_git.remote_head_sha(
             canonical, ref=ref, env=None,
         )
+        if entry.ref is None:
+            entry.ref = ref
         write_lock(lock_path, lock)
         click.echo(f"{slug}: reset to {entry.local_sha[:7]}")
 

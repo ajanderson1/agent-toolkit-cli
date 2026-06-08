@@ -63,8 +63,8 @@ def update_cmd(
             continue
 
         entry = lock.skills[slug]
-        ref = entry.ref or "main"
         skill_git.fetch(canonical, env=None)
+        ref = skill_git.resolve_ref(entry.ref, canonical)
         try:
             skill_git.merge(canonical, ref=ref, env=None)
         except skill_git.GitError as exc:
@@ -80,6 +80,12 @@ def update_cmd(
             )
         except skill_git.GitError:
             pass
+        # Memoise the detected default branch so the next update reads it from
+        # the lock instead of re-detecting (which can fire a network
+        # `set-head --auto` when origin/HEAD is unset). Only reached on the
+        # merge-success path, so a real, mergeable branch — never the fallback.
+        if entry.ref is None:
+            entry.ref = ref
         write_lock(lock_path, lock)
         click.echo(f"{slug}: updated")
 

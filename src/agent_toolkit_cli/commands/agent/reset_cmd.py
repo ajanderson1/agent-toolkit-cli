@@ -77,7 +77,7 @@ def reset_cmd(
                 continue
 
         entry = lock.skills[slug]
-        ref = entry.ref or "main"
+        ref = skill_git.resolve_ref(entry.ref, canonical)
         try:
             skill_git.fetch(canonical, env=None)
             skill_git.reset_hard(canonical, ref=ref, env=None)
@@ -93,6 +93,9 @@ def reset_cmd(
             )
         except skill_git.GitError:
             pass
+        # Memoise the detected default branch (parity with skill reset).
+        if entry.ref is None:
+            entry.ref = ref
         write_lock(lock_path, lock)
         click.echo(f"{slug}: reset to {(entry.local_sha or '')[:7]}")
 

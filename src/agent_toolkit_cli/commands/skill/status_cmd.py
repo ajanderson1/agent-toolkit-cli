@@ -109,7 +109,9 @@ def status_cmd(
                 # remote" (#276). divergence() reads local refs only (no fetch),
                 # so an unpushed commit shows as AHEAD against the last-known
                 # origin regardless of fetch freshness.
-                suffix = _divergence_suffix(parent_dir, entry.ref or "main")
+                suffix = _divergence_suffix(
+                    parent_dir, skill_git.resolve_ref(entry.ref, parent_dir),
+                )
                 click.echo(f"{slug}\t{state} (owned){suffix}")
                 continue
             wt = skill_git.status(parent_dir, env=None)
