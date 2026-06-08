@@ -29,14 +29,38 @@ class Finding:
     fix_action: "FixAction | None" = None
 
 
+def _unmanaged_finding(
+    *,
+    pointer: Path,
+    harness: str,
+    canonical: Path,
+    scope: str,
+    project_root: "Path | None",
+    home: "Path | None",
+    lock_path: Path,
+) -> Finding:
+    """Build an unmanaged finding. Report-only if canonical already has content."""
+    adoptable = not canonical.exists() or canonical.stat().st_size == 0
+    if not adoptable:
+        return Finding(message=(
+            f"unmanaged: real file at {pointer} is not in the lock; "
+            f"AGENTS.md already exists — adopt skipped (content merge is out of scope)"
+        ))
+    return Finding(message=(
+        f"unmanaged: real file at {pointer} is not in the lock "
+        f"(adopt → rename to AGENTS.md + symlink {pointer.name})"
+    ))
+
+
 @click.command(help="Find conflicting/orphan/stray pointers vs the lock.")
 @click.option(
     "--scope",
     type=click.Choice(["project", "global"]),
     default="project",
 )
+@click.option("--no-fix", is_flag=True, help="Report only; do not prompt or mutate.")
 @click.pass_context
-def doctor_cmd(ctx: click.Context, scope: str) -> None:
+def doctor_cmd(ctx: click.Context, scope: str, no_fix: bool) -> None:
     project_root: Path | None = None
     home: Path | None = None
     if scope == "project":
@@ -105,6 +129,26 @@ def doctor_cmd(ctx: click.Context, scope: str) -> None:
                     f"stray: {harness} pointer at {pointer} points at canonical "
                     "but isn't recorded in the lock"
                 )
+            ))
+
+    # Unmanaged: a real file (not a symlink) at a known pointer slot that the
+    # lock doesn't record. A real file at a *wanted* slot is already a conflict
+    # (above), so exclude conflict_paths. Several harnesses share a slot
+    # (augment+claude-code → CLAUDE.md); dedupe by path so we emit one finding.
+    seen_unmanaged: set[Path] = set()
+    for harness in sorted(SUPPORTED_HARNESSES):
+        try:
+            pointer = _pointer_path(harness, scope, project_root, home)
+        except ValueError:
+            continue
+        if pointer in conflict_paths or pointer in seen_unmanaged:
+            continue
+        if pointer.exists() and not pointer.is_symlink():
+            seen_unmanaged.add(pointer)
+            findings.append(_unmanaged_finding(
+                pointer=pointer, harness=harness, canonical=canonical,
+                scope=scope, project_root=project_root, home=home,
+                lock_path=lock_path,
             ))
 
     if not findings:

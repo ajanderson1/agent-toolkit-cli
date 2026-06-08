@@ -346,6 +346,36 @@ def test_install_failure_leaves_no_lock_entry(tmp_path, monkeypatch):
         )
 
 
+def test_doctor_detects_unmanaged_claude_md(tmp_path, monkeypatch):
+    """A real, lock-unrecorded CLAUDE.md is an 'unmanaged' finding (not 'clean')."""
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / "CLAUDE.md").write_text("# my instructions\n")  # real file, no lock, no AGENTS.md
+    monkeypatch.chdir(project)
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["instructions", "doctor", "--scope", "project", "--no-fix"])
+    assert result.exit_code != 0, result.output
+    assert "unmanaged" in result.output.lower()
+    assert "clean" not in result.output.lower()
+    # --no-fix must not mutate.
+    assert (project / "CLAUDE.md").is_file() and not (project / "CLAUDE.md").is_symlink()
+    assert not (project / "AGENTS.md").exists()
+
+
+def test_doctor_unmanaged_dedupes_shared_slot(tmp_path, monkeypatch):
+    """augment + claude-code share the CLAUDE.md slot → exactly one unmanaged finding."""
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / "CLAUDE.md").write_text("# x\n")
+    monkeypatch.chdir(project)
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["instructions", "doctor", "--scope", "project", "--no-fix"])
+    # Count "unmanaged:" with colon to avoid matching the pytest temp dir name.
+    assert result.output.lower().count("unmanaged:") == 1, result.output
+
+
 def test_install_pointer_conflict_is_clean_clickexception(tmp_path, monkeypatch):
     """A real user file in the pointer slot yields a clean ClickException
     (not a raw traceback) and leaves the user's file intact."""
