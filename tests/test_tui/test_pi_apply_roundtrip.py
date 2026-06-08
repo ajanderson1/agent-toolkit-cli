@@ -4,9 +4,15 @@ _apply_pi_pending against a seeded tmp HOME for both origins.
 
 This is the round-trip regression: it exercises the actual delegated path
 (_apply_pi_pending -> pi_extension_ops.uninstall) against on-disk state, then
-asserts the extension is genuinely gone via build_inventory. The npm case is
-the proven RED: the pre-fix inline exact-match remove_package("npm:foo") missed
-the drifted "foo@1.2.3" entry, so it survived the apply.
+asserts the extension is genuinely gone via build_inventory.
+
+The npm case seeds BOTH the canonical "npm:foo" (which build_inventory reads as
+global_loaded=True for slug "foo", so `loaded is False` after apply genuinely
+guards the user-visible "row stays unchecked" symptom) AND a prefix-less drifted
+"foo@1.2.3" variant. The on-disk `packages == ["npm:keep"]` assertion is the
+proven RED: the pre-fix inline exact-match remove_package("npm:foo") removed only
+the literal "npm:foo" and left the drifted "foo@1.2.3" behind, so identity-based
+removal is what this guards.
 """
 from __future__ import annotations
 
@@ -75,10 +81,19 @@ async def _deselect_global_and_apply(home, slug):
 async def test_npm_global_deselect_apply_stays_removed(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.chdir(tmp_path)
-    _seed_npm(tmp_path, "foo", "npm:foo", ["foo@1.2.3", "npm:keep"])
+    # Seed canonical "npm:foo" (inventory reads slug "foo" as loaded) + a drifted
+    # prefix-less "foo@1.2.3" variant. Pre-apply, slug "foo" is global_loaded=True.
+    _seed_npm(tmp_path, "foo", "npm:foo", ["npm:foo", "foo@1.2.3", "npm:keep"])
+    assert any(  # guard: the row really is loaded before we deselect it
+        r.slug == "foo" and r.global_loaded for r in build_inventory(home=tmp_path)
+    )
     loaded = await _deselect_global_and_apply(tmp_path, "foo")
+    # Load-bearing now: "foo" was loaded; after deselect+apply the row stays
+    # unchecked (the reported "reverts to installed" symptom must NOT happen).
     assert loaded is False
     body = json.loads((tmp_path / ".pi" / "agent" / "settings.json").read_text())
+    # Drift guard: identity-based removal drops BOTH "npm:foo" and "foo@1.2.3";
+    # the pre-fix exact-match path left "foo@1.2.3" behind.
     assert body["packages"] == ["npm:keep"]
 
 
