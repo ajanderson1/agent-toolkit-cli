@@ -1,5 +1,19 @@
 # Changelog
 
+## [3.6.2](https://github.com/ajanderson1/agent-toolkit-cli/compare/v3.6.1...v3.6.2) (2026-06-09)
+
+
+### Features
+
+* **instructions:** doctor detects and adopts an unmanaged CLAUDE.md as AGENTS.md ([#340](https://github.com/ajanderson1/agent-toolkit-cli/issues/340)) ([09852da](https://github.com/ajanderson1/agent-toolkit-cli/commit/09852da50931a9c68d1b1fa10ae513e77dda02cd)), closes [#337](https://github.com/ajanderson1/agent-toolkit-cli/issues/337)
+
+
+### Bug Fixes
+
+* align all 'list' command output into padded human-readable tables ([#338](https://github.com/ajanderson1/agent-toolkit-cli/issues/338)) ([dcc266b](https://github.com/ajanderson1/agent-toolkit-cli/commit/dcc266bc75b1aada6f6e1ce1af5162aa593b9882))
+* **tui:** deselecting a pi extension at global scope reverts and doesn't remove it ([#339](https://github.com/ajanderson1/agent-toolkit-cli/issues/339)) ([6d7b52e](https://github.com/ajanderson1/agent-toolkit-cli/commit/6d7b52e5e33deee37923f206da5b7f5905608d86))
+* **tui:** sync sidebar Kind highlight to the active kind ([#328](https://github.com/ajanderson1/agent-toolkit-cli/issues/328)) ([#334](https://github.com/ajanderson1/agent-toolkit-cli/issues/334)) ([9a5ee52](https://github.com/ajanderson1/agent-toolkit-cli/commit/9a5ee520183a2e02ec23f7879dcb85dbc6ed8946))
+
 ## [3.6.1](https://github.com/ajanderson1/agent-toolkit-cli/compare/v3.6.0...v3.6.1) (2026-06-08)
 
 
