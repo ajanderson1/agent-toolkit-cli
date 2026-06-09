@@ -346,6 +346,117 @@ def test_install_failure_leaves_no_lock_entry(tmp_path, monkeypatch):
         )
 
 
+def test_doctor_detects_unmanaged_claude_md(tmp_path, monkeypatch):
+    """A real, lock-unrecorded CLAUDE.md is an 'unmanaged' finding (not 'clean')."""
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / "CLAUDE.md").write_text("# my instructions\n")  # real file, no lock, no AGENTS.md
+    monkeypatch.chdir(project)
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["instructions", "doctor", "--scope", "project", "--no-fix"])
+    assert result.exit_code != 0, result.output
+    assert "unmanaged" in result.output.lower()
+    assert "clean" not in result.output.lower()
+    # --no-fix must not mutate.
+    assert (project / "CLAUDE.md").is_file() and not (project / "CLAUDE.md").is_symlink()
+    assert not (project / "AGENTS.md").exists()
+
+
+def test_doctor_unmanaged_dedupes_shared_slot(tmp_path, monkeypatch):
+    """augment + claude-code share the CLAUDE.md slot → exactly one unmanaged finding."""
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / "CLAUDE.md").write_text("# x\n")
+    monkeypatch.chdir(project)
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["instructions", "doctor", "--scope", "project", "--no-fix"])
+    # Count "unmanaged:" with colon to avoid matching the pytest temp dir name.
+    assert result.output.lower().count("unmanaged:") == 1, result.output
+
+
+def test_doctor_adopt_renames_and_symlinks(tmp_path, monkeypatch):
+    """`y` at the prompt: CLAUDE.md → AGENTS.md (content kept), CLAUDE.md becomes a symlink, lock written, re-run clean."""
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / "CLAUDE.md").write_text("# my instructions\n")
+    monkeypatch.chdir(project)
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["instructions", "doctor", "--scope", "project"], input="y\n")
+    assert result.exit_code == 0, result.output  # adopted → nothing skipped
+
+    agents = project / "AGENTS.md"
+    pointer = project / "CLAUDE.md"
+    assert agents.is_file() and agents.read_text() == "# my instructions\n"
+    assert pointer.is_symlink() and pointer.resolve() == agents.resolve()
+
+    lock = json.loads((project / "instructions-lock.json").read_text())
+    assert "claude-code" in lock["instructions"]["AGENTS.md"]["harnesses"]
+
+    # Round-trip: doctor is now clean.
+    again = runner.invoke(main, ["instructions", "doctor", "--scope", "project"])
+    assert again.exit_code == 0, again.output
+    assert "clean" in again.output.lower()
+
+
+def test_doctor_unmanaged_non_tty_does_not_mutate(tmp_path, monkeypatch):
+    """No --no-fix, but no input available (non-TTY): finding reported, nothing adopted, exit 1."""
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / "CLAUDE.md").write_text("# x\n")
+    monkeypatch.chdir(project)
+
+    runner = CliRunner()
+    # No `input=` → click.prompt hits EOF → the except guard fires.
+    result = runner.invoke(main, ["instructions", "doctor", "--scope", "project"])
+    assert result.exit_code != 0, result.output
+    assert (project / "CLAUDE.md").is_file() and not (project / "CLAUDE.md").is_symlink()
+    assert not (project / "AGENTS.md").exists()
+    assert "no input available" in result.output.lower()
+
+
+def test_doctor_unmanaged_does_not_clobber_existing_agents(tmp_path, monkeypatch):
+    """Real CLAUDE.md + non-empty AGENTS.md: reported but report-only; 'y' must not destroy either."""
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / "AGENTS.md").write_text("# real canon\n")
+    (project / "CLAUDE.md").write_text("# different\n")
+    monkeypatch.chdir(project)
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["instructions", "doctor", "--scope", "project"], input="y\n")
+    # Reported as unmanaged (real file, not in lock) but adopt is skipped → exit 1.
+    assert result.exit_code != 0, result.output
+    assert "unmanaged" in result.output.lower()
+    # Neither file destroyed.
+    assert (project / "AGENTS.md").read_text() == "# real canon\n"
+    assert (project / "CLAUDE.md").read_text() == "# different\n"
+
+
+def test_doctor_adopt_global(tmp_path, monkeypatch):
+    home = _global_home(tmp_path, monkeypatch)
+    # _global_home seeds ~/.agent-toolkit/AGENTS.md — remove it so adoption is unambiguous.
+    (home / ".agent-toolkit" / "AGENTS.md").unlink()
+    # Real, unmanaged file at the global claude-code slot.
+    (home / ".claude").mkdir(parents=True, exist_ok=True)
+    (home / ".claude" / "CLAUDE.md").write_text("# global instructions\n")
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["instructions", "doctor", "--scope", "global"], input="y\n")
+    assert result.exit_code == 0, result.output
+
+    agents = home / ".agent-toolkit" / "AGENTS.md"
+    pointer = home / ".claude" / "CLAUDE.md"
+    assert agents.is_file() and agents.read_text() == "# global instructions\n"
+    assert pointer.is_symlink() and pointer.resolve() == agents.resolve()
+
+    again = runner.invoke(main, ["instructions", "doctor", "--scope", "global"])
+    assert again.exit_code == 0, again.output
+    assert "clean" in again.output.lower()
+
+
 def test_install_pointer_conflict_is_clean_clickexception(tmp_path, monkeypatch):
     """A real user file in the pointer slot yields a clean ClickException
     (not a raw traceback) and leaves the user's file intact."""
@@ -375,3 +486,105 @@ def test_install_pointer_conflict_is_clean_clickexception(tmp_path, monkeypatch)
     if lock_file.exists():
         lock = json.loads(lock_file.read_text())
         assert lock.get("instructions", {}) == {}
+
+
+# --- #337 adopt rollback + slot-correctness regressions -----------------------
+
+
+def test_doctor_adopt_rolls_back_on_apply_failure(tmp_path, monkeypatch):
+    """If install.apply() raises *any* error mid-adopt, the user's file and the
+    lock are fully restored — no lying lock, no moved file (review finding 2)."""
+    import agent_toolkit_cli.instructions_install as install_mod
+
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / "CLAUDE.md").write_text("# mine\n")
+    monkeypatch.chdir(project)
+
+    # Force apply() to blow up with a non-domain error after the rename+lock write.
+    # doctor_cmd calls `instructions_install.apply(...)` via the module, so
+    # patching the source module's attribute reaches the same call.
+    def boom(*a, **k):
+        raise OSError("disk gone")
+
+    monkeypatch.setattr(install_mod, "apply", boom)
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["instructions", "doctor", "--scope", "project"], input="y\n")
+    assert result.exit_code != 0, result.output
+    assert "adopt failed" in result.output.lower()
+
+    # Fully rolled back: real file restored, AGENTS.md gone, no lock entry.
+    pointer = project / "CLAUDE.md"
+    assert pointer.is_file() and not pointer.is_symlink()
+    assert pointer.read_text() == "# mine\n"
+    assert not (project / "AGENTS.md").exists()
+    lock_file = project / "instructions-lock.json"
+    if lock_file.exists():
+        lock = json.loads(lock_file.read_text())
+        assert lock.get("instructions", {}) == {}, "lock claims an adopt that was rolled back"
+
+
+def test_doctor_adopt_rolls_back_partial_apply_with_prior_lock(tmp_path, monkeypatch):
+    """apply() that creates our slot's symlink then raises on a *different* wanted
+    slot must leave the original real file restored and the prior lock intact —
+    not a half-adopted state (review finding 1)."""
+    import agent_toolkit_cli.instructions_install as install_mod
+
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / "CLAUDE.md").write_text("# mine\n")
+    # A pre-existing, unrelated lock entry (so prior_existed is True and there is
+    # a prior state to restore to).
+    (project / "instructions-lock.json").write_text(json.dumps({
+        "version": 1,
+        "instructions": {"AGENTS.md": {
+            "scope": "project", "source": "AGENTS.md", "harnesses": ["gemini-cli"],
+        }},
+    }))
+    monkeypatch.chdir(project)
+
+    def apply_then_fail(*a, **k):
+        # Simulate apply() laying our symlink down, then failing on another slot.
+        canonical = project / "AGENTS.md"
+        (project / "CLAUDE.md").symlink_to(canonical)
+        raise install_mod.CanonicalMissingError("boom on other slot")
+
+    monkeypatch.setattr(install_mod, "apply", apply_then_fail)
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["instructions", "doctor", "--scope", "project"], input="y\n")
+    assert result.exit_code != 0, result.output
+
+    # The symlink apply() created must be gone; the real file must be back.
+    pointer = project / "CLAUDE.md"
+    assert pointer.is_file() and not pointer.is_symlink(), "symlink not cleaned up on rollback"
+    assert pointer.read_text() == "# mine\n"
+    assert not (project / "AGENTS.md").exists()
+    # Prior lock restored verbatim — claude-code never recorded.
+    lock = json.loads((project / "instructions-lock.json").read_text())
+    assert lock["instructions"]["AGENTS.md"]["harnesses"] == ["gemini-cli"]
+
+
+def test_doctor_adopts_augment_global_slot_as_augment_not_claude(tmp_path, monkeypatch):
+    """At global scope ~/.augment/CLAUDE.md is augment's OWN slot, distinct from
+    ~/.claude/CLAUDE.md. Adopting it must record augment and symlink the augment
+    slot — never fabricate a claude-code pointer (review finding 3)."""
+    home = _global_home(tmp_path, monkeypatch)
+    (home / ".agent-toolkit" / "AGENTS.md").unlink()  # make adoption unambiguous
+    augment_slot = home / ".augment" / "CLAUDE.md"
+    augment_slot.parent.mkdir(parents=True, exist_ok=True)
+    augment_slot.write_text("# augment instructions\n")
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["instructions", "doctor", "--scope", "global"], input="y\n")
+    assert result.exit_code == 0, result.output
+
+    agents = home / ".agent-toolkit" / "AGENTS.md"
+    assert agents.read_text() == "# augment instructions\n"
+    # augment's slot is now the symlink; claude-code's slot was NOT fabricated.
+    assert augment_slot.is_symlink() and augment_slot.resolve() == agents.resolve()
+    assert not (home / ".claude" / "CLAUDE.md").exists(), "fabricated an unrelated claude-code pointer"
+
+    lock = json.loads((home / ".agent-toolkit" / "instructions-lock.json").read_text())
+    assert lock["instructions"]["AGENTS.md"]["harnesses"] == ["augment"]
