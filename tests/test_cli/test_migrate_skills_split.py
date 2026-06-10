@@ -186,3 +186,64 @@ def test_action_plan_flags_projectionless_scope_for_manual_decision(tmp_path):
                                  project_locks=[proj],
                                  projected_agents=lambda *a: ())
     assert [(a.phase, a.verb) for a in plan] == [("B", "needs-decision")]
+
+
+def test_render_plan_groups_by_phase(tmp_path, capsys):
+    glob = tmp_path / "global-lock.json"
+    glob.write_text('{"skills":{"journal":{"source":"ajanderson1/skills","skillPath":"journal"}}}')
+    plan = mss.build_action_plan(slugs=["journal"], global_lock=glob,
+                                 project_locks=[], projected_agents=_fake_agents)
+    mss.render_plan(plan)
+    out = capsys.readouterr().out
+    assert "Phase A" in out and "remove journal" in out and "ajanderson1/skills-journal" in out
+
+
+def test_main_dryrun_fails_loud_on_unmapped(tmp_path, monkeypatch, capsys):
+    # an unmapped first-party slug must abort the dry-run, not be skipped
+    glob = tmp_path / "skills-lock.json"
+    glob.write_text('{"skills":{"newthing":{"source":"ajanderson1/skills","skillPath":"newthing"}}}')
+    import pytest
+    with pytest.raises(SystemExit):
+        mss.main(["--global-lock", str(glob), "--roots", str(tmp_path)])
+    assert "unmapped" in capsys.readouterr().out.lower()
+
+
+def test_main_excludes_global_lock_from_project_scopes(tmp_path, monkeypatch, capsys):
+    # ~/.agent-toolkit/skills-lock.json matches the $HOME rglob; treating it as
+    # a project scope would have Phase B `uninstall -p` (cwd=~/.agent-toolkit)
+    # strip the just-migrated GLOBAL entries, then `install -p` fail and strand
+    # hermetic: stub the scanner + journal so this never reads real $HOME state
+    # (a real mid-migration journal would inject phantom Phase B rows and
+    # spuriously fail the "Phase B" assertion below)
+    monkeypatch.setattr(mss, "projected_agents", _fake_agents)
+    monkeypatch.setattr(mss, "JOURNAL", tmp_path / "journal.jsonl")
+    glob = tmp_path / ".agent-toolkit" / "skills-lock.json"; glob.parent.mkdir()
+    glob.write_text('{"skills":{"journal":{"source":"ajanderson1/skills","skillPath":"journal"}}}')
+    mss.main(["--global-lock", str(glob), "--roots", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert "Phase B" not in out, "global lock must never appear as a Phase B scope"
+
+
+def test_journal_pending_installs_reemits_unpaired_uninstall(tmp_path, monkeypatch):
+    # crash/abort between Phase B uninstall and install drops the project lock
+    # entry — without the journal, re-run planning (which keys on lock entries)
+    # would silently strand that project scope
+    monkeypatch.setattr(mss, "JOURNAL", tmp_path / "journal.jsonl")
+    mss._journal_append({"event": "uninstalled", "slug": "journal",
+                         "scope": str(tmp_path / "p" / "skills-lock.json"),
+                         "agents": ["claude"]})
+    pending = mss.journal_pending_installs()
+    assert [(x.verb, x.slug, x.agents) for x in pending] == [("install", "journal", ("claude",))]
+
+
+def test_journal_pending_installs_skips_empty_agents(tmp_path, monkeypatch, capsys):
+    # a journaled uninstall with agents=[] must NOT be replayed as a live
+    # install — it would hit the empty-agents refusal on every re-run (an
+    # infinite abort loop fixable only by hand-editing the journal). Skip it
+    # loudly and leave the scope for manual re-install.
+    monkeypatch.setattr(mss, "JOURNAL", tmp_path / "journal.jsonl")
+    mss._journal_append({"event": "uninstalled", "slug": "journal",
+                         "scope": str(tmp_path / "p" / "skills-lock.json"),
+                         "agents": []})
+    assert mss.journal_pending_installs() == []
+    assert "manual re-install required" in capsys.readouterr().out

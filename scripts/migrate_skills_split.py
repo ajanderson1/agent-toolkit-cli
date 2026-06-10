@@ -6,8 +6,11 @@ Phase A = global library (skill remove/add — global-only). Phase B = project s
 transactional --apply. See docs/superpowers/specs/2026-06-10-skills-split-into-category-repos-design.md
 """
 from __future__ import annotations
+import argparse
 import json
+import os
 import re
+import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
@@ -197,3 +200,181 @@ def build_action_plan(
             b += [Action("B", "uninstall", slug, scope, agents=agents),
                   Action("B", "install", slug, scope, new_source, agents=agents)]
     return a + b
+
+
+def render_plan(plan: list[Action]) -> None:
+    if not plan:
+        print("nothing to do (all scopes already migrated)"); return
+    for ph in ("A", "B"):
+        rows = [a for a in plan if a.phase == ph]
+        if not rows:
+            continue
+        print(f"Phase {ph} ({'global library' if ph=='A' else 'project scopes'}):")
+        for a in rows:
+            tail = f" -> {a.new_source}" if a.new_source else ""
+            ag = f" [agents={','.join(a.agents)}]" if a.agents else ""
+            print(f"  {a.verb} {a.slug} @ {a.scope}{tail}{ag}")
+    print(f"\n{len(plan)} actions, {len({a.scope for a in plan})} locks, {len({a.slug for a in plan})} skills")
+
+
+def _run(cmd: list[str], cwd: Path | None = None) -> None:
+    subprocess.run(cmd, cwd=cwd, check=True)   # fail loud — non-zero raises
+
+
+# Phase B crash journal: a crash/abort between uninstall -p and install -p drops
+# the project lock entry, and re-run planning keys on lock entries — without a
+# journal that scope would be silently stranded. Lives OUTSIDE /tmp on purpose.
+JOURNAL = Path(os.path.expanduser("~/.agent-toolkit/skills-split-journal.jsonl"))
+
+
+def _journal_append(event: dict) -> None:
+    JOURNAL.parent.mkdir(parents=True, exist_ok=True)
+    with JOURNAL.open("a") as f:
+        f.write(json.dumps(event) + "\n")
+
+
+def journal_pending_installs() -> list[Action]:
+    """Phase B uninstalls whose paired install never completed — re-emitted on
+    re-run so no project scope is stranded by a crash window."""
+    if not JOURNAL.exists():
+        return []
+    done: set[tuple[str, str]] = set()
+    started: dict[tuple[str, str], dict] = {}
+    for line in JOURNAL.read_text().splitlines():
+        e = json.loads(line)
+        key = (e["slug"], e["scope"])
+        if e["event"] == "uninstalled":
+            started[key] = e
+        elif e["event"] == "installed":
+            done.add(key)
+    pending: list[Action] = []
+    for key, e in started.items():
+        if key in done:
+            continue
+        if not e.get("agents"):
+            # never replay an empty-agents install — it would hit the refusal
+            # in apply_action on every re-run (infinite abort loop)
+            print(f"WARN: skipping journaled install for {e['slug']} @ {e['scope']}: "
+                  f"no agents recorded — manual re-install required")
+            continue
+        pending.append(Action("B", "install", e["slug"], Path(e["scope"]),
+                              f"{OWNER}/{repo_for_slug(e['slug'])}", tuple(e["agents"])))
+    return pending
+
+
+def apply_action(a: Action) -> None:
+    """Execute one action via the shipped CLI. Rollback on failure is handled
+    by the caller via _rollback() — see main()."""
+    if a.phase == "A" and a.verb == "remove":
+        _run(["agent-toolkit-cli", "skill", "remove", a.slug, "--force"])
+    elif a.phase == "A" and a.verb == "add":
+        _run(["agent-toolkit-cli", "skill", "add",
+              f"{a.new_source}/{a.slug}", "--owned", "--ref", "main"])
+    elif a.phase == "A" and a.verb == "install":
+        # restore the GLOBAL agent projections deleted by `remove --force`
+        # (`skill add` recreates only the library dir + lock entry, NOT the
+        # ~/.claude/skills/<slug> etc. symlinks; doctor can't detect the gap — #230)
+        _run(["agent-toolkit-cli", "skill", "install", a.slug,
+              "--scope", "global", "--agents", ",".join(a.agents)])
+    elif a.phase == "B" and a.verb == "uninstall":
+        _journal_append({"event": "uninstalled", "slug": a.slug,
+                         "scope": str(a.scope), "agents": list(a.agents)})
+        _run(["agent-toolkit-cli", "skill", "uninstall", a.slug, "-p", "--agents", "all"],
+             cwd=a.scope.parent)
+    elif a.phase == "B" and a.verb == "install":
+        # uninstall -p preserves the project canonical, and ensure_project_canonical
+        # links only "if absent" (skill_install.py) — purge a canonical still
+        # resolving into the OLD monorepo cache so install re-derives from the
+        # new source instead of freezing content against the soon-archived repo
+        from agent_toolkit_cli.skill_paths import canonical_skill_dir
+        stale = canonical_skill_dir(a.slug, scope="project", project=a.scope.parent)
+        if stale.is_symlink():
+            target = str(stale.resolve())
+            if "/_parents/ajanderson1/skills/" in target or "/_parents/ajanderson1/skills@" in target:
+                stale.unlink()
+        if not a.agents:
+            raise RuntimeError(
+                f"{a.slug} @ {a.scope}: no prior agent projections found — refusing "
+                f"to default to --agents all (known over-install trap); investigate")
+        _run(["agent-toolkit-cli", "skill", "install", a.slug, "-p",
+              "--agents", ",".join(a.agents)], cwd=a.scope.parent)
+        _journal_append({"event": "installed", "slug": a.slug, "scope": str(a.scope)})
+
+
+def _rollback(failed: Action) -> None:
+    """Spec mandate: on failure re-add the old source and abort, so no slug is
+    left registered nowhere. The old repo is still live (archive is Task 9, last).
+    Even if this rollback ALSO fails, re-run planning self-heals: a missing
+    global entry replans as an add (see build_action_plan)."""
+    if failed.phase == "A" and failed.verb == "add":
+        try:
+            _run(["agent-toolkit-cli", "skill", "add",
+                  f"{SOURCE_REPO}/{failed.slug}", "--owned", "--ref", "main"])
+        except subprocess.CalledProcessError:
+            print(f"rollback re-add failed for {failed.slug} — safe: re-run "
+                  f"replans the missing entry as an add to the new source")
+    # A-remove failed: nothing changed. A-install / B-install failed: lock entry
+    # exists (journal re-emits B installs). B-uninstall failed: entry intact.
+
+
+def main(argv: list[str] | None = None) -> int:
+    p = argparse.ArgumentParser(description="Split ajanderson1/skills into category repos")
+    p.add_argument("--apply", action="store_true", help="execute (default: dry-run)")
+    p.add_argument("--global-lock", default=os.path.expanduser("~/.agent-toolkit/skills-lock.json"))
+    p.add_argument("--roots", nargs="*", default=[os.path.expanduser("~")])
+    args = p.parse_args(argv)
+
+    global_lock = Path(args.global_lock)
+    # the global lock matches the $HOME rglob — it must NEVER be a project scope
+    # (Phase B against cwd=~/.agent-toolkit would strip just-migrated entries)
+    project_locks = [
+        pl for pl in discover_lock_paths([Path(r) for r in args.roots])
+        if pl.resolve() != global_lock.resolve()
+    ]
+
+    strays = mss_unmapped(project_locks + [global_lock])
+    if strays:
+        print(f"ABORT: unmapped first-party slugs would be stranded: {sorted(strays)}")
+        raise SystemExit(2)
+
+    plan = build_action_plan(
+        slugs=sorted(MIGRATED_SLUGS), global_lock=global_lock,
+        project_locks=project_locks,
+        # pass the module-level scanner EXPLICITLY: a def-time keyword default
+        # binds the original function object, so tests monkeypatching
+        # mss.projected_agents would silently not take effect through main()
+        projected_agents=projected_agents,
+    )
+    seen = {(x.slug, str(x.scope)) for x in plan}
+    plan += [x for x in journal_pending_installs() if (x.slug, str(x.scope)) not in seen]
+    render_plan(plan)
+    undecided = [x for x in plan if x.verb == "needs-decision"]
+    if undecided:
+        print("\nNEEDS MANUAL DECISION (projection-less old-source entries — choose an")
+        print("agent set or drop the lock entry by hand, then re-run):")
+        for x in undecided:
+            print(f"  {x.slug} @ {x.scope}")
+    if not args.apply:
+        print("\n(dry-run; pass --apply to execute)")
+        return 0
+    if undecided:
+        print("ABORT: unresolved needs-decision scopes above — nothing was changed.")
+        raise SystemExit(3)
+    for a in plan:
+        try:
+            apply_action(a)
+        except (subprocess.CalledProcessError, RuntimeError) as exc:
+            _rollback(a)
+            print(f"FAILED at {a.verb} {a.slug} @ {a.scope}: {exc}. "
+                  f"Rolled back to a re-runnable state; aborting. Fix the cause and "
+                  f"re-run — planning self-heals (missing global entry -> add; "
+                  f"journaled unpaired uninstalls -> re-emitted installs).")
+            raise SystemExit(1) from exc
+    return 0
+
+
+# local alias so main() reads cleanly
+mss_unmapped = unmapped_first_party_slugs
+
+if __name__ == "__main__":
+    raise SystemExit(main())
