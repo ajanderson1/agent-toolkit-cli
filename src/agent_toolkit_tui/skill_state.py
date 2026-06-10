@@ -19,6 +19,7 @@ from agent_toolkit_cli.skill_paths import (
     agent_projection_dir, canonical_skill_dir, library_lock_path,
     library_skill_path, parent_clone_path, project_parents_root,
 )
+from agent_toolkit_tui.composition import skills_longtail, skills_nonstandard_big_five
 
 # "library" means the skill exists in the library but is not installed in this
 # project (no project canonical at <project>/.agents/skills/<slug>/). This is
@@ -26,12 +27,16 @@ from agent_toolkit_cli.skill_paths import (
 State = Literal["clean", "dirty", "missing", "copy", "library"]
 Scope = Literal["global", "project"]
 
-# Agents whose cells the TUI grid renders interactively. Mirrors v2.0.0's
-# 5-harness shortcut for the interactive surface; the long tail of agents
-# stays CLI-only.
+# Column composition is derived per rebuild (#351). all_cell_agents() is the
+# probe set for the state loader: standard bundle + every potential column,
+# so expanding the long tail never needs a reload.
 # "standard" is first — it represents the bundle toggle (~/.agents/skills/<slug>
 # symlink at global scope; project canonical existence at project scope).
-INTERACTIVE_AGENTS: tuple[str, ...] = ("standard", "claude-code", "pi")
+INTERACTIVE_AGENTS: tuple[str, ...] = ("standard",) + skills_nonstandard_big_five()
+
+
+def all_cell_agents() -> tuple[str, ...]:
+    return ("standard",) + skills_nonstandard_big_five() + skills_longtail()
 
 
 @dataclass(frozen=True)
@@ -191,7 +196,7 @@ def build_skill_rows(
                 else "clean"
             )
         cells: dict[tuple[str, str], SkillCell] = {}
-        for agent in INTERACTIVE_AGENTS:
+        for agent in all_cell_agents():
             cells[(agent, scope)] = _cell_for(
                 slug, agent, scope=scope, home=home, project=project,
             )
@@ -199,7 +204,7 @@ def build_skill_rows(
         # the globally-installed indicator (#188). Skipped when home is
         # None (callers that don't care about the indicator).
         if scope == "project" and home is not None:
-            for agent in INTERACTIVE_AGENTS:
+            for agent in all_cell_agents():
                 cells[(agent, "global")] = _cell_for(
                     slug, agent, scope="global", home=home, project=None,
                 )

@@ -567,3 +567,32 @@ def test_build_skill_rows_global_scope_unchanged(
         assert (agent, "project") not in demo.cells, (
             f"unexpected project cell at global scope: {demo.cells.keys()}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Full-composition cell probing (#351)
+# ---------------------------------------------------------------------------
+
+def test_rows_carry_cells_for_longtail_agents(git_sandbox, tmp_path: Path, monkeypatch):
+    """Every loaded row has cells for long-tail agents, so expanding the
+    long tail never needs a reload (#351)."""
+    from agent_toolkit_tui.composition import skills_longtail
+
+    home = tmp_path / "home"
+    home.mkdir()
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    monkeypatch.setenv("HOME", str(home))
+
+    runner = CliRunner()
+    r = runner.invoke(main, [
+        "skill", "add", str(git_sandbox.upstream), "--slug", "demo",
+    ])
+    assert r.exit_code == 0, r.output
+
+    rows = build_skill_rows(scope="global", home=home, project=None)
+    demo = next(r for r in rows if r.slug == "demo")
+    some_tail = skills_longtail()[0]
+    assert (some_tail, "global") in demo.cells
