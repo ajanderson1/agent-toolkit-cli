@@ -4,11 +4,11 @@
 
 | Kind | Support | How |
 |---|:-:|---|
-| [Instructions](../kinds/instructions.md) | — | no instruction-file concept |
+| [Instructions](../kinds/instructions.md) | N/A | no instruction-file concept |
 | [Skills](../kinds/skills.md) | [✅](#skills) | `.mcpjam/skills` |
-| [Agents (subagents)](../kinds/agents.md) | — | no subagent concept |
+| [Agents (subagents)](../kinds/agents.md) | N/A | no subagent concept |
 | [MCP servers](../kinds/mcp.md) | — | planned kind |
-| [Pi extensions](../kinds/pi-extensions.md) | — | Pi-only kind |
+| [Pi extensions](../kinds/pi-extensions.md) | N/A | Pi-only kind |
 
 ## Instructions { #instructions }
 

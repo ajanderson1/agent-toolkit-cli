@@ -1,8 +1,11 @@
 # Harness compatibility matrix
 
 Single source of truth for which (asset-kind × harness) pairs are supported and
-how each is projected. This doc currently covers two kinds, each in its own
-section below:
+how each is projected. Machine-read by the CLI (shipped in the wheel) and
+guarded by parity tests; the human-friendly [matrix](../matrix.md) and the
+per-harness pages are generated views of this file
+(`scripts/gen_harness_docs.py`). This doc currently covers two kinds, each in
+its own section below:
 
 - the **`agent` (subagent) kind** — v3.0.0 Phase A deliverable for #252
   (v3.1.0 milestone). Parity test: `tests/test_subagent_matrix.py`.

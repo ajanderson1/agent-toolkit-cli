@@ -6,9 +6,9 @@
 |---|:-:|---|
 | [Instructions](../kinds/instructions.md) | [✅](#instructions) | native `AGENTS.md` reader |
 | [Skills](../kinds/skills.md) | [✅](#skills) | `.bob/skills` |
-| [Agents (subagents)](../kinds/agents.md) | [❌](#agents) | no file-drop convention |
+| [Agents (subagents)](../kinds/agents.md) | [—](#agents) | no file-drop convention |
 | [MCP servers](../kinds/mcp.md) | — | planned kind |
-| [Pi extensions](../kinds/pi-extensions.md) | — | Pi-only kind |
+| [Pi extensions](../kinds/pi-extensions.md) | N/A | Pi-only kind |
 
 ## Instructions { #instructions }
 

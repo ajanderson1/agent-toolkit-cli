@@ -4,11 +4,11 @@
 
 | Kind | Support | How |
 |---|:-:|---|
-| [Instructions](../kinds/instructions.md) | [❌](#instructions) | no pointer-satisfiable root file |
+| [Instructions](../kinds/instructions.md) | [—](#instructions) | no pointer-satisfiable root file |
 | [Skills](../kinds/skills.md) | [✅](#skills) | `.continue/skills` |
-| [Agents (subagents)](../kinds/agents.md) | [❓](#agents) | no public evidence |
+| [Agents (subagents)](../kinds/agents.md) | [?](#agents) | no public evidence |
 | [MCP servers](../kinds/mcp.md) | — | planned kind |
-| [Pi extensions](../kinds/pi-extensions.md) | — | Pi-only kind |
+| [Pi extensions](../kinds/pi-extensions.md) | N/A | Pi-only kind |
 
 ## Instructions { #instructions }
 

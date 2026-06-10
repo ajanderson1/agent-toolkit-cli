@@ -1,17 +1,7 @@
 /* Site enhancements. Re-runs on every page load, including Material's
  * instant navigation (document$ re-emits per page). */
 (function () {
-  /* Headline harnesses — keep in sync with MAIN in scripts/gen_harness_docs.py. */
-  var MAIN = ["Claude Code", "Pi", "Codex", "Gemini CLI", "OpenCode"];
-
   function enhance() {
-    /* Bold the headline harnesses in the sidebar / tabs nav. */
-    document.querySelectorAll(".md-nav__link").forEach(function (link) {
-      if (MAIN.indexOf(link.textContent.trim()) !== -1) {
-        link.classList.add("nav-main-harness");
-      }
-    });
-
     /* Compatibility-matrix fold: the toggle row reveals/hides the
      * alphabetical tbody.matrix-others (hidden at render time). */
     document.querySelectorAll(".harness-matrix").forEach(function (table) {

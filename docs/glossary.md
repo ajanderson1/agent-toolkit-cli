@@ -101,15 +101,17 @@ terms first.
 
 **Verdict** { #verdict }
 :   A harness's classification for one kind in the [SSOT](#ssot): a supported
-    mechanism, **unsupported (gap)** (could be filled, isn't yet),
-    **unsupported (by design)** (rendered — in the matrix), or **unknown**
-    (no public evidence found).
+    mechanism (✅ in the [matrix](matrix.md)), **unsupported (gap)** (could be
+    filled, isn't yet — rendered —), **unsupported (by design)** (the harness
+    has no such concept — rendered N/A), or **unknown** (no public evidence
+    found — rendered ?).
 
 **SSOT** { #ssot }
 :   Single source of truth for harness compatibility:
-    `docs/agent-toolkit/harness-matrix.md` — machine-read by the CLI (shipped
-    in the wheel), guarded by parity tests. The [matrix](matrix.md) and
-    harness pages are generated from it.
+    [`harness-matrix.md`](agent-toolkit/harness-matrix.md) — machine-read by
+    the CLI (shipped in the wheel), guarded by parity tests, and published
+    here as part of the site. The [matrix](matrix.md) and harness pages are
+    generated views of it.
 
 **Adapter** { #adapter }
 :   The per-(kind × harness) code implementing a supported verdict — writes

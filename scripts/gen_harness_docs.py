@@ -187,15 +187,17 @@ def linkify(citation: str) -> str:
     )
 
 
+# Glyphs: ✅ harness + toolkit support · — gap (harness could, toolkit hasn't)
+# · N/A kind not supported by the harness · ? unknown.
 def sym_agent(v: str) -> str:
     if v in AGENT_SUPPORTED:
         return "✅"
     if v == "unsupported (gap)":
-        return "❌"
-    if v == "unsupported (by design)":
         return "—"
+    if v == "unsupported (by design)":
+        return "N/A"
     if v == UNKNOWN:
-        return "❓"
+        return "?"
     raise SystemExit(f"unmapped agent verdict: {v!r}")
 
 
@@ -203,11 +205,11 @@ def sym_instr(v: str) -> str:
     if v in ("native", "symlink"):
         return "✅"
     if v == "unsupported (gap)":
-        return "❌"
-    if v == "unsupported (by design)":
         return "—"
+    if v == "unsupported (by design)":
+        return "N/A"
     if v == UNKNOWN:
-        return "❓"
+        return "?"
     raise SystemExit(f"unmapped instructions verdict: {v!r}")
 
 
@@ -218,11 +220,11 @@ def matrix_cells(slug: str, agents: dict[str, AgentRow], instrs: dict[str, Instr
     agent_s = sym_agent(agents[slug].verdict)
     return [
         f"[{cfg.display_name}]({page})",
-        f"[{instr_s}]({page}#instructions)" if instr_s != "—" else "—",
+        f"[{instr_s}]({page}#instructions)" if instr_s != "N/A" else "N/A",
         f"[✅]({page}#skills)",
-        f"[{agent_s}]({page}#agents)" if agent_s != "—" else "—",
+        f"[{agent_s}]({page}#agents)" if agent_s != "N/A" else "N/A",
         "—",
-        f"[✅]({page}#pi-extensions)" if slug == "pi" else "—",
+        f"[✅]({page}#pi-extensions)" if slug == "pi" else "N/A",
     ]
 
 
@@ -258,13 +260,14 @@ One row per harness, one column per asset [kind](glossary.md#kind). Every
 harness links to its own page with per-kind detail; every tick links straight
 to the relevant section. The main harnesses are pinned at the top — expand the
 row beneath them for the rest, alphabetically. Derived from the machine-read
-[SSOT](glossary.md#ssot) (`docs/agent-toolkit/harness-matrix.md`) by
-`scripts/gen_harness_docs.py` — edit the SSOT, then regenerate; never edit
+[SSOT](glossary.md#ssot) ([`harness-matrix.md`](agent-toolkit/harness-matrix.md))
+by `scripts/gen_harness_docs.py` — edit the SSOT, then regenerate; never edit
 this page by hand.
 
-**Legend:** ✅ supported · ❌ not supported (a gap that could be filled) ·
-— not applicable (no such concept in the harness, by design) ·
-❓ unknown (no public evidence found)
+**Legend:** ✅ supported by the harness and the toolkit ·
+— gap (the harness supports it; the toolkit hasn't implemented it yet) ·
+N/A — the harness has no such concept ·
+? unknown (no public evidence of how the harness handles this kind)
 
 <div class="harness-matrix" markdown>
 <table markdown>
@@ -412,21 +415,21 @@ def write_harness_page(slug: str, agents: dict[str, AgentRow], instrs: dict[str,
     instr_how = {
         "✅": "native `AGENTS.md` reader" if i.verdict == "native"
         else f"pointer symlink ({i.default_file} → `AGENTS.md`)",
-        "❌": "no pointer-satisfiable root file",
-        "—": "no instruction-file concept",
-        "❓": "no public evidence",
+        "—": "no pointer-satisfiable root file",
+        "N/A": "no instruction-file concept",
+        "?": "no public evidence",
     }[instr_s]
     agent_how = {
-        "✅": a.verdict, "❌": "no file-drop convention",
-        "—": "no subagent concept", "❓": "no public evidence",
+        "✅": a.verdict, "—": "no file-drop convention",
+        "N/A": "no subagent concept", "?": "no public evidence",
     }[agent_s]
     pi_row = (
         "| [Pi extensions](../kinds/pi-extensions.md) | [✅](#pi-extensions) | symlink |"
         if slug == "pi"
-        else "| [Pi extensions](../kinds/pi-extensions.md) | — | Pi-only kind |"
+        else "| [Pi extensions](../kinds/pi-extensions.md) | N/A | Pi-only kind |"
     )
-    instr_cell = f"[{instr_s}](#instructions)" if instr_s != "—" else "—"
-    agent_cell = f"[{agent_s}](#agents)" if agent_s != "—" else "—"
+    instr_cell = f"[{instr_s}](#instructions)" if instr_s != "N/A" else "N/A"
+    agent_cell = f"[{agent_s}](#agents)" if agent_s != "N/A" else "N/A"
     sections = [
         instr_section(i),
         skills_section(slug),

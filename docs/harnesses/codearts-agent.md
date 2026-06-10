@@ -4,11 +4,11 @@
 
 | Kind | Support | How |
 |---|:-:|---|
-| [Instructions](../kinds/instructions.md) | [❓](#instructions) | no public evidence |
+| [Instructions](../kinds/instructions.md) | [?](#instructions) | no public evidence |
 | [Skills](../kinds/skills.md) | [✅](#skills) | `.codeartsdoer/skills` |
-| [Agents (subagents)](../kinds/agents.md) | [❓](#agents) | no public evidence |
+| [Agents (subagents)](../kinds/agents.md) | [?](#agents) | no public evidence |
 | [MCP servers](../kinds/mcp.md) | — | planned kind |
-| [Pi extensions](../kinds/pi-extensions.md) | — | Pi-only kind |
+| [Pi extensions](../kinds/pi-extensions.md) | N/A | Pi-only kind |
 
 ## Instructions { #instructions }
 

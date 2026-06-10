@@ -8,7 +8,7 @@
 | [Skills](../kinds/skills.md) | [✅](#skills) | `.devin/skills` |
 | [Agents (subagents)](../kinds/agents.md) | [✅](#agents) | translate |
 | [MCP servers](../kinds/mcp.md) | — | planned kind |
-| [Pi extensions](../kinds/pi-extensions.md) | — | Pi-only kind |
+| [Pi extensions](../kinds/pi-extensions.md) | N/A | Pi-only kind |
 
 ## Instructions { #instructions }
 
