@@ -26,3 +26,19 @@
 
 - **claude-code:** v1 = `symlink → ~/.claude/agents/<slug>.md`. CURRENT: still a markdown+frontmatter drop-in (so our mechanism stays **symlink** — agent's `config_file+folder` label is a misclassification of "reads a folder"; we do not mutate a config file). NEW facts: discovery is now **recursive**; optional-frontmatter set greatly expanded (15 fields). Mechanism verdict for our matrix: **symlink** (frontmatter passes unchanged). Confirmed live.
 - **kode / mux / command-code:** NOT in v1's 5 baselines — newly surfaced supported harnesses. kode reads `.claude/agents/` (Claude-compatible) → symlink; mux + command-code use their own dirs with compatible markdown → symlink (verify frontmatter reshape need in Phase B).
+
+## Re-verification 2026-06-10 — `.claude/agents/` readers (#361)
+
+- `claude-code`: re-fetched https://code.claude.com/docs/en/sub-agents —
+  confirms `.claude/agents/` (project, discovered by walking up from cwd) and
+  `~/.claude/agents/` (user), both scanned **recursively**, by default. HOLDS
+  at both scopes.
+- `kode`: re-fetched docs/agents-system.md — five-tier priority order still
+  lists `~/.claude/agents/` (user) and `./.claude/agents/` (project) as
+  auto-scanned defaults, no flags/config. HOLDS at both scopes.
+- `command-code`: WebSearch `"command code" commandcode.ai ".claude/agents"` —
+  no evidence command-code reads `.claude/agents/`; own
+  `~/.commandcode/agents/` dirs only. Negative.
+- `mux`: WebSearch `mux coder ".claude/agents"` — no evidence mux reads
+  `.claude/agents/` for agent definitions (it accepts `CLAUDE.md` as an
+  instruction base file, which is unrelated). Negative.

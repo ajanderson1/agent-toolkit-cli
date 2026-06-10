@@ -96,9 +96,9 @@ By mechanism: **symlink** (Claude-compatible markdown drop-in) — `augment`,
 | `continue` | unknown — no public evidence found |  |  | subagents in private testing (issue #9550), config.yaml-based; no stable public file spec | [continuedev/continue#9550](https://github.com/continuedev/continue/issues/9550) |
 | `cortex` | symlink | symlink | `~/.snowflake/cortex/agents/` or `~/.claude/agents/` / `.cortex/agents/` or `.claude/agents/` | markdown+frontmatter; required `name`,`description`,`tools`(array or `*`); optional `model` | https://docs.snowflake.com/en/user-guide/cortex-code/extensibility |
 | `crush` | unsupported (gap) |  |  | delegation runtime-only (`agent`/`agentic_fetch` tools); no user agent files (issue #1807 open) | [charmbracelet/crush#1807](https://github.com/charmbracelet/crush/issues/1807) |
-| `cursor` | symlink | symlink | `~/.cursor/agents/<slug>.md` / `.cursor/agents/<slug>.md` | markdown+frontmatter; required `name`,`description`; optional `model`,`readonly`,`is_background` | https://cursor.com/docs/subagents |
+| `cursor` | symlink | symlink | `~/.cursor/agents/<slug>.md` (also `~/.claude/agents/`, `~/.codex/agents/`) / `.cursor/agents/<slug>.md` (also `.claude/agents/`, `.codex/agents/`) | markdown+frontmatter; required `name`,`description`; optional `model`,`readonly`,`is_background` | https://cursor.com/docs/subagents (re-verified 2026-06-10: `.claude/agents/` + `~/.claude/agents/` are default discovery locations) |
 | `deepagents` | unsupported (by design) |  |  | Python library; subagents are code `SubAgent` TypedDicts; no file-drop convention | [langchain-ai/deepagents libs/deepagents/deepagents/middleware/subagents.py](https://github.com/langchain-ai/deepagents/blob/main/libs/deepagents/deepagents/middleware/subagents.py) |
-| `devin` | translate | translate | `~/.config/devin/agents/{profile}/AGENT.md` / `.devin/agents/{profile}/AGENT.md` | markdown+frontmatter; req `name`,`description`; per-profile-dir `AGENT.md`; also reads `.claude/agents/*.md` | https://cli.devin.ai/docs/subagents |
+| `devin` | translate | translate | `~/.config/devin/agents/{profile}/AGENT.md` / `.devin/agents/{profile}/AGENT.md` (also `.agents/agents/{profile}/AGENT.md`) | markdown+frontmatter; req `name`,`description`; per-profile-dir `AGENT.md`; also imports project-relative `.claude/agents/*.md` (project scope only) | https://docs.devin.ai/cli/subagents (cli.devin.ai/docs/subagents now 301s here; re-verified 2026-06-10) |
 | `dexto` | config_file+folder | config_file+folder | `agents/<name>.yml` (project; global unconfirmed) / `agents/<name>.yml` | YAML; req `systemPrompt`,`llm.*`; spawn via `tools[].type: agent-spawner` registry | [docs.dexto.ai/docs/guides/configuring-dexto/agent-yml](https://docs.dexto.ai/docs/guides/configuring-dexto/agent-yml) |
 | `droid` | symlink | symlink | `~/.factory/droids/<slug>.md` / `.factory/droids/<slug>.md` | markdown+frontmatter; required `name`(lc/digits/-/_)+non-empty body; optional `description`(≤500),`model`,`tools` | https://docs.factory.ai/cli/configuration/custom-droids |
 | `firebender` | config_file+folder | config_file+folder | `~/.firebender/firebender.json`→md / `firebender.json`→`.firebender/agents/<slug>.md` | markdown+frontmatter req `name`,`description`,`callable:true` to spawn; registered in `firebender.json` array | https://docs.firebender.com/multi-agent/subagents |
@@ -155,10 +155,31 @@ By mechanism: **symlink** (Claude-compatible markdown drop-in) — `augment`,
     not an agent-discovery path; project `.agents/` survives only as a legacy
     fallback. Verify against the installed `@tintinweb/pi-subagents` before
     relying on the dual user-scope alias.
-- **Cross-harness convergence:** `~/.claude/agents/` is read natively by
-  `kode`, `neovate`, `cortex`, and `devin` (Claude-compatibility layers). A single
-  symlink into `~/.claude/agents/` may satisfy multiple harnesses — a Phase B
-  optimization to weigh against per-harness slot explicitness.
+- **Cross-harness convergence (re-verified 2026-06-10 for #361):**
+  `.claude/agents/` is a de-facto shared agents slot. Verified reader sets
+  (strict bar: a citable source stating the harness reads the dir **by
+  default**, no flags/config):
+  - **Global (`~/.claude/agents/`):** `claude-code`, `kode`, `neovate`,
+    `cortex`, and `cursor`. Cursor is new since the Phase A sweep —
+    https://cursor.com/docs/subagents lists `~/.claude/agents/` (user) and
+    `.claude/agents/` (project) as default subagent discovery locations,
+    `.cursor/` winning name conflicts.
+  - **Project (`.claude/agents/`):** the same five **plus `devin`**, which
+    imports project-relative `.claude/agents/*.md` as subagent profiles
+    (https://docs.devin.ai/cli/subagents § Importing From Other Tools). Devin's
+    global agents live in the `~/.config/devin/agents/{profile}/AGENT.md` tree,
+    NOT `~/.claude/agents/` — so devin is a project-scope reader only.
+  - The remaining 21 supported harnesses were swept on 2026-06-10
+    (`"<harness>" ".claude/agents"` searches + official docs): no other harness
+    reads `.claude/agents/` by default. Near-misses that do NOT count:
+    `droid` (one-time *import* command copying into `~/.factory/droids/`),
+    `junie` (detects `.claude/agents/` and *suggests importing* into
+    `.junie/agents/`), `kiro-cli` (documented as having no `.claude/` compat),
+    `qwen-code` (extension-install-time conversion only). Evidence trails in
+    the per-batch fragments.
+  - A single write into `.claude/agents/` satisfies all readers at that scope —
+    this is the coverage basis for the `standard` agents projection (#361,
+    `STANDARD_AGENT_READERS`).
 
 ## Instruction-file (`instructions` asset type) support — all harnesses
 

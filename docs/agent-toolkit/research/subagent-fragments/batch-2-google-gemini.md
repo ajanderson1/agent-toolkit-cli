@@ -21,3 +21,12 @@
 
 - **gemini-cli:** v1 = `translate → ~/.gemini/agents/<slug>.md`, name+description only, zod `.strict()` (#97). CONFIRMED live with citation upgrade: `agentLoader.ts` `localAgentSchema.strict()`, `storage.ts:117-118,309-310`. Baseline holds. Mechanism: **translate**.
 - **qwen-code:** NOT in v1 — new supported harness. Gemini fork but own loader; requires an extra `systemPrompt` field and does NOT use `.strict()` → its own translate flavor in Phase B.
+
+## Re-verification 2026-06-10 — `.claude/agents/` readers (#361)
+
+- `gemini-cli`: WebSearch — no evidence of a `.claude/agents/` compat layer;
+  loader remains zod-`.strict()` over `~/.gemini/agents/` + `.gemini/agents/`
+  only. Negative.
+- `qwen-code`: WebSearch — Claude Code *extensions/plugins* can be installed
+  into Qwen Code with agent configs **converted at install time** to the Qwen
+  subagent format; that is not a default read of `.claude/agents/`. Negative.

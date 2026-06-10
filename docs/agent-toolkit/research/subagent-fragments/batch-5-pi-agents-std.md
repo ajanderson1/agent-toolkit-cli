@@ -24,3 +24,9 @@
 
 - **pi:** v1 = `dual-symlink → ~/.pi/agent/agents/<slug>.md` AND `~/.agents/<slug>.md` via `pi-subagents`, project `.pi/agents/` + `.agents/` (#75). CURRENT: loader is now namespaced `@tintinweb/pi-subagents`; the `~/.agents/` global alias appears to be a SKILLS path, not agent-discovery — agent-specific global is `~/.pi/agent/agents/`. Project-scope `.agents/` survives only as a legacy fallback. POTENTIAL baseline change: the user-scope dual `~/.agents/` alias may no longer be a valid agent slot. FLAGGED for Phase B verification against the actual installed extension.
 - **firebender:** NOT in v1 — new supported harness via config-file-registered markdown.
+
+## Re-verification 2026-06-10 — `.claude/agents/` readers (#361)
+
+- `firebender`: WebSearch + docs.firebender.com — agents are registered in the
+  `firebender.json` `agents` array pointing at `.firebender/agents/*.md`; no
+  `.claude/agents/` auto-read. Negative.

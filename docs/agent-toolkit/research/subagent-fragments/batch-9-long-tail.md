@@ -25,3 +25,14 @@
 ## Baseline deltas (vs v1 tag v1.0.0)
 
 - None in v1's 5. THREE newly-supported: **github-copilot** (`.agent.md` → translate), **pochi** (markdown → symlink/translate), **mistral-vibe** (TOML → translate). openhands + replit = gap; mcpjam + adal = by design/unknown.
+
+## Re-verification 2026-06-10 — `.claude/agents/` readers (#361)
+
+- `mistral-vibe`: WebSearch — no evidence; agents are TOML in `~/.vibe/agents/`
+  + `.vibe/agents/`. (Blog posts about *delegating from Claude Code to Vibe*
+  describe a Claude-side agent file, not Vibe reading `.claude/agents/`.)
+  Negative.
+- `github-copilot`: WebSearch + docs.github.com custom-agents pages — agents
+  are `.github/agents/*.agent.md` (project) + `~/.copilot/agents/` (user); no
+  `.claude/agents/` read documented. Negative.
+- `pochi`: WebSearch — no evidence; own `.pochi/agents/` dirs only. Negative.
