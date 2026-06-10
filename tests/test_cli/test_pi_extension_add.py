@@ -131,3 +131,19 @@ def test_add_abbreviated_sha_pin_expands(tmp_path, monkeypatch, git_sandbox):
     ).stdout.strip()
     assert head == first_sha != second_sha
     assert not (canonical / "EXTRA.md").exists()
+
+
+def test_add_bad_sha_fails_loud_no_orphans(tmp_path, monkeypatch, git_sandbox):
+    """A pin absent from the remote must raise (fail-loud, NOT silently stay
+    at HEAD), write no lock entry (#283), and leave no store dir (#313)."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    bogus = "0" * 40  # 40-hex, classified as SHA, exists nowhere
+
+    with pytest.raises(Exception):  # GitError from fetch_ref
+        pea.add(
+            source=f"file://{git_sandbox.upstream}/tree/{bogus}",
+            slug="ghost-pin", env=git_sandbox.env,
+        )
+
+    assert "ghost-pin" not in read_lock(pep.library_lock_path(env={})).skills
+    assert not pep.library_pi_extension_path("ghost-pin", env={}).exists()
