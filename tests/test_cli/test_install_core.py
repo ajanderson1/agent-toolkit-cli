@@ -20,7 +20,7 @@ FAKE_BINDING = KindBinding(
     canonical_dirname="xs",
     library_subdir="xs",
     lock_filename="xs-lock.json",
-    general_harness_name="general-x",
+    standard_harness_name="standard-x",
 )
 
 

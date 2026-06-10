@@ -9,11 +9,11 @@ Asserts:
    already has the entry; this pins the facade constant).
 2. The skill facade's synthetic name set contains "standard-skill" (catalog
    already has the entry; this pins the skill facade constant).
-3. Dual-flagged agent cells (is_universal=True + a real subagent_mechanism,
+3. Dual-flagged agent cells (is_standard=True + a real subagent_mechanism,
    e.g. cursor with mechanism='symlink') are NOT silently skipped by
    _install_core._should_skip_symlink when queried at global scope.
    Before the PR3 fix, _should_skip_symlink returned (True, 'universal-global')
-   for any is_universal cell regardless of mechanism — this is wrong for cells
+   for any is_standard cell regardless of mechanism — this is wrong for cells
    that also have a real agent adapter.
 4. agent_install.plan() for cursor at global scope includes cursor in
    add_agents (end-to-end assertion of the same fix, via the agent facade's
@@ -46,7 +46,7 @@ def test_general_agent_catalog_entry_exists():
     assert "standard-agent" in AGENTS
     cfg = AGENTS["standard-agent"]
     assert cfg.display_name == "Standard (agents)"
-    assert cfg.show_in_universal_list is False
+    assert cfg.show_in_standard_list is False
     assert cfg.subagent_mechanism == "none"  # synthetic — not a real harness
 
 
@@ -56,25 +56,25 @@ def test_general_skill_catalog_entry_exists():
     assert "standard-skill" in AGENTS
     cfg = AGENTS["standard-skill"]
     assert cfg.display_name == "Standard (skills)"
-    assert cfg.show_in_universal_list is False
-    assert cfg.is_universal is True  # lives in .agents/skills
+    assert cfg.show_in_standard_list is False
+    assert cfg.is_standard is True  # lives in .agents/skills
 
 
 # ── 2. Dual-flagged cell skip predicate ─────────────────────────────────────
 
 
 @pytest.mark.parametrize("harness", [
-    "cursor",       # is_universal=True, subagent_mechanism='symlink'
-    "gemini-cli",   # is_universal=True, subagent_mechanism='translate'
-    "github-copilot",  # is_universal=True, subagent_mechanism='translate'
-    "opencode",     # is_universal=True, subagent_mechanism='translate'
+    "cursor",       # is_standard=True, subagent_mechanism='symlink'
+    "gemini-cli",   # is_standard=True, subagent_mechanism='translate'
+    "github-copilot",  # is_standard=True, subagent_mechanism='translate'
+    "opencode",     # is_standard=True, subagent_mechanism='translate'
 ])
 def test_skip_predicate_does_not_skip_dual_flagged_agent_cells(harness):
     """_should_skip_symlink must NOT skip dual-flagged cells at global scope.
 
-    A dual-flagged cell has is_universal=True (skills_dir='.agents/skills')
+    A dual-flagged cell has is_standard=True (skills_dir='.agents/skills')
     AND a real subagent_mechanism (not 'none').  Before the PR3 fix, the
-    predicate treated is_universal as a generic skip signal: it returned
+    predicate treated is_standard as a generic skip signal: it returned
     (True, 'universal-global') for any universal cell regardless of whether
     it had a real agent adapter.  This silently omitted dual-flagged cells
     from the core's _current_linked_agents scan even though they are
@@ -88,7 +88,7 @@ def test_skip_predicate_does_not_skip_dual_flagged_agent_cells(harness):
 
     cfg = AGENTS[harness]
     # Pre-condition: the harness must be dual-flagged for the test to be meaningful.
-    assert cfg.is_universal, f"{harness} must have is_universal=True"
+    assert cfg.is_standard, f"{harness} must have is_standard=True"
     assert cfg.subagent_mechanism != "none", (
         f"{harness} must have a real subagent_mechanism for this test"
     )
@@ -107,7 +107,7 @@ def test_skip_predicate_does_not_skip_dual_flagged_agent_cells(harness):
 def test_skip_predicate_still_skips_pure_universal_cell_at_global():
     """Pure universal cells (no real agent mechanism) must still be skipped.
 
-    codex: is_universal=True, subagent_mechanism='none' (disabled PR2).
+    codex: is_standard=True, subagent_mechanism='none' (disabled PR2).
     Ensures the PR3 fix does not regress the skill kind's universal-skip
     behaviour for cells that genuinely have no agent adapter.
     """
@@ -115,7 +115,7 @@ def test_skip_predicate_still_skips_pure_universal_cell_at_global():
     from agent_toolkit_cli._install_core import _should_skip_symlink
 
     cfg = AGENTS["codex"]
-    assert cfg.is_universal is True
+    assert cfg.is_standard is True
     assert cfg.subagent_mechanism == "none"
 
     skip, reason = _should_skip_symlink(
@@ -141,7 +141,7 @@ def test_skip_predicate_does_not_skip_pure_universal_at_project():
 def test_agent_plan_includes_cursor_at_global_scope(tmp_path, monkeypatch):
     """agent_install.plan() must include cursor in add_agents at global scope.
 
-    cursor is dual-flagged: is_universal=True (reads .agents/skills for skills)
+    cursor is dual-flagged: is_standard=True (reads .agents/skills for skills)
     + subagent_mechanism='symlink' (has a real agent adapter).  The agent
     facade's adapter-aware scanner bypasses _should_skip_symlink, so cursor
     should appear in add_agents regardless.
@@ -160,7 +160,7 @@ def test_agent_plan_includes_cursor_at_global_scope(tmp_path, monkeypatch):
 
 
 def test_agent_plan_includes_gemini_cli_at_global_scope(tmp_path, monkeypatch):
-    """gemini-cli is dual-flagged (is_universal + translate). Must be included."""
+    """gemini-cli is dual-flagged (is_standard + translate). Must be included."""
     monkeypatch.setenv("HOME", str(tmp_path))
     from agent_toolkit_cli.agent_install import plan
 

@@ -138,14 +138,14 @@ def test_install_core_plan_has_no_kind_param():
     assert "kind" not in sig.parameters, (
         "_install_core.plan() must not accept `kind=`; kind-specific binding "
         "is done at the facade level via canonical_dir_resolver / "
-        "universal_bundle_link / synthetic_names / current_linked_resolver."
+        "standard_bundle_link / synthetic_names / current_linked_resolver."
     )
 
 
 def test_install_core_accepts_kind_specific_overrides_via_callables():
     """The core accepts kind-specific behaviour via injected callables, not a kind= param.
 
-    The facade pattern: canonical_dir_resolver, universal_bundle_link,
+    The facade pattern: canonical_dir_resolver, standard_bundle_link,
     synthetic_names, and current_linked_resolver are the injection points.
     All must be present in _install_core.plan()'s signature.
     """
@@ -154,7 +154,7 @@ def test_install_core_accepts_kind_specific_overrides_via_callables():
     sig = inspect.signature(plan)
     expected_injection_points = {
         "canonical_dir_resolver",
-        "universal_bundle_link",
+        "standard_bundle_link",
         "synthetic_names",
         "current_linked_resolver",
     }

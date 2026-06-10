@@ -83,13 +83,13 @@ def _read_skill_description(canonical: Path) -> str:
     return " ".join(str(raw).split())
 
 
-def _universal_bundle_link(slug: str) -> Path:
-    """Return the ~/.agents/skills/<slug> path for the universal-bundle install."""
+def _standard_bundle_link(slug: str) -> Path:
+    """Return the ~/.agents/skills/<slug> path for the standard-bundle install."""
     return Path.home() / ".agents" / "skills" / slug
 
 
-def _project_universal_link(project: Path, slug: str) -> Path:
-    """Return the <project>/.agents/skills/<slug> path for the project universal bundle."""
+def _project_standard_link(project: Path, slug: str) -> Path:
+    """Return the <project>/.agents/skills/<slug> path for the project standard bundle."""
     return project / ".agents" / "skills" / slug
 
 
@@ -101,8 +101,8 @@ def _cell_for(
     # use _should_skip_symlink (that function doesn't understand "standard" as
     # an agent_name — the engine strips it before calling skip checks).
     if agent_name == "standard":
-        # The universal bundle is one shared projection symlink that all
-        # universal agents read through. Both scopes detect it the same way now:
+        # The standard bundle is one shared projection symlink that all
+        # standard agents read through. Both scopes detect it the same way now:
         # linked iff the bundle link is a symlink resolving to the canonical
         # (which lives in the library at global scope, the external store at
         # project scope). Global: ~/.agents/skills/<slug>; project:
@@ -111,9 +111,9 @@ def _cell_for(
             slug, scope=scope, home=home, project=project,
         )
         bundle_link = (
-            _universal_bundle_link(slug)
+            _standard_bundle_link(slug)
             if scope == "global"
-            else _project_universal_link(project, slug)  # type: ignore[arg-type]
+            else _project_standard_link(project, slug)  # type: ignore[arg-type]
         )
         if not bundle_link.is_symlink():
             return SkillCell(linked=False, drift=False, skipped=False)

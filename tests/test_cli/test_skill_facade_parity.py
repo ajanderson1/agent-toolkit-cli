@@ -43,8 +43,8 @@ SKILL_INSTALL_PUBLIC = {
     "uninstall",
     "migrate_project_canonical",
     "ensure_project_canonical",
-    "_universal_bundle_link",     # used by tests + ensure_project_canonical
-    "_project_universal_link",    # used by ensure_project_canonical
+    "_standard_bundle_link",     # used by tests + ensure_project_canonical
+    "_project_standard_link",    # used by ensure_project_canonical
 }
 
 

@@ -1,14 +1,14 @@
 """Interactive DataTable for the TUI's skill tab.
 
-Columns: SKILL ⓘ | Universal ⓘ | Claude Code ⓘ | Pi ⓘ | State ⓘ | Source.
+Columns: SKILL ⓘ | Standard ⓘ | Claude Code ⓘ | Pi ⓘ | State ⓘ | Source.
 
 `space` toggles a cell (queues link/unlink in `_pending`).
 `a` toggles a column.
-`i` opens ColumnInfoModal for columns with registered info (Universal, State); for all other glyphed columns (SKILL, Claude Code, Pi) it opens CellInfoScreen with per-cell or slug context. The Source column has no info panel.
+`i` opens ColumnInfoModal for columns with registered info (Standard, State); for all other glyphed columns (SKILL, Claude Code, Pi) it opens CellInfoScreen with per-cell or slug context. The Source column has no info panel.
 `^s` Apply is handled by the App, which reads pending_entries().
 
 The long tail of agents is managed via the CLI; the TUI grid only shows
-the interactive shortlist (universal + claude-code + pi). The `Source`
+the interactive shortlist (standard + claude-code + pi). The `Source`
 column is passive (no toggle / no info popup); the SKILL slug-cell info
 modal surfaces the skill description when present.
 """
@@ -241,7 +241,7 @@ class SkillGrid(Vertical):
 
     def action_info(self) -> None:
         """Route `i` by column. Columns with a registered ColumnInfo open
-        ColumnInfoModal (header-level info such as Universal bundle, State
+        ColumnInfoModal (header-level info such as Standard bundle, State
         badge legend). Everything else opens CellInfoScreen with the per-cell
         state (linked target, drift+doctor command, pending op, slug source)."""
         from agent_toolkit_tui.screens.cell_info import CellInfoScreen
@@ -500,7 +500,7 @@ class SkillGrid(Vertical):
         cell = row.cells.get((agent, self._scope))
         if cell is None or cell.skipped:
             return
-        # Universal at project scope is now a plain projection symlink into the
+        # Standard at project scope is now a plain projection symlink into the
         # external store (post-#235/#237), so unlinking it is non-destructive and
         # the engine handles it like any other cell — no special guard (#232).
         key = (self._scope, agent, row.slug)

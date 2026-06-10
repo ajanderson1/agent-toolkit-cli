@@ -14,7 +14,7 @@ import questionary
 
 from agent_toolkit_cli.skill_agents import (
     AGENTS, detect_installed_agents,
-    get_non_universal_agents, get_universal_agents,
+    get_non_standard_agents, get_standard_agents,
 )
 
 
@@ -70,20 +70,20 @@ def select_agents_to_add(
     if _io_for_test is not None:
         return _io_for_test
 
-    universal_agents = get_universal_agents()
-    non_universal = get_non_universal_agents()
+    standard_agents = get_standard_agents()
+    non_standard = get_non_standard_agents()
     detected = set(detect_installed_agents())
 
     questionary.print(
         "\n── Standard (.agents/skills) ── always included ──",
         style="bold fg:cyan",
     )
-    for name in universal_agents:
+    for name in standard_agents:
         questionary.print(f"  • {AGENTS[name].display_name}")
     questionary.print(f"\n  Canonical clone: {canonical_path}\n")
 
     choices = []
-    for name in non_universal:
+    for name in non_standard:
         cfg = AGENTS[name]
         label = f"{cfg.display_name}    ({cfg.skills_dir.split('/')[0]}/skills/<slug>)"
         choices.append(questionary.Choice(
@@ -97,10 +97,10 @@ def select_agents_to_add(
     if agents_choice is None:
         return AgentSelection(agents=(), scope="global")
 
-    # The universal agents always get "selected" — at global scope this
+    # The standard agents always get "selected" — at global scope this
     # means just clone canonical (skip-rule fires); at project scope it
     # creates the <project>/.agents/skills/<slug> symlink.
-    selected = tuple(universal_agents) + tuple(agents_choice)
+    selected = tuple(standard_agents) + tuple(agents_choice)
 
     scope_choice = _ask(questionary.select(
         "Scope:",

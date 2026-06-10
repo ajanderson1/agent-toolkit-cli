@@ -37,7 +37,7 @@ class AgentConfig:
     skills_dir: str
     global_skills_dir: Path
     detect_installed: Callable[[], bool]
-    show_in_universal_list: bool = True
+    show_in_standard_list: bool = True
     subagent_mechanism: Literal[
         "symlink", "translate", "config_file_folder", "none"
     ] = "none"
@@ -48,7 +48,7 @@ class AgentConfig:
     disabled_reason: str = ""
 
     @property
-    def is_universal(self) -> bool:
+    def is_standard(self) -> bool:
         return self.skills_dir == ".agents/skills"
 
 
@@ -407,7 +407,7 @@ AGENTS: dict[str, AgentConfig] = {
         display_name="Replit",
         skills_dir=".agents/skills",
         global_skills_dir=XDG_CONFIG / "agents/skills",
-        show_in_universal_list=False,
+        show_in_standard_list=False,
         detect_installed=lambda: (Path.cwd() / ".replit").exists(),
     ),
     "rovodev": AgentConfig(
@@ -495,7 +495,7 @@ AGENTS: dict[str, AgentConfig] = {
         display_name="Standard",
         skills_dir=".agents/skills",
         global_skills_dir=XDG_CONFIG / "agents/skills",
-        show_in_universal_list=False,
+        show_in_standard_list=False,
         detect_installed=lambda: False,
     ),
     "standard-skill": AgentConfig(
@@ -503,7 +503,7 @@ AGENTS: dict[str, AgentConfig] = {
         display_name="Standard (skills)",
         skills_dir=".agents/skills",
         global_skills_dir=XDG_CONFIG / "agents/skills",
-        show_in_universal_list=False,
+        show_in_standard_list=False,
         detect_installed=lambda: False,
     ),
     "standard-agent": AgentConfig(
@@ -511,7 +511,7 @@ AGENTS: dict[str, AgentConfig] = {
         display_name="Standard (agents)",
         skills_dir=".agents/agents",
         global_skills_dir=XDG_CONFIG / "agents/agents",
-        show_in_universal_list=False,
+        show_in_standard_list=False,
         detect_installed=lambda: False,
         subagent_mechanism="none",  # synthetic — not a real installable harness
     ),
@@ -560,22 +560,22 @@ def resolve_agent_token(name: str) -> str:
     return new
 
 
-def get_universal_agents() -> list[str]:
+def get_standard_agents() -> list[str]:
     """Agents whose skillsDir == '.agents/skills', excluding the synthetic
-    'standard' pseudo-entry. Matches getUniversalAgents() in agents.ts."""
+    'standard' pseudo-entry. (Renamed from getUniversalAgents/agents.ts.)"""
     return [
         n
         for n, c in AGENTS.items()
-        if c.is_universal and c.show_in_universal_list
+        if c.is_standard and c.show_in_standard_list
     ]
 
 
-def get_non_universal_agents() -> list[str]:
-    return [n for n, c in AGENTS.items() if not c.is_universal]
+def get_non_standard_agents() -> list[str]:
+    return [n for n, c in AGENTS.items() if not c.is_standard]
 
 
-def is_universal(name: str) -> bool:
-    return AGENTS[name].is_universal
+def is_standard(name: str) -> bool:
+    return AGENTS[name].is_standard
 
 
 def detect_installed_agents() -> list[str]:

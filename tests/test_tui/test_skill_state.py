@@ -127,7 +127,7 @@ def test_universal_cell_global_linked(tmp_path: Path, monkeypatch):
     bundle_link = bundle_dir / "demo"
     bundle_link.symlink_to(canonical)
 
-    # Patch Path.home() so _universal_bundle_link resolves under fake_home.
+    # Patch Path.home() so _standard_bundle_link resolves under fake_home.
     monkeypatch.setattr(Path, "home", staticmethod(lambda: fake_home))
 
     cell = _cell_for("demo", "standard", scope="global", home=fake_home, project=None)
@@ -156,7 +156,7 @@ def test_universal_cell_global_drifted(tmp_path: Path, monkeypatch):
     bundle_link = bundle_dir / "demo"
     bundle_link.symlink_to(elsewhere)
 
-    # Patch Path.home() so _universal_bundle_link resolves under fake_home.
+    # Patch Path.home() so _standard_bundle_link resolves under fake_home.
     monkeypatch.setattr(Path, "home", staticmethod(lambda: fake_home))
 
     cell = _cell_for("demo", "standard", scope="global", home=fake_home, project=None)

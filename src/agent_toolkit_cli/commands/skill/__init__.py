@@ -20,7 +20,7 @@ from agent_toolkit_cli.skill_install import (
     InstallError,
     InstallPlan,
     _current_linked_agents,
-    _universal_bundle_link,
+    _standard_bundle_link,
     apply as engine_apply,
     ensure_project_canonical,
     plan as engine_plan,
@@ -504,7 +504,7 @@ Examples:
 
 \b
   agent-toolkit-cli skill install journal --agents claude-code
-  agent-toolkit-cli skill install journal --agents universal
+  agent-toolkit-cli skill install journal --agents standard
   agent-toolkit-cli skill install journal --agents claude-code -p
 """)
 @click.argument("slug", required=True)
@@ -724,7 +724,7 @@ def remove_cmd(
             from . import wizard as _wizard
             will_delete = [str(library_dir)]
             # Enumerate known symlinks.
-            bundle_link = _universal_bundle_link(slug)
+            bundle_link = _standard_bundle_link(slug)
             if bundle_link.is_symlink():
                 will_delete.append(str(bundle_link))
             for name in AGENTS:
@@ -782,8 +782,8 @@ def remove_cmd(
 
 
 def _remove_all_global_symlinks(slug: str) -> None:
-    """Remove the universal bundle link and all non-universal agent links at global scope."""
-    bundle_link = _universal_bundle_link(slug)
+    """Remove the standard bundle link and all non-standard agent links at global scope."""
+    bundle_link = _standard_bundle_link(slug)
     if bundle_link.is_symlink():
         bundle_link.unlink()
 
@@ -791,7 +791,7 @@ def _remove_all_global_symlinks(slug: str) -> None:
         if name == "standard":
             continue
         cfg = AGENTS[name]
-        if cfg.is_universal:
+        if cfg.is_standard:
             continue
         link = cfg.global_skills_dir / slug
         if link.is_symlink():

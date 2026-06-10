@@ -25,10 +25,10 @@ def test_get_column_info_universal_returns_columninfo():
 
 
 def test_get_column_info_universal_lists_known_harnesses():
-    from agent_toolkit_cli.skill_agents import get_universal_agents
+    from agent_toolkit_cli.skill_agents import get_standard_agents
     info = get_column_info("standard")
     text = "\n".join(info.lines)
-    for name in get_universal_agents():
+    for name in get_standard_agents():
         assert name in text, f"universal harness {name!r} missing from info"
 
 
@@ -71,7 +71,7 @@ def test_get_column_info_state_badge_order_matches_state_markup():
     assert badges == ["clean", "dirty", "missing", "copy", "library"]
 
 
-def test_universal_info_includes_global_marker_when_context_says_globally_linked():
+def test_standard_info_includes_global_marker_when_context_says_globally_linked():
     """Standard info shows the 🌐 paragraph when the focused row IS globally installed."""
     info = get_column_info("standard", context={"global_linked": True})
     assert info is not None
@@ -82,7 +82,7 @@ def test_universal_info_includes_global_marker_when_context_says_globally_linked
     )
 
 
-def test_universal_info_omits_global_marker_when_context_says_not_globally_linked():
+def test_standard_info_omits_global_marker_when_context_says_not_globally_linked():
     """Standard info OMITS the 🌐 paragraph when the focused row is NOT globally installed (#212)."""
     info = get_column_info("standard", context={"global_linked": False})
     assert info is not None
@@ -92,7 +92,7 @@ def test_universal_info_omits_global_marker_when_context_says_not_globally_linke
     )
 
 
-def test_universal_info_includes_global_marker_when_no_context():
+def test_standard_info_includes_global_marker_when_no_context():
     """Without context (e.g. legacy callers) the 🌐 paragraph still appears (back-compat)."""
     info = get_column_info("standard")
     assert info is not None

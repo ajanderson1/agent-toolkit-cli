@@ -21,7 +21,7 @@ def test_agent_install_synthetic_names_constant():
     assert _AGENT_SYNTHETIC_NAMES == frozenset({"standard-agent"})
 
 
-def test_plan_shim_passes_no_universal_bundle_link(tmp_path, monkeypatch):
+def test_plan_shim_passes_no_standard_bundle_link(tmp_path, monkeypatch):
     """Agents have no universal-bundle concept; the facade injects None."""
     monkeypatch.setenv("HOME", str(tmp_path))
     from agent_toolkit_cli.agent_install import plan

@@ -14,7 +14,7 @@ def test_kind_binding_is_frozen_dataclass():
         canonical_dirname="xs",
         library_subdir="_library/xs",
         lock_filename="xs-lock.json",
-        general_harness_name="general-x",
+        standard_harness_name="standard-x",
     )
     import dataclasses
     assert dataclasses.is_dataclass(b)
@@ -29,7 +29,7 @@ def test_skill_binding_is_the_canonical_skill_binding():
     assert SKILL_BINDING.canonical_dirname == "skills"
     assert SKILL_BINDING.library_subdir == "skills"  # under ~/.agent-toolkit/
     assert SKILL_BINDING.lock_filename == "skills-lock.json"
-    assert SKILL_BINDING.general_harness_name == "standard-skill"
+    assert SKILL_BINDING.standard_harness_name == "standard-skill"
 
 
 def test_library_root_for_kind_uses_binding_subdir(tmp_path, monkeypatch):
@@ -48,7 +48,7 @@ def test_library_root_for_kind_with_fake_kind(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(fake_home))
     fake = KindBinding(
         kind="x", canonical_dirname="xs", library_subdir="xs",
-        lock_filename="xs-lock.json", general_harness_name="general-x",
+        lock_filename="xs-lock.json", standard_harness_name="standard-x",
     )
     assert library_root_for_kind(fake, env=dict(os.environ)) == fake_home / ".agent-toolkit" / "xs"
 

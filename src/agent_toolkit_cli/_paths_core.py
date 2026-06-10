@@ -19,7 +19,7 @@ class KindBinding:
     canonical_dirname: str     # "skills" | "agents" — used in the catalog config's per-harness dir
     library_subdir: str        # "skills" | "agents" — directory name under ~/.agent-toolkit/
     lock_filename: str         # "skills-lock.json" | "agents-lock.json"
-    general_harness_name: str  # "standard-skill" | "standard-agent"
+    standard_harness_name: str  # "standard-skill" | "standard-agent"
 
 
 SKILL_BINDING = KindBinding(
@@ -27,7 +27,7 @@ SKILL_BINDING = KindBinding(
     canonical_dirname="skills",
     library_subdir="skills",
     lock_filename="skills-lock.json",
-    general_harness_name="standard-skill",
+    standard_harness_name="standard-skill",
 )
 
 INSTRUCTIONS_BINDING = KindBinding(
@@ -35,7 +35,7 @@ INSTRUCTIONS_BINDING = KindBinding(
     canonical_dirname="instructions",
     library_subdir="instructions",
     lock_filename="instructions-lock.json",
-    general_harness_name="general-instructions",
+    standard_harness_name="standard-instructions",
 )
 
 
@@ -44,7 +44,7 @@ AGENT_BINDING = KindBinding(
     canonical_dirname="agents",
     library_subdir="agents",
     lock_filename="agents-lock.json",
-    general_harness_name="standard-agent",
+    standard_harness_name="standard-agent",
 )
 
 
@@ -53,7 +53,7 @@ PI_EXTENSION_BINDING = KindBinding(
     canonical_dirname="pi-extensions",
     library_subdir="pi-extensions",
     lock_filename="pi-extensions-lock.json",
-    general_harness_name="general-pi-extension",
+    standard_harness_name="standard-pi-extension",
 )
 
 

@@ -1,6 +1,6 @@
 """Store-owned projection for the pi-extension kind.
 
-Pi extensions have NO per-harness fan-out and NO universal bundle: a
+Pi extensions have NO per-harness fan-out and NO standard bundle: a
 store-owned extension projects exactly ONE symlink per scope into Pi's
 discovery dir (~/.pi/agent/extensions/<slug> global, <proj>/.pi/extensions/<slug>
 project). This module reuses the kind-agnostic guard posture from

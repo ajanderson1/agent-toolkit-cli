@@ -7,9 +7,9 @@ from agent_toolkit_cli.skill_agents import (
     AGENTS,
     UnknownAgentError,
     get_agent,
-    get_non_universal_agents,
-    get_universal_agents,
-    is_universal,
+    get_non_standard_agents,
+    get_standard_agents,
+    is_standard,
 )
 
 
@@ -32,29 +32,29 @@ def test_every_global_skills_dir_is_absolute():
         )
 
 
-def test_universal_agents_have_canonical_skills_dir():
-    for n in get_universal_agents():
+def test_standard_agents_have_canonical_skills_dir():
+    for n in get_standard_agents():
         assert AGENTS[n].skills_dir == ".agents/skills"
 
 
-def test_non_universal_agents_have_custom_skills_dir():
-    for n in get_non_universal_agents():
+def test_non_standard_agents_have_custom_skills_dir():
+    for n in get_non_standard_agents():
         assert AGENTS[n].skills_dir != ".agents/skills"
 
 
 def test_universal_list_excludes_synthetic_universal():
-    assert "standard" not in get_universal_agents()
+    assert "standard" not in get_standard_agents()
 
 
 def test_universal_list_excludes_replit():
-    """replit has skills_dir='.agents/skills' but show_in_universal_list=False."""
-    assert "replit" not in get_universal_agents()
+    """replit has skills_dir='.agents/skills' but show_in_standard_list=False."""
+    assert "replit" not in get_standard_agents()
 
 
-def test_is_universal_matches_skills_dir():
-    assert is_universal("codex") is True
-    assert is_universal("claude-code") is False
-    assert is_universal("pi") is False
+def test_is_standard_matches_skills_dir():
+    assert is_standard("codex") is True
+    assert is_standard("claude-code") is False
+    assert is_standard("pi") is False
 
 
 def test_get_agent_returns_config():
@@ -77,19 +77,19 @@ def test_well_known_agents_present():
 def test_well_known_universality():
     """Of our 5 v2.0.0 shortlist:
     codex, opencode, gemini-cli are universal; claude-code, pi are not."""
-    assert is_universal("codex") is True
-    assert is_universal("opencode") is True
-    assert is_universal("gemini-cli") is True
-    assert is_universal("claude-code") is False
-    assert is_universal("pi") is False
+    assert is_standard("codex") is True
+    assert is_standard("opencode") is True
+    assert is_standard("gemini-cli") is True
+    assert is_standard("claude-code") is False
+    assert is_standard("pi") is False
 
 
 def test_general_skill_entry_exists_and_resolves_to_dotagents_skills():
     assert "standard-skill" in AGENTS
     cfg = AGENTS["standard-skill"]
     assert cfg.skills_dir == ".agents/skills"
-    assert cfg.show_in_universal_list is False
-    assert cfg.is_universal is True  # by skills_dir membership
+    assert cfg.show_in_standard_list is False
+    assert cfg.is_standard is True  # by skills_dir membership
 
 
 def test_universal_and_general_skill_coexist_with_same_dir():
@@ -98,10 +98,10 @@ def test_universal_and_general_skill_coexist_with_same_dir():
     assert AGENTS["standard"].global_skills_dir == AGENTS["standard-skill"].global_skills_dir
 
 
-def test_get_universal_agents_does_not_include_general_skill():
-    """Both `universal` and `standard-skill` set show_in_universal_list=False,
+def test_get_standard_agents_does_not_include_general_skill():
+    """Both `universal` and `standard-skill` set show_in_standard_list=False,
     so neither appears in the legacy 'universal agents' listing."""
-    listed = get_universal_agents()
+    listed = get_standard_agents()
     assert "standard" not in listed
     assert "standard-skill" not in listed
 
@@ -172,5 +172,5 @@ def test_general_agent_synthetic_present():
     cfg = AGENTS["standard-agent"]
     assert cfg.skills_dir == ".agents/agents"  # parallel to standard-skill but agents dir
     assert cfg.global_skills_dir == XDG_CONFIG / "agents/agents"
-    assert cfg.show_in_universal_list is False
+    assert cfg.show_in_standard_list is False
     assert cfg.subagent_mechanism == "none"  # not a real harness

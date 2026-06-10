@@ -19,7 +19,7 @@ def test_instructions_binding_field_values():
     assert INSTRUCTIONS_BINDING.canonical_dirname == "instructions"
     assert INSTRUCTIONS_BINDING.library_subdir == "instructions"
     assert INSTRUCTIONS_BINDING.lock_filename == "instructions-lock.json"
-    assert INSTRUCTIONS_BINDING.general_harness_name == "general-instructions"
+    assert INSTRUCTIONS_BINDING.standard_harness_name == "standard-instructions"
 
 
 def test_library_root_for_instructions_kind(monkeypatch, tmp_path):

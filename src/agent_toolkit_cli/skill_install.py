@@ -6,18 +6,18 @@ v2.2 library/install split:
 
 Symlink rules (v2.2, mirroring installer.ts:280-323):
   - Global + "standard" bundle target  → ~/.agents/skills/<slug> → library
-  - Global + non-universal agent        → ~/.<agent-dir>/skills/<slug> → library
-  - Project + universal agent           → symlink → external canonical (store)
-  - Project + non-universal             → <project>/<agent-dir>/skills/<slug> → canonical
+  - Global + non-standard agent         → ~/.<agent-dir>/skills/<slug> → library
+  - Project + standard agent            → symlink → external canonical (store)
+  - Project + non-standard              → <project>/<agent-dir>/skills/<slug> → canonical
                                           (agent root dir is created if absent)
 
 v3.0.0 facade split (PR1):
   Kind-agnostic install primitives (errors, dataclasses, plan(),
   _current_linked_agents, _should_skip_symlink, _symlink_or_copy,
   _doctor_hint) live in `_install_core`. This module re-exports them and
-  injects the skill-specific bundle-link helpers (`_universal_bundle_link`,
-  `_project_universal_link`) when delegating to the core. The .agents/skills
-  path that defines skill universality is owned here.
+  injects the skill-specific bundle-link helpers (`_standard_bundle_link`,
+  `_project_standard_link`) when delegating to the core. The .agents/skills
+  path that defines skill standardness is owned here.
 """
 from __future__ import annotations
 
@@ -57,16 +57,16 @@ from agent_toolkit_cli.skill_source import ParsedSource
 _SKILL_SYNTHETIC_NAMES: frozenset[str] = frozenset({"standard", "standard-skill"})
 
 
-def _universal_bundle_link(slug: str) -> Path:
-    """The ~/.agents/skills/<slug> path used for universal-bundle installs at global scope."""
+def _standard_bundle_link(slug: str) -> Path:
+    """The ~/.agents/skills/<slug> path used for standard-bundle installs at global scope."""
     return Path.home() / ".agents" / "skills" / slug
 
 
-def _project_universal_link(project: Path, slug: str) -> Path:
-    """The <project>/.agents/skills/<slug> path for the universal bundle at project scope.
+def _project_standard_link(project: Path, slug: str) -> Path:
+    """The <project>/.agents/skills/<slug> path for the standard bundle at project scope.
 
-    Every universal agent (skills_dir == ".agents/skills") reads through this one
-    shared projection. Mirrors _universal_bundle_link at project scope: under the
+    Every standard agent (skills_dir == ".agents/skills") reads through this one
+    shared projection. Mirrors _standard_bundle_link at project scope: under the
     external-store model it is a symlink → the project canonical, created/removed
     by the synthetic "standard" token in apply()."""
     return project / ".agents" / "skills" / slug
@@ -85,16 +85,16 @@ def plan(
     """Compute the minimal add/remove delta to reach target_agents.
 
     Thin facade over `_install_core.plan` that binds the skill-specific
-    `_universal_bundle_link` helper. Pure: reads current symlinks on disk +
+    `_standard_bundle_link` helper. Pure: reads current symlinks on disk +
     lock, returns plan. The skip rules from apply() are NOT applied here —
     plan reflects user intent ('I want codex globally'), apply realises it
-    ('codex is universal so no symlink needed').
+    ('codex is standard so no symlink needed').
     """
     return _core_plan(
         slug=slug, scope=scope, source=source, ref=ref,
         target_agents=target_agents, home=home, project=project,
         canonical_dir_resolver=canonical_skill_dir,
-        universal_bundle_link=_universal_bundle_link,
+        standard_bundle_link=_standard_bundle_link,
         synthetic_names=_SKILL_SYNTHETIC_NAMES,
     )
 
@@ -106,13 +106,13 @@ def _current_linked_agents(
     """Return agents whose symlink currently resolves to our canonical.
 
     Thin facade over `_install_core._current_linked_agents` that binds the
-    skill-specific `_universal_bundle_link` helper so the synthetic
+    skill-specific `_standard_bundle_link` helper so the synthetic
     "standard" bundle token is recognised at global scope.
     """
     return _core_current_linked_agents(
         slug=slug, scope=scope, home=home, project=project,
         canonical_dir_resolver=canonical_skill_dir,
-        universal_bundle_link=_universal_bundle_link,
+        standard_bundle_link=_standard_bundle_link,
         synthetic_names=_SKILL_SYNTHETIC_NAMES,
     )
 
@@ -171,14 +171,14 @@ def apply(
         # → library at global scope; at project scope it's a no-op (the project
         # canonical IS the install).
         if name == "standard":
-            # The universal bundle is one shared projection symlink that all
-            # universal agents read through: ~/.agents/skills/<slug> at global
+            # The standard bundle is one shared projection symlink that all
+            # standard agents read through: ~/.agents/skills/<slug> at global
             # scope, <project>/.agents/skills/<slug> at project scope. Under the
             # external-store model both point at the (out-of-tree) canonical.
             link = (
-                _universal_bundle_link(plan.slug)
+                _standard_bundle_link(plan.slug)
                 if plan.scope == "global"
-                else _project_universal_link(project, plan.slug)
+                else _project_standard_link(project, plan.slug)
             )
             link.parent.mkdir(parents=True, exist_ok=True)
             if link.is_symlink():
@@ -230,9 +230,9 @@ def apply(
     for name in plan.remove_agents:
         if name == "standard":
             link = (
-                _universal_bundle_link(plan.slug)
+                _standard_bundle_link(plan.slug)
                 if plan.scope == "global"
-                else _project_universal_link(project, plan.slug)
+                else _project_standard_link(project, plan.slug)
             )
             if link.is_symlink():
                 link.unlink()

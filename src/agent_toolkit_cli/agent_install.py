@@ -5,9 +5,9 @@ Binds AGENT_BINDING + _AGENT_SYNTHETIC_NAMES into the core. apply()
 dispatches to per-mechanism adapters from `agent_adapters/` instead of
 the skill facade's uniform-symlink projection.
 
-No universal-bundle concept exists for agents (per spec: agents
+No standard-bundle concept exists for agents (per spec: agents
 don't bundle into a megaprompt), so the facade injects
-universal_bundle_link=None.
+standard_bundle_link=None.
 """
 from __future__ import annotations
 
@@ -55,8 +55,8 @@ def plan(
 
     Thin facade over `_install_core.plan` that binds the agent-specific
     synthetic-name set AND injects an adapter-aware "currently linked"
-    scanner. Agents have no universal-bundle concept, so
-    universal_bundle_link=None.
+    scanner. Agents have no standard-bundle concept, so
+    standard_bundle_link=None.
 
     The injected scanner is essential: the core's built-in scan looks for a
     SYMLINK at the SKILL projection path, but agent adapters write REAL FILES
@@ -69,7 +69,7 @@ def plan(
         slug=slug, scope=scope, source=source, ref=ref,
         target_agents=target_agents, home=home, project=project,
         canonical_dir_resolver=canonical_agent_dir,
-        universal_bundle_link=None,
+        standard_bundle_link=None,
         synthetic_names=_AGENT_SYNTHETIC_NAMES,
         current_linked_resolver=_current_linked_agents,
     )
@@ -79,7 +79,7 @@ def _current_linked_agents(
     *, slug: str, scope: Scope,
     home: Path | None, project: Path | None,
     canonical_dir_resolver=None,
-    universal_bundle_link=None,
+    standard_bundle_link=None,
     synthetic_names: frozenset[str] = frozenset(),
 ) -> tuple[str, ...]:
     """Adapter-aware "currently linked" scan for the agent kind.
@@ -95,7 +95,7 @@ def _current_linked_agents(
     Adapters that fail-loud on a destination they cannot resolve (e.g. dexto
     at project scope) are treated as not-linked rather than crashing the scan.
 
-    The kwargs `canonical_dir_resolver`/`universal_bundle_link` are accepted
+    The kwargs `canonical_dir_resolver`/`standard_bundle_link` are accepted
     only to satisfy the core's `current_linked_resolver` call signature; they
     are irrelevant to the agent kind and ignored.
     """
