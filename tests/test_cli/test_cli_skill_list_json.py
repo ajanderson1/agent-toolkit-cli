@@ -20,7 +20,7 @@ def _add_demo(runner: CliRunner, upstream_path: Path, slug: str = "demo"):
 
 def _install_universal(runner: CliRunner, slug: str = "demo"):
     return runner.invoke(main, [
-        "skill", "install", slug, "--agents", "universal",
+        "skill", "install", slug, "--agents", "standard",
     ])
 
 
@@ -136,7 +136,7 @@ def test_skill_list_agent_filter_universal_token(
     assert _install_universal(runner).exit_code == 0
 
     result = runner.invoke(main, [
-        "skill", "list", "-g", "-a", "universal", "--json",
+        "skill", "list", "-g", "-a", "standard", "--json",
     ])
     assert result.exit_code == 0, result.output
     data = json.loads(result.output)
@@ -185,7 +185,7 @@ def test_skill_list_agent_filter_with_json_keeps_format(
     assert _install_universal(runner).exit_code == 0
 
     result = runner.invoke(main, [
-        "skill", "list", "-g", "-a", "universal", "--json",
+        "skill", "list", "-g", "-a", "standard", "--json",
     ])
     assert result.exit_code == 0, result.output
     data = json.loads(result.output)

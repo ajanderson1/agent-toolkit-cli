@@ -36,9 +36,9 @@ from agent_toolkit_cli.skill_agents import (
 from agent_toolkit_cli.skill_source import ParsedSource
 
 # Catalog tokens that are virtual entries, not real harness install targets.
-# Note: no "universal" — that's skill-only. "general-agent" mirrors
-# "general-skill" from the skill facade.
-_AGENT_SYNTHETIC_NAMES: frozenset[str] = frozenset({"general-agent"})
+# Note: no "standard" bundle — that's skill-only. "standard-agent" mirrors
+# "standard-skill" from the skill facade.
+_AGENT_SYNTHETIC_NAMES: frozenset[str] = frozenset({"standard-agent"})
 
 
 def plan(
@@ -89,7 +89,7 @@ def _current_linked_agents(
     install (adapter.destination(...)) and test whether that real file
     exists. A harness whose destination exists is "currently linked".
 
-    Synthetic tokens (general-agent) are skipped. Unsupported harnesses
+    Synthetic tokens (standard-agent) are skipped. Unsupported harnesses
     (mechanism='none', incl. the 4 PR2-disabled config_file_folder cells)
     raise UnsupportedMechanismError from get_adapter() and are skipped.
     Adapters that fail-loud on a destination they cannot resolve (e.g. dexto
@@ -132,7 +132,7 @@ def apply(
     """Execute the agent-install plan.
 
     For each agent in plan.add_agents:
-      - Skip synthetic tokens (general-agent).
+      - Skip synthetic tokens (standard-agent).
       - Resolve the mechanism via agent_adapters.get_adapter().
       - If get_adapter() raises UnsupportedMechanismError, record as skipped.
       - Otherwise call adapter.install(slug, canonical_path/<agent_file>, …).

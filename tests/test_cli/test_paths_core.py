@@ -29,7 +29,7 @@ def test_skill_binding_is_the_canonical_skill_binding():
     assert SKILL_BINDING.canonical_dirname == "skills"
     assert SKILL_BINDING.library_subdir == "skills"  # under ~/.agent-toolkit/
     assert SKILL_BINDING.lock_filename == "skills-lock.json"
-    assert SKILL_BINDING.general_harness_name == "general-skill"
+    assert SKILL_BINDING.general_harness_name == "standard-skill"
 
 
 def test_library_root_for_kind_uses_binding_subdir(tmp_path, monkeypatch):

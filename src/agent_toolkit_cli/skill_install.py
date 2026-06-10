@@ -5,7 +5,7 @@ v2.2 library/install split:
   Project canonical: <project>/.agents/skills/<slug>/    (independent git clone)
 
 Symlink rules (v2.2, mirroring installer.ts:280-323):
-  - Global + "universal" bundle target  → ~/.agents/skills/<slug> → library
+  - Global + "standard" bundle target  → ~/.agents/skills/<slug> → library
   - Global + non-universal agent        → ~/.<agent-dir>/skills/<slug> → library
   - Project + universal agent           → symlink → external canonical (store)
   - Project + non-universal             → <project>/<agent-dir>/skills/<slug> → canonical
@@ -54,7 +54,7 @@ from agent_toolkit_cli.skill_paths import (
 from agent_toolkit_cli.skill_source import ParsedSource
 
 # Catalog tokens that are virtual entries, not real harness symlink targets.
-_SKILL_SYNTHETIC_NAMES: frozenset[str] = frozenset({"universal", "general-skill"})
+_SKILL_SYNTHETIC_NAMES: frozenset[str] = frozenset({"standard", "standard-skill"})
 
 
 def _universal_bundle_link(slug: str) -> Path:
@@ -68,7 +68,7 @@ def _project_universal_link(project: Path, slug: str) -> Path:
     Every universal agent (skills_dir == ".agents/skills") reads through this one
     shared projection. Mirrors _universal_bundle_link at project scope: under the
     external-store model it is a symlink → the project canonical, created/removed
-    by the synthetic "universal" token in apply()."""
+    by the synthetic "standard" token in apply()."""
     return project / ".agents" / "skills" / slug
 
 
@@ -107,7 +107,7 @@ def _current_linked_agents(
 
     Thin facade over `_install_core._current_linked_agents` that binds the
     skill-specific `_universal_bundle_link` helper so the synthetic
-    "universal" bundle token is recognised at global scope.
+    "standard" bundle token is recognised at global scope.
     """
     return _core_current_linked_agents(
         slug=slug, scope=scope, home=home, project=project,
@@ -167,10 +167,10 @@ def apply(
     created: list[Path] = []
     skipped: list[str] = []
     for name in plan.add_agents:
-        # The synthetic "universal" token means: create ~/.agents/skills/<slug>
+        # The synthetic "standard" token means: create ~/.agents/skills/<slug>
         # → library at global scope; at project scope it's a no-op (the project
         # canonical IS the install).
-        if name == "universal":
+        if name == "standard":
             # The universal bundle is one shared projection symlink that all
             # universal agents read through: ~/.agents/skills/<slug> at global
             # scope, <project>/.agents/skills/<slug> at project scope. Under the
@@ -184,13 +184,13 @@ def apply(
             if link.is_symlink():
                 if link.resolve() != canonical.resolve():
                     raise InstallError(
-                        f"{plan.slug}/universal: conflicting symlink at {link}: "
+                        f"{plan.slug}/standard: conflicting symlink at {link}: "
                         f"points to {link.resolve()}, expected {canonical}"
                         + _doctor_hint(plan.slug, plan.scope)
                     )
             elif link.exists():
                 raise InstallError(
-                    f"{plan.slug}/universal: conflicting non-symlink at {link}; "
+                    f"{plan.slug}/standard: conflicting non-symlink at {link}; "
                     f"refusing to overwrite"
                 )
             else:
@@ -228,7 +228,7 @@ def apply(
     # Remove symlinks.
     removed: list[Path] = []
     for name in plan.remove_agents:
-        if name == "universal":
+        if name == "standard":
             link = (
                 _universal_bundle_link(plan.slug)
                 if plan.scope == "global"
@@ -239,7 +239,7 @@ def apply(
                 removed.append(link)
             elif link.exists():
                 raise InstallError(
-                    f"{plan.slug}/universal: cannot unlink {link}: not a symlink"
+                    f"{plan.slug}/standard: cannot unlink {link}: not a symlink"
                 )
             continue
 

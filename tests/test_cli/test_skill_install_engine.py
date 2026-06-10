@@ -31,13 +31,13 @@ def test_skip_rule_global_universal(tmp_path):
 
     v2.2: individual universal agents (codex, gemini-cli, etc.) skip their
     per-agent symlink. The single ~/.agents/skills/<slug> bundle symlink is
-    created separately via the "universal" token in apply(), not per-agent.
+    created separately via the "standard" token in apply(), not per-agent.
     """
     skip, reason = _should_skip_symlink(
         agent_name="codex", scope="global", project=None,
     )
     assert skip is True
-    assert reason == "universal-global"
+    assert reason == "standard-global"
 
 
 def test_skip_rule_project_universal(tmp_path):
@@ -204,7 +204,7 @@ def test_apply_project_codex_gets_symlink_universal(git_sandbox, tmp_path):
 
 
 def test_apply_project_universal_unlink_removes_symlink(git_sandbox, tmp_path):
-    """#232: removing "universal" at project scope unlinks the projection symlink.
+    """#232: removing "standard" at project scope unlinks the projection symlink.
 
     Mirrors test_apply_project_codex_gets_symlink_universal for the install side.
     After unlink the <project>/.agents/skills/<slug> symlink is gone, but the
@@ -232,7 +232,7 @@ def test_apply_project_universal_unlink_removes_symlink(git_sandbox, tmp_path):
     apply(
         InstallPlan(
             slug="demo", scope="project", source=None, ref=None,
-            add_agents=(), remove_agents=("universal",),
+            add_agents=(), remove_agents=("standard",),
         ),
         home=home, project=project, env=git_sandbox.env,
     )

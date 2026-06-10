@@ -66,7 +66,7 @@ def select_agents_to_add(
     *, slug: str, canonical_path: Path,
     _io_for_test: AgentSelection | None = None,
 ) -> AgentSelection:
-    """Two-section wizard: Universal (auto-listed) + Additional agents (checkbox)."""
+    """Two-section wizard: Standard (auto-listed) + Additional agents (checkbox)."""
     if _io_for_test is not None:
         return _io_for_test
 
@@ -75,7 +75,7 @@ def select_agents_to_add(
     detected = set(detect_installed_agents())
 
     questionary.print(
-        "\n── Universal (.agents/skills) ── always included ──",
+        "\n── Standard (.agents/skills) ── always included ──",
         style="bold fg:cyan",
     )
     for name in universal_agents:

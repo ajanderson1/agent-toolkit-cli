@@ -1,7 +1,7 @@
 """Agents catalog — port of vercel-labs/skills/src/agents.ts.
 
-53 real agents + 1 synthetic 'universal' pseudo-agent. An agent is
-'universal' iff its skills_dir is exactly '.agents/skills' (all such
+53 real agents + 1 synthetic 'standard' pseudo-agent. An agent is
+'standard' iff its skills_dir is exactly '.agents/skills' (all such
 agents read skills from a single shared canonical location, so no
 per-harness symlink is needed at global scope).
 """
@@ -489,25 +489,25 @@ AGENTS: dict[str, AgentConfig] = {
         global_skills_dir=HOME / ".adal/skills",
         detect_installed=lambda: (HOME / ".adal").exists(),
     ),
-    "universal": AgentConfig(
-        name="universal",
-        display_name="Universal",
+    "standard": AgentConfig(
+        name="standard",
+        display_name="Standard",
         skills_dir=".agents/skills",
         global_skills_dir=XDG_CONFIG / "agents/skills",
         show_in_universal_list=False,
         detect_installed=lambda: False,
     ),
-    "general-skill": AgentConfig(
-        name="general-skill",
-        display_name="General (skills)",
+    "standard-skill": AgentConfig(
+        name="standard-skill",
+        display_name="Standard (skills)",
         skills_dir=".agents/skills",
         global_skills_dir=XDG_CONFIG / "agents/skills",
         show_in_universal_list=False,
         detect_installed=lambda: False,
     ),
-    "general-agent": AgentConfig(
-        name="general-agent",
-        display_name="General (agents)",
+    "standard-agent": AgentConfig(
+        name="standard-agent",
+        display_name="Standard (agents)",
         skills_dir=".agents/agents",
         global_skills_dir=XDG_CONFIG / "agents/agents",
         show_in_universal_list=False,
@@ -529,7 +529,7 @@ def get_agent(name: str) -> AgentConfig:
 
 def get_universal_agents() -> list[str]:
     """Agents whose skillsDir == '.agents/skills', excluding the synthetic
-    'universal' pseudo-entry. Matches getUniversalAgents() in agents.ts."""
+    'standard' pseudo-entry. Matches getUniversalAgents() in agents.ts."""
     return [
         n
         for n, c in AGENTS.items()

@@ -3,7 +3,7 @@
 The table lives in docs/agent-toolkit/harness-matrix.md under the heading
 "## Instruction-file (`instructions` kind) support — all harnesses". Every
 harness in the catalog (agent_toolkit_cli.skill_agents, excluding the synthetic
-`universal`, `general-skill`, and `general-agent` entries) must appear exactly
+`universal`, `standard-skill`, and `standard-agent` entries) must appear exactly
 once with a recognised verdict.
 
 Symlink-verdict rows (the Phase B work surface) must additionally carry a
@@ -53,11 +53,11 @@ def _catalog_harnesses() -> set[str]:
     """All catalog harness names except synthetic pseudo-entries.
 
     Mirrors `test_subagent_matrix._catalog_harnesses` — both tables index the
-    same catalog and exclude the same synthetics. `general-agent` is the
+    same catalog and exclude the same synthetics. `standard-agent` is the
     agent-kind synthetic added in PR2 of #252; it resolves to a convergence
     path and is not an instruction-file harness, so it is excluded here too.
     """
-    return set(skill_agents.AGENTS) - {"universal", "general-skill", "general-agent"}
+    return set(skill_agents.AGENTS) - {"standard", "standard-skill", "standard-agent"}
 
 
 def _parse_section() -> dict[str, dict[str, str]]:

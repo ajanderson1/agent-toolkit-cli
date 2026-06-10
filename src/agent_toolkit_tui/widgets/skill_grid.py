@@ -326,7 +326,7 @@ class SkillGrid(Vertical):
             home=Path.home() if scope == "global" else None,
             project=None if scope == "global" else Path.cwd(),
         )
-        if agent == "universal":
+        if agent == "standard":
             if scope == "global":
                 bundle = Path.home() / ".agents" / "skills" / row.slug
                 if cell.drift:
@@ -361,7 +361,7 @@ class SkillGrid(Vertical):
         )
         if cell.skipped:
             return (
-                f"General agent — no symlink needed.\n"
+                f"Standard agent — no symlink needed.\n"
                 f"Skill lives at {canonical}."
             )
         if pending == "link":
@@ -470,18 +470,18 @@ class SkillGrid(Vertical):
     def _context_for(self, *, key: str, row_index: int) -> dict | None:
         """Build the per-call context dict for get_column_info().
 
-        Today only the 'universal' key uses it: we surface whether the focused
+        Today only the 'standard' key uses it: we surface whether the focused
         row is also installed globally so the modal can omit the 🌐 paragraph
         when it's not.
         """
-        if key != "universal":
+        if key != "standard":
             return None
         # row_index comes from the table cursor → index the visible rows (#249).
         visible = self._visible_rows()
         if row_index < 0 or row_index >= len(visible):
             return None
         row = visible[row_index]
-        global_cell = row.cells.get(("universal", "global"))
+        global_cell = row.cells.get(("standard", "global"))
         return {"global_linked": bool(global_cell and global_cell.linked)}
 
     def _toggle_at(self, coord: Coordinate) -> None:
@@ -557,11 +557,10 @@ class SkillGrid(Vertical):
         table.add_column(f"SKILL {_INFO_GLYPH}", width=20)
         for agent in INTERACTIVE_AGENTS:
             # Every interactive agent column exposes either a column-info
-            # modal (General) or per-cell info (Claude Code, Pi via
-            # CellInfoScreen) — glyph them all. The "universal" token is the
-            # load-bearing bundle key; only its display label is "General"
-            # (v3 universal→general rename, #304 bug 3).
-            base = "General" if agent == "universal" else AGENTS[agent].display_name
+            # modal (Standard) or per-cell info (Claude Code, Pi via
+            # CellInfoScreen) — glyph them all. "standard" is the
+            # load-bearing bundle key (v3.7 full rename, #350).
+            base = "Standard" if agent == "standard" else AGENTS[agent].display_name
             table.add_column(f"{base} {_INFO_GLYPH}", width=14)
         # State has a column-info modal → glyph it.
         table.add_column(f"State {_INFO_GLYPH}", width=10)

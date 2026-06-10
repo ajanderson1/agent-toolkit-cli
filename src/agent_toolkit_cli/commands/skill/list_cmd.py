@@ -50,11 +50,11 @@ def list_cmd(
         read_only=True,
     )
 
-    if agent is not None and agent != "universal" and agent not in AGENTS:
+    if agent is not None and agent != "standard" and agent not in AGENTS:
         raise click.UsageError(f"unknown agent: {agent}")
-    if agent == "general-skill":
+    if agent == "standard-skill":
         raise click.UsageError(
-            "general-skill is a synthetic catalog entry, not a usable agent token"
+            "standard-skill is a synthetic catalog entry, not a usable agent token"
         )
 
     lock = read_lock(lock_file_path(scope=scope, home=home, project=project_root))

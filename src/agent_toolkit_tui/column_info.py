@@ -45,9 +45,8 @@ def _universal_info(context: dict | None = None) -> ColumnInfo:
         "  so you may not need it at project scope too.",
     ] if show_marker else []
     return ColumnInfo(
-        # Display label only — the registry key + function name keep the
-        # load-bearing "universal" token (v3 universal→general rename, #304).
-        title="General bundle",
+        # v3.7 full rename (#350): key and title both say "standard".
+        title="Standard bundle",
         lines=description + bullets + indicator_note,
     )
 
@@ -71,7 +70,7 @@ def _state_info(context: dict | None = None) -> ColumnInfo:
 
 
 COLUMN_INFO: dict[str, Callable[..., ColumnInfo]] = {
-    "universal": _universal_info,
+    "standard": _universal_info,
     "state": _state_info,
 }
 

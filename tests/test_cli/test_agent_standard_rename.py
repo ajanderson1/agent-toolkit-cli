@@ -1,9 +1,13 @@
-"""PR3 — universal→general rename: failing test (TDD gate).
+"""#350 — full universal/general → standard rename: pins the renamed tokens.
+
+Originally written for the #304 display-only rename (PR3); now pins the #350
+full rename, where catalog keys, synthetic-name sets, and display names all
+say "standard".
 
 Asserts:
-1. The agent facade's synthetic name set contains "general-agent" (catalog
+1. The agent facade's synthetic name set contains "standard-agent" (catalog
    already has the entry; this pins the facade constant).
-2. The skill facade's synthetic name set contains "general-skill" (catalog
+2. The skill facade's synthetic name set contains "standard-skill" (catalog
    already has the entry; this pins the skill facade constant).
 3. Dual-flagged agent cells (is_universal=True + a real subagent_mechanism,
    e.g. cursor with mechanism='symlink') are NOT silently skipped by
@@ -24,34 +28,34 @@ import pytest
 
 
 def test_agent_synthetic_name_is_general_agent():
-    """The agent facade's synthetic set uses 'general-agent', not 'universal'."""
+    """The agent facade's synthetic set uses 'standard-agent', not 'standard'."""
     from agent_toolkit_cli.agent_install import _AGENT_SYNTHETIC_NAMES
-    assert "general-agent" in _AGENT_SYNTHETIC_NAMES
-    assert "universal" not in _AGENT_SYNTHETIC_NAMES
+    assert "standard-agent" in _AGENT_SYNTHETIC_NAMES
+    assert "standard" not in _AGENT_SYNTHETIC_NAMES
 
 
 def test_skill_synthetic_names_include_general_skill():
-    """The skill facade's synthetic set contains 'general-skill'."""
+    """The skill facade's synthetic set contains 'standard-skill'."""
     from agent_toolkit_cli.skill_install import _SKILL_SYNTHETIC_NAMES
-    assert "general-skill" in _SKILL_SYNTHETIC_NAMES
+    assert "standard-skill" in _SKILL_SYNTHETIC_NAMES
 
 
 def test_general_agent_catalog_entry_exists():
-    """Catalog already ships 'general-agent' (PR2). This test pins the shape."""
+    """Catalog already ships 'standard-agent' (PR2). This test pins the shape."""
     from agent_toolkit_cli.skill_agents import AGENTS
-    assert "general-agent" in AGENTS
-    cfg = AGENTS["general-agent"]
-    assert cfg.display_name == "General (agents)"
+    assert "standard-agent" in AGENTS
+    cfg = AGENTS["standard-agent"]
+    assert cfg.display_name == "Standard (agents)"
     assert cfg.show_in_universal_list is False
     assert cfg.subagent_mechanism == "none"  # synthetic — not a real harness
 
 
 def test_general_skill_catalog_entry_exists():
-    """Catalog already ships 'general-skill' (PR1). This test pins the shape."""
+    """Catalog already ships 'standard-skill' (PR1). This test pins the shape."""
     from agent_toolkit_cli.skill_agents import AGENTS
-    assert "general-skill" in AGENTS
-    cfg = AGENTS["general-skill"]
-    assert cfg.display_name == "General (skills)"
+    assert "standard-skill" in AGENTS
+    cfg = AGENTS["standard-skill"]
+    assert cfg.display_name == "Standard (skills)"
     assert cfg.show_in_universal_list is False
     assert cfg.is_universal is True  # lives in .agents/skills
 
@@ -118,11 +122,11 @@ def test_skip_predicate_still_skips_pure_universal_cell_at_global():
         agent_name="codex", scope="global", project=None,
     )
     assert skip is True
-    assert reason == "universal-global"
+    assert reason == "standard-global"
 
 
 def test_skip_predicate_does_not_skip_pure_universal_at_project():
-    """Universal cells at project scope must never be skipped (existing rule)."""
+    """Standard cells at project scope must never be skipped (existing rule)."""
     from agent_toolkit_cli._install_core import _should_skip_symlink
     skip, reason = _should_skip_symlink(
         agent_name="codex", scope="project", project=None,

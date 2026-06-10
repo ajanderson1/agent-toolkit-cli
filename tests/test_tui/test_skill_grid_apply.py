@@ -55,7 +55,7 @@ async def test_toggle_cell_queues_link():
 
 @pytest.mark.asyncio
 async def test_toggle_universal_project_linked_queues_unlink():
-    """#232: a checked Universal cell at project scope must queue an unlink.
+    """#232: a checked Standard cell at project scope must queue an unlink.
 
     Previously a guard early-returned for (universal, project, linked), so the
     cell could never be un-toggled. The engine (post-#237) handles the unlink.
@@ -63,22 +63,22 @@ async def test_toggle_universal_project_linked_queues_unlink():
     from textual.app import App
     class _A(App):
         def compose(self):
-            yield SkillGrid([_row("j", scope="project", linked=("universal",))], id="g")
+            yield SkillGrid([_row("j", scope="project", linked=("standard",))], id="g")
     a = _A()
     async with a.run_test() as pilot:
         await pilot.pause()
         g = a.query_one("#g", SkillGrid)
         g.set_scope("project")
         await pilot.pause()
-        g.cursor_to_cell(row_slug="j", agent_name="universal")
+        g.cursor_to_cell(row_slug="j", agent_name="standard")
         await pilot.pause()
         await pilot.press("space")
-        assert g.pending_entries() == {("project", "universal", "j"): "unlink"}
+        assert g.pending_entries() == {("project", "standard", "j"): "unlink"}
 
 
 @pytest.mark.asyncio
 async def test_toggle_universal_project_unlinked_queues_link():
-    """#232 inverse: an unchecked Universal cell at project scope queues a link."""
+    """#232 inverse: an unchecked Standard cell at project scope queues a link."""
     from textual.app import App
     class _A(App):
         def compose(self):
@@ -89,10 +89,10 @@ async def test_toggle_universal_project_unlinked_queues_link():
         g = a.query_one("#g", SkillGrid)
         g.set_scope("project")
         await pilot.pause()
-        g.cursor_to_cell(row_slug="j", agent_name="universal")
+        g.cursor_to_cell(row_slug="j", agent_name="standard")
         await pilot.pause()
         await pilot.press("space")
-        assert g.pending_entries() == {("project", "universal", "j"): "link"}
+        assert g.pending_entries() == {("project", "standard", "j"): "link"}
 
 
 @pytest.mark.asyncio

@@ -53,7 +53,7 @@ async def test_project_scope_globally_linked_cell_shows_marker():
         "alpha",
         project_cells={agent: _unlinked() for agent in INTERACTIVE_AGENTS},
         global_cells={
-            "universal": _unlinked(),
+            "standard": _unlinked(),
             "claude-code": _linked(),
             "pi": _unlinked(),
         },
@@ -92,7 +92,7 @@ async def test_global_scope_view_does_not_show_marker():
     row = _row_with(
         "alpha",
         global_cells={
-            "universal": _linked(),
+            "standard": _linked(),
             "claude-code": _linked(),
             "pi": _linked(),
         },
@@ -127,7 +127,7 @@ async def test_drifted_global_cell_does_not_show_marker():
         "alpha",
         project_cells={agent: _unlinked() for agent in INTERACTIVE_AGENTS},
         global_cells={
-            "universal": _unlinked(),
+            "standard": _unlinked(),
             "claude-code": _drifted(),
             "pi": _unlinked(),
         },
@@ -159,7 +159,7 @@ async def test_skipped_global_cell_does_not_show_marker():
         "alpha",
         project_cells={agent: _unlinked() for agent in INTERACTIVE_AGENTS},
         global_cells={
-            "universal": _skipped(),
+            "standard": _skipped(),
             "claude-code": _unlinked(),
             "pi": _unlinked(),
         },
@@ -178,7 +178,7 @@ async def test_skipped_global_cell_does_not_show_marker():
         g._rebuild(table)  # type: ignore[attr-defined]
         await pilot.pause()
         row_key = list(table.rows.keys())[0]
-        u_col_key = list(table.columns.keys())[1 + INTERACTIVE_AGENTS.index("universal")]
+        u_col_key = list(table.columns.keys())[1 + INTERACTIVE_AGENTS.index("standard")]
         plain = Text.from_markup(str(table.get_cell(row_key, u_col_key))).plain
         assert "🌐" not in plain, f"skipped global cell shows marker: {plain!r}"
 
@@ -191,7 +191,7 @@ async def test_per_agent_independence():
         "alpha",
         project_cells={agent: _unlinked() for agent in INTERACTIVE_AGENTS},
         global_cells={
-            "universal": _linked(),
+            "standard": _linked(),
             "claude-code": _unlinked(),
             "pi": _unlinked(),
         },
@@ -212,7 +212,7 @@ async def test_per_agent_independence():
         row_key = list(table.rows.keys())[0]
         cols = list(table.columns.keys())
         u_plain = Text.from_markup(str(table.get_cell(
-            row_key, cols[1 + INTERACTIVE_AGENTS.index("universal")]))).plain
+            row_key, cols[1 + INTERACTIVE_AGENTS.index("standard")]))).plain
         cc_plain = Text.from_markup(str(table.get_cell(
             row_key, cols[1 + INTERACTIVE_AGENTS.index("claude-code")]))).plain
         pi_plain = Text.from_markup(str(table.get_cell(

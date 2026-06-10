@@ -111,7 +111,7 @@ def _should_skip_symlink(
       - Project + non-universal: NOT skipped. The agent root dir is auto-created
         by apply() via link.parent.mkdir(parents=True, exist_ok=True).
 
-    The special "universal" bundle token is handled in apply() before
+    The special "standard" bundle token is handled in apply() before
     _should_skip_symlink is called; it never reaches here as an agent_name.
 
     PR3 (universal→general rename) made this predicate kind-aware: a cell
@@ -128,7 +128,7 @@ def _should_skip_symlink(
     # Dual-flagged cells (is_universal + real subagent_mechanism) must NOT be
     # skipped — their agent adapter handles the install independently.
     if cfg.is_universal and scope == "global" and cfg.subagent_mechanism == "none":
-        return True, "universal-global"
+        return True, "standard-global"
     return False, ""
 
 
@@ -161,7 +161,7 @@ def plan(
 
     `synthetic_names` is the set of catalog tokens that are virtual entries
     rather than real harness symlink targets (e.g. the skill facade injects
-    `frozenset({"universal", "general-skill"})`). The core treats it as
+    `frozenset({"standard", "standard-skill"})`). The core treats it as
     opaque — it never names a specific kind's synthetics itself.
 
     `current_linked_resolver` overrides the built-in `_current_linked_agents`
@@ -205,7 +205,7 @@ def _current_linked_agents(
     scan compares against the correct canonical path for the asset kind;
     defaults to `canonical_skill_dir` for backward compatibility.
 
-    Includes the synthetic 'universal' bundle token at global scope when
+    Includes the synthetic 'standard' bundle token at global scope when
     `universal_bundle_link(slug)` is a symlink to the library canonical.
 
     `synthetic_names` enumerates catalog tokens that are virtual entries
@@ -226,7 +226,7 @@ def _current_linked_agents(
     if scope == "global" and universal_bundle_link is not None:
         bundle_link = universal_bundle_link(slug)
         if bundle_link.is_symlink() and bundle_link.resolve() == canonical_real:
-            linked.append("universal")
+            linked.append("standard")
 
     for name in AGENTS:
         # Skip facade-injected synthetic catalog tokens — they're handled

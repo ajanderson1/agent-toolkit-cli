@@ -53,6 +53,11 @@ def test_catalog_matches_vendored_skills_sh_source():
 
         pytest.skip("vendored agents.ts not present at " + str(fixture))
     ts_names = _extract_agent_names_from_ts(fixture.read_text())
+    # Deliberate naming divergence from upstream vercel-labs/skills (#350):
+    # upstream's `universal` is our `standard`. Applied before comparison so the
+    # vendored fixture stays a verbatim snapshot.
+    _RENAMED_FROM_UPSTREAM = {"universal": "standard"}
+    ts_names = {_RENAMED_FROM_UPSTREAM.get(n, n) for n in ts_names}
     py_names = set(AGENTS.keys())
     missing_in_py = ts_names - py_names
     extra_in_py = py_names - ts_names
