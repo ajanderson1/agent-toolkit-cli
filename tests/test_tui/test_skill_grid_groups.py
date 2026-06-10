@@ -220,3 +220,21 @@ async def test_filter_does_not_reset_expansion():
             "filter must affect rows only, not the expanded columns"
         # Rows actually filtered.
         assert table.row_count == 1
+
+
+@pytest.mark.asyncio
+async def test_scope_toggle_does_not_reset_expansion():
+    """AC4: only the pseudo-column collapses the long tail — scope toggle
+    clears pending but keeps the expanded state."""
+    app = _GridApp([_row("alpha")])
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        grid = app.query_one("#g", SkillGrid)
+        table = app.query_one("#skill-table", DataTable)
+        _cursor_to_pseudo(grid, table)
+        await pilot.press("space")
+        await pilot.pause()
+        assert grid._longtail_expanded is True
+        grid.set_scope("project")
+        await pilot.pause()
+        assert grid._longtail_expanded is True
