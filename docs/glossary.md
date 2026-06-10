@@ -1,103 +1,110 @@
 # Glossary
 
-Terms with a precise meaning in this toolkit. The
-[compatibility matrix](matrix.md), the per-harness pages, and the kind pages
-all use this vocabulary.
+The shared vocabulary of the [compatibility matrix](matrix.md), the
+per-harness pages, and the kind pages — grouped for skimming.
 
-### Harness
+## Core model
 
-A coding agent / AI dev tool the toolkit can target — Claude Code, Codex,
-Gemini CLI, Cursor, Pi, … 54 are catalogued; see the
-[compatibility matrix](matrix.md). Called "agent" in the upstream
-`vercel-labs/skills` catalog, but this toolkit reserves *agent* for the
-subagent kind.
+**Harness** { #harness }
+:   A coding agent / AI dev tool the toolkit can target — Claude Code, Codex,
+    Gemini CLI, Pi, … 54 catalogued in the [matrix](matrix.md). (The upstream
+    `vercel-labs/skills` catalog calls these "agents"; this toolkit reserves
+    *agent* for the subagent kind.)
 
-### Kind
+**Kind** { #kind }
+:   A category of installable asset with its own lock file and CLI surface:
+    [instructions](kinds/instructions.md), [skills](kinds/skills.md),
+    [agents](kinds/agents.md), [pi extensions](kinds/pi-extensions.md), and
+    (planned) [MCP servers](kinds/mcp.md).
 
-A category of installable asset, each with its own lock file, CLI surface,
-and projection rules: [instructions](kinds/instructions.md),
-[skills](kinds/skills.md), [agents](kinds/agents.md),
-[pi extensions](kinds/pi-extensions.md), and (planned)
-[MCP servers](kinds/mcp.md).
+**Asset** { #asset }
+:   One installable thing of a kind — a skill folder, a subagent definition,
+    the canonical `AGENTS.md`.
 
-### Asset
+## Conventions & conformance
 
-One installable thing of a given kind — a skill folder, a subagent
-definition, the canonical `AGENTS.md`.
+**Adopted convention** { #adopted-convention }
+:   The cross-harness standard the toolkit converges on for a kind —
+    `AGENTS.md` for instructions, `SKILL.md` folders for skills, the
+    [general](#general) directory layout. The canonical copy always follows
+    the convention; everything else is projected from it.
 
-### Canonical
+**Standard (conforming)** { #standard }
+:   A harness that follows the adopted convention for a kind natively — reads
+    `AGENTS.md` or the general directory directly. Zero projection work.
 
-The single authoritative copy of an asset that all projections point back to —
-e.g. the library clone of a skill, or `AGENTS.md` for the instructions kind.
+**Non-standard (non-conforming)** { #non-standard }
+:   A harness with its own equivalent surface that diverges from the adopted
+    convention — an own-name file (`CLAUDE.md`), a different format, or a
+    config registry. Still supported, via a pointer, translate, or config
+    [mechanism](#mechanism).
 
-### Library
+## On disk
 
-The toolkit's store of canonical asset sources at `~/.agent-toolkit/`
-(e.g. `~/.agent-toolkit/skills/<slug>`, a git clone of the skill's repo).
+**Canonical** { #canonical }
+:   The single authoritative copy of an asset that all projections point back
+    to — the library clone of a skill, `AGENTS.md` for instructions.
 
-### Projection
+**Library** { #library }
+:   The store of canonical sources at `~/.agent-toolkit/` (e.g.
+    `~/.agent-toolkit/skills/<slug>`, a git clone of the skill repo).
 
-Making an asset visible to one harness — usually a symlink from the
-harness's slot directory to the canonical copy, sometimes a translated file
-or a registry entry. Projections are reconciled against the lock file and are
-always safe to delete and re-create.
+**Scope** { #scope }
+:   Where an asset is installed: **project** (committed paths inside one
+    repo) or **global** (per-user, under `~`). Most verbs take `-p`/`-g`.
 
-### Mechanism
+**General** { #general }
+:   The per-kind convergence directory many harnesses read directly —
+    `.agents/skills` for skills, `.agents/agents` for agents. Its readers
+    need no per-harness projection. (Successor of the legacy skills-only
+    "universal" model.)
 
-*How* a kind projects into a particular harness:
+**Projection** { #projection }
+:   Making an asset visible to one harness — usually a symlink into its slot
+    directory, sometimes a translated file or a registry entry. Derived
+    state: always safe to delete and rebuild.
 
-- **native** — the harness already reads the canonical file/dir; zero work.
-- **symlink** — a per-asset symlink into an auto-scanned directory.
-- **pointer** — the instructions-kind special case: a same-name symlink
-  (`CLAUDE.md → AGENTS.md`).
-- **translate** — generate a per-harness flavored file (different
-  frontmatter, suffix, or format) in a managed cache, then symlink to it.
-- **config_file / config_file+folder** — mutate a named config file to
-  register the asset, optionally alongside a managed artefact folder; both
-  commit and roll back together.
-- **dual-symlink** — two slot directories mirroring one source (Pi).
+**Mechanism** { #mechanism }
+:   *How* a kind projects into a particular harness:
 
-### Scope
+    - **native** — already reads the canonical file/dir; zero work.
+    - **symlink** — per-asset symlink into an auto-scanned directory.
+    - **pointer** — same-name symlink (`CLAUDE.md → AGENTS.md`);
+      instructions-kind only.
+    - **translate** — per-harness flavored copy in a managed cache, then a
+      symlink to it.
+    - **config_file / config_file+folder** — registers the asset in a named
+      config file, optionally with a managed artefact folder; commits and
+      rolls back together.
+    - **dual-symlink** — two slot directories mirroring one source (Pi).
 
-Where an asset is installed: **project** (committed paths inside one repo) or
-**global** (per-user, under `~`). Most verbs take `-p`/`-g`; defaults vary by
-kind and cwd.
+## State & repair
 
-### Lock file
+**Lock file** { #lock-file }
+:   The per-kind, per-scope JSON record of what is installed and from where
+    (`skills-lock.json`, `instructions-lock.json`, …). The source of truth;
+    projections are derived.
 
-The per-kind, per-scope JSON record of what is installed and from where
-(`skills-lock.json`, `instructions-lock.json`, …). The lock is the source of
-truth; projections are derived state that `doctor` can always rebuild.
+**Doctor** { #doctor }
+:   The per-kind reconciler: compares lock ↔ canonical ↔ projections, reports
+    findings (missing, foreign, drifted, unmanaged), offers fixes.
 
-### Doctor
+## Compatibility data
 
-The per-kind reconciler: compares lock ↔ canonical ↔ projections, reports
-findings (missing, foreign, drifted, unmanaged), and offers fixes.
+**Verdict** { #verdict }
+:   A harness's classification for one kind in the [SSOT](#ssot): a supported
+    mechanism, **unsupported (gap)** (could be filled, isn't yet),
+    **unsupported (by design)** (rendered — in the matrix), or **unknown**
+    (no public evidence found).
 
-### General
+**SSOT** { #ssot }
+:   Single source of truth for harness compatibility:
+    `docs/agent-toolkit/harness-matrix.md` — machine-read by the CLI (shipped
+    in the wheel), guarded by parity tests. The [matrix](matrix.md) and
+    harness pages are generated from it.
 
-The per-kind convergence directory that many harnesses read directly —
-`.agents/skills` for skills, `.agents/agents` for agents. Harnesses reading
-it need no per-harness projection. Successor of the legacy "universal" model
-(general is per-kind; universal was skills-only).
-
-### Verdict
-
-A harness's classification for one kind in the
-[SSOT](#ssot): a supported mechanism, **unsupported (gap)** (could be filled,
-isn't yet), **unsupported (by design)** (no such concept — rendered — in the
-matrix), or **unknown** (no public evidence found).
-
-### SSOT
-
-Single source of truth. For harness compatibility it is
-`docs/agent-toolkit/harness-matrix.md` — machine-read by the CLI (shipped in
-the wheel) and guarded by parity tests. The [matrix](matrix.md) and harness
-pages are generated from it by `scripts/gen_harness_docs.py`.
-
-### Adapter
-
-The per-(kind × harness) code that implements a supported verdict — writes
-the projection, guards foreign files, and rolls back on failure. A verdict
-can be *supported* while the adapter is *disabled* (e.g. Codex subagents,
-pending the shared-config decision).
+**Adapter** { #adapter }
+:   The per-(kind × harness) code implementing a supported verdict — writes
+    the projection, guards foreign files, rolls back on failure. A verdict
+    can be *supported* while the adapter is *disabled* (e.g. Codex subagents,
+    pending the shared-config decision).
