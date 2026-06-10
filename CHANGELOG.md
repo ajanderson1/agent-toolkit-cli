@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.6.4](https://github.com/ajanderson1/agent-toolkit-cli/compare/v3.6.3...v3.6.4) (2026-06-10)
+
+
+### Bug Fixes
+
+* **pi-extension:** SHA-pinned add lands on the pinned commit ([#330](https://github.com/ajanderson1/agent-toolkit-cli/issues/330)) ([#343](https://github.com/ajanderson1/agent-toolkit-cli/issues/343)) ([6635496](https://github.com/ajanderson1/agent-toolkit-cli/commit/6635496a121518b63228f09bc32e16e203839d81))
+
 ## [3.6.3](https://github.com/ajanderson1/agent-toolkit-cli/compare/v3.6.2...v3.6.3) (2026-06-10)
 
 
