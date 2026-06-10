@@ -80,7 +80,7 @@ def test_skip_predicate_does_not_skip_dual_flagged_agent_cells(harness):
     from the core's _current_linked_agents scan even though they are
     legitimate agent install targets.
 
-    After the fix the predicate is kind-aware: it only skips cells that are
+    After the fix the predicate is asset-type-aware: it only skips cells that are
     universal AND have no real agent mechanism (subagent_mechanism='none').
     """
     from agent_toolkit_cli.skill_agents import AGENTS
@@ -108,7 +108,7 @@ def test_skip_predicate_still_skips_pure_universal_cell_at_global():
     """Pure universal cells (no real agent mechanism) must still be skipped.
 
     codex: is_standard=True, subagent_mechanism='none' (disabled PR2).
-    Ensures the PR3 fix does not regress the skill kind's universal-skip
+    Ensures the PR3 fix does not regress the skill asset type's universal-skip
     behaviour for cells that genuinely have no agent adapter.
     """
     from agent_toolkit_cli.skill_agents import AGENTS

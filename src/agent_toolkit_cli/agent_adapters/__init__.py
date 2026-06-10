@@ -1,4 +1,4 @@
-"""Agent-kind projection adapters, dispatched by AgentConfig.subagent_mechanism.
+"""Agent-asset-type projection adapters, dispatched by AgentConfig.subagent_mechanism.
 
 PR2 ships three mechanism modules:
   - symlink: 15 harnesses; write a single .md to the harness's agents dir.
@@ -8,26 +8,26 @@ PR2 ships three mechanism modules:
 Per-cell quirks (path-template, required frontmatter, format) live in
 per-cell dicts INSIDE the mechanism module. Mechanism = code path; cell = data row.
 
-Architecture note — #252 "generalize install/lock/paths to a kind dimension" CLOSED AS OBSOLETE:
+Architecture note — #252 "generalize install/lock/paths to an asset-type dimension" CLOSED AS OBSOLETE:
 
-#252 originally anticipated a single install module with a `kind=` discriminator
-parameter (one module handling all asset kinds at runtime).  The project instead
-shipped PARALLEL MODULES PER KIND, now fact across four kinds:
+#252 originally anticipated a single install module with an `asset_type=` discriminator
+parameter (one module handling all asset types at runtime).  The project instead
+shipped PARALLEL MODULES PER ASSET TYPE, now fact across four asset types:
 
   skills       → skill_install.py / skill_lock.py / skill_paths.py
   agents       → agent_install.py / agent_lock.py / agent_paths.py   (PR #268)
   instructions → instructions_install.py / instructions_lock.py / instructions_paths.py
   pi-extension → pi_extension_install.py / pi_extension_lock.py / pi_extension_paths.py
 
-The shared seam is a kind-agnostic core (_install_core.py) that each facade binds
+The shared seam is a asset-type-agnostic core (_install_core.py) that each facade binds
 via injected callables (canonical_dir_resolver, standard_bundle_link, synthetic_names,
-current_linked_resolver).  The lockfile did NOT gain a `kind` field — each kind
-has its own lock filename and a per-kind path field on the shared LockEntry
+current_linked_resolver).  The lockfile did NOT gain an `asset_type` field — each asset type
+has its own lock filename and a per-asset-type path field on the shared LockEntry
 (skillPath / agentPath / piExtensionPath).
 
-This dispatcher (get_adapter()) is the single SSOT for the agent kind's mechanism
-catalog — no parallel registry exists.  The `kind=` discriminator design is
-superseded.  Refs: #252, #268, plan 2026-05-30-agent-kind-pr3-5-plan.md § PR3.
+This dispatcher (get_adapter()) is the single SSOT for the agent asset type's mechanism
+catalog — no parallel registry exists.  The `asset_type=` discriminator design is
+superseded.  Refs: #252, #268, plan 2026-05-30-agent-asset-type-pr3-5-plan.md § PR3.
 """
 from __future__ import annotations
 
@@ -44,7 +44,7 @@ from agent_toolkit_cli.skill_agents import (
 class UnsupportedMechanismError(RuntimeError):
     """Harness exists in catalog but its subagent_mechanism is 'none'.
 
-    Means the agent kind is not installable for this harness — either it
+    Means the agent asset type is not installable for this harness — either it
     doesn't support subagents (the 10 by-design cells) or research hasn't
     classified it yet (the 5 unknown cells). Surface to user with the
     matrix URL.
@@ -104,7 +104,7 @@ def _guard_foreign(dest: Path, *, harness: str, overwrite: bool) -> None:
 
 
 class AgentAdapter(Protocol):
-    """Per-harness install/uninstall contract for the agent kind.
+    """Per-harness install/uninstall contract for the agent asset type.
 
     Implementations are functions or callable objects; the Protocol is
     structural so we can return module-level callables without wrapping.

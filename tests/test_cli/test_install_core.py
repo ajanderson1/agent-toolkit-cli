@@ -1,4 +1,4 @@
-"""Direct tests against _install_core to prove kind-agnosticism.
+"""Direct tests against _install_core to prove asset-type-agnosticism.
 
 These tests use a synthetic AssetTypeBinding to confirm the core does not hard-
 code 'skill' anywhere; they do not exercise file-system side effects.
@@ -49,15 +49,15 @@ def test_install_result_dataclass_shape_unchanged():
 
 def test_install_core_has_no_hardcoded_skill_string():
     """Defensive: the core's source must not reference the word 'skill' in a
-    way that would couple it to the skill kind. A few existing identifiers
+    way that would couple it to the skill asset type. A few existing identifiers
     (e.g. 'skill_path' which is a v1 lock field name) are grandfathered via an
     allowlist."""
     import inspect
     import agent_toolkit_cli._install_core as core
     src = inspect.getsource(core)
-    # Allowed: references to the kind-agnostic skill_* modules (skill_lock,
+    # Allowed: references to the asset-type-agnostic skill_* modules (skill_lock,
     # skill_agents, skill_source, skill_paths) and to the v1 lock-field name
-    # skill_path — these are the existing kind-agnostic helpers that PR2 will
+    # skill_path — these are the existing asset-type-agnostic helpers that PR2 will
     # rename. Also: docstring lines, comments, and the user-facing
     # `skill doctor` hint emitted by the facade-level CLI. Anything else is
     # a smell.
@@ -83,11 +83,11 @@ def test_install_core_has_no_hardcoded_skill_string():
             continue
         allowed = (
             "skill_lock" in line
-            or "skill_agents" in line   # kind-agnostic catalog (PR2 renames)
-            or "skill_source" in line   # kind-agnostic source parser (PR2)
+            or "skill_agents" in line   # asset-type-agnostic catalog (PR2 renames)
+            or "skill_source" in line   # asset-type-agnostic source parser (PR2)
             or "skill_paths" in line    # facade (already a facade in Task 3)
             or "skill_path" in line     # v1 LockEntry field
-            or "skill_git" in line      # cross-kind git helpers (PR2 renames)
+            or "skill_git" in line      # cross-asset-type git helpers (PR2 renames)
             or "canonical_skill_dir" in line  # imported from skill_paths facade
             or "agent-toolkit-cli skill doctor" in line  # facade-level CLI hint
             or 'asset_type_noun: str = "skill"' in line  # _doctor_hint default (PR2)

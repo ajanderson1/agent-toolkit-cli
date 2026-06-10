@@ -1,6 +1,6 @@
 """Agent-flavoured facade over `_paths_core.py`.
 
-v3.0.0 PR2 — mirrors `skill_paths.py` for the agent (subagent) kind.
+v3.0.0 PR2 — mirrors `skill_paths.py` for the agent (subagent) asset type.
 
 v3.0.0 model — library vs install:
 
@@ -31,9 +31,9 @@ from agent_toolkit_cli._paths_core import (
     library_lock_path_for_asset_type,
     library_root_for_asset_type,
 )
-# Shared helpers (independent of kind) re-exported from skill_paths.
+# Shared helpers (independent of asset type) re-exported from skill_paths.
 # Re-exporting (rather than hoisting into _paths_core) is deliberate: it
-# avoids touching PR1's frozen public surface mid-cycle. Hoist to a kind-
+# avoids touching PR1's frozen public surface mid-cycle. Hoist to an asset-type-
 # agnostic module once both facades have shipped and stabilised (PR3+).
 from agent_toolkit_cli.skill_paths import (
     SUPPORTED_HARNESSES,

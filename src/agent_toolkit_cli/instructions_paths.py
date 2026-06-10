@@ -1,10 +1,10 @@
 """Instructions-flavoured facade over `_paths_core.py`.
 
 v3.0.0 — mirrors `skill_paths.py` and `agent_paths.py` for the instructions
-(AGENTS.md pointer-symlink) kind.
+(AGENTS.md pointer-symlink) asset type.
 
 Differences from skill/agent paths:
-- **No `canonical_<kind>_dir`** — instructions has no per-slug subdir. The
+- **No `canonical_<asset_type>_dir`** — instructions has no per-slug subdir. The
   asset is a single file (`AGENTS.md`); pointers live next to it.
 - **`global_canonical_agents_md()` / `project_canonical_agents_md()`** — the
   asset's resolved location at each scope. These are what pointers symlink TO.

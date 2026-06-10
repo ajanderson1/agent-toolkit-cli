@@ -317,7 +317,7 @@ def resolve_ref(
     `origin/HEAD`; only if that can't be determined do we fall back to `"main"`,
     preserving prior behaviour for `main` repos and for callers with no clone
     yet. Takes the bare ref value (not a lock entry) so both `entry.ref` and
-    parse-time `parsed.ref` callers, across every asset kind, share one path.
+    parse-time `parsed.ref` callers, across every asset type, share one path.
     `env` is threaded to the detection git calls for callers that run under a
     custom environment (the install engines).
     """

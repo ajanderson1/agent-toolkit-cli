@@ -1,7 +1,7 @@
-"""Parity test for the all-harness subagent (agent kind) support table.
+"""Parity test for the all-harness subagent (agent asset type) support table.
 
 The table lives in docs/agent-toolkit/harness-matrix.md under the heading
-"## Subagent (agent kind) support — all harnesses". Every harness in the
+"## Subagent (agent asset type) support — all harnesses". Every harness in the
 catalog (agent_toolkit_cli.skill_agents, excluding the synthetic `universal`
 entry) must appear exactly once with a recognised verdict. Supported rows
 must additionally carry a mechanism keyword, a target path, and a citation.
@@ -34,7 +34,7 @@ _VERDICTS = (
 )
 
 # Section heading that contains the 54-row table.
-_SECTION_HEADING = "## Subagent (agent kind) support — all harnesses"
+_SECTION_HEADING = "## Subagent (agent asset type) support — all harnesses"
 
 # Row shape: | `<harness>` | <verdict cell> | <mechanism> | <path> | <format> | <citation> |
 _ROW_RE = re.compile(

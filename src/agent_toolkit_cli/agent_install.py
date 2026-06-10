@@ -1,6 +1,6 @@
 """Agent-flavoured facade over `_install_core.py`.
 
-v3.0.0 PR2 — mirrors `skill_install.py` for the agent (subagent) kind.
+v3.0.0 PR2 — mirrors `skill_install.py` for the agent (subagent) asset type.
 Binds AGENT_BINDING + _AGENT_SYNTHETIC_NAMES into the core. apply()
 dispatches to per-mechanism adapters from `agent_adapters/` instead of
 the skill facade's uniform-symlink projection.
@@ -82,7 +82,7 @@ def _current_linked_agents(
     standard_bundle_link=None,
     synthetic_names: frozenset[str] = frozenset(),
 ) -> tuple[str, ...]:
-    """Adapter-aware "currently linked" scan for the agent kind.
+    """Adapter-aware "currently linked" scan for the agent asset type.
 
     Diverges from the core's symlink-at-skill-path scan: for each supported
     harness (subagent_mechanism != 'none'), ask its adapter where it WOULD
@@ -97,7 +97,7 @@ def _current_linked_agents(
 
     The kwargs `canonical_dir_resolver`/`standard_bundle_link` are accepted
     only to satisfy the core's `current_linked_resolver` call signature; they
-    are irrelevant to the agent kind and ignored.
+    are irrelevant to the agent asset type and ignored.
     """
     from agent_toolkit_cli.agent_adapters import UnsupportedMechanismError
 
@@ -294,7 +294,7 @@ def uninstall(
     canonical library entry. Use `agent remove` to fully drop from the
     library."). The destructive path lives in `remove()`.
 
-    The agent kind cannot rely on the core's symlink-at-skill-path scan to
+    The agent asset type cannot rely on the core's symlink-at-skill-path scan to
     discover projections: adapters write REAL FILES, so the scan returned ()
     and every projected file was ORPHANED (PR #268). We therefore call each
     requested harness's adapter.uninstall() DIRECTLY, so the real destination

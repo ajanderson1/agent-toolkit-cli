@@ -1,7 +1,7 @@
-"""Instructions kind lockfile model — own dataclass, own read/write.
+"""Instructions asset-type lockfile model — own dataclass, own read/write.
 
 Differs deliberately from skill_lock.LockEntry: an instructions entry has no
-`source`/`ref`/`upstream_sha` because the kind has no upstream repo. Sharing
+`source`/`ref`/`upstream_sha` because the asset type has no upstream repo. Sharing
 LockEntry would mean every other field is meaningless for instructions; a
 separate file is honest about shape.
 

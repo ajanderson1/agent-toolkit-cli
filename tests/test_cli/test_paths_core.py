@@ -8,7 +8,7 @@ from agent_toolkit_cli._paths_core import (
 )
 
 
-def test_kind_binding_is_frozen_dataclass():
+def test_asset_type_binding_is_frozen_dataclass():
     b = AssetTypeBinding(
         asset_type="x",
         canonical_dirname="xs",
@@ -37,7 +37,7 @@ def test_library_root_for_asset_type_uses_binding_subdir(tmp_path, monkeypatch):
     fake_home = tmp_path / "h"
     monkeypatch.setenv("HOME", str(fake_home))
     # The existing library_root() returns ~/.agent-toolkit/skills/. The
-    # kinded helper returns ~/.agent-toolkit/<binding.library_subdir>/.
+    # binding-driven helper returns ~/.agent-toolkit/<binding.library_subdir>/.
     expected = fake_home / ".agent-toolkit" / "skills"
     assert library_root_for_asset_type(SKILL_BINDING, env=dict(os.environ)) == expected
 

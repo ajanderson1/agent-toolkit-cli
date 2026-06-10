@@ -1,4 +1,4 @@
-"""Kind-agnostic install engine. Bound by per-kind facades (skill_install,
+"""Asset-type-agnostic install engine. Bound by per-asset-type facades (skill_install,
 future agent_install). All public symbols are re-exported from the facades
 so existing call sites keep working.
 
@@ -32,7 +32,7 @@ class InstallError(RuntimeError):
 def _doctor_hint(slug: str, scope: str, asset_type_noun: str = "skill") -> str:
     """Suggest the doctor command that clears a blocking stray symlink.
 
-    `asset_type_noun` is the CLI noun for the asset kind ("skill" today; "agent"
+    `asset_type_noun` is the CLI noun for the asset type ("skill" today; "agent"
     once PR4 adds the agent CLI verb group). Defaults to "skill" so existing
     skill-facade callers keep their current error message verbatim.
     """
@@ -103,7 +103,7 @@ def _should_skip_symlink(
         AND subagent_mechanism='none' (e.g. codex, amp, cline).
       - Global + dual-flagged (is_standard=True + real subagent_mechanism):
         NOT skipped. The cell has a real agent adapter that handles install
-        independently of the skill-kind standard bundle (e.g. cursor has
+        independently of the skill-asset-type standard bundle (e.g. cursor has
         subagent_mechanism='symlink'; gemini-cli has 'translate'). PR3 fix.
       - Project + standard: NOT skipped. Canonical is in the external store;
         each standard agent gets <project>/.agents/skills/<slug> → store.
@@ -114,13 +114,13 @@ def _should_skip_symlink(
     The special "standard" bundle token is handled in apply() before
     _should_skip_symlink is called; it never reaches here as an agent_name.
 
-    PR3 (universal→general rename) made this predicate kind-aware: a cell
+    PR3 (universal→general rename) made this predicate asset-type-aware: a cell
     that is both skill-standard (skills_dir == ".agents/skills") AND has a
     real agent adapter (subagent_mechanism != "none") must NOT be skipped —
-    the agent-kind adapter handles the install via get_adapter(), and the
-    skill-kind standard bundle still covers it for the skills path.
+    the agent-asset-type adapter handles the install via get_adapter(), and the
+    skill-asset-type standard bundle still covers it for the skills path.
     The agent facade's plan() injects its own adapter-aware scanner and never
-    calls this predicate; it is called only in the SKILL-kind path via
+    calls this predicate; it is called only in the SKILL-asset-type path via
     _current_linked_agents and skill_install.apply().
     """
     cfg = get_agent(agent_name)
@@ -148,13 +148,13 @@ def plan(
 ) -> InstallPlan:
     """Compute the minimal add/remove delta to reach target_agents.
 
-    `canonical_dir_resolver` is the kind-specific resolver returning the
+    `canonical_dir_resolver` is the asset-type-specific resolver returning the
     canonical install directory for a slug at a given scope (e.g.
     `canonical_skill_dir` for skills, `canonical_agent_dir` for agents).
-    Required so the core stays kind-blind; defaults to canonical_skill_dir
+    Required so the core stays asset-type-blind; defaults to canonical_skill_dir
     for backward compatibility with callers that haven't migrated yet.
 
-    `standard_bundle_link` is injected by the facade — it is the kind-
+    `standard_bundle_link` is injected by the facade — it is the asset-type-
     specific function that returns the per-slug bundle path (e.g.
     `~/.agents/skills/<slug>` for skills). Defaults to None for callers
     that do not need it (most plan-only computations).
@@ -162,14 +162,14 @@ def plan(
     `synthetic_names` is the set of catalog tokens that are virtual entries
     rather than real harness symlink targets (e.g. the skill facade injects
     `frozenset({"standard", "standard-skill"})`). The core treats it as
-    opaque — it never names a specific kind's synthetics itself.
+    opaque — it never names a specific asset type's synthetics itself.
 
     `current_linked_resolver` overrides the built-in `_current_linked_agents`
     scan. The skill facade leaves it None (the symlink-at-projection-path scan
     is correct for skills). The agent facade injects an adapter-aware scanner
     that resolves each harness's REAL destination and tests `dest.exists()` —
     because agent adapters write real files, never symlinks at the skill path,
-    so the built-in scan always returns () for the agent kind (the PR #268 bug).
+    so the built-in scan always returns () for the agent asset type (the PR #268 bug).
     Called with the same keyword args as `_current_linked_agents`.
     """
     for n in target_agents:
@@ -200,9 +200,9 @@ def _current_linked_agents(
 ) -> tuple[str, ...]:
     """Return agents whose symlink currently resolves to our canonical.
 
-    `canonical_dir_resolver` is the kind-specific canonical resolver
+    `canonical_dir_resolver` is the asset-type-specific canonical resolver
     (e.g. `canonical_skill_dir`, `canonical_agent_dir`). Required so the
-    scan compares against the correct canonical path for the asset kind;
+    scan compares against the correct canonical path for the asset type;
     defaults to `canonical_skill_dir` for backward compatibility.
 
     Includes the synthetic 'standard' bundle token at global scope when
@@ -211,7 +211,7 @@ def _current_linked_agents(
     `synthetic_names` enumerates catalog tokens that are virtual entries
     (handled separately from real harness symlinks) and are skipped from
     the per-agent iteration. The core treats the set as opaque: each
-    facade injects the synthetics for its own kind (skills inject the
+    facade injects the synthetics for its own asset type (skills inject the
     pair containing the standard bundle token and the standard projection
     token; agents inject their own).
     """

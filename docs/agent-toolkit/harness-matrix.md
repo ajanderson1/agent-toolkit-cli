@@ -51,7 +51,7 @@ How an `agent` (subagent) asset is projected into a harness:
   private repo, unreleased, or unidentifiable product). Absence of evidence, not
   evidence of absence; revisit if the product publishes.
 
-## Subagent (agent kind) support — all harnesses
+## Subagent (agent asset type) support — all harnesses
 
 This table is the v3.0.0 Phase A deliverable: the `agent` (subagent) verdict for
 every harness in the catalog (`src/agent_toolkit_cli/skill_agents.py`, excluding
@@ -160,7 +160,7 @@ By mechanism: **symlink** (Claude-compatible markdown drop-in) — `augment`,
   symlink into `~/.claude/agents/` may satisfy multiple harnesses — a Phase B
   optimization to weigh against per-harness slot explicitness.
 
-## Instruction-file (`instructions` kind) support — all harnesses
+## Instruction-file (`instructions` asset type) support — all harnesses
 
 This table is the **v3.0.0 Phase A deliverable** for the `instructions` kind:
 for every harness in the catalog, what file does the harness load by **default**

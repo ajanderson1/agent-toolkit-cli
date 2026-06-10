@@ -4,7 +4,7 @@
 adapter_for(harness) returns a small object with .install() / .uninstall().
 
 Sources: Phase A matrix at docs/agent-toolkit/harness-matrix.md
-§ "Instruction-file (`instructions` kind) support — all harnesses"
+§ "Instruction-file (`instructions` asset type) support — all harnesses"
 (symlink-verdict rows, verified 2026-05-29).
 
 Templates use {HOME}, {PROJECT}, {POINTER_NAME} placeholders.
@@ -28,7 +28,7 @@ class MissingHomeError(RuntimeError):
 
 
 class UnknownHarnessError(KeyError):
-    """`harness` is not in the instructions-kind CELLS table."""
+    """`harness` is not in the instructions-asset-type CELLS table."""
 
 
 Scope = Literal["project", "global"]
@@ -143,5 +143,5 @@ class Adapter:
 
 def adapter_for(harness: str) -> Adapter:
     if harness not in CELLS:
-        raise UnknownHarnessError(f"unknown harness for instructions kind: {harness!r}")
+        raise UnknownHarnessError(f"unknown harness for instructions asset type: {harness!r}")
     return Adapter(harness=harness)

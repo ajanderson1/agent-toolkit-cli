@@ -12,7 +12,7 @@ Symlink rules (v2.2, mirroring installer.ts:280-323):
                                           (agent root dir is created if absent)
 
 v3.0.0 facade split (PR1):
-  Kind-agnostic install primitives (errors, dataclasses, plan(),
+  Asset-type-agnostic install primitives (errors, dataclasses, plan(),
   _current_linked_agents, _should_skip_symlink, _symlink_or_copy,
   _doctor_hint) live in `_install_core`. This module re-exports them and
   injects the skill-specific bundle-link helpers (`_standard_bundle_link`,

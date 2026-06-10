@@ -1,5 +1,5 @@
-"""Path facade for the pi-extension kind. Binds PI_EXTENSION_BINDING to the
-kind-agnostic helpers in _paths_core, and owns the Pi-specific projection
+"""Path facade for the pi-extension asset type. Binds PI_EXTENSION_BINDING to the
+asset-type-agnostic helpers in _paths_core, and owns the Pi-specific projection
 dirs (~/.pi/agent/extensions and <project>/.pi/extensions). Mirrors
 agent_paths.py / skill_paths.py. Pi-only: there is no per-harness fan-out."""
 from __future__ import annotations
@@ -13,7 +13,7 @@ from agent_toolkit_cli._paths_core import (
     library_root_for_asset_type,
 )
 
-# Reuse the kind-agnostic project-store helpers verbatim.
+# Reuse the asset-type-agnostic project-store helpers verbatim.
 from agent_toolkit_cli.skill_paths import (
     parent_clone_path,
     project_id,

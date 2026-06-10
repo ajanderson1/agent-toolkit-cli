@@ -13,7 +13,7 @@ from agent_toolkit_cli.instructions_matrix import instructions_matrix_rows
 from agent_toolkit_cli.table import render_table
 
 
-@click.command(help="Per-harness verdict for the instructions kind.")
+@click.command(help="Per-harness verdict for the instructions asset type.")
 @click.option(
     "--format",
     "fmt",

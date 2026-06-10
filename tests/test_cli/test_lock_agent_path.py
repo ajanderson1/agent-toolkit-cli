@@ -121,7 +121,7 @@ def test_agent_path_not_in_extras_on_v3_read(tmp_path):
 
 
 def test_skill_path_and_agent_path_coexist(tmp_path):
-    """Mixed lock supporting both kinds (forward-compatible): both fields
+    """Mixed lock supporting both asset types (forward-compatible): both fields
     preserved separately."""
     lock_path = tmp_path / "mixed-lock.json"
     lock = LockFile(version=3, skills={})

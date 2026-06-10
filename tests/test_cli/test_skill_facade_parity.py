@@ -1,5 +1,5 @@
 """Facade parity: the public-symbol surface of skill_paths / skill_install /
-skill_lock must not regress during the kind-dimension refactor.
+skill_lock must not regress during the asset-type-dimension refactor.
 
 If a name is removed from this set, downstream callers (tests + CLI verbs)
 will break. Renames or moves are a PR-level decision, not a refactor side

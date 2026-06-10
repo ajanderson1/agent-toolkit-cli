@@ -9,7 +9,7 @@ from agent_toolkit_cli._paths_core import (
 )
 
 
-def test_instructions_binding_is_a_kindbinding():
+def test_instructions_binding_is_an_asset_type_binding():
     assert isinstance(INSTRUCTIONS_BINDING, AssetTypeBinding)
 
 
@@ -22,14 +22,14 @@ def test_instructions_binding_field_values():
     assert INSTRUCTIONS_BINDING.standard_harness_name == "standard-instructions"
 
 
-def test_library_root_for_instructions_kind(monkeypatch, tmp_path):
+def test_library_root_for_instructions_asset_type(monkeypatch, tmp_path):
     """Library root resolves to ~/.agent-toolkit/instructions/."""
     monkeypatch.setenv("HOME", str(tmp_path))
     root = library_root_for_asset_type(INSTRUCTIONS_BINDING)
     assert root == tmp_path / ".agent-toolkit" / "instructions"
 
 
-def test_library_lock_path_for_instructions_kind(monkeypatch, tmp_path):
+def test_library_lock_path_for_instructions_asset_type(monkeypatch, tmp_path):
     """Lock lives at ~/.agent-toolkit/instructions-lock.json."""
     monkeypatch.setenv("HOME", str(tmp_path))
     lock = library_lock_path_for_asset_type(INSTRUCTIONS_BINDING)
