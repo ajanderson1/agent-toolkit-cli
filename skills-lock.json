@@ -2,28 +2,39 @@
   "version": 1,
   "skills": {
     "autonomous-run": {
-      "source": "ajanderson1/skills",
+      "source": "ajanderson1/skills-workflow",
       "sourceType": "github",
+      "ref": "main",
       "skillPath": "autonomous-run",
-      "parentUrl": "https://github.com/ajanderson1/skills"
+      "parentUrl": "https://github.com/ajanderson1/skills-workflow"
     },
     "cmux-pm": {
-      "source": "ajanderson1/skills",
+      "source": "ajanderson1/skills-orchestration",
       "sourceType": "github",
+      "ref": "main",
       "skillPath": "cmux-pm",
-      "parentUrl": "https://github.com/ajanderson1/skills"
+      "parentUrl": "https://github.com/ajanderson1/skills-orchestration"
     },
     "domain-manager": {
-      "source": "ajanderson1/skills",
+      "source": "ajanderson1/skills-infra",
       "sourceType": "github",
+      "ref": "main",
       "skillPath": "domain-manager",
-      "parentUrl": "https://github.com/ajanderson1/skills"
+      "parentUrl": "https://github.com/ajanderson1/skills-infra"
     },
     "journal": {
-      "source": "ajanderson1/skills",
+      "source": "ajanderson1/skills-journal",
       "sourceType": "github",
+      "ref": "main",
       "skillPath": "journal",
-      "parentUrl": "https://github.com/ajanderson1/skills"
+      "parentUrl": "https://github.com/ajanderson1/skills-journal"
+    },
+    "mkdocs": {
+      "source": "ajanderson1/skills-infra",
+      "sourceType": "github",
+      "ref": "main",
+      "skillPath": "mkdocs",
+      "parentUrl": "https://github.com/ajanderson1/skills-infra"
     },
     "pinchtab": {
       "source": "pinchtab/pinchtab",
@@ -33,16 +44,18 @@
       "readOnly": true
     },
     "pocketsmith": {
-      "source": "ajanderson1/skills",
+      "source": "ajanderson1/skills-finance",
       "sourceType": "github",
+      "ref": "main",
       "skillPath": "pocketsmith",
-      "parentUrl": "https://github.com/ajanderson1/skills"
+      "parentUrl": "https://github.com/ajanderson1/skills-finance"
     },
     "skill-builder": {
-      "source": "ajanderson1/skills",
+      "source": "ajanderson1/skills-authoring",
       "sourceType": "github",
+      "ref": "main",
       "skillPath": "skill-builder",
-      "parentUrl": "https://github.com/ajanderson1/skills"
+      "parentUrl": "https://github.com/ajanderson1/skills-authoring"
     }
   }
 }
