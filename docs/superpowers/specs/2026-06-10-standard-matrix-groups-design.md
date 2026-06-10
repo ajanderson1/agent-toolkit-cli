@@ -50,11 +50,12 @@ long-tail column set.
 
 Composition is **derived from the catalog at rebuild time**, not hardcoded:
 
-- **Skills**: standard set = `get_standard_agents()` (14 today). Non-standard
-  big five = claude-code, pi (codex/gemini-cli/opencode ARE standard for
-  skills). Long tail = the remaining non-compliant catalog harnesses (40 today).
+- **Skills**: standard set = `get_standard_agents()` (13 today — measured, not
+  asserted). Non-standard big five = claude-code, pi (codex/gemini-cli/opencode
+  ARE standard for skills). Long tail = the remaining non-compliant catalog
+  harnesses (39 today).
 - **Instructions**: standard column = the existing read-only canonical-status
-  column (40 native AGENTS.md readers). Non-standard big five = claude-code,
+  column (39 native AGENTS.md readers). Non-standard big five = claude-code,
   gemini-cli (symlink verdict). Long tail = the remaining symlink-verdict
   harnesses (augment, codebuddy, iflow-cli, replit, tabnine-cli today).
   Gap/unknown-verdict harnesses are excluded — there is nothing to toggle.
@@ -65,7 +66,7 @@ replaced by per-kind derivation helpers so composition tracks the catalog.
 ### Two-line header labels
 
 Column labels become Rich `Text` with two lines: dim group tag + column name,
-e.g. `STANDARD\nstandard ⓘ`, `NON-STD\nclaude-code ⓘ`, `NON-STD\n… +40 ⓘ`.
+e.g. `STANDARD\nstandard ⓘ`, `NON-STD\nclaude-code ⓘ`, `NON-STD\n… +39 ⓘ`.
 Trailing columns keep single-line labels (DataTable pads them). Alignment is
 native; nothing to sync on scroll or resize.
 
@@ -74,14 +75,25 @@ native; nothing to sync on scroll or resize.
 - Collapsed (default): one pseudo-column labeled `… +N ⓘ` after the big-five
   non-standard columns. N = long-tail count for that kind. Cells under it render
   a dim placeholder (`·`).
-- Activating it (cursor on the pseudo-column + the existing info/activate
-  action) expands in place: `_rebuild()` runs with the long-tail toggle columns
+- Activating it — **cursor on the pseudo-column + `space`** (the existing
+  toggle binding; no new keybinding, and the ⓘ panel copy names the same key) —
+  expands in place: `_rebuild()` runs with the long-tail toggle columns
   included and the pseudo-column relabeled `… collapse`. Activating again
-  collapses.
+  collapses. The cursor follows the pseudo-column to its new index on both
+  transitions.
 - Expanded long-tail columns behave exactly like the big-five columns (same
   toggle/apply semantics for skills; same install semantics for instructions).
 - State: one boolean per grid instance (`_longtail_expanded`), session-only.
-  Rebuild preserves scroll via the existing #321 save/restore idiom.
+  Rebuild preserves scroll via the existing #321 save/restore idiom. **Filter
+  and scope-toggle do not reset the expanded state** — only the pseudo-column
+  collapses it.
+- **Pending ops survive collapse, keep-and-indicate** (#349 lesson:
+  revert-destroys-invisible-ops): when collapsed tail columns have queued
+  toggles, the pseudo label carries a pending marker (`… +39 ±2 ⓘ`); apply
+  still applies them, revert clears them and the marker.
+- Horizontal arrow/scroll browsing is the accepted navigation model for the
+  expanded state (~46 columns) — no jump-to-column affordance (YAGNI); the
+  pseudo-column's `… collapse` label is the exit affordance.
 - The pseudo-column's ⓘ panel lists the collapsed harness names so they are
   discoverable without expanding.
 
@@ -95,10 +107,9 @@ and membership stay correct as the catalog grows.
 
 ### Interaction & accessibility
 
-- Existing bindings unchanged (scope ctrl+g, filter, info). Expand/collapse is
-  reachable via the cursor + activate on the pseudo-column; no new global
-  keybinding unless the plan finds activation awkward in practice (then a
-  per-grid `e` binding, documented in the footer).
+- Existing bindings unchanged (scope ctrl+g, filter, info). Expand/collapse =
+  `space` on the pseudo-column (the existing toggle binding); no new
+  keybinding.
 - Headless tests must cover: default collapsed composition per kind, expand →
   columns appear in place + scroll preserved, collapse → restored, group tags
   present in header labels, standard ⓘ panel lists the full set with correct

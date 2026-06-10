@@ -240,7 +240,9 @@ async def test_datatable_two_line_header_renders():
         t = app.query_one("#t", DataTable)
         assert t.header_height == 2
         # Both lines present in the rendered header region.
-        text = "\n".join(str(strip) for strip in [t.render_line(0), t.render_line(1)])
+        # Use Strip.text, not str(strip) — the repr only incidentally embeds
+        # segment text and is not a stable API.
+        text = "\n".join(strip.text for strip in [t.render_line(0), t.render_line(1)])
         assert "NON-STD" in text and "claude-code" in text
 ```
 
@@ -271,15 +273,30 @@ async def test_default_columns_collapsed(...):
                    for l in labels if "State" in l or "Source" in l)
 
 async def test_expand_collapse_in_place_preserves_scroll(...):
-    # Move cursor onto the pseudo-column, trigger the toggle binding,
+    # Move cursor onto the pseudo-column, press space,
     # assert long-tail columns appear, pseudo label flips to "… collapse",
+    # CURSOR sits on the pseudo-column's NEW index (it follows the column),
     # scroll_y unchanged (fixture must overflow the container — #321 lesson),
-    # then toggle again → columns gone, "… +N ⓘ" back.
+    # then space again → columns gone, "… +N ⓘ" back, cursor on the
+    # collapsed pseudo-column index.
 
 async def test_longtail_toggle_roundtrip(...):
-    # Expand, move to a long-tail agent column, press the toggle key,
+    # Expand, move to a long-tail agent column, press space,
     # assert the cell shows a pending glyph and _pending got
     # (scope, <tail-agent>, slug) — identical semantics to a big-five column.
+    # FIXTURE NOTE: _toggle_at bails on cell=None; rows must carry cells for
+    # the tail agents under test — build cells over ("standard",) +
+    # skills_nonstandard_big_five() + skills_longtail()[:1], or load rows via
+    # Task 2's loader so cells exist for the full composition.
+
+async def test_collapse_with_pending_indicates_and_applies(...):
+    # Expand → queue a toggle on a tail agent → collapse:
+    # pseudo label shows the ±1 pending marker; pending_entries() still
+    # includes the op (apply path unaffected); revert clears it AND the marker.
+
+async def test_filter_does_not_reset_expansion(...):
+    # Expand → type a row filter → long-tail columns still present;
+    # filter affects rows only.
 ```
 
 Run: `uv run pytest tests/test_tui/test_skill_grid_groups.py -q`
@@ -313,11 +330,11 @@ from agent_toolkit_tui.composition import (
         active = self._active_agents()
         for agent in active:
             tag = "STANDARD" if agent == "standard" else "NON-STD"
-            base = "Standard" if agent == "standard" else AGENTS[agent].display_name
-            table.add_column(_grouped_label(tag, f"{base} {_INFO_GLYPH}"), width=14)
-        tail_n = len(skills_longtail())
-        pseudo = "… collapse" if self._longtail_expanded else f"… +{tail_n} {_INFO_GLYPH}"
-        table.add_column(_grouped_label("NON-STD", pseudo), width=14)
+            base = "standard" if agent == "standard" else AGENTS[agent].display_name
+            table.add_column(grouped_label(tag, f"{base} {_INFO_GLYPH}"), width=14)
+        # `pseudo` label: see (e2) below — carries a ±N pending marker when
+        # collapsed tail columns have queued ops.
+        table.add_column(grouped_label("NON-STD", pseudo), width=14)
         table.add_column(f"State {_INFO_GLYPH}", width=10)
         table.add_column("Source", width=30)
 ```
@@ -334,8 +351,6 @@ def grouped_label(tag: str, name: str) -> Text:
     return label
 ```
 
-(References to `_grouped_label(...)` in the snippets above and in Task 5 mean
-this shared `grouped_label`.)
 
 Row cells: iterate `active` for glyphs, then a dim `"·"` placeholder cell for
 the pseudo-column, then state/source. Update the `max_col` math (old :581) to
@@ -368,13 +383,38 @@ the pseudo-column, then state/source. Update the `max_col` math (old :581) to
         return None
 ```
 
-(d) Toggle path — in `_toggle_at` (old :487), before the agent lookup:
+(d) Toggle path — in `_toggle_at` (old :487), before the agent lookup. **The
+trigger is `space`** (the existing `toggle_cell` binding — no new binding; the
+ⓘ panel copy and tests name the same key). After the rebuild the pseudo-column
+has MOVED (by `len(skills_longtail())` indexes), so the cursor explicitly
+follows it instead of landing on a random tail column:
 
 ```python
-        if coord.column == 1 + len(self._active_agents()):
+        active_n = len(self._active_agents())
+        if coord.column == 1 + active_n:
             self._longtail_expanded = not self._longtail_expanded
             self._rebuild(table)
+            # Cursor follows the pseudo-column to its new index.
+            table.cursor_coordinate = Coordinate(
+                row=table.cursor_coordinate.row,
+                column=1 + len(self._active_agents()),
+            )
             return
+```
+
+(e2) Pending ops on collapsed tail columns stay applied/revertible but would be
+invisible (#349 bug class: revert-destroys-invisible-ops). **Keep-and-indicate**:
+when collapsed and any `_pending` key references a long-tail agent, the pseudo
+label carries a pending marker:
+
+```python
+        tail = skills_longtail()
+        tail_pending = sum(1 for (_s, a, _slug) in self._pending if a in tail)
+        marker = f" [yellow]±{tail_pending}[/]" if tail_pending else ""
+        pseudo = (
+            "… collapse" if self._longtail_expanded
+            else f"… +{len(tail)}{marker} {_INFO_GLYPH}"
+        )
 ```
 
 (e) `_context_for` (old :470-485): the standard-key branch keeps its behavior;
@@ -429,18 +469,24 @@ def test_longtail_info_lists_collapsed_names():
 Run: `uv run pytest tests/test_tui/test_column_info.py -q`
 Expected: FAIL.
 
-- [ ] **Step 2: Implement** — in `_standard_info` (post-#350 name of
-  `_universal_info`, :26-52), change the description head to:
+- [ ] **Step 2: Implement** — make `_standard_info` (post-#350 name of
+  `_universal_info`, :26-52) **kind-agnostic via context**, like the long-tail
+  factory, so the instruction grid can reuse the same registry key (Task 5):
 
 ```python
+def _standard_info(context: dict | None = None) -> ColumnInfo:
+    ctx = context or {}
+    kind = ctx.get("kind", "skills")
+    harness_names = tuple(ctx.get("names") or get_standard_agents())
     description = [
-        f"Covered by the standard convention for skills ({len(harness_names)}):",
+        f"Covered by the standard convention for {kind} ({len(harness_names)}):",
         "",
     ]
+    ...  # existing bullets; the contextual 🌐 block stays skills-only
+    # (gate it on kind == "skills" since instructions has no global-marker concept)
 ```
 
-(keep the existing bullets + contextual 🌐 block), and register the long-tail
-factory:
+and register the long-tail factory:
 
 ```python
 def _longtail_info(context: dict | None = None) -> ColumnInfo:
@@ -450,7 +496,8 @@ def _longtail_info(context: dict | None = None) -> ColumnInfo:
     return ColumnInfo(
         title=f"{head} ({len(names)})",
         lines=[
-            "Press enter on this column to expand/collapse in place.",
+            "Press space on this column to expand/collapse in place.",
+            "Expanded columns are browsed with the arrow keys (no jump-to-column).",
             "",
             *[f"  • {n}" for n in names],
         ],
@@ -517,18 +564,30 @@ INTERACTIVE_HARNESSES: tuple[str, ...] = instructions_nonstandard_big_five()
 and in `instruction_grid.py` mirror Task 3 exactly, with the offsets shifted by
 the read-only standard column (the existing `_HARNESS_COL_OFFSET = 2` becomes
 the base; pseudo-column sits after the active harness columns). The standard
-column's two-line label: `_grouped_label("STANDARD", f"standard {_INFO_GLYPH}")`.
+column's two-line label: `grouped_label("STANDARD", f"standard {_INFO_GLYPH}")`.
 The instruction state loader must probe pointer cells for
 `instructions_nonstandard_big_five() + instructions_longtail()` (mirror Task 2's
 change in `instruction_state.py`).
 
-The instructions standard ⓘ panel needs the native-harness list: extract the
-matrix-row parser from `commands/instructions/list_cmd.py` (the regex +
-row-builder around :25-65) into a reusable helper
-`instructions_matrix_rows()` in `src/agent_toolkit_cli/instructions_matrix.py`
-(moved, not duplicated — list_cmd imports it back), and pass
-`[r["harness"] for r in rows if r["verdict"] == "native"]` to the panel via the
-grid's `_context_for`.
+**Port the column-info dispatch — the instruction grid does NOT have it.**
+Unlike skill_grid, instruction_grid's `i` binding inline-builds cell info with a
+hardcoded `coord.column == 1` "general · instruction" branch (:183-195); there
+is no `_column_key_for_index`, `_context_for`, or `action_open_column_info`.
+Mirror skill_grid's dispatch trio into instruction_grid, REPLACE the inline
+column-1 branch with the registry path (`get_column_info("standard",
+context=...)` → ColumnInfoModal), and supply
+`{"kind": "instructions", "names": <native list>}` from `_context_for`.
+
+The native-harness list: extract the matrix-row parser from
+`commands/instructions/list_cmd.py` (the regex + row-builder, :23-70) into a
+reusable `instructions_matrix_rows()` in
+`src/agent_toolkit_cli/instructions_matrix.py` (moved, not duplicated —
+list_cmd imports it back). **The parser's source-tree fallback computes the
+repo root as `Path(__file__).resolve().parents[4]` — at the new module depth
+that is `parents[2]`; recompute it or every dev/source-tree run raises
+FileNotFoundError (the #305/#308 packaged-path-gap class). The
+importlib.resources packaged path stays unchanged.** Pass
+`[r["harness"] for r in rows if r["verdict"] == "native"]` to the panel.
 
 - [ ] **Step 3: Run + commit**
 
