@@ -57,3 +57,33 @@ def unmapped_first_party_slugs(lock_paths: list[Path]) -> set[str]:
     """First-party slugs registered against the old source that are neither mapped
     nor a known alias — these would be silently stranded. Caller must fail loud."""
     return _first_party_slugs(lock_paths) - MIGRATED_SLUGS - set(ALIAS_REMAP)
+
+
+def discover_lock_paths(roots: list[Path]) -> list[Path]:
+    """All skills-lock.json under roots (recursive), excluding .worktrees/,
+    Claude-managed .claude/worktrees/, and cache trees (.cache — a live uv
+    git-checkout under ~/.cache/uv/ holds an old-source lock snapshot; cache
+    copies are disposable, not scopes to migrate).
+    Global lock is passed explicitly by the caller, not discovered here."""
+    found: list[Path] = []
+    for root in roots:
+        for p in sorted(root.rglob("skills-lock.json")):
+            parts = p.parts
+            if ".worktrees" in parts or ".cache" in parts:
+                continue
+            if ".claude" in parts and "worktrees" in parts:
+                continue
+            found.append(p)
+    return found
+
+
+def find_lock_scopes_for_slug(slug: str, *, lock_paths: list[Path]) -> list[Path]:
+    """Locks where `slug` is registered against the OLD source. Fails loud on
+    unparseable locks (no silent skip — see conventions: fail loudly)."""
+    hits: list[Path] = []
+    for lock in lock_paths:
+        data = json.loads(lock.read_text())
+        entry = data.get("skills", {}).get(slug)
+        if entry and entry.get("source") == SOURCE_REPO:
+            hits.append(lock)
+    return hits
