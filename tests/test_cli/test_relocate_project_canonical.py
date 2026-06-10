@@ -214,12 +214,12 @@ def test_doctor_orphan_sweep_detects_unreferenced_canonical(
     findings = skill_doctor.diagnose(
         slugs=None, scope="project", home=None, project=project,
     )
-    kinds = {(f.kind, f.slug) for f in findings}
-    assert ("orphan_canonical", "ghost") in kinds
-    assert any(f.kind == "orphan_canonical" and "bak-" in str(f.path) for f in findings)
+    finding_types = {(f.finding_type, f.slug) for f in findings}
+    assert ("orphan_canonical", "ghost") in finding_types
+    assert any(f.finding_type == "orphan_canonical" and "bak-" in str(f.path) for f in findings)
 
     for f in findings:
-        if f.kind == "orphan_canonical":
+        if f.finding_type == "orphan_canonical":
             f.fix_action.apply()
     assert not orphan.exists()
     assert not bak.exists()

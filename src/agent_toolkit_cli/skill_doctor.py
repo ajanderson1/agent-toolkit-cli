@@ -26,7 +26,7 @@ from agent_toolkit_cli.skill_paths import (
     lock_file_path,
 )
 
-FindingKind = Literal[
+FindingType = Literal[
     "missing_canonical", "drifted_symlink",
     "wrong_type_bundle", "orphan_symlink", "foreign_symlink",
     "dirty_tree", "lock_source_mismatch", "stray_symlink",
@@ -43,7 +43,7 @@ class FixAction:
 
 @dataclass(frozen=True)
 class Finding:
-    kind: FindingKind
+    finding_type: FindingType
     slug: str
     scope: Scope
     path: Path
@@ -158,7 +158,7 @@ def _scan_stray_symlinks(
             except OSError:
                 target = Path("(unreadable)")
             findings.append(Finding(
-                kind="stray_symlink", slug=slug, scope=scope,
+                finding_type="stray_symlink", slug=slug, scope=scope,
                 path=link,
                 detail=(
                     f"{link} -> {target}: '{slug}' is not in the {scope} "
@@ -207,7 +207,7 @@ def _scan_orphan_canonicals(
                  f"(orphaned canonical from a prior uninstall)"
         )
         findings.append(Finding(
-            kind="orphan_canonical", slug=slug, scope=scope,
+            finding_type="orphan_canonical", slug=slug, scope=scope,
             path=path, detail=detail,
             fix_action=_make_rmtree_action(path=path),
         ))
@@ -249,14 +249,14 @@ def _scan_stray_bundle_dirs(
         if is_bak:
             slug = name.split(".bak-")[0]
             findings.append(Finding(
-                kind="stray_bundle_dir", slug=slug, scope=scope,
+                finding_type="stray_bundle_dir", slug=slug, scope=scope,
                 path=path,
                 detail=f"{path}: leftover doctor backup, safe to remove",
                 fix_action=_make_rmtree_action(path=path),
             ))
         else:
             findings.append(Finding(
-                kind="stray_bundle_dir", slug=name, scope=scope,
+                finding_type="stray_bundle_dir", slug=name, scope=scope,
                 path=path,
                 detail=(
                     f"{path}: '{name}' is a real directory in the standard "
@@ -590,7 +590,7 @@ def _check_slug(
     canonical = canonical_skill_dir(slug, scope=scope, home=home, project=project)
     if not canonical.exists():
         findings.append(Finding(
-            kind="missing_canonical", slug=slug, scope=scope,
+            finding_type="missing_canonical", slug=slug, scope=scope,
             path=canonical,
             detail=(
                 f"lock has {slug} but canonical directory is gone. "
@@ -613,7 +613,7 @@ def _check_slug(
         target_exists = target_path.exists()
         if not target_exists:
             findings.append(Finding(
-                kind="orphan_symlink", slug=slug, scope=scope,
+                finding_type="orphan_symlink", slug=slug, scope=scope,
                 path=link,
                 detail=(
                     f"{agent_name} symlink at {link} points to {target_path} "
@@ -629,7 +629,7 @@ def _check_slug(
         if not _is_inside(target, expected_root):
             if _is_standard_bundle_target(target):
                 findings.append(Finding(
-                    kind="drifted_symlink", slug=slug, scope=scope,
+                    finding_type="drifted_symlink", slug=slug, scope=scope,
                     path=link,
                     detail=(
                         f"{agent_name} symlink at {link} points to {target} "
@@ -641,7 +641,7 @@ def _check_slug(
                 ))
                 continue
             findings.append(Finding(
-                kind="foreign_symlink", slug=slug, scope=scope,
+                finding_type="foreign_symlink", slug=slug, scope=scope,
                 path=link,
                 detail=(
                     f"{agent_name} symlink at {link} points to {target}, "
@@ -653,7 +653,7 @@ def _check_slug(
             ))
             continue
         findings.append(Finding(
-            kind="drifted_symlink", slug=slug, scope=scope,
+            finding_type="drifted_symlink", slug=slug, scope=scope,
             path=link,
             detail=(
                 f"{agent_name} symlink at {link} points to {target}, "
@@ -665,7 +665,7 @@ def _check_slug(
         bundle = _standard_bundle_link(slug)
         if bundle.exists() and not bundle.is_symlink():
             findings.append(Finding(
-                kind="wrong_type_bundle", slug=slug, scope=scope,
+                finding_type="wrong_type_bundle", slug=slug, scope=scope,
                 path=bundle,
                 detail=(
                     f"{bundle} is a real directory; expected symlink to "
@@ -678,7 +678,7 @@ def _check_slug(
     if skill_git.is_git_repo(canonical):
         if skill_git.status(canonical, env=None) == skill_git.GitWorkingTreeStatus.DIRTY:
             findings.append(Finding(
-                kind="dirty_tree", slug=slug, scope=scope,
+                finding_type="dirty_tree", slug=slug, scope=scope,
                 path=canonical,
                 detail=f"working tree at {canonical} has uncommitted changes",
                 fix_action=None,
@@ -688,7 +688,7 @@ def _check_slug(
         expected = clone_url_from_entry(entry)
         if observed is not None and _normalise_git_url(observed) != _normalise_git_url(expected):
             findings.append(Finding(
-                kind="lock_source_mismatch", slug=slug, scope=scope,
+                finding_type="lock_source_mismatch", slug=slug, scope=scope,
                 path=canonical,
                 detail=(
                     f"lock source {expected!r} != git remote origin "

@@ -33,7 +33,7 @@ class FixAction:
 @dataclass
 class Finding:
     slug: str
-    kind: str
+    finding_type: str
     scope: str
     path: Path
     detail: str
@@ -65,7 +65,7 @@ def _diagnose(
         # 1. Missing canonical directory.
         if not canonical.exists():
             findings.append(Finding(
-                slug=slug, kind="missing-canonical", scope=scope,
+                slug=slug, finding_type="missing-canonical", scope=scope,
                 path=canonical,
                 detail="lock entry exists but canonical directory is absent",
                 fix_action=None,  # reclone would require source URL access
@@ -76,7 +76,7 @@ def _diagnose(
         content_file = canonical / f"{slug}.md"
         if not content_file.exists():
             findings.append(Finding(
-                slug=slug, kind="missing-content-file", scope=scope,
+                slug=slug, finding_type="missing-content-file", scope=scope,
                 path=content_file,
                 detail=f"{slug}.md absent in canonical",
                 fix_action=None,
@@ -88,7 +88,7 @@ def _diagnose(
                 wt = skill_git.status(canonical, env=None)
                 if wt == skill_git.GitWorkingTreeStatus.DIRTY:
                     findings.append(Finding(
-                        slug=slug, kind="dirty-canonical", scope=scope,
+                        slug=slug, finding_type="dirty-canonical", scope=scope,
                         path=canonical,
                         detail="canonical has uncommitted changes",
                         fix_action=None,
@@ -113,7 +113,7 @@ def _diagnose(
                     orphan = child
                     findings.append(Finding(
                         slug=child.name,
-                        kind="orphan-canonical",
+                        finding_type="orphan-canonical",
                         scope=scope,
                         path=orphan,
                         detail="canonical directory has no lock entry",
@@ -163,7 +163,7 @@ def doctor_cmd(
     quit_loop = False
     for f in findings:
         click.echo("")
-        click.echo(f"{f.slug} · {f.kind} ({f.scope})")
+        click.echo(f"{f.slug} · {f.finding_type} ({f.scope})")
         click.echo(f"  path:   {f.path}")
         click.echo(f"  detail: {f.detail}")
         if f.fix_action is None or no_fix or quit_loop:
