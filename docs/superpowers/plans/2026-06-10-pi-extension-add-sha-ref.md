@@ -38,7 +38,7 @@
 - Modify: `src/agent_toolkit_cli/pi_extension_add.py` (helper + import)
 - Test: `tests/test_cli/test_pi_extension_add.py`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `tests/test_cli/test_pi_extension_add.py`:
 
@@ -61,12 +61,12 @@ def test_looks_like_sha(ref, expected):
 
 (`pytest` and `pea` are already imported at the top of the file — `import pytest` / `from agent_toolkit_cli import pi_extension_add as pea`.)
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_cli/test_pi_extension_add.py -q -k looks_like_sha`
 Expected: 10 FAILED with `AttributeError: module ... has no attribute 'looks_like_sha'`
 
-- [ ] **Step 3: Implement the helper**
+- [x] **Step 3: Implement the helper**
 
 In `src/agent_toolkit_cli/pi_extension_add.py`, add `import re` to the imports block, then add below `_npm_slug`:
 
@@ -83,12 +83,12 @@ def looks_like_sha(ref: str | None) -> bool:
     return bool(ref) and re.fullmatch(r"[0-9a-f]{7,40}", ref) is not None
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/test_cli/test_pi_extension_add.py -q`
 Expected: all PASS (existing 4 + new 10)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/agent_toolkit_cli/pi_extension_add.py tests/test_cli/test_pi_extension_add.py
@@ -105,7 +105,7 @@ git commit -m "feat(pi-extension): add looks_like_sha ref classifier (#330)"
 - Modify: `src/agent_toolkit_cli/pi_extension_add.py:93-95` (the clone site)
 - Test: `tests/test_cli/test_pi_extension_add.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `tests/test_cli/test_pi_extension_add.py`:
 
@@ -176,12 +176,12 @@ def test_add_abbreviated_sha_pin_expands(tmp_path, monkeypatch, git_sandbox):
     assert not (canonical / "EXTRA.md").exists()
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest tests/test_cli/test_pi_extension_add.py::test_add_sha_pinned_lands_on_pin -q`
 Expected: FAIL — `GitError` from `git clone --branch <first_sha>`: `Remote branch <sha> not found in upstream origin`
 
-- [ ] **Step 3: Implement the SHA branch at the clone site**
+- [x] **Step 3: Implement the SHA branch at the clone site**
 
 In `src/agent_toolkit_cli/pi_extension_add.py`, add `import shutil` to the imports, then replace lines 93-95:
 
@@ -224,12 +224,12 @@ with:
             raise
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `uv run pytest tests/test_cli/test_pi_extension_add.py -q`
 Expected: all PASS (including the existing branch-ref and ref-less adds — regression guard)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/agent_toolkit_cli/pi_extension_add.py tests/test_cli/test_pi_extension_add.py
@@ -244,7 +244,7 @@ git commit -m "fix(pi-extension): SHA-pinned add lands on the pinned commit (#33
 - Test: `tests/test_cli/test_pi_extension_add.py`
 - Modify: `src/agent_toolkit_cli/pi_extension_add.py` (only if the test exposes a gap — Task 2's implementation already includes the cleanup)
 
-- [ ] **Step 1: Write the test**
+- [x] **Step 1: Write the test**
 
 Append to `tests/test_cli/test_pi_extension_add.py`:
 
@@ -265,12 +265,12 @@ def test_add_bad_sha_fails_loud_no_orphans(tmp_path, monkeypatch, git_sandbox):
     assert not pep.library_pi_extension_path("ghost-pin", env={}).exists()
 ```
 
-- [ ] **Step 2: Run test — expected to pass already (Task 2 shipped the cleanup)**
+- [x] **Step 2: Run test — expected to pass already (Task 2 shipped the cleanup)**
 
 Run: `uv run pytest tests/test_cli/test_pi_extension_add.py::test_add_bad_sha_fails_loud_no_orphans -q`
 Expected: PASS. **If it FAILS**, the cleanup in Task 2 Step 3 has a gap — fix it there (the `except skill_git.GitError: shutil.rmtree(...); raise` block) until this test passes. Do not weaken the test.
 
-- [ ] **Step 3: Prove the test is real (it must bite without the cleanup)**
+- [x] **Step 3: Prove the test is real (it must bite without the cleanup)**
 
 Do NOT use `git stash` to peek at a baseline. Instead, temporarily edit
 `src/agent_toolkit_cli/pi_extension_add.py`: in the **checkout** `except
@@ -282,7 +282,7 @@ with `pass`. Run:
 
 Expected: FAIL on the final assertion (`library_pi_extension_path(...).exists()` is True — orphan dir left behind). Then restore the `shutil.rmtree(...)` line and re-run: PASS. If the test passes even with the cleanup stubbed out, it is vacuous — stop and fix the test.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add tests/test_cli/test_pi_extension_add.py
@@ -297,7 +297,7 @@ git commit -m "test(pi-extension): bad SHA pin fails loud, no lock entry, no orp
 - Modify: `src/agent_toolkit_cli/pi_extension_doctor.py:337-353` (`_make_reclone_action`)
 - Test: `tests/test_cli/test_cli_pi_extension_lifecycle.py` (§ `# Task B5: doctor`)
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add to `tests/test_cli/test_cli_pi_extension_lifecycle.py` in the doctor section (after `test_doctor_detects_missing_canonical`). Reuse that test's seeding idiom — read it first and match its imports/helpers (it already has `git_sandbox`, lock seeding, and `pep`/lock imports in scope):
 
@@ -402,12 +402,12 @@ def test_doctor_reclone_branch_entry_lands_on_current_tip(
 > project: Path | None)` (`pi_extension_doctor.py:71`). `slugs=None` scans
 > every slug in the lock; `scope="global"` targets the global library.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest tests/test_cli/test_cli_pi_extension_lifecycle.py::test_doctor_reclone_sha_pinned_lands_on_pin tests/test_cli/test_cli_pi_extension_lifecycle.py::test_doctor_reclone_branch_entry_lands_on_current_tip -q`
 Expected: the SHA-pin test FAILS — either `GitError` (`--branch <sha>` rejected) or `head == second commit` (landed on HEAD, pin ignored). The branch-regression test PASSES both before and after the fix — it exists to kill the tempting-but-wrong variant that pins on `upstream_sha` (under that variant it goes RED). Do not delete it for being green.
 
-- [ ] **Step 3: Implement the fix in `_make_reclone_action`**
+- [x] **Step 3: Implement the fix in `_make_reclone_action`**
 
 In `src/agent_toolkit_cli/pi_extension_doctor.py`, add two imports at the top of the file (the code block below does NOT repeat them — add them before pasting it):
 
@@ -467,7 +467,7 @@ def _make_reclone_action(*, slug: str, entry: object) -> FixAction:
     )
 ```
 
-- [ ] **Step 4: Run the doctor tests**
+- [x] **Step 4: Run the doctor tests**
 
 Run: `uv run pytest tests/test_cli/test_cli_pi_extension_lifecycle.py -q`
 Expected: all PASS. Branch and ref-less entries are genuinely unchanged
@@ -477,7 +477,7 @@ regardless of what `upstream_sha` holds. The
 `test_doctor_reclone_branch_entry_lands_on_current_tip` regression test
 proves it against a stale `upstream_sha`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/agent_toolkit_cli/pi_extension_doctor.py tests/test_cli/test_cli_pi_extension_lifecycle.py
@@ -498,7 +498,7 @@ Without this, one SHA-pinned entry poisons every `pi-extension update` run:
 which git rejects, so the user sees a phantom "conflict during merge" and exit 1
 for a healthy entry. `reset` hits the same wall at `reset_hard(origin/<sha>)`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Add to `tests/test_cli/test_cli_pi_extension_lifecycle.py` (near the existing
 update tests; reuse the file's existing `CliRunner`/`main` imports):
@@ -550,12 +550,12 @@ def test_reset_skips_pinned_entry(tmp_path, monkeypatch, git_sandbox):
 > NOTE: these tests depend on Task 2 (SHA-pinned `add` working). Task order
 > matters here — do not reorder Task 5 before Task 2.
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_cli/test_cli_pi_extension_lifecycle.py::test_update_skips_pinned_entry tests/test_cli/test_cli_pi_extension_lifecycle.py::test_reset_skips_pinned_entry -q`
 Expected: both FAIL — update prints "conflict during merge" and exits 1; reset raises `ClickException` ("git failed during reset")
 
-- [ ] **Step 3: Implement the skips**
+- [x] **Step 3: Implement the skips**
 
 In `src/agent_toolkit_cli/commands/pi_extension/update_cmd.py`, add the import
 `from agent_toolkit_cli.pi_extension_add import looks_like_sha` at the top,
@@ -574,13 +574,13 @@ In `src/agent_toolkit_cli/commands/pi_extension/reset_cmd.py`, same import,
 same block inserted after the copy-mode check (before the `if not force:`
 dirty check at `:76`).
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/test_cli/test_cli_pi_extension_lifecycle.py -q`
 Expected: all PASS (the new skip fires only when `entry.ref` is SHA-looking;
 branch/ref-less/npm rows take their existing paths)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/agent_toolkit_cli/commands/pi_extension/update_cmd.py src/agent_toolkit_cli/commands/pi_extension/reset_cmd.py tests/test_cli/test_cli_pi_extension_lifecycle.py
@@ -593,12 +593,12 @@ git commit -m "fix(pi-extension): update/reset skip SHA-pinned entries (#330)"
 
 **Files:** none (verification only)
 
-- [ ] **Step 1: Run the entire suite**
+- [x] **Step 1: Run the entire suite**
 
 Run: `uv run pytest -q`
 Expected: everything green **except** (possibly, machine-dependent) the known local-only `test_empty_machine_is_empty` — see Worker notes. Any other failure is yours: fix before proceeding.
 
-- [ ] **Step 2: Acceptance-criteria sweep**
+- [x] **Step 2: Acceptance-criteria sweep**
 
 Check each spec §2 criterion against a test or code line:
 
@@ -615,7 +615,7 @@ Check each spec §2 criterion against a test or code line:
 | 9. no schema change; CLI changes additive only | diff touches the two engines + two verb guards + tests |
 | 10. abbreviated SHA pins work | `test_add_abbreviated_sha_pin_expands` |
 
-- [ ] **Step 3 (optional, network + real GitHub): manual smoke**
+- [x] **Step 3 (optional, network + real GitHub): manual smoke**
 
 ```bash
 HOME=$(mktemp -d) uv run agent-toolkit pi-extension add \
