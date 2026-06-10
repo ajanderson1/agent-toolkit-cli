@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from pathlib import Path
-from typing import Literal, cast
+from typing import Iterable, Literal, cast
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -51,6 +51,22 @@ _KIND_LABELS: dict[Kind, str] = {
     "pi-extension": "Pi Extension",
     "agent": "Agent",
 }
+
+
+def _scope_tag(keys: Iterable[tuple[str, ...]]) -> str:
+    """Return ' (N global, M project)' when pending ops span both scopes.
+
+    Every grid's pending key starts with the scope string — (scope, slug)
+    for pi, (scope, harness, slug) for the rest — so key[0] is the scope in
+    all four shapes. Iterating a pending dict yields its keys, so both dicts
+    and key lists are accepted. Empty or single-scope input returns ''.
+    """
+    ks = list(keys)
+    n_global = sum(1 for k in ks if k[0] == "global")
+    n_project = len(ks) - n_global
+    if n_global and n_project:
+        return f" ({n_global} global, {n_project} project)"
+    return ""
 
 
 class ConfirmDiscardScreen(ModalScreen[bool]):
