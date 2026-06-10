@@ -49,3 +49,19 @@ def test_add_npm_idempotent(tmp_path, monkeypatch):
     pea.add(source="npm:foo", slug=None, env={})
     lock = read_lock(pep.library_lock_path(env={}))
     assert list(lock.skills) == ["foo"]
+
+
+@pytest.mark.parametrize("ref,expected", [
+    ("22d0c764cd6c10ed06a7877e55a606d3435f1ec5", True),   # full SHA
+    ("22d0c76", True),                                     # abbreviated SHA
+    ("deadbeef", True),                                    # 8-hex
+    ("main", False),                                       # branch
+    ("v1.2.3", False),                                     # tag
+    ("feature/foo", False),                                # slashed branch
+    (None, False),                                         # no ref
+    ("22d0c7", False),                                     # 6 hex chars: below git's 7-char floor
+    ("g2d0c764", False),                                   # non-hex char
+    ("DEADBEEF", False),                                   # uppercase: git SHAs print lowercase
+])
+def test_looks_like_sha(ref, expected):
+    assert pea.looks_like_sha(ref) is expected

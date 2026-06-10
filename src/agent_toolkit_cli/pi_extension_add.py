@@ -9,6 +9,7 @@ Mirrors skill_add's global-only posture. Lock is written ONLY after a
 successful clone (store-owned) — never before (#283)."""
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from agent_toolkit_cli import skill_git
@@ -29,6 +30,18 @@ class AddError(RuntimeError):
 def _npm_slug(spec: str) -> str:
     # "npm:@scope/name" -> "@scope/name"
     return spec.split(":", 1)[1]
+
+
+def looks_like_sha(ref: str | None) -> bool:
+    """True when `ref` can only sensibly be a commit SHA (lowercase hex,
+    7-40 chars — git's abbreviated-to-full range).
+
+    Why a heuristic is safe both ways: `git clone --branch` rejects a 40-hex
+    *branch name* anyway, so classifying one as a SHA is strictly more
+    correct than today; and a short all-hex *tag* (e.g. `abc1234`) classified
+    as a SHA still resolves — `fetch_ref` + `checkout` accept tag names too.
+    """
+    return bool(ref) and re.fullmatch(r"[0-9a-f]{7,40}", ref) is not None
 
 
 def _derive_slug(parsed: ParsedSource) -> str | None:
