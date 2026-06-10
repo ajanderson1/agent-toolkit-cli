@@ -60,7 +60,11 @@ names and lock filenames derive from them).
   not via Textual binding strings — verified); `_show_kind` →
   `_show_asset_type`; CSS/DOM ids `kinds-sidebar` / `kinds-list` / `kind-*` →
   `asset-types-sidebar` / `asset-types-list` / `asset-type-*` (internal ids;
-  visible sidebar labels are the value names and do not change).
+  the visible sidebar option labels stay exactly their current literal strings
+  — `instruction` (singular, a pre-existing TUI choice distinct from the
+  binding value `"instructions"`), `skill`, `pi-extension`, `agent`). The one
+  intended visible TUI text change is the sidebar rail header `Static("Kind")`
+  → `Static("Asset type")`.
 - Comments, docstrings, and test names sweep along.
 
 ### Non-touch allowlist (the no-breaking-changes guarantee)

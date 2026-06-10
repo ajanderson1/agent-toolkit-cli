@@ -25,6 +25,8 @@
 | `Finding.kind` (field, all 3 doctor Finding classes) | `finding_type` |
 | TUI `Kind` (Literal alias) | `AssetType` |
 | TUI `_active_kind` / `action_kind` / `_show_kind` | `_active_asset_type` / `action_asset_type` / `_show_asset_type` |
+| TUI `_KIND_LABELS` / `kind_label` (app.py l.48, l.918, l.939) | `_ASSET_TYPE_LABELS` / `asset_type_label` |
+| test function/file names containing `kind` (e.g. `test_kind_sidebar_lists_three_kinds`, `test_kind_binding_is_frozen_dataclass`) | `asset_type` equivalents |
 | DOM/CSS ids `kinds-sidebar`, `kinds-list`, `kind-<x>` | `asset-types-sidebar`, `asset-types-list`, `asset-type-<x>` |
 | prose "kind" / "asset kind" (this taxonomy) | "asset type" |
 | prose "the four kinds" / "per-kind" / "cross-kind" | "the four asset types" / "per-asset-type" / "cross-asset-type" |
@@ -43,6 +45,11 @@
    `docs/solutions/`, `docs/audit/`, `docs/agent-toolkit/research/`.
 6. English uses of "kind" that are NOT this taxonomy (e.g. "some kind of",
    "kindly") — judge each docs hit; only the asset-classifier sense renames.
+7. The serialized `kind:` metadata-block key and quoted schema examples in
+   `docs/agent-toolkit/schema.md` (e.g. `kind: plugin`) — that file documents
+   an on-disk format real artifacts carry, exactly like translate.py's
+   passthrough key. Its surrounding PROSE may rename; the format-key lines and
+   YAML examples stay byte-identical and count as tolerated grep survivors.
 
 ---
 
@@ -65,16 +72,28 @@ Expected: all pass (note the exact pass count for later comparison; one known lo
 
 - [ ] **Step 3: Capture baseline CLI output in a sandbox HOME**
 
+An empty sandbox produces trivially-empty list/doctor output that would diff
+clean even across a broken rename — seed it with one real skill first so the
+snapshots exercise library-root derivation, lock reads, and table rendering.
+`instructions list` is the highest-risk command (it parses
+`docs/agent-toolkit/harness-matrix.md`, which Task 5/6 edit) — capture it
+explicitly.
+
 ```bash
 export SANDBOX=/tmp/355-baseline && mkdir -p "$SANDBOX/home"
+# Seed: install one skill globally into the sandbox HOME (any small public
+# skill repo works; use an existing local fixture if offline).
+HOME="$SANDBOX/home" uv run agent-toolkit-cli skill add https://github.com/anthropics/skills --skill document-skills/pdf 2>&1 | tail -2
 for noun in skill agent instructions pi-extension; do
   HOME="$SANDBOX/home" uv run agent-toolkit-cli $noun --help > "$SANDBOX/$noun-help.txt" 2>&1 || true
+  HOME="$SANDBOX/home" uv run agent-toolkit-cli $noun list -g > "$SANDBOX/$noun-list.txt" 2>&1 || true
+  HOME="$SANDBOX/home" uv run agent-toolkit-cli $noun doctor -g > "$SANDBOX/$noun-doctor.txt" 2>&1 || true
 done
-HOME="$SANDBOX/home" uv run agent-toolkit-cli skill list -g > "$SANDBOX/skill-list.txt" 2>&1 || true
-HOME="$SANDBOX/home" uv run agent-toolkit-cli skill doctor -g > "$SANDBOX/skill-doctor.txt" 2>&1 || true
+HOME="$SANDBOX/home" uv run agent-toolkit-cli instructions list > "$SANDBOX/instructions-list-cwd.txt" 2>&1 || true
 ```
 
-Expected: files created. These are diffed in Task 7.
+Expected: files created; `skill-list.txt` shows the seeded skill (non-empty).
+These are diffed in Task 7.
 
 ---
 
@@ -218,10 +237,22 @@ def action_asset_type(self, asset_type: str) -> None: ...
 ```
 
 Every internal reference (`get_option_index(f"asset-type-{asset_type}")`, the
-option-selected handler's id comparisons, `self._active_asset_type` reads at
-l.379/400/426 etc.) follows. Visible option labels ("skill", …) unchanged.
+option-selected handler's id comparisons, `self._active_asset_type` reads)
+follows. Visible option labels ("skill", …) unchanged.
 `action_asset_type` is only called directly in code (verified — no Textual
 `Binding("…", "kind(...)")` strings exist), so the action rename is safe.
+
+The sidebar's rail header (app.py l.157) is the ONE intended visible TUI text
+change on this PR:
+
+```python
+Static("Asset type", classes="rail-header")   # was: Static("Kind", ...)
+```
+
+The `.rail-header` class selector in `app.tcss` is unchanged. Eyeball the
+sidebar width after the change (`uv run agent-toolkit-tui`): "Asset type" is
+10 chars vs 4 — if it truncates, widen `#asset-types-sidebar` in `app.tcss`
+by the difference.
 
 - [ ] **Step 2: app.tcss + pi_grid strings + state-module docstrings** per the file list above.
 
@@ -245,6 +276,28 @@ git add -A && git commit -m "refactor: rename TUI kind surfaces to asset type (#
 - Modify (prose/comments/help only): `src/agent_toolkit_cli/commands/instructions/__init__.py` (docstring), `src/agent_toolkit_cli/commands/instructions/list_cmd.py` (help string → `"Per-harness verdict for the instructions asset type."`), `src/agent_toolkit_cli/instructions_adapters/symlink.py` (docstring l.7, comment l.31, error message l.146 → `f"unknown harness for instructions asset type: {harness!r}"`), `src/agent_toolkit_cli/instructions_adapters/__init__.py`, `src/agent_toolkit_cli/agent_adapters/__init__.py` (comments l.13, l.29), `src/agent_toolkit_cli/agent_install.py`, `src/agent_toolkit_cli/agent_lock.py`, `src/agent_toolkit_cli/instructions_lock.py`, `src/agent_toolkit_cli/pi_extension_install.py`, `src/agent_toolkit_cli/pi_extension_inventory.py`, `src/agent_toolkit_cli/pi_extension_lock.py`, `src/agent_toolkit_cli/skill_git.py` (any residual "kind" prose found by grep)
 - Rename: `tests/test_cli/test_kind_architecture.py` → `tests/test_cli/test_asset_type_architecture.py` (`git mv`, plus internal prose/identifiers)
 - Modify: remaining test files from the inventory (`tests/test_cli/test_agent_general_rename.py`, `test_agent_install_roundtrip.py`, `test_agent_lock.py`, `test_cli_agent_group.py`, `test_instructions_adapters/*`, `test_lock_agent_path.py`, `test_relocate_project_canonical.py`, `test_skill_facade_parity.py`, `test_skill_nested_monorepo.py`, `tests/test_instructions_matrix.py`, `tests/test_skill_git_resolve_ref.py`, `tests/test_subagent_matrix.py`)
+- Modify (parse contract — see Step 0): `docs/agent-toolkit/harness-matrix.md` lines 54 and 163 ONLY (the two section headings)
+
+- [ ] **Step 0: Atomically rename the load-bearing matrix headings (code + tests + doc together)**
+
+Two literal heading strings are a byte-match PARSE CONTRACT between code and
+`docs/agent-toolkit/harness-matrix.md` — `_parse_matrix()` does
+`text.split(_SECTION_HEADING, 1)[1]`, so renaming one side without the other
+makes `instructions list` raise IndexError and fails the matrix tests. All six
+occurrences change in THIS commit, never split across commits:
+
+| String | Sites |
+|---|---|
+| `## Instruction-file (\`instructions\` kind) support — all harnesses` → `## Instruction-file (\`instructions\` asset type) support — all harnesses` | `src/agent_toolkit_cli/commands/instructions/list_cmd.py:22`, `tests/test_instructions_matrix.py:38`, `tests/test_cli/test_instructions_adapters/test_dispatcher.py:17`, `docs/agent-toolkit/harness-matrix.md:163` |
+| `## Subagent (agent kind) support — all harnesses` → `## Subagent (agent asset type) support — all harnesses` | `tests/test_subagent_matrix.py:37`, `docs/agent-toolkit/harness-matrix.md:54` |
+
+After editing, prove the contract held:
+
+Run: `uv run pytest tests/test_instructions_matrix.py tests/test_subagent_matrix.py -q && uv run agent-toolkit-cli instructions list >/dev/null && echo CONTRACT-OK`
+Expected: tests pass, `CONTRACT-OK` prints.
+
+(Task 6 then renames only the REMAINING harness-matrix.md prose — the headings
+are already done.)
 
 - [ ] **Step 1: Sweep every remaining `kind` hit in `src/` and `tests/`**
 
@@ -279,7 +332,7 @@ git add -A && git commit -m "refactor: sweep remaining kind terminology from src
 - Modify: `scripts/gen_harness_docs.py` (27 hits: legend l.191, kind-page links l.233-237, prose l.259-298, glossary anchor link `glossary.md#kind` → `glossary.md#asset-type`, "## The kinds" → "## The asset types")
 - Rename: `docs/kinds/` → `docs/asset-types/` (`git mv`; 5 files inside keep their names)
 - Modify: `mkdocs.yml` (nav l.122-128: section label `Kinds:` → `Asset types:`, paths `kinds/*.md` → `asset-types/*.md`)
-- Modify: `docs/glossary.md` (rename the "kind" entry/heading to "asset type", keep a one-line pointer: *"kind — former name for asset type"*), `docs/matrix.md` + `docs/harnesses/*.md` (regenerated), `docs/agent-toolkit/harness-matrix.md` (~19 prose uses), `docs/agent-toolkit/roadmap.md`, `docs/agent-toolkit/schema.md`, `docs/agent-toolkit/skill-lock.md`, `docs/index.md` (if it links kinds/), the 5 files now in `docs/asset-types/` (internal prose)
+- Modify: `docs/glossary.md` (rename the "kind" entry/heading to "asset type", keep a one-line pointer: *"kind — former name for asset type"*), `docs/matrix.md` + `docs/harnesses/*.md` (regenerated), `docs/agent-toolkit/harness-matrix.md` (remaining prose uses — the two section headings were already renamed atomically in Task 5 Step 0), `docs/agent-toolkit/roadmap.md`, `docs/agent-toolkit/schema.md` (prose ONLY — allowlist entry 7 keeps the serialized `kind:` key lines and YAML examples byte-identical), `docs/agent-toolkit/skill-lock.md`, `docs/index.md` (if it links kinds/), the 5 files now in `docs/asset-types/` (internal prose)
 - DO NOT touch: `docs/superpowers/`, `docs/solutions/`, `docs/audit/`, `docs/agent-toolkit/research/`
 
 - [ ] **Step 1: `git mv docs/kinds docs/asset-types`**, update `mkdocs.yml` nav.
@@ -299,8 +352,13 @@ grep -rniw "kind\|kinds" docs/ mkdocs.yml scripts/ \
   | grep -v "superpowers/\|solutions/\|audit/\|research/" \
   | grep -vi "kind of\|kindly\|former name"
 uv run mkdocs build --strict
+uv run pytest tests/test_instructions_matrix.py tests/test_subagent_matrix.py -q
 ```
-Expected: grep shows only deliberate survivors (the glossary pointer line); mkdocs build passes with no broken-link warnings.
+Expected: grep shows only deliberate survivors (the glossary pointer line and
+schema.md's serialized-key lines per allowlist entry 7); mkdocs build passes
+with no broken-link warnings; the matrix-parity tests stay green (they are the
+only automated check that the harness-matrix.md edits stayed in sync with the
+code's parse strings).
 
 ```bash
 git add -A && git commit -m "docs: rename kind terminology to asset type across living docs (#355)"
@@ -317,14 +375,24 @@ git add -A && git commit -m "docs: rename kind terminology to asset type across 
 ```bash
 export SANDBOX=/tmp/355-baseline
 for noun in skill agent instructions pi-extension; do
-  HOME="$SANDBOX/home" uv run agent-toolkit-cli $noun --help > "/tmp/355-after-$noun-help.txt" 2>&1 || true
-  diff "$SANDBOX/$noun-help.txt" "/tmp/355-after-$noun-help.txt" || echo "DIFF in $noun --help (must be help-prose only)"
+  for verb in help list doctor; do
+    case "$verb" in
+      help) cmd="$noun --help" ;;
+      *)    cmd="$noun $verb -g" ;;
+    esac
+    HOME="$SANDBOX/home" uv run agent-toolkit-cli $cmd > "/tmp/355-after-$noun-$verb.txt" 2>&1 || true
+    diff "$SANDBOX/$noun-$verb.txt" "/tmp/355-after-$noun-$verb.txt" || echo "DIFF in $noun $verb"
+  done
 done
-HOME="$SANDBOX/home" uv run agent-toolkit-cli skill list -g | diff "$SANDBOX/skill-list.txt" - 
-HOME="$SANDBOX/home" uv run agent-toolkit-cli skill doctor -g | diff "$SANDBOX/skill-doctor.txt" -
+HOME="$SANDBOX/home" uv run agent-toolkit-cli instructions list > /tmp/355-after-instructions-list-cwd.txt 2>&1 || true
+diff "$SANDBOX/instructions-list-cwd.txt" /tmp/355-after-instructions-list-cwd.txt || echo "DIFF in instructions list"
 ```
 
-Expected: `skill list` / `skill doctor` byte-identical; `--help` diffs limited to the one help-string prose change (instructions list).
+Expected: all `list` / `doctor` outputs byte-identical (including the seeded
+skill rows and the matrix-parsed `instructions list` table); `--help` diffs
+limited to exactly two help-prose renames — the `instructions` group docstring
+("Root for the instructions-…") and the `instructions list` short help. Any
+other diff line is a regression: stop and investigate before the PR.
 
 - [ ] **Step 2: Full gate**
 
@@ -333,10 +401,16 @@ Expected: green, baseline pass count.
 
 - [ ] **Step 3: Final grep audit (the acceptance criterion)**
 
+Two passes — `-w` alone is blind to underscore-joined identifiers
+(`_KIND_LABELS`, `kind_label`, `test_kind_*` names) because grep treats `_` as
+a word character, so the non-word pass is the one that actually proves the
+identifiers died:
+
 ```bash
 grep -rniw "kind\|kinds" src/ tests/ | grep -v "agent_adapters/translate.py"
+grep -rni "kind" src/ tests/ | grep -v "agent_adapters/translate.py"
 ```
-Expected: zero lines.
+Expected: zero lines from BOTH passes.
 
 - [ ] **Step 4: Push + PR**
 
