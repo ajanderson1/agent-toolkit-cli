@@ -52,7 +52,7 @@ How an `agent` (subagent) asset is projected into a harness:
 
 This table is the v3.0.0 Phase A deliverable: the `agent` (subagent) verdict for
 every harness in the catalog (`src/agent_toolkit_cli/skill_agents.py`, excluding
-the synthetic `universal` entry). It is the contract Phase B implements against —
+the synthetic `standard` entry). It is the contract Phase B implements against —
 each `supported` row (mechanism = `symlink`/`translate`/`config_file`/`config_file+folder`/`dual-symlink`)
 becomes one adapter behaviour. Guarded by `tests/test_subagent_matrix.py`.
 Per-harness "what I checked" evidence trails and v1 baseline deltas live in
@@ -171,10 +171,12 @@ trails live in `docs/agent-toolkit/research/instructions-fragments/`. Tracked in
 
 ### Mechanisms (instructions kind)
 
+> **Terminology:** *standard* — formerly "general" (v3), earlier "universal" (pre-v3). The old token spellings still work for one cycle with a deprecation warning and are removed in v4.
+
 This kind has only **one action verdict**. The five-cell vocabulary is:
 
 - **native** — harness reads `AGENTS.md` by default at one or both scopes. No
-  pointer needed; this set is the per-kind "general" column.
+  pointer needed; this set is the per-kind "standard" column.
 - **symlink** — harness reads a fixed own-name file by default (e.g.
   `CLAUDE.md`, `GEMINI.md`, `IFLOW.md`). Adapter creates a same-name pointer
   symlink → `AGENTS.md`.
@@ -275,6 +277,6 @@ satisfies them as-is.
 - **`continue` reclassified `gap`.** The spec's priors list assumed `continue`
   was unsupported; current upstream loads `.continue/rules/*.md` directories
   but no single root file → file-vs-directory rule → `gap`.
-- **Per-kind "general" set is large.** Per the sibling spec's per-kind general
-  model, the 39 `native` readers ARE the "general" column for this kind —
+- **Per-kind "standard" set is large.** Per the sibling spec's per-kind standard
+  model, the 39 `native` readers ARE the "standard" column for this kind —
   rendered in the TUI as informational (always satisfied, no toggle).
