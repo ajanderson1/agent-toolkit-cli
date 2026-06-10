@@ -95,8 +95,8 @@ def _untracked_row(slug: str) -> PiExtensionRow:
 
 
 @pytest.mark.asyncio
-async def test_pi_grid_mounts_with_correct_columns():
-    """Grid must show EXTENSION, Pi (global), Pi (project), Origin, Source."""
+async def test_pi_grid_mounts_with_single_scope_column():
+    """Grid shows EXTENSION, Pi (<scope>), Origin, Source — 4 columns (#349)."""
 
     class _A(App):
         def compose(self) -> ComposeResult:
@@ -107,13 +107,45 @@ async def test_pi_grid_mounts_with_correct_columns():
         await pilot.pause()
         table = app.query_one("#pi-table", DataTable)
         labels = [str(c.label) for c in table.columns.values()]
-        assert len(labels) == 5
-        # Check the canonical column names (strip the ⓘ glyph via 'in').
+        assert len(labels) == 4
         assert any("EXTENSION" in lbl for lbl in labels)
-        assert any("global" in lbl.lower() for lbl in labels)
-        assert any("project" in lbl.lower() for lbl in labels)
+        assert any("Pi (global)" in lbl for lbl in labels)  # default scope
+        assert not any("project" in lbl.lower() for lbl in labels)
         assert any("Origin" in lbl for lbl in labels)
         assert any("Source" in lbl for lbl in labels)
+
+
+@pytest.mark.asyncio
+async def test_pi_grid_set_scope_switches_column_and_clears_pending():
+    """set_scope re-headers the scope column and clears pending (uniform
+    widget contract — preservation is the app's job, #349)."""
+
+    class _A(App):
+        def compose(self) -> ComposeResult:
+            yield PiGrid([_store_row("alpha")], id="g")
+
+    app = _A()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        g = app.query_one("#g", PiGrid)
+        table = app.query_one("#pi-table", DataTable)
+        table.cursor_coordinate = table.cursor_coordinate.__class__(row=0, column=1)
+        table.focus()
+        await pilot.pause()
+        await pilot.press("space")
+        assert g.pending_entries() == {("global", "alpha"): "link"}
+
+        # Park the cursor on Origin (old project-column index) to prove the snap.
+        table.cursor_coordinate = table.cursor_coordinate.__class__(row=0, column=2)
+        g.set_scope("project")
+        g.set_rows([_store_row("alpha")])  # app always refreshes after set_scope
+        await pilot.pause()
+        labels = [str(c.label) for c in table.columns.values()]
+        assert any("Pi (project)" in lbl for lbl in labels)
+        assert g.pending_entries() == {}
+        # Cursor snapped to the scope column — without the snap a cursor on the
+        # removed project column lands on non-interactive Origin (#349 review).
+        assert table.cursor_coordinate.column == 1
 
 
 @pytest.mark.asyncio
@@ -155,7 +187,7 @@ async def test_toggle_global_queues_link():
 
 @pytest.mark.asyncio
 async def test_toggle_project_queues_link():
-    """Space on a project cell with unloaded store-owned row queues 'link'."""
+    """Space on the scope cell in project scope queues 'link' (#349)."""
 
     class _A(App):
         def compose(self) -> ComposeResult:
@@ -165,9 +197,11 @@ async def test_toggle_project_queues_link():
     async with app.run_test() as pilot:
         await pilot.pause()
         g = app.query_one("#g", PiGrid)
+        g.set_scope("project")
+        g.set_rows([_store_row("alpha", project_loaded=False)])
         table = app.query_one("#pi-table", DataTable)
-        # Column 2 = Pi (project)
-        table.cursor_coordinate = table.cursor_coordinate.__class__(row=0, column=2)
+        # Column 1 = Pi (<active scope>)
+        table.cursor_coordinate = table.cursor_coordinate.__class__(row=0, column=1)
         table.focus()
         await pilot.pause()
         await pilot.press("space")
@@ -216,15 +250,16 @@ async def test_toggle_twice_clears_pending():
 
 
 @pytest.mark.asyncio
-async def test_npm_row_toggles_both_scopes():
-    """npm row: independently toggle global and project scopes."""
+async def test_npm_row_toggles_per_scope():
+    """npm row: each scope queues its own op via the single scope column;
+    set_scope clears the queue (uniform widget contract, #349)."""
+
+    def _rows():
+        return [_npm_row("@scope/pkg", global_loaded=False, project_loaded=True)]
 
     class _A(App):
         def compose(self) -> ComposeResult:
-            yield PiGrid(
-                [_npm_row("@scope/pkg", global_loaded=False, project_loaded=True)],
-                id="g",
-            )
+            yield PiGrid(_rows(), id="g")
 
     app = _A()
     async with app.run_test() as pilot:
@@ -232,20 +267,24 @@ async def test_npm_row_toggles_both_scopes():
         g = app.query_one("#g", PiGrid)
         table = app.query_one("#pi-table", DataTable)
 
-        # Toggle global (col 1) → link
+        # Global scope (default): toggle → link, key is global.
         table.cursor_coordinate = table.cursor_coordinate.__class__(row=0, column=1)
         table.focus()
         await pilot.pause()
         await pilot.press("space")
+        assert g.pending_entries() == {("global", "@scope/pkg"): "link"}
 
-        # Toggle project (col 2) → unlink (already loaded)
-        table.cursor_coordinate = table.cursor_coordinate.__class__(row=0, column=2)
+        # Scope switch clears the queue.
+        g.set_scope("project")
+        g.set_rows(_rows())
+        await pilot.pause()
+        assert g.pending_entries() == {}
+
+        # Project scope: toggle → unlink (already loaded), key is project.
+        table.cursor_coordinate = table.cursor_coordinate.__class__(row=0, column=1)
         await pilot.pause()
         await pilot.press("space")
-
-        pending = g.pending_entries()
-        assert pending.get(("global", "@scope/pkg")) == "link"
-        assert pending.get(("project", "@scope/pkg")) == "unlink"
+        assert g.pending_entries() == {("project", "@scope/pkg"): "unlink"}
 
 
 @pytest.mark.asyncio
