@@ -6,8 +6,6 @@ Kinds without a standard concept (agents, pi-extensions) have no entry here.
 """
 from __future__ import annotations
 
-from rich.text import Text
-
 from agent_toolkit_cli.instructions_adapters import SUPPORTED_HARNESSES
 from agent_toolkit_cli.skill_agents import AGENTS
 
@@ -38,11 +36,3 @@ def instructions_longtail() -> tuple[str, ...]:
     return tuple(sorted(
         h for h in SUPPORTED_HARNESSES if h not in BIG_FIVE
     ))
-
-
-def grouped_label(tag: str, name: str) -> Text:
-    """Two-line DataTable header label: dim group tag over the column name."""
-    label = Text()
-    label.append(f"{tag}\n", style="dim")
-    label.append(name)
-    return label

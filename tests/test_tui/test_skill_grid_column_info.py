@@ -37,14 +37,14 @@ async def test_columns_have_info_glyph_except_source():
         await pilot.pause()
         table = a.query_one("#skill-table", DataTable)
         labels = [str(c.label) for c in table.columns.values()]
-        # Layout (#351): SKILL | STANDARD/standard | NON-STD/Claude Code |
-        # NON-STD/Pi | NON-STD/… +N | State | Source — group tags ride line 1
-        # of the two-line labels.
+        # Layout (#351): SKILL | Standard | Claude Code | Pi | … +N | State |
+        # Source — single-line labels; Standard leads, the rest is implicitly
+        # non-standard.
         assert labels[0] == "SKILL ⓘ", f"slug label: {labels[0]!r}"
-        assert labels[1] == "STANDARD\nstandard ⓘ", f"standard label: {labels[1]!r}"
-        assert labels[2] == "NON-STD\nClaude Code ⓘ", f"claude-code label: {labels[2]!r}"
-        assert labels[3] == "NON-STD\nPi ⓘ", f"pi label: {labels[3]!r}"
-        assert labels[4].startswith("NON-STD\n… +"), f"pseudo label: {labels[4]!r}"
+        assert labels[1] == "Standard ⓘ", f"standard label: {labels[1]!r}"
+        assert labels[2] == "Claude Code ⓘ", f"claude-code label: {labels[2]!r}"
+        assert labels[3] == "Pi ⓘ", f"pi label: {labels[3]!r}"
+        assert labels[4].startswith("… +"), f"pseudo label: {labels[4]!r}"
         assert labels[-2] == "State ⓘ", f"state label: {labels[-2]!r}"
         assert labels[-1] == "Source", f"source label: {labels[-1]!r}"
         assert "ⓘ" not in labels[-1], f"source must not have glyph: {labels[-1]!r}"
@@ -223,10 +223,10 @@ async def test_full_header_row():
         labels = [str(c.label) for c in table.columns.values()]
         assert labels == [
             "SKILL ⓘ",
-            "STANDARD\nstandard ⓘ",
-            "NON-STD\nClaude Code ⓘ",
-            "NON-STD\nPi ⓘ",
-            f"NON-STD\n… +{len(skills_longtail())} ⓘ",
+            "Standard ⓘ",
+            "Claude Code ⓘ",
+            "Pi ⓘ",
+            f"… +{len(skills_longtail())} ⓘ",
             "State ⓘ",
             "Source",
         ], f"unexpected header row: {labels!r}"

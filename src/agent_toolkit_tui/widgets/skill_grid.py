@@ -29,7 +29,6 @@ from agent_toolkit_cli.skill_agents import AGENTS
 from agent_toolkit_tui.column_info import COLUMN_INFO, get_column_info
 from agent_toolkit_tui.composition import (
     LONGTAIL_KEY,
-    grouped_label,
     skills_longtail,
     skills_nonstandard_big_five,
 )
@@ -584,7 +583,6 @@ class SkillGrid(Vertical):
         # clamped cursor — acceptable (cursor stays visible), not the toggle case.
         saved_scroll = (table.scroll_x, table.scroll_y)
         table.clear(columns=True)
-        table.header_height = 2
         # Slug column has cell-info (the slug-cell panel) → glyph it.
         table.add_column(f"SKILL {_INFO_GLYPH}", width=20)
         active = self._active_agents()
@@ -592,11 +590,11 @@ class SkillGrid(Vertical):
             # Every interactive agent column exposes either a column-info
             # modal (Standard) or per-cell info (e.g. Claude Code, Pi via
             # CellInfoScreen) — glyph them all. "standard" is the
-            # load-bearing bundle key (v3.7 full rename, #350); the group
-            # tags ride inside the two-line header labels (#351).
-            tag = "STANDARD" if agent == "standard" else "NON-STD"
-            base = "standard" if agent == "standard" else AGENTS[agent].display_name
-            table.add_column(grouped_label(tag, f"{base} {_INFO_GLYPH}"), width=14)
+            # load-bearing bundle key (v3.7 full rename, #350). The Standard
+            # column leads; everything after it is implicitly non-standard
+            # (group-tag header row removed per AJ demo feedback, #351).
+            base = "Standard" if agent == "standard" else AGENTS[agent].display_name
+            table.add_column(f"{base} {_INFO_GLYPH}", width=14)
         # Longtail pseudo-column (#351). Pending ops on collapsed tail columns
         # stay applied/revertible but would be invisible (#349 bug class:
         # revert-destroys-invisible-ops) — keep-and-indicate via a ±N marker.
@@ -607,7 +605,7 @@ class SkillGrid(Vertical):
             "… collapse" if self._longtail_expanded
             else f"… +{len(tail)}{marker} {_INFO_GLYPH}"
         )
-        table.add_column(grouped_label("NON-STD", pseudo), width=14)
+        table.add_column(pseudo, width=14)
         # State has a column-info modal → glyph it.
         table.add_column(f"State {_INFO_GLYPH}", width=10)
         # Source is passive — no info panel, no glyph.

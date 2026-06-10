@@ -28,7 +28,6 @@ from textual.widgets import DataTable
 from agent_toolkit_tui.column_info import get_column_info
 from agent_toolkit_tui.composition import (
     LONGTAIL_KEY,
-    grouped_label,
     instructions_longtail,
     instructions_nonstandard_big_five,
 )
@@ -393,13 +392,12 @@ class InstructionGrid(Vertical):
         # no-op and the offset holds. See skill_grid._rebuild for the full note.
         saved_scroll = (table.scroll_x, table.scroll_y)
         table.clear(columns=True)
-        table.header_height = 2
         # Slug column.
         table.add_column(f"INSTRUCTION {_INFO_GLYPH}", width=22)
-        # Standard column — read-only canonical status; group-tagged (#351).
-        table.add_column(
-            grouped_label("STANDARD", f"standard {_INFO_GLYPH}"), width=12,
-        )
+        # Standard column — read-only canonical status. It leads; everything
+        # after it is implicitly non-standard (group-tag header row removed
+        # per AJ demo feedback, #351).
+        table.add_column(f"standard {_INFO_GLYPH}", width=12)
         # Per-harness interactive columns.
         _HARNESS_DISPLAY: dict[str, str] = {
             "claude-code": "CLAUDE.md",
@@ -408,9 +406,7 @@ class InstructionGrid(Vertical):
         active = self._active_harnesses()
         for harness in active:
             display = _HARNESS_DISPLAY.get(harness, harness)
-            table.add_column(
-                grouped_label("NON-STD", f"{display} {_INFO_GLYPH}"), width=14,
-            )
+            table.add_column(f"{display} {_INFO_GLYPH}", width=14)
         # Longtail pseudo-column (#351); keep-and-indicate ±N marker for
         # pending ops on collapsed tail columns (#349 bug class).
         tail = instructions_longtail()
@@ -420,7 +416,7 @@ class InstructionGrid(Vertical):
             "… collapse" if self._longtail_expanded
             else f"… +{len(tail)}{marker} {_INFO_GLYPH}"
         )
-        table.add_column(grouped_label("NON-STD", pseudo), width=14)
+        table.add_column(pseudo, width=14)
         # Source column — passive.
         table.add_column("Source", width=30)
 

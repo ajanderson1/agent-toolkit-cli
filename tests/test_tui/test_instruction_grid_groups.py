@@ -1,9 +1,10 @@
 """Standard / Non-standard column groups on the instruction grid (#351).
 
 Mirrors test_skill_grid_groups.py with the instructions composition:
-standard read-only column tagged STANDARD; claude-code + gemini-cli +
-`… +N ⓘ` tagged NON-STD; expand shows the remaining symlink harnesses as
-installable columns; per-grid session state independent of the skill grid.
+standard read-only column leads; claude-code + gemini-cli + `… +N ⓘ`
+follow (implicitly non-standard — single-line headers); expand shows the
+remaining symlink harnesses as installable columns; per-grid session state
+independent of the skill grid.
 """
 from __future__ import annotations
 
@@ -69,10 +70,9 @@ async def test_default_columns_collapsed():
         assert any("GEMINI.md" in l for l in labels)
         assert any(f"… +{len(instructions_longtail())}" in l for l in labels)
         assert not any("augment" in l for l in labels)        # tail collapsed
-        assert sum("STANDARD" in l for l in labels) == 1
-        assert sum("NON-STD" in l for l in labels) == 2 + 1   # big-five-nonstd + pseudo
-        assert not any("STANDARD" in l or "NON-STD" in l
-                       for l in labels if "INSTRUCTION" in l or "Source" in l)
+        # Single-line headers only — the group-tag row is gone.
+        assert not any("\n" in l for l in labels)
+        assert not any("STANDARD" in l or "NON-STD" in l for l in labels)
 
 
 @pytest.mark.asyncio

@@ -1,14 +1,13 @@
-"""Standard / Non-standard column groups on the skill grid (#351).
+"""Standard column + long-tail expand/collapse on the skill grid (#351).
 
-Spike test first: pins the two-line `header_height=2` DataTable header
-mechanism the whole feature depends on (verified on Textual 8.2.5 at review
-time). Behavior tests drive the real SkillGrid through the same app harness
-as tests/test_tui/test_skill_grid_column_info.py.
+Single-line headers: the Standard column leads; everything after it is
+implicitly non-standard (the two-line group-tag header row was removed per
+AJ demo feedback). Behavior tests drive the real SkillGrid through the same
+app harness as tests/test_tui/test_skill_grid_column_info.py.
 """
 from __future__ import annotations
 
 import pytest
-from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.coordinate import Coordinate
 from textual.widgets import DataTable
@@ -18,36 +17,6 @@ from agent_toolkit_tui.composition import skills_longtail, skills_nonstandard_bi
 from agent_toolkit_tui.skill_state import SkillCell, SkillRow
 from agent_toolkit_tui.widgets.skill_grid import SkillGrid
 
-
-@pytest.mark.asyncio
-async def test_datatable_two_line_header_renders():
-    class Probe(App):
-        def compose(self) -> ComposeResult:
-            yield DataTable(id="t")
-
-        def on_mount(self) -> None:
-            t = self.query_one("#t", DataTable)
-            t.header_height = 2
-            label = Text()
-            label.append("NON-STD\n", style="dim")
-            label.append("claude-code ⓘ")
-            t.add_column(label, width=14)
-            t.add_row("x")
-
-    app = Probe()
-    async with app.run_test() as pilot:
-        t = app.query_one("#t", DataTable)
-        assert t.header_height == 2
-        # Both lines present in the rendered header region.
-        # Use Strip.text, not str(strip) — the repr only incidentally embeds
-        # segment text and is not a stable API.
-        text = "\n".join(strip.text for strip in [t.render_line(0), t.render_line(1)])
-        assert "NON-STD" in text and "claude-code" in text
-
-
-# ---------------------------------------------------------------------------
-# Behavior tests — real SkillGrid through the app harness
-# ---------------------------------------------------------------------------
 
 def _full_cells(scope: str = "global") -> dict:
     """Cells over the FULL composition: _toggle_at bails on cell=None, so
@@ -100,15 +69,14 @@ async def test_default_columns_collapsed():
         await pilot.pause()
         table = app.query_one("#skill-table", DataTable)
         labels = _labels(table)
-        # slug + standard + claude-code + pi + pseudo + state + source
-        assert any("standard" in l for l in labels)
+        # slug + Standard + claude-code + pi + pseudo + state + source
+        assert any("Standard" in l for l in labels)
         assert any("… +" in l for l in labels)
         assert not any("codex" in l for l in labels)          # standard → no own column
         assert not any(_tail_display(0) in l for l in labels)  # tail collapsed
-        assert sum("STANDARD" in l for l in labels) == 1
-        assert sum("NON-STD" in l for l in labels) == 2 + 1   # big-five-nonstd + pseudo
-        assert not any("STANDARD" in l or "NON-STD" in l
-                       for l in labels if "State" in l or "Source" in l)
+        # Single-line headers only — the group-tag row is gone.
+        assert not any("\n" in l for l in labels)
+        assert not any("STANDARD" in l or "NON-STD" in l for l in labels)
 
 
 @pytest.mark.asyncio
