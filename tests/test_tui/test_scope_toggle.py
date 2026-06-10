@@ -167,11 +167,23 @@ async def test_ctrl_g_on_pi_pane_refreshes_pi_not_skill():
 
 
 @pytest.mark.asyncio
-async def test_pi_pane_shows_scope_toggle_and_header_tracks_scope():
-    """The pi pane joins the scope toggle: widget visible, column header
-    flips with ctrl+g (#349)."""
+async def test_pi_pane_shows_scope_toggle_and_cells_track_scope(monkeypatch):
+    """The pi pane joins the scope toggle: widget visible, cell glyphs track
+    the active scope with ctrl+g (the header carries no scope name, matching
+    the other tabs, #349)."""
+    from textual.coordinate import Coordinate
     from textual.widgets import DataTable
+    from agent_toolkit_tui.pi_extension_state import PiCell, PiExtensionRow
 
+    def _row(slug):
+        cell = PiCell(global_loaded=True, project_loaded=False, origin="store-owned")
+        return PiExtensionRow(slug=slug, origin="store-owned",
+                              source=f"git@github.com:x/{slug}",
+                              global_cell=cell, project_cell=cell)
+
+    monkeypatch.setattr(
+        "agent_toolkit_tui.app.build_pi_rows", lambda **kwargs: [_row("alpha")]
+    )
     app = TUIApp()
     async with app.run_test() as pilot:
         await pilot.pause()
@@ -181,12 +193,17 @@ async def test_pi_pane_shows_scope_toggle_and_header_tracks_scope():
 
         table = app.query_one("#pi-table", DataTable)
         labels = [str(c.label) for c in table.columns.values()]
-        assert any("Pi (project)" in lbl for lbl in labels)  # app starts project
+        assert not any("global" in lbl.lower() or "project" in lbl.lower()
+                       for lbl in labels)
+        # App starts in project scope: alpha unloaded here, loaded globally.
+        cell = str(table.get_cell_at(Coordinate(0, 1)))
+        assert "☐" in cell and "🌐" in cell
 
         await pilot.press("ctrl+g")
         await pilot.pause()
-        labels = [str(c.label) for c in table.columns.values()]
-        assert any("Pi (global)" in lbl for lbl in labels)
+        # Global scope: loaded glyph, no globe indicator.
+        cell = str(table.get_cell_at(Coordinate(0, 1)))
+        assert "✔" in cell and "🌐" not in cell
 
 
 @pytest.mark.asyncio

@@ -96,7 +96,9 @@ def _untracked_row(slug: str) -> PiExtensionRow:
 
 @pytest.mark.asyncio
 async def test_pi_grid_mounts_with_single_scope_column():
-    """Grid shows EXTENSION, Pi (<scope>), Origin, Source — 4 columns (#349)."""
+    """Grid shows EXTENSION, Pi, Origin, Source — 4 columns. The header
+    carries NO scope name (the ScopeToggle communicates scope, matching the
+    other asset-type tabs, #349)."""
 
     class _A(App):
         def compose(self) -> ComposeResult:
@@ -109,16 +111,17 @@ async def test_pi_grid_mounts_with_single_scope_column():
         labels = [str(c.label) for c in table.columns.values()]
         assert len(labels) == 4
         assert any("EXTENSION" in lbl for lbl in labels)
-        assert any("Pi (global)" in lbl for lbl in labels)  # default scope
+        assert any(lbl.startswith("Pi ") for lbl in labels)
+        assert not any("global" in lbl.lower() for lbl in labels)
         assert not any("project" in lbl.lower() for lbl in labels)
         assert any("Origin" in lbl for lbl in labels)
         assert any("Source" in lbl for lbl in labels)
 
 
 @pytest.mark.asyncio
-async def test_pi_grid_set_scope_switches_column_and_clears_pending():
-    """set_scope re-headers the scope column and clears pending (uniform
-    widget contract — preservation is the app's job, #349)."""
+async def test_pi_grid_set_scope_clears_pending_and_snaps_cursor():
+    """set_scope clears pending (uniform widget contract — preservation is
+    the app's job) and snaps the cursor to the scope column (#349)."""
 
     class _A(App):
         def compose(self) -> ComposeResult:
@@ -140,12 +143,46 @@ async def test_pi_grid_set_scope_switches_column_and_clears_pending():
         g.set_scope("project")
         g.set_rows([_store_row("alpha")])  # app always refreshes after set_scope
         await pilot.pause()
-        labels = [str(c.label) for c in table.columns.values()]
-        assert any("Pi (project)" in lbl for lbl in labels)
         assert g.pending_entries() == {}
         # Cursor snapped to the scope column — without the snap a cursor on the
         # removed project column lands on non-interactive Origin (#349 review).
         assert table.cursor_coordinate.column == 1
+
+
+@pytest.mark.asyncio
+async def test_pi_grid_globe_indicator_in_project_scope():
+    """Project scope shows the 🌐 indicator on rows loaded globally, matching
+    the skill grid's global indicator; global scope never shows it (#349)."""
+    from textual.coordinate import Coordinate
+
+    def _rows():
+        return [
+            _store_row("alpha", global_loaded=True, project_loaded=False),
+            _store_row("beta", global_loaded=False, project_loaded=False),
+        ]
+
+    class _A(App):
+        def compose(self) -> ComposeResult:
+            yield PiGrid(_rows(), id="g")
+
+    app = _A()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        g = app.query_one("#g", PiGrid)
+        table = app.query_one("#pi-table", DataTable)
+
+        # Global scope (default): alpha renders loaded, NO globe anywhere.
+        assert "✔" in str(table.get_cell_at(Coordinate(0, 1)))
+        assert "🌐" not in str(table.get_cell_at(Coordinate(0, 1)))
+
+        g.set_scope("project")
+        g.set_rows(_rows())
+        await pilot.pause()
+        # Project scope: alpha is unloaded here but loaded globally → ☐ 🌐.
+        alpha_cell = str(table.get_cell_at(Coordinate(0, 1)))
+        assert "☐" in alpha_cell and "🌐" in alpha_cell
+        # beta is loaded nowhere → no globe.
+        assert "🌐" not in str(table.get_cell_at(Coordinate(1, 1)))
 
 
 @pytest.mark.asyncio

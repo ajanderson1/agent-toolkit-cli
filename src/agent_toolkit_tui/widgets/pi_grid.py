@@ -1,11 +1,13 @@
 """Interactive DataTable for the TUI's pi-extension tab.
 
-Columns: EXTENSION | Pi (<active scope>) | Origin | Source.
+Columns: EXTENSION | Pi | Origin | Source.
 
 One scope is visible at a time; the app's ctrl+g scope toggle flips it
-app-wide (#349). set_scope() follows the same contract as the other grids
-(sets scope, clears pending); pending preservation across the toggle is
-orchestrated by the App, not the widget.
+app-wide (#349). The header carries no scope name — the ScopeToggle widget
+communicates scope, and in project scope a 🌐 suffix marks rows that are
+loaded globally (both match the other asset-type grids). set_scope() follows
+the same contract as the other grids (sets scope, clears pending); pending
+preservation across the toggle is orchestrated by the App, not the widget.
 
 `space` queues a link/unlink for the cell under the cursor.
 `ctrl+s` Apply is handled by the App, which reads pending_entries().
@@ -40,6 +42,7 @@ _PENDING_LINK    = "[yellow]+[/]"
 _PENDING_UNLINK  = "[yellow]-[/]"
 _UNTRACKED_GLYPH = "[dim]—[/]"
 _INFO_GLYPH      = "ⓘ"
+_GLOBAL_GLYPH    = "🌐"
 
 _ORIGIN_MARKUP = {
     "store-owned": "[blue]store[/]",
@@ -300,7 +303,7 @@ class PiGrid(Vertical):
         saved_scroll = (table.scroll_x, table.scroll_y)
         table.clear(columns=True)
         table.add_column(f"EXTENSION {_INFO_GLYPH}", width=24)
-        table.add_column(f"Pi ({self._scope}) {_INFO_GLYPH}", width=14)
+        table.add_column(f"Pi {_INFO_GLYPH}", width=14)
         table.add_column("Origin", width=12)
         table.add_column("Source", width=30)
 
@@ -337,10 +340,16 @@ class PiGrid(Vertical):
         )
         pending = self._pending.get((scope, row.slug))
         if pending == "link":
-            return _PENDING_LINK
-        if pending == "unlink":
-            return _PENDING_UNLINK
-        return _LOADED_GLYPH if loaded else _UNLOADED_GLYPH
+            base = _PENDING_LINK
+        elif pending == "unlink":
+            base = _PENDING_UNLINK
+        else:
+            base = _LOADED_GLYPH if loaded else _UNLOADED_GLYPH
+        # In project scope, mark rows that are also loaded globally — same
+        # indicator as the skill grid's global indicator (#349).
+        if scope == "project" and row.global_cell.global_loaded:
+            return f"{base} {_GLOBAL_GLYPH}"
+        return base
 
     def _origin_glyph(self, origin: str) -> str:
         """Return styled markup for an origin label. Never named _render_*."""
