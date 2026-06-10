@@ -64,10 +64,10 @@ async def _deselect_global_and_apply(home, slug):
     async with app.run_test() as pilot:
         await pilot.pause()
         # Match the proven apply-test idiom (test_pi_grid.py): activate the pi
-        # kind, grab the always-present #pi-grid, and seed the pending unlink via
+        # asset type, grab the always-present #pi-grid, and seed the pending unlink via
         # restore_pending (updates the backing _pending dict that
         # _apply_pi_pending reads through pending_entries()).
-        app._active_kind = "pi-extension"
+        app._active_asset_type = "pi-extension"
         grid = app.query_one("#pi-grid", PiGrid)
         grid.restore_pending({("global", slug): "unlink"})
         await pilot.pause()

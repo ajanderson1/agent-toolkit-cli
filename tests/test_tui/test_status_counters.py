@@ -206,7 +206,7 @@ async def test_pi_status_bar_shows_active_scope_only(monkeypatch):
     app = TUIApp()
     async with app.run_test() as pilot:
         await pilot.pause()
-        app.action_kind("pi-extension")
+        app.action_asset_type("pi-extension")
         await pilot.pause()
         bar = str(app.query_one("#status-bar", Static).render())
         # project scope is active on load: exactly one project-loaded row.

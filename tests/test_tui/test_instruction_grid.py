@@ -369,17 +369,17 @@ async def test_slug_info_at_project_scope_does_not_crash():
 
 
 @pytest.mark.asyncio
-async def test_kind_sidebar_lists_instruction_first():
+async def test_asset_type_sidebar_lists_instruction_first():
     """Sidebar OptionList must list instruction first, then separator, then others."""
     from agent_toolkit_tui.app import TUIApp
 
     app = TUIApp()
     async with app.run_test() as pilot:
         await pilot.pause()
-        ol = app.query_one("#kinds-list", OptionList)
+        ol = app.query_one("#asset-types-list", OptionList)
         # First option must be instruction
         first_option = ol.get_option_at_index(0)
-        assert first_option.id == "kind-instruction"
+        assert first_option.id == "asset-type-instruction"
         # Second entry must be the separator (disabled)
         separator = ol.get_option_at_index(1)
         assert separator.disabled is True
@@ -389,7 +389,7 @@ async def test_kind_sidebar_lists_instruction_first():
         for i in range(ol.option_count):
             try:
                 opt = ol.get_option_at_index(i)
-                if opt.id not in (None, "kind-separator") and not opt.disabled:
+                if opt.id not in (None, "asset-type-separator") and not opt.disabled:
                     prompts.append(str(opt.prompt))
                     ids.append(opt.id)
             except Exception:
@@ -399,12 +399,12 @@ async def test_kind_sidebar_lists_instruction_first():
         assert "pi-extension" in prompts
         assert "agent" in prompts
         # instruction must be first among selectable options
-        assert ids[0] == "kind-instruction"
+        assert ids[0] == "asset-type-instruction"
 
 
 @pytest.mark.asyncio
 async def test_switch_to_instruction_shows_instruction_grid():
-    """Switching to instruction kind makes InstructionGrid visible, others hidden."""
+    """Switching to instruction asset type makes InstructionGrid visible, others hidden."""
     from agent_toolkit_tui.app import TUIApp
     from agent_toolkit_tui.widgets.agent_grid import AgentGrid
     from agent_toolkit_tui.widgets.pi_grid import PiGrid
@@ -413,7 +413,7 @@ async def test_switch_to_instruction_shows_instruction_grid():
     app = TUIApp()
     async with app.run_test() as pilot:
         await pilot.pause()
-        app.action_kind("instruction")
+        app.action_asset_type("instruction")
         await pilot.pause()
         instruction_grid = app.query_one("#instruction-grid", InstructionGrid)
         skill_grid = app.query_one("#skill-grid", SkillGrid)
@@ -434,9 +434,9 @@ async def test_switch_to_instruction_then_back_to_skill():
     app = TUIApp()
     async with app.run_test() as pilot:
         await pilot.pause()
-        app.action_kind("instruction")
+        app.action_asset_type("instruction")
         await pilot.pause()
-        app.action_kind("skill")
+        app.action_asset_type("skill")
         await pilot.pause()
         instruction_grid = app.query_one("#instruction-grid", InstructionGrid)
         skill_grid = app.query_one("#skill-grid", SkillGrid)
@@ -446,7 +446,7 @@ async def test_switch_to_instruction_then_back_to_skill():
 
 @pytest.mark.asyncio
 async def test_ctrl_s_routes_to_instruction_apply_when_active(monkeypatch):
-    """ctrl+s dispatches to _apply_instruction_pending when instruction kind is active."""
+    """ctrl+s dispatches to _apply_instruction_pending when instruction asset type is active."""
     from agent_toolkit_tui.app import TUIApp
 
     called: list[str] = []
@@ -467,7 +467,7 @@ async def test_ctrl_s_routes_to_instruction_apply_when_active(monkeypatch):
     app = TUIApp()
     async with app.run_test() as pilot:
         await pilot.pause()
-        app._active_kind = "instruction"
+        app._active_asset_type = "instruction"
         await pilot.press("ctrl+s")
         await pilot.pause()
 
@@ -509,7 +509,7 @@ async def test_apply_link_creates_pointer(monkeypatch, tmp_path: Path):
     app = TUIApp()
     async with app.run_test() as pilot:
         await pilot.pause()
-        app._active_kind = "instruction"
+        app._active_asset_type = "instruction"
         app._scope = "global"
         grid = app.query_one("#instruction-grid", InstructionGrid)
         grid.set_rows([_unlinked_row()])
@@ -571,7 +571,7 @@ async def test_apply_unlink_removes_from_lock(monkeypatch, tmp_path: Path):
     app = TUIApp()
     async with app.run_test() as pilot:
         await pilot.pause()
-        app._active_kind = "instruction"
+        app._active_asset_type = "instruction"
         app._scope = "global"
         grid = app.query_one("#instruction-grid", InstructionGrid)
         grid.set_rows([_linked_row()])
@@ -622,7 +622,7 @@ async def test_apply_canonical_missing_surfaces_error(monkeypatch, tmp_path: Pat
             return orig_notify(*a, **k)
 
         monkeypatch.setattr(app, "notify", spy_notify)
-        app._active_kind = "instruction"
+        app._active_asset_type = "instruction"
         app._scope = "global"
         grid = app.query_one("#instruction-grid", InstructionGrid)
         grid.set_rows([_unlinked_row()])
@@ -663,7 +663,7 @@ async def test_apply_rolls_back_lock_on_reconcile_failure(monkeypatch, tmp_path:
     app = TUIApp()
     async with app.run_test() as pilot:
         await pilot.pause()
-        app._active_kind = "instruction"
+        app._active_asset_type = "instruction"
         app._scope = "global"
         grid = app.query_one("#instruction-grid", InstructionGrid)
         grid.set_rows([_unlinked_row()])
@@ -715,7 +715,7 @@ async def test_apply_rolls_back_to_prior_lock_on_failure(monkeypatch, tmp_path: 
     app = TUIApp()
     async with app.run_test() as pilot:
         await pilot.pause()
-        app._active_kind = "instruction"
+        app._active_asset_type = "instruction"
         app._scope = "global"
         grid = app.query_one("#instruction-grid", InstructionGrid)
         grid.set_rows([_unlinked_row()])
@@ -770,7 +770,7 @@ async def test_apply_unlink_last_harness_prunes_lock(monkeypatch, tmp_path: Path
     app = TUIApp()
     async with app.run_test() as pilot:
         await pilot.pause()
-        app._active_kind = "instruction"
+        app._active_asset_type = "instruction"
         app._scope = "global"
         grid = app.query_one("#instruction-grid", InstructionGrid)
         grid.set_rows([_linked_row()])
@@ -816,7 +816,7 @@ async def test_conflict_slot_not_clobbered(monkeypatch, tmp_path: Path):
     app = TUIApp()
     async with app.run_test() as pilot:
         await pilot.pause()
-        app._active_kind = "instruction"
+        app._active_asset_type = "instruction"
         app._scope = "global"
         grid = app.query_one("#instruction-grid", InstructionGrid)
         # Conflict row — pending is empty (conflict cells can't be toggled)

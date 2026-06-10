@@ -113,12 +113,12 @@ def test_standard_info_is_exhaustive_with_count():
         assert any(name in line for line in info.lines)
 
 
-def test_standard_info_is_kind_aware():
-    """The factory takes the names (and kind) from context so the instruction
+def test_standard_info_is_asset_type_aware():
+    """The factory takes the names (and asset type) from context so the instruction
     grid can reuse the same registry key (#351)."""
     info = get_column_info(
         "standard",
-        context={"kind": "instructions", "names": ("alpha-harness", "beta-harness")},
+        context={"asset_type": "instructions", "names": ("alpha-harness", "beta-harness")},
     )
     text = " ".join(info.lines)
     assert "instructions" in text and "(2)" in text

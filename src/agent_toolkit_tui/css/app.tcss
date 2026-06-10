@@ -14,7 +14,7 @@ Screen {
 }
 
 /* Left rail. */
-#kinds-sidebar {
+#asset-types-sidebar {
     width: 24;
     min-width: 20;
     max-width: 30;
@@ -22,7 +22,7 @@ Screen {
     border-right: tall $primary-darken-2;
 }
 
-#kinds-sidebar .rail-header {
+#asset-types-sidebar .rail-header {
     text-style: bold;
     color: $accent;
     padding: 1 2 1 2;
@@ -30,7 +30,7 @@ Screen {
     border-bottom: tall $primary-darken-2;
 }
 
-#kinds-list {
+#asset-types-list {
     background: $panel;
     border: none;
     padding: 1 0;
@@ -40,15 +40,15 @@ Screen {
     scrollbar-color-hover: $primary;
 }
 
-#kinds-list > .option-list--option {
+#asset-types-list > .option-list--option {
     padding: 0 2;
 }
-#kinds-list > .option-list--option-highlighted {
+#asset-types-list > .option-list--option-highlighted {
     background: $primary;
     color: $text;
     text-style: bold;
 }
-#kinds-list > .option-list--option-hover {
+#asset-types-list > .option-list--option-hover {
     background: $boost;
 }
 

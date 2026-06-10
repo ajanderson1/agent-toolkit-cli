@@ -3,7 +3,7 @@
 The TUI renders the standard column plus the non-covered MAIN_HARNESSES only;
 the long tail is CLI-only (post-demo AJ decision). The coverage guard below is
 the load-bearing invariant: every main harness must be covered — standard or
-own column — on every kind it supports.
+own column — on every asset type it supports.
 """
 from agent_toolkit_cli.skill_agents import AGENTS
 from agent_toolkit_tui.composition import (
@@ -40,7 +40,7 @@ def test_skills_coverage_guard():
 
 
 def test_instructions_coverage_guard():
-    """Every main harness that supports the instructions kind is covered:
+    """Every main harness that supports the instructions asset type is covered:
     native verdict (standard column) or a rendered pointer column."""
     from agent_toolkit_cli.instructions_matrix import instructions_matrix_rows
 
@@ -49,7 +49,7 @@ def test_instructions_coverage_guard():
     for h in MAIN_HARNESSES:
         verdict = verdicts.get(h, "")
         if verdict.startswith("unsupported") or verdict.startswith("unknown"):
-            continue  # the harness can't consume the kind at all
+            continue  # the harness can't consume the asset type at all
         assert verdict == "native" or h in rendered, (
             f"{h} (verdict {verdict!r}) is neither native (standard) nor a "
             f"rendered instructions column"

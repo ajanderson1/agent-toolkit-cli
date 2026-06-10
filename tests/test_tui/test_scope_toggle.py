@@ -156,7 +156,7 @@ async def test_ctrl_g_on_pi_pane_refreshes_pi_not_skill():
         skill_grid = app.query_one("#skill-grid", SkillGrid)
         skill_grid._pending[("global", "claude", "alpha")] = "link"
 
-        app.action_kind("pi-extension")
+        app.action_asset_type("pi-extension")
         await pilot.pause()
         await pilot.press("ctrl+g")
         await pilot.pause()
@@ -187,7 +187,7 @@ async def test_pi_pane_shows_scope_toggle_and_cells_track_scope(monkeypatch):
     app = TUIApp()
     async with app.run_test() as pilot:
         await pilot.pause()
-        app.action_kind("pi-extension")
+        app.action_asset_type("pi-extension")
         await pilot.pause()
         assert app.query_one("#scope-toggle", ScopeToggle).display is True
 
@@ -230,7 +230,7 @@ async def test_pending_survives_scope_round_trip_pi(monkeypatch):
     app = TUIApp()
     async with app.run_test() as pilot:
         await pilot.pause()
-        app.action_kind("pi-extension")
+        app.action_asset_type("pi-extension")
         await pilot.pause()
         pi_grid = app.query_one("#pi-grid", PiGrid)
         pi_grid._pending[("project", "alpha")] = "link"
@@ -276,7 +276,7 @@ async def test_footer_pending_label_scope_tagged_when_spanning():
     app = TUIApp()
     async with app.run_test() as pilot:
         await pilot.pause()
-        app.action_kind("pi-extension")
+        app.action_asset_type("pi-extension")
         await pilot.pause()
         pi_grid = app.query_one("#pi-grid", PiGrid)
         pi_grid._pending[("project", "alpha")] = "link"
@@ -312,7 +312,7 @@ async def test_diff_scope_tagged_when_spanning():
     app = TUIApp()
     async with app.run_test() as pilot:
         await pilot.pause()
-        app.action_kind("pi-extension")
+        app.action_asset_type("pi-extension")
         await pilot.pause()
         pi_grid = app.query_one("#pi-grid", PiGrid)
         pi_grid._pending[("project", "alpha")] = "link"
@@ -332,7 +332,7 @@ async def test_revert_clears_both_scopes_and_is_scope_tagged():
     app = TUIApp()
     async with app.run_test() as pilot:
         await pilot.pause()
-        app.action_kind("pi-extension")
+        app.action_asset_type("pi-extension")
         await pilot.pause()
         pi_grid = app.query_one("#pi-grid", PiGrid)
         pi_grid._pending[("project", "alpha")] = "link"

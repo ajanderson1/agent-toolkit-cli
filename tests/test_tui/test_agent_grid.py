@@ -13,7 +13,7 @@ Widget-level:
 8. set_scope clears pending
 
 App-level:
-9.  sidebar lists 3 kinds (skill / pi-extension / agent)
+9.  sidebar lists 3 asset types (skill / pi-extension / agent)
 10. switch to agent shows AgentGrid, hides SkillGrid + PiGrid
 11. switch back to skill shows SkillGrid
 12. ctrl+s routes to _apply_agent_pending when agent active
@@ -294,14 +294,14 @@ async def test_set_scope_clears_pending():
 
 
 @pytest.mark.asyncio
-async def test_kind_sidebar_lists_three_kinds():
+async def test_asset_type_sidebar_lists_three_asset_types():
     """The sidebar OptionList must include skill, pi-extension, and agent."""
     from agent_toolkit_tui.app import TUIApp
 
     app = TUIApp()
     async with app.run_test() as pilot:
         await pilot.pause()
-        ol = app.query_one("#kinds-list", OptionList)
+        ol = app.query_one("#asset-types-list", OptionList)
         prompts = [str(ol.get_option_at_index(i).prompt) for i in range(ol.option_count)]
         assert "skill" in prompts
         assert "pi-extension" in prompts
@@ -310,13 +310,13 @@ async def test_kind_sidebar_lists_three_kinds():
 
 @pytest.mark.asyncio
 async def test_switch_to_agent_shows_agent_grid():
-    """Switching to agent kind makes AgentGrid visible, others hidden."""
+    """Switching to agent asset type makes AgentGrid visible, others hidden."""
     from agent_toolkit_tui.app import TUIApp
 
     app = TUIApp()
     async with app.run_test() as pilot:
         await pilot.pause()
-        app.action_kind("agent")
+        app.action_asset_type("agent")
         await pilot.pause()
         agent_grid = app.query_one("#agent-grid", AgentGrid)
         skill_grid = app.query_one("#skill-grid", SkillGrid)
@@ -334,9 +334,9 @@ async def test_switch_to_agent_then_back_to_skill():
     app = TUIApp()
     async with app.run_test() as pilot:
         await pilot.pause()
-        app.action_kind("agent")
+        app.action_asset_type("agent")
         await pilot.pause()
-        app.action_kind("skill")
+        app.action_asset_type("skill")
         await pilot.pause()
         agent_grid = app.query_one("#agent-grid", AgentGrid)
         skill_grid = app.query_one("#skill-grid", SkillGrid)
@@ -346,7 +346,7 @@ async def test_switch_to_agent_then_back_to_skill():
 
 @pytest.mark.asyncio
 async def test_ctrl_s_routes_to_agent_apply_when_active(monkeypatch):
-    """ctrl+s dispatches to _apply_agent_pending when agent kind is active."""
+    """ctrl+s dispatches to _apply_agent_pending when agent asset type is active."""
     from agent_toolkit_tui.app import TUIApp
 
     called: list[str] = []
@@ -367,7 +367,7 @@ async def test_ctrl_s_routes_to_agent_apply_when_active(monkeypatch):
     app = TUIApp()
     async with app.run_test() as pilot:
         await pilot.pause()
-        app._active_kind = "agent"
+        app._active_asset_type = "agent"
         await pilot.press("ctrl+s")
         await pilot.pause()
 
@@ -401,7 +401,7 @@ async def test_apply_link_calls_agent_install_apply(monkeypatch):
     app = TUIApp()
     async with app.run_test() as pilot:
         await pilot.pause()
-        app._active_kind = "agent"
+        app._active_asset_type = "agent"
         grid = app.query_one("#agent-grid", AgentGrid)
         grid.set_rows([_full_row("my-agent", linked=False)])
         grid.restore_pending({("global", "claude-code", "my-agent"): "link"})
@@ -455,7 +455,7 @@ async def test_apply_unlink_calls_agent_install_uninstall_directly(monkeypatch):
     app = TUIApp()
     async with app.run_test() as pilot:
         await pilot.pause()
-        app._active_kind = "agent"
+        app._active_asset_type = "agent"
         grid = app.query_one("#agent-grid", AgentGrid)
         grid.set_rows([_full_row("my-agent", linked=True)])
         grid.restore_pending({("global", "claude-code", "my-agent"): "unlink"})
@@ -501,7 +501,7 @@ async def test_apply_error_surfaces_notify_and_footer(monkeypatch):
             return orig_notify(*a, **k)
 
         monkeypatch.setattr(app, "notify", spy_notify)
-        app._active_kind = "agent"
+        app._active_asset_type = "agent"
         grid = app.query_one("#agent-grid", AgentGrid)
         grid.set_rows([_full_row("my-agent", linked=False)])
         grid.restore_pending({("global", "claude-code", "my-agent"): "link"})
@@ -560,7 +560,7 @@ async def test_apply_project_scope_seeds_canonical(monkeypatch, tmp_path):
     app = TUIApp()
     async with app.run_test() as pilot:
         await pilot.pause()
-        app._active_kind = "agent"
+        app._active_asset_type = "agent"
         app._scope = "project"
         grid = app.query_one("#agent-grid", AgentGrid)
         grid.set_scope("project")

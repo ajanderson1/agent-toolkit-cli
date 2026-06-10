@@ -1,7 +1,7 @@
 """Data model for the TUI's agent tab.
 
 Reads the agent lock + filesystem to produce AgentRow records with per-harness
-cell state. Mirrors skill_state.py for the agent kind.
+cell state. Mirrors skill_state.py for the agent asset type.
 
 Key differences from skill_state:
 - No standard-bundle concept (agents are real files, not symlinks to a bundle).
