@@ -1,5 +1,18 @@
 # Changelog
 
+## [3.6.3](https://github.com/ajanderson1/agent-toolkit-cli/compare/v3.6.2...v3.6.3) (2026-06-10)
+
+
+### Documentation
+
+* **plan:** fix SHA-pinned pi-extension add ([#330](https://github.com/ajanderson1/agent-toolkit-cli/issues/330)) ([97710e9](https://github.com/ajanderson1/agent-toolkit-cli/commit/97710e90efe99ad25d121ba91e347a64fd653a98))
+* **plan:** skills repo split implementation plan ([#341](https://github.com/ajanderson1/agent-toolkit-cli/issues/341)) ([bbb909a](https://github.com/ajanderson1/agent-toolkit-cli/commit/bbb909a0c8ca0b008dd148a57c750328d2c1266e))
+* **solutions:** ADRs for bundle/plugin capability on clone-and-project ([1392bfe](https://github.com/ajanderson1/agent-toolkit-cli/commit/1392bfeb204c0935c2fe1818ddd765bde978e6f7))
+* **spec,plan:** correct skills-split after critical review ([#341](https://github.com/ajanderson1/agent-toolkit-cli/issues/341)) ([df7f309](https://github.com/ajanderson1/agent-toolkit-cli/commit/df7f30983cbe089eb84a6493f9cb827c737bd98e))
+* **spec,plan:** resolve critical-review findings for [#330](https://github.com/ajanderson1/agent-toolkit-cli/issues/330) ([fcdb1e2](https://github.com/ajanderson1/agent-toolkit-cli/commit/fcdb1e2f50f2f8ae8b3f2b5da8000f1274fd4c01))
+* **spec:** fix SHA-pinned pi-extension add ([#330](https://github.com/ajanderson1/agent-toolkit-cli/issues/330)) ([d9ee095](https://github.com/ajanderson1/agent-toolkit-cli/commit/d9ee095635ec1952dc93975adfe3f05335242dd0))
+* **spec:** split ajanderson1/skills into category repos ([#341](https://github.com/ajanderson1/agent-toolkit-cli/issues/341)) ([903e104](https://github.com/ajanderson1/agent-toolkit-cli/commit/903e104ea153098725c258c72870548d3a486044))
+
 ## [3.6.2](https://github.com/ajanderson1/agent-toolkit-cli/compare/v3.6.1...v3.6.2) (2026-06-09)
 
 
