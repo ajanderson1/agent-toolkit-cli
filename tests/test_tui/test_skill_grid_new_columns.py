@@ -114,6 +114,22 @@ def test_read_skill_description_no_key(tmp_path):
     assert _read_skill_description(d) == ""
 
 
+def test_unlisted_state_markup():
+    """#360: unlisted rows render with a warning (yellow) tint, distinct from dim library."""
+    from agent_toolkit_tui.widgets.skill_grid import _STATE_MARKUP
+    assert "unlisted" in _STATE_MARKUP
+    assert "yellow" in _STATE_MARKUP["unlisted"]
+    # library stays dim — the two states must be visually distinct.
+    assert "dim" in _STATE_MARKUP["library"]
+
+
+def test_unlisted_in_state_legend():
+    """#360: the State column's `i` legend explains the unlisted badge."""
+    from agent_toolkit_tui.column_info import get_column_info
+    info = get_column_info("state")
+    assert any("unlisted" in line for line in info.lines)
+
+
 def test_build_skill_rows_project_scope_falls_back_to_library_description(
     git_sandbox, tmp_path, monkeypatch,
 ):

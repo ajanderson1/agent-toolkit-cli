@@ -76,6 +76,8 @@ def _state_info(context: dict | None = None) -> ColumnInfo:
             "• copy — installed as a real copy (symlink fallback — e.g. Windows)",
             "• library — in the library, not yet installed in this project "
             "(project scope only — normal pre-install state)",
+            "• unlisted — installed in this project but no longer tracked by "
+            "the library lock (re-add via `skill doctor -p`)",
         ],
     )
 
