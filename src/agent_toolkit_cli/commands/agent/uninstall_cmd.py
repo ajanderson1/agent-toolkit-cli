@@ -15,7 +15,7 @@ import click
 
 from agent_toolkit_cli import agent_install
 from agent_toolkit_cli.commands.agent._common import scope_and_roots
-from agent_toolkit_cli.skill_agents import AGENTS
+from agent_toolkit_cli.skill_agents import AGENTS, resolve_agent_token
 
 
 def _resolve_harnesses_for_uninstall(
@@ -24,7 +24,7 @@ def _resolve_harnesses_for_uninstall(
 ) -> tuple[str, ...]:
     """If --harnesses given, use that. Otherwise, derive from the lock entry."""
     if harnesses_str is not None:
-        parts = [p.strip() for p in harnesses_str.split(",") if p.strip()]
+        parts = [resolve_agent_token(p.strip()) for p in harnesses_str.split(",") if p.strip()]
         unknown = [p for p in parts if p not in AGENTS]
         if unknown:
             raise click.UsageError(f"unknown harness(es): {', '.join(unknown)}")

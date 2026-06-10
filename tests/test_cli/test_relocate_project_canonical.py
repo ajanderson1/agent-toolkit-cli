@@ -257,7 +257,7 @@ def test_install_universal_token_project_creates_shared_symlink(
     monkeypatch.chdir(project)
     runner = CliRunner(env=scrub_git_env())
     result = runner.invoke(cli, ["skill", "install", "mkdocs",
-                                 "--agents", "universal", "-p"])
+                                 "--agents", "standard", "-p"])
     assert result.exit_code == 0, result.output
 
     shared = project / ".agents" / "skills" / "mkdocs"
@@ -281,12 +281,12 @@ def test_uninstall_universal_token_project_removes_shared_symlink(
     monkeypatch.chdir(project)
     runner = CliRunner(env=scrub_git_env())
     assert runner.invoke(cli, ["skill", "install", "mkdocs",
-                               "--agents", "universal", "-p"]).exit_code == 0
+                               "--agents", "standard", "-p"]).exit_code == 0
     shared = project / ".agents" / "skills" / "mkdocs"
     assert shared.is_symlink()
 
     result = runner.invoke(cli, ["skill", "uninstall", "mkdocs",
-                                 "--agents", "universal", "-p"])
+                                 "--agents", "standard", "-p"])
     assert result.exit_code == 0, result.output
     assert not shared.exists() and not shared.is_symlink(), (
         "unchecking universal must remove the shared .agents/skills symlink"

@@ -5,7 +5,7 @@ the cursor is on a cell in that column. The registry maps a column key
 (an entry in INTERACTIVE_AGENTS, or a non-agent key such as "state") to a
 factory that produces a fresh ColumnInfo at call time.
 
-Factories — not pre-built ColumnInfo objects — so the Universal list
+Factories — not pre-built ColumnInfo objects — so the Standard list
 always reflects the current catalog without an import-time snapshot.
 """
 from __future__ import annotations
@@ -13,7 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable
 
-from agent_toolkit_cli.skill_agents import AGENTS, get_universal_agents
+from agent_toolkit_cli.skill_agents import AGENTS, get_standard_agents
 
 
 @dataclass(frozen=True)
@@ -23,8 +23,8 @@ class ColumnInfo:
     lines: list[str]
 
 
-def _universal_info(context: dict | None = None) -> ColumnInfo:
-    harness_names = get_universal_agents()
+def _standard_info(context: dict | None = None) -> ColumnInfo:
+    harness_names = get_standard_agents()
     description = [
         "Toggles link/unlink for every harness whose",
         "skillsDir is `.agents/skills`.",
@@ -45,9 +45,8 @@ def _universal_info(context: dict | None = None) -> ColumnInfo:
         "  so you may not need it at project scope too.",
     ] if show_marker else []
     return ColumnInfo(
-        # Display label only — the registry key + function name keep the
-        # load-bearing "universal" token (v3 universal→general rename, #304).
-        title="General bundle",
+        # v3.7 full rename (#350): key and title both say "standard".
+        title="Standard bundle",
         lines=description + bullets + indicator_note,
     )
 
@@ -71,7 +70,7 @@ def _state_info(context: dict | None = None) -> ColumnInfo:
 
 
 COLUMN_INFO: dict[str, Callable[..., ColumnInfo]] = {
-    "universal": _universal_info,
+    "standard": _standard_info,
     "state": _state_info,
 }
 
@@ -79,7 +78,7 @@ COLUMN_INFO: dict[str, Callable[..., ColumnInfo]] = {
 def get_column_info(name: str, *, context: dict | None = None) -> ColumnInfo | None:
     """Return a fresh ColumnInfo for `name`, or None if unregistered.
 
-    `context` is forwarded to the factory. Today only `_universal_info` reads
+    `context` is forwarded to the factory. Today only `_standard_info` reads
     it (`global_linked` flag).
     """
     factory = COLUMN_INFO.get(name)

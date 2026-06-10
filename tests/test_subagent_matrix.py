@@ -51,11 +51,11 @@ def _catalog_harnesses() -> set[str]:
     """All catalog harness names except synthetic pseudo-entries.
 
     `skill_agents.AGENTS` is a dict[str, AgentConfig] keyed by harness name.
-    `universal`, `general-skill` (added in PR1 of #252), and `general-agent`
+    `standard`, `standard-skill` (added in PR1 of #252), and `standard-agent`
     (added in PR2 of #252) are synthetic — they resolve to convergence paths
     and are not real harnesses, so they're excluded from the harness-support matrix.
     """
-    return set(skill_agents.AGENTS) - {"universal", "general-skill", "general-agent"}
+    return set(skill_agents.AGENTS) - {"standard", "standard-skill", "standard-agent"}
 
 
 def _parse_section() -> dict[str, dict[str, str]]:
@@ -238,7 +238,7 @@ def test_every_catalog_supported_mechanism_appears_in_matrix(rows):
     catalog_with_real_mechanism = {
         name for name, cfg in skill_agents.AGENTS.items()
         if cfg.subagent_mechanism != "none"
-        and name not in {"universal", "general-skill", "general-agent"}
+        and name not in {"standard", "standard-skill", "standard-agent"}
     }
     matrix_supported = {
         h for h, row in rows.items()

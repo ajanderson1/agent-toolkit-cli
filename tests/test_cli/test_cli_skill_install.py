@@ -39,7 +39,7 @@ def test_install_global_universal_creates_agents_skills_symlink(
     assert r.exit_code == 0, r.output
 
     result = runner.invoke(main, [
-        "skill", "install", "demo", "--agents", "universal",
+        "skill", "install", "demo", "--agents", "standard",
     ])
     assert result.exit_code == 0, result.output
 
@@ -83,7 +83,7 @@ def test_install_global_claude_code_creates_claude_symlink(
 def test_install_global_universal_and_claude_does_both(
     git_sandbox, tmp_path: Path, monkeypatch
 ):
-    """skill install --agents universal,claude-code creates both symlinks."""
+    """skill install --agents standard,claude-code creates both symlinks."""
     library_root = tmp_path / "lib" / "skills"
     fake_home = tmp_path / "home"
     fake_home.mkdir()
@@ -101,7 +101,7 @@ def test_install_global_universal_and_claude_does_both(
     assert r.exit_code == 0, r.output
 
     result = runner.invoke(main, [
-        "skill", "install", "demo", "--agents", "universal,claude-code",
+        "skill", "install", "demo", "--agents", "standard,claude-code",
     ])
     assert result.exit_code == 0, result.output
 
@@ -129,7 +129,7 @@ def test_install_global_requires_library_entry(
 
     runner = CliRunner()
     result = runner.invoke(main, [
-        "skill", "install", "nonexistent", "--agents", "universal",
+        "skill", "install", "nonexistent", "--agents", "standard",
     ])
     assert result.exit_code != 0
 
@@ -151,11 +151,11 @@ def test_install_global_idempotent(
     assert r.exit_code == 0, r.output
 
     r1 = runner.invoke(main, [
-        "skill", "install", "demo", "--agents", "universal",
+        "skill", "install", "demo", "--agents", "standard",
     ])
     assert r1.exit_code == 0, r1.output
     r2 = runner.invoke(main, [
-        "skill", "install", "demo", "--agents", "universal",
+        "skill", "install", "demo", "--agents", "standard",
     ])
     assert r2.exit_code == 0, r2.output
 
@@ -185,7 +185,7 @@ def test_install_project_universal_clones_project_canonical(
     result = runner.invoke(main, [
         "--project", str(project),
         "skill", "install", "demo", "--scope", "project",
-        "--agents", "universal",
+        "--agents", "standard",
     ])
     assert result.exit_code == 0, result.output
 

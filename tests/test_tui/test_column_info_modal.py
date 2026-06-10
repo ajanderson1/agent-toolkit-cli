@@ -11,9 +11,8 @@ from agent_toolkit_tui.widgets.column_info_modal import ColumnInfoModal
 async def test_modal_renders_title_and_lines():
     from textual.app import App
 
-    # Token stays "universal" (load-bearing bundle key); only the display label
-    # changed to "General" in the v3 rename (#304 bug 3).
-    info = get_column_info("universal")
+    # #350 full rename: key and title both say "standard"/"Standard".
+    info = get_column_info("standard")
     assert info is not None
 
     class _A(App):
@@ -25,7 +24,7 @@ async def test_modal_renders_title_and_lines():
         await pilot.pause()
         # Title rendered.
         rendered = a.screen_stack[-1].query_one("#column-info-title").render()
-        assert "General" in str(rendered)
+        assert "Standard" in str(rendered)
         # Body contains at least one harness name.
         body = a.screen_stack[-1].query_one("#column-info-body").render()
         assert "amp" in str(body)
@@ -35,7 +34,7 @@ async def test_modal_renders_title_and_lines():
 async def test_modal_escape_closes():
     from textual.app import App
 
-    info = get_column_info("universal")
+    info = get_column_info("standard")
     assert info is not None
 
     class _A(App):
@@ -57,7 +56,7 @@ async def test_modal_i_key_closes():
     """Pressing `i` again toggles the modal closed (symmetry with opening)."""
     from textual.app import App
 
-    info = get_column_info("universal")
+    info = get_column_info("standard")
     assert info is not None
 
     class _A(App):

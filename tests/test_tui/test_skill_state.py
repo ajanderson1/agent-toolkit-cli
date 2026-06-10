@@ -94,7 +94,7 @@ def test_build_skill_rows_missing_canonical(
 
 
 # ---------------------------------------------------------------------------
-# Universal cell tests
+# Standard cell tests
 # ---------------------------------------------------------------------------
 
 def test_universal_cell_global_not_linked(tmp_path: Path, monkeypatch):
@@ -105,7 +105,7 @@ def test_universal_cell_global_not_linked(tmp_path: Path, monkeypatch):
     fake_home.mkdir()
     monkeypatch.setenv("HOME", str(fake_home))
 
-    cell = _cell_for("demo", "universal", scope="global", home=fake_home, project=None)
+    cell = _cell_for("demo", "standard", scope="global", home=fake_home, project=None)
     assert cell == SkillCell(linked=False, drift=False, skipped=False)
 
 
@@ -127,10 +127,10 @@ def test_universal_cell_global_linked(tmp_path: Path, monkeypatch):
     bundle_link = bundle_dir / "demo"
     bundle_link.symlink_to(canonical)
 
-    # Patch Path.home() so _universal_bundle_link resolves under fake_home.
+    # Patch Path.home() so _standard_bundle_link resolves under fake_home.
     monkeypatch.setattr(Path, "home", staticmethod(lambda: fake_home))
 
-    cell = _cell_for("demo", "universal", scope="global", home=fake_home, project=None)
+    cell = _cell_for("demo", "standard", scope="global", home=fake_home, project=None)
     assert cell == SkillCell(linked=True, drift=False, skipped=False)
 
 
@@ -156,10 +156,10 @@ def test_universal_cell_global_drifted(tmp_path: Path, monkeypatch):
     bundle_link = bundle_dir / "demo"
     bundle_link.symlink_to(elsewhere)
 
-    # Patch Path.home() so _universal_bundle_link resolves under fake_home.
+    # Patch Path.home() so _standard_bundle_link resolves under fake_home.
     monkeypatch.setattr(Path, "home", staticmethod(lambda: fake_home))
 
-    cell = _cell_for("demo", "universal", scope="global", home=fake_home, project=None)
+    cell = _cell_for("demo", "standard", scope="global", home=fake_home, project=None)
     assert cell == SkillCell(linked=False, drift=True, skipped=False)
 
 
@@ -180,7 +180,7 @@ def test_universal_cell_project_linked(tmp_path: Path, monkeypatch):
     bundle.mkdir(parents=True)
     (bundle / "demo").symlink_to(canonical)
 
-    cell = _cell_for("demo", "universal", scope="project", home=None, project=project)
+    cell = _cell_for("demo", "standard", scope="project", home=None, project=project)
     assert cell == SkillCell(linked=True, drift=False, skipped=False)
 
 
@@ -195,7 +195,7 @@ def test_universal_cell_project_not_linked(tmp_path: Path, monkeypatch):
     # Canonical present in the store, but no .agents/skills/demo symlink.
     canonical_skill_dir("demo", scope="project", project=project).mkdir(parents=True)
 
-    cell = _cell_for("demo", "universal", scope="project", home=None, project=project)
+    cell = _cell_for("demo", "standard", scope="project", home=None, project=project)
     assert cell == SkillCell(linked=False, drift=False, skipped=False)
 
 
@@ -215,7 +215,7 @@ def test_universal_cell_project_drifted(tmp_path: Path, monkeypatch):
     (project / ".agents" / "skills").mkdir(parents=True)
     (project / ".agents" / "skills" / "demo").symlink_to(elsewhere)
 
-    cell = _cell_for("demo", "universal", scope="project", home=None, project=project)
+    cell = _cell_for("demo", "standard", scope="project", home=None, project=project)
     assert cell.linked is False
     assert cell.drift is True
 
@@ -239,14 +239,14 @@ def test_build_skill_rows_includes_universal_cell(
     assert rows, "expected at least one row"
     row = rows[0]
     # The universal cell must be present in the cells dict.
-    assert ("universal", "project") in row.cells, (
+    assert ("standard", "project") in row.cells, (
         f"universal cell missing; cells keys: {list(row.cells.keys())}"
     )
     # Demo was installed for claude-code only (not the universal bundle), so the
     # universal cell is present but not linked: under the external-store model
     # "linked" requires the shared <project>/.agents/skills/<slug> symlink, which
     # only the universal token creates.
-    universal_cell = row.cells[("universal", "project")]
+    universal_cell = row.cells[("standard", "project")]
     assert universal_cell.linked is False
     assert universal_cell.skipped is False
 
@@ -373,7 +373,7 @@ def test_project_scope_universal_linked_after_install(
         "--project", str(project),
         "skill", "install", "demo",
         "--scope", "project",
-        "--agents", "universal",
+        "--agents", "standard",
     ])
     assert r.exit_code == 0, r.output
 
@@ -382,7 +382,7 @@ def test_project_scope_universal_linked_after_install(
     row = rows[0]
     assert row.slug == "demo"
     assert row.state == "clean"
-    universal_cell = row.cells[("universal", "project")]
+    universal_cell = row.cells[("standard", "project")]
     assert universal_cell.linked is True
 
 
@@ -479,7 +479,7 @@ def _install_demo_globally(runner, project, library_root, *, universal: bool = T
         "--scope", "global",
     ]
     if universal:
-        args.extend(["--agents", "universal"])
+        args.extend(["--agents", "standard"])
     return runner.invoke(main, args)
 
 

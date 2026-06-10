@@ -1,14 +1,14 @@
 """Interactive DataTable for the TUI's skill tab.
 
-Columns: SKILL ⓘ | Universal ⓘ | Claude Code ⓘ | Pi ⓘ | State ⓘ | Source.
+Columns: SKILL ⓘ | Standard ⓘ | Claude Code ⓘ | Pi ⓘ | State ⓘ | Source.
 
 `space` toggles a cell (queues link/unlink in `_pending`).
 `a` toggles a column.
-`i` opens ColumnInfoModal for columns with registered info (Universal, State); for all other glyphed columns (SKILL, Claude Code, Pi) it opens CellInfoScreen with per-cell or slug context. The Source column has no info panel.
+`i` opens ColumnInfoModal for columns with registered info (Standard, State); for all other glyphed columns (SKILL, Claude Code, Pi) it opens CellInfoScreen with per-cell or slug context. The Source column has no info panel.
 `^s` Apply is handled by the App, which reads pending_entries().
 
 The long tail of agents is managed via the CLI; the TUI grid only shows
-the interactive shortlist (universal + claude-code + pi). The `Source`
+the interactive shortlist (standard + claude-code + pi). The `Source`
 column is passive (no toggle / no info popup); the SKILL slug-cell info
 modal surfaces the skill description when present.
 """
@@ -241,7 +241,7 @@ class SkillGrid(Vertical):
 
     def action_info(self) -> None:
         """Route `i` by column. Columns with a registered ColumnInfo open
-        ColumnInfoModal (header-level info such as Universal bundle, State
+        ColumnInfoModal (header-level info such as Standard bundle, State
         badge legend). Everything else opens CellInfoScreen with the per-cell
         state (linked target, drift+doctor command, pending op, slug source)."""
         from agent_toolkit_tui.screens.cell_info import CellInfoScreen
@@ -326,7 +326,7 @@ class SkillGrid(Vertical):
             home=Path.home() if scope == "global" else None,
             project=None if scope == "global" else Path.cwd(),
         )
-        if agent == "universal":
+        if agent == "standard":
             if scope == "global":
                 bundle = Path.home() / ".agents" / "skills" / row.slug
                 if cell.drift:
@@ -361,7 +361,7 @@ class SkillGrid(Vertical):
         )
         if cell.skipped:
             return (
-                f"General agent — no symlink needed.\n"
+                f"Standard agent — no symlink needed.\n"
                 f"Skill lives at {canonical}."
             )
         if pending == "link":
@@ -470,18 +470,18 @@ class SkillGrid(Vertical):
     def _context_for(self, *, key: str, row_index: int) -> dict | None:
         """Build the per-call context dict for get_column_info().
 
-        Today only the 'universal' key uses it: we surface whether the focused
+        Today only the 'standard' key uses it: we surface whether the focused
         row is also installed globally so the modal can omit the 🌐 paragraph
         when it's not.
         """
-        if key != "universal":
+        if key != "standard":
             return None
         # row_index comes from the table cursor → index the visible rows (#249).
         visible = self._visible_rows()
         if row_index < 0 or row_index >= len(visible):
             return None
         row = visible[row_index]
-        global_cell = row.cells.get(("universal", "global"))
+        global_cell = row.cells.get(("standard", "global"))
         return {"global_linked": bool(global_cell and global_cell.linked)}
 
     def _toggle_at(self, coord: Coordinate) -> None:
@@ -500,7 +500,7 @@ class SkillGrid(Vertical):
         cell = row.cells.get((agent, self._scope))
         if cell is None or cell.skipped:
             return
-        # Universal at project scope is now a plain projection symlink into the
+        # Standard at project scope is now a plain projection symlink into the
         # external store (post-#235/#237), so unlinking it is non-destructive and
         # the engine handles it like any other cell — no special guard (#232).
         key = (self._scope, agent, row.slug)
@@ -557,11 +557,10 @@ class SkillGrid(Vertical):
         table.add_column(f"SKILL {_INFO_GLYPH}", width=20)
         for agent in INTERACTIVE_AGENTS:
             # Every interactive agent column exposes either a column-info
-            # modal (General) or per-cell info (Claude Code, Pi via
-            # CellInfoScreen) — glyph them all. The "universal" token is the
-            # load-bearing bundle key; only its display label is "General"
-            # (v3 universal→general rename, #304 bug 3).
-            base = "General" if agent == "universal" else AGENTS[agent].display_name
+            # modal (Standard) or per-cell info (Claude Code, Pi via
+            # CellInfoScreen) — glyph them all. "standard" is the
+            # load-bearing bundle key (v3.7 full rename, #350).
+            base = "Standard" if agent == "standard" else AGENTS[agent].display_name
             table.add_column(f"{base} {_INFO_GLYPH}", width=14)
         # State has a column-info modal → glyph it.
         table.add_column(f"State {_INFO_GLYPH}", width=10)

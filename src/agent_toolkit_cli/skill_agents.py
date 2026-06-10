@@ -1,13 +1,14 @@
 """Agents catalog — port of vercel-labs/skills/src/agents.ts.
 
-53 real agents + 1 synthetic 'universal' pseudo-agent. An agent is
-'universal' iff its skills_dir is exactly '.agents/skills' (all such
+53 real agents + 1 synthetic 'standard' pseudo-agent. An agent is
+'standard' iff its skills_dir is exactly '.agents/skills' (all such
 agents read skills from a single shared canonical location, so no
 per-harness symlink is needed at global scope).
 """
 from __future__ import annotations
 
 import os
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Literal
@@ -36,7 +37,7 @@ class AgentConfig:
     skills_dir: str
     global_skills_dir: Path
     detect_installed: Callable[[], bool]
-    show_in_universal_list: bool = True
+    show_in_standard_list: bool = True
     subagent_mechanism: Literal[
         "symlink", "translate", "config_file_folder", "none"
     ] = "none"
@@ -47,7 +48,7 @@ class AgentConfig:
     disabled_reason: str = ""
 
     @property
-    def is_universal(self) -> bool:
+    def is_standard(self) -> bool:
         return self.skills_dir == ".agents/skills"
 
 
@@ -406,7 +407,7 @@ AGENTS: dict[str, AgentConfig] = {
         display_name="Replit",
         skills_dir=".agents/skills",
         global_skills_dir=XDG_CONFIG / "agents/skills",
-        show_in_universal_list=False,
+        show_in_standard_list=False,
         detect_installed=lambda: (Path.cwd() / ".replit").exists(),
     ),
     "rovodev": AgentConfig(
@@ -489,28 +490,28 @@ AGENTS: dict[str, AgentConfig] = {
         global_skills_dir=HOME / ".adal/skills",
         detect_installed=lambda: (HOME / ".adal").exists(),
     ),
-    "universal": AgentConfig(
-        name="universal",
-        display_name="Universal",
+    "standard": AgentConfig(
+        name="standard",
+        display_name="Standard",
         skills_dir=".agents/skills",
         global_skills_dir=XDG_CONFIG / "agents/skills",
-        show_in_universal_list=False,
+        show_in_standard_list=False,
         detect_installed=lambda: False,
     ),
-    "general-skill": AgentConfig(
-        name="general-skill",
-        display_name="General (skills)",
+    "standard-skill": AgentConfig(
+        name="standard-skill",
+        display_name="Standard (skills)",
         skills_dir=".agents/skills",
         global_skills_dir=XDG_CONFIG / "agents/skills",
-        show_in_universal_list=False,
+        show_in_standard_list=False,
         detect_installed=lambda: False,
     ),
-    "general-agent": AgentConfig(
-        name="general-agent",
-        display_name="General (agents)",
+    "standard-agent": AgentConfig(
+        name="standard-agent",
+        display_name="Standard (agents)",
         skills_dir=".agents/agents",
         global_skills_dir=XDG_CONFIG / "agents/agents",
-        show_in_universal_list=False,
+        show_in_standard_list=False,
         detect_installed=lambda: False,
         subagent_mechanism="none",  # synthetic — not a real installable harness
     ),
@@ -527,22 +528,54 @@ def get_agent(name: str) -> AgentConfig:
     return AGENTS[name]
 
 
-def get_universal_agents() -> list[str]:
+# --- Deprecated token aliases (#350) -----------------------------------------
+# Old spellings accepted for one cycle with a stderr warning; the whole block
+# (table + resolver + call sites) is deleted in v4.
+DEPRECATED_TOKEN_ALIASES: dict[str, str] = {
+    "universal": "standard",
+    "general-skill": "standard-skill",
+    "general-agent": "standard-agent",
+}
+
+_warned_deprecated: set[str] = set()
+
+
+def resolve_agent_token(name: str) -> str:
+    """Map a deprecated agent/harness token to its 'standard' replacement.
+
+    Warns once per old token per process on stderr. Names that are not in the
+    alias table pass through unchanged — unknown-token validation stays at the
+    callers (UnknownAgentError / click.UsageError).
+    """
+    new = DEPRECATED_TOKEN_ALIASES.get(name)
+    if new is None:
+        return name
+    if name not in _warned_deprecated:
+        _warned_deprecated.add(name)
+        print(
+            f"warning: '{name}' is deprecated; renamed to '{new}'. "
+            f"The old spelling will be removed in v4.",
+            file=sys.stderr,
+        )
+    return new
+
+
+def get_standard_agents() -> list[str]:
     """Agents whose skillsDir == '.agents/skills', excluding the synthetic
-    'universal' pseudo-entry. Matches getUniversalAgents() in agents.ts."""
+    'standard' pseudo-entry. (Renamed from getUniversalAgents/agents.ts.)"""
     return [
         n
         for n, c in AGENTS.items()
-        if c.is_universal and c.show_in_universal_list
+        if c.is_standard and c.show_in_standard_list
     ]
 
 
-def get_non_universal_agents() -> list[str]:
-    return [n for n, c in AGENTS.items() if not c.is_universal]
+def get_non_standard_agents() -> list[str]:
+    return [n for n, c in AGENTS.items() if not c.is_standard]
 
 
-def is_universal(name: str) -> bool:
-    return AGENTS[name].is_universal
+def is_standard(name: str) -> bool:
+    return AGENTS[name].is_standard
 
 
 def detect_installed_agents() -> list[str]:

@@ -177,7 +177,7 @@ def test_doctor_journal_v21_to_v22_repro(
     # fake_home so that real on-disk skills (e.g. ~/.pi/agent/skills/journal)
     # don't leak into the findings as foreign_symlink noise.
     for agent_name, cfg in list(skill_agents.AGENTS.items()):
-        if cfg.is_universal:
+        if cfg.is_standard:
             continue
         fake_dir = fake_home / f".fake-{agent_name}" / "skills"
         monkeypatch.setitem(
@@ -214,7 +214,7 @@ def test_doctor_journal_v21_to_v22_repro(
     # The engine diagnoses two findings:
     #   1. drifted_symlink (fixable): the claude link points at the v2.1
     #      bundle path (~/.agents/skills/journal). The new
-    #      _is_universal_bundle_target predicate triggers drift instead
+    #      _is_standard_bundle_target predicate triggers drift instead
     #      of foreign_symlink, so this is now a prompted fix rather than
     #      a skipped report.
     #   2. wrong_type_bundle (fixable): bundle is a real dir, not a symlink.

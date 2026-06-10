@@ -20,7 +20,7 @@ shipped PARALLEL MODULES PER KIND, now fact across four kinds:
   pi-extension → pi_extension_install.py / pi_extension_lock.py / pi_extension_paths.py
 
 The shared seam is a kind-agnostic core (_install_core.py) that each facade binds
-via injected callables (canonical_dir_resolver, universal_bundle_link, synthetic_names,
+via injected callables (canonical_dir_resolver, standard_bundle_link, synthetic_names,
 current_linked_resolver).  The lockfile did NOT gain a `kind` field — each kind
 has its own lock filename and a per-kind path field on the shared LockEntry
 (skillPath / agentPath / piExtensionPath).

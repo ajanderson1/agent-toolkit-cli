@@ -158,8 +158,8 @@ def test_action_plan_recovers_stranded_slug_after_failed_add(tmp_path):
 def test_projected_agents_collapses_bundle_to_universal_token(tmp_path):
     # the captured list is fed straight into `--agents`, and _resolve_agents
     # (commands/skill/__init__.py) hard-rejects synthetic catalog names
-    # ("general-skill"/"general-agent", which share skills_dir .agents/skills)
-    # — a universal-bundle link must surface as the literal "universal" token
+    # ("standard-skill"/"standard-agent", which share skills_dir .agents/skills)
+    # — a universal-bundle link must surface as the literal "standard" token
     # (accepted first-class) and the synthetics must NEVER appear
     proj = tmp_path / "p"
     lock = proj / "skills-lock.json"
@@ -170,8 +170,8 @@ def test_projected_agents_collapses_bundle_to_universal_token(tmp_path):
     (bundle / "journal").symlink_to(canon)
     lock.write_text('{"skills":{}}')
     agents = mss.projected_agents("journal", "project", lock)
-    assert "universal" in agents
-    assert not {"general-skill", "general-agent"} & set(agents)
+    assert "standard" in agents
+    assert not {"standard-skill", "standard-agent"} & set(agents)
 
 
 def test_secret_scan_flags_credential_files_and_uuids(tmp_path):

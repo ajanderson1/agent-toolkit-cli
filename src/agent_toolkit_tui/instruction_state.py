@@ -7,7 +7,7 @@ Key differences from agent_state:
 - Manages pointer symlinks to a canonical AGENTS.md file, not copies.
 - Cell state includes a `conflict` flag (real file or foreign symlink in slot).
 - INTERACTIVE_HARNESSES is the pinned shortlist: claude-code, gemini-cli.
-  The `general` column is rendered separately by the grid as a read-only status
+  The `standard` column is rendered separately by the grid as a read-only status
   column (shows canonical_exists), NOT listed here.
 - If the lock is empty but the canonical AGENTS.md exists, emit a single
   AGENTS.md row so a fresh user can install pointers from the grid.
@@ -25,7 +25,7 @@ from agent_toolkit_cli.instructions_lock import read_lock
 Scope = Literal["global", "project"]
 
 # Pinned shortlist of installable harnesses whose cells the TUI grid renders
-# interactively. `general` is informational only and NOT included here.
+# interactively. `standard` is informational only and NOT included here.
 # This is the single knob to add/remove interactive columns.
 INTERACTIVE_HARNESSES: tuple[str, ...] = ("claude-code", "gemini-cli")
 

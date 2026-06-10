@@ -3,7 +3,7 @@ future agent_install). All public symbols are re-exported from the facades
 so existing call sites keep working.
 
 PR1 boundary: any helper that has to know whether the asset is a skill or
-an agent (e.g. _universal_bundle_link, _project_universal_link) lives in
+an agent (e.g. _standard_bundle_link, _project_standard_link) lives in
 the facade, NOT here. The core takes a KindBinding when it needs to know
 the canonical dirname, lock filename, or general-harness name.
 """
@@ -97,38 +97,38 @@ def _should_skip_symlink(
     """Return (skip?, reason). Mirrors installer.ts:296-323 with v2.2 adjustments.
 
     v2.2 semantics (post-store relocation):
-      - Global + universal (skill-only, no real agent mechanism): SKIPPED.
-        ~/.agents/skills/<slug> → library is created via the universal bundle
-        path in apply(). These are "pure universal" cells: is_universal=True
+      - Global + standard (skill-only, no real agent mechanism): SKIPPED.
+        ~/.agents/skills/<slug> → library is created via the standard bundle
+        path in apply(). These are "pure standard" cells: is_standard=True
         AND subagent_mechanism='none' (e.g. codex, amp, cline).
-      - Global + dual-flagged (is_universal=True + real subagent_mechanism):
+      - Global + dual-flagged (is_standard=True + real subagent_mechanism):
         NOT skipped. The cell has a real agent adapter that handles install
-        independently of the skill-kind universal bundle (e.g. cursor has
+        independently of the skill-kind standard bundle (e.g. cursor has
         subagent_mechanism='symlink'; gemini-cli has 'translate'). PR3 fix.
-      - Project + universal: NOT skipped. Canonical is in the external store;
-        each universal agent gets <project>/.agents/skills/<slug> → store.
-      - Global + non-universal: NOT skipped (symlink → library).
-      - Project + non-universal: NOT skipped. The agent root dir is auto-created
+      - Project + standard: NOT skipped. Canonical is in the external store;
+        each standard agent gets <project>/.agents/skills/<slug> → store.
+      - Global + non-standard: NOT skipped (symlink → library).
+      - Project + non-standard: NOT skipped. The agent root dir is auto-created
         by apply() via link.parent.mkdir(parents=True, exist_ok=True).
 
-    The special "universal" bundle token is handled in apply() before
+    The special "standard" bundle token is handled in apply() before
     _should_skip_symlink is called; it never reaches here as an agent_name.
 
     PR3 (universal→general rename) made this predicate kind-aware: a cell
-    that is both skill-universal (skills_dir == ".agents/skills") AND has a
+    that is both skill-standard (skills_dir == ".agents/skills") AND has a
     real agent adapter (subagent_mechanism != "none") must NOT be skipped —
     the agent-kind adapter handles the install via get_adapter(), and the
-    skill-kind universal bundle still covers it for the skills path.
+    skill-kind standard bundle still covers it for the skills path.
     The agent facade's plan() injects its own adapter-aware scanner and never
     calls this predicate; it is called only in the SKILL-kind path via
     _current_linked_agents and skill_install.apply().
     """
     cfg = get_agent(agent_name)
-    # Skip only "pure universal" cells: is_universal with no real agent mechanism.
-    # Dual-flagged cells (is_universal + real subagent_mechanism) must NOT be
+    # Skip only "pure standard" cells: is_standard with no real agent mechanism.
+    # Dual-flagged cells (is_standard + real subagent_mechanism) must NOT be
     # skipped — their agent adapter handles the install independently.
-    if cfg.is_universal and scope == "global" and cfg.subagent_mechanism == "none":
-        return True, "universal-global"
+    if cfg.is_standard and scope == "global" and cfg.subagent_mechanism == "none":
+        return True, "standard-global"
     return False, ""
 
 
@@ -142,7 +142,7 @@ def plan(
     home: Path | None = None,
     project: Path | None = None,
     canonical_dir_resolver: Callable[..., Path] | None = None,
-    universal_bundle_link: Callable[[str], Path] | None = None,
+    standard_bundle_link: Callable[[str], Path] | None = None,
     synthetic_names: frozenset[str] = frozenset(),
     current_linked_resolver: Callable[..., tuple[str, ...]] | None = None,
 ) -> InstallPlan:
@@ -154,14 +154,14 @@ def plan(
     Required so the core stays kind-blind; defaults to canonical_skill_dir
     for backward compatibility with callers that haven't migrated yet.
 
-    `universal_bundle_link` is injected by the facade — it is the kind-
+    `standard_bundle_link` is injected by the facade — it is the kind-
     specific function that returns the per-slug bundle path (e.g.
     `~/.agents/skills/<slug>` for skills). Defaults to None for callers
     that do not need it (most plan-only computations).
 
     `synthetic_names` is the set of catalog tokens that are virtual entries
     rather than real harness symlink targets (e.g. the skill facade injects
-    `frozenset({"universal", "general-skill"})`). The core treats it as
+    `frozenset({"standard", "standard-skill"})`). The core treats it as
     opaque — it never names a specific kind's synthetics itself.
 
     `current_linked_resolver` overrides the built-in `_current_linked_agents`
@@ -179,7 +179,7 @@ def plan(
     current = scanner(
         slug=slug, scope=scope, home=home, project=project,
         canonical_dir_resolver=canonical_dir_resolver,
-        universal_bundle_link=universal_bundle_link,
+        standard_bundle_link=standard_bundle_link,
         synthetic_names=synthetic_names,
     )
     target = tuple(target_agents)
@@ -195,7 +195,7 @@ def _current_linked_agents(
     *, slug: str, scope: Scope,
     home: Path | None, project: Path | None,
     canonical_dir_resolver: Callable[..., Path] | None = None,
-    universal_bundle_link: Callable[[str], Path] | None = None,
+    standard_bundle_link: Callable[[str], Path] | None = None,
     synthetic_names: frozenset[str] = frozenset(),
 ) -> tuple[str, ...]:
     """Return agents whose symlink currently resolves to our canonical.
@@ -205,14 +205,14 @@ def _current_linked_agents(
     scan compares against the correct canonical path for the asset kind;
     defaults to `canonical_skill_dir` for backward compatibility.
 
-    Includes the synthetic 'universal' bundle token at global scope when
-    `universal_bundle_link(slug)` is a symlink to the library canonical.
+    Includes the synthetic 'standard' bundle token at global scope when
+    `standard_bundle_link(slug)` is a symlink to the library canonical.
 
     `synthetic_names` enumerates catalog tokens that are virtual entries
     (handled separately from real harness symlinks) and are skipped from
     the per-agent iteration. The core treats the set as opaque: each
     facade injects the synthetics for its own kind (skills inject the
-    pair containing the universal bundle token and the general projection
+    pair containing the standard bundle token and the standard projection
     token; agents inject their own).
     """
     resolver = canonical_dir_resolver if canonical_dir_resolver is not None else canonical_skill_dir
@@ -223,14 +223,14 @@ def _current_linked_agents(
 
     linked: list[str] = []
 
-    if scope == "global" and universal_bundle_link is not None:
-        bundle_link = universal_bundle_link(slug)
+    if scope == "global" and standard_bundle_link is not None:
+        bundle_link = standard_bundle_link(slug)
         if bundle_link.is_symlink() and bundle_link.resolve() == canonical_real:
-            linked.append("universal")
+            linked.append("standard")
 
     for name in AGENTS:
         # Skip facade-injected synthetic catalog tokens — they're handled
-        # by the facade (e.g. the universal bundle link above), not by the
+        # by the facade (e.g. the standard bundle link above), not by the
         # per-agent symlink scan.
         if name in synthetic_names:
             continue

@@ -1,7 +1,7 @@
 """Pilot tests for SkillGrid's column-info wiring.
 
 `i` routes via `_column_key_for_index`:
-  - Universal / State (have a registered ColumnInfo) → ColumnInfoModal
+  - Standard / State (have a registered ColumnInfo) → ColumnInfoModal
   - Agent columns (Claude Code, Pi) / slug / source → CellInfoScreen
 """
 from __future__ import annotations
@@ -37,9 +37,9 @@ async def test_columns_have_info_glyph_except_source():
         await pilot.pause()
         table = a.query_one("#skill-table", DataTable)
         labels = [str(c.label) for c in table.columns.values()]
-        # Layout: SKILL | General | Claude Code | Pi | State | Source
+        # Layout: SKILL | Standard | Claude Code | Pi | State | Source
         assert labels[0] == "SKILL ⓘ", f"slug label: {labels[0]!r}"
-        assert labels[1] == "General ⓘ", f"general label: {labels[1]!r}"
+        assert labels[1] == "Standard ⓘ", f"standard label: {labels[1]!r}"
         assert labels[2] == "Claude Code ⓘ", f"claude-code label: {labels[2]!r}"
         assert labels[3] == "Pi ⓘ", f"pi label: {labels[3]!r}"
         assert labels[-2] == "State ⓘ", f"state label: {labels[-2]!r}"
@@ -60,7 +60,7 @@ async def test_press_i_on_universal_column_opens_column_info_modal():
     async with a.run_test() as pilot:
         await pilot.pause()
         g = a.query_one("#g", SkillGrid)
-        g.cursor_to_cell(row_slug="alpha", agent_name="universal")
+        g.cursor_to_cell(row_slug="alpha", agent_name="standard")
         await pilot.pause()
         await pilot.press("i")
         await pilot.pause()
@@ -219,14 +219,14 @@ async def test_full_header_row():
         table = a.query_one("#skill-table", DataTable)
         labels = [str(c.label) for c in table.columns.values()]
         assert labels == [
-            "SKILL ⓘ", "General ⓘ", "Claude Code ⓘ", "Pi ⓘ",
+            "SKILL ⓘ", "Standard ⓘ", "Claude Code ⓘ", "Pi ⓘ",
             "State ⓘ", "Source",
         ], f"unexpected header row: {labels!r}"
 
 
 @pytest.mark.asyncio
 async def test_universal_modal_omits_global_marker_when_not_globally_linked():
-    """In project scope, opening the Universal column info on a row whose global
+    """In project scope, opening the Standard column info on a row whose global
     cell is NOT linked produces a modal without the 🌐 marker paragraph (#212)."""
     from textual.app import App
 
@@ -249,7 +249,7 @@ async def test_universal_modal_omits_global_marker_when_not_globally_linked():
     async with a.run_test() as pilot:
         await pilot.pause()
         g = a.query_one("#g", SkillGrid)
-        g.cursor_to_cell(row_slug="alpha", agent_name="universal")
+        g.cursor_to_cell(row_slug="alpha", agent_name="standard")
         await pilot.pause()
         await pilot.press("i")
         await pilot.pause()
@@ -260,7 +260,7 @@ async def test_universal_modal_omits_global_marker_when_not_globally_linked():
 
 @pytest.mark.asyncio
 async def test_universal_modal_keeps_global_marker_when_globally_linked():
-    """In project scope, opening the Universal column info on a row whose global
+    """In project scope, opening the Standard column info on a row whose global
     cell IS linked still includes the 🌐 marker paragraph."""
     from textual.app import App
 
@@ -271,7 +271,7 @@ async def test_universal_modal_keeps_global_marker_when_globally_linked():
         cells[(a, "project")] = SkillCell(linked=False, drift=False, skipped=False)
         cells[(a, "global")] = SkillCell(linked=False, drift=False, skipped=False)
     # The universal global cell is linked — caller has the skill globally installed.
-    cells[("universal", "global")] = SkillCell(linked=True, drift=False, skipped=False)
+    cells[("standard", "global")] = SkillCell(linked=True, drift=False, skipped=False)
     row = SkillRow(slug="alpha", source="x/alpha", ref="main", state="library", cells=cells)
 
     class _A(App):
@@ -284,7 +284,7 @@ async def test_universal_modal_keeps_global_marker_when_globally_linked():
     async with a.run_test() as pilot:
         await pilot.pause()
         g = a.query_one("#g", SkillGrid)
-        g.cursor_to_cell(row_slug="alpha", agent_name="universal")
+        g.cursor_to_cell(row_slug="alpha", agent_name="standard")
         await pilot.pause()
         await pilot.press("i")
         await pilot.pause()

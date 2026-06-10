@@ -19,7 +19,7 @@ def _add_and_install_global_universal(runner, upstream_path, library_root, fake_
     if r.exit_code != 0:
         return r
     return runner.invoke(main, [
-        "skill", "install", "demo", "--agents", "universal",
+        "skill", "install", "demo", "--agents", "standard",
     ])
 
 
@@ -45,7 +45,7 @@ def test_uninstall_global_universal_removes_symlink(
     assert bundle_link.is_symlink()
 
     result = runner.invoke(main, [
-        "skill", "uninstall", "demo", "--agents", "universal",
+        "skill", "uninstall", "demo", "--agents", "standard",
     ])
     assert result.exit_code == 0, result.output
     assert not bundle_link.exists(), "symlink must be removed"
@@ -74,7 +74,7 @@ def test_uninstall_idempotent(
 
     # Uninstall without having installed first.
     result = runner.invoke(main, [
-        "skill", "uninstall", "demo", "--agents", "universal",
+        "skill", "uninstall", "demo", "--agents", "standard",
     ])
     assert result.exit_code == 0, result.output
 

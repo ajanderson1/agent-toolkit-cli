@@ -11,7 +11,7 @@ def test_binding_fields():
     assert b.canonical_dirname == "pi-extensions"
     assert b.library_subdir == "pi-extensions"
     assert b.lock_filename == "pi-extensions-lock.json"
-    assert b.general_harness_name == "general-pi-extension"
+    assert b.standard_harness_name == "standard-pi-extension"
 
 
 def test_library_root(monkeypatch, tmp_path):

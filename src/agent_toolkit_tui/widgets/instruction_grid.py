@@ -1,18 +1,18 @@
 """Interactive DataTable for the TUI's instruction tab.
 
-Columns: INSTRUCTION ⓘ | general ⓘ | <INTERACTIVE_HARNESSES...> | Source.
+Columns: INSTRUCTION ⓘ | standard ⓘ | <INTERACTIVE_HARNESSES...> | Source.
 
 Mirrors agent_grid.py: per-harness columns, scope toggle, toggle-queue →
 pending → apply. Pending key shape: (scope, harness_name, slug) — same
 3-tuple as skill/agent.
 
-The `general` column is read-only (canonical_exists status). It is NOT
+The `standard` column is read-only (canonical_exists status). It is NOT
 toggleable. Conflict cells are also not toggleable (adapter refuses; shown
 distinctly as [red]![/]).
 
 CRITICAL: never name any method `_render_*` — it collides with Textual's
 internal flag mechanism and produces "bool is not callable" from compose.
-All glyph helpers are named `_cell_glyph`, `_general_glyph`, `_rebuild`.
+All glyph helpers are named `_cell_glyph`, `_standard_glyph`, `_rebuild`.
 """
 from __future__ import annotations
 
@@ -37,7 +37,7 @@ _NOT_AVAIL_GLYPH = "[dim]—[/]"
 
 # Column index offsets:
 #   0 = slug (INSTRUCTION)
-#   1 = general (read-only canonical status)
+#   1 = standard (read-only canonical status)
 #   2..2+N-1 = interactive harness columns
 #   2+N = Source
 _HARNESS_COL_OFFSET = 2
@@ -181,11 +181,11 @@ class InstructionGrid(Vertical):
                 f"Canonical: {canonical_path}"
             )
         elif coord.column == 1:
-            # General column — explain canonical + native readers.
-            title = "general · instruction"
+            # Standard column — explain canonical + native readers.
+            title = "standard · instruction"
             status = "✔ present" if row.canonical_exists else "✘ missing"
             body = (
-                f"[b]general[/] — canonical AGENTS.md\n\n"
+                f"[b]standard[/] — canonical AGENTS.md\n\n"
                 f"Status: {status}\n\n"
                 "The canonical AGENTS.md is what every native reader (39 harnesses) "
                 "consumes directly, and what every pointer symlink ultimately resolves to.\n\n"
@@ -245,7 +245,7 @@ class InstructionGrid(Vertical):
         col = table.cursor_coordinate.column
         harness = self._harness_for_column(col)
         if harness is None:
-            # slug or general or source — no-op.
+            # slug or standard or source — no-op.
             return
         scope = self._scope
         # Determine target: if any cell in the column is effectively off → link all.
@@ -280,7 +280,7 @@ class InstructionGrid(Vertical):
         self._notify_pending()
 
     def _toggle_at(self, coord: Coordinate) -> None:
-        # Slug column (0), general column (1), or source column → no-op.
+        # Slug column (0), standard column (1), or source column → no-op.
         harness = self._harness_for_column(coord.column)
         if harness is None:
             return
@@ -311,12 +311,12 @@ class InstructionGrid(Vertical):
 
         Column layout:
           0 = slug (INSTRUCTION)
-          1 = general (read-only)
+          1 = standard (read-only)
           2..2+N-1 = INTERACTIVE_HARNESSES
           2+N = Source
         """
         if col < _HARNESS_COL_OFFSET:
-            # Slug or general — not an interactive harness column.
+            # Slug or standard — not an interactive harness column.
             return None
         idx = col - _HARNESS_COL_OFFSET
         if 0 <= idx < len(INTERACTIVE_HARNESSES):
@@ -335,8 +335,8 @@ class InstructionGrid(Vertical):
         table.clear(columns=True)
         # Slug column.
         table.add_column(f"INSTRUCTION {_INFO_GLYPH}", width=22)
-        # General column — read-only canonical status.
-        table.add_column(f"general {_INFO_GLYPH}", width=12)
+        # Standard column — read-only canonical status.
+        table.add_column(f"standard {_INFO_GLYPH}", width=12)
         # Per-harness interactive columns.
         _HARNESS_DISPLAY: dict[str, str] = {
             "claude-code": "CLAUDE.md",
@@ -350,7 +350,7 @@ class InstructionGrid(Vertical):
 
         for row in self._rows:
             cells: list[str] = [row.slug]
-            cells.append(self._general_glyph(row))
+            cells.append(self._standard_glyph(row))
             for harness in INTERACTIVE_HARNESSES:
                 cells.append(self._cell_glyph(row=row, harness=harness))
             cells.append(row.source)
@@ -358,7 +358,7 @@ class InstructionGrid(Vertical):
 
         if self._rows:
             max_row = len(self._rows) - 1
-            # Layout: slug + general + N harness cols + source.
+            # Layout: slug + standard + N harness cols + source.
             max_col = _HARNESS_COL_OFFSET + len(INTERACTIVE_HARNESSES)
             table.cursor_coordinate = Coordinate(
                 row=min(saved.row, max_row),
@@ -369,8 +369,8 @@ class InstructionGrid(Vertical):
             x=saved_scroll[0], y=saved_scroll[1], animate=False, force=True
         )
 
-    def _general_glyph(self, row: InstructionRow) -> str:
-        """Return the display glyph for the general (canonical) column. Never named _render_*."""
+    def _standard_glyph(self, row: InstructionRow) -> str:
+        """Return the display glyph for the standard (canonical) column. Never named _render_*."""
         if row.canonical_exists:
             return _LINKED_GLYPH
         return "[red]✘[/]"

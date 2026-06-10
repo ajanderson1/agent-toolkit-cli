@@ -17,7 +17,7 @@ from typing import Callable, Literal
 from agent_toolkit_cli import skill_git
 from agent_toolkit_cli._install_core import InstallError
 from agent_toolkit_cli.skill_agents import AGENTS
-from agent_toolkit_cli.skill_install import _should_skip_symlink, _universal_bundle_link
+from agent_toolkit_cli.skill_install import _should_skip_symlink, _standard_bundle_link
 from agent_toolkit_cli.skill_lock import (
     LockEntry, LockFile, clone_url_from_entry, read_lock, remove_entry, write_lock,
 )
@@ -126,7 +126,7 @@ def _scan_stray_symlinks(
     seen: set[Path] = set()
     runtime_home = Path.home()
     for agent_name, cfg in AGENTS.items():
-        if cfg.is_universal:
+        if cfg.is_standard:
             continue
         skip, _ = _should_skip_symlink(
             agent_name=agent_name, scope=scope, project=project,
@@ -217,9 +217,9 @@ def _scan_orphan_canonicals(
 def _scan_stray_bundle_dirs(
     *, scope: Scope, home: Path | None, project: Path | None, lock: LockFile,
 ) -> list[Finding]:
-    """Find orphan REAL directories in the universal-bundle root ~/.agents/skills.
+    """Find orphan REAL directories in the standard-bundle root ~/.agents/skills.
 
-    Global scope only. A correctly installed global universal skill is a *symlink*
+    Global scope only. A correctly installed global standard skill is a *symlink*
     at ~/.agents/skills/<slug> → the library canonical; a real dir there whose slug
     is in the lock is a `wrong_type_bundle` case (handled by _check_slug). What this
     scan catches is the remainder: real dirs whose slug is NOT in the lock (orphan
@@ -230,7 +230,7 @@ def _scan_stray_bundle_dirs(
     """
     if scope != "global":
         return []
-    root = _universal_bundle_root()
+    root = _standard_bundle_root()
     if not root.is_dir():
         return []
     known = set(lock.skills)
@@ -259,7 +259,7 @@ def _scan_stray_bundle_dirs(
                 kind="stray_bundle_dir", slug=name, scope=scope,
                 path=path,
                 detail=(
-                    f"{path}: '{name}' is a real directory in the universal "
+                    f"{path}: '{name}' is a real directory in the standard "
                     f"bundle but has no entry in the global lock"
                 ),
                 fix_action=_make_backup_dir_action(path=path),
@@ -432,12 +432,12 @@ def make_remove_entry_action(
 def _projection_paths(
     slug: str, *, scope: Scope, home: Path | None, project: Path | None,
 ) -> list[tuple[str, Path]]:
-    """Return (agent_name, projection_path) tuples for every non-universal
-    real agent at the given scope. Universal bundle handled separately.
+    """Return (agent_name, projection_path) tuples for every non-standard
+    real agent at the given scope. Standard bundle handled separately.
     """
     out: list[tuple[str, Path]] = []
     for name, cfg in AGENTS.items():
-        if cfg.is_universal:
+        if cfg.is_standard:
             # Skip rule fires at both scopes; no per-agent symlink expected.
             continue
         skip, _ = _should_skip_symlink(
@@ -459,23 +459,23 @@ def _is_inside(child: Path, parent: Path) -> bool:
         return False
 
 
-def _universal_bundle_root() -> Path:
-    """Root of the v2.1 universal-bundle layout: ~/.agents/skills.
+def _standard_bundle_root() -> Path:
+    """Root of the v2.1 standard-bundle layout: ~/.agents/skills.
 
-    Mirrors `skill_install._universal_bundle_link` (which is `<root>/<slug>`).
+    Mirrors `skill_install._standard_bundle_link` (which is `<root>/<slug>`).
     """
     return Path.home() / ".agents" / "skills"
 
 
-def _is_universal_bundle_target(target: Path) -> bool:
-    """True when `target` lives inside the universal-bundle root.
+def _is_standard_bundle_target(target: Path) -> bool:
+    """True when `target` lives inside the standard-bundle root.
 
     On a v2.1 → v2.2 migration the per-harness symlinks point at
     `~/.agents/skills/<slug>` (a real dir or a transitional symlink). The
     classification should be `drifted_symlink` (re-link to library) rather
     than `foreign_symlink` (report-only).
     """
-    return _is_inside(target, _universal_bundle_root())
+    return _is_inside(target, _standard_bundle_root())
 
 
 def _expected_target_root(
@@ -627,7 +627,7 @@ def _check_slug(
             continue
         expected_root = _expected_target_root(scope=scope, project=project)
         if not _is_inside(target, expected_root):
-            if _is_universal_bundle_target(target):
+            if _is_standard_bundle_target(target):
                 findings.append(Finding(
                     kind="drifted_symlink", slug=slug, scope=scope,
                     path=link,
@@ -662,7 +662,7 @@ def _check_slug(
             fix_action=_make_relink_action(link=link, canonical=canonical),
         ))
     if scope == "global":
-        bundle = _universal_bundle_link(slug)
+        bundle = _standard_bundle_link(slug)
         if bundle.exists() and not bundle.is_symlink():
             findings.append(Finding(
                 kind="wrong_type_bundle", slug=slug, scope=scope,

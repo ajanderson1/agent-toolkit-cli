@@ -114,22 +114,22 @@ def projected_agents(slug: str, scope: str, lock: Path) -> tuple[str, ...]:
     straight copy of remove_cmd's will_delete loop: that loop only enumerates
     paths to DELETE, so synthetic catalog names are harmless there — but THIS
     list is fed back into `--agents`, and _resolve_agents
-    (commands/skill/__init__.py) hard-rejects synthetics like "general-skill".
+    (commands/skill/__init__.py) hard-rejects synthetics like "standard-skill".
     Two rules:
-      1. skip ALL synthetic catalog entries, not just "universal";
-      2. a universal-bundle link surfaces as the literal "universal" token —
+      1. skip ALL synthetic catalog entries, not just "standard";
+      2. a standard-bundle link surfaces as the literal "standard" token —
          the only token that restores the bundle BY DESIGN (real agents like
          dexto sharing .agents/skills restore it only by coincidence) — and
          agents whose projection dir IS the bundle path collapse into it.
     """
     from agent_toolkit_cli.skill_paths import AGENTS, agent_projection_dir
 
-    synthetic = {"universal", "general-skill", "general-agent"}
+    synthetic = {"standard", "standard-skill", "standard-agent"}
     project = None if scope == "global" else lock.parent
-    bundle = agent_projection_dir("universal", slug, scope=scope, home=None, project=project)
+    bundle = agent_projection_dir("standard", slug, scope=scope, home=None, project=project)
     found: list[str] = []
     if bundle.is_symlink():
-        found.append("universal")
+        found.append("standard")
     for name in AGENTS:
         if name in synthetic:
             continue

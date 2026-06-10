@@ -19,7 +19,7 @@ from agent_toolkit_cli._install_core import InstallError, InstallPlan
 from agent_toolkit_cli.agent_lock import read_lock
 from agent_toolkit_cli.agent_paths import canonical_agent_dir, library_lock_path
 from agent_toolkit_cli.commands.agent._common import scope_and_roots
-from agent_toolkit_cli.skill_agents import AGENTS
+from agent_toolkit_cli.skill_agents import AGENTS, resolve_agent_token
 
 
 def _default_harnesses() -> tuple[str, ...]:
@@ -41,7 +41,7 @@ def _resolve_harnesses(harnesses_str: str | None) -> tuple[str, ...]:
     """Expand comma-separated harness names or return defaults."""
     if harnesses_str is None:
         return _default_harnesses()
-    parts = [p.strip() for p in harnesses_str.split(",") if p.strip()]
+    parts = [resolve_agent_token(p.strip()) for p in harnesses_str.split(",") if p.strip()]
     unknown = [p for p in parts if p not in AGENTS]
     if unknown:
         raise click.UsageError(f"unknown harness(es): {', '.join(unknown)}")

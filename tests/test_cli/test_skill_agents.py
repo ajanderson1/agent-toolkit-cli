@@ -7,16 +7,16 @@ from agent_toolkit_cli.skill_agents import (
     AGENTS,
     UnknownAgentError,
     get_agent,
-    get_non_universal_agents,
-    get_universal_agents,
-    is_universal,
+    get_non_standard_agents,
+    get_standard_agents,
+    is_standard,
 )
 
 
 def test_catalog_size():
-    """54 real agents + 1 synthetic 'universal' pseudo-entry."""
-    # +1 for general-skill (PR1 of v3.0.0, coexists with universal)
-    # +1 for general-agent (PR2 of v3.0.0)
+    """54 real agents + 1 synthetic 'standard' pseudo-entry."""
+    # +1 for standard-skill (PR1 of v3.0.0, coexists with universal)
+    # +1 for standard-agent (PR2 of v3.0.0)
     assert len(AGENTS) == 57
 
 
@@ -32,29 +32,29 @@ def test_every_global_skills_dir_is_absolute():
         )
 
 
-def test_universal_agents_have_canonical_skills_dir():
-    for n in get_universal_agents():
+def test_standard_agents_have_canonical_skills_dir():
+    for n in get_standard_agents():
         assert AGENTS[n].skills_dir == ".agents/skills"
 
 
-def test_non_universal_agents_have_custom_skills_dir():
-    for n in get_non_universal_agents():
+def test_non_standard_agents_have_custom_skills_dir():
+    for n in get_non_standard_agents():
         assert AGENTS[n].skills_dir != ".agents/skills"
 
 
 def test_universal_list_excludes_synthetic_universal():
-    assert "universal" not in get_universal_agents()
+    assert "standard" not in get_standard_agents()
 
 
 def test_universal_list_excludes_replit():
-    """replit has skills_dir='.agents/skills' but show_in_universal_list=False."""
-    assert "replit" not in get_universal_agents()
+    """replit has skills_dir='.agents/skills' but show_in_standard_list=False."""
+    assert "replit" not in get_standard_agents()
 
 
-def test_is_universal_matches_skills_dir():
-    assert is_universal("codex") is True
-    assert is_universal("claude-code") is False
-    assert is_universal("pi") is False
+def test_is_standard_matches_skills_dir():
+    assert is_standard("codex") is True
+    assert is_standard("claude-code") is False
+    assert is_standard("pi") is False
 
 
 def test_get_agent_returns_config():
@@ -77,58 +77,58 @@ def test_well_known_agents_present():
 def test_well_known_universality():
     """Of our 5 v2.0.0 shortlist:
     codex, opencode, gemini-cli are universal; claude-code, pi are not."""
-    assert is_universal("codex") is True
-    assert is_universal("opencode") is True
-    assert is_universal("gemini-cli") is True
-    assert is_universal("claude-code") is False
-    assert is_universal("pi") is False
+    assert is_standard("codex") is True
+    assert is_standard("opencode") is True
+    assert is_standard("gemini-cli") is True
+    assert is_standard("claude-code") is False
+    assert is_standard("pi") is False
 
 
 def test_general_skill_entry_exists_and_resolves_to_dotagents_skills():
-    assert "general-skill" in AGENTS
-    cfg = AGENTS["general-skill"]
+    assert "standard-skill" in AGENTS
+    cfg = AGENTS["standard-skill"]
     assert cfg.skills_dir == ".agents/skills"
-    assert cfg.show_in_universal_list is False
-    assert cfg.is_universal is True  # by skills_dir membership
+    assert cfg.show_in_standard_list is False
+    assert cfg.is_standard is True  # by skills_dir membership
 
 
 def test_universal_and_general_skill_coexist_with_same_dir():
     """PR1 ships both. The `universal` synthetic is removed in PR3."""
-    assert AGENTS["universal"].skills_dir == AGENTS["general-skill"].skills_dir
-    assert AGENTS["universal"].global_skills_dir == AGENTS["general-skill"].global_skills_dir
+    assert AGENTS["standard"].skills_dir == AGENTS["standard-skill"].skills_dir
+    assert AGENTS["standard"].global_skills_dir == AGENTS["standard-skill"].global_skills_dir
 
 
-def test_get_universal_agents_does_not_include_general_skill():
-    """Both `universal` and `general-skill` set show_in_universal_list=False,
+def test_get_standard_agents_does_not_include_general_skill():
+    """Both `universal` and `standard-skill` set show_in_standard_list=False,
     so neither appears in the legacy 'universal agents' listing."""
-    listed = get_universal_agents()
-    assert "universal" not in listed
-    assert "general-skill" not in listed
+    listed = get_standard_agents()
+    assert "standard" not in listed
+    assert "standard-skill" not in listed
 
 
 def test_list_cmd_rejects_general_skill_token():
-    """general-skill is in AGENTS but the CLI must reject it as a token."""
+    """standard-skill is in AGENTS but the CLI must reject it as a token."""
     import click as _click  # noqa: F401 — for type clarity
     from click.testing import CliRunner
 
     from agent_toolkit_cli.cli import main
 
     runner = CliRunner()
-    result = runner.invoke(main, ["skill", "list", "-g", "-a", "general-skill"])
+    result = runner.invoke(main, ["skill", "list", "-g", "-a", "standard-skill"])
     assert result.exit_code != 0
-    assert "general-skill is a synthetic" in result.output
+    assert "standard-skill is a synthetic" in result.output
 
 
 def test_resolve_agents_rejects_general_skill_token():
-    """_resolve_agents() must fail-loud on general-skill."""
+    """_resolve_agents() must fail-loud on standard-skill."""
     import click
 
     from agent_toolkit_cli.commands.skill import _resolve_agents
 
-    with pytest.raises(click.UsageError, match="general-skill is a synthetic"):
-        _resolve_agents("general-skill", "global")
-    with pytest.raises(click.UsageError, match="general-skill is a synthetic"):
-        _resolve_agents("claude-code,general-skill", "global")
+    with pytest.raises(click.UsageError, match="standard-skill is a synthetic"):
+        _resolve_agents("standard-skill", "global")
+    with pytest.raises(click.UsageError, match="standard-skill is a synthetic"):
+        _resolve_agents("claude-code,standard-skill", "global")
 
 
 def test_agentconfig_has_subagent_mechanism_field():
@@ -168,9 +168,9 @@ def test_subagent_mechanism_literal_values():
 def test_general_agent_synthetic_present():
     from agent_toolkit_cli.skill_agents import AGENTS, XDG_CONFIG
 
-    assert "general-agent" in AGENTS
-    cfg = AGENTS["general-agent"]
-    assert cfg.skills_dir == ".agents/agents"  # parallel to general-skill but agents dir
+    assert "standard-agent" in AGENTS
+    cfg = AGENTS["standard-agent"]
+    assert cfg.skills_dir == ".agents/agents"  # parallel to standard-skill but agents dir
     assert cfg.global_skills_dir == XDG_CONFIG / "agents/agents"
-    assert cfg.show_in_universal_list is False
+    assert cfg.show_in_standard_list is False
     assert cfg.subagent_mechanism == "none"  # not a real harness

@@ -3,7 +3,7 @@
 Covers (widget-level + app-level):
 
 Widget-level:
-1.  columns renders correctly (INSTRUCTION + general + INTERACTIVE_HARNESSES + Source)
+1.  columns renders correctly (INSTRUCTION + standard + INTERACTIVE_HARNESSES + Source)
 2.  row count
 3.  toggle unlinked cell queues 'link'
 4.  toggle linked cell queues 'unlink'
@@ -12,7 +12,7 @@ Widget-level:
 7.  toggle_column (action_a) queues all in column
 8.  set_scope clears pending
 9.  conflict cell is non-toggleable (no-op)
-10. general column is non-toggleable (no-op)
+10. standard column is non-toggleable (no-op)
 
 App-level:
 11. sidebar lists instruction first, separator second, then others
@@ -96,7 +96,7 @@ def _conflict_row(slug: str = "AGENTS.md", *, scope: str = "global") -> Instruct
 
 @pytest.mark.asyncio
 async def test_instruction_grid_mounts_with_correct_columns():
-    """Grid must show INSTRUCTION + general + INTERACTIVE_HARNESSES + Source."""
+    """Grid must show INSTRUCTION + standard + INTERACTIVE_HARNESSES + Source."""
 
     class _A(App):
         def compose(self) -> ComposeResult:
@@ -107,10 +107,10 @@ async def test_instruction_grid_mounts_with_correct_columns():
         await pilot.pause()
         table = app.query_one("#instruction-table", DataTable)
         labels = [str(c.label) for c in table.columns.values()]
-        # Slug + general + N harness cols + Source
+        # Slug + standard + N harness cols + Source
         assert len(labels) == len(INTERACTIVE_HARNESSES) + 3
         assert any("INSTRUCTION" in lbl for lbl in labels)
-        assert any("general" in lbl for lbl in labels)
+        assert any("standard" in lbl for lbl in labels)
         assert any("Source" in lbl for lbl in labels)
 
 
@@ -144,7 +144,7 @@ async def test_toggle_unlinked_cell_queues_link():
         g = app.query_one("#g", InstructionGrid)
         g.set_scope("global")
         table = app.query_one("#instruction-table", DataTable)
-        # Column layout: [0]=slug, [1]=general, [2]=first harness, ...
+        # Column layout: [0]=slug, [1]=standard, [2]=first harness, ...
         table.cursor_coordinate = table.cursor_coordinate.__class__(row=0, column=2)
         table.focus()
         await pilot.pause()
@@ -306,8 +306,8 @@ async def test_conflict_cell_is_not_toggled():
 
 
 @pytest.mark.asyncio
-async def test_general_column_is_not_toggled():
-    """Space on the general (column 1) is a no-op."""
+async def test_standard_column_is_not_toggled():
+    """Space on the standard (column 1) is a no-op."""
 
     class _A(App):
         def compose(self) -> ComposeResult:
@@ -319,7 +319,7 @@ async def test_general_column_is_not_toggled():
         g = app.query_one("#g", InstructionGrid)
         g.set_scope("global")
         table = app.query_one("#instruction-table", DataTable)
-        # Column 1 = general
+        # Column 1 = standard
         table.cursor_coordinate = table.cursor_coordinate.__class__(row=0, column=1)
         table.focus()
         await pilot.pause()

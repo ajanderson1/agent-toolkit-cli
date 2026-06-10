@@ -17,7 +17,9 @@ agent-toolkit-cli skill push   [<slug>...] [-g|-p] [--direct]   # PR-branch by d
 agent-toolkit-cli skill remove <slug>... [-g|-p] [--force]          # alias: rm
 ```
 
-`<source>` accepts `owner/repo`, a full HTTPS URL, an SSH URL, or a local path. `-g/--global` and `-p/--project` select scope; default is global. `skill list --json` emits a JSON array (`slug`, `source`, `ref`, `upstream_sha`, `local_sha`, `scope`) for scripting; `-a/--agent <name>` filters to skills currently symlinked into that agent (or the `universal` token).
+`<source>` accepts `owner/repo`, a full HTTPS URL, an SSH URL, or a local path. `-g/--global` and `-p/--project` select scope; default is global. `skill list --json` emits a JSON array (`slug`, `source`, `ref`, `upstream_sha`, `local_sha`, `scope`) for scripting; `-a/--agent <name>` filters to skills currently symlinked into that agent (or the `standard` token).
+
+> **Terminology:** *standard* — formerly "general" (v3), earlier "universal" (pre-v3). The old token spellings still work for one cycle with a deprecation warning and are removed in v4.
 
 Full reference, lock-file format, and skills.sh interop notes live in [`skill-lock.md`](skill-lock.md).
 
@@ -89,5 +91,5 @@ By default `skill push <slug>` creates a `skill/self-improvement-<timestamp>` br
 ## See also
 
 - [`skill-lock.md`](skill-lock.md) — lock-file format and `skill` subcommand reference.
-- The 55-agent catalog (`skillsDir == .agents/skills` = universal) lives in `src/agent_toolkit_cli/skill_agents.py`.
+- The 55-agent catalog (`skillsDir == .agents/skills` = standard) lives in `src/agent_toolkit_cli/skill_agents.py`.
 - [`schema.md`](schema.md) — asset frontmatter schema (toolkit-repo SSOT, not consumed by this CLI post-v2.3.0).

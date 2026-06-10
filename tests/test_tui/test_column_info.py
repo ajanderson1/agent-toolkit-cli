@@ -9,15 +9,14 @@ from agent_toolkit_tui.column_info import (
 
 
 def test_universal_entry_is_registered():
-    assert "universal" in COLUMN_INFO
+    assert "standard" in COLUMN_INFO
 
 
 def test_get_column_info_universal_returns_columninfo():
-    # Token stays "universal" (load-bearing bundle key); the display title is
-    # "General" after the v3 universal→general rename (#304 bug 3).
-    info = get_column_info("universal")
+    # #350 full rename: key and title both say "standard"/"Standard".
+    info = get_column_info("standard")
     assert isinstance(info, ColumnInfo)
-    assert info.title.lower().startswith("general")
+    assert info.title.lower().startswith("standard")
     # At least one harness should be listed.
     assert info.lines
     # The description block is the first paragraph above the bullet list.
@@ -26,10 +25,10 @@ def test_get_column_info_universal_returns_columninfo():
 
 
 def test_get_column_info_universal_lists_known_harnesses():
-    from agent_toolkit_cli.skill_agents import get_universal_agents
-    info = get_column_info("universal")
+    from agent_toolkit_cli.skill_agents import get_standard_agents
+    info = get_column_info("standard")
     text = "\n".join(info.lines)
-    for name in get_universal_agents():
+    for name in get_standard_agents():
         assert name in text, f"universal harness {name!r} missing from info"
 
 
@@ -39,8 +38,8 @@ def test_get_column_info_unknown_returns_none():
 
 def test_get_column_info_is_recomputed_each_call():
     """Registry stores a factory, so a later catalog change is reflected."""
-    info_a = get_column_info("universal")
-    info_b = get_column_info("universal")
+    info_a = get_column_info("standard")
+    info_b = get_column_info("standard")
     # Distinct objects (factory called twice), but equal content.
     assert info_a is not info_b
     assert info_a.title == info_b.title
@@ -72,9 +71,9 @@ def test_get_column_info_state_badge_order_matches_state_markup():
     assert badges == ["clean", "dirty", "missing", "copy", "library"]
 
 
-def test_universal_info_includes_global_marker_when_context_says_globally_linked():
-    """Universal info shows the 🌐 paragraph when the focused row IS globally installed."""
-    info = get_column_info("universal", context={"global_linked": True})
+def test_standard_info_includes_global_marker_when_context_says_globally_linked():
+    """Standard info shows the 🌐 paragraph when the focused row IS globally installed."""
+    info = get_column_info("standard", context={"global_linked": True})
     assert info is not None
     joined = "\n".join(info.lines)
     assert "🌐" in joined, f"info missing global marker glyph: {info.lines}"
@@ -83,9 +82,9 @@ def test_universal_info_includes_global_marker_when_context_says_globally_linked
     )
 
 
-def test_universal_info_omits_global_marker_when_context_says_not_globally_linked():
-    """Universal info OMITS the 🌐 paragraph when the focused row is NOT globally installed (#212)."""
-    info = get_column_info("universal", context={"global_linked": False})
+def test_standard_info_omits_global_marker_when_context_says_not_globally_linked():
+    """Standard info OMITS the 🌐 paragraph when the focused row is NOT globally installed (#212)."""
+    info = get_column_info("standard", context={"global_linked": False})
     assert info is not None
     joined = "\n".join(info.lines)
     assert "🌐" not in joined, (
@@ -93,9 +92,9 @@ def test_universal_info_omits_global_marker_when_context_says_not_globally_linke
     )
 
 
-def test_universal_info_includes_global_marker_when_no_context():
+def test_standard_info_includes_global_marker_when_no_context():
     """Without context (e.g. legacy callers) the 🌐 paragraph still appears (back-compat)."""
-    info = get_column_info("universal")
+    info = get_column_info("standard")
     assert info is not None
     joined = "\n".join(info.lines)
     assert "🌐" in joined, f"info missing global marker glyph: {info.lines}"

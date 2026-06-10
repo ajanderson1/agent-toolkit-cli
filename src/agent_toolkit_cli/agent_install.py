@@ -5,9 +5,9 @@ Binds AGENT_BINDING + _AGENT_SYNTHETIC_NAMES into the core. apply()
 dispatches to per-mechanism adapters from `agent_adapters/` instead of
 the skill facade's uniform-symlink projection.
 
-No universal-bundle concept exists for agents (per spec: agents
+No standard-bundle concept exists for agents (per spec: agents
 don't bundle into a megaprompt), so the facade injects
-universal_bundle_link=None.
+standard_bundle_link=None.
 """
 from __future__ import annotations
 
@@ -36,9 +36,9 @@ from agent_toolkit_cli.skill_agents import (
 from agent_toolkit_cli.skill_source import ParsedSource
 
 # Catalog tokens that are virtual entries, not real harness install targets.
-# Note: no "universal" — that's skill-only. "general-agent" mirrors
-# "general-skill" from the skill facade.
-_AGENT_SYNTHETIC_NAMES: frozenset[str] = frozenset({"general-agent"})
+# Note: no "standard" bundle — that's skill-only. "standard-agent" mirrors
+# "standard-skill" from the skill facade.
+_AGENT_SYNTHETIC_NAMES: frozenset[str] = frozenset({"standard-agent"})
 
 
 def plan(
@@ -55,8 +55,8 @@ def plan(
 
     Thin facade over `_install_core.plan` that binds the agent-specific
     synthetic-name set AND injects an adapter-aware "currently linked"
-    scanner. Agents have no universal-bundle concept, so
-    universal_bundle_link=None.
+    scanner. Agents have no standard-bundle concept, so
+    standard_bundle_link=None.
 
     The injected scanner is essential: the core's built-in scan looks for a
     SYMLINK at the SKILL projection path, but agent adapters write REAL FILES
@@ -69,7 +69,7 @@ def plan(
         slug=slug, scope=scope, source=source, ref=ref,
         target_agents=target_agents, home=home, project=project,
         canonical_dir_resolver=canonical_agent_dir,
-        universal_bundle_link=None,
+        standard_bundle_link=None,
         synthetic_names=_AGENT_SYNTHETIC_NAMES,
         current_linked_resolver=_current_linked_agents,
     )
@@ -79,7 +79,7 @@ def _current_linked_agents(
     *, slug: str, scope: Scope,
     home: Path | None, project: Path | None,
     canonical_dir_resolver=None,
-    universal_bundle_link=None,
+    standard_bundle_link=None,
     synthetic_names: frozenset[str] = frozenset(),
 ) -> tuple[str, ...]:
     """Adapter-aware "currently linked" scan for the agent kind.
@@ -89,13 +89,13 @@ def _current_linked_agents(
     install (adapter.destination(...)) and test whether that real file
     exists. A harness whose destination exists is "currently linked".
 
-    Synthetic tokens (general-agent) are skipped. Unsupported harnesses
+    Synthetic tokens (standard-agent) are skipped. Unsupported harnesses
     (mechanism='none', incl. the 4 PR2-disabled config_file_folder cells)
     raise UnsupportedMechanismError from get_adapter() and are skipped.
     Adapters that fail-loud on a destination they cannot resolve (e.g. dexto
     at project scope) are treated as not-linked rather than crashing the scan.
 
-    The kwargs `canonical_dir_resolver`/`universal_bundle_link` are accepted
+    The kwargs `canonical_dir_resolver`/`standard_bundle_link` are accepted
     only to satisfy the core's `current_linked_resolver` call signature; they
     are irrelevant to the agent kind and ignored.
     """
@@ -132,7 +132,7 @@ def apply(
     """Execute the agent-install plan.
 
     For each agent in plan.add_agents:
-      - Skip synthetic tokens (general-agent).
+      - Skip synthetic tokens (standard-agent).
       - Resolve the mechanism via agent_adapters.get_adapter().
       - If get_adapter() raises UnsupportedMechanismError, record as skipped.
       - Otherwise call adapter.install(slug, canonical_path/<agent_file>, …).

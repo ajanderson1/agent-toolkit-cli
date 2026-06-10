@@ -10,13 +10,17 @@ import click
 import yaml
 
 from agent_toolkit_cli import skill_git
-from agent_toolkit_cli.skill_agents import AGENTS, detect_installed_agents
+from agent_toolkit_cli.skill_agents import (
+    AGENTS,
+    detect_installed_agents,
+    resolve_agent_token,
+)
 from agent_toolkit_cli.skill_install import (
     DirtyCanonicalError,
     InstallError,
     InstallPlan,
     _current_linked_agents,
-    _universal_bundle_link,
+    _standard_bundle_link,
     apply as engine_apply,
     ensure_project_canonical,
     plan as engine_plan,
@@ -162,9 +166,9 @@ Examples:
   $ agent-toolkit-cli skill add ajanderson1/journal-skill --slug journal
 
 \b
-  # Make it visible to a specific agent (claude-code) or all universal agents
+  # Make it visible to a specific agent (claude-code) or all standard harnesses
   $ agent-toolkit-cli skill install journal --agents claude-code
-  $ agent-toolkit-cli skill install journal --agents universal
+  $ agent-toolkit-cli skill install journal --agents standard
   $ agent-toolkit-cli skill install journal --agents all
 
 \b
@@ -201,20 +205,23 @@ def _resolve_agents(agents_str: str, scope: str) -> tuple[str, ...]:
     """Expand a comma-separated --agents string into a tuple of agent names.
 
     Special values:
-      "universal" → the universal bundle token (creates ~/.agents/skills/<slug>)
-      "all"       → every agent detected as installed at the given scope
+      "standard" → the standard bundle token (creates ~/.agents/skills/<slug>)
+      "all"      → every agent detected as installed at the given scope
+
+    Deprecated spellings (universal, general-*) are aliased with a stderr
+    warning via resolve_agent_token().
     """
     if agents_str == "all":
         return tuple(detect_installed_agents())
-    parts = [p.strip() for p in agents_str.split(",") if p.strip()]
-    # "universal" is a valid token; other names must be in the catalog.
-    unknown = [p for p in parts if p != "universal" and p not in AGENTS]
+    parts = [resolve_agent_token(p.strip()) for p in agents_str.split(",") if p.strip()]
+    # "standard" is a valid token; other names must be in the catalog.
+    unknown = [p for p in parts if p != "standard" and p not in AGENTS]
     if unknown:
         raise click.UsageError(f"unknown agent(s): {', '.join(unknown)}")
-    synthetic = [p for p in parts if p == "general-skill"]
+    synthetic = [p for p in parts if p == "standard-skill"]
     if synthetic:
         raise click.UsageError(
-            f"general-skill is a synthetic catalog entry, not a usable agent token: "
+            f"standard-skill is a synthetic catalog entry, not a usable agent token: "
             f"{', '.join(synthetic)}"
         )
     return tuple(parts)
@@ -497,12 +504,12 @@ Examples:
 
 \b
   agent-toolkit-cli skill install journal --agents claude-code
-  agent-toolkit-cli skill install journal --agents universal
+  agent-toolkit-cli skill install journal --agents standard
   agent-toolkit-cli skill install journal --agents claude-code -p
 """)
 @click.argument("slug", required=True)
 @click.option("--agents", "agents_str", required=True,
-              help="Comma-separated agent names, 'universal', or 'all'.")
+              help="Comma-separated agent names, 'standard', or 'all'.")
 @click.option("--scope", "scope", default="global",
               type=click.Choice(["global", "project"]),
               help="Scope: global (default) or project.")
@@ -575,8 +582,8 @@ def install_cmd(
             ) from exc
 
         # Under the external-store model every agent — including the synthetic
-        # "universal" bundle token — projects via a symlink into the project
-        # tree; apply() creates <project>/.agents/skills/<slug> for "universal".
+        # "standard" bundle token — projects via a symlink into the project
+        # tree; apply() creates <project>/.agents/skills/<slug> for "standard".
         p = InstallPlan(
             slug=slug, scope="project",
             source=None, ref=None,
@@ -606,7 +613,7 @@ Examples:
 """)
 @click.argument("slug", required=True)
 @click.option("--agents", "agents_str", required=True,
-              help="Comma-separated agent names, 'universal', or 'all'.")
+              help="Comma-separated agent names, 'standard', or 'all'.")
 @click.option("--scope", "scope", default="global",
               type=click.Choice(["global", "project"]),
               help="Scope: global (default) or project.")
@@ -645,9 +652,9 @@ def uninstall_cmd(
         project_root = (
             ctx.obj.get("project_root") if ctx.obj else None
         ) or Path.cwd()
-        # Every agent — including the synthetic "universal" bundle token —
+        # Every agent — including the synthetic "standard" bundle token —
         # projects via a symlink under the external-store model; apply() removes
-        # <project>/.agents/skills/<slug> for "universal".
+        # <project>/.agents/skills/<slug> for "standard".
         p = InstallPlan(
             slug=slug, scope="project",
             source=None, ref=None,
@@ -717,11 +724,11 @@ def remove_cmd(
             from . import wizard as _wizard
             will_delete = [str(library_dir)]
             # Enumerate known symlinks.
-            bundle_link = _universal_bundle_link(slug)
+            bundle_link = _standard_bundle_link(slug)
             if bundle_link.is_symlink():
                 will_delete.append(str(bundle_link))
             for name in AGENTS:
-                if name == "universal":
+                if name == "standard":
                     continue
                 try:
                     from agent_toolkit_cli.skill_paths import agent_projection_dir
@@ -775,16 +782,16 @@ def remove_cmd(
 
 
 def _remove_all_global_symlinks(slug: str) -> None:
-    """Remove the universal bundle link and all non-universal agent links at global scope."""
-    bundle_link = _universal_bundle_link(slug)
+    """Remove the standard bundle link and all non-standard agent links at global scope."""
+    bundle_link = _standard_bundle_link(slug)
     if bundle_link.is_symlink():
         bundle_link.unlink()
 
     for name in AGENTS:
-        if name == "universal":
+        if name == "standard":
             continue
         cfg = AGENTS[name]
-        if cfg.is_universal:
+        if cfg.is_standard:
             continue
         link = cfg.global_skills_dir / slug
         if link.is_symlink():

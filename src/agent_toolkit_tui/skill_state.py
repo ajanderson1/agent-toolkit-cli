@@ -29,16 +29,16 @@ Scope = Literal["global", "project"]
 # Agents whose cells the TUI grid renders interactively. Mirrors v2.0.0's
 # 5-harness shortcut for the interactive surface; the long tail of agents
 # stays CLI-only.
-# "universal" is first — it represents the bundle toggle (~/.agents/skills/<slug>
+# "standard" is first — it represents the bundle toggle (~/.agents/skills/<slug>
 # symlink at global scope; project canonical existence at project scope).
-INTERACTIVE_AGENTS: tuple[str, ...] = ("universal", "claude-code", "pi")
+INTERACTIVE_AGENTS: tuple[str, ...] = ("standard", "claude-code", "pi")
 
 
 @dataclass(frozen=True)
 class SkillCell:
     linked: bool       # symlink resolves to canonical (or canonical exists for skipped)
     drift: bool        # symlink exists, points elsewhere, AND canonical exists at this scope
-    skipped: bool      # universal-global: no symlink needed, canonical IS the dir
+    skipped: bool      # standard-global: no symlink needed, canonical IS the dir
     stray: bool = False  # symlink exists but skill isn't installed at this scope
 
 
@@ -83,13 +83,13 @@ def _read_skill_description(canonical: Path) -> str:
     return " ".join(str(raw).split())
 
 
-def _universal_bundle_link(slug: str) -> Path:
-    """Return the ~/.agents/skills/<slug> path for the universal-bundle install."""
+def _standard_bundle_link(slug: str) -> Path:
+    """Return the ~/.agents/skills/<slug> path for the standard-bundle install."""
     return Path.home() / ".agents" / "skills" / slug
 
 
-def _project_universal_link(project: Path, slug: str) -> Path:
-    """Return the <project>/.agents/skills/<slug> path for the project universal bundle."""
+def _project_standard_link(project: Path, slug: str) -> Path:
+    """Return the <project>/.agents/skills/<slug> path for the project standard bundle."""
     return project / ".agents" / "skills" / slug
 
 
@@ -97,12 +97,12 @@ def _cell_for(
     slug: str, agent_name: str, *,
     scope: Scope, home: Path | None, project: Path | None,
 ) -> SkillCell:
-    # The synthetic "universal" token has its own detection logic: it does NOT
-    # use _should_skip_symlink (that function doesn't understand "universal" as
+    # The synthetic "standard" token has its own detection logic: it does NOT
+    # use _should_skip_symlink (that function doesn't understand "standard" as
     # an agent_name — the engine strips it before calling skip checks).
-    if agent_name == "universal":
-        # The universal bundle is one shared projection symlink that all
-        # universal agents read through. Both scopes detect it the same way now:
+    if agent_name == "standard":
+        # The standard bundle is one shared projection symlink that all
+        # standard agents read through. Both scopes detect it the same way now:
         # linked iff the bundle link is a symlink resolving to the canonical
         # (which lives in the library at global scope, the external store at
         # project scope). Global: ~/.agents/skills/<slug>; project:
@@ -111,9 +111,9 @@ def _cell_for(
             slug, scope=scope, home=home, project=project,
         )
         bundle_link = (
-            _universal_bundle_link(slug)
+            _standard_bundle_link(slug)
             if scope == "global"
-            else _project_universal_link(project, slug)  # type: ignore[arg-type]
+            else _project_standard_link(project, slug)  # type: ignore[arg-type]
         )
         if not bundle_link.is_symlink():
             return SkillCell(linked=False, drift=False, skipped=False)

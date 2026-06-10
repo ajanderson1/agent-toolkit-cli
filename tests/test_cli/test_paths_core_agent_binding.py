@@ -23,7 +23,7 @@ def test_agent_binding_fields():
     assert AGENT_BINDING.canonical_dirname == "agents"
     assert AGENT_BINDING.library_subdir == "agents"
     assert AGENT_BINDING.lock_filename == "agents-lock.json"
-    assert AGENT_BINDING.general_harness_name == "general-agent"
+    assert AGENT_BINDING.standard_harness_name == "standard-agent"
 
 
 def test_agent_binding_is_frozen():
