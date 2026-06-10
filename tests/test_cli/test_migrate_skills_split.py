@@ -47,15 +47,24 @@ def test_unmapped_slug_guard_lists_strays(tmp_path):
 
 def test_discover_lock_paths_scans_home_excludes_worktrees(tmp_path):
     (tmp_path / "proj").mkdir()
-    a = tmp_path / "proj" / "skills-lock.json"; a.write_text('{"skills":{}}')
-    deep = tmp_path / "proj" / "sub" / "deep"; deep.mkdir(parents=True)
-    b = deep / "skills-lock.json"; b.write_text('{"skills":{}}')
-    wt = tmp_path / "proj" / ".worktrees" / "run-1"; wt.mkdir(parents=True)
-    c = wt / "skills-lock.json"; c.write_text('{"skills":{}}')
-    cache = tmp_path / ".cache" / "uv" / "git-v0" / "checkouts" / "abc"; cache.mkdir(parents=True)
-    d = cache / "skills-lock.json"; d.write_text('{"skills":{}}')
-    cwt = tmp_path / "proj" / ".claude" / "worktrees" / "feat-x"; cwt.mkdir(parents=True)
-    e = cwt / "skills-lock.json"; e.write_text('{"skills":{}}')
+    a = tmp_path / "proj" / "skills-lock.json"
+    a.write_text('{"skills":{}}')
+    deep = tmp_path / "proj" / "sub" / "deep"
+    deep.mkdir(parents=True)
+    b = deep / "skills-lock.json"
+    b.write_text('{"skills":{}}')
+    wt = tmp_path / "proj" / ".worktrees" / "run-1"
+    wt.mkdir(parents=True)
+    c = wt / "skills-lock.json"
+    c.write_text('{"skills":{}}')
+    cache = tmp_path / ".cache" / "uv" / "git-v0" / "checkouts" / "abc"
+    cache.mkdir(parents=True)
+    d = cache / "skills-lock.json"
+    d.write_text('{"skills":{}}')
+    cwt = tmp_path / "proj" / ".claude" / "worktrees" / "feat-x"
+    cwt.mkdir(parents=True)
+    e = cwt / "skills-lock.json"
+    e.write_text('{"skills":{}}')
 
     found = mss.discover_lock_paths([tmp_path])
     assert a in found and b in found
@@ -76,7 +85,8 @@ def test_find_lock_scopes_filters_to_source_repo(tmp_path):
 
 
 def test_parse_error_fails_loud(tmp_path):
-    bad = tmp_path / "skills-lock.json"; bad.write_text("{ not json")
+    bad = tmp_path / "skills-lock.json"
+    bad.write_text("{ not json")
     import pytest
     with pytest.raises(json.JSONDecodeError):
         mss.find_lock_scopes_for_slug("journal", lock_paths=[bad])
@@ -91,7 +101,8 @@ def _fake_agents(slug, scope, lock):
 def test_action_plan_orders_global_before_project(tmp_path):
     glob = tmp_path / "global-lock.json"
     glob.write_text('{"skills":{"journal":{"source":"ajanderson1/skills","skillPath":"journal"}}}')
-    proj = tmp_path / "p" / "skills-lock.json"; proj.parent.mkdir()
+    proj = tmp_path / "p" / "skills-lock.json"
+    proj.parent.mkdir()
     proj.write_text('{"skills":{"journal":{"source":"ajanderson1/skills","skillPath":"journal"}}}')
 
     plan = mss.build_action_plan(slugs=["journal"], global_lock=glob,
@@ -122,8 +133,10 @@ def test_action_plan_project_only_slug_gets_prerequisite_global_add(tmp_path):
     # re-derives from the global entry, so a prerequisite Phase A add is
     # mandatory (spec mandate) — without it, uninstall -p drops the project
     # entry and install -p raises "not in global library", stranding the slug.
-    glob = tmp_path / "global-lock.json"; glob.write_text('{"skills":{}}')
-    proj = tmp_path / "p" / "skills-lock.json"; proj.parent.mkdir()
+    glob = tmp_path / "global-lock.json"
+    glob.write_text('{"skills":{}}')
+    proj = tmp_path / "p" / "skills-lock.json"
+    proj.parent.mkdir()
     proj.write_text('{"skills":{"apk-workbench":{"source":"ajanderson1/skills","skillPath":"apk-workbench"}}}')
     plan = mss.build_action_plan(slugs=["apk-workbench"], global_lock=glob,
                                  project_locks=[proj], projected_agents=_fake_agents)
@@ -135,7 +148,8 @@ def test_action_plan_recovers_stranded_slug_after_failed_add(tmp_path):
     # mid-apply abort state: remove succeeded, add failed -> slug on NO source.
     # Re-run must re-emit the add, not silently skip the slug (an old-source-only
     # predicate would make a stranded slug vanish from the plan forever).
-    glob = tmp_path / "global-lock.json"; glob.write_text('{"skills":{}}')
+    glob = tmp_path / "global-lock.json"
+    glob.write_text('{"skills":{}}')
     plan = mss.build_action_plan(slugs=["journal"], global_lock=glob,
                                  project_locks=[], projected_agents=_fake_agents)
     assert [(a.phase, a.verb) for a in plan] == [("A", "add")]
@@ -149,8 +163,10 @@ def test_projected_agents_collapses_bundle_to_universal_token(tmp_path):
     # (accepted first-class) and the synthetics must NEVER appear
     proj = tmp_path / "p"
     lock = proj / "skills-lock.json"
-    bundle = proj / ".agents" / "skills"; bundle.mkdir(parents=True)
-    canon = proj / ".canonical-journal"; canon.mkdir()
+    bundle = proj / ".agents" / "skills"
+    bundle.mkdir(parents=True)
+    canon = proj / ".canonical-journal"
+    canon.mkdir()
     (bundle / "journal").symlink_to(canon)
     lock.write_text('{"skills":{}}')
     agents = mss.projected_agents("journal", "project", lock)
@@ -159,7 +175,8 @@ def test_projected_agents_collapses_bundle_to_universal_token(tmp_path):
 
 
 def test_secret_scan_flags_credential_files_and_uuids(tmp_path):
-    skill = tmp_path / "bank-statement-download" / "references"; skill.mkdir(parents=True)
+    skill = tmp_path / "bank-statement-download" / "references"
+    skill.mkdir(parents=True)
     (skill / "credentials.md").write_text(
         "N26 vault item: 3f2a9c14-1b2d-4e6a-9f01-aabbccddeeff\nacct 51412937\n"
     )
@@ -180,7 +197,8 @@ def test_action_plan_flags_projectionless_scope_for_manual_decision(tmp_path):
     # Plan a needs-decision marker instead; main() blocks --apply on these.
     glob = tmp_path / "global-lock.json"
     glob.write_text('{"skills":{"journal":{"source":"ajanderson1/skills-journal","skillPath":"journal"}}}')
-    proj = tmp_path / "p" / "skills-lock.json"; proj.parent.mkdir()
+    proj = tmp_path / "p" / "skills-lock.json"
+    proj.parent.mkdir()
     proj.write_text('{"skills":{"journal":{"source":"ajanderson1/skills","skillPath":"journal"}}}')
     plan = mss.build_action_plan(slugs=["journal"], global_lock=glob,
                                  project_locks=[proj],
@@ -217,7 +235,8 @@ def test_main_excludes_global_lock_from_project_scopes(tmp_path, monkeypatch, ca
     # spuriously fail the "Phase B" assertion below)
     monkeypatch.setattr(mss, "projected_agents", _fake_agents)
     monkeypatch.setattr(mss, "JOURNAL", tmp_path / "journal.jsonl")
-    glob = tmp_path / ".agent-toolkit" / "skills-lock.json"; glob.parent.mkdir()
+    glob = tmp_path / ".agent-toolkit" / "skills-lock.json"
+    glob.parent.mkdir()
     glob.write_text('{"skills":{"journal":{"source":"ajanderson1/skills","skillPath":"journal"}}}')
     mss.main(["--global-lock", str(glob), "--roots", str(tmp_path)])
     out = capsys.readouterr().out

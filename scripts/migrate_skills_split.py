@@ -151,7 +151,8 @@ def scan_for_secrets(skill_tree: Path) -> list[Path]:
         if not f.is_file():
             continue
         if _SECRET_NAME_RE.search(f.name):
-            hits.append(f); continue
+            hits.append(f)
+            continue
         try:
             if _UUID_RE.search(f.read_text(errors="ignore")):
                 hits.append(f)
@@ -204,7 +205,8 @@ def build_action_plan(
 
 def render_plan(plan: list[Action]) -> None:
     if not plan:
-        print("nothing to do (all scopes already migrated)"); return
+        print("nothing to do (all scopes already migrated)")
+        return
     for ph in ("A", "B"):
         rows = [a for a in plan if a.phase == ph]
         if not rows:
