@@ -1,8 +1,9 @@
 """`agent install <slug> [-g/-p] [--harnesses <names>]` — project to harnesses.
 
 Projects the agent's content file into each requested harness's agents dir
-via the per-mechanism adapter. Harnesses default to all enabled adapters
-(subagent_mechanism != 'none') when --harnesses is omitted.
+via the per-mechanism adapter. When --harnesses is omitted the default is
+covered-aware (#361): the standard slot plus every enabled adapter
+(subagent_mechanism != 'none') the slot does NOT already cover at this scope.
 
 result.removed is NOT populated by apply() (the uninstall loop in
 agent_install.apply() never appends — see code comment there). We do NOT
@@ -18,34 +19,48 @@ from agent_toolkit_cli import agent_install
 from agent_toolkit_cli._install_core import InstallError, InstallPlan
 from agent_toolkit_cli.agent_lock import read_lock
 from agent_toolkit_cli.agent_paths import canonical_agent_dir, library_lock_path
-from agent_toolkit_cli.commands.agent._common import scope_and_roots
-from agent_toolkit_cli.skill_agents import AGENTS, resolve_agent_token
+from agent_toolkit_cli.commands.agent._common import parse_harness_tokens, scope_and_roots
+from agent_toolkit_cli.skill_agents import AGENTS
 
 
-def _default_harnesses() -> tuple[str, ...]:
-    """Return all harness names whose subagent_mechanism != 'none'."""
+def _default_harnesses(scope: str) -> tuple[str, ...]:
+    """Covered-aware default install fan-out (#361): the standard slot first,
+    then every enabled harness NOT covered by it at this scope, sorted.
+
+    Covered harnesses (agents_standard_covered) read the standard slot
+    natively — a per-harness own-dir copy would be a redundant second
+    artifact. NOTE the deliberate asymmetry with uninstall: the no-flag
+    UNINSTALL default stays MAXIMAL (no covered filter) because pre-#361
+    installs wrote real own-dir files for covered harnesses — see
+    uninstall_cmd._resolve_harnesses_for_uninstall.
+    """
     from agent_toolkit_cli.agent_adapters import UnsupportedMechanismError, get_adapter
+    from agent_toolkit_cli.agent_adapters.standard import agents_standard_covered
+    covered = agents_standard_covered(scope)
     result = []
     for name, cfg in AGENTS.items():
         if cfg.subagent_mechanism == "none":
+            continue
+        if name in covered:
             continue
         try:
             get_adapter(name)
             result.append(name)
         except (UnsupportedMechanismError, Exception):
             pass
-    return tuple(sorted(result))
+    return ("standard", *sorted(result))
 
 
-def _resolve_harnesses(harnesses_str: str | None) -> tuple[str, ...]:
-    """Expand comma-separated harness names or return defaults."""
+def _resolve_harnesses(harnesses_str: str | None, scope: str) -> tuple[str, ...]:
+    """Expand comma-separated harness names or return scope-aware defaults.
+
+    Explicit values go through the shared parse/normalize/dedupe seam
+    (_common.parse_harness_tokens): synthetic catalog names rejected,
+    claude-code normalized to standard, order-preserving dedupe.
+    """
     if harnesses_str is None:
-        return _default_harnesses()
-    parts = [resolve_agent_token(p.strip()) for p in harnesses_str.split(",") if p.strip()]
-    unknown = [p for p in parts if p not in AGENTS]
-    if unknown:
-        raise click.UsageError(f"unknown harness(es): {', '.join(unknown)}")
-    return tuple(parts)
+        return _default_harnesses(scope)
+    return parse_harness_tokens(harnesses_str)
 
 
 @click.command("install", epilog="""\
@@ -61,7 +76,8 @@ Examples:
 @click.option("-p", "--project", "project_flag", is_flag=True)
 @click.option(
     "--harnesses", default=None,
-    help="Comma-separated harness names. Default: all enabled harnesses.",
+    help="Comma-separated harness names. Default: standard + all enabled "
+         "harnesses not covered by the standard slot.",
 )
 @click.pass_context
 def install_cmd(
@@ -90,7 +106,7 @@ def install_cmd(
         )
 
     try:
-        target_harnesses = _resolve_harnesses(harnesses)
+        target_harnesses = _resolve_harnesses(harnesses, scope)
     except click.UsageError:
         raise
 

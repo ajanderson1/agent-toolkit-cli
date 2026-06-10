@@ -14,22 +14,26 @@ from pathlib import Path
 import click
 
 from agent_toolkit_cli import agent_install
-from agent_toolkit_cli.commands.agent._common import scope_and_roots
-from agent_toolkit_cli.skill_agents import AGENTS, resolve_agent_token
+from agent_toolkit_cli.commands.agent._common import parse_harness_tokens, scope_and_roots
+from agent_toolkit_cli.skill_agents import AGENTS
 
 
 def _resolve_harnesses_for_uninstall(
     harnesses_str: str | None, slug: str, scope: str,
     home: object, project: object,
 ) -> tuple[str, ...]:
-    """If --harnesses given, use that. Otherwise, derive from the lock entry."""
+    """If --harnesses given, use that (shared parse/normalize/dedupe seam —
+    same synthetic rejection + claude-code → standard normalization as
+    install). Otherwise default to the MAXIMAL set."""
     if harnesses_str is not None:
-        parts = [resolve_agent_token(p.strip()) for p in harnesses_str.split(",") if p.strip()]
-        unknown = [p for p in parts if p not in AGENTS]
-        if unknown:
-            raise click.UsageError(f"unknown harness(es): {', '.join(unknown)}")
-        return tuple(parts)
-    # Default: all enabled harnesses (same as install default).
+        return parse_harness_tokens(harnesses_str)
+    # Default: MAXIMAL — the standard slot plus ALL enabled harnesses, with
+    # NO covered-set filter (deliberately asymmetric with the install default,
+    # #361): pre-#361 installs wrote real files in covered harnesses' own
+    # dirs (kode/neovate/cortex/...), which the covered-aware install default
+    # no longer touches but a default uninstall must still clean. The facade
+    # normalizes same-destination tokens to "standard" and its seen-set
+    # dedupes the slot itself.
     from agent_toolkit_cli.agent_adapters import UnsupportedMechanismError, get_adapter
     result = []
     for name, cfg in AGENTS.items():
@@ -40,7 +44,7 @@ def _resolve_harnesses_for_uninstall(
             result.append(name)
         except (UnsupportedMechanismError, Exception):
             pass
-    return tuple(sorted(result))
+    return ("standard", *sorted(result))
 
 
 @click.command("uninstall", epilog="""\
@@ -56,7 +60,8 @@ Examples:
 @click.option("-p", "--project", "project_flag", is_flag=True)
 @click.option(
     "--harnesses", default=None,
-    help="Comma-separated harness names to remove from. Default: all enabled.",
+    help="Comma-separated harness names to remove from. "
+         "Default: standard + ALL enabled harnesses (maximal).",
 )
 @click.pass_context
 def uninstall_cmd(

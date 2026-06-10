@@ -20,7 +20,13 @@ from agent_toolkit_cli.skill_agents import AGENTS
 
 
 def _all_enabled_harnesses() -> tuple[str, ...]:
-    """Return all harness names whose subagent_mechanism != 'none'."""
+    """The standard slot plus all harness names whose subagent_mechanism
+    != 'none'.
+
+    "standard" is prepended explicitly (#361) so the slot's .attk sentinel
+    is cleaned even if every covered catalog token were ever dropped from
+    the enabled set — remove must never orphan the sidecar.
+    """
     from agent_toolkit_cli.agent_adapters import UnsupportedMechanismError, get_adapter
     result = []
     for name, cfg in AGENTS.items():
@@ -31,7 +37,7 @@ def _all_enabled_harnesses() -> tuple[str, ...]:
             result.append(name)
         except (UnsupportedMechanismError, Exception):
             pass
-    return tuple(result)
+    return ("standard", *result)
 
 
 @click.command("remove")
