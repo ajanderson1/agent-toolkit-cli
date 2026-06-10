@@ -1,4 +1,4 @@
-# Replit
+# ![Replit logo](https://www.google.com/s2/favicons?domain=replit.com&sz=64){ .harness-logo } Replit
 
 `replit` · one row of the [compatibility matrix](../matrix.md)
 

@@ -1,4 +1,4 @@
-# Qwen Code
+# ![Qwen Code logo](https://github.com/QwenLM.png?size=64){ .harness-logo } Qwen Code
 
 `qwen-code` · one row of the [compatibility matrix](../matrix.md)
 

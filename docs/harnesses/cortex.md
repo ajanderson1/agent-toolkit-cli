@@ -1,4 +1,4 @@
-# Cortex Code
+# ![Cortex Code logo](https://www.google.com/s2/favicons?domain=snowflake.com&sz=64){ .harness-logo } Cortex Code
 
 `cortex` · one row of the [compatibility matrix](../matrix.md)
 

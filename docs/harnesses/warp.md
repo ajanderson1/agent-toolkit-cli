@@ -1,4 +1,4 @@
-# Warp
+# ![Warp logo](https://www.google.com/s2/favicons?domain=warp.dev&sz=64){ .harness-logo } Warp
 
 `warp` · one row of the [compatibility matrix](../matrix.md)
 

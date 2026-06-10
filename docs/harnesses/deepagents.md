@@ -1,4 +1,4 @@
-# Deep Agents
+# ![Deep Agents logo](https://github.com/langchain-ai.png?size=64){ .harness-logo } Deep Agents
 
 `deepagents` · one row of the [compatibility matrix](../matrix.md)
 

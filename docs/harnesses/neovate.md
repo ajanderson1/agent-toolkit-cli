@@ -1,4 +1,4 @@
-# Neovate
+# ![Neovate logo](https://github.com/neovateai.png?size=64){ .harness-logo } Neovate
 
 `neovate` · one row of the [compatibility matrix](../matrix.md)
 

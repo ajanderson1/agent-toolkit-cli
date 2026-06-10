@@ -1,4 +1,4 @@
-# AdaL
+# ![AdaL logo](https://www.google.com/s2/favicons?domain=sylph.ai&sz=64){ .harness-logo } AdaL
 
 `adal` · one row of the [compatibility matrix](../matrix.md)
 

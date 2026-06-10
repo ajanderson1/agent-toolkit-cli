@@ -1,4 +1,4 @@
-# Kiro CLI
+# ![Kiro CLI logo](https://www.google.com/s2/favicons?domain=kiro.dev&sz=64){ .harness-logo } Kiro CLI
 
 `kiro-cli` · one row of the [compatibility matrix](../matrix.md)
 

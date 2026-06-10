@@ -1,4 +1,4 @@
-# Windsurf
+# ![Windsurf logo](https://www.google.com/s2/favicons?domain=windsurf.com&sz=64){ .harness-logo } Windsurf
 
 `windsurf` · one row of the [compatibility matrix](../matrix.md)
 

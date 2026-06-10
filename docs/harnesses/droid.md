@@ -1,4 +1,4 @@
-# Droid
+# ![Droid logo](https://www.google.com/s2/favicons?domain=factory.ai&sz=64){ .harness-logo } Droid
 
 `droid` · one row of the [compatibility matrix](../matrix.md)
 

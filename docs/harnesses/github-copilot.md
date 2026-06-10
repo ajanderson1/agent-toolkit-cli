@@ -1,4 +1,4 @@
-# GitHub Copilot
+# ![GitHub Copilot logo](https://github.com/github.png?size=64){ .harness-logo } GitHub Copilot
 
 `github-copilot` · one row of the [compatibility matrix](../matrix.md)
 

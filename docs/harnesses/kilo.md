@@ -1,4 +1,4 @@
-# Kilo Code
+# ![Kilo Code logo](https://www.google.com/s2/favicons?domain=kilo.ai&sz=64){ .harness-logo } Kilo Code
 
 `kilo` · one row of the [compatibility matrix](../matrix.md)
 

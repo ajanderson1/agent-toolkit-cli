@@ -1,4 +1,4 @@
-# OpenClaw
+# ![OpenClaw logo](https://www.google.com/s2/favicons?domain=openclaw.ai&sz=64){ .harness-logo } OpenClaw
 
 `openclaw` · one row of the [compatibility matrix](../matrix.md)
 

@@ -1,4 +1,4 @@
-# Command Code
+# ![Command Code logo](https://www.google.com/s2/favicons?domain=commandcode.ai&sz=64){ .harness-logo } Command Code
 
 `command-code` · one row of the [compatibility matrix](../matrix.md)
 

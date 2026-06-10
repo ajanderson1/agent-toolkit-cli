@@ -1,4 +1,4 @@
-# Trae
+# ![Trae logo](https://www.google.com/s2/favicons?domain=trae.ai&sz=64){ .harness-logo } Trae
 
 `trae` · one row of the [compatibility matrix](../matrix.md)
 

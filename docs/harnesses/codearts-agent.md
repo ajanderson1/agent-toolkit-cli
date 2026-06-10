@@ -1,4 +1,4 @@
-# CodeArts Agent
+# ![CodeArts Agent logo](https://www.google.com/s2/favicons?domain=huaweicloud.com&sz=64){ .harness-logo } CodeArts Agent
 
 `codearts-agent` · one row of the [compatibility matrix](../matrix.md)
 

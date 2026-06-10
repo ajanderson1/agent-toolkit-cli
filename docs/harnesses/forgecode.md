@@ -1,4 +1,4 @@
-# ForgeCode
+# ![ForgeCode logo](https://www.google.com/s2/favicons?domain=forgecode.dev&sz=64){ .harness-logo } ForgeCode
 
 `forgecode` · one row of the [compatibility matrix](../matrix.md)
 

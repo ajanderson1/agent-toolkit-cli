@@ -1,4 +1,4 @@
-# Mux
+# ![Mux logo](https://www.google.com/s2/favicons?domain=coder.com&sz=64){ .harness-logo } Mux
 
 `mux` · one row of the [compatibility matrix](../matrix.md)
 

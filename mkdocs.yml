@@ -110,6 +110,12 @@ markdown_extensions:
       custom_checkbox: true
   - pymdownx.tilde
 
+extra_css:
+  - stylesheets/extra.css
+
+extra_javascript:
+  - javascripts/extra.js
+
 nav:
   - Home: index.md
   - Compatibility:
@@ -122,60 +128,61 @@ nav:
       - MCP servers (planned): kinds/mcp.md
     - Harnesses:
       # BEGIN GENERATED HARNESS NAV (scripts/gen_harness_docs.py)
-      - AdaL: harnesses/adal.md
-      - AiderDesk: harnesses/aider-desk.md
-      - Amp: harnesses/amp.md
-      - Antigravity: harnesses/antigravity.md
-      - Augment: harnesses/augment.md
-      - IBM Bob: harnesses/bob.md
       - Claude Code: harnesses/claude-code.md
-      - Cline: harnesses/cline.md
-      - CodeArts Agent: harnesses/codearts-agent.md
-      - CodeBuddy: harnesses/codebuddy.md
-      - Codemaker: harnesses/codemaker.md
-      - Code Studio: harnesses/codestudio.md
-      - Codex: harnesses/codex.md
-      - Command Code: harnesses/command-code.md
-      - Continue: harnesses/continue.md
-      - Cortex Code: harnesses/cortex.md
-      - Crush: harnesses/crush.md
-      - Cursor: harnesses/cursor.md
-      - Deep Agents: harnesses/deepagents.md
-      - Devin for Terminal: harnesses/devin.md
-      - Dexto: harnesses/dexto.md
-      - Droid: harnesses/droid.md
-      - Firebender: harnesses/firebender.md
-      - ForgeCode: harnesses/forgecode.md
-      - Gemini CLI: harnesses/gemini-cli.md
-      - GitHub Copilot: harnesses/github-copilot.md
-      - Goose: harnesses/goose.md
-      - Hermes Agent: harnesses/hermes-agent.md
-      - iFlow CLI: harnesses/iflow-cli.md
-      - Junie: harnesses/junie.md
-      - Kilo Code: harnesses/kilo.md
-      - Kimi Code CLI: harnesses/kimi-cli.md
-      - Kiro CLI: harnesses/kiro-cli.md
-      - Kode: harnesses/kode.md
-      - MCPJam: harnesses/mcpjam.md
-      - Mistral Vibe: harnesses/mistral-vibe.md
-      - Mux: harnesses/mux.md
-      - Neovate: harnesses/neovate.md
-      - OpenClaw: harnesses/openclaw.md
-      - OpenCode: harnesses/opencode.md
-      - OpenHands: harnesses/openhands.md
       - Pi: harnesses/pi.md
-      - Pochi: harnesses/pochi.md
-      - Qoder: harnesses/qoder.md
-      - Qwen Code: harnesses/qwen-code.md
-      - Replit: harnesses/replit.md
-      - Roo Code: harnesses/roo.md
-      - Rovo Dev: harnesses/rovodev.md
-      - Tabnine CLI: harnesses/tabnine-cli.md
-      - Trae: harnesses/trae.md
-      - Trae CN: harnesses/trae-cn.md
-      - Warp: harnesses/warp.md
-      - Windsurf: harnesses/windsurf.md
-      - Zencoder: harnesses/zencoder.md
+      - Codex: harnesses/codex.md
+      - Gemini CLI: harnesses/gemini-cli.md
+      - OpenCode: harnesses/opencode.md
+      - Others:
+        - AdaL: harnesses/adal.md
+        - AiderDesk: harnesses/aider-desk.md
+        - Amp: harnesses/amp.md
+        - Antigravity: harnesses/antigravity.md
+        - Augment: harnesses/augment.md
+        - IBM Bob: harnesses/bob.md
+        - Cline: harnesses/cline.md
+        - CodeArts Agent: harnesses/codearts-agent.md
+        - CodeBuddy: harnesses/codebuddy.md
+        - Codemaker: harnesses/codemaker.md
+        - Code Studio: harnesses/codestudio.md
+        - Command Code: harnesses/command-code.md
+        - Continue: harnesses/continue.md
+        - Cortex Code: harnesses/cortex.md
+        - Crush: harnesses/crush.md
+        - Cursor: harnesses/cursor.md
+        - Deep Agents: harnesses/deepagents.md
+        - Devin for Terminal: harnesses/devin.md
+        - Dexto: harnesses/dexto.md
+        - Droid: harnesses/droid.md
+        - Firebender: harnesses/firebender.md
+        - ForgeCode: harnesses/forgecode.md
+        - GitHub Copilot: harnesses/github-copilot.md
+        - Goose: harnesses/goose.md
+        - Hermes Agent: harnesses/hermes-agent.md
+        - iFlow CLI: harnesses/iflow-cli.md
+        - Junie: harnesses/junie.md
+        - Kilo Code: harnesses/kilo.md
+        - Kimi Code CLI: harnesses/kimi-cli.md
+        - Kiro CLI: harnesses/kiro-cli.md
+        - Kode: harnesses/kode.md
+        - MCPJam: harnesses/mcpjam.md
+        - Mistral Vibe: harnesses/mistral-vibe.md
+        - Mux: harnesses/mux.md
+        - Neovate: harnesses/neovate.md
+        - OpenClaw: harnesses/openclaw.md
+        - OpenHands: harnesses/openhands.md
+        - Pochi: harnesses/pochi.md
+        - Qoder: harnesses/qoder.md
+        - Qwen Code: harnesses/qwen-code.md
+        - Replit: harnesses/replit.md
+        - Roo Code: harnesses/roo.md
+        - Rovo Dev: harnesses/rovodev.md
+        - Tabnine CLI: harnesses/tabnine-cli.md
+        - Trae: harnesses/trae.md
+        - Trae CN: harnesses/trae-cn.md
+        - Warp: harnesses/warp.md
+        - Windsurf: harnesses/windsurf.md
+        - Zencoder: harnesses/zencoder.md
       # END GENERATED HARNESS NAV
   - Reference:
     - CLI reference: agent-toolkit/cli.md

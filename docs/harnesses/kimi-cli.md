@@ -1,4 +1,4 @@
-# Kimi Code CLI
+# ![Kimi Code CLI logo](https://github.com/moonshotai.png?size=64){ .harness-logo } Kimi Code CLI
 
 `kimi-cli` · one row of the [compatibility matrix](../matrix.md)
 

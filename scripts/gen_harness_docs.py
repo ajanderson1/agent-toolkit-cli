@@ -32,13 +32,81 @@ MKDOCS_YML = ROOT / "mkdocs.yml"
 
 SYNTHETIC = {"universal", "general-skill", "general-agent"}
 
-# Headline harnesses shown in the top table; everything else folds into the
-# collapsible "others" section. Curated: the toolkit's primary targets plus
-# the widely-known names.
-MAIN = [
-    "claude-code", "codex", "gemini-cli", "opencode", "pi",
-    "cursor", "github-copilot", "windsurf", "cline", "amp", "goose", "junie",
-]
+# Headline harnesses: pinned to the top of the matrix (in this order) and
+# listed first + bolded in the nav; everything else folds into the expandable
+# alphabetical rest.
+MAIN = ["claude-code", "pi", "codex", "gemini-cli", "opencode"]
+
+
+def _gh(org: str) -> str:
+    """GitHub org/user avatar — the project's de-facto logo."""
+    return f"https://github.com/{org}.png?size=64"
+
+
+def _fav(domain: str) -> str:
+    """Favicon of the product's home domain, via Google's favicon service."""
+    return f"https://www.google.com/s2/favicons?domain={domain}&sz=64"
+
+
+# Small logo shown in each harness page title. Empty string = no public logo
+# identified; the page renders without one. Every catalog slug MUST have an
+# entry — main() fails loudly otherwise.
+LOGOS: dict[str, str] = {
+    "adal": _fav("sylph.ai"),
+    "aider-desk": _gh("hotovo"),
+    "amp": _fav("ampcode.com"),
+    "antigravity": _fav("antigravity.google"),
+    "augment": _fav("augmentcode.com"),
+    "bob": _fav("bob.ibm.com"),
+    "claude-code": _fav("claude.com"),
+    "cline": _fav("cline.bot"),
+    "codearts-agent": _fav("huaweicloud.com"),
+    "codebuddy": _fav("codebuddy.ai"),
+    "codemaker": _gh("codemakerai"),
+    "codestudio": "",  # product unidentified (SSOT: exhaustive search, no source)
+    "codex": _fav("openai.com"),
+    "command-code": _fav("commandcode.ai"),
+    "continue": _fav("continue.dev"),
+    "cortex": _fav("snowflake.com"),
+    "crush": _gh("charmbracelet"),
+    "cursor": _fav("cursor.com"),
+    "deepagents": _gh("langchain-ai"),
+    "devin": _fav("devin.ai"),
+    "dexto": _gh("truffle-ai"),
+    "droid": _fav("factory.ai"),
+    "firebender": _fav("firebender.com"),
+    "forgecode": _fav("forgecode.dev"),
+    "gemini-cli": _gh("google-gemini"),
+    "github-copilot": _gh("github"),
+    "goose": _gh("block"),
+    "hermes-agent": _fav("nousresearch.com"),
+    "iflow-cli": _fav("iflow.cn"),
+    "junie": _fav("jetbrains.com"),
+    "kilo": _fav("kilo.ai"),
+    "kimi-cli": _gh("moonshotai"),
+    "kiro-cli": _fav("kiro.dev"),
+    "kode": _gh("shareAI-lab"),
+    "mcpjam": _fav("mcpjam.com"),
+    "mistral-vibe": _fav("mistral.ai"),
+    "mux": _fav("coder.com"),
+    "neovate": _gh("neovateai"),
+    "openclaw": _fav("openclaw.ai"),
+    "opencode": _fav("opencode.ai"),
+    "openhands": _fav("all-hands.dev"),
+    "pi": _fav("pi.dev"),
+    "pochi": _fav("getpochi.com"),
+    "qoder": _fav("qoder.com"),
+    "qwen-code": _gh("QwenLM"),
+    "replit": _fav("replit.com"),
+    "roo": _fav("roocode.com"),
+    "rovodev": _fav("atlassian.com"),
+    "tabnine-cli": _fav("tabnine.com"),
+    "trae": _fav("trae.ai"),
+    "trae-cn": _fav("trae.cn"),
+    "warp": _fav("warp.dev"),
+    "windsurf": _fav("windsurf.com"),
+    "zencoder": _fav("zencoder.ai"),
+}
 
 AGENT_SUPPORTED = {"symlink", "translate", "config_file+folder", "dual-symlink"}
 UNKNOWN = "unknown — no public evidence found"
@@ -131,40 +199,53 @@ def sym_instr(v: str) -> str:
     raise SystemExit(f"unmapped instructions verdict: {v!r}")
 
 
-def matrix_row(slug: str, agents: dict[str, AgentRow], instrs: dict[str, InstrRow]) -> str:
+def matrix_cells(slug: str, agents: dict[str, AgentRow], instrs: dict[str, InstrRow]) -> list[str]:
     cfg = AGENTS[slug]
     page = f"harnesses/{slug}.md"
     instr_s = sym_instr(instrs[slug].verdict)
     agent_s = sym_agent(agents[slug].verdict)
-    instr_cell = f"[{instr_s}]({page}#instructions)" if instr_s != "—" else "—"
-    agent_cell = f"[{agent_s}]({page}#agents)" if agent_s != "—" else "—"
-    skills_cell = f"[✅]({page}#skills)"
-    pi_cell = f"[✅]({page}#pi-extensions)" if slug == "pi" else "—"
-    return (
-        f"| [{cfg.display_name}]({page}) | {instr_cell} | {skills_cell} "
-        f"| {agent_cell} | — | {pi_cell} |"
-    )
+    return [
+        f"[{cfg.display_name}]({page})",
+        f"[{instr_s}]({page}#instructions)" if instr_s != "—" else "—",
+        f"[✅]({page}#skills)",
+        f"[{agent_s}]({page}#agents)" if agent_s != "—" else "—",
+        "—",
+        f"[✅]({page}#pi-extensions)" if slug == "pi" else "—",
+    ]
 
 
-MATRIX_HEADER = (
-    "| Harness | [Instructions](kinds/instructions.md) | [Skills](kinds/skills.md) "
-    "| [Agents](kinds/agents.md) | [MCP](kinds/mcp.md) | [Pi extensions](kinds/pi-extensions.md) |"
-)
-MATRIX_RULE = "|---|:-:|:-:|:-:|:-:|:-:|"
+MATRIX_HEADERS = [
+    "Harness",
+    "[Instructions](kinds/instructions.md)",
+    "[Skills](kinds/skills.md)",
+    "[Agents](kinds/agents.md)",
+    "[MCP](kinds/mcp.md)",
+    "[Pi extensions](kinds/pi-extensions.md)",
+]
+
+
+# md_in_html requires the markdown attribute on EVERY nesting level
+# (table > thead/tbody > tr > td) for the cell markdown to be processed.
+def _html_row(cells: list[str]) -> str:
+    return "<tr markdown>" + "".join(f"<td markdown>{c}</td>" for c in cells) + "</tr>"
 
 
 def write_matrix(slugs: list[str], agents: dict[str, AgentRow], instrs: dict[str, InstrRow]) -> None:
-    others = [s for s in slugs if s not in MAIN]
-    main_rows = "\n".join(matrix_row(s, agents, instrs) for s in MAIN)
-    other_rows = "\n".join(
-        "    " + matrix_row(s, agents, instrs) for s in sorted(others)
-    )
+    others = sorted(s for s in slugs if s not in MAIN)
+    head = "<tr markdown>" + "".join(f"<th markdown>{h}</th>" for h in MATRIX_HEADERS) + "</tr>"
+    main_rows = "\n".join(_html_row(matrix_cells(s, agents, instrs)) for s in MAIN)
+    other_rows = "\n".join(_html_row(matrix_cells(s, agents, instrs)) for s in others)
+    label = f"Show {len(others)} more harnesses (A–Z) ▸"
+    # One table: pinned MAIN rows, then a toggle row (docs/javascripts/extra.js)
+    # revealing the alphabetical rest. tbody[hidden] keeps the fold JS-free at
+    # render time; without JS the matrix simply stays folded.
     out = f"""\
 # Compatibility matrix
 
 One row per harness, one column per asset [kind](glossary.md#kind). Every
 harness links to its own page with per-kind detail; every tick links straight
-to the relevant section. Derived from the machine-read
+to the relevant section. The main harnesses are pinned at the top — expand the
+row beneath them for the rest, alphabetically. Derived from the machine-read
 [SSOT](glossary.md#ssot) (`docs/agent-toolkit/harness-matrix.md`) by
 `scripts/gen_harness_docs.py` — edit the SSOT, then regenerate; never edit
 this page by hand.
@@ -173,19 +254,20 @@ this page by hand.
 — not applicable (no such concept in the harness, by design) ·
 ❓ unknown (no public evidence found)
 
-## Main harnesses
-
-{MATRIX_HEADER}
-{MATRIX_RULE}
+<table class="harness-matrix" markdown>
+<thead markdown>
+{head}
+</thead>
+<tbody markdown>
 {main_rows}
-
-## Others
-
-??? note "All other harnesses ({len(others)})"
-
-    {MATRIX_HEADER}
-    {MATRIX_RULE}
+</tbody>
+<tbody class="matrix-toggle">
+<tr><td colspan="6"><button type="button" data-show="{label}" data-hide="Show fewer ▴">{label}</button></td></tr>
+</tbody>
+<tbody class="matrix-others" markdown hidden>
 {other_rows}
+</tbody>
+</table>
 
 ## The kinds
 
@@ -332,8 +414,14 @@ def write_harness_page(slug: str, agents: dict[str, AgentRow], instrs: dict[str,
     if pi_sec:
         sections.append(pi_sec)
     body = "\n\n".join(sections)
+    logo = LOGOS[slug]
+    title = (
+        f'![{cfg.display_name} logo]({logo}){{ .harness-logo }} {cfg.display_name}'
+        if logo
+        else cfg.display_name
+    )
     out = f"""\
-# {cfg.display_name}
+# {title}
 
 `{slug}` · one row of the [compatibility matrix](../matrix.md)
 
@@ -354,8 +442,12 @@ def rewrite_nav(slugs: list[str]) -> None:
     text = MKDOCS_YML.read_text()
     begin = "      # BEGIN GENERATED HARNESS NAV (scripts/gen_harness_docs.py)\n"
     end = "      # END GENERATED HARNESS NAV\n"
+    others = sorted(s for s in slugs if s not in MAIN)
     entries = "".join(
-        f"      - {AGENTS[s].display_name}: harnesses/{s}.md\n" for s in sorted(slugs)
+        f"      - {AGENTS[s].display_name}: harnesses/{s}.md\n" for s in MAIN
+    )
+    entries += "      - Others:\n" + "".join(
+        f"        - {AGENTS[s].display_name}: harnesses/{s}.md\n" for s in others
     )
     pattern = re.compile(re.escape(begin) + ".*?" + re.escape(end), re.DOTALL)
     new, n = pattern.subn(begin + entries + end, text)
@@ -374,6 +466,8 @@ def main() -> None:
             f"  instr table only: {sorted(set(instrs) - catalog)}\n"
             f"  catalog only:     {sorted(catalog - set(agents))}"
         )
+    if missing_logos := sorted(catalog - set(LOGOS)):
+        raise SystemExit(f"slugs missing a LOGOS entry: {missing_logos}")
     slugs = sorted(catalog)
     HARNESS_DIR.mkdir(exist_ok=True)
     for stale in HARNESS_DIR.glob("*.md"):

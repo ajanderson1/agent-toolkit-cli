@@ -1,4 +1,4 @@
-# Cline
+# ![Cline logo](https://www.google.com/s2/favicons?domain=cline.bot&sz=64){ .harness-logo } Cline
 
 `cline` · one row of the [compatibility matrix](../matrix.md)
 

@@ -1,4 +1,4 @@
-# Devin for Terminal
+# ![Devin for Terminal logo](https://www.google.com/s2/favicons?domain=devin.ai&sz=64){ .harness-logo } Devin for Terminal
 
 `devin` · one row of the [compatibility matrix](../matrix.md)
 

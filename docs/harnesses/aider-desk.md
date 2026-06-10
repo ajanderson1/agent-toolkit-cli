@@ -1,4 +1,4 @@
-# AiderDesk
+# ![AiderDesk logo](https://github.com/hotovo.png?size=64){ .harness-logo } AiderDesk
 
 `aider-desk` · one row of the [compatibility matrix](../matrix.md)
 

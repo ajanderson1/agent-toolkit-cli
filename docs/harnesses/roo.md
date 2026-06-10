@@ -1,4 +1,4 @@
-# Roo Code
+# ![Roo Code logo](https://www.google.com/s2/favicons?domain=roocode.com&sz=64){ .harness-logo } Roo Code
 
 `roo` · one row of the [compatibility matrix](../matrix.md)
 

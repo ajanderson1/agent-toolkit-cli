@@ -1,4 +1,4 @@
-# Goose
+# ![Goose logo](https://github.com/block.png?size=64){ .harness-logo } Goose
 
 `goose` · one row of the [compatibility matrix](../matrix.md)
 

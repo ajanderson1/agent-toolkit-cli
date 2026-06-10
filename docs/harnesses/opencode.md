@@ -1,4 +1,4 @@
-# OpenCode
+# ![OpenCode logo](https://www.google.com/s2/favicons?domain=opencode.ai&sz=64){ .harness-logo } OpenCode
 
 `opencode` · one row of the [compatibility matrix](../matrix.md)
 

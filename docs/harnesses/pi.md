@@ -1,4 +1,4 @@
-# Pi
+# ![Pi logo](https://www.google.com/s2/favicons?domain=pi.dev&sz=64){ .harness-logo } Pi
 
 `pi` · one row of the [compatibility matrix](../matrix.md)
 

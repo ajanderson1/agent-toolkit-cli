@@ -1,4 +1,4 @@
-# Antigravity
+# ![Antigravity logo](https://www.google.com/s2/favicons?domain=antigravity.google&sz=64){ .harness-logo } Antigravity
 
 `antigravity` · one row of the [compatibility matrix](../matrix.md)
 

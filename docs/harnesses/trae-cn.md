@@ -1,4 +1,4 @@
-# Trae CN
+# ![Trae CN logo](https://www.google.com/s2/favicons?domain=trae.cn&sz=64){ .harness-logo } Trae CN
 
 `trae-cn` · one row of the [compatibility matrix](../matrix.md)
 

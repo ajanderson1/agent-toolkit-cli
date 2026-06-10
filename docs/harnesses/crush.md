@@ -1,4 +1,4 @@
-# Crush
+# ![Crush logo](https://github.com/charmbracelet.png?size=64){ .harness-logo } Crush
 
 `crush` · one row of the [compatibility matrix](../matrix.md)
 

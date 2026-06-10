@@ -1,4 +1,4 @@
-# CodeBuddy
+# ![CodeBuddy logo](https://www.google.com/s2/favicons?domain=codebuddy.ai&sz=64){ .harness-logo } CodeBuddy
 
 `codebuddy` · one row of the [compatibility matrix](../matrix.md)
 

@@ -1,4 +1,4 @@
-# Junie
+# ![Junie logo](https://www.google.com/s2/favicons?domain=jetbrains.com&sz=64){ .harness-logo } Junie
 
 `junie` · one row of the [compatibility matrix](../matrix.md)
 

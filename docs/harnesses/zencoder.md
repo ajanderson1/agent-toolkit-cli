@@ -1,4 +1,4 @@
-# Zencoder
+# ![Zencoder logo](https://www.google.com/s2/favicons?domain=zencoder.ai&sz=64){ .harness-logo } Zencoder
 
 `zencoder` · one row of the [compatibility matrix](../matrix.md)
 

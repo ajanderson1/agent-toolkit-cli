@@ -1,4 +1,4 @@
-# Firebender
+# ![Firebender logo](https://www.google.com/s2/favicons?domain=firebender.com&sz=64){ .harness-logo } Firebender
 
 `firebender` · one row of the [compatibility matrix](../matrix.md)
 

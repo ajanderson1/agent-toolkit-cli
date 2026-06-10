@@ -1,4 +1,4 @@
-# Pochi
+# ![Pochi logo](https://www.google.com/s2/favicons?domain=getpochi.com&sz=64){ .harness-logo } Pochi
 
 `pochi` · one row of the [compatibility matrix](../matrix.md)
 

@@ -1,4 +1,4 @@
-# Hermes Agent
+# ![Hermes Agent logo](https://www.google.com/s2/favicons?domain=nousresearch.com&sz=64){ .harness-logo } Hermes Agent
 
 `hermes-agent` · one row of the [compatibility matrix](../matrix.md)
 

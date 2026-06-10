@@ -1,4 +1,4 @@
-# Codemaker
+# ![Codemaker logo](https://github.com/codemakerai.png?size=64){ .harness-logo } Codemaker
 
 `codemaker` · one row of the [compatibility matrix](../matrix.md)
 

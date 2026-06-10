@@ -1,4 +1,4 @@
-# Cursor
+# ![Cursor logo](https://www.google.com/s2/favicons?domain=cursor.com&sz=64){ .harness-logo } Cursor
 
 `cursor` · one row of the [compatibility matrix](../matrix.md)
 

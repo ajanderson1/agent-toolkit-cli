@@ -1,4 +1,4 @@
-# Gemini CLI
+# ![Gemini CLI logo](https://github.com/google-gemini.png?size=64){ .harness-logo } Gemini CLI
 
 `gemini-cli` · one row of the [compatibility matrix](../matrix.md)
 

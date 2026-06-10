@@ -1,4 +1,4 @@
-# Amp
+# ![Amp logo](https://www.google.com/s2/favicons?domain=ampcode.com&sz=64){ .harness-logo } Amp
 
 `amp` · one row of the [compatibility matrix](../matrix.md)
 

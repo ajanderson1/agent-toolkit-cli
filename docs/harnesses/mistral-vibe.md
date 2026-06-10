@@ -1,4 +1,4 @@
-# Mistral Vibe
+# ![Mistral Vibe logo](https://www.google.com/s2/favicons?domain=mistral.ai&sz=64){ .harness-logo } Mistral Vibe
 
 `mistral-vibe` · one row of the [compatibility matrix](../matrix.md)
 

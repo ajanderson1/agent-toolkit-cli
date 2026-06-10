@@ -1,4 +1,4 @@
-# Dexto
+# ![Dexto logo](https://github.com/truffle-ai.png?size=64){ .harness-logo } Dexto
 
 `dexto` · one row of the [compatibility matrix](../matrix.md)
 

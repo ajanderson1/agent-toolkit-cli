@@ -1,4 +1,4 @@
-# OpenHands
+# ![OpenHands logo](https://www.google.com/s2/favicons?domain=all-hands.dev&sz=64){ .harness-logo } OpenHands
 
 `openhands` · one row of the [compatibility matrix](../matrix.md)
 

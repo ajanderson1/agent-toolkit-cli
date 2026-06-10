@@ -1,4 +1,4 @@
-# MCPJam
+# ![MCPJam logo](https://www.google.com/s2/favicons?domain=mcpjam.com&sz=64){ .harness-logo } MCPJam
 
 `mcpjam` · one row of the [compatibility matrix](../matrix.md)
 

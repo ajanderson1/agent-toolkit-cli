@@ -1,4 +1,4 @@
-# Claude Code
+# ![Claude Code logo](https://www.google.com/s2/favicons?domain=claude.com&sz=64){ .harness-logo } Claude Code
 
 `claude-code` · one row of the [compatibility matrix](../matrix.md)
 

@@ -1,4 +1,4 @@
-# Tabnine CLI
+# ![Tabnine CLI logo](https://www.google.com/s2/favicons?domain=tabnine.com&sz=64){ .harness-logo } Tabnine CLI
 
 `tabnine-cli` · one row of the [compatibility matrix](../matrix.md)
 

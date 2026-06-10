@@ -1,4 +1,4 @@
-# Augment
+# ![Augment logo](https://www.google.com/s2/favicons?domain=augmentcode.com&sz=64){ .harness-logo } Augment
 
 `augment` · one row of the [compatibility matrix](../matrix.md)
 

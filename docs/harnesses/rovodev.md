@@ -1,4 +1,4 @@
-# Rovo Dev
+# ![Rovo Dev logo](https://www.google.com/s2/favicons?domain=atlassian.com&sz=64){ .harness-logo } Rovo Dev
 
 `rovodev` · one row of the [compatibility matrix](../matrix.md)
 

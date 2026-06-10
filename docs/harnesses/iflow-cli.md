@@ -1,4 +1,4 @@
-# iFlow CLI
+# ![iFlow CLI logo](https://www.google.com/s2/favicons?domain=iflow.cn&sz=64){ .harness-logo } iFlow CLI
 
 `iflow-cli` · one row of the [compatibility matrix](../matrix.md)
 

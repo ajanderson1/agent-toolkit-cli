@@ -1,4 +1,4 @@
-# Kode
+# ![Kode logo](https://github.com/shareAI-lab.png?size=64){ .harness-logo } Kode
 
 `kode` · one row of the [compatibility matrix](../matrix.md)
 
