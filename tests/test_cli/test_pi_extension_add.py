@@ -65,3 +65,69 @@ def test_add_npm_idempotent(tmp_path, monkeypatch):
 ])
 def test_looks_like_sha(ref, expected):
     assert pea.looks_like_sha(ref) is expected
+
+
+import subprocess
+
+
+def _push_second_commit(git_sandbox) -> tuple[str, str]:
+    """Create a second upstream commit; return (first_sha, second_sha)."""
+    def git(*args):
+        return subprocess.run(
+            ["git", "-C", str(git_sandbox.clone), *args],
+            check=True, env=git_sandbox.env, capture_output=True, text=True,
+        ).stdout.strip()
+
+    first_sha = git("rev-parse", "HEAD")
+    (git_sandbox.clone / "EXTRA.md").write_text("second\n")
+    git("add", "-A")
+    git("commit", "-m", "second")
+    git("push", "origin", "main")
+    second_sha = git("rev-parse", "HEAD")
+    return first_sha, second_sha
+
+
+def test_add_sha_pinned_lands_on_pin(tmp_path, monkeypatch, git_sandbox):
+    """A /tree/<sha> source must land the store copy on the pinned commit,
+    not the branch HEAD (#330). Same parsed.ref shape as owner/repo@<sha>."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    first_sha, second_sha = _push_second_commit(git_sandbox)
+
+    pea.add(
+        source=f"file://{git_sandbox.upstream}/tree/{first_sha}",
+        slug="pinned", env=git_sandbox.env,
+    )
+
+    canonical = pep.library_pi_extension_path("pinned", env={})
+    head = subprocess.run(
+        ["git", "-C", str(canonical), "rev-parse", "HEAD"],
+        check=True, env=git_sandbox.env, capture_output=True, text=True,
+    ).stdout.strip()
+    assert head == first_sha != second_sha
+    # Worktree reflects the pinned commit, not HEAD.
+    assert not (canonical / "EXTRA.md").exists()
+    # Lock records the pin; upstream_sha is None (no origin/<sha> remote ref).
+    entry = read_lock(pep.library_lock_path(env={})).skills["pinned"]
+    assert entry.ref == first_sha
+    assert entry.local_sha == first_sha
+    assert entry.upstream_sha is None
+
+
+def test_add_abbreviated_sha_pin_expands(tmp_path, monkeypatch, git_sandbox):
+    """A 7-char pin must land on the full commit: `git fetch origin <short>`
+    always fails (best-effort), and checkout resolves it locally (#330)."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    first_sha, second_sha = _push_second_commit(git_sandbox)
+
+    pea.add(
+        source=f"file://{git_sandbox.upstream}/tree/{first_sha[:7]}",
+        slug="shortpin", env=git_sandbox.env,
+    )
+
+    canonical = pep.library_pi_extension_path("shortpin", env={})
+    head = subprocess.run(
+        ["git", "-C", str(canonical), "rev-parse", "HEAD"],
+        check=True, env=git_sandbox.env, capture_output=True, text=True,
+    ).stdout.strip()
+    assert head == first_sha != second_sha
+    assert not (canonical / "EXTRA.md").exists()
