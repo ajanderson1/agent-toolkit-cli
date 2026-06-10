@@ -2,13 +2,15 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Re-port the `mcp` (Model Context Protocol server) asset kind into the current v3 per-kind architecture as a first-class, lock-driven, four-harness capability — `add`/`install`/`uninstall`/`remove`/`list`/`status`/`doctor` — with a config-injection adapter layer that manages MCP entries *by name* inside each harness's native config file, never by file ownership.
+**Goal:** Re-port the `mcp` (Model Context Protocol server) asset kind into the current v3 per-kind architecture as a first-class, lock-driven, four-harness capability — `add`/`install`/`uninstall`/`remove`/`update`/`list`/`status`/`doctor` — with a config-injection adapter layer that manages MCP entries *by name* inside each harness's native config file, never by file ownership.
 
 **Architecture:** Follow the established v3 per-kind pattern exactly (the same shape `agent` and `pi_extension` kinds use): parallel modules `mcp_install.py` / `mcp_lock.py` (scope resolution lives in `commands/mcp/_common.py` — see Task 6), a `commands/mcp/` Click group, and an `mcp_adapters/` package whose `get_adapter(harness)` dispatcher is the single SSOT for the per-harness projection mechanism. The shared kind-agnostic core (`_install_core.py`) is bound via injected callables; the lock is a per-kind file (`mcps-lock.json`, plural per convention) with an **independent, versioned `McpLockEntry` record** — deliberately NOT the shared `LockEntry` (a per-harness projection list per slug doesn't fit its one-canonical-path shape), but aligned for the bundle composite's future grouping field (decision record in "Deferred / Open Questions"). Unlike folder-shaped kinds (skills/agents) that symlink or copy a markdown file, MCP is **config-injection-shaped**: each adapter surgically upserts/removes one named entry (`[mcp_servers.<name>]` in Codex TOML, `mcpServers.<name>` in Claude/Pi/OpenCode JSON) using a round-tripping parser, preserving every other byte. Every write is loud and atomic (temp file in same dir → `os.replace`).
 
-**Tech Stack:** Python 3.12+ (per `requires-python`), Click, `tomlkit` (Codex TOML round-trip — NEW dependency), stdlib `json` (Claude/Pi/OpenCode), pytest. Catalog source: `<catalog-repo>/mcps/<name>/{config.json, README.md}` plus a sibling `<name>.toolkit.yaml` metadata sidecar.
+**Tech Stack:** Python 3.12+ (per `requires-python`), Click, `tomlkit` (Codex TOML round-trip — NEW dependency), stdlib `json` (Claude/Pi/OpenCode), pytest. Library entry shape: `~/.agent-toolkit/mcps/<slug>/{config.json, README.md}` plus a sibling `<slug>.toolkit.yaml` metadata sidecar.
 
-**Catalog decision (2026-06-10, #329 critical review):** the old assumption that `~/GitHub/agent-toolkit/mcps/` holds ~20 ready entries is FALSE post-#341 (it holds 2 standalone server source repos, no `config.json` entries, no sidecars, and the repo fails `_is_toolkit_repo()`). **The catalog lives in a NEW dedicated repo — `ajanderson1/mcps`** — consistent with the #341 per-category split. Prerequisite (Task 0, below): seed that repo with the `mcps/<slug>/{config.json, README.md}` + `<slug>.toolkit.yaml` convention plus the two toolkit-repo markers (`.agent-toolkit-source`, `schemas/asset-frontmatter.v1alpha2.json`) so `resolve_toolkit_root()` validates it. MCP is the FIRST consumer of `resolve_toolkit_root()` (zero existing callers), so pointing its resolution at the mcps repo affects no other kind; the verbs read the same `--toolkit-repo` / env contract `_repo_resolution.py` defines.
+**Library model (decision 2026-06-10, supersedes the earlier "dedicated catalog repo" decision):** MCP entries live in a **library at `~/.agent-toolkit/mcps/`** — the same substrate position as `~/.agent-toolkit/skills/` etc.: a local store you `add` to, ready to install. It is NOT a managed clone of any repo and there is NO catalog-repo prerequisite. `mcp add` AUTHORS entries from flags (a skill's upstream is a git repo so its `add` clones; an MCP's upstream is an npm/PyPI package, docker image, URL, or local path, so its `add` writes the entry directly). Consequences: `resolve_toolkit_root()` / `_repo_resolution.py` / marker files are NOT used by this kind at all — the library root derives from `home` (`home / ".agent-toolkit" / "mcps"`), entries sit at the library root (`<slug>/config.json` + `<slug>.toolkit.yaml`, no intermediate `mcps/` dir), and tests simply seed a tmp `$HOME`. Cross-machine library sync (git-ifying the dir + a `push` verb on the skill-push `divergence()` pattern) is a deferred follow-up.
+
+**Sources + version transparency (decision 2026-06-10):** v1 supports `npx`, `uvx`, `docker`, `url` (remote HTTP), and `local` (existing directory on disk). Git-clone-and-build sources (where this tool would fetch and build a server repo) are deferred — note `uvx --from git+url@ref` already covers pinned Python git sources without any build machinery. Versioning is **transparency, not enforcement**: `add` best-effort RESOLVES the current version (`npm view <pkg> version`; PyPI JSON API; docker tag as given, digest recorded when cheap; git HEAD SHA for `--local` when the path is a repo) and writes it into the entry (`pkg@1.4.2` / `pkg==2.0.1`), so projected configs are effectively pinned underneath (sidestepping the npx/uvx sticky-stale caches) while the UX stays "floating with explicit update". If resolution fails (offline / tool absent), the entry is stored unpinned and `list`/`doctor` show it as `floating` — never block. The `update` verb advances the float explicitly: re-resolve, rewrite the entry, re-upsert every locked projection, print `old → new`.
 
 **Prior art (re-mapped, predates v3):**
 - Spec/brainstorm: `docs/superpowers/specs/2026-05-04-mcp-management-design.md` — the design these tasks implement (manage-by-name, round-trip, loud atomic writes, four harness strategy table, the empty-`{}` / absent-`.mcp.json` failure-mode notes added 2026-06-07).
@@ -37,16 +39,18 @@ The spec (`2026-05-04-mcp-management-design.md`) was written against the **v1 ar
 1. **Install machinery has repeatedly shipped silently-broken global-scope / orphan paths with green CI.** Every install path MUST have an explicit `install → uninstall → assert-clean` round-trip test **at BOTH global and project scope** (Tasks 9, 10).
 2. **`uninstall` is non-destructive; `remove` is destructive.** `uninstall` removes the harness projection only and leaves the canonical/lock intact; `remove` drops the canonical entry + lock entry. Mirror the agent kind's contract exactly (project memory: a misnamed `uninstall -g` once `rmtree`'d the canonical store).
 3. **Apply-over-existing MUST roll back the prior projection on a Canonical/PointerConflict** (mirror `install_cmd` rollback contract).
-4. **Packaged-resource paths must survive a wheel install** — no `parents[N]` walks to find repo files at runtime; the catalog is resolved via the toolkit-repo flag, not relative-to-`__file__` (Task 11 guard).
+4. **Packaged-resource paths must survive a wheel install** — no `parents[N]` walks to find repo files at runtime; the library root derives from `home` (`~/.agent-toolkit/mcps/`), never relative-to-`__file__` (Task 11 guard).
 
 ## Out of scope (explicit — deferred to follow-up issues)
 
-- `fix` (drift reconciliation) and `diff` (dry-run) verbs. `doctor` reports drift but does not write.
-- `push` / `update` / `reset` / `import` verbs for MCP (skills/agents have them; MCP foundations does not need them — the catalog is hand-authored or scaffolded via `add`).
+- `fix` (drift reconciliation) and `diff` (dry-run) verbs. `doctor` reports drift but does not write. (`update` IS in scope — see Task 8: re-resolve + re-upsert is the verb that makes version transparency coherent.)
+- `push` / `reset` / `import` verbs for MCP. `push`'s follow-up semantics are already defined: git-ify the library dir and publish via the skill-push `divergence()` pattern (commit+push the library). Not needed until cross-machine sync matters.
+- **Git-clone-and-build sources** (this tool fetching + building a server repo — the materialization layer). `uvx --from git+url@ref` and `npx github:owner/repo#ref` already cover pinned git sources via the package managers.
+- Cross-machine library sync (the library is machine-local in v1; entries are cheap to re-`add`).
 - The TUI MCPs section (#39 lineage).
 - Schema bump to `v1alpha2` / `metadata.kind` discriminator.
 - `verify:` command execution (arbitrary shell; opt-in `--verify` is a follow-up).
-- `ingest` of one-off MCPs from URLs.
+- `ingest` of one-off MCPs from arbitrary pasted JSON (flag-driven `add` covers the common cases in two commands; a paste-ingest is a follow-up).
 - The FULL running-`claude`-process guard machinery for `~/.claude.json` is a follow-up — but a **minimal guard ships in this slice** (spec Rule 5 makes it core write-safety): before any global-scope claude-code write, the facade checks for a running `claude` process (`pgrep -x claude`, best-effort) and refuses with a clear message; `--force` bypasses. `~/.claude.json` is a live state file Claude rewrites continuously — an unguarded read→rewrite→replace can silently destroy state Claude wrote in between (Task 7).
 
 ---
@@ -56,18 +60,18 @@ The spec (`2026-05-04-mcp-management-design.md`) was written against the **v1 ar
 **New files:**
 
 - `src/agent_toolkit_cli/mcp_lock.py` — `mcps-lock.json` reader/writer with an independent, versioned `McpLockEntry` record (decision 2026-06-10: independent-but-aligned; see Task 6 and the decision record below).
-- `src/agent_toolkit_cli/mcp_catalog.py` — reads `<toolkit-repo>/mcps/<name>/{config.json}` + sibling `<name>.toolkit.yaml` metadata; returns an `McpAsset` (slug, inner_config dict, metadata dict, transport, install_method).
+- `src/agent_toolkit_cli/mcp_library.py` — the library reader/writer: `library_root(home) = home/".agent-toolkit"/"mcps"`; reads `<library>/<slug>/config.json` + sibling `<slug>.toolkit.yaml`; returns an `McpAsset` (slug, inner_config dict, metadata dict, transport, install_method); `write_entry()` used by `add`.
 - `src/agent_toolkit_cli/mcp_install.py` — the facade: `apply()` / `uninstall()` / `remove()` binding `_install_core.py` and dispatching to `mcp_adapters.get_adapter()`. Mirrors `agent_install.py` including the rollback contract.
 - `src/agent_toolkit_cli/mcp_adapters/__init__.py` — `McpAdapter` Protocol, `get_adapter(harness)` SSOT dispatcher, shared atomic-write + round-trip-read helpers, `McpProjectionConflictError`.
 - `src/agent_toolkit_cli/mcp_adapters/json_config.py` — config-file adapter for Claude / Pi / OpenCode (JSON family). Per-harness target paths + per-harness key translation in per-cell dicts inside the module.
 - `src/agent_toolkit_cli/mcp_adapters/toml_config.py` — config-file adapter for Codex (`~/.codex/config.toml` via `tomlkit`).
 - `src/agent_toolkit_cli/commands/mcp/__init__.py` — the `mcp` Click group + subcommand registration. Mirrors `commands/agent/__init__.py`.
 - `src/agent_toolkit_cli/commands/mcp/_common.py` — shared scope/root resolution for the verbs.
-- `src/agent_toolkit_cli/commands/mcp/{add,install,uninstall,remove,list,status,doctor}_cmd.py` — the seven verbs.
+- `src/agent_toolkit_cli/commands/mcp/{add,install,uninstall,remove,update,list,status,doctor}_cmd.py` — the eight verbs.
 
 **New test files:**
 
-- `tests/test_mcp_catalog.py`
+- `tests/test_mcp_library.py`
 - `tests/test_mcp_lock.py`
 - `tests/test_mcp_adapters_json.py`
 - `tests/test_mcp_adapters_toml.py`
@@ -82,19 +86,6 @@ The spec (`2026-05-04-mcp-management-design.md`) was written against the **v1 ar
 - `pyproject.toml` — add `tomlkit` dependency.
 - `docs/agent-toolkit/roadmap.md` — strike `mcp` from the Phase 2 pending list.
 - `README.md` — note MCP is now a supported kind (four harnesses, foundations slice).
-
----
-
-## Task 0: Seed the dedicated MCP catalog repo (`ajanderson1/mcps`) — PREREQUISITE
-
-**Files:** none in this repo (a new private GitHub repo).
-
-Per the catalog decision above. Without this, Tasks 2's real-world value and Task 10's smoke have nothing to run against.
-
-- [ ] **Step 1:** Create the private repo `ajanderson1/mcps` (`gh repo create ajanderson1/mcps --private`).
-- [ ] **Step 2:** Lay down the toolkit-repo markers: `.agent-toolkit-source` (empty) and `schemas/asset-frontmatter.v1alpha2.json` (copy from `agent-toolkit`'s schema, or a minimal valid schema), so `_is_toolkit_repo()` passes.
-- [ ] **Step 3:** Author at least TWO real catalog entries (e.g. `context7`, `playwright`) under `mcps/<slug>/{config.json, README.md}` + `mcps/<slug>.toolkit.yaml`, following Task 2's convention. Source material: the historical entries in the pre-#341 `agent-toolkit` git history (`git log -- mcps/`) where available.
-- [ ] **Step 4:** Push, and clone to `~/GitHub/mcps`. Task 10's smoke sets the toolkit-repo resolution at this clone.
 
 ---
 
@@ -122,41 +113,50 @@ git commit -m "build: add tomlkit for Codex MCP config round-trip"
 
 ---
 
-## Task 2: MCP catalog reader (`mcp_catalog.py`)
+## Task 2: MCP library reader/writer (`mcp_library.py`)
 
 **Files:**
-- Create: `src/agent_toolkit_cli/mcp_catalog.py`
-- Test: `tests/test_mcp_catalog.py`
+- Create: `src/agent_toolkit_cli/mcp_library.py`
+- Test: `tests/test_mcp_library.py`
 
-The catalog convention is `<toolkit-repo>/mcps/<slug>/config.json` (the inner MCP server config — `{type, command, args, ...}`, NO `mcpServers` wrapper) plus a sibling `<slug>.toolkit.yaml` metadata sidecar at `<toolkit-repo>/mcps/<slug>.toolkit.yaml`. The README.md is human prose and is NOT parsed for metadata.
+The library lives at `~/.agent-toolkit/mcps/` (derived from `home` — NOT a repo clone, NOT resolved via `_repo_resolution.py`). Entry convention, at the library root: `<library>/<slug>/config.json` (the inner MCP server config — `{type, command, args, ...}`, NO `mcpServers` wrapper) plus a sibling `<slug>.toolkit.yaml` metadata sidecar at `<library>/<slug>.toolkit.yaml`. The README.md is human prose and is NOT parsed for metadata.
 
 - [ ] **Step 1: Write the failing test**
 
-Create `tests/test_mcp_catalog.py`:
+Create `tests/test_mcp_library.py`:
 
 ```python
-"""Tests for src/agent_toolkit_cli/mcp_catalog.py — catalog discovery + parse."""
+"""Tests for src/agent_toolkit_cli/mcp_library.py — library discovery + parse."""
 from __future__ import annotations
 
 from pathlib import Path
 
 import pytest
 
-from agent_toolkit_cli.mcp_catalog import McpAsset, list_catalog, load_mcp_asset
+from agent_toolkit_cli.mcp_library import (
+    McpAsset,
+    library_root,
+    list_library,
+    load_mcp_asset,
+)
 
 
-def _write_catalog_entry(
-    toolkit: Path, slug: str, *, inner: str, sidecar: str
+def test_library_root_derives_from_home(tmp_path):
+    assert library_root(tmp_path) == tmp_path / ".agent-toolkit" / "mcps"
+
+
+def _write_library_entry(
+    library: Path, slug: str, *, inner: str, sidecar: str
 ) -> None:
-    mcp_dir = toolkit / "mcps" / slug
+    mcp_dir = library / slug
     mcp_dir.mkdir(parents=True, exist_ok=True)
     (mcp_dir / "config.json").write_text(inner)
     (mcp_dir / "README.md").write_text(f"# {slug}\n")
-    (toolkit / "mcps" / f"{slug}.toolkit.yaml").write_text(sidecar)
+    (library / f"{slug}.toolkit.yaml").write_text(sidecar)
 
 
 def test_load_mcp_asset_reads_inner_and_sidecar(tmp_path):
-    _write_catalog_entry(
+    _write_library_entry(
         tmp_path,
         "context7",
         inner='{"type": "stdio", "command": "npx", "args": ["-y", "ctx7"]}\n',
@@ -180,25 +180,24 @@ def test_load_mcp_asset_reads_inner_and_sidecar(tmp_path):
 
 
 def test_load_mcp_asset_missing_slug_raises(tmp_path):
-    (tmp_path / "mcps").mkdir()
     with pytest.raises(FileNotFoundError):
         load_mcp_asset(tmp_path, "does-not-exist")
 
 
-def test_list_catalog_returns_slugs_sorted(tmp_path):
+def test_list_library_returns_slugs_sorted(tmp_path):
     for slug in ("zeta", "alpha"):
-        _write_catalog_entry(
+        _write_library_entry(
             tmp_path, slug,
             inner='{"type":"stdio","command":"npx"}\n',
             sidecar=f"name: {slug}\ndescription: x.\ntransport: stdio\ninstall_method: npx\n",
         )
-    assert list_catalog(tmp_path) == ["alpha", "zeta"]
+    assert list_library(tmp_path) == ["alpha", "zeta"]
 
 
 def test_load_mcp_asset_without_sidecar_uses_defaults(tmp_path):
     """A bare config.json with no sidecar is still loadable; metadata is empty,
     transport/install_method fall back to None (doctor surfaces the gap later)."""
-    mcp_dir = tmp_path / "mcps" / "orphan"
+    mcp_dir = tmp_path / "orphan"
     mcp_dir.mkdir(parents=True)
     (mcp_dir / "config.json").write_text('{"type":"stdio","command":"npx"}\n')
     asset = load_mcp_asset(tmp_path, "orphan")
@@ -209,19 +208,21 @@ def test_load_mcp_asset_without_sidecar_uses_defaults(tmp_path):
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `uv run pytest tests/test_mcp_catalog.py -v`
-Expected: FAIL — `ModuleNotFoundError: No module named 'agent_toolkit_cli.mcp_catalog'`.
+Run: `uv run pytest tests/test_mcp_library.py -v`
+Expected: FAIL — `ModuleNotFoundError: No module named 'agent_toolkit_cli.mcp_library'`.
 
-- [ ] **Step 3: Implement `mcp_catalog.py`**
+- [ ] **Step 3: Implement `mcp_library.py`**
 
-Create `src/agent_toolkit_cli/mcp_catalog.py`:
+Create `src/agent_toolkit_cli/mcp_library.py`:
 
 ```python
-"""Read MCP entries from the toolkit catalog.
+"""The MCP library at ~/.agent-toolkit/mcps/ — read entries, write entries (add).
 
-Catalog convention: `<toolkit-repo>/mcps/<slug>/config.json` (inner MCP server
-config, no mcpServers wrapper) plus a sibling metadata sidecar at
-`<toolkit-repo>/mcps/<slug>.toolkit.yaml`. README.md is human prose, not parsed.
+Library convention (entries at the library ROOT, no intermediate dir):
+`<library>/<slug>/config.json` (inner MCP server config, no mcpServers wrapper)
+plus a sibling metadata sidecar at `<library>/<slug>.toolkit.yaml`.
+README.md is human prose, not parsed. The library is a plain local store —
+NOT a repo clone; the root derives from home, never from _repo_resolution.
 """
 from __future__ import annotations
 
@@ -250,21 +251,27 @@ class McpAsset:
     def env(self) -> list[str]:
         return list(self.metadata.get("env", []))
 
+    @property
+    def resolved_version(self) -> str | None:
+        """Version transparency: what `add`/`update` last resolved, or None (floating)."""
+        return self.metadata.get("resolved_version")
 
-def _mcps_dir(toolkit_root: Path) -> Path:
-    return toolkit_root / "mcps"
+
+def library_root(home: Path) -> Path:
+    """The MCP library root. Derives from home — wheel-safe, no parents[N]."""
+    return home / ".agent-toolkit" / "mcps"
 
 
-def load_mcp_asset(toolkit_root: Path, slug: str) -> McpAsset:
+def load_mcp_asset(library: Path, slug: str) -> McpAsset:
     """Load one MCP asset by slug. Raises FileNotFoundError if config.json absent."""
-    config_path = _mcps_dir(toolkit_root) / slug / "config.json"
+    config_path = library / slug / "config.json"
     if not config_path.is_file():
         raise FileNotFoundError(
-            f"MCP '{slug}' not found in catalog: {config_path} does not exist"
+            f"MCP '{slug}' not found in the library: {config_path} does not exist — add it first: agent-toolkit-cli mcp add {slug} --npx|--uvx|--docker|--url|--local …"
         )
     inner = json.loads(config_path.read_text(encoding="utf-8"))
     _validate_inner_config(slug, inner, config_path)
-    sidecar_path = _mcps_dir(toolkit_root) / f"{slug}.toolkit.yaml"
+    sidecar_path = library / f"{slug}.toolkit.yaml"
     metadata: dict = {}
     if sidecar_path.is_file():
         metadata = yaml.safe_load(sidecar_path.read_text(encoding="utf-8")) or {}
@@ -294,29 +301,49 @@ def _validate_inner_config(slug: str, inner: object, path: Path) -> None:
         raise ValueError(f"{path}: 'env' must be a string→string object")
 
 
-def list_catalog(toolkit_root: Path) -> list[str]:
-    """Return sorted slugs of every MCP directory containing a config.json."""
-    mcps = _mcps_dir(toolkit_root)
-    if not mcps.is_dir():
+def list_library(library: Path) -> list[str]:
+    """Return sorted slugs of every entry directory containing a config.json."""
+    if not library.is_dir():
         return []
     slugs = [
         d.name
-        for d in mcps.iterdir()
+        for d in library.iterdir()
         if d.is_dir() and (d / "config.json").is_file()
     ]
     return sorted(slugs)
+
+
+def write_entry(library: Path, slug: str, *, inner_config: dict, metadata: dict) -> Path:
+    """Author one library entry (used by `mcp add`). Returns the entry dir.
+
+    Refuses to overwrite an existing entry unless the caller deleted it first
+    (re-`add` of an existing slug is an explicit error; `update` is the verb
+    that rewrites entries).
+    """
+    entry = library / slug
+    if (entry / "config.json").is_file():
+        raise FileExistsError(f"MCP '{slug}' already exists in the library: {entry}")
+    entry.mkdir(parents=True, exist_ok=True)
+    (entry / "config.json").write_text(
+        json.dumps(inner_config, indent=2) + "\n", encoding="utf-8"
+    )
+    (entry / "README.md").write_text(f"# {slug}\n", encoding="utf-8")
+    (library / f"{slug}.toolkit.yaml").write_text(
+        yaml.safe_dump(metadata, sort_keys=True), encoding="utf-8"
+    )
+    return entry
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `uv run pytest tests/test_mcp_catalog.py -v`
+Run: `uv run pytest tests/test_mcp_library.py -v`
 Expected: PASS — all four tests.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/agent_toolkit_cli/mcp_catalog.py tests/test_mcp_catalog.py
-git commit -m "feat(mcp): catalog reader for mcps/<slug>/config.json + sidecar"
+git add src/agent_toolkit_cli/mcp_library.py tests/test_mcp_library.py
+git commit -m "feat(mcp): library reader/writer for ~/.agent-toolkit/mcps/<slug>"
 ```
 
 ---
@@ -689,7 +716,7 @@ class _Cell:
 
 
 def _passthrough(inner: dict) -> dict:
-    """Claude/Pi accept the catalog inner config verbatim."""
+    """Claude/Pi accept the library inner config verbatim."""
     return dict(inner)
 
 
@@ -934,8 +961,8 @@ class _CodexAdapter:
 
     def _translate(self, inner: dict) -> dict:
         """Codex mcp_servers entry: command + args + env (+ optional url/transport).
-        The catalog inner shape already matches Codex closely; pass through the
-        recognised keys, dropping the catalog-only 'type' marker."""
+        The library inner shape already matches Codex closely; pass through the
+        recognised keys, dropping the library-only 'type' marker."""
         out: dict = {}
         if "command" in inner:
             out["command"] = inner["command"]
@@ -1007,7 +1034,7 @@ git commit -m "feat(mcp): Codex TOML adapter with byte-preserving round-trip"
 - Create: `src/agent_toolkit_cli/mcp_lock.py`
 - Test: `tests/test_mcp_lock.py`
 
-The lock records which (scope, harness, slug) projections this tool created, so `uninstall`/`remove`/`status` know what is tool-owned vs hand-rolled. It follows `agent_lock.py`'s per-kind-filename convention (`mcps-lock.json`) but deliberately NOT its shared-`LockEntry` record: because MCP writes into shared config files rather than a single owned path, the lock records the **set of (harness, scope, slug)** managed entries plus the catalog source ref, in an independent versioned envelope (decision 2026-06-10).
+The lock records which (scope, harness, slug) projections this tool created, so `uninstall`/`remove`/`status` know what is tool-owned vs hand-rolled. It follows `agent_lock.py`'s per-kind-filename convention (`mcps-lock.json`) but deliberately NOT its shared-`LockEntry` record: because MCP writes into shared config files rather than a single owned path, the lock records the **set of (harness, scope, slug)** managed entries plus provenance (`source` = install_method) and version transparency (`pin`), in an independent versioned envelope (decision 2026-06-10).
 
 - [ ] **Step 1: Read the sibling first**
 
@@ -1111,7 +1138,8 @@ LOCK_VERSION = 1
 class McpLockEntry:
     slug: str
     harness: str
-    source: str          # catalog source ref, e.g. "ajanderson1/mcps"
+    source: str            # provenance: the entry's install_method ("npx"|"uvx"|"docker"|"url"|"local")
+    pin: str | None = None  # version transparency: resolved version at install time, None = floating
 
 
 def lock_path_for_scope(scope: str, *, home: Path, project: Path | None) -> Path:
@@ -1130,7 +1158,10 @@ def read_lock(path: Path) -> dict[str, list[McpLockEntry]]:
     for slug, entries in raw.get("mcps", {}).items():
         # Tolerant read: ignore unknown per-entry keys (future grouping field).
         out[slug] = [
-            McpLockEntry(slug=slug, harness=e["harness"], source=e["source"])
+            McpLockEntry(
+                slug=slug, harness=e["harness"], source=e["source"],
+                pin=e.get("pin"),
+            )
             for e in entries
         ]
     return out
@@ -1142,7 +1173,8 @@ def write_lock(path: Path, lock: dict[str, list[McpLockEntry]]) -> None:
         "version": LOCK_VERSION,
         "mcps": {
             slug: [
-                {"harness": e.harness, "source": e.source}
+                {"harness": e.harness, "source": e.source,
+                 **({"pin": e.pin} if e.pin else {})}
                 for e in sorted(entries, key=lambda x: x.harness)
             ]
             for slug, entries in sorted(lock.items())
@@ -1182,9 +1214,9 @@ def scope_and_roots(
 ) -> tuple[Scope, Path | None, Path | None]:   # Scope = Literal["project", "global"]
 ```
 
-It returns a **3-tuple** (never `toolkit_root`), and its "project lock present?" probe is hard-coded to `AGENT_BINDING.lock_filename` (`agents-lock.json`) — so it CANNOT be delegated to: an MCP delegate would key the read-verb scope default off the wrong lockfile. The fork is **required, not conditional**:
+It returns a **3-tuple** (never any library/toolkit root), and its "project lock present?" probe is hard-coded to `AGENT_BINDING.lock_filename` (`agents-lock.json`) — so it CANNOT be delegated to: an MCP delegate would key the read-verb scope default off the wrong lockfile. The fork is **required, not conditional**:
 
-Create `src/agent_toolkit_cli/commands/mcp/_common.py` as a copy of `commands/agent/_common.py` with the lock-filename probe swapped to `mcp_lock.LOCK_FILENAME` (`"mcps-lock.json"`). The catalog root is resolved SEPARATELY by the verbs via `_repo_resolution.resolve_toolkit_root()` — never bundled into `scope_and_roots`. Drop `mcp_paths.py` entirely (the lock-path helper lives in `mcp_lock.py`; scope resolution lives in `commands/mcp/_common.py`; no third module is needed).
+Create `src/agent_toolkit_cli/commands/mcp/_common.py` as a copy of `commands/agent/_common.py` with the lock-filename probe swapped to `mcp_lock.LOCK_FILENAME` (`"mcps-lock.json"`). The library root derives from `home` via `mcp_library.library_root(home)` — never bundled into `scope_and_roots`, never resolved via `_repo_resolution.py`. Drop `mcp_paths.py` entirely (the lock-path helper lives in `mcp_lock.py`; scope resolution lives in `commands/mcp/_common.py`; no third module is needed).
 
 - [ ] **Step 6: Run tests to verify they pass**
 
@@ -1206,11 +1238,11 @@ git commit -m "feat(mcp): mcps-lock.json reader/writer + paths resolution"
 - Create: `src/agent_toolkit_cli/mcp_install.py`
 - Test: `tests/test_mcp_install.py`
 
-The facade is the heart of the kind: it loads the catalog asset, dispatches to every requested harness adapter, writes the lock, and on a per-harness failure **rolls back the projections it already made this call** (rollback precedent: `commands/instructions/install_cmd.py` — project memory: TUI/CLI apply must roll back prior on conflict).
+The facade is the heart of the kind: it loads the library asset, dispatches to every requested harness adapter, writes the lock, and on a per-harness failure **rolls back the projections it already made this call** (rollback precedent: `commands/instructions/install_cmd.py` — project memory: TUI/CLI apply must roll back prior on conflict).
 
 **Review-resolved facade duties (added after critical review):** (a) **installed-harness sentinel** — before dispatching to an adapter, check the harness sentinel dir (Task 4 note #3); absent → loud skip, exit 0; (b) **running-claude guard** — before a global-scope claude-code write, best-effort `pgrep -x claude`; found → refuse with a clear message unless `--force` (see Out of scope note); (c) **hand-rolled collision warning** — before upserting, if `adapter.is_installed(slug)` is true but the lock has NO entry for (slug, harness), print `WARNING: overwriting existing hand-rolled entry '<slug>' in <path> — this entry was not previously managed by agent-toolkit`; do not block (manage-by-name is correct), but the user must see the collision. Add a test asserting the warning fires.
 
-It enforces the contract split: `uninstall` removes harness projections only (lock entry dropped, catalog untouched); `remove` is `uninstall` + dropping nothing extra in foundations (no canonical store for MCPs — the catalog is the source — so `remove` == `uninstall` of ALL harnesses for that slug + ensure no lock entry remains; document this so the destructive/non-destructive contract is explicit even though they converge for a catalog-sourced kind).
+It enforces the contract split: `uninstall` removes harness projections only (lock entry dropped, library untouched); `remove` is `uninstall` of ALL harnesses for that slug + ensure no lock entry remains — the library entry itself is NOT deleted (delete it with plain `rm -r` or a future `mcp remove --purge`; document this so the destructive/non-destructive contract is explicit even though they nearly converge for a library-sourced kind).
 
 - [ ] **Step 1: Read the sibling first**
 
@@ -1233,24 +1265,24 @@ from agent_toolkit_cli import mcp_install
 from agent_toolkit_cli.mcp_lock import lock_path_for_scope, read_lock
 
 
-def _seed_catalog(toolkit: Path, slug="context7"):
-    d = toolkit / "mcps" / slug
+def _seed_library(library: Path, slug="context7"):
+    d = library / slug
     d.mkdir(parents=True)
-    (d / "config.json").write_text('{"type":"stdio","command":"npx","args":["-y","ctx7"]}\n')
+    (d / "config.json").write_text('{"type":"stdio","command":"npx","args":["-y","ctx7@9.9.9"]}\n')
     (d / "README.md").write_text(f"# {slug}\n")
-    (toolkit / "mcps" / f"{slug}.toolkit.yaml").write_text(
-        f"name: {slug}\ndescription: x.\ntransport: stdio\ninstall_method: npx\n"
+    (library / f"{slug}.toolkit.yaml").write_text(
+        f"name: {slug}\ndescription: x.\ntransport: stdio\ninstall_method: npx\nresolved_version: 9.9.9\n"
     )
 
 
 def test_apply_installs_and_writes_lock_project(tmp_path):
-    toolkit = tmp_path / "toolkit"
-    _seed_catalog(toolkit)
+    library = tmp_path / "library"
+    _seed_library(library)
     project = tmp_path / "proj"
     project.mkdir()
     mcp_install.apply(
         slug="context7", harnesses=["claude-code"], scope="project",
-        toolkit_root=toolkit, home=tmp_path, project=project,
+        library_root=library, home=tmp_path, project=project,
     )
     doc = json.loads((project / ".mcp.json").read_text())
     assert "context7" in doc["mcpServers"]
@@ -1259,13 +1291,13 @@ def test_apply_installs_and_writes_lock_project(tmp_path):
 
 
 def test_apply_installs_two_harnesses(tmp_path):
-    toolkit = tmp_path / "toolkit"
-    _seed_catalog(toolkit)
+    library = tmp_path / "library"
+    _seed_library(library)
     project = tmp_path / "proj"
     project.mkdir()
     mcp_install.apply(
         slug="context7", harnesses=["claude-code", "codex"], scope="project",
-        toolkit_root=toolkit, home=tmp_path, project=project,
+        library_root=library, home=tmp_path, project=project,
     )
     assert "context7" in json.loads((project / ".mcp.json").read_text())["mcpServers"]
     assert (project / ".codex" / "config.toml").is_file()
@@ -1274,22 +1306,22 @@ def test_apply_installs_two_harnesses(tmp_path):
 
 
 def test_uninstall_removes_projection_keeps_catalog(tmp_path):
-    toolkit = tmp_path / "toolkit"
-    _seed_catalog(toolkit)
+    library = tmp_path / "library"
+    _seed_library(library)
     project = tmp_path / "proj"
     project.mkdir()
     mcp_install.apply(
         slug="context7", harnesses=["claude-code"], scope="project",
-        toolkit_root=toolkit, home=tmp_path, project=project,
+        library_root=library, home=tmp_path, project=project,
     )
     mcp_install.uninstall(
         slug="context7", harnesses=["claude-code"], scope="project",
-        toolkit_root=toolkit, home=tmp_path, project=project,
+        library_root=library, home=tmp_path, project=project,
     )
     doc = json.loads((project / ".mcp.json").read_text())
     assert "context7" not in doc["mcpServers"]
     # Catalog still intact (non-destructive contract)
-    assert (toolkit / "mcps" / "context7" / "config.json").is_file()
+    assert (library / "context7" / "config.json").is_file()
     # Lock entry gone
     lock = read_lock(lock_path_for_scope("project", home=tmp_path, project=project))
     assert "context7" not in lock
@@ -1297,8 +1329,8 @@ def test_uninstall_removes_projection_keeps_catalog(tmp_path):
 
 def test_apply_rolls_back_prior_projection_on_later_failure(tmp_path, monkeypatch):
     """If the 2nd harness adapter raises, the 1st harness's projection is rolled back."""
-    toolkit = tmp_path / "toolkit"
-    _seed_catalog(toolkit)
+    library = tmp_path / "library"
+    _seed_library(library)
     project = tmp_path / "proj"
     project.mkdir()
 
@@ -1319,7 +1351,7 @@ def test_apply_rolls_back_prior_projection_on_later_failure(tmp_path, monkeypatc
     with pytest.raises(RuntimeError):
         mcp_install.apply(
             slug="context7", harnesses=["claude-code", "codex"], scope="project",
-            toolkit_root=toolkit, home=tmp_path, project=project,
+            library_root=library, home=tmp_path, project=project,
         )
     # Claude projection rolled back
     mcp_path = project / ".mcp.json"
@@ -1355,7 +1387,7 @@ import sys
 from pathlib import Path
 
 from agent_toolkit_cli.mcp_adapters import get_adapter
-from agent_toolkit_cli.mcp_catalog import load_mcp_asset
+from agent_toolkit_cli.mcp_library import load_mcp_asset
 from agent_toolkit_cli.mcp_lock import (
     McpLockEntry,
     lock_path_for_scope,
@@ -1364,9 +1396,6 @@ from agent_toolkit_cli.mcp_lock import (
     upsert_entry,
     write_lock,
 )
-
-_SOURCE_REF = "ajanderson1/mcps"  # the dedicated catalog repo (Task 0); refine if multi-source
-
 
 def _loud(msg: str) -> None:
     print(msg, file=sys.stdout)
@@ -1377,12 +1406,12 @@ def apply(
     slug: str,
     harnesses: list[str],
     scope: str,
-    toolkit_root: Path,
+    library_root: Path,
     home: Path,
     project: Path | None = None,
 ) -> None:
     """Install `slug` into each harness. Atomic across harnesses: roll back on failure."""
-    asset = load_mcp_asset(toolkit_root, slug)
+    asset = load_mcp_asset(library_root, slug)
     lock_path = lock_path_for_scope(scope, home=home, project=project)
     lock = read_lock(lock_path)
 
@@ -1394,7 +1423,11 @@ def apply(
             _loud(f"→ writing {target}")
             adapter.install(slug, asset.inner_config, scope=scope, home=home, project=project)
             _loud(f"✓ wrote {target}")
-            lock = upsert_entry(lock, McpLockEntry(slug=slug, harness=harness, source=_SOURCE_REF))
+            lock = upsert_entry(lock, McpLockEntry(
+                slug=slug, harness=harness,
+                source=asset.install_method or "unknown",
+                pin=asset.resolved_version,
+            ))
             done.append(harness)
         write_lock(lock_path, lock)
     except BaseException:
@@ -1413,7 +1446,7 @@ def uninstall(
     slug: str,
     harnesses: list[str],
     scope: str,
-    toolkit_root: Path,
+    library_root: Path,
     home: Path,
     project: Path | None = None,
 ) -> None:
@@ -1434,7 +1467,7 @@ def remove(
     *,
     slug: str,
     scope: str,
-    toolkit_root: Path,
+    library_root: Path,
     home: Path,
     project: Path | None = None,
 ) -> None:
@@ -1453,7 +1486,7 @@ def remove(
         return
     uninstall(
         slug=slug, harnesses=harnesses, scope=scope,
-        toolkit_root=toolkit_root, home=home, project=project,
+        library_root=library_root, home=home, project=project,
     )
 ```
 
@@ -1482,7 +1515,7 @@ git commit -m "feat(mcp): install facade with cross-harness rollback + uninstall
 - Modify: `src/agent_toolkit_cli/cli.py`
 - Test: `tests/test_cli_mcp.py` (smoke-level here; the round-trip + both-scope guard is Task 9)
 
-Mirror `commands/agent/` exactly: a Click group, read verbs (`list`, `status`, `doctor`) pass `read_only=True`; write verbs (`install`, `uninstall`, `remove`) default to project when a project lock is present; `add` scaffolds a catalog entry (global-only, no `-p`).
+Mirror `commands/agent/` exactly: a Click group, read verbs (`list`, `status`, `doctor`) pass `read_only=True`; write verbs (`install`, `uninstall`, `remove`) default to project when a project lock is present; `add` authors a library entry from source flags (global-only, no `-p`); `update` re-resolves + re-projects.
 
 - [ ] **Step 1: Read the sibling first**
 
@@ -1498,8 +1531,8 @@ via config-injection adapters + mcps-lock.json. Mirrors commands/agent/.
 
 Read verbs (list/status/doctor) pass read_only=True → default to global outside
 a project. Write verbs (install/uninstall/remove) default to project when a
-project lock is present. `add` scaffolds a catalog entry (global-only).
-Supported harnesses: claude, codex, opencode, pi.
+project lock is present. `add` authors a library entry from flags (global-only); `update` advances the float.
+Supported harnesses: claude-code, codex, opencode, pi.
 """
 from __future__ import annotations
 
@@ -1512,6 +1545,7 @@ from agent_toolkit_cli.commands.mcp.list_cmd import list_cmd
 from agent_toolkit_cli.commands.mcp.remove_cmd import remove_cmd
 from agent_toolkit_cli.commands.mcp.status_cmd import status_cmd
 from agent_toolkit_cli.commands.mcp.uninstall_cmd import uninstall_cmd
+from agent_toolkit_cli.commands.mcp.update_cmd import update_cmd
 
 
 @click.group(name="mcp")
@@ -1526,6 +1560,7 @@ mcp.add_command(add_cmd)
 mcp.add_command(install_cmd)
 mcp.add_command(uninstall_cmd)
 mcp.add_command(remove_cmd)
+mcp.add_command(update_cmd)
 mcp.add_command(doctor_cmd)
 ```
 
@@ -1536,10 +1571,11 @@ Create `src/agent_toolkit_cli/commands/mcp/install_cmd.py` (the canonical write 
 from __future__ import annotations
 
 import click
+from pathlib import Path
 
 from agent_toolkit_cli import mcp_install
-from agent_toolkit_cli._repo_resolution import resolve_toolkit_root
 from agent_toolkit_cli.commands.mcp._common import scope_and_roots
+from agent_toolkit_cli.mcp_library import library_root
 
 _HARNESSES = ("claude-code", "codex", "opencode", "pi")
 
@@ -1556,17 +1592,17 @@ _HARNESSES = ("claude-code", "codex", "opencode", "pi")
 @click.pass_context
 def install_cmd(ctx, slug: str, harnesses: tuple[str, ...], global_: bool,
                 project_flag: bool, force: bool) -> None:
-    """Install a catalog MCP into one or more harnesses."""
+    """Install a library MCP into one or more harnesses."""
     # Mirrors commands/agent/install_cmd.py: 3-tuple return; ctx threads the
-    # project root; toolkit_root comes from the SEPARATE shared resolver.
+    # project root. The library root derives from home — no repo resolution.
     scope, home, project = scope_and_roots(
         global_, project_flag, ctx.obj.get("project_root") if ctx.obj else None,
     )
-    toolkit_root = resolve_toolkit_root()
+    library = library_root(Path.home())
     targets = list(harnesses) or list(_HARNESSES)
     mcp_install.apply(
         slug=slug, harnesses=targets, scope=scope,
-        toolkit_root=toolkit_root, home=home, project=project, force=force,
+        library_root=library, home=home, project=project, force=force,
     )
     click.echo(f"✓ installed {slug} → {', '.join(targets)} ({scope} scope)")
 ```
@@ -1574,12 +1610,20 @@ def install_cmd(ctx, slug: str, harnesses: tuple[str, ...], global_: bool,
 Create the remaining verb files mirroring the agent siblings:
 - `uninstall_cmd.py` — same flags as install; calls `mcp_install.uninstall`. Default harnesses = those in the lock for `slug` (read the lock; if none specified and none in lock, error "not installed").
 - `remove_cmd.py` — `slug` arg + scope flags; calls `mcp_install.remove`.
-- `list_cmd.py` — `read_only=True`; prints catalog slugs and, per slug, which harnesses are installed at the resolved scope (via `get_adapter(h).is_installed`).
+- `list_cmd.py` — `read_only=True`; prints library slugs with their resolved version (or `floating`) and, per slug, which harnesses are installed at the resolved scope (via `get_adapter(h).is_installed`).
 - `status_cmd.py` — `read_only=True`; prints the lock contents for the resolved scope.
-- `add_cmd.py` — global-only scaffold: writes `mcps/<slug>/config.json` + `mcps/<slug>.toolkit.yaml` skeleton into the toolkit repo (mirror `commands/agent/add_cmd.py`'s shape; keep minimal).
+- `add_cmd.py` — **flag-driven authoring into the library** (global-only — the library is per-user): exactly ONE source flag is required:
+  - `--npx <pkg>` → inner `{type: stdio, command: "npx", args: ["-y", "<pkg>@<resolved>"]}`; resolve current version via `npm view <pkg> version` (best-effort, subprocess, short timeout).
+  - `--uvx <pkg>` → `{type: stdio, command: "uvx", args: ["<pkg>==<resolved>"]}`; resolve via the PyPI JSON API (`https://pypi.org/pypi/<pkg>/json`, stdlib urllib, short timeout).
+  - `--docker <image[:tag]>` → `{type: stdio, command: "docker", args: ["run", "--rm", "-i", "<image:tag>"]}`; tag as given (default `latest`), digest recorded in the sidecar when `docker image inspect` is cheap and available.
+  - `--url <https://…>` → `{type: http, url: "<url>"}`; nothing to resolve.
+  - `--local <dir> --command "<cmd …>"` → the given command verbatim (recommend the `uv --directory <abs-dir> run <entrypoint>` shape so no `cwd` field is needed — not every harness supports one); if `<dir>` is a git repo, record its HEAD SHA as the resolved version.
+  - Optional: `--env VAR` (repeatable — declared env var NAMES for doctor), `--description`.
+  - Writes via `mcp_library.write_entry()`: `config.json` + `<slug>.toolkit.yaml` (with `install_method`, `transport`, `resolved_version` when resolution succeeded). **Resolution failure is NOT an error** — store unpinned, print `note: could not resolve a version for <pkg>; stored floating`, and `list`/`doctor` show `floating`. Re-`add` of an existing slug errors (use `update`).
+- `update_cmd.py` — **advance the float, explicitly** (`mcp update <slug> [-g|-p]`): re-resolve the entry's source (same per-method resolution as `add`); if the version changed, rewrite the library entry (config.json args + sidecar `resolved_version`), then re-upsert every harness the resolved-scope lock lists for the slug (idempotent adapter upserts; refresh `pin` on the lock entries) and print `<slug>: <old> → <new> (<harnesses>)`. No change → `<slug>: up to date (<version>)`. `--url` entries are a no-op; `--local` refreshes the recorded HEAD SHA and re-projects only on drift.
 - `doctor_cmd.py` — `read_only=True`; three checks per lock entry, NEVER writes (foundations `doctor` is read-only; `fix` is deferred):
   1. **Orphans/missing**: `is_installed` matches the lock (report orphan lock entries / missing projections).
-  2. **Structural drift (spec Rule 4 — this is what makes "doctor reports drift" true):** load the catalog asset, render it through the adapter's `translate`, and compare structurally (parsed equality, not text) against the installed entry; report `drifted` per (slug, harness) when they differ. Read-only — reconciliation is the deferred `fix` verb.
+  2. **Structural drift (spec Rule 4 — this is what makes "doctor reports drift" true):** load the library asset, render it through the adapter's `translate`, and compare structurally (parsed equality, not text) against the installed entry; report `drifted` per (slug, harness) when they differ. Read-only — reconciliation is the deferred `fix` verb.
   3. **Env presence**: warn on declared `env:` vars absent from the environment. **Print variable NAMES only, never values** — e.g. `WARNING: env var DATABASE_URL (declared by context7) is not set`; a test MUST assert doctor output never contains the value of a seeded env var (the no-secrets non-goal applies to terminal output too).
 
 Create `src/agent_toolkit_cli/commands/mcp/_common.py` mirroring `commands/agent/_common.py` (shared `--harness` choice tuple, scope-flag decorators) to keep the verb files DRY.
@@ -1615,19 +1659,16 @@ from click.testing import CliRunner
 from agent_toolkit_cli.cli import main
 
 
-def _seed(toolkit: Path, slug="context7"):
-    d = toolkit / "mcps" / slug
+def _seed(home: Path, slug="context7"):
+    """Seed a library entry under HOME/.agent-toolkit/mcps/ (the real library root)."""
+    library = home / ".agent-toolkit" / "mcps"
+    d = library / slug
     d.mkdir(parents=True)
-    (d / "config.json").write_text('{"type":"stdio","command":"npx","args":["-y","ctx7"]}\n')
+    (d / "config.json").write_text('{"type":"stdio","command":"npx","args":["-y","ctx7@9.9.9"]}\n')
     (d / "README.md").write_text(f"# {slug}\n")
-    (toolkit / "mcps" / f"{slug}.toolkit.yaml").write_text(
-        f"name: {slug}\ndescription: x.\ntransport: stdio\ninstall_method: npx\n"
+    (library / f"{slug}.toolkit.yaml").write_text(
+        f"name: {slug}\ndescription: x.\ntransport: stdio\ninstall_method: npx\nresolved_version: 9.9.9\n"
     )
-    # _repo_resolution._is_toolkit_repo() requires BOTH markers — without them
-    # every CLI-level test dies with RepoNotFoundError before touching MCP code.
-    (toolkit / ".agent-toolkit-source").write_text("")
-    (toolkit / "schemas").mkdir(exist_ok=True)
-    (toolkit / "schemas" / "asset-frontmatter.v1alpha2.json").write_text("{}\n")
 
 
 def test_mcp_group_registered():
@@ -1638,12 +1679,10 @@ def test_mcp_group_registered():
 
 
 def test_mcp_install_project_claude(tmp_path, monkeypatch):
-    toolkit = tmp_path / "toolkit"
-    _seed(toolkit)
+    _seed(tmp_path)
     project = tmp_path / "proj"
     project.mkdir()
     monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.setenv("AGENT_TOOLKIT_REPO", str(toolkit))
     monkeypatch.chdir(project)
     result = CliRunner().invoke(
         main, ["mcp", "install", "context7", "--harness", "claude-code", "-p"],
@@ -1653,7 +1692,7 @@ def test_mcp_install_project_claude(tmp_path, monkeypatch):
     assert "context7" in doc["mcpServers"]
 ```
 
-> **Note:** the exact env-var / flag names for toolkit-repo resolution (`AGENT_TOOLKIT_REPO` vs `--toolkit-repo`) must match what `_repo_resolution.resolve_toolkit_root()` actually reads — confirm against `_repo_resolution.py` in Step 1 and adjust. `resolve_toolkit_root()` VALIDATES the directory via `_is_toolkit_repo()` (requires `.agent-toolkit-source` + `schemas/asset-frontmatter.v1alpha2.json`), which is why `_seed()` writes both markers. Note also that `resolve_toolkit_root` currently has zero callers in `src/` — MCP is its first consumer; confirm its contract still fits before wiring.
+> **Note:** there is NO toolkit-repo resolution in this kind — `_repo_resolution.py` is untouched. The library root is `Path.home()/".agent-toolkit"/"mcps"`, so tests control it entirely via `monkeypatch.setenv("HOME", …)` (Path.home() honours `HOME` on POSIX). `Path.home()` is called at verb runtime (never at import time) so the monkeypatch always lands.
 
 - [ ] **Step 5: Run tests to verify they pass**
 
@@ -1664,7 +1703,7 @@ Expected: PASS.
 
 ```bash
 git add src/agent_toolkit_cli/commands/mcp src/agent_toolkit_cli/cli.py tests/test_cli_mcp.py
-git commit -m "feat(mcp): CLI command group (install/uninstall/remove/list/status/add/doctor)"
+git commit -m "feat(mcp): CLI command group (add/install/uninstall/remove/update/list/status/doctor)"
 ```
 
 ---
@@ -1675,6 +1714,8 @@ git commit -m "feat(mcp): CLI command group (install/uninstall/remove/list/statu
 - Test: `tests/test_cli_mcp.py` (extend)
 
 Project memory: v3 install machinery has **repeatedly shipped silently-broken global-scope / orphan paths with green CI** because tests only covered one scope or only the happy install (never the uninstall round-trip). This task makes that impossible to repeat for MCP. These tests are the gate; they must be RED before the facade is trusted and GREEN after.
+
+Also covered here: an **`update` flow test** — monkeypatch the version-resolution helper to return a bumped version, run `mcp update <slug>`, assert the library entry's `config.json` args + sidecar `resolved_version` were rewritten, every locked harness's installed entry shows the new version (re-upserted), the lock `pin` refreshed, and output contains `old → new`. A second case: resolver returns the same version → no writes, output `up to date`. And an **`add` resolution-failure test** — monkeypatch the resolver to raise, assert the entry is stored floating (no version in args, no `resolved_version`) with a loud note, exit 0.
 
 - [ ] **Step 1: Write the round-trip + both-scope tests**
 
@@ -1687,12 +1728,10 @@ import pytest
 @pytest.mark.parametrize("scope_flag, scope_name", [("-g", "global"), ("-p", "project")])
 def test_install_uninstall_round_trip_both_scopes(tmp_path, monkeypatch, scope_flag, scope_name):
     """install → uninstall leaves the harness config with NO managed entry, at BOTH scopes."""
-    toolkit = tmp_path / "toolkit"
-    _seed(toolkit)
+    _seed(tmp_path)
     project = tmp_path / "proj"
     project.mkdir()
     monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.setenv("AGENT_TOOLKIT_REPO", str(toolkit))
     monkeypatch.chdir(project)
     runner = CliRunner()
 
@@ -1711,12 +1750,10 @@ def test_install_uninstall_round_trip_both_scopes(tmp_path, monkeypatch, scope_f
 @pytest.mark.parametrize("scope_flag, scope_name", [("-g", "global"), ("-p", "project")])
 def test_install_all_four_harnesses_round_trip(tmp_path, monkeypatch, scope_flag, scope_name):
     """All four adapters install AND fully uninstall at both scopes (no orphan projections)."""
-    toolkit = tmp_path / "toolkit"
-    _seed(toolkit)
+    _seed(tmp_path)
     project = tmp_path / "proj"
     project.mkdir()
     monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.setenv("AGENT_TOOLKIT_REPO", str(toolkit))
     monkeypatch.chdir(project)
     runner = CliRunner()
 
@@ -1744,12 +1781,10 @@ def test_install_all_four_harnesses_round_trip(tmp_path, monkeypatch, scope_flag
 @pytest.mark.parametrize("scope_flag, scope_name", [("-g", "global"), ("-p", "project")])
 def test_uninstall_preserves_hand_rolled_neighbour(tmp_path, monkeypatch, scope_flag, scope_name):
     """A hand-rolled MCP in the same file survives our install+uninstall byte-for-byte."""
-    toolkit = tmp_path / "toolkit"
-    _seed(toolkit)
+    _seed(tmp_path)
     project = tmp_path / "proj"
     project.mkdir()
     monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.setenv("AGENT_TOOLKIT_REPO", str(toolkit))
     monkeypatch.chdir(project)
 
     target = (tmp_path / ".claude.json") if scope_name == "global" else (project / ".mcp.json")
@@ -1779,7 +1814,7 @@ git commit -m "test(mcp): both-scope install→uninstall round-trip guard (orpha
 
 ---
 
-## Task 10: Full suite + real-catalog smoke
+## Task 10: Full suite + real-library smoke
 
 **Files:** none (verification task)
 
@@ -1793,23 +1828,24 @@ Expected: PASS, no regressions in existing kinds.
 Run: `[ -d tests/bats ] && bats tests/bats || echo "no bats suite"`
 Expected: PASS or "no bats suite".
 
-- [ ] **Step 3: Smoke against the real catalog (the `ajanderson1/mcps` repo seeded in Task 0)**
+- [ ] **Step 3: End-to-end smoke against the real library (`~/.agent-toolkit/mcps/`)**
 
 ```bash
-export AGENT_TOOLKIT_REPO=~/GitHub/mcps   # or the --toolkit-repo equivalent _repo_resolution defines
+uv run agent-toolkit-cli mcp add context7 --npx @upstash/context7-mcp   # authors ~/.agent-toolkit/mcps/context7/ + resolves the current version
 uv run agent-toolkit-cli mcp list -g
 uv run agent-toolkit-cli mcp install context7 --harness claude-code -p
 cat ./.mcp.json
+uv run agent-toolkit-cli mcp update context7
 uv run agent-toolkit-cli mcp uninstall context7 --harness claude-code -p
 cat ./.mcp.json
 ```
 
-Expected: `list` shows the slugs seeded in Task 0 (context7, playwright, …); install adds `mcpServers.context7` to `./.mcp.json` with loud `→ writing` / `✓ wrote` lines; uninstall removes it leaving `{"mcpServers": {}}`. **Important:** this writes into the agent-toolkit-cli repo's own `.mcp.json` (gitignored) — verify it does not get committed.
+Expected: `add` authors the entry with a resolved version visible in the output; `list` shows `context7` with its version; install adds `mcpServers.context7` to `./.mcp.json` with loud `→ writing` / `✓ wrote` lines; `update` reports up-to-date or a version bump; uninstall removes it leaving `{"mcpServers": {}}`. **Important:** the smoke entry lands in the REAL `~/.agent-toolkit/mcps/` — fine to keep (it is a real, useful entry) or `rm -r` after. Also: this writes into the agent-toolkit-cli repo's own `.mcp.json` (gitignored) — verify it does not get committed.
 
 - [ ] **Step 4: Commit (if any fixes were needed)**
 
 ```bash
-git add -A && git commit -m "fix(mcp): address full-suite + real-catalog smoke findings"
+git add -A && git commit -m "fix(mcp): address full-suite + real-library smoke findings"
 ```
 
 (Skip if nothing changed.)
@@ -1821,7 +1857,7 @@ git add -A && git commit -m "fix(mcp): address full-suite + real-catalog smoke f
 **Files:**
 - Test: `tests/test_mcp_wheel.py`
 
-Project memory (#305): a kind once read repo files via `parents[N]` and crashed on every wheel install while CI stayed green (it only ran from the source tree). MCP resolves its catalog via the toolkit-repo flag, not relative-to-`__file__`, so it should be immune — this test PROVES it by running the built wheel from outside the repo.
+Project memory (#305): a kind once read repo files via `parents[N]` and crashed on every wheel install while CI stayed green (it only ran from the source tree). MCP derives its library root from `home`, never relative-to-`__file__`, so it should be immune — this test PROVES it by running the built wheel from outside the repo.
 
 - [ ] **Step 1: Write the wheel test**
 
@@ -1866,23 +1902,19 @@ def test_mcp_install_from_wheel(tmp_path):
     bin_dir = venv / ("Scripts" if (venv / "Scripts").exists() else "bin")
     _uv("pip", "install", "--python", str(bin_dir / "python"), str(wheel))
 
-    # Seed a synthetic catalog + project entirely outside the repo
-    toolkit = tmp_path / "toolkit"
-    d = toolkit / "mcps" / "demo"
+    # Seed a library entry under the isolated HOME, entirely outside the repo
+    library = tmp_path / ".agent-toolkit" / "mcps"
+    d = library / "demo"
     d.mkdir(parents=True)
-    (d / "config.json").write_text('{"type":"stdio","command":"npx","args":["-y","demo"]}\n')
+    (d / "config.json").write_text('{"type":"stdio","command":"npx","args":["-y","demo@1.0.0"]}\n')
     (d / "README.md").write_text("# demo\n")
-    (toolkit / "mcps" / "demo.toolkit.yaml").write_text(
-        "name: demo\ndescription: x.\ntransport: stdio\ninstall_method: npx\n"
+    (library / "demo.toolkit.yaml").write_text(
+        "name: demo\ndescription: x.\ntransport: stdio\ninstall_method: npx\nresolved_version: 1.0.0\n"
     )
-    # Markers required by _repo_resolution._is_toolkit_repo()
-    (toolkit / ".agent-toolkit-source").write_text("")
-    (toolkit / "schemas").mkdir()
-    (toolkit / "schemas" / "asset-frontmatter.v1alpha2.json").write_text("{}\n")
     project = tmp_path / "proj"
     project.mkdir()
 
-    env = {"HOME": str(tmp_path), "AGENT_TOOLKIT_REPO": str(toolkit), "PATH": str(bin_dir)}
+    env = {"HOME": str(tmp_path), "PATH": str(bin_dir)}
     import os
     env = {**os.environ, **env}
     r = subprocess.run(
@@ -1923,11 +1955,14 @@ In `docs/agent-toolkit/roadmap.md`, update the Phase 2 heading and table: remove
 In `README.md`, add MCP to the supported-kinds list with the foundations caveat:
 
 ```markdown
-- **MCPs** — `agent-toolkit-cli mcp install <slug>` projects a catalog MCP into
+- **MCPs** — `agent-toolkit-cli mcp add <slug> --npx|--uvx|--docker|--url|--local` authors a
+  library entry (version auto-resolved for transparency); `mcp install <slug>` projects it into
   Claude / Codex / OpenCode / Pi by surgically editing each harness's native
   config (manage-by-name, never file ownership; loud atomic writes). `list`,
-  `status`, `uninstall`, `remove`, and a read-only `doctor` are supported.
-  Drift `fix`, dry-run `diff`, and the TUI MCPs section land in a follow-up.
+  `status`, `uninstall`, `remove`, `update` (re-resolve the version + re-project),
+  and a read-only `doctor` (orphans, structural drift, env-name presence) are
+  supported. Drift `fix`, dry-run `diff`, git-clone-and-build sources, library
+  sync/`push`, and the TUI MCPs section land in follow-ups.
 ```
 
 - [ ] **Step 3: Commit**
@@ -1977,9 +2012,9 @@ Use `superpowers:finishing-a-development-branch` to open the PR (target: PR awai
 
 **2. Placeholder scan:** No "TBD"/"handle edge cases"/"similar to Task N" — every code step has concrete code. The verb files in Task 8 beyond `install_cmd` are described by behaviour + "mirror the agent sibling" rather than full code; this is deliberate (they are thin and the agent sibling IS the concrete template the engineer reads in Step 1), but it is the one spot a builder must read siblings rather than copy-paste. Flagged here honestly.
 
-**3. Type consistency:** `McpAsset` (catalog) / `McpAdapter` (Protocol) / `McpLockEntry` (lock) used consistently. `get_adapter(harness)` signature identical across base, install facade, and tests. `config_target(scope=, home=, project=)`, `install(slug, inner_config, scope=, home=, project=)`, `uninstall(slug, scope=, home=, project=)`, `is_installed(...)` — identical across `json_config`, `toml_config`, Protocol, facade, and tests. `scope_and_roots(global_, project, ctx_project, *, read_only=)` → 3-tuple, copied into `commands/mcp/_common.py` with the `mcps-lock.json` probe (verified against `commands/agent/_common.py:20` during critical review — the original plan's 4-tuple/`agent_paths` assumption was wrong and has been corrected in Tasks 6/8).
+**3. Type consistency:** `McpAsset` (library) / `McpAdapter` (Protocol) / `McpLockEntry` (lock) used consistently. `get_adapter(harness)` signature identical across base, install facade, and tests. `config_target(scope=, home=, project=)`, `install(slug, inner_config, scope=, home=, project=)`, `uninstall(slug, scope=, home=, project=)`, `is_installed(...)` — identical across `json_config`, `toml_config`, Protocol, facade, and tests. `scope_and_roots(global_, project, ctx_project, *, read_only=)` → 3-tuple, copied into `commands/mcp/_common.py` with the `mcps-lock.json` probe (verified against `commands/agent/_common.py:20` during critical review — the original plan's 4-tuple/`agent_paths` assumption was wrong and has been corrected in Tasks 6/8).
 
-**One known soft spot the builder must resolve by reading siblings:** the exact toolkit-repo resolution mechanism (`AGENT_TOOLKIT_REPO` env vs `--toolkit-repo` flag vs `_repo_resolution.py` default) and the precise `scope_and_roots` return tuple. Tasks 6 and 8 both instruct reading the agent sibling first and adjusting; the tests note the same. This is correct dependency-direction (reuse the shared resolver) but cannot be pinned to exact code without the sibling open.
+**One known soft spot the builder must resolve empirically:** the version-resolution subprocesses in `add`/`update` (`npm view`, the PyPI JSON API, `docker image inspect`) — exact output parsing and timeout behaviour can only be pinned against the real tools; the contract that matters is **best-effort, never blocking** (failure → floating + a loud note). `scope_and_roots` is no longer a soft spot (signature verified during critical review and pinned in Tasks 6/8); toolkit-repo resolution is no longer used at all (library root derives from home).
 
 ---
 
@@ -1988,11 +2023,11 @@ Use `superpowers:finishing-a-development-branch` to open the PR (target: PR awai
 ### From 2026-06-10 review (#329 critical review — deep tier)
 
 > **Both questions RESOLVED by AJ, 2026-06-10, same session:**
-> 1. **Catalog → dedicated `ajanderson1/mcps` repo** (consistent with the #341 per-category split). Applied: Task 0 prerequisite added; Tech Stack catalog note; Task 10 smoke repointed; `_SOURCE_REF = "ajanderson1/mcps"`.
+> 1. ~~**Catalog → dedicated `ajanderson1/mcps` repo**~~ **SUPERSEDED same day** by the library model (AJ, mechanism discussion): entries live in a plain local **library at `~/.agent-toolkit/mcps/`** — not a repo clone, no prerequisite repo, no Task 0. `add` authors entries from source flags (`--npx`/`--uvx`/`--docker`/`--url`/`--local`) with best-effort version resolution (transparency, not enforcement); a new `update` verb re-resolves and re-projects; v1 sources exclude git-clone-and-build; `push`/cross-machine sync deferred (git-ify the library + skill-push `divergence()` pattern when needed).
 > 2. **Lock → independent `McpLockEntry`, ALIGNED**: renamed `mcps-lock.json` (plural convention), versioned envelope (`"version": 1`), tolerant read reserving the bundle grouping field. Applied throughout Task 6. The intro's old "mcpPath on shared LockEntry" wording was the error; the independent-but-aligned shape is authoritative.
 >
 > Original entries kept below for the decision record.
 
-1. **[P0 — BLOCKS Tasks 2 & 10 — RESOLVED, see above] Where does the MCP catalog live post-#341?** The plan and spec assume `~/GitHub/agent-toolkit/mcps/` holds ~20 entries shaped `mcps/<slug>/{config.json, README.md}` + `<slug>.toolkit.yaml` sidecars. Verified 2026-06-10: that directory holds exactly TWO full standalone server repos (`mcp_android/`, `mcp_pocketsmith/` — each with `.git`, `src/`, `pyproject.toml`), zero `config.json` files, zero sidecars. The repo also fails `_is_toolkit_repo()` (no `schemas/` dir), so `resolve_toolkit_root()` cannot resolve it. Task 10's real-catalog smoke (`context7`, `playwright`, …) cannot pass against reality. Options include: (a) re-author catalog entries + markers in `agent-toolkit`, (b) a dedicated MCP catalog repo (consistent with the #341 per-category split), (c) per-server-repo metadata. Product decision required before Tasks 2/10 are executable. *(adversarial + feasibility reviewers, confidence 100)*
+1. **[P0 — BLOCKS Tasks 2 & 10 — RESOLVED, see above] Where does the MCP catalog live post-#341?** The plan and spec assume `~/GitHub/agent-toolkit/mcps/` holds ~20 entries shaped `mcps/<slug>/{config.json, README.md}` + `<slug>.toolkit.yaml` sidecars. Verified 2026-06-10: that directory holds exactly TWO full standalone server repos (`mcp_android/`, `mcp_pocketsmith/` — each with `.git`, `src/`, `pyproject.toml`), zero `config.json` files, zero sidecars. The repo also fails `_is_toolkit_repo()` (no `schemas/` dir), so `resolve_library_root()` cannot resolve it. Task 10's real-catalog smoke (`context7`, `playwright`, …) cannot pass against reality. Options include: (a) re-author catalog entries + markers in `agent-toolkit`, (b) a dedicated MCP catalog repo (consistent with the #341 per-category split), (c) per-server-repo metadata. Product decision required before Tasks 2/10 are executable. *(adversarial + feasibility reviewers, confidence 100)*
 
 2. **[P1 — BLOCKS Task 6 — RESOLVED, see above] Lock model: independent `McpLockEntry` vs shared `LockEntry`/`KindBinding`.** Task 6 drafts a bespoke `McpLockEntry` + `{"mcps": {...}}` schema (no version field, no `sourceType`/`ref`/`sha`, filename `mcps-lock.json` breaking the plural convention). The bundle-composite ADR (`docs/solutions/architecture-patterns/clone-and-project-substrate-for-bundle-plugin-capability-2026-06-10.md`) plans "the lock gains a grouping field" ACROSS the per-kind lockfiles and lists MCP as bundle step 1 — a fifth lockfile with an incompatible schema cannot participate without special-casing. Counter-argument (coherence reviewer): MCP's record shape (a LIST of per-harness projections per slug, no canonical path) is genuinely different from the one-path-per-slug shape `LockEntry` assumes, so forcing the shared machinery may distort it. Decide: (a) keep independent entry but adopt `mcps-lock.json` naming + a version field + alignment hooks for the bundle grouping field, or (b) full `KindBinding` + shared `LockEntry` with the projection list in the v3 extras dict. *(coherence + adversarial reviewers, confidence 100 — genuine tradeoff)*
