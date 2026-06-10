@@ -88,6 +88,16 @@ names and lock filenames derive from them).
 (CLAUDE.md / AGENTS.md) if they use the word for this taxonomy. README and
 `docs/agent-toolkit/cli.md` already contain zero uses.
 
+The MkDocs site (landed 5e1cc73, same day as this spec) is in scope:
+`docs/kinds/` → `docs/asset-types/` (`git mv`), the `mkdocs.yml` nav section
+label and paths, the `docs/glossary.md` "kind" entry (renamed to "asset type"
+with a one-line former-name pointer), and `scripts/gen_harness_docs.py` (the
+generator owns `docs/matrix.md` + `docs/harnesses/*.md` — edit the generator,
+then regenerate; never hand-edit generated pages). The site is brand-new and
+not yet published, so the `kinds/` → `asset-types/` URL change has no external
+consumers. Historical-docs exclusions extend to `docs/audit/` and
+`docs/agent-toolkit/research/` (dated point-in-time artifacts).
+
 ## Alternatives considered
 
 - **Docs + user-visible only** — leaves code speaking the old language;
