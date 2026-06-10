@@ -130,6 +130,48 @@ def test_update_no_args_updates_all(tmp_path, monkeypatch, git_sandbox):
     assert r.exit_code == 0, r.output
 
 
+def _seed_pinned_entry(tmp_path, git_sandbox) -> str:
+    """Store-owned entry pinned to a SHA, with a real clone on disk.
+    Returns the pinned SHA."""
+    from agent_toolkit_cli import pi_extension_add as pea
+    sha = subprocess.run(
+        ["git", "-C", str(git_sandbox.clone), "rev-parse", "HEAD"],
+        check=True, env=git_sandbox.env, capture_output=True, text=True,
+    ).stdout.strip()
+    pea.add(
+        source=f"file://{git_sandbox.upstream}/tree/{sha}",
+        slug="pinned", env=git_sandbox.env,
+    )
+    return sha
+
+
+def test_update_skips_pinned_entry(tmp_path, monkeypatch, git_sandbox):
+    """A SHA-pinned entry must not poison `update`: skip + exit 0 (#330)."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    sha = _seed_pinned_entry(tmp_path, git_sandbox)
+
+    r = CliRunner().invoke(main, ["pi-extension", "update", "-g"])
+    assert r.exit_code == 0, r.output
+    assert "pinned" in r.output.lower()
+    assert sha[:7] in r.output
+    assert "conflict" not in r.output.lower()
+
+
+def test_reset_skips_pinned_entry(tmp_path, monkeypatch, git_sandbox):
+    """`reset` on a pinned entry: informational skip, exit 0 (#330)."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    sha = _seed_pinned_entry(tmp_path, git_sandbox)
+
+    r = CliRunner().invoke(main, ["pi-extension", "reset", "pinned", "-g"])
+    assert r.exit_code == 0, r.output
+    assert "pinned to" in r.output.lower()
+    assert sha[:7] in r.output
+
+
 # ---------------------------------------------------------------------------
 # Task B2: push
 # ---------------------------------------------------------------------------
