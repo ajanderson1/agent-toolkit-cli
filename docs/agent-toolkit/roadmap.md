@@ -2,7 +2,7 @@
 
 Where `agent-toolkit-cli` and `agent-toolkit-tui` are headed after v2.0.0. Items are listed in rough priority order, not strict chronology.
 
-The v2.0.0 release stripped the TUI down to the skill kind and adopted the [`vercel-labs/skills`](https://github.com/vercel-labs/skills) lock-file model end-to-end for skills. Everything below is work that the v2.0.0 release **explicitly defers** — the README is the source of truth for what's actually shipped today.
+The v2.0.0 release stripped the TUI down to the skill asset type and adopted the [`vercel-labs/skills`](https://github.com/vercel-labs/skills) lock-file model end-to-end for skills. Everything below is work that the v2.0.0 release **explicitly defers** — the README is the source of truth for what's actually shipped today.
 
 ## v2.x (additive)
 
@@ -24,13 +24,13 @@ Today, `agent-toolkit-cli skill add -g` against a fresh `$HOME` writes a v1 lock
 
 Decision pending: default `-g` to v3 entry shape, or stay on v1 and document the asymmetry.
 
-## v3.x (the other six kinds)
+## v3.x (the other six asset types)
 
 ### Phase 2: revisit agent, command, hook, mcp, plugin, pi-extension
 
-For each kind, decide whether the lock-file model applies. Status as of 2026-06-10:
+For each asset type, decide whether the lock-file model applies. Status as of 2026-06-10:
 
-| Kind | Model | Status |
+| Asset type | Model | Status |
 |---|---|---|
 | agent | Per-agent repo + lock — same shape as skills. | **Delivered** (v3.4.0, #252 SAFE slice) |
 | pi-extension | Per-extension repo + lock — same shape as skills. | **Delivered** (v3.3.0) |
@@ -42,11 +42,11 @@ For each kind, decide whether the lock-file model applies. Status as of 2026-06-
 
 The structural-shape constraint (folder-with-markdown vs. config-injection) is the determinant. Skills, agents, commands, and pi-extensions are folder-shaped → easy. MCPs, hooks, and plugins are config-injection → need an adapter layer that translates `<slug>/manifest.toml` to the target config file.
 
-Each kind will land in its own spec + plan, not a single bulk PR.
+Each asset type will land in its own spec + plan, not a single bulk PR.
 
 ### TUI: collapse legacy mode
 
-Once all seven kinds are lock-file-driven, the `AGENT_TOOLKIT_TUI_LEGACY=1` flag becomes redundant. The default TUI gets a real kinds sidebar populated from lock entries, not from the walker. The seven tabs converge on the SkillGrid's shape (slug · source · ref · state).
+Once all seven asset types are lock-file-driven, the `AGENT_TOOLKIT_TUI_LEGACY=1` flag becomes redundant. The default TUI gets a real asset-types sidebar populated from lock entries, not from the walker. The seven tabs converge on the SkillGrid's shape (slug · source · ref · state).
 
 `AGENT_TOOLKIT_TUI_LEGACY` is removed at that point. The current default-mode behaviour (skills only) is itself a transitional state.
 

@@ -120,12 +120,12 @@ nav:
   - Home: index.md
   - Compatibility:
     - Matrix: matrix.md
-    - Kinds:
-      - Instructions: kinds/instructions.md
-      - Skills: kinds/skills.md
-      - Agents (subagents): kinds/agents.md
-      - Pi extensions: kinds/pi-extensions.md
-      - MCP servers (planned): kinds/mcp.md
+    - Asset types:
+      - Instructions: asset-types/instructions.md
+      - Skills: asset-types/skills.md
+      - Agents (subagents): asset-types/agents.md
+      - Pi extensions: asset-types/pi-extensions.md
+      - MCP servers (planned): asset-types/mcp.md
     - Harnesses:
       # BEGIN GENERATED HARNESS NAV (scripts/gen_harness_docs.py)
       - Claude Code: harnesses/claude-code.md

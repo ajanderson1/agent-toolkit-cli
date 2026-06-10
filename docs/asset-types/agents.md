@@ -1,6 +1,6 @@
 # Agents (subagents)
 
-The `agent` [kind](../glossary.md#kind) manages subagent definitions —
+The `agent` [asset type](../glossary.md#asset-type) manages subagent definitions —
 markdown-with-frontmatter descriptions of a delegable assistant — and projects
 them into each harness's agent slot.
 

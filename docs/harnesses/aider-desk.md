@@ -2,13 +2,13 @@
 
 `aider-desk` · one row of the [compatibility matrix](../matrix.md)
 
-| Kind | Support | How |
+| Asset type | Support | How |
 |---|:-:|---|
-| [Instructions](../kinds/instructions.md) | [—](#instructions) | no pointer-satisfiable root file |
-| [Skills](../kinds/skills.md) | [✅](#skills) | `.aider-desk/skills` |
-| [Agents (subagents)](../kinds/agents.md) | [✅](#agents) | config_file+folder |
-| [MCP servers](../kinds/mcp.md) | — | planned kind |
-| [Pi extensions](../kinds/pi-extensions.md) | N/A | Pi-only kind |
+| [Instructions](../asset-types/instructions.md) | [—](#instructions) | no pointer-satisfiable root file |
+| [Skills](../asset-types/skills.md) | [✅](#skills) | `.aider-desk/skills` |
+| [Agents (subagents)](../asset-types/agents.md) | [✅](#agents) | config_file+folder |
+| [MCP servers](../asset-types/mcp.md) | — | planned asset type |
+| [Pi extensions](../asset-types/pi-extensions.md) | N/A | Pi-only asset type |
 
 ## Instructions { #instructions }
 
@@ -22,7 +22,7 @@ Not supported (gap) — no default root instruction file a pointer symlink could
 
 ## Skills { #skills }
 
-Supported — every harness in the catalog has a skills directory the [skills kind](../kinds/skills.md) projects into.
+Supported — every harness in the catalog has a skills directory the [skills asset type](../asset-types/skills.md) projects into.
 
 - **Project dir:** `.aider-desk/skills`
 - **Global dir:** `~/.aider-desk/skills`
@@ -31,7 +31,7 @@ Supported — every harness in the catalog has a skills directory the [skills ki
 
 ## Agents (subagents) { #agents }
 
-Supported via the **config_file+folder** mechanism — see the [agents kind](../kinds/agents.md) for what each mechanism means.
+Supported via the **config_file+folder** mechanism — see the [agents asset type](../asset-types/agents.md) for what each mechanism means.
 
 - **Mechanism:** config_file+folder
 - **User / project path:** `~/.aider-desk/agents/<slug>/config.json` / `.aider-desk/agents/<slug>/config.json`

@@ -4,7 +4,7 @@
 
 The `skill` subgroup manages skills using a **per-skill upstream git repo + lock file** model, mirroring the on-disk layout and lock-file schema of [`vercel-labs/skills`](https://github.com/vercel-labs/skills). Lock files written by this CLI are readable by `npx skills`, and skills installed by either tool live in the same canonical directory.
 
-Unlike the legacy walker-driven path used for the other six asset kinds (agent, command, mcp, hook, plugin, pi-extension), the skill path keeps no metadata in the monorepo. Each skill is a standalone git repository; the lock file is the SSOT for installation state.
+Unlike the legacy walker-driven path used for the other six asset types (agent, command, mcp, hook, plugin, pi-extension), the skill path keeps no metadata in the monorepo. Each skill is a standalone git repository; the lock file is the SSOT for installation state.
 
 The defining behaviour: **`update` is a merge-aware operation.** Local edits to a skill (the "self-improvement" case) survive a pull from upstream when there is no overlap, and surface as real `git` merge conflicts when there is.
 
@@ -165,7 +165,7 @@ The reverse also holds: a skill installed via `npx skills add owner/repo` lands 
 ## What this design intentionally does **not** do
 
 - **Auto-push** of self-improvements. There is no session-end hook that pushes for you. Run `skill push` manually (or wire it into your own workflow). A follow-on design will revisit auto-push once the manual flow is proven.
-- **The other six asset kinds.** Agent, command, mcp, hook, plugin, and pi-extension were managed by the pre-v2 CLI commands removed in #160; the frozen surface lives at the `v1.0.0` tag. v2-native replacements (if any) land per-command — see the [#160 tracker issue](https://github.com/ajanderson1/agent-toolkit-cli/issues/163) for status.
+- **The other six asset types.** Agent, command, mcp, hook, plugin, and pi-extension were managed by the pre-v2 CLI commands removed in #160; the frozen surface lives at the `v1.0.0` tag. v2-native replacements (if any) land per-command — see the [#160 tracker issue](https://github.com/ajanderson1/agent-toolkit-cli/issues/163) for status.
 - **Submitting to the public skills.sh catalogue.** Your repos can be private; we use the same lock format and addressing scheme without depending on the catalogue.
 
 ## Where to look next

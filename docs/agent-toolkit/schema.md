@@ -1,12 +1,12 @@
 # agent-toolkit asset schema
 
 Every asset carries an `agent_toolkit_cli` metadata block.  For Markdown-based
-kinds the block is YAML frontmatter; for JSON-based kinds it lives under the
+asset types the block is YAML frontmatter; for JSON-based asset types it lives under the
 `agent_toolkit_cli` top-level key.
 
 ## Canonical directory layout
 
-| Kind | Path |
+| Asset type | Path |
 |------|------|
 | skill | `skills/<slug>/SKILL.md` |
 | agent | `agents/<slug>.md` |

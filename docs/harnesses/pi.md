@@ -2,17 +2,17 @@
 
 `pi` · one row of the [compatibility matrix](../matrix.md)
 
-| Kind | Support | How |
+| Asset type | Support | How |
 |---|:-:|---|
-| [Instructions](../kinds/instructions.md) | [✅](#instructions) | native `AGENTS.md` reader |
-| [Skills](../kinds/skills.md) | [✅](#skills) | `.pi/skills` |
-| [Agents (subagents)](../kinds/agents.md) | [✅](#agents) | dual-symlink |
-| [MCP servers](../kinds/mcp.md) | — | planned kind |
-| [Pi extensions](../kinds/pi-extensions.md) | [✅](#pi-extensions) | symlink |
+| [Instructions](../asset-types/instructions.md) | [✅](#instructions) | native `AGENTS.md` reader |
+| [Skills](../asset-types/skills.md) | [✅](#skills) | `.pi/skills` |
+| [Agents (subagents)](../asset-types/agents.md) | [✅](#agents) | dual-symlink |
+| [MCP servers](../asset-types/mcp.md) | — | planned asset type |
+| [Pi extensions](../asset-types/pi-extensions.md) | [✅](#pi-extensions) | symlink |
 
 ## Instructions { #instructions }
 
-Reads the canonical `AGENTS.md` natively — no pointer needed; the [instructions kind](../kinds/instructions.md) is satisfied as-is.
+Reads the canonical `AGENTS.md` natively — no pointer needed; the [instructions asset type](../asset-types/instructions.md) is satisfied as-is.
 
 - **Verdict:** native
 - **Default file:** `AGENTS.md`
@@ -22,7 +22,7 @@ Reads the canonical `AGENTS.md` natively — no pointer needed; the [instruction
 
 ## Skills { #skills }
 
-Supported — every harness in the catalog has a skills directory the [skills kind](../kinds/skills.md) projects into.
+Supported — every harness in the catalog has a skills directory the [skills asset type](../asset-types/skills.md) projects into.
 
 - **Project dir:** `.pi/skills`
 - **Global dir:** `~/.pi/agent/skills`
@@ -31,7 +31,7 @@ Supported — every harness in the catalog has a skills directory the [skills ki
 
 ## Agents (subagents) { #agents }
 
-Supported via the **dual-symlink** mechanism — see the [agents kind](../kinds/agents.md) for what each mechanism means.
+Supported via the **dual-symlink** mechanism — see the [agents asset type](../asset-types/agents.md) for what each mechanism means.
 
 - **Mechanism:** dual-symlink
 - **User / project path:** `~/.pi/agent/agents/<slug>.md` / `.pi/agents/<slug>.md` (legacy `.agents/` fallback)
@@ -42,7 +42,7 @@ Supported via the **dual-symlink** mechanism — see the [agents kind](../kinds/
 ## Pi extensions { #pi-extensions }
 
 Pi is the only harness with an extension-package concept, so the
-[pi-extension kind](../kinds/pi-extensions.md) targets Pi alone.
+[pi-extension asset type](../asset-types/pi-extensions.md) targets Pi alone.
 Extensions are git-sourced (branch- or SHA-pinned) and projected by
 symlink into Pi's extension directory.
 

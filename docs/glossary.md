@@ -1,7 +1,7 @@
 # Glossary
 
 The shared vocabulary of the [compatibility matrix](matrix.md), the
-per-harness pages, and the kind pages — grouped for skimming, highest-level
+per-harness pages, and the asset-type pages — grouped for skimming, highest-level
 terms first.
 
 ## Core model
@@ -10,35 +10,38 @@ terms first.
 :   A coding agent / AI dev tool the toolkit can target — Claude Code, Codex,
     Gemini CLI, Pi, … 54 catalogued in the [matrix](matrix.md). (The upstream
     `vercel-labs/skills` catalog calls these "agents"; this toolkit reserves
-    *agent* for the subagent kind.)
+    *agent* for the subagent asset type.)
 
-**Kind** { #kind }
+**Asset type** { #asset-type }
 :   The toolkit's central organising concept: a category of installable asset
     that harnesses consume in structurally the same way, so one set of verbs
-    can manage it across all of them. Each kind owns its own
+    can manage it across all of them. Each asset type owns its own
     [adopted convention](#adopted-convention), [lock file](#lock-file),
     [doctor](#doctor), projection [mechanisms](#mechanism), and CLI namespace.
-    Five kinds: [instructions](kinds/instructions.md) (always-loaded context),
-    [skills](kinds/skills.md) (on-demand instruction folders),
-    [agents](kinds/agents.md) (delegable subagents),
-    [pi extensions](kinds/pi-extensions.md) (Pi-only packages), and (planned)
-    [MCP servers](kinds/mcp.md). The [matrix](matrix.md) has one column — and
-    every harness page one section — per kind.
+    Five asset types: [instructions](asset-types/instructions.md) (always-loaded context),
+    [skills](asset-types/skills.md) (on-demand instruction folders),
+    [agents](asset-types/agents.md) (delegable subagents),
+    [pi extensions](asset-types/pi-extensions.md) (Pi-only packages), and (planned)
+    [MCP servers](asset-types/mcp.md). The [matrix](matrix.md) has one column — and
+    every harness page one section — per asset type.
 
 **Asset** { #asset }
-:   One installable thing of a kind — a skill folder, a subagent definition,
+:   One installable thing of an asset type — a skill folder, a subagent definition,
     the canonical `AGENTS.md`.
+
+**Kind** { #kind }
+:   Former name for [asset type](#asset-type).
 
 ## Conventions & conformance
 
 **Adopted convention** { #adopted-convention }
-:   The cross-harness standard the toolkit converges on for a kind —
+:   The cross-harness standard the toolkit converges on for an asset type —
     `AGENTS.md` for instructions, `SKILL.md` folders for skills, the
     [general](#general) directory layout. The canonical copy always follows
     the convention; everything else is projected from it.
 
 **Standard (conforming)** { #standard }
-:   A harness that follows the adopted convention for a kind natively — reads
+:   A harness that follows the adopted convention for an asset type natively — reads
     `AGENTS.md` or the general directory directly. Zero projection work.
 
 **Non-standard (non-conforming)** { #non-standard }
@@ -62,7 +65,7 @@ terms first.
     repo) or **global** (per-user, under `~`). Most verbs take `-p`/`-g`.
 
 **General** { #general }
-:   The per-kind convergence directory many harnesses read directly —
+:   The per-asset-type convergence directory many harnesses read directly —
     `.agents/skills` for skills, `.agents/agents` for agents. Its readers
     need no per-harness projection. (Successor of the legacy skills-only
     "universal" model.)
@@ -73,12 +76,12 @@ terms first.
     state: always safe to delete and rebuild.
 
 **Mechanism** { #mechanism }
-:   *How* a kind projects into a particular harness:
+:   *How* an asset type projects into a particular harness:
 
     - **native** — already reads the canonical file/dir; zero work.
     - **symlink** — per-asset symlink into an auto-scanned directory.
     - **pointer** — same-name symlink (`CLAUDE.md → AGENTS.md`);
-      instructions-kind only.
+      instructions-asset-type only.
     - **translate** — per-harness flavored copy in a managed cache, then a
       symlink to it.
     - **config_file / config_file+folder** — registers the asset in a named
@@ -89,18 +92,18 @@ terms first.
 ## State & repair
 
 **Lock file** { #lock-file }
-:   The per-kind, per-scope JSON record of what is installed and from where
+:   The per-asset-type, per-scope JSON record of what is installed and from where
     (`skills-lock.json`, `instructions-lock.json`, …). The source of truth;
     projections are derived.
 
 **Doctor** { #doctor }
-:   The per-kind reconciler: compares lock ↔ canonical ↔ projections, reports
+:   The per-asset-type reconciler: compares lock ↔ canonical ↔ projections, reports
     findings (missing, foreign, drifted, unmanaged), offers fixes.
 
 ## Compatibility data
 
 **Verdict** { #verdict }
-:   A harness's classification for one kind in the [SSOT](#ssot): a supported
+:   A harness's classification for one asset type in the [SSOT](#ssot): a supported
     mechanism (✅ in the [matrix](matrix.md)), **unsupported (gap)** (could be
     filled, isn't yet — rendered —), **unsupported (by design)** (the harness
     has no such concept — rendered N/A), or **unknown** (no public evidence
@@ -114,7 +117,7 @@ terms first.
     generated views of it.
 
 **Adapter** { #adapter }
-:   The per-(kind × harness) code implementing a supported verdict — writes
+:   The per-(asset type × harness) code implementing a supported verdict — writes
     the projection, guards foreign files, rolls back on failure. A verdict
     can be *supported* while the adapter is *disabled* (e.g. Codex subagents,
     pending the shared-config decision).

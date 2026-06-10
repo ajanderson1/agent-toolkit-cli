@@ -1,6 +1,6 @@
 # Pi extensions
 
-The `pi-extension` [kind](../glossary.md#kind) manages extension packages for
+The `pi-extension` [asset type](../glossary.md#asset-type) manages extension packages for
 [Pi](../harnesses/pi.md) — the only harness with an extension-package concept,
 which is why this column of the [compatibility matrix](../matrix.md) has a
 single ✅.

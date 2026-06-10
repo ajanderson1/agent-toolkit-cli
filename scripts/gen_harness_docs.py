@@ -30,7 +30,7 @@ DOCS = ROOT / "docs"
 HARNESS_DIR = DOCS / "harnesses"
 MKDOCS_YML = ROOT / "mkdocs.yml"
 
-SYNTHETIC = {"universal", "general-skill", "general-agent"}
+SYNTHETIC = {"standard", "standard-skill", "standard-agent"}
 
 # Headline harnesses: pinned to the top of the matrix (in this order) and
 # listed first + bolded in the nav; everything else folds into the expandable
@@ -188,7 +188,7 @@ def linkify(citation: str) -> str:
 
 
 # Glyphs: ✅ harness + toolkit support · — gap (harness could, toolkit hasn't)
-# · N/A kind not supported by the harness · ? unknown.
+# · N/A asset type not supported by the harness · ? unknown.
 def sym_agent(v: str) -> str:
     if v in AGENT_SUPPORTED:
         return "✅"
@@ -230,11 +230,11 @@ def matrix_cells(slug: str, agents: dict[str, AgentRow], instrs: dict[str, Instr
 
 MATRIX_HEADERS = [
     "Harness",
-    "[Instructions](kinds/instructions.md)",
-    "[Skills](kinds/skills.md)",
-    "[Agents](kinds/agents.md)",
-    "[MCP](kinds/mcp.md)",
-    "[Pi extensions](kinds/pi-extensions.md)",
+    "[Instructions](asset-types/instructions.md)",
+    "[Skills](asset-types/skills.md)",
+    "[Agents](asset-types/agents.md)",
+    "[MCP](asset-types/mcp.md)",
+    "[Pi extensions](asset-types/pi-extensions.md)",
 ]
 
 
@@ -256,8 +256,8 @@ def write_matrix(slugs: list[str], agents: dict[str, AgentRow], instrs: dict[str
     out = f"""\
 # Compatibility matrix
 
-One row per harness, one column per asset [kind](glossary.md#kind). Every
-harness links to its own page with per-kind detail; every tick links straight
+One row per harness, one column per [asset type](glossary.md#asset-type). Every
+harness links to its own page with per-asset-type detail; every tick links straight
 to the relevant section. The main harnesses are pinned at the top — expand the
 row beneath them for the rest, alphabetically. Derived from the machine-read
 [SSOT](glossary.md#ssot) ([`harness-matrix.md`](agent-toolkit/harness-matrix.md))
@@ -267,7 +267,7 @@ this page by hand.
 **Legend:** ✅ supported by the harness and the toolkit ·
 — gap (the harness supports it; the toolkit hasn't implemented it yet) ·
 N/A — the harness has no such concept ·
-? unknown (no public evidence of how the harness handles this kind)
+? unknown (no public evidence of how the harness handles this asset type)
 
 <div class="harness-matrix" markdown>
 <table markdown>
@@ -286,16 +286,16 @@ N/A — the harness has no such concept ·
 </table>
 </div>
 
-## The kinds
+## The asset types
 
-- **[Instructions](kinds/instructions.md)** — one canonical `AGENTS.md`,
+- **[Instructions](asset-types/instructions.md)** — one canonical `AGENTS.md`,
   pointer symlinks for harnesses that read an own-name file.
-- **[Skills](kinds/skills.md)** — `SKILL.md` folders projected into each
+- **[Skills](asset-types/skills.md)** — `SKILL.md` folders projected into each
   harness's skills directory.
-- **[Agents (subagents)](kinds/agents.md)** — subagent definitions projected
+- **[Agents (subagents)](asset-types/agents.md)** — subagent definitions projected
   per-harness (symlink, translate, or registry mechanisms).
-- **[MCP servers](kinds/mcp.md)** — placeholder; not yet a managed kind.
-- **[Pi extensions](kinds/pi-extensions.md)** — Pi-only extension packages.
+- **[MCP servers](asset-types/mcp.md)** — placeholder; not yet a managed asset type.
+- **[Pi extensions](asset-types/pi-extensions.md)** — Pi-only extension packages.
 """
     (DOCS / "matrix.md").write_text(out)
 
@@ -305,12 +305,12 @@ def instr_section(row: InstrRow) -> str:
     if row.verdict == "native":
         lines.append(
             "Reads the canonical `AGENTS.md` natively — no pointer needed; "
-            "the [instructions kind](../kinds/instructions.md) is satisfied as-is."
+            "the [instructions asset type](../asset-types/instructions.md) is satisfied as-is."
         )
     elif row.verdict == "symlink":
         lines.append(
             f"Reads a fixed own-name file ({row.default_file}) instead of "
-            "`AGENTS.md`. The [instructions kind](../kinds/instructions.md) "
+            "`AGENTS.md`. The [instructions asset type](../asset-types/instructions.md) "
             "creates a same-name pointer symlink → `AGENTS.md`."
         )
     elif row.verdict == "unsupported (gap)":
@@ -336,15 +336,15 @@ def instr_section(row: InstrRow) -> str:
 def skills_section(slug: str) -> str:
     cfg = AGENTS[slug]
     general = (
-        "yes — reads the per-kind general directory directly"
-        if cfg.is_universal
+        "yes — reads the per-asset-type general directory directly"
+        if cfg.is_standard
         else "no — gets its own projection"
     )
     return "\n".join([
         "## Skills { #skills }",
         "",
         "Supported — every harness in the catalog has a skills directory the "
-        "[skills kind](../kinds/skills.md) projects into.",
+        "[skills asset type](../asset-types/skills.md) projects into.",
         "",
         f"- **Project dir:** `{cfg.skills_dir}`",
         f"- **Global dir:** `{tilde(cfg.global_skills_dir)}`",
@@ -362,7 +362,7 @@ def agent_section(slug: str, row: AgentRow) -> str:
     if row.verdict in AGENT_SUPPORTED:
         lines.append(
             f"Supported via the **{row.verdict}** mechanism — see the "
-            "[agents kind](../kinds/agents.md) for what each mechanism means."
+            "[agents asset type](../asset-types/agents.md) for what each mechanism means."
         )
         lines += [
             "",
@@ -398,7 +398,7 @@ def pi_ext_section(slug: str) -> str:
         "## Pi extensions { #pi-extensions }",
         "",
         "Pi is the only harness with an extension-package concept, so the",
-        "[pi-extension kind](../kinds/pi-extensions.md) targets Pi alone.",
+        "[pi-extension asset type](../asset-types/pi-extensions.md) targets Pi alone.",
         "Extensions are git-sourced (branch- or SHA-pinned) and projected by",
         "symlink into Pi's extension directory.",
         "",
@@ -424,9 +424,9 @@ def write_harness_page(slug: str, agents: dict[str, AgentRow], instrs: dict[str,
         "N/A": "no subagent concept", "?": "no public evidence",
     }[agent_s]
     pi_row = (
-        "| [Pi extensions](../kinds/pi-extensions.md) | [✅](#pi-extensions) | symlink |"
+        "| [Pi extensions](../asset-types/pi-extensions.md) | [✅](#pi-extensions) | symlink |"
         if slug == "pi"
-        else "| [Pi extensions](../kinds/pi-extensions.md) | N/A | Pi-only kind |"
+        else "| [Pi extensions](../asset-types/pi-extensions.md) | N/A | Pi-only asset type |"
     )
     instr_cell = f"[{instr_s}](#instructions)" if instr_s != "N/A" else "N/A"
     agent_cell = f"[{agent_s}](#agents)" if agent_s != "N/A" else "N/A"
@@ -450,12 +450,12 @@ def write_harness_page(slug: str, agents: dict[str, AgentRow], instrs: dict[str,
 
 `{slug}` · one row of the [compatibility matrix](../matrix.md)
 
-| Kind | Support | How |
+| Asset type | Support | How |
 |---|:-:|---|
-| [Instructions](../kinds/instructions.md) | {instr_cell} | {instr_how} |
-| [Skills](../kinds/skills.md) | [✅](#skills) | `{cfg.skills_dir}` |
-| [Agents (subagents)](../kinds/agents.md) | {agent_cell} | {agent_how} |
-| [MCP servers](../kinds/mcp.md) | — | planned kind |
+| [Instructions](../asset-types/instructions.md) | {instr_cell} | {instr_how} |
+| [Skills](../asset-types/skills.md) | [✅](#skills) | `{cfg.skills_dir}` |
+| [Agents (subagents)](../asset-types/agents.md) | {agent_cell} | {agent_how} |
+| [MCP servers](../asset-types/mcp.md) | — | planned asset type |
 {pi_row}
 
 {body}
