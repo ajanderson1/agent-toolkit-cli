@@ -79,14 +79,31 @@ The TUI/composition layer consumes this via a new per-scope helper —
   `.claude/agents/<slug>.md` projection at the chosen scope.
 - **Adopt-if-identical:** if the slot file already exists (e.g. a prior
   `--harnesses claude-code` install) and is byte-identical to the canonical
-  content, installing `standard` succeeds as a no-op adoption. Different
-  content → fail loud (conflict), same as the foreign-file guard today.
-- **`claude-code` stays a valid explicit token** and writes the same slot
-  (idempotent with `standard` on disk). Reporting (status/TUI) names the slot
-  `standard`; the per-scope covered set explains who reads it.
+  content, installing `standard` succeeds as a no-op adoption (it becomes
+  tool-owned via the `.attk` sentinel; deleting it later loses nothing — the
+  content is the canonical's by definition). **Conflict contract (corrected
+  by review):** the foreign-content fail-loud guard applies to slugs WITHOUT
+  a lock entry at the active scope (fresh installs). For locked slugs the
+  facade sets `overwrite=True` (tool-owned refresh) — same contract as every
+  existing adapter. Both behaviors are pinned by tests at the adapter AND
+  CLI layers.
+- **`claude-code` stays a valid input token, normalized to `standard`** at
+  every boundary (CLI parse + facade uninstall path) — it is never dispatched
+  to the legacy claude-code symlink cell again. One slot, one adapter, one
+  name: reporting (status/TUI) says `standard`; the per-scope covered set
+  explains who reads it. (Review finding: leaving two adapters writing the
+  same file makes the delta/dedupe machinery unsound.)
 - **Uninstall:** `--harnesses standard` removes the slot file (the usual
-  non-destructive detach; canonical + lock untouched). Because `standard` and
-  `claude-code` are one slot, uninstalling either token removes the same file.
+  non-destructive detach; canonical + lock untouched). Normalization is
+  destination-based in the facade: any requested harness whose destination
+  resolves to the standard slot (claude-code everywhere; kode at project
+  scope, whose project cell IS `.claude/agents/<slug>.md`) routes to the
+  standard adapter — so sentinel cleanup always happens and detaching a
+  covered token detaches the slot all covered harnesses read (documented in
+  cli.md). The **default** uninstall set stays maximal (standard + ALL
+  enabled harnesses — adapters are idempotent), so pre-#361 per-harness
+  projections in kode/neovate/cortex's own dirs are still cleaned up; only
+  the **install** default is covered-aware.
 - **Default fan-out** (`agent install` with no `--harnesses`): `standard` +
   the enabled harnesses **not** covered at that scope. Covered harnesses no
   longer receive individual default installs (they read the standard slot).
@@ -98,14 +115,18 @@ Columns become (per the post-#351-demo decisions: single-line headers, no
 group-tag row, **no long-tail pseudo-column — the long tail is CLI-only**):
 
 ```
-AGENT ⓘ | Standard ⓘ | Cursor ⓘ | Pi ⓘ | Gemini CLI ⓘ | OpenCode ⓘ | State | Source
+AGENT ⓘ | Standard ⓘ | Gemini CLI ⓘ | OpenCode ⓘ | Pi ⓘ | Cursor ⓘ | State | Source
 ```
+
+(Column order = `MAIN_HARNESSES` declaration order filtered, matching the
+skills/instructions helpers' convention.)
 
 - The rendered set = Standard + the `MAIN_HARNESSES` members that support the
   agent kind and are not standard-covered at the current scope. Today:
-  cursor, pi, gemini-cli, opencode (codex is `unsupported (by design)` —
-  registry-gated, pending PR5a — and therefore exempt from the coverage
-  guarantee). The #351 coverage-guard test gains an agents-kind case.
+  gemini-cli, opencode, pi, cursor — in `MAIN_HARNESSES` declaration order
+  (codex is `unsupported (by design)` — registry-gated, pending PR5a — and
+  therefore exempt from the coverage guarantee). The #351 coverage-guard test
+  gains an agents-kind case.
 - The Standard cell shows the `.claude/agents/<slug>.md` slot state at the
   current scope (linked / unlinked / drift), via the same adapter-aware check
   the claude-code cell used.
@@ -119,9 +140,11 @@ AGENT ⓘ | Standard ⓘ | Cursor ⓘ | Pi ⓘ | Gemini CLI ⓘ | OpenCode ⓘ |
 
 ### Doctor
 
-The standard slot joins agent doctor's scan: drift (file differs from
-canonical) and orphan (slot file with no lock entry) findings, named
-`standard` in output.
+The standard slot joins agent doctor's scan: drift (slot file differs from
+the scope-appropriate canonical — project doctor compares against the
+PROJECT canonical, not the global library) and orphan (slot `.md` file with
+no lock entry, found by a directory sweep after the per-slug loop, skipping
+`.attk` sidecars) findings, named `standard` in output.
 
 ### Research step (mandated)
 
@@ -149,8 +172,10 @@ upstream docs/source:
 
 1. `agent install <slug> --harnesses standard` projects exactly
    `~/.claude/agents/<slug>.md` (global) / `<project>/.claude/agents/<slug>.md`
-   (project); round-trips with uninstall; adopt-if-identical on existing
-   claude-code installs; conflict on foreign content.
+   (project); round-trips with uninstall (incl. sentinel cleanup on every
+   deletion path); adopt-if-identical on existing claude-code installs;
+   conflict on foreign content for unlocked slugs (locked slugs refresh as
+   tool-owned — the existing facade contract).
 2. Default fan-out installs `standard` + non-covered harnesses only.
 3. Agents tab shows the Standard column (absorbing claude-code's column);
    cells reflect slot state; ⓘ panel enumerates the per-scope covered set
@@ -162,5 +187,7 @@ upstream docs/source:
 5. Research step completed: every supported harness re-verified for
    `.claude/agents/` reading, fragments + matrix updated with citations.
 6. Doctor reports drift/orphan on the standard slot.
-7. `standard-agent` still rejected as a user token; #350 alias behavior
-   unchanged; full suite green.
+7. `standard-agent` (and the other synthetic catalog names) rejected with an
+   explicit UsageError at the agent-kind boundary ("synthetic; use
+   'standard'") — review found the old behavior was a silent no-op, not a
+   rejection; #350 alias behavior unchanged; full suite green.

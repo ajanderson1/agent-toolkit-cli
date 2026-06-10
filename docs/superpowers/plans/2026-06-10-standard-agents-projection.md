@@ -67,7 +67,7 @@ Device: $(hostname -s)"
 
 **Files:**
 - Create: `src/agent_toolkit_cli/agent_adapters/standard.py`
-- Test: `tests/test_cli/test_agent_standard_adapter.py` (new)
+- Create: `tests/test_cli/test_agent_standard_adapter.py`
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -103,6 +103,15 @@ def test_readers_table_shape():
     assert "devin" in STANDARD_AGENT_READERS["project"]
 
 
+def test_readers_are_real_catalog_harnesses():
+    """Catalog drift guard (review finding): a renamed/removed harness in the
+    table would otherwise silently regain a default install while the panel
+    lists a ghost name."""
+    from agent_toolkit_cli.skill_agents import AGENTS
+    all_readers = frozenset().union(*STANDARD_AGENT_READERS.values())
+    assert all_readers <= set(AGENTS)
+
+
 def test_agents_standard_covered_accessor():
     assert agents_standard_covered("global") == STANDARD_AGENT_READERS["global"]
     with pytest.raises(KeyError):
@@ -128,7 +137,10 @@ def test_install_uninstall_roundtrip(tmp_path):
 
 def test_adopt_if_identical(tmp_path):
     """A pre-existing byte-identical file (e.g. a prior claude-code install)
-    is adopted silently — no conflict, sentinel written."""
+    is adopted silently — no conflict, sentinel written. (Adoption is safe:
+    deleting an adopted file later loses nothing — its content is the
+    canonical's by definition.)"""
+    from agent_toolkit_cli.agent_adapters import _sentinel_path
     content = _canonical(tmp_path)
     dest = tmp_path / ".claude" / "agents" / "demo.md"
     dest.parent.mkdir(parents=True)
@@ -136,6 +148,15 @@ def test_adopt_if_identical(tmp_path):
     a = adapter_for()
     out = a.install("demo", content, scope="global", home=tmp_path)
     assert out == dest
+    assert _sentinel_path(dest).exists()  # contract: adoption claims ownership
+
+
+def test_destination_rejects_traversal_slugs(tmp_path):
+    """Defense for the new high-value target: a slug containing path
+    separators must not escape the agents dir."""
+    a = adapter_for()
+    with pytest.raises(ValueError):
+        a.destination("../evil", scope="global", home=tmp_path)
 
 
 def test_foreign_different_content_conflicts(tmp_path):
@@ -208,6 +229,8 @@ class _StandardAdapter:
             raise ValueError(
                 f"standard: scope must be 'global' or 'project', got {scope!r}"
             )
+        if "/" in slug or "\\" in slug or slug in (".", ".."):
+            raise ValueError(f"standard: invalid slug {slug!r}")
         return _expand(_TEMPLATES[scope], home=home, project=project, slug=slug)
 
     def install(
@@ -308,12 +331,53 @@ def test_plan_standard_to_standard_is_noop(tmp_path, monkeypatch):
              home=tmp_path)
     assert "standard" not in p.add_agents
     assert "claude-code" not in p.remove_agents
+
+
+def test_linked_scan_dedupe_kode_project_scope(tmp_path):
+    """kode's PROJECT cell IS {PROJECT}/.claude/agents/<slug>.md — the same
+    file as the standard slot. Without project-scope dedupe the scan would
+    double-report and a delta could delete the shared file (review finding)."""
+    slot = tmp_path / ".claude" / "agents" / "demo.md"
+    slot.parent.mkdir(parents=True)
+    slot.write_text("x\n")
+    from agent_toolkit_cli.agent_install import _current_linked_agents
+    linked = _current_linked_agents(
+        slug="demo", scope="project", home=None, project=tmp_path,
+    )
+    assert "standard" in linked
+    assert "kode" not in linked
+
+
+def test_uninstall_covered_token_routes_to_standard_adapter(tmp_path):
+    """Destination-based normalization in the facade (review finding): the
+    production deletion path is agent_install.uninstall()'s DIRECT adapter
+    loop, not plan(). A covered token whose destination IS the slot (kode at
+    project scope) must route to the standard adapter so the .attk sentinel
+    is cleaned up with the file."""
+    from agent_toolkit_cli.agent_adapters import _sentinel_path
+    from agent_toolkit_cli.agent_adapters.standard import adapter_for as _std
+    from agent_toolkit_cli.agent_install import uninstall
+
+    canonical = tmp_path / "c"
+    canonical.mkdir()
+    content = canonical / "demo.md"
+    content.write_text("x\n")
+    std = _std()
+    out = std.install("demo", content, scope="project", project=tmp_path)
+    assert _sentinel_path(out).exists()
+    uninstall(slug="demo", scope="project", home=None, project=tmp_path,
+              harnesses=("kode",))
+    assert not out.exists()
+    assert not _sentinel_path(out).exists()
 ```
 
 - [ ] **Step 2: Run to verify failure**
 
 Run: `uv run pytest tests/test_cli/test_agent_install.py -q -k standard`
-Expected: FAIL — `UnsupportedMechanismError` from `get_adapter("standard")`.
+Expected: FAIL — `UnsupportedMechanismError` for
+`test_get_adapter_standard_returns_adapter`; plain AssertionError for the two
+scan tests (the pre-change scan reports `claude-code` for the slot, so
+`"standard" in linked` fails without raising).
 
 - [ ] **Step 3: Implement.** In `get_adapter` insert BEFORE the catalog lookup:
 
@@ -349,6 +413,8 @@ scan where the standard slot wins:
             linked.append("standard")
 
     for name in _AGENTS:
+        if name == "standard":
+            continue  # already handled above (get_adapter now intercepts it)
         if name in synthetic_names or name in _AGENT_SYNTHETIC_NAMES:
             continue
         try:
@@ -368,16 +434,62 @@ scan where the standard slot wins:
     return tuple(linked)
 ```
 
-(Note: `"standard"` is in `_AGENTS` (the skills bundle pseudo-entry) but its
-catalog mechanism is `none` — `get_adapter` now intercepts the name BEFORE the
-mechanism check, so guard the loop: skip `name == "standard"` there to avoid
-double-reporting. Add `if name == "standard": continue` as the first line of
-the loop.)
-
 Also update the module docstring sentence "No standard-bundle concept exists
 for agents" to: "The agents kind's standard projection is the
 `.claude/agents/<slug>.md` slot (#361) — `standard_bundle_link` stays None
 because the slot is an adapter, not a core bundle link."
+
+In `agent_install.uninstall()`, add destination-based normalization at the
+top of the adapter loop (the production deletion paths — uninstall_cmd, the
+TUI apply, remove_cmd — all call this DIRECT loop, not plan(), so the dedupe
+must live here too):
+
+```python
+    from agent_toolkit_cli.agent_adapters.standard import adapter_for as _std
+
+    std = _std()
+    for name in harnesses:
+        if name in _AGENT_SYNTHETIC_NAMES:
+            continue
+        # Destination-based normalization (#361): any harness whose
+        # destination resolves to the standard slot routes to the standard
+        # adapter (claude-code everywhere; kode at project scope) so sentinel
+        # cleanup always happens and the slot has one owner.
+        if name != "standard":
+            try:
+                std_dest = std.destination(slug, scope=scope, home=home, project=project)
+                adapter = agent_adapters.get_adapter(name)
+                if adapter.destination(slug, scope=scope, home=home, project=project) == std_dest:
+                    name = "standard"
+            except (ValueError, _UnknownAgentError, UnsupportedMechanismError):
+                pass
+        try:
+            adapter = agent_adapters.get_adapter(name)
+        except (UnsupportedMechanismError, _UnknownAgentError):
+            continue
+        try:
+            adapter.uninstall(slug, scope=scope, home=home, project=project)
+        except ValueError:
+            continue
+```
+
+And make sentinel cleanup destination-generic in `_SymlinkAdapter.uninstall`
+(`agent_adapters/symlink.py`) so non-normalized paths (e.g. `agent remove`'s
+legacy all-enabled list) never orphan a sentinel that would later authorize a
+silent clobber (review finding — the orphaned `.attk` defeats `_guard_foreign`):
+
+```python
+    def uninstall(self, slug, *, scope, home=None, project=None) -> None:
+        dest = self._resolve_dest(slug, scope=scope, home=home, project=project)
+        if dest.exists() or dest.is_symlink():
+            dest.unlink()
+        sentinel = _sentinel_path(dest)
+        if sentinel.exists():
+            sentinel.unlink()
+```
+
+(add `from agent_toolkit_cli.agent_adapters import _guard_foreign, _sentinel_path`
+to symlink.py's imports — `_guard_foreign` is already imported there.)
 
 - [ ] **Step 4: Run to verify pass**
 
@@ -401,7 +513,7 @@ Device: $(hostname -s)"
 - Modify: `src/agent_toolkit_cli/commands/agent/install_cmd.py:24-48`
 - Modify: `src/agent_toolkit_cli/commands/agent/uninstall_cmd.py:21-35`
 - Modify: `src/agent_toolkit_cli/commands/agent/status_cmd.py:11-33`
-- Test: `tests/test_cli/test_agent_cli_standard.py` (new)
+- Create: `tests/test_cli/test_agent_cli_standard.py`
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -489,12 +601,40 @@ def _resolve_harnesses(harnesses_str: str | None, scope: str) -> tuple[str, ...]
     return tuple(dict.fromkeys(parts))  # de-dupe, preserve order
 ```
 
+Add explicit synthetic-token rejection (review finding: AC7's "rejected"
+was previously a silent no-op — `standard-agent` is in AGENTS so it passed
+validation and apply() skipped it while the CLI printed "installed"):
+
+```python
+    from agent_toolkit_cli.agent_install import _AGENT_SYNTHETIC_NAMES
+    synthetic = [p for p in parts if p in _AGENT_SYNTHETIC_NAMES]
+    if synthetic:
+        raise click.UsageError(
+            f"{', '.join(synthetic)}: synthetic catalog name(s); use 'standard'"
+        )
+```
+
 Update the two call sites in `install_cmd.py`'s command body to pass the
 resolved scope (it is computed by `scope_and_roots` before harness
-resolution — move the `_resolve_harnesses` call after it if needed). Mirror
-the same two changes in `uninstall_cmd.py`'s
-`_resolve_harnesses_for_uninstall` (claude-code→standard normalization +
-covered-aware default derived from the same helpers).
+resolution — move the `_resolve_harnesses` call after it if needed).
+
+`uninstall_cmd.py`'s `_resolve_harnesses_for_uninstall` gets the
+claude-code→standard normalization and the synthetic rejection, but its
+**no-flag default stays MAXIMAL**: `("standard",) + all enabled harnesses`
+(no covered filter — review finding: pre-#361 default installs wrote real
+files at kode/neovate/cortex's OWN dirs, and a covered-aware uninstall
+default would strand them forever; adapters are idempotent so over-listing
+is harmless per the facade docstring). Only the INSTALL default is
+covered-aware. Add a test: default uninstall after a pre-#361-style
+all-harness install leaves no projection files.
+
+`remove_cmd.py` (review finding — it was missing from the plan): its
+`_all_enabled_harnesses()` helper gains `("standard",)` prepended, so
+`agent remove` cleans the slot + sentinel via the standard adapter (the
+facade's destination normalization covers the claude-code entry it also
+lists). Add `Modify: src/agent_toolkit_cli/commands/agent/remove_cmd.py`
+to this task's Files list, plus a test asserting `agent remove` after a
+`--harnesses standard` install leaves no `.attk` file in `.claude/agents/`.
 
 `status_cmd.py` — `_projected_harnesses` gains the same dedupe as the facade
 scan (standard first, skip same-destination cells):
@@ -569,8 +709,10 @@ def test_agents_nonstandard_main_today():
     from agent_toolkit_tui.composition import agents_nonstandard_main
     # claude-code is standard-covered; codex is unsupported-by-design;
     # cursor/pi/gemini-cli/opencode keep their own columns.
-    assert agents_nonstandard_main("global") == ("cursor", "pi", "gemini-cli", "opencode")
-    assert agents_nonstandard_main("project") == ("cursor", "pi", "gemini-cli", "opencode")
+    # MAIN_HARNESSES declaration order, filtered — same convention as the
+    # skills/instructions helpers.
+    assert agents_nonstandard_main("global") == ("gemini-cli", "opencode", "pi", "cursor")
+    assert agents_nonstandard_main("project") == ("gemini-cli", "opencode", "pi", "cursor")
 
 
 def test_agents_coverage_guard():
@@ -615,8 +757,9 @@ standard cell. Replace the pinned tuple:
 from agent_toolkit_tui.composition import agents_nonstandard_main
 
 # Rendered columns (#361): the standard slot first, then the non-covered
-# main harnesses. The long tail is CLI-only. The rendered set is scope-
-# independent today; cells are still keyed by (scope, harness).
+# main harnesses (derived per scope; the two scopes happen to yield the
+# same set today because devin is not a MAIN harness). Cells are still
+# keyed by (scope, harness). The long tail is CLI-only.
 INTERACTIVE_HARNESSES: tuple[str, ...] = ("standard",) + agents_nonstandard_main("global")
 ```
 
@@ -683,7 +826,10 @@ async def test_press_i_on_standard_column_opens_registry_modal():
         body = str(app.screen.query_one("#column-info-body").render())
         assert "agents" in body
         assert "kode" in body and "neovate" in body and "cortex" in body
-        # global-scope panel carries the devin project-only note
+        # global-scope panel (the grid default) carries the devin
+        # project-only note; after grid.set_scope("project") + reopen, the
+        # note must be absent (devin is simply covered there) — add a second
+        # assertion block for that scope flip.
         assert "devin" in body
 ```
 
@@ -751,8 +897,9 @@ async def test_agent_grid_has_standard_but_no_pseudo_column():
 Run: `uv run pytest tests/test_tui/ -q`
 Expected: failures only in `test_agent_grid.py` assertions pinned to the old
 4-column layout (claude-code first, no opencode) — update them to the new
-`INTERACTIVE_HARNESSES` (standard, cursor, pi, gemini-cli, opencode); they
-are layout-contract updates, listed in the commit body. Then: PASS.
+`INTERACTIVE_HARNESSES` (standard, gemini-cli, opencode, pi, cursor — the
+MAIN_HARNESSES-order derivation); they are layout-contract updates, listed
+in the commit body. Then: PASS.
 
 - [ ] **Step 8: Commit**
 
@@ -821,33 +968,110 @@ Run: `uv run pytest tests/test_cli/test_agent_doctor.py -q -k standard`
 Expected: FAIL (no such finding kind).
 
 - [ ] **Step 3: Implement.** In `_diagnose`'s per-slug loop, after the
-"missing content file" check:
+"missing content file" check. **The comparison baseline is scope-aware**
+(review finding: `_diagnose`'s `canonical = library_agent_path(slug)` is the
+GLOBAL library; a project slot is seeded from the PROJECT canonical and may
+legitimately differ from the global library — comparing against the wrong
+baseline reports false drift and the fix would install the wrong version):
 
 ```python
         # 5. Standard-slot drift (#361): the .claude/agents/<slug>.md slot
-        # exists but differs from the canonical content file.
-        if content_file.exists():
-            from agent_toolkit_cli.agent_adapters.standard import adapter_for as _std
+        # exists but differs from the scope-appropriate canonical.
+        from agent_toolkit_cli.agent_adapters.standard import adapter_for as _std
+        from agent_toolkit_cli.agent_paths import canonical_agent_dir
+        scope_content = canonical_agent_dir(
+            slug, scope=scope, home=home, project=project,
+        ) / f"{slug}.md"
+        if scope_content.exists():
             try:
                 slot = _std().destination(slug, scope=scope, home=home, project=project)
             except ValueError:
                 slot = None
             if slot is not None and slot.exists() and not filecmp.cmp(
-                content_file, slot, shallow=False,
+                scope_content, slot, shallow=False,
             ):
                 findings.append(Finding(
                     slug=slug, kind="standard-slot-drift", scope=scope,
                     path=slot,
-                    detail="standard slot differs from canonical "
-                           f"({slot} vs {content_file})",
+                    detail="standard slot differs from canonical — local "
+                           f"edits to {slot} will be DISCARDED by the fix "
+                           f"(baseline: {scope_content})",
                     fix_action=FixAction(
-                        shell_preview=f"cp {content_file} {slot}",
-                        apply=lambda c=content_file, s=slot: shutil.copy2(c, s),
+                        shell_preview=f"diff {slot} {scope_content}; cp {scope_content} {slot}",
+                        apply=lambda c=scope_content, s=slot: shutil.copy2(c, s),
                     ),
                 ))
 ```
 
 Add `import filecmp` to the module imports.
+
+After the per-slug loop (beside the existing orphan-canonical sweep), add the
+**standard-slot orphan sweep** (review finding: spec AC requires drift AND
+orphan; the per-slug loop structurally cannot see slot files for slugs absent
+from the lock):
+
+```python
+    # 6. Standard-slot orphans (#361): .md files in the standard agents dir
+    # with no lock entry. Sweep skips .attk sidecars and non-md files.
+    if not slugs:
+        from agent_toolkit_cli.agent_adapters.standard import adapter_for as _std
+        try:
+            agents_dir = _std().destination(
+                "__probe__", scope=scope, home=home, project=project,
+            ).parent
+        except ValueError:
+            agents_dir = None
+        if agents_dir is not None and agents_dir.is_dir():
+            lock_slugs = set(lock.skills.keys())
+            for child in sorted(agents_dir.glob("*.md")):
+                if child.stem in lock_slugs:
+                    continue
+                orphan = child
+                findings.append(Finding(
+                    slug=child.stem, kind="standard-slot-orphan", scope=scope,
+                    path=orphan,
+                    detail="standard slot file has no lock entry",
+                    fix_action=FixAction(
+                        shell_preview=f"rm {orphan}",
+                        apply=lambda p=orphan: p.unlink(),
+                    ),
+                ))
+```
+
+Add the matching tests to Step 1's file:
+
+```python
+def test_doctor_flags_standard_slot_orphan(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    home = _setup_locked_agent(tmp_path)
+    stray = home / ".claude" / "agents" / "stray.md"
+    stray.parent.mkdir(parents=True, exist_ok=True)
+    stray.write_text("x\n")
+    from agent_toolkit_cli.commands.agent.doctor_cmd import _diagnose
+    findings = _diagnose(slugs=None, scope="global", home=home, project=None)
+    assert any(f.kind == "standard-slot-orphan" and f.slug == "stray" for f in findings)
+
+
+def test_doctor_project_drift_uses_project_canonical(tmp_path, monkeypatch):
+    """Project doctor compares the slot against the PROJECT canonical — a
+    project slot matching its project canonical is clean even when the
+    global library has moved on (review finding)."""
+    project = tmp_path / "proj"
+    canonical = project / ".agents" / "agents" / "demo"  # adapt to canonical_agent_dir's actual project layout
+    canonical.mkdir(parents=True)
+    (canonical / "demo.md").write_text("project version\n")
+    slot = project / ".claude" / "agents" / "demo.md"
+    slot.parent.mkdir(parents=True)
+    slot.write_text("project version\n")
+    # ...write a project lock entry for demo per the module's fixture pattern...
+    from agent_toolkit_cli.commands.agent.doctor_cmd import _diagnose
+    findings = _diagnose(slugs=None, scope="project", home=None, project=project)
+    assert not any(f.kind == "standard-slot-drift" for f in findings)
+```
+
+(Adapt the project-canonical path in the second test to what
+`canonical_agent_dir(slug, scope="project", project=project)` actually
+returns — verify before writing the fixture.)
 
 - [ ] **Step 4: Run to verify pass**
 
