@@ -1,10 +1,13 @@
 """Interactive DataTable for the TUI's agent tab.
 
-Columns: AGENT ⓘ | <INTERACTIVE_HARNESSES...> | Source.
+Columns (#361): AGENT ⓘ | Standard ⓘ | <non-covered main harnesses…> | Source.
 
 Mirrors skill_grid.py: per-harness columns, scope toggle, toggle-queue →
 pending → apply. Pending key shape: (scope, harness_name, slug) — same
-3-tuple as skill.
+3-tuple as skill. The Standard column IS a harness column (the
+.claude/agents slot is a real installable destination) — it toggles like
+any other; `i` on it opens the registry-backed ColumnInfoModal listing
+the covered harnesses for the active scope.
 
 No State column (agents are installed real files, not git working trees).
 
@@ -25,6 +28,8 @@ from textual.widgets import DataTable
 
 from agent_toolkit_cli.skill_agents import AGENTS
 from agent_toolkit_tui.agent_state import INTERACTIVE_HARNESSES, AgentRow
+from agent_toolkit_tui.column_info import get_column_info
+from agent_toolkit_tui.widgets.column_info_modal import ColumnInfoModal
 
 _LINKED_GLYPH   = "[green]✔[/]"
 _UNLINKED_GLYPH = "☐"
@@ -137,7 +142,10 @@ class AgentGrid(Vertical):
         self._toggle_at(table.cursor_coordinate)
 
     def action_info(self) -> None:
-        """Open CellInfoScreen for the cell under the cursor."""
+        """Route `i` by column. The standard column has registered ColumnInfo
+        and opens ColumnInfoModal — the registry path mirroring
+        instruction_grid (#351/#361). Everything else opens CellInfoScreen
+        with the per-cell state."""
         from agent_toolkit_tui.screens.cell_info import CellInfoScreen
 
         try:
@@ -145,6 +153,12 @@ class AgentGrid(Vertical):
         except Exception:
             return
         coord = table.cursor_coordinate
+        key = self._column_key_for_index(coord.column)
+        if key is not None:
+            info = get_column_info(key, context=self._context_for(key=key))
+            if info is not None:
+                self.app.push_screen(ColumnInfoModal(info))
+                return
         if coord.row >= len(self._rows):
             return
         row = self._rows[coord.row]
@@ -270,6 +284,42 @@ class AgentGrid(Vertical):
             return INTERACTIVE_HARNESSES[idx]
         return None
 
+    def _column_key_for_index(self, col: int) -> str | None:
+        """Resolve a column index to a COLUMN_INFO registry key (#361).
+
+        Only the standard column has registered ColumnInfo; harness/slug/
+        source columns return None and fall through to CellInfoScreen.
+        """
+        if self._harness_for_column(col) == "standard":
+            return "standard"
+        return None
+
+    def _context_for(self, *, key: str) -> dict | None:
+        """Context for get_column_info(): the standard panel enumerates the
+        native .claude/agents readers from the per-scope coverage SSOT (#361).
+
+        At global scope the panel carries the devin note (devin reads the
+        slot at project scope only, so it is absent from the global covered
+        set); at project scope devin is simply covered and the note is gone.
+        """
+        if key == "standard":
+            from agent_toolkit_cli.agent_adapters.standard import (
+                agents_standard_covered,
+            )
+
+            covered = sorted(agents_standard_covered(self._scope))
+            extra_lines = (
+                ["", "devin reads .claude/agents at project scope only."]
+                if self._scope == "global"
+                else []
+            )
+            return {
+                "asset_type": "agents",
+                "names": tuple(covered),
+                "extra_lines": extra_lines,
+            }
+        return None
+
     def _rebuild(self, table: DataTable) -> None:
         """Rebuild the DataTable from current rows + pending. Never named _render_*."""
         saved = table.cursor_coordinate
@@ -282,11 +332,17 @@ class AgentGrid(Vertical):
         table.clear(columns=True)
         # Slug column — info glyph since `i` works on it.
         table.add_column(f"AGENT {_INFO_GLYPH}", width=22)
-        # Per-harness columns.
+        # Per-harness columns. "standard" is the .claude/agents slot (#361),
+        # not a catalog harness — label it explicitly (same special-case as
+        # skill_grid). The Standard column leads; everything after it is
+        # implicitly non-standard.
         for harness in INTERACTIVE_HARNESSES:
-            cfg = AGENTS.get(harness)
-            display = cfg.display_name if cfg else harness
-            table.add_column(f"{display} {_INFO_GLYPH}", width=14)
+            if harness == "standard":
+                base = "Standard"
+            else:
+                cfg = AGENTS.get(harness)
+                base = cfg.display_name if cfg else harness
+            table.add_column(f"{base} {_INFO_GLYPH}", width=14)
         # Source column — passive, no info popup.
         table.add_column("Source", width=30)
 

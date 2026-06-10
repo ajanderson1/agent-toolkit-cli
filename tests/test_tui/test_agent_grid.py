@@ -43,7 +43,7 @@ from agent_toolkit_tui.widgets.skill_grid import SkillGrid
 # ---------------------------------------------------------------------------
 
 
-def _linked_row(slug: str, *, harness: str = "claude-code") -> AgentRow:
+def _linked_row(slug: str, *, harness: str = INTERACTIVE_HARNESSES[0]) -> AgentRow:
     """Row with exactly one harness linked at global scope."""
     return AgentRow(
         slug=slug,
@@ -53,7 +53,7 @@ def _linked_row(slug: str, *, harness: str = "claude-code") -> AgentRow:
     )
 
 
-def _unlinked_row(slug: str, *, harness: str = "claude-code") -> AgentRow:
+def _unlinked_row(slug: str, *, harness: str = INTERACTIVE_HARNESSES[0]) -> AgentRow:
     """Row with exactly one harness unlinked at global scope."""
     return AgentRow(
         slug=slug,
@@ -404,7 +404,7 @@ async def test_apply_link_calls_agent_install_apply(monkeypatch):
         app._active_asset_type = "agent"
         grid = app.query_one("#agent-grid", AgentGrid)
         grid.set_rows([_full_row("my-agent", linked=False)])
-        grid.restore_pending({("global", "claude-code", "my-agent"): "link"})
+        grid.restore_pending({("global", "standard", "my-agent"): "link"})
         await pilot.pause()
 
         app._apply_agent_pending()
@@ -413,7 +413,7 @@ async def test_apply_link_calls_agent_install_apply(monkeypatch):
     assert "applied:" in footer
     assert len(apply_calls) >= 1
     assert apply_calls[0]["slug"] == "my-agent"
-    assert "claude-code" in apply_calls[0]["add_agents"]
+    assert "standard" in apply_calls[0]["add_agents"]
     # Global scope MUST pass home=Path.home() (not None).
     assert apply_calls[0]["home"] == Path.home()
 
@@ -458,7 +458,7 @@ async def test_apply_unlink_calls_agent_install_uninstall_directly(monkeypatch):
         app._active_asset_type = "agent"
         grid = app.query_one("#agent-grid", AgentGrid)
         grid.set_rows([_full_row("my-agent", linked=True)])
-        grid.restore_pending({("global", "claude-code", "my-agent"): "unlink"})
+        grid.restore_pending({("global", "standard", "my-agent"): "unlink"})
         await pilot.pause()
 
         app._apply_agent_pending()
@@ -467,7 +467,7 @@ async def test_apply_unlink_calls_agent_install_uninstall_directly(monkeypatch):
     # Uninstall MUST have been called directly — not via apply().removed.
     assert uninstall_calls, "agent_install.uninstall() was NOT called — orphan bug!"
     assert uninstall_calls[0]["slug"] == "my-agent"
-    assert "claude-code" in uninstall_calls[0]["harnesses"]
+    assert "standard" in uninstall_calls[0]["harnesses"]
     # apply() should NOT have been called (no adds in this pending).
     assert apply_calls == [], "apply() should not be called for unlink-only pending"
     assert "applied:" in footer
@@ -504,7 +504,7 @@ async def test_apply_error_surfaces_notify_and_footer(monkeypatch):
         app._active_asset_type = "agent"
         grid = app.query_one("#agent-grid", AgentGrid)
         grid.set_rows([_full_row("my-agent", linked=False)])
-        grid.restore_pending({("global", "claude-code", "my-agent"): "link"})
+        grid.restore_pending({("global", "standard", "my-agent"): "link"})
         await pilot.pause()
 
         app._apply_agent_pending()
@@ -569,10 +569,10 @@ async def test_apply_project_scope_seeds_canonical(monkeypatch, tmp_path):
             slug="my-agent",
             source="ajanderson1/my-agent",
             ref="main",
-            cells={("claude-code", "project"): AgentCell(linked=False)},
+            cells={("standard", "project"): AgentCell(linked=False)},
         )
         grid.set_rows([project_row])
-        grid.restore_pending({("project", "claude-code", "my-agent"): "link"})
+        grid.restore_pending({("project", "standard", "my-agent"): "link"})
         await pilot.pause()
 
         app._apply_agent_pending()

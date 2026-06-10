@@ -24,8 +24,9 @@ class ColumnInfo:
 
 
 def _standard_info(context: dict | None = None) -> ColumnInfo:
-    # Asset-type-agnostic via context (#351): the instruction grid reuses this
-    # registry key with its own names/asset type; names default to the skills set.
+    # Asset-type-agnostic via context (#351, #361): the instruction and agent
+    # grids reuse this registry key with their own names/asset type; names
+    # default to the skills set.
     ctx = context or {}
     asset_type = ctx.get("asset_type", "skills")
     harness_names = tuple(ctx.get("names") or get_standard_agents())
@@ -38,6 +39,9 @@ def _standard_info(context: dict | None = None) -> ColumnInfo:
         if name in AGENTS else f"  • {name}"
         for name in harness_names
     ]
+    # Caller-supplied trailing lines (#361): e.g. the agents panel's devin
+    # project-scope-only note at global scope. Appended after the bullets.
+    extra_lines = list(ctx.get("extra_lines") or [])
     # The 🌐 marker block is contextual AND skills-only (instructions has no
     # global-marker concept): it only makes sense when the focused row IS
     # installed globally. Omit it when the caller says otherwise.
@@ -51,9 +55,10 @@ def _standard_info(context: dict | None = None) -> ColumnInfo:
         "  so you may not need it at project scope too.",
     ] if show_marker else []
     return ColumnInfo(
-        # v3.7 full rename (#350): key and title both say "standard".
-        title="Standard bundle",
-        lines=description + bullets + indicator_note,
+        # v3.7 full rename (#350): key and title both say "standard". The
+        # agents asset type is a single-file slot, not a bundle (#361).
+        title="Standard slot (agents)" if asset_type == "agents" else "Standard bundle",
+        lines=description + bullets + extra_lines + indicator_note,
     )
 
 

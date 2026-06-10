@@ -4,11 +4,11 @@ Reads the agent lock + filesystem to produce AgentRow records with per-harness
 cell state. Mirrors skill_state.py for the agent asset type.
 
 Key differences from skill_state:
-- No standard-bundle concept (agents are real files, not symlinks to a bundle).
+- The standard projection is the .claude/agents/<slug>.md slot (#361) — a real
+  installable file, not a symlink bundle. It renders as the first column.
 - No git working-tree state badge (agents are installed files, not git repos per-se).
 - Linked = adapter destination exists (adapter.destination(...).exists() or .is_symlink()).
-- INTERACTIVE_HARNESSES is the pinned shortlist of 4 high-value harnesses.
-  standard-agent is synthetic (mechanism='none') and is NOT rendered.
+- INTERACTIVE_HARNESSES is derived: standard slot + non-covered main harnesses.
 """
 from __future__ import annotations
 
@@ -19,18 +19,15 @@ from typing import Literal
 from agent_toolkit_cli.agent_adapters import UnsupportedMechanismError, get_adapter
 from agent_toolkit_cli.agent_lock import read_lock
 from agent_toolkit_cli.agent_paths import lock_file_path
+from agent_toolkit_tui.composition import agents_nonstandard_main
 
 Scope = Literal["global", "project"]
 
-# Pinned shortlist of installable harnesses whose cells the TUI grid renders
-# interactively. standard-agent is synthetic (mechanism='none') so it is NOT
-# included here. This is the single knob to add/remove interactive columns.
-INTERACTIVE_HARNESSES: tuple[str, ...] = (
-    "claude-code",
-    "cursor",
-    "pi",
-    "gemini-cli",
-)
+# Rendered columns (#361): the standard slot first, then the non-covered
+# main harnesses (derived per scope; the two scopes yield the same set
+# today because devin is not a MAIN harness). Cells are still keyed by
+# (scope, harness). The long tail is CLI-only.
+INTERACTIVE_HARNESSES: tuple[str, ...] = ("standard",) + agents_nonstandard_main("global")
 
 
 @dataclass(frozen=True)

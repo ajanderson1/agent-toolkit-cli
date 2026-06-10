@@ -59,3 +59,31 @@ def test_instructions_coverage_guard():
 def test_rendered_columns_disjoint_from_standard():
     standard = {n for n, c in AGENTS.items() if c.is_standard and c.show_in_standard_list}
     assert set(skills_nonstandard_main()).isdisjoint(standard)
+
+
+def test_agents_nonstandard_main_today():
+    from agent_toolkit_tui.composition import agents_nonstandard_main
+
+    # claude-code AND cursor are standard-covered (cursor per the 2026-06-10
+    # re-verification); codex is unsupported-by-design; gemini-cli/opencode/pi
+    # keep their own columns. MAIN_HARNESSES declaration order, filtered —
+    # same convention as the skills/instructions helpers.
+    assert agents_nonstandard_main("global") == ("gemini-cli", "opencode", "pi")
+    assert agents_nonstandard_main("project") == ("gemini-cli", "opencode", "pi")
+
+
+def test_agents_coverage_guard():
+    """Every main harness that supports the agent asset type is covered: in
+    the standard readers set or a rendered column."""
+    from agent_toolkit_cli.agent_adapters.standard import agents_standard_covered
+    from agent_toolkit_tui.composition import agents_nonstandard_main
+
+    for scope in ("global", "project"):
+        covered = agents_standard_covered(scope)
+        rendered = set(agents_nonstandard_main(scope))
+        for h in MAIN_HARNESSES:
+            if AGENTS[h].subagent_mechanism == "none":
+                continue  # e.g. codex: unsupported by design — exempt
+            assert h in covered or h in rendered, (
+                f"{h} is neither standard-covered nor rendered on the agents tab ({scope})"
+            )
