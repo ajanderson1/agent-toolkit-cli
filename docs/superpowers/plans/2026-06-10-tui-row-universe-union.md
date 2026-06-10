@@ -4,7 +4,7 @@
 
 **Goal:** Make project-installed-but-not-in-library assets visible (`unlisted` state) and actionable in the TUI, align row-inclusion semantics (union of library lock + scope lock) across the skill and agent tabs, and add a doctor `unlisted` finding with a re-add-to-library fix-action.
 
-**Architecture:** Row builders in `agent_toolkit_tui/{skill_state,agent_state}.py` compute union(library lock, scope lock) inline (no shared helper — the lock modules differ). `skill_state` gains state `"unlisted"`; `agent_state` gains a `state` field (`installed`/`library`/`unlisted`). Two Apply-path fixes make unlisted rows actionable. `skill_doctor.diagnose` and agent `_diagnose` gain an `unlisted` finding whose fix-action re-materialises the library canonical and lock entry from the project entry's recorded source+ref.
+**Architecture:** Row builders in `agent_toolkit_tui/{skill_state,agent_state}.py` compute union(library lock, scope lock) inline (no shared helper — the lock modules differ). `skill_state` gains state `"unlisted"`; `agent_state` gains a `state` field (`installed`/`library`/`unlisted`). Exactly two Apply-path fixes make unlisted rows actionable: Task 3 (`ensure_project_canonical` early-return) and Task 4 (drop the project lock entry on full uninstall). `skill_doctor.diagnose` and agent `_diagnose` gain an `unlisted` finding whose fix-action re-materialises the library canonical and lock entry from the project entry's recorded source+ref.
 
 **Tech Stack:** Python 3.13, Click, Textual, pytest (headless `run_test()` pilots).
 
@@ -178,7 +178,8 @@ git commit -m "feat(tui): skill row universe = union(library, project lock); unl
 ### Task 2: `skill_grid` — render `unlisted` with a warning tint
 
 **Files:**
-- Modify: `src/agent_toolkit_tui/widgets/skill_grid.py:39-41` (the `_STATE_MARKUP` dict)
+- Modify: `src/agent_toolkit_tui/widgets/skill_grid.py:39-41` (the `_STATE_MARKUP` dict) and its `action_info` slug-column branch
+- Modify: `src/agent_toolkit_tui/column_info.py` (`_state_info` legend)
 - Test: `tests/test_tui/test_skill_grid_new_columns.py`
 
 - [ ] **Step 1: Write the failing test** — append to `tests/test_tui/test_skill_grid_new_columns.py` (mirror the row-construction helper style used by `tests/test_tui/test_skill_grid_apply.py::_row`):
@@ -191,6 +192,13 @@ def test_unlisted_state_markup():
     assert "yellow" in _STATE_MARKUP["unlisted"]
     # library stays dim — the two states must be visually distinct.
     assert "dim" in _STATE_MARKUP["library"]
+
+
+def test_unlisted_in_state_legend():
+    """#360: the State column's `i` legend explains the unlisted badge."""
+    from agent_toolkit_tui.column_info import get_column_info
+    info = get_column_info("state")
+    assert any("unlisted" in line for line in info.lines)
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -198,7 +206,9 @@ def test_unlisted_state_markup():
 Run: `uv run pytest tests/test_tui/test_skill_grid_new_columns.py::test_unlisted_state_markup -v`
 Expected: FAIL — `KeyError`/assert: `"unlisted" in _STATE_MARKUP`.
 
-- [ ] **Step 3: Implement** — in `skill_grid.py`, extend `_STATE_MARKUP`:
+- [ ] **Step 3: Implement**
+
+(a) In `skill_grid.py`, extend `_STATE_MARKUP`:
 
 ```python
     # "library" = in the library, not yet installed in this project. Normal
@@ -209,7 +219,25 @@ Expected: FAIL — `KeyError`/assert: `"unlisted" in _STATE_MARKUP`.
     "unlisted": "[yellow]unlisted[/]",
 ```
 
-No other grid change: the cell-info panel already falls through to `row.state` for non-`library` states, so it shows `unlisted` as-is.
+(b) In `src/agent_toolkit_tui/column_info.py`, add an `unlisted` bullet to `_state_info`'s `lines`, immediately after the `library` bullet:
+
+```python
+            "• unlisted — installed in this project but no longer tracked by "
+            "the library lock (re-add via `skill doctor -p`)",
+```
+
+(c) In `skill_grid.py`'s `action_info` slug-column branch, give `unlisted` an explanatory display alongside the existing `library` suppression:
+
+```python
+        if row.state == "library":
+            state_display = "—"
+        elif row.state == "unlisted":
+            state_display = "unlisted — not in library (re-add via: skill doctor -p)"
+        else:
+            state_display = row.state
+```
+
+(replacing the current one-liner `state_display = "—" if row.state == "library" else row.state`).
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -388,7 +416,7 @@ async def test_apply_full_uninstall_unlisted_drops_project_entry(
         # Queue an unlink for every linked, non-skipped cell of the demo row
         # at project scope (full uninstall), then apply.
         pending = {}
-        for row in grid.rows:  # adapt: use the grid's actual row accessor
+        for row in grid._rows:  # SkillGrid stores rows in `_rows` (skill_grid.py:110)
             if row.slug != "demo":
                 continue
             for (agent, scope), cell in row.cells.items():
@@ -403,14 +431,65 @@ async def test_apply_full_uninstall_unlisted_drops_project_entry(
     assert "demo" not in proj_lock.skills          # entry dropped
     canonical = canonical_skill_dir("demo", scope="project", project=project)
     assert canonical.exists()                      # non-destructive: canonical preserved
-```
+    # The apply genuinely detached projections (it consulted the pending ops,
+    # not the library — spec D4): the claude-code projection symlink is gone.
+    from agent_toolkit_cli.skill_paths import agent_projection_dir
+    link = agent_projection_dir("claude-code", "demo", scope="project", home=None, project=project)
+    assert not link.is_symlink()
 
-Note for the implementer: `grid.rows` / `restore_pending` — confirm the exact accessor names against `src/agent_toolkit_tui/widgets/skill_grid.py` (`restore_pending` and `pending_entries` exist; the row list attribute may be named differently, e.g. `_rows` or exposed via `set_rows`' stored value). Adjust the test to the real API; the assertion targets (lock entry dropped, canonical preserved) are the contract.
+
+@pytest.mark.asyncio
+async def test_apply_failure_keeps_project_entry(git_sandbox, tmp_path: Path, monkeypatch):
+    """#360 AC2 failure path: if the engine apply errors, the project lock
+    entry is NOT dropped (the drop only follows a successful apply)."""
+    project = tmp_path / "proj"
+    project.mkdir()
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+
+    runner = CliRunner()
+    r = runner.invoke(main, ["skill", "add", str(git_sandbox.upstream), "--slug", "demo"])
+    assert r.exit_code == 0, r.output
+    (project / ".claude").mkdir(exist_ok=True)
+    r = runner.invoke(main, [
+        "--project", str(project),
+        "skill", "install", "demo", "--scope", "project",
+        "--agents", "claude-code",
+    ])
+    assert r.exit_code == 0, r.output
+    r = runner.invoke(main, ["skill", "remove", "demo", "--force"])
+    assert r.exit_code == 0, r.output
+    monkeypatch.chdir(project)
+
+    # Patch the SOURCE module (app.py imports inside the method, so the
+    # call resolves through skill_install at apply time — same monkeypatch
+    # trap as #337's doctor_cmd lesson).
+    import agent_toolkit_cli.skill_install as skill_install
+
+    def _boom(*args, **kwargs):
+        raise skill_install.InstallError("boom")
+
+    monkeypatch.setattr(skill_install, "apply", _boom)
+
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        from agent_toolkit_tui.widgets.skill_grid import SkillGrid
+        grid = app.query_one("#skill-grid", SkillGrid)
+        grid.restore_pending({("project", "claude-code", "demo"): "unlink"})
+        app._apply_skill_pending()
+        await pilot.pause()
+
+    proj_lock = read_lock(lock_file_path(scope="project", project=project))
+    assert "demo" in proj_lock.skills  # entry survives a failed apply
+```
 
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest tests/test_tui/test_skill_apply_unlisted.py -v`
-Expected: FAIL on `assert "demo" not in proj_lock.skills` (entry survives today). If it instead fails with `InstallError: demo: not in global library`, Task 3 has not been applied — do Task 3 first.
+Expected: the full-uninstall test FAILS on `assert "demo" not in proj_lock.skills` (entry survives today); the failure-path test PASSES (it pins behaviour that must not change). If the first instead fails with `InstallError: demo: not in global library`, Task 3 has not been applied — do Task 3 first.
 
 - [ ] **Step 3: Implement** — in `app.py` `_apply_skill_pending`, inside the per-`(scope, slug)` loop, after the successful `engine_apply` call (`ok += len(result.created) + len(result.removed)`), add:
 
@@ -432,13 +511,20 @@ and add the helper method to `TUIApp`:
         today's behaviour (entry stays; the row remains visible via the
         library universe). Non-destructive: the external-store canonical is
         preserved; doctor's orphan sweep reclaims it if unreferenced."""
+        from agent_toolkit_cli.skill_agents import AGENTS
         from agent_toolkit_cli.skill_lock import read_lock, remove_entry, write_lock
         from agent_toolkit_cli.skill_paths import library_lock_path, lock_file_path
-        from agent_toolkit_tui.skill_state import INTERACTIVE_AGENTS, _cell_for
+        from agent_toolkit_tui.skill_state import _cell_for
 
         if slug in read_lock(library_lock_path()).skills:
             return  # listed — out of scope for the drop rule
-        for agent in INTERACTIVE_AGENTS:
+        # Probe the FULL agent universe, not just the rendered columns: a
+        # long-tail projection installed via the CLI must block the drop,
+        # otherwise the entry vanishes while a live symlink remains and
+        # doctor then offers destructive cleanup of a functional install.
+        # Mirrors skill_doctor._scan_stray_symlinks' universe.
+        probe = ("standard", *(a for a in AGENTS if not AGENTS[a].is_standard))
+        for agent in probe:
             cell = _cell_for(slug, agent, scope="project", home=None, project=project)
             if cell.skipped:
                 continue  # skipped cells report linked=canonical-exists, not a symlink
@@ -550,7 +636,7 @@ def test_no_locks_no_rows(tmp_path: Path, monkeypatch):
     assert rows == []
 ```
 
-Implementer note: if `agent_lock.write_lock`/`LockFile`/`LockEntry` are not re-exported by `agent_lock` (check `src/agent_toolkit_cli/agent_lock.py` `__all__`), import them from `agent_toolkit_cli.skill_lock` instead — `agent_lock` re-exports the shared shapes. If `library_lock_path()` does not honour `HOME` via monkeypatch in-process (it resolves through `_paths_core` bindings), mirror whatever isolation `tests/test_cli/test_agent_install.py` uses (it sets `HOME`) and resolve paths AFTER the `setenv`.
+Implementer note: `agent_lock.__all__` re-exports `LockEntry`, `LockFile`, `read_lock`, `write_lock`, `add_entry`, `remove_entry`, and `clone_url_from_entry` (verified — it is a facade over `skill_lock`), so the imports above are correct as written. If `library_lock_path()` does not honour `HOME` via monkeypatch in-process (it resolves through `_paths_core` bindings), mirror whatever isolation `tests/test_cli/test_agent_install.py` uses (it sets `HOME`) and resolve paths AFTER the `setenv`.
 
 - [ ] **Step 2: Run tests to verify the union cases fail**
 
@@ -616,8 +702,10 @@ def build_agent_rows(
     rows: list[AgentRow] = []
     for slug in sorted(universe):
         entry = universe[slug]
-        if scope == "global" or slug in scope_slugs:
-            state: State = "installed" if scope == "global" or slug in lib_slugs else "unlisted"
+        if slug in scope_slugs:
+            # At global scope the scope lock IS the library lock (same file),
+            # so this branch covers every slug and yields "installed".
+            state: State = "installed" if slug in lib_slugs else "unlisted"
         else:
             state = "library"
         cells: dict[tuple[str, str], AgentCell] = {}
@@ -714,7 +802,18 @@ _STATE_MARKUP = {
             cells.append(_STATE_MARKUP.get(row.state, row.state))
 ```
 
-(d) Update the two layout-comment/index helpers (`agent_grid.py:258` `_col_for_harness`-style and `:265` `_harness_for_col`-style): the harness range is unchanged (`[1..N]`), but any logic that treats "last column" or `N+1` as Source must now treat `N+1` as State and `N+2` as Source. Update the docstrings to `Layout: [0]=slug, [1..N]=harnesses, [N+1]=state, [N+2]=source.` and adjust bounds checks accordingly.
+(d) Update the two layout-comment/index helpers (`agent_grid.py:258` `_col_for_harness`-style and `:265` `_harness_for_col`-style): the harness range is unchanged (`[1..N]`), but any logic that treats "last column" or `N+1` as Source must now treat `N+1` as State and `N+2` as Source. Update the docstrings to `Layout: [0]=slug, [1..N]=harnesses, [N+1]=state, [N+2]=source.` There are THREE index sites, not two — the cursor clamp in `_rebuild` (`agent_grid.py:~303`) must change from `max_col = 1 + len(INTERACTIVE_HARNESSES)` to `max_col = 2 + len(INTERACTIVE_HARNESSES)` (and its layout comment updated), or the saved cursor can never reach the Source column after a rebuild.
+
+(e) In `action_info`'s slug-column branch (`agent_grid.py:~153-158`), append a State line to the body, mirroring the skill grid's panel:
+
+```python
+        body = (
+            f"Agent [b]{row.slug}[/]\n"
+            f"Source: {row.source}\n"
+            f"Ref:    {row.ref}\n"
+            f"State:  {'—' if row.state == 'installed' else row.state}"
+        )
+```
 
 - [ ] **Step 4: Run the full agent-grid suite**
 
@@ -796,6 +895,7 @@ def test_unlisted_fix_action_readds_to_library(git_sandbox, tmp_path, monkeypatc
     findings = diagnose(slugs=None, scope="project", home=None, project=project)
     fix = next(f for f in findings if f.kind == "unlisted").fix_action
     fix.apply()
+    fix.apply()  # idempotent: second apply is a no-op, not an error
 
     assert "demo" in read_lock(library_lock_path()).skills   # lock entry restored
     assert library_skill_path("demo").exists()               # canonical re-materialised
@@ -819,7 +919,7 @@ Expected: first two FAIL (no `unlisted` kind emitted); the global-scope test PAS
 
 - [ ] **Step 3: Implement** — in `src/agent_toolkit_cli/skill_doctor.py`:
 
-(a) Add `"unlisted"` to the `FindingKind` literal list (line ~30).
+(a) Add `"unlisted"` to the `FindingKind` literal list (line ~30). The Literal update must land in the same commit as the scan code and tests — `Finding` is a frozen dataclass typed `kind: FindingKind`, so `mypy --strict` rejects `kind="unlisted"` until the Literal carries it.
 
 (b) Ensure `library_lock_path` and `library_skill_path` are imported from `skill_paths`, and `add_entry`/`write_lock` from `skill_lock` (extend existing import blocks; `dataclasses` may need importing).
 
@@ -961,6 +1061,7 @@ def test_unlisted_fix_action_writes_library_entry(tmp_path: Path, monkeypatch):
 
     monkeypatch.setattr(dc.skill_git, "clone", _fake_clone)
     fix.apply()
+    fix.apply()  # idempotent: second apply is a no-op, not an error
     assert "reviewer" in read_lock(library_lock_path()).skills
 
 
@@ -978,7 +1079,7 @@ def test_no_finding_when_library_tracks_slug(tmp_path: Path, monkeypatch):
     assert not [f for f in findings if f.kind == "unlisted"]
 ```
 
-(Implementer note: as in Task 5, if `LockEntry`/`LockFile`/`write_lock`/`read_lock` aren't re-exported by `agent_lock`, import from `skill_lock`. `_diagnose` may return findings for missing canonicals for these stub entries — filter by `kind == "unlisted"` as the tests do.)
+(Implementer note: `agent_lock` re-exports all the lock primitives the tests import — verified against its `__all__`. `_diagnose` may return findings for missing canonicals for these stub entries — filter by `kind == "unlisted"` as the tests do.)
 
 - [ ] **Step 2: Run tests to verify they fail**
 
@@ -996,7 +1097,7 @@ from agent_toolkit_cli.agent_paths import (
 )
 ```
 
-plus `import dataclasses` and (if not re-exported by `agent_lock`) `from agent_toolkit_cli.skill_lock import LockFile, add_entry, clone_url_from_entry, write_lock`.
+plus `import dataclasses` and `from agent_toolkit_cli.agent_lock import LockFile, add_entry, clone_url_from_entry, write_lock` — all four are confirmed in `agent_lock.__all__` (it is a facade re-exporting `skill_lock`'s primitives).
 
 (b) Add the fix-action builder above `_diagnose`:
 
@@ -1079,7 +1180,7 @@ git commit -m "feat(doctor): agent unlisted finding (inert until #362) (#360)" -
 
 - [ ] **Step 1: Add the cross-references**
 
-`pi_extension_state.py` docstring — append:
+`pi_extension_state.py` docstring — append (the union claim was verified against `pi_extension_inventory.build_inventory` in the 2026-06-10 audit: pass 1 reads both scope locks, pass 2 discovers loose extension dirs, pass 3 reads settings.json packages):
 
 ```
 Row-universe contract (#360): this tab already implements the union semantic

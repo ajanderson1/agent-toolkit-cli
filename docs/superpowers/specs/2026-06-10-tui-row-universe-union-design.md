@@ -86,7 +86,11 @@ docstring documents the exception.
     hand-written project locks; tested that way).
 - #360 does NOT fix #362 — separate issue, separate PR.
 - `library` agent rows are actionable via the existing install toggles
-  (skill-tab parity).
+  (skill-tab parity). This is the pre-existing `_apply_agent_pending` path —
+  it seeds the project canonical by copy from the global canonical, then
+  writes projections; #360 adds no new agent install code. Pre-#362 such an
+  install lands on disk but writes no project lock entry — that gap is
+  #362's to close, not this issue's.
 
 ### D4 — TUI actionability (AC2)
 
@@ -161,6 +165,16 @@ N/A (no library).
   untouched; agent variant exercised via hand-written project lock.
 - **TUI:** headless-Textual apply round-trip for an unlisted skill row
   (toggle off → Apply → projections detached, project lock entry dropped).
+
+## Deferred / Open Questions
+
+### From 2026-06-10 review
+
+- Should the TUI footer show a distinct message (e.g. "removed from project:
+  <slug>") when a fully-uninstalled `unlisted` row vanishes from the grid
+  after Apply, instead of only the standard "applied: N ok" counts? The row
+  disappearing without comment may read as a refresh failure. (design-lens,
+  deferred — UX decision, not blocking)
 
 ## Precedents / links
 
