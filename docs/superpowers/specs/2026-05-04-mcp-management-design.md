@@ -202,12 +202,12 @@ A correct implementation:
 
 1. `agent-toolkit link <scope> <harness> mcps:context7` installs the MCP via the harness's preferred mechanism without printing or storing secrets.
 2. Re-running the same `link` command produces byte-identical files on disk (deterministic render order: entries sorted by name, stable JSON/TOML serialization).
-3. `agent-toolkit unlink <scope> <harness> mcps:context7` removes only that named entry. Hand-rolled MCP entries with other names in the same file are byte-equal before and after.
+3. `agent-toolkit unlink <scope> <harness> mcps:context7` removes only that named entry. Hand-rolled MCP entries with other names in the same file are byte-equal before and after for the TOML family (Codex/tomlkit); for the JSON family (Claude/Pi/OpenCode, stdlib `json` re-serialisation) the guarantee is **structural equality + preserved entry order** — byte-level preservation is not achievable with a whole-document JSON dump and is explicitly scoped to TOML. *(Scoped 2026-06-10 during the #329 critical review.)*
 4. `agent-toolkit list <harness>` shows MCP install state alongside skills/commands/agents using the four-glyph status.
 5. `agent-toolkit diff <scope> <harness>` shows would-be changes per file, no writes.
 6. `agent-toolkit doctor` reports drift for MCPs whose installed entry differs structurally from the rendered template, and warns on missing env vars / prerequisites.
 7. `agent-toolkit fix` reconciles drift to canonical form.
-8. For each adapter, a round-trip test asserts: source file with comments + unknown sections + hand-rolled MCP entries → `link` an unrelated MCP → `unlink` it → byte-equal to source.
+8. For the TOML adapter, a round-trip test asserts: source file with comments + unknown sections + hand-rolled MCP entries → `link` an unrelated MCP → `unlink` it → byte-equal to source. For JSON adapters the equivalent test asserts structural equality + preserved entry order (see acceptance #3's scoping note).
 9. Schema-drift CI passes against the bumped v1alpha2 schema.
 10. The TUI's MCPs section reads and writes via the same adapter API as the CLI; no duplicate logic.
 

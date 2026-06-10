@@ -4,9 +4,11 @@
 
 **Goal:** Re-port the `mcp` (Model Context Protocol server) asset kind into the current v3 per-kind architecture as a first-class, lock-driven, four-harness capability — `add`/`install`/`uninstall`/`remove`/`list`/`status`/`doctor` — with a config-injection adapter layer that manages MCP entries *by name* inside each harness's native config file, never by file ownership.
 
-**Architecture:** Follow the established v3 per-kind pattern exactly (the same shape `agent` and `pi_extension` kinds use): parallel modules `mcp_install.py` / `mcp_lock.py` / `mcp_paths.py`, a `commands/mcp/` Click group, and an `mcp_adapters/` package whose `get_adapter(harness)` dispatcher is the single SSOT for the per-harness projection mechanism. The shared kind-agnostic core (`_install_core.py`) is bound via injected callables; the lockfile gains an `mcpPath` field on the shared `LockEntry` and a per-kind lock filename. Unlike folder-shaped kinds (skills/agents) that symlink or copy a markdown file, MCP is **config-injection-shaped**: each adapter surgically upserts/removes one named entry (`[mcp_servers.<name>]` in Codex TOML, `mcpServers.<name>` in Claude/Pi/OpenCode JSON) using a round-tripping parser, preserving every other byte. Every write is loud and atomic (temp file in same dir → `os.replace`).
+**Architecture:** Follow the established v3 per-kind pattern exactly (the same shape `agent` and `pi_extension` kinds use): parallel modules `mcp_install.py` / `mcp_lock.py` (scope resolution lives in `commands/mcp/_common.py` — see Task 6), a `commands/mcp/` Click group, and an `mcp_adapters/` package whose `get_adapter(harness)` dispatcher is the single SSOT for the per-harness projection mechanism. The shared kind-agnostic core (`_install_core.py`) is bound via injected callables; the lock is a per-kind file (`mcps-lock.json`, plural per convention) with an **independent, versioned `McpLockEntry` record** — deliberately NOT the shared `LockEntry` (a per-harness projection list per slug doesn't fit its one-canonical-path shape), but aligned for the bundle composite's future grouping field (decision record in "Deferred / Open Questions"). Unlike folder-shaped kinds (skills/agents) that symlink or copy a markdown file, MCP is **config-injection-shaped**: each adapter surgically upserts/removes one named entry (`[mcp_servers.<name>]` in Codex TOML, `mcpServers.<name>` in Claude/Pi/OpenCode JSON) using a round-tripping parser, preserving every other byte. Every write is loud and atomic (temp file in same dir → `os.replace`).
 
-**Tech Stack:** Python 3.11+, Click, `tomlkit` (Codex TOML round-trip — NEW dependency), stdlib `json` (Claude/Pi/OpenCode), pytest. Catalog source: `<toolkit-repo>/mcps/<name>/{config.json, README.md}` plus a sibling `<name>.toolkit.yaml` metadata sidecar.
+**Tech Stack:** Python 3.12+ (per `requires-python`), Click, `tomlkit` (Codex TOML round-trip — NEW dependency), stdlib `json` (Claude/Pi/OpenCode), pytest. Catalog source: `<catalog-repo>/mcps/<name>/{config.json, README.md}` plus a sibling `<name>.toolkit.yaml` metadata sidecar.
+
+**Catalog decision (2026-06-10, #329 critical review):** the old assumption that `~/GitHub/agent-toolkit/mcps/` holds ~20 ready entries is FALSE post-#341 (it holds 2 standalone server source repos, no `config.json` entries, no sidecars, and the repo fails `_is_toolkit_repo()`). **The catalog lives in a NEW dedicated repo — `ajanderson1/mcps`** — consistent with the #341 per-category split. Prerequisite (Task 0, below): seed that repo with the `mcps/<slug>/{config.json, README.md}` + `<slug>.toolkit.yaml` convention plus the two toolkit-repo markers (`.agent-toolkit-source`, `schemas/asset-frontmatter.v1alpha2.json`) so `resolve_toolkit_root()` validates it. MCP is the FIRST consumer of `resolve_toolkit_root()` (zero existing callers), so pointing its resolution at the mcps repo affects no other kind; the verbs read the same `--toolkit-repo` / env contract `_repo_resolution.py` defines.
 
 **Prior art (re-mapped, predates v3):**
 - Spec/brainstorm: `docs/superpowers/specs/2026-05-04-mcp-management-design.md` — the design these tasks implement (manage-by-name, round-trip, loud atomic writes, four harness strategy table, the empty-`{}` / absent-`.mcp.json` failure-mode notes added 2026-06-07).
@@ -20,15 +22,19 @@
 Before writing any code, the engineer MUST read the agent kind as the working template — it is the closest sibling and the canonical example of every contract this plan relies on:
 
 - `src/agent_toolkit_cli/agent_adapters/__init__.py` — the dispatcher + `Protocol` + `_guard_foreign` / `.attk` sentinel pattern. **Copy this file's structure for `mcp_adapters/__init__.py`.**
-- `src/agent_toolkit_cli/agent_install.py` — the facade that binds `_install_core.py` via injected callables, and (critically) the **rollback contract**: on a projection conflict, write the lock first, apply, and roll back the prior projection on failure. The MCP facade MUST mirror this.
-- `src/agent_toolkit_cli/agent_lock.py` — per-kind lock filename + `agentPath` field on the shared `LockEntry`. MCP adds `mcpPath`.
+- `src/agent_toolkit_cli/agent_install.py` — the facade that binds `_install_core.py` via injected callables. **Note:** the actual **rollback contract** precedent (write the lock first, apply, roll back the prior projection on failure) lives in `src/agent_toolkit_cli/commands/instructions/install_cmd.py` — `agent_install.apply()` itself has no try/except rollback path. Read BOTH; the MCP facade MUST implement the rollback contract (Task 7's facade code is the authoritative shape).
+- `src/agent_toolkit_cli/agent_lock.py` — per-kind lock filename + `agentPath` field on the shared `LockEntry`. MCP deliberately does NOT mirror this: it keeps an independent, versioned `McpLockEntry` (decision 2026-06-10 — see "Deferred / Open Questions" record).
 - `src/agent_toolkit_cli/agent_paths.py` — scope/root resolution.
 - `src/agent_toolkit_cli/commands/agent/__init__.py` + `add_cmd.py` + `install_cmd.py` + `uninstall_cmd.py` + `remove_cmd.py` + `list_cmd.py` + `status_cmd.py` + `doctor_cmd.py` — the CLI verbs to mirror. Note the read/write scope-default split documented in the `__init__.py` docstring (read verbs `read_only=True` → global default; write verbs default to project when a project lock is present).
 - `src/agent_toolkit_cli/_install_core.py` — the shared core and `InstallError` hierarchy.
 - `src/agent_toolkit_cli/skill_agents.py` — `AGENTS` registry (the harness catalog). MCP adapter dispatch keys off harness name here.
 
+**Spec scope mapping — why this plan deviates from the design document:**
+
+The spec (`2026-05-04-mcp-management-design.md`) was written against the **v1 architecture** (walker, allow-list authority, `link`/`unlink`/`diff`/`fix`/`new` verbs, `v1alpha2` schema bump). The v3 per-kind architecture (shipped for skill/agent/instructions/pi-extension) supersedes the walker model with per-kind facades and lock-driven tracking — the **lock replaces the allow-list as the authority on what we manage** (spec Rule 1 re-mapped); the spec's mechanism rules (manage-by-name, round-trip parsers, structural drift, loud atomic writes) carry over unchanged. Verb mapping: `link`→`install`, `unlink`→`uninstall`, `new`→`add`, `check`/`doctor`→`doctor`; spec acceptance #1–4, #6, #8 are implemented here; #5 (`diff`), #7 (`fix`), #9 (schema v1alpha2), #10 (TUI) are deferred per issue #329's out-of-scope list. The spec's `harness_adapters/` package name becomes `mcp_adapters/` per the v3 per-kind naming convention (`agent_adapters/` precedent); the empty `harness_adapters/` directory on disk is a v1 stub — do not write into it.
+
 **Project-memory mandates (non-negotiable, enforced by tasks below):**
-1. **Install machinery has repeatedly shipped silently-broken global-scope / orphan paths with green CI.** Every install path MUST have an explicit `install → uninstall → assert-clean` round-trip test **at BOTH user and project scope** (Tasks 9, 10).
+1. **Install machinery has repeatedly shipped silently-broken global-scope / orphan paths with green CI.** Every install path MUST have an explicit `install → uninstall → assert-clean` round-trip test **at BOTH global and project scope** (Tasks 9, 10).
 2. **`uninstall` is non-destructive; `remove` is destructive.** `uninstall` removes the harness projection only and leaves the canonical/lock intact; `remove` drops the canonical entry + lock entry. Mirror the agent kind's contract exactly (project memory: a misnamed `uninstall -g` once `rmtree`'d the canonical store).
 3. **Apply-over-existing MUST roll back the prior projection on a Canonical/PointerConflict** (mirror `install_cmd` rollback contract).
 4. **Packaged-resource paths must survive a wheel install** — no `parents[N]` walks to find repo files at runtime; the catalog is resolved via the toolkit-repo flag, not relative-to-`__file__` (Task 11 guard).
@@ -41,7 +47,7 @@ Before writing any code, the engineer MUST read the agent kind as the working te
 - Schema bump to `v1alpha2` / `metadata.kind` discriminator.
 - `verify:` command execution (arbitrary shell; opt-in `--verify` is a follow-up).
 - `ingest` of one-off MCPs from URLs.
-- `--force` running-`claude`-process guard for `~/.claude.json` (record as a known limitation in `doctor`; full guard is a follow-up).
+- The FULL running-`claude`-process guard machinery for `~/.claude.json` is a follow-up — but a **minimal guard ships in this slice** (spec Rule 5 makes it core write-safety): before any global-scope claude-code write, the facade checks for a running `claude` process (`pgrep -x claude`, best-effort) and refuses with a clear message; `--force` bypasses. `~/.claude.json` is a live state file Claude rewrites continuously — an unguarded read→rewrite→replace can silently destroy state Claude wrote in between (Task 7).
 
 ---
 
@@ -49,8 +55,7 @@ Before writing any code, the engineer MUST read the agent kind as the working te
 
 **New files:**
 
-- `src/agent_toolkit_cli/mcp_paths.py` — scope + catalog-root resolution for the MCP kind. Mirrors `agent_paths.py`.
-- `src/agent_toolkit_cli/mcp_lock.py` — `mcp-lock.json` reader/writer; adds `mcpPath` to the shared `LockEntry` consumers. Mirrors `agent_lock.py`.
+- `src/agent_toolkit_cli/mcp_lock.py` — `mcps-lock.json` reader/writer with an independent, versioned `McpLockEntry` record (decision 2026-06-10: independent-but-aligned; see Task 6 and the decision record below).
 - `src/agent_toolkit_cli/mcp_catalog.py` — reads `<toolkit-repo>/mcps/<name>/{config.json}` + sibling `<name>.toolkit.yaml` metadata; returns an `McpAsset` (slug, inner_config dict, metadata dict, transport, install_method).
 - `src/agent_toolkit_cli/mcp_install.py` — the facade: `apply()` / `uninstall()` / `remove()` binding `_install_core.py` and dispatching to `mcp_adapters.get_adapter()`. Mirrors `agent_install.py` including the rollback contract.
 - `src/agent_toolkit_cli/mcp_adapters/__init__.py` — `McpAdapter` Protocol, `get_adapter(harness)` SSOT dispatcher, shared atomic-write + round-trip-read helpers, `McpProjectionConflictError`.
@@ -77,6 +82,19 @@ Before writing any code, the engineer MUST read the agent kind as the working te
 - `pyproject.toml` — add `tomlkit` dependency.
 - `docs/agent-toolkit/roadmap.md` — strike `mcp` from the Phase 2 pending list.
 - `README.md` — note MCP is now a supported kind (four harnesses, foundations slice).
+
+---
+
+## Task 0: Seed the dedicated MCP catalog repo (`ajanderson1/mcps`) — PREREQUISITE
+
+**Files:** none in this repo (a new private GitHub repo).
+
+Per the catalog decision above. Without this, Tasks 2's real-world value and Task 10's smoke have nothing to run against.
+
+- [ ] **Step 1:** Create the private repo `ajanderson1/mcps` (`gh repo create ajanderson1/mcps --private`).
+- [ ] **Step 2:** Lay down the toolkit-repo markers: `.agent-toolkit-source` (empty) and `schemas/asset-frontmatter.v1alpha2.json` (copy from `agent-toolkit`'s schema, or a minimal valid schema), so `_is_toolkit_repo()` passes.
+- [ ] **Step 3:** Author at least TWO real catalog entries (e.g. `context7`, `playwright`) under `mcps/<slug>/{config.json, README.md}` + `mcps/<slug>.toolkit.yaml`, following Task 2's convention. Source material: the historical entries in the pre-#341 `agent-toolkit` git history (`git log -- mcps/`) where available.
+- [ ] **Step 4:** Push, and clone to `~/GitHub/mcps`. Task 10's smoke sets the toolkit-repo resolution at this clone.
 
 ---
 
@@ -245,11 +263,35 @@ def load_mcp_asset(toolkit_root: Path, slug: str) -> McpAsset:
             f"MCP '{slug}' not found in catalog: {config_path} does not exist"
         )
     inner = json.loads(config_path.read_text(encoding="utf-8"))
+    _validate_inner_config(slug, inner, config_path)
     sidecar_path = _mcps_dir(toolkit_root) / f"{slug}.toolkit.yaml"
     metadata: dict = {}
     if sidecar_path.is_file():
         metadata = yaml.safe_load(sidecar_path.read_text(encoding="utf-8")) or {}
     return McpAsset(slug=slug, inner_config=inner, metadata=metadata)
+
+
+def _validate_inner_config(slug: str, inner: object, path: Path) -> None:
+    """Structural validation — bounds the injection surface to well-typed values.
+
+    The inner config is written into live harness configs where the harness
+    EXECUTES it; a malformed shape (command as list, args containing dicts)
+    must fail loudly at load time, not propagate into ~/.claude.json.
+    """
+    if not isinstance(inner, dict):
+        raise ValueError(f"{path}: inner config must be a JSON object")
+    if "command" in inner and not isinstance(inner["command"], str):
+        raise ValueError(f"{path}: 'command' must be a string")
+    if "args" in inner and not (
+        isinstance(inner["args"], list)
+        and all(isinstance(a, str) for a in inner["args"])
+    ):
+        raise ValueError(f"{path}: 'args' must be a list of strings")
+    if "env" in inner and not (
+        isinstance(inner["env"], dict)
+        and all(isinstance(k, str) and isinstance(v, str) for k, v in inner["env"].items())
+    ):
+        raise ValueError(f"{path}: 'env' must be a string→string object")
 
 
 def list_catalog(toolkit_root: Path) -> list[str]:
@@ -308,7 +350,7 @@ from agent_toolkit_cli.mcp_adapters import (
 
 
 def test_get_adapter_dispatches_known_harnesses():
-    for harness in ("claude", "codex", "opencode", "pi"):
+    for harness in ("claude-code", "codex", "opencode", "pi"):
         adapter = get_adapter(harness)
         assert adapter.name == harness
 
@@ -373,7 +415,7 @@ class UnsupportedMcpHarnessError(InstallError):
 
 # Harness → mechanism module. The single SSOT.
 _MECHANISM: dict[str, Literal["json", "toml"]] = {
-    "claude": "json",
+    "claude-code": "json",
     "pi": "json",
     "opencode": "json",
     "codex": "toml",
@@ -498,6 +540,13 @@ Per the spec's strategy table: Claude writes `mcpServers.<name>` to `.mcp.json` 
 
 **Critical (project memory + spec failure-mode notes):** the round-trip read MUST normalise both an **absent file** and a **bare `{}`** (no `mcpServers` key) to `{"mcpServers": {}}` before upsert — never short-circuit on absence (the v2.3.0 audit silent-no-op bug) and never write through an invalid bare `{}`.
 
+**Review-resolved contracts for this task (added after critical review):**
+
+1. **JSON-family preservation contract is STRUCTURAL, not byte-level.** `json.dumps(indent=2)` re-serialises the whole document, so a user file with compact formatting or 4-space indent is reformatted on first write — spec acceptance #3/#8's byte-equality is achievable only for the TOML family (tomlkit round-trips). For the JSON family the contract is: every pre-existing entry is **structurally identical** before/after, entry order preserved (no re-sort), and re-runs are byte-idempotent. This deviation from the spec is deliberate and recorded in the Plan Self-Review. The worst case (`~/.claude.json` whole-file re-indent at global scope) is mitigated by the running-claude guard below.
+2. **Pi targets MUST be empirically verified before the CELLS values are trusted (spec open item #3 — never closed).** Add a verification step before implementing: launch Pi against a scratch project containing `.pi/mcp.json` and confirm the server is offered; same for `~/.config/mcp/mcp.json` at user scope. If either path is not read, change the cell and record the verified source in the cell's comment. An unread target means installs succeed, doctor reports healthy, and the MCP never loads — exactly the silent-green-breakage class Mandate 1 exists to kill.
+3. **Installed-harness sentinel (spec failure-mode table).** Each cell carries a `sentinel` (e.g. `~/.claude/` for claude-code, `~/.codex/` for codex, `~/.config/opencode/` for opencode, `~/.pi/` for pi). The facade checks the sentinel before dispatching to an adapter: when absent, print `"<harness> does not appear to be installed (<sentinel> missing); skipping"` and skip — exit 0. NEVER unconditionally `mkdir -p` a harness config tree for a harness that is not installed. `atomic_write_text` stays generic (no sentinel logic in the write primitive).
+4. **OpenCode refusal path (spec: "Refuse if source uses `${VAR:-default}`").** `_opencode_translate` MUST raise (not silently mistranslate) when an env value contains shell-default syntax `${...:-...}` or any `${` that the mechanical substring replace cannot cleanly map — a silent write of `{env:VAR:-default}` is a malformed reference OpenCode will choke on. Raise `InstallError` naming the variable; the facade's rollback handles multi-harness installs. Test both the refusal and the clean `${VAR}` → `{env:VAR}` path.
+
 - [ ] **Step 1: Write the failing tests**
 
 Append to `tests/test_mcp_adapters_json.py`:
@@ -509,7 +558,7 @@ def _claude_inner():
 
 def test_claude_install_creates_file_with_valid_shape_when_absent(tmp_path):
     """Absent .mcp.json must be created as {"mcpServers": {...}}, NOT skipped."""
-    adapter = get_adapter("claude")
+    adapter = get_adapter("claude-code")
     project = tmp_path / "proj"
     project.mkdir()
     written = adapter.install(
@@ -525,7 +574,7 @@ def test_claude_install_normalises_bare_empty_object(tmp_path):
     project = tmp_path / "proj"
     project.mkdir()
     (project / ".mcp.json").write_text("{}\n")
-    adapter = get_adapter("claude")
+    adapter = get_adapter("claude-code")
     adapter.install("context7", _claude_inner(), scope="project", home=tmp_path, project=project)
     doc = json.loads((project / ".mcp.json").read_text())
     assert doc == {"mcpServers": {"context7": _claude_inner()}}
@@ -538,7 +587,7 @@ def test_claude_install_preserves_hand_rolled_entries(tmp_path):
     (project / ".mcp.json").write_text(
         json.dumps({"mcpServers": {"handrolled": {"command": "x"}}}, indent=2) + "\n"
     )
-    adapter = get_adapter("claude")
+    adapter = get_adapter("claude-code")
     adapter.install("context7", _claude_inner(), scope="project", home=tmp_path, project=project)
     doc = json.loads((project / ".mcp.json").read_text())
     assert doc["mcpServers"]["handrolled"] == {"command": "x"}
@@ -548,7 +597,7 @@ def test_claude_install_preserves_hand_rolled_entries(tmp_path):
 def test_claude_uninstall_removes_only_named_entry(tmp_path):
     project = tmp_path / "proj"
     project.mkdir()
-    adapter = get_adapter("claude")
+    adapter = get_adapter("claude-code")
     adapter.install("context7", _claude_inner(), scope="project", home=tmp_path, project=project)
     # Add a hand-rolled neighbour by hand
     doc = json.loads((project / ".mcp.json").read_text())
@@ -563,7 +612,7 @@ def test_claude_uninstall_removes_only_named_entry(tmp_path):
 def test_claude_uninstall_absent_is_noop(tmp_path):
     project = tmp_path / "proj"
     project.mkdir()
-    get_adapter("claude").uninstall("context7", scope="project", home=tmp_path, project=project)
+    get_adapter("claude-code").uninstall("context7", scope="project", home=tmp_path, project=project)
     # No crash; no file created
     assert not (project / ".mcp.json").exists()
 
@@ -571,7 +620,7 @@ def test_claude_uninstall_absent_is_noop(tmp_path):
 def test_claude_install_is_idempotent(tmp_path):
     project = tmp_path / "proj"
     project.mkdir()
-    adapter = get_adapter("claude")
+    adapter = get_adapter("claude-code")
     adapter.install("context7", _claude_inner(), scope="project", home=tmp_path, project=project)
     first = (project / ".mcp.json").read_text()
     adapter.install("context7", _claude_inner(), scope="project", home=tmp_path, project=project)
@@ -579,8 +628,8 @@ def test_claude_install_is_idempotent(tmp_path):
 
 
 def test_claude_user_scope_target_is_home_claude_json(tmp_path):
-    adapter = get_adapter("claude")
-    target = adapter.config_target(scope="user", home=tmp_path, project=None)
+    adapter = get_adapter("claude-code")
+    target = adapter.config_target(scope="global", home=tmp_path, project=None)
     assert target == tmp_path / ".claude.json"
 
 
@@ -620,10 +669,12 @@ in the per-cell CELLS dict (mechanism = code path; cell = data row).
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+from agent_toolkit_cli._install_core import InstallError
 from agent_toolkit_cli.mcp_adapters import atomic_write_text
 
 
@@ -643,21 +694,34 @@ def _passthrough(inner: dict) -> dict:
 
 
 def _opencode_translate(inner: dict) -> dict:
-    """OpenCode native shape: command joined to a list, env→environment, ${V}→{env:V}."""
+    """OpenCode native shape: command joined to a list, env→environment, ${V}→{env:V}.
+
+    Refuses (raises InstallError) on shell-default syntax ${VAR:-default} — the
+    mechanical replace cannot represent it and a silent mistranslation would
+    write a malformed reference into opencode.json (spec strategy table).
+    """
     cmd = [inner["command"], *inner.get("args", [])] if "command" in inner else []
     out: dict = {"type": "local", "command": cmd}
     env = inner.get("env")
     if isinstance(env, dict):
-        out["environment"] = {
-            k: v.replace("${", "{env:").replace("}", "}") if isinstance(v, str) else v
-            for k, v in env.items()
-        }
+        translated = {}
+        for k, v in env.items():
+            if isinstance(v, str) and re.search(r"\$\{[^}]*:-", v):
+                raise InstallError(
+                    f"opencode: cannot translate env var {k!r} — shell-default "
+                    f"syntax ${{VAR:-default}} has no OpenCode equivalent. "
+                    f"Adjust the catalog entry or skip --harness opencode."
+                )
+            translated[k] = (
+                v.replace("${", "{env:") if isinstance(v, str) else v
+            )
+        out["environment"] = translated
     return out
 
 
 CELLS: dict[str, _Cell] = {
-    "claude": _Cell(
-        name="claude",
+    "claude-code": _Cell(
+        name="claude-code",
         user_target=lambda home: home / ".claude.json",
         project_target=lambda proj: proj / ".mcp.json",
         servers_key="mcpServers",
@@ -686,7 +750,7 @@ class _JsonAdapter:
         self.name = cell.name
 
     def config_target(self, *, scope: str, home: Path, project: Path | None) -> Path:
-        if scope == "user":
+        if scope == "global":
             return self._cell.user_target(home)
         if project is None:
             raise ValueError("project scope requires a project root")
@@ -707,9 +771,10 @@ class _JsonAdapter:
     def install(self, slug, inner_config, *, scope, home, project=None) -> Path:
         target = self.config_target(scope=scope, home=home, project=project)
         doc = self._read(target)
+        # Upsert ONLY our named entry. Do NOT re-sort pre-existing neighbours —
+        # hand-rolled entry order is the user's; re-running with the same input
+        # is still byte-idempotent because the upsert is positionally stable.
         doc[self._cell.servers_key][slug] = self._cell.translate(inner_config)
-        # Deterministic render: sorted keys at the servers level for stable output.
-        doc[self._cell.servers_key] = dict(sorted(doc[self._cell.servers_key].items()))
         atomic_write_text(target, json.dumps(doc, indent=2) + "\n")
         return target
 
@@ -776,14 +841,14 @@ INNER = {"type": "stdio", "command": "npx", "args": ["-y", "ctx7"]}
 
 def test_codex_user_target(tmp_path):
     adapter = get_adapter("codex")
-    assert adapter.config_target(scope="user", home=tmp_path, project=None) == (
+    assert adapter.config_target(scope="global", home=tmp_path, project=None) == (
         tmp_path / ".codex" / "config.toml"
     )
 
 
 def test_codex_install_adds_mcp_servers_table(tmp_path):
     adapter = get_adapter("codex")
-    adapter.install("context7", INNER, scope="user", home=tmp_path)
+    adapter.install("context7", INNER, scope="global", home=tmp_path)
     doc = tomlkit.parse((tmp_path / ".codex" / "config.toml").read_text())
     assert doc["mcp_servers"]["context7"]["command"] == "npx"
     assert doc["mcp_servers"]["context7"]["args"] == ["-y", "ctx7"]
@@ -803,16 +868,16 @@ def test_codex_round_trip_preserves_unrelated_tables_and_comments(tmp_path):
     )
     cfg.write_text(source)
     adapter = get_adapter("codex")
-    adapter.install("context7", INNER, scope="user", home=tmp_path)
-    adapter.uninstall("context7", scope="user", home=tmp_path)
+    adapter.install("context7", INNER, scope="global", home=tmp_path)
+    adapter.uninstall("context7", scope="global", home=tmp_path)
     assert cfg.read_text() == source
 
 
 def test_codex_uninstall_removes_only_named_table(tmp_path):
     adapter = get_adapter("codex")
-    adapter.install("context7", INNER, scope="user", home=tmp_path)
-    adapter.install("other", {"command": "y"}, scope="user", home=tmp_path)
-    adapter.uninstall("context7", scope="user", home=tmp_path)
+    adapter.install("context7", INNER, scope="global", home=tmp_path)
+    adapter.install("other", {"command": "y"}, scope="global", home=tmp_path)
+    adapter.uninstall("context7", scope="global", home=tmp_path)
     doc = tomlkit.parse((tmp_path / ".codex" / "config.toml").read_text())
     assert "context7" not in doc["mcp_servers"]
     assert doc["mcp_servers"]["other"]["command"] == "y"
@@ -820,9 +885,9 @@ def test_codex_uninstall_removes_only_named_table(tmp_path):
 
 def test_codex_install_idempotent(tmp_path):
     adapter = get_adapter("codex")
-    adapter.install("context7", INNER, scope="user", home=tmp_path)
+    adapter.install("context7", INNER, scope="global", home=tmp_path)
     first = (tmp_path / ".codex" / "config.toml").read_text()
-    adapter.install("context7", INNER, scope="user", home=tmp_path)
+    adapter.install("context7", INNER, scope="global", home=tmp_path)
     assert (tmp_path / ".codex" / "config.toml").read_text() == first
 ```
 
@@ -856,7 +921,7 @@ class _CodexAdapter:
     name = "codex"
 
     def config_target(self, *, scope: str, home: Path, project: Path | None = None) -> Path:
-        if scope == "user":
+        if scope == "global":
             return home / ".codex" / "config.toml"
         if project is None:
             raise ValueError("project scope requires a project root")
@@ -942,7 +1007,7 @@ git commit -m "feat(mcp): Codex TOML adapter with byte-preserving round-trip"
 - Create: `src/agent_toolkit_cli/mcp_lock.py`
 - Test: `tests/test_mcp_lock.py`
 
-The lock records which (scope, harness, slug) projections this tool created, so `uninstall`/`remove`/`status` know what is tool-owned vs hand-rolled. Mirror `agent_lock.py`: a per-kind lock filename (`mcp-lock.json`) and an `mcpPath`-style record. Because MCP writes into shared config files rather than a single owned path, the lock records the **set of (harness, scope, slug)** managed entries plus the catalog source ref.
+The lock records which (scope, harness, slug) projections this tool created, so `uninstall`/`remove`/`status` know what is tool-owned vs hand-rolled. It follows `agent_lock.py`'s per-kind-filename convention (`mcps-lock.json`) but deliberately NOT its shared-`LockEntry` record: because MCP writes into shared config files rather than a single owned path, the lock records the **set of (harness, scope, slug)** managed entries plus the catalog source ref, in an independent versioned envelope (decision 2026-06-10).
 
 - [ ] **Step 1: Read the sibling first**
 
@@ -953,7 +1018,7 @@ Read `src/agent_toolkit_cli/agent_lock.py` and `src/agent_toolkit_cli/agent_path
 Create `tests/test_mcp_lock.py`:
 
 ```python
-"""Tests for mcp_lock.py — the mcp-lock.json reader/writer."""
+"""Tests for mcp_lock.py — the mcps-lock.json reader/writer."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -969,42 +1034,42 @@ from agent_toolkit_cli.mcp_lock import (
 
 
 def test_lock_path_user_scope(tmp_path):
-    assert lock_path_for_scope("user", home=tmp_path, project=None) == (
-        tmp_path / ".agent-toolkit" / "mcp-lock.json"
+    assert lock_path_for_scope("global", home=tmp_path, project=None) == (
+        tmp_path / ".agent-toolkit" / "mcps-lock.json"
     )
 
 
 def test_lock_path_project_scope(tmp_path):
     assert lock_path_for_scope("project", home=tmp_path, project=tmp_path / "p") == (
-        tmp_path / "p" / "mcp-lock.json"
+        tmp_path / "p" / "mcps-lock.json"
     )
 
 
 def test_round_trip_empty(tmp_path):
-    p = tmp_path / "mcp-lock.json"
+    p = tmp_path / "mcps-lock.json"
     write_lock(p, {})
     assert read_lock(p) == {}
 
 
 def test_upsert_and_remove(tmp_path):
-    p = tmp_path / "mcp-lock.json"
+    p = tmp_path / "mcps-lock.json"
     lock = read_lock(p)
-    lock = upsert_entry(lock, McpLockEntry(slug="context7", harness="claude", source="ajanderson1/agent-toolkit"))
+    lock = upsert_entry(lock, McpLockEntry(slug="context7", harness="claude-code", source="ajanderson1/mcps"))
     write_lock(p, lock)
     reloaded = read_lock(p)
     assert "context7" in reloaded
-    assert reloaded["context7"][0].harness == "claude"
-    reloaded = remove_entry(reloaded, slug="context7", harness="claude")
+    assert reloaded["context7"][0].harness == "claude-code"
+    reloaded = remove_entry(reloaded, slug="context7", harness="claude-code")
     assert "context7" not in reloaded
 
 
 def test_upsert_two_harnesses_same_slug(tmp_path):
-    lock = upsert_entry({}, McpLockEntry(slug="context7", harness="claude", source="s"))
+    lock = upsert_entry({}, McpLockEntry(slug="context7", harness="claude-code", source="s"))
     lock = upsert_entry(lock, McpLockEntry(slug="context7", harness="codex", source="s"))
     harnesses = sorted(e.harness for e in lock["context7"])
-    assert harnesses == ["claude", "codex"]
+    assert harnesses == ["claude-code", "codex"]
     # Removing one leaves the other
-    lock = remove_entry(lock, slug="context7", harness="claude")
+    lock = remove_entry(lock, slug="context7", harness="claude-code")
     assert [e.harness for e in lock["context7"]] == ["codex"]
 ```
 
@@ -1018,11 +1083,19 @@ Expected: FAIL — module missing.
 Create `src/agent_toolkit_cli/mcp_lock.py`:
 
 ```python
-"""mcp-lock.json — records tool-owned MCP projections per (slug, harness).
+"""mcps-lock.json — records tool-owned MCP projections per (slug, harness).
 
-User scope: ~/.agent-toolkit/mcp-lock.json. Project scope: <project>/mcp-lock.json.
+Global scope: ~/.agent-toolkit/mcps-lock.json. Project scope: <project>/mcps-lock.json.
 Each slug maps to a list of McpLockEntry (one per harness it is installed into).
-Mirrors agent_lock.py's filename-per-kind convention.
+Mirrors agent_lock.py's filename-per-kind convention (plural, like agents-lock.json).
+
+Lock-model decision (2026-06-10, #329 critical review): the record stays
+INDEPENDENT of skill_lock.LockEntry — a per-harness projection list per slug
+genuinely does not fit LockEntry's one-canonical-path-per-slug shape — but is
+ALIGNED for future composability: versioned envelope ({"version": 1, "mcps": ...})
+and entries are plain objects so the bundle composite's grouping field
+(see docs/solutions/architecture-patterns/clone-and-project-substrate-for-
+bundle-plugin-capability-2026-06-10.md) can be added without a migration.
 """
 from __future__ import annotations
 
@@ -1030,18 +1103,19 @@ import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-LOCK_FILENAME = "mcp-lock.json"
+LOCK_FILENAME = "mcps-lock.json"
+LOCK_VERSION = 1
 
 
 @dataclass(frozen=True)
 class McpLockEntry:
     slug: str
     harness: str
-    source: str          # catalog source ref, e.g. "ajanderson1/agent-toolkit"
+    source: str          # catalog source ref, e.g. "ajanderson1/mcps"
 
 
 def lock_path_for_scope(scope: str, *, home: Path, project: Path | None) -> Path:
-    if scope == "user":
+    if scope == "global":
         return home / ".agent-toolkit" / LOCK_FILENAME
     if project is None:
         raise ValueError("project scope requires a project root")
@@ -1054,20 +1128,25 @@ def read_lock(path: Path) -> dict[str, list[McpLockEntry]]:
     raw = json.loads(path.read_text(encoding="utf-8") or "{}")
     out: dict[str, list[McpLockEntry]] = {}
     for slug, entries in raw.get("mcps", {}).items():
-        out[slug] = [McpLockEntry(slug=slug, **e) for e in entries]
+        # Tolerant read: ignore unknown per-entry keys (future grouping field).
+        out[slug] = [
+            McpLockEntry(slug=slug, harness=e["harness"], source=e["source"])
+            for e in entries
+        ]
     return out
 
 
 def write_lock(path: Path, lock: dict[str, list[McpLockEntry]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     serialisable = {
+        "version": LOCK_VERSION,
         "mcps": {
             slug: [
                 {"harness": e.harness, "source": e.source}
                 for e in sorted(entries, key=lambda x: x.harness)
             ]
             for slug, entries in sorted(lock.items())
-        }
+        },
     }
     path.write_text(json.dumps(serialisable, indent=2) + "\n", encoding="utf-8")
 
@@ -1089,25 +1168,23 @@ def remove_entry(lock: dict[str, list[McpLockEntry]], *, slug: str, harness: str
     return out
 ```
 
-- [ ] **Step 5: Implement `mcp_paths.py`**
+- [ ] **Step 5: Implement scope resolution in `commands/mcp/_common.py` (NOT `mcp_paths.py`)**
 
-Create `src/agent_toolkit_cli/mcp_paths.py` by mirroring `agent_paths.py`'s scope/root resolution. Read `agent_paths.py` and reproduce its `scope_and_roots(...)` signature and `read_only` semantics for the MCP kind (the catalog root comes from the toolkit-repo resolution shared helper `_repo_resolution.py` — reuse it, do not re-implement). Keep this file thin: it resolves `(scope, home, project, toolkit_root)` for the verbs.
+**Corrected after review — the original step pointed at a function that does not exist.** `scope_and_roots` does NOT live in `agent_paths.py`; it lives in `src/agent_toolkit_cli/commands/agent/_common.py:20` with signature:
 
 ```python
-"""Scope + root resolution for the MCP kind. Mirrors agent_paths.py."""
-from __future__ import annotations
-
-from pathlib import Path
-
-from agent_toolkit_cli.agent_paths import scope_and_roots as _agent_scope_and_roots
-
-# MCP scope resolution is identical to the agent kind's: read verbs default to
-# global outside a project; write verbs default to project when a project lock
-# is present. Delegate to the shared resolver rather than fork the logic.
-scope_and_roots = _agent_scope_and_roots
+def scope_and_roots(
+    global_: bool,
+    project: bool,
+    ctx_project: Path | None,
+    *,
+    read_only: bool = False,
+) -> tuple[Scope, Path | None, Path | None]:   # Scope = Literal["project", "global"]
 ```
 
-> **Implementation note:** if `agent_paths.scope_and_roots` hard-codes the agent lock filename for its "project lock present?" probe, it cannot be reused verbatim — in that case copy the function into `mcp_paths.py` and swap the probe to `mcp_lock.LOCK_FILENAME`. Verify by reading `agent_paths.py` in Step 1. Prefer delegation; fork only if the probe is kind-specific.
+It returns a **3-tuple** (never `toolkit_root`), and its "project lock present?" probe is hard-coded to `AGENT_BINDING.lock_filename` (`agents-lock.json`) — so it CANNOT be delegated to: an MCP delegate would key the read-verb scope default off the wrong lockfile. The fork is **required, not conditional**:
+
+Create `src/agent_toolkit_cli/commands/mcp/_common.py` as a copy of `commands/agent/_common.py` with the lock-filename probe swapped to `mcp_lock.LOCK_FILENAME` (`"mcps-lock.json"`). The catalog root is resolved SEPARATELY by the verbs via `_repo_resolution.resolve_toolkit_root()` — never bundled into `scope_and_roots`. Drop `mcp_paths.py` entirely (the lock-path helper lives in `mcp_lock.py`; scope resolution lives in `commands/mcp/_common.py`; no third module is needed).
 
 - [ ] **Step 6: Run tests to verify they pass**
 
@@ -1118,7 +1195,7 @@ Expected: PASS.
 
 ```bash
 git add src/agent_toolkit_cli/mcp_lock.py src/agent_toolkit_cli/mcp_paths.py tests/test_mcp_lock.py
-git commit -m "feat(mcp): mcp-lock.json reader/writer + paths resolution"
+git commit -m "feat(mcp): mcps-lock.json reader/writer + paths resolution"
 ```
 
 ---
@@ -1129,11 +1206,15 @@ git commit -m "feat(mcp): mcp-lock.json reader/writer + paths resolution"
 - Create: `src/agent_toolkit_cli/mcp_install.py`
 - Test: `tests/test_mcp_install.py`
 
-The facade is the heart of the kind: it loads the catalog asset, dispatches to every requested harness adapter, writes the lock, and on a per-harness failure **rolls back the projections it already made this call** (mirror `agent_install.py`'s rollback contract — project memory: TUI/CLI apply must roll back prior on conflict). It enforces the contract split: `uninstall` removes harness projections only (lock entry dropped, catalog untouched); `remove` is `uninstall` + dropping nothing extra in foundations (no canonical store for MCPs — the catalog is the source — so `remove` == `uninstall` of ALL harnesses for that slug + ensure no lock entry remains; document this so the destructive/non-destructive contract is explicit even though they converge for a catalog-sourced kind).
+The facade is the heart of the kind: it loads the catalog asset, dispatches to every requested harness adapter, writes the lock, and on a per-harness failure **rolls back the projections it already made this call** (rollback precedent: `commands/instructions/install_cmd.py` — project memory: TUI/CLI apply must roll back prior on conflict).
+
+**Review-resolved facade duties (added after critical review):** (a) **installed-harness sentinel** — before dispatching to an adapter, check the harness sentinel dir (Task 4 note #3); absent → loud skip, exit 0; (b) **running-claude guard** — before a global-scope claude-code write, best-effort `pgrep -x claude`; found → refuse with a clear message unless `--force` (see Out of scope note); (c) **hand-rolled collision warning** — before upserting, if `adapter.is_installed(slug)` is true but the lock has NO entry for (slug, harness), print `WARNING: overwriting existing hand-rolled entry '<slug>' in <path> — this entry was not previously managed by agent-toolkit`; do not block (manage-by-name is correct), but the user must see the collision. Add a test asserting the warning fires.
+
+It enforces the contract split: `uninstall` removes harness projections only (lock entry dropped, catalog untouched); `remove` is `uninstall` + dropping nothing extra in foundations (no canonical store for MCPs — the catalog is the source — so `remove` == `uninstall` of ALL harnesses for that slug + ensure no lock entry remains; document this so the destructive/non-destructive contract is explicit even though they converge for a catalog-sourced kind).
 
 - [ ] **Step 1: Read the sibling first**
 
-Read `src/agent_toolkit_cli/agent_install.py` in full, focusing on `apply()`'s rollback path. Reproduce the structure.
+Read `src/agent_toolkit_cli/agent_install.py` in full for the facade shape, and `src/agent_toolkit_cli/commands/instructions/install_cmd.py` for the rollback precedent (`agent_install.apply()` itself contains no rollback path — the Task 7 facade code below is the authoritative rollback contract for MCP).
 
 - [ ] **Step 2: Write the failing tests**
 
@@ -1168,13 +1249,13 @@ def test_apply_installs_and_writes_lock_project(tmp_path):
     project = tmp_path / "proj"
     project.mkdir()
     mcp_install.apply(
-        slug="context7", harnesses=["claude"], scope="project",
+        slug="context7", harnesses=["claude-code"], scope="project",
         toolkit_root=toolkit, home=tmp_path, project=project,
     )
     doc = json.loads((project / ".mcp.json").read_text())
     assert "context7" in doc["mcpServers"]
     lock = read_lock(lock_path_for_scope("project", home=tmp_path, project=project))
-    assert lock["context7"][0].harness == "claude"
+    assert lock["context7"][0].harness == "claude-code"
 
 
 def test_apply_installs_two_harnesses(tmp_path):
@@ -1183,13 +1264,13 @@ def test_apply_installs_two_harnesses(tmp_path):
     project = tmp_path / "proj"
     project.mkdir()
     mcp_install.apply(
-        slug="context7", harnesses=["claude", "codex"], scope="project",
+        slug="context7", harnesses=["claude-code", "codex"], scope="project",
         toolkit_root=toolkit, home=tmp_path, project=project,
     )
     assert "context7" in json.loads((project / ".mcp.json").read_text())["mcpServers"]
     assert (project / ".codex" / "config.toml").is_file()
     lock = read_lock(lock_path_for_scope("project", home=tmp_path, project=project))
-    assert sorted(e.harness for e in lock["context7"]) == ["claude", "codex"]
+    assert sorted(e.harness for e in lock["context7"]) == ["claude-code", "codex"]
 
 
 def test_uninstall_removes_projection_keeps_catalog(tmp_path):
@@ -1198,11 +1279,11 @@ def test_uninstall_removes_projection_keeps_catalog(tmp_path):
     project = tmp_path / "proj"
     project.mkdir()
     mcp_install.apply(
-        slug="context7", harnesses=["claude"], scope="project",
+        slug="context7", harnesses=["claude-code"], scope="project",
         toolkit_root=toolkit, home=tmp_path, project=project,
     )
     mcp_install.uninstall(
-        slug="context7", harnesses=["claude"], scope="project",
+        slug="context7", harnesses=["claude-code"], scope="project",
         toolkit_root=toolkit, home=tmp_path, project=project,
     )
     doc = json.loads((project / ".mcp.json").read_text())
@@ -1237,7 +1318,7 @@ def test_apply_rolls_back_prior_projection_on_later_failure(tmp_path, monkeypatc
 
     with pytest.raises(RuntimeError):
         mcp_install.apply(
-            slug="context7", harnesses=["claude", "codex"], scope="project",
+            slug="context7", harnesses=["claude-code", "codex"], scope="project",
             toolkit_root=toolkit, home=tmp_path, project=project,
         )
     # Claude projection rolled back
@@ -1284,7 +1365,7 @@ from agent_toolkit_cli.mcp_lock import (
     write_lock,
 )
 
-_SOURCE_REF = "ajanderson1/agent-toolkit"  # catalog provenance; refine if multi-source
+_SOURCE_REF = "ajanderson1/mcps"  # the dedicated catalog repo (Task 0); refine if multi-source
 
 
 def _loud(msg: str) -> None:
@@ -1413,7 +1494,7 @@ Create `src/agent_toolkit_cli/commands/mcp/__init__.py`:
 
 ```python
 """`agent-toolkit-cli mcp <verb>` — manage MCP servers across four harnesses
-via config-injection adapters + mcp-lock.json. Mirrors commands/agent/.
+via config-injection adapters + mcps-lock.json. Mirrors commands/agent/.
 
 Read verbs (list/status/doctor) pass read_only=True → default to global outside
 a project. Write verbs (install/uninstall/remove) default to project when a
@@ -1435,7 +1516,7 @@ from agent_toolkit_cli.commands.mcp.uninstall_cmd import uninstall_cmd
 
 @click.group(name="mcp")
 def mcp() -> None:
-    """Manage MCP servers via config-injection adapters + mcp-lock.json."""
+    """Manage MCP servers via config-injection adapters + mcps-lock.json."""
 
 
 mcp.add_command(list_cmd)
@@ -1457,26 +1538,35 @@ from __future__ import annotations
 import click
 
 from agent_toolkit_cli import mcp_install
-from agent_toolkit_cli.mcp_paths import scope_and_roots
+from agent_toolkit_cli._repo_resolution import resolve_toolkit_root
+from agent_toolkit_cli.commands.mcp._common import scope_and_roots
 
-_HARNESSES = ("claude", "codex", "opencode", "pi")
+_HARNESSES = ("claude-code", "codex", "opencode", "pi")
 
 
 @click.command(name="install")
 @click.argument("slug")
 @click.option("--harness", "harnesses", multiple=True, type=click.Choice(_HARNESSES),
-              help="Harness(es) to install into. Repeatable. Default: all four.")
-@click.option("-g", "--global", "global_", is_flag=True, help="User scope.")
-@click.option("-p", "--project", "project_", is_flag=True, help="Project scope.")
-def install_cmd(slug: str, harnesses: tuple[str, ...], global_: bool, project_: bool) -> None:
+              help="Harness(es) to install into. Repeatable. Default: all four "
+                   "(harnesses not detected on this machine are warned and skipped).")
+@click.option("-g", "--global", "global_", is_flag=True, help="Global (user) scope.")
+@click.option("-p", "--project", "project_flag", is_flag=True, help="Project scope.")
+@click.option("--force", is_flag=True,
+              help="Bypass the running-claude guard for ~/.claude.json writes.")
+@click.pass_context
+def install_cmd(ctx, slug: str, harnesses: tuple[str, ...], global_: bool,
+                project_flag: bool, force: bool) -> None:
     """Install a catalog MCP into one or more harnesses."""
-    scope, home, project, toolkit_root = scope_and_roots(
-        global_=global_, project_=project_, read_only=False,
+    # Mirrors commands/agent/install_cmd.py: 3-tuple return; ctx threads the
+    # project root; toolkit_root comes from the SEPARATE shared resolver.
+    scope, home, project = scope_and_roots(
+        global_, project_flag, ctx.obj.get("project_root") if ctx.obj else None,
     )
+    toolkit_root = resolve_toolkit_root()
     targets = list(harnesses) or list(_HARNESSES)
     mcp_install.apply(
         slug=slug, harnesses=targets, scope=scope,
-        toolkit_root=toolkit_root, home=home, project=project,
+        toolkit_root=toolkit_root, home=home, project=project, force=force,
     )
     click.echo(f"✓ installed {slug} → {', '.join(targets)} ({scope} scope)")
 ```
@@ -1487,7 +1577,10 @@ Create the remaining verb files mirroring the agent siblings:
 - `list_cmd.py` — `read_only=True`; prints catalog slugs and, per slug, which harnesses are installed at the resolved scope (via `get_adapter(h).is_installed`).
 - `status_cmd.py` — `read_only=True`; prints the lock contents for the resolved scope.
 - `add_cmd.py` — global-only scaffold: writes `mcps/<slug>/config.json` + `mcps/<slug>.toolkit.yaml` skeleton into the toolkit repo (mirror `commands/agent/add_cmd.py`'s shape; keep minimal).
-- `doctor_cmd.py` — `read_only=True`; for each lock entry, check `is_installed` matches the lock (report orphan lock entries / missing projections), and warn on declared `env:` vars absent from the environment. NEVER writes (foundations `doctor` is read-only; `fix` is deferred).
+- `doctor_cmd.py` — `read_only=True`; three checks per lock entry, NEVER writes (foundations `doctor` is read-only; `fix` is deferred):
+  1. **Orphans/missing**: `is_installed` matches the lock (report orphan lock entries / missing projections).
+  2. **Structural drift (spec Rule 4 — this is what makes "doctor reports drift" true):** load the catalog asset, render it through the adapter's `translate`, and compare structurally (parsed equality, not text) against the installed entry; report `drifted` per (slug, harness) when they differ. Read-only — reconciliation is the deferred `fix` verb.
+  3. **Env presence**: warn on declared `env:` vars absent from the environment. **Print variable NAMES only, never values** — e.g. `WARNING: env var DATABASE_URL (declared by context7) is not set`; a test MUST assert doctor output never contains the value of a seeded env var (the no-secrets non-goal applies to terminal output too).
 
 Create `src/agent_toolkit_cli/commands/mcp/_common.py` mirroring `commands/agent/_common.py` (shared `--harness` choice tuple, scope-flag decorators) to keep the verb files DRY.
 
@@ -1530,6 +1623,11 @@ def _seed(toolkit: Path, slug="context7"):
     (toolkit / "mcps" / f"{slug}.toolkit.yaml").write_text(
         f"name: {slug}\ndescription: x.\ntransport: stdio\ninstall_method: npx\n"
     )
+    # _repo_resolution._is_toolkit_repo() requires BOTH markers — without them
+    # every CLI-level test dies with RepoNotFoundError before touching MCP code.
+    (toolkit / ".agent-toolkit-source").write_text("")
+    (toolkit / "schemas").mkdir(exist_ok=True)
+    (toolkit / "schemas" / "asset-frontmatter.v1alpha2.json").write_text("{}\n")
 
 
 def test_mcp_group_registered():
@@ -1548,14 +1646,14 @@ def test_mcp_install_project_claude(tmp_path, monkeypatch):
     monkeypatch.setenv("AGENT_TOOLKIT_REPO", str(toolkit))
     monkeypatch.chdir(project)
     result = CliRunner().invoke(
-        main, ["mcp", "install", "context7", "--harness", "claude", "-p"],
+        main, ["mcp", "install", "context7", "--harness", "claude-code", "-p"],
     )
     assert result.exit_code == 0, result.output
     doc = json.loads((project / ".mcp.json").read_text())
     assert "context7" in doc["mcpServers"]
 ```
 
-> **Note:** the exact env-var / flag names for toolkit-repo resolution (`AGENT_TOOLKIT_REPO` vs `--toolkit-repo`) must match what `_repo_resolution.py` / `agent_paths.scope_and_roots` actually read — confirm against the agent CLI tests in Step 1 and adjust the test + `scope_and_roots` call accordingly.
+> **Note:** the exact env-var / flag names for toolkit-repo resolution (`AGENT_TOOLKIT_REPO` vs `--toolkit-repo`) must match what `_repo_resolution.resolve_toolkit_root()` actually reads — confirm against `_repo_resolution.py` in Step 1 and adjust. `resolve_toolkit_root()` VALIDATES the directory via `_is_toolkit_repo()` (requires `.agent-toolkit-source` + `schemas/asset-frontmatter.v1alpha2.json`), which is why `_seed()` writes both markers. Note also that `resolve_toolkit_root` currently has zero callers in `src/` — MCP is its first consumer; confirm its contract still fits before wiring.
 
 - [ ] **Step 5: Run tests to verify they pass**
 
@@ -1586,7 +1684,7 @@ Append to `tests/test_cli_mcp.py`:
 import pytest
 
 
-@pytest.mark.parametrize("scope_flag, scope_name", [("-g", "user"), ("-p", "project")])
+@pytest.mark.parametrize("scope_flag, scope_name", [("-g", "global"), ("-p", "project")])
 def test_install_uninstall_round_trip_both_scopes(tmp_path, monkeypatch, scope_flag, scope_name):
     """install → uninstall leaves the harness config with NO managed entry, at BOTH scopes."""
     toolkit = tmp_path / "toolkit"
@@ -1598,19 +1696,19 @@ def test_install_uninstall_round_trip_both_scopes(tmp_path, monkeypatch, scope_f
     monkeypatch.chdir(project)
     runner = CliRunner()
 
-    r1 = runner.invoke(main, ["mcp", "install", "context7", "--harness", "claude", scope_flag])
+    r1 = runner.invoke(main, ["mcp", "install", "context7", "--harness", "claude-code", scope_flag])
     assert r1.exit_code == 0, r1.output
 
     # Determine the target file for this scope
-    target = (tmp_path / ".claude.json") if scope_name == "user" else (project / ".mcp.json")
+    target = (tmp_path / ".claude.json") if scope_name == "global" else (project / ".mcp.json")
     assert "context7" in json.loads(target.read_text())["mcpServers"]
 
-    r2 = runner.invoke(main, ["mcp", "uninstall", "context7", "--harness", "claude", scope_flag])
+    r2 = runner.invoke(main, ["mcp", "uninstall", "context7", "--harness", "claude-code", scope_flag])
     assert r2.exit_code == 0, r2.output
     assert "context7" not in json.loads(target.read_text())["mcpServers"]
 
 
-@pytest.mark.parametrize("scope_flag, scope_name", [("-g", "user"), ("-p", "project")])
+@pytest.mark.parametrize("scope_flag, scope_name", [("-g", "global"), ("-p", "project")])
 def test_install_all_four_harnesses_round_trip(tmp_path, monkeypatch, scope_flag, scope_name):
     """All four adapters install AND fully uninstall at both scopes (no orphan projections)."""
     toolkit = tmp_path / "toolkit"
@@ -1631,8 +1729,8 @@ def test_install_all_four_harnesses_round_trip(tmp_path, monkeypatch, scope_flag
     # No harness config should still hold the managed entry.
     from agent_toolkit_cli.mcp_adapters import get_adapter
     home = tmp_path
-    proj = None if scope_name == "user" else project
-    for h in ("claude", "codex", "opencode", "pi"):
+    proj = None if scope_name == "global" else project
+    for h in ("claude-code", "codex", "opencode", "pi"):
         assert not get_adapter(h).is_installed(
             "context7", scope=scope_name, home=home, project=proj,
         ), f"{h} left an orphan projection at {scope_name} scope"
@@ -1643,7 +1741,7 @@ def test_install_all_four_harnesses_round_trip(tmp_path, monkeypatch, scope_flag
     assert "context7" not in lock
 
 
-@pytest.mark.parametrize("scope_flag, scope_name", [("-g", "user"), ("-p", "project")])
+@pytest.mark.parametrize("scope_flag, scope_name", [("-g", "global"), ("-p", "project")])
 def test_uninstall_preserves_hand_rolled_neighbour(tmp_path, monkeypatch, scope_flag, scope_name):
     """A hand-rolled MCP in the same file survives our install+uninstall byte-for-byte."""
     toolkit = tmp_path / "toolkit"
@@ -1654,13 +1752,13 @@ def test_uninstall_preserves_hand_rolled_neighbour(tmp_path, monkeypatch, scope_
     monkeypatch.setenv("AGENT_TOOLKIT_REPO", str(toolkit))
     monkeypatch.chdir(project)
 
-    target = (tmp_path / ".claude.json") if scope_name == "user" else (project / ".mcp.json")
+    target = (tmp_path / ".claude.json") if scope_name == "global" else (project / ".mcp.json")
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(json.dumps({"mcpServers": {"handrolled": {"command": "x"}}}, indent=2) + "\n")
 
     runner = CliRunner()
-    runner.invoke(main, ["mcp", "install", "context7", "--harness", "claude", scope_flag])
-    runner.invoke(main, ["mcp", "uninstall", "context7", "--harness", "claude", scope_flag])
+    runner.invoke(main, ["mcp", "install", "context7", "--harness", "claude-code", scope_flag])
+    runner.invoke(main, ["mcp", "uninstall", "context7", "--harness", "claude-code", scope_flag])
 
     doc = json.loads(target.read_text())
     assert doc["mcpServers"]["handrolled"] == {"command": "x"}
@@ -1695,17 +1793,18 @@ Expected: PASS, no regressions in existing kinds.
 Run: `[ -d tests/bats ] && bats tests/bats || echo "no bats suite"`
 Expected: PASS or "no bats suite".
 
-- [ ] **Step 3: Smoke against the real catalog**
+- [ ] **Step 3: Smoke against the real catalog (the `ajanderson1/mcps` repo seeded in Task 0)**
 
 ```bash
-uv run agent-toolkit mcp list -g
-uv run agent-toolkit mcp install context7 --harness claude -p
+export AGENT_TOOLKIT_REPO=~/GitHub/mcps   # or the --toolkit-repo equivalent _repo_resolution defines
+uv run agent-toolkit-cli mcp list -g
+uv run agent-toolkit-cli mcp install context7 --harness claude-code -p
 cat ./.mcp.json
-uv run agent-toolkit mcp uninstall context7 --harness claude -p
+uv run agent-toolkit-cli mcp uninstall context7 --harness claude-code -p
 cat ./.mcp.json
 ```
 
-Expected: `list` shows real catalog slugs (context7, playwright, …); install adds `mcpServers.context7` to `./.mcp.json` with loud `→ writing` / `✓ wrote` lines; uninstall removes it leaving `{"mcpServers": {}}`. **Important:** this writes into the agent-toolkit-cli repo's own `.mcp.json` (gitignored) — verify it does not get committed.
+Expected: `list` shows the slugs seeded in Task 0 (context7, playwright, …); install adds `mcpServers.context7` to `./.mcp.json` with loud `→ writing` / `✓ wrote` lines; uninstall removes it leaving `{"mcpServers": {}}`. **Important:** this writes into the agent-toolkit-cli repo's own `.mcp.json` (gitignored) — verify it does not get committed.
 
 - [ ] **Step 4: Commit (if any fixes were needed)**
 
@@ -1731,7 +1830,10 @@ Create `tests/test_mcp_wheel.py`:
 ```python
 """Guard: the mcp command group works from a built wheel, run outside the repo.
 
-Mirrors the #305 packaged-resource regression guard. Skipped if uv is absent.
+Mirrors the #305 packaged-resource regression guard. Follows the
+tests/test_cli/test_instructions_packaging.py skip policy: skip ONLY when uv
+is absent (via the _uv helper, never @pytest.mark.skipif) — a build/install
+that actually runs and FAILS must be a hard failure, never a skip-green.
 """
 from __future__ import annotations
 
@@ -1745,18 +1847,24 @@ import pytest
 REPO = Path(__file__).resolve().parents[1]
 
 
-@pytest.mark.skipif(shutil.which("uv") is None, reason="uv not available")
+def _uv(*args: str, **kwargs):
+    """Run a uv command; skip the test only if uv itself is unavailable."""
+    if shutil.which("uv") is None:
+        pytest.skip("uv not available")
+    return subprocess.run(["uv", *args], check=True, **kwargs)
+
+
 def test_mcp_install_from_wheel(tmp_path):
     # Build the wheel
     dist = tmp_path / "dist"
-    subprocess.run(["uv", "build", "--wheel", "-o", str(dist)], cwd=REPO, check=True)
+    _uv("build", "--wheel", "-o", str(dist), cwd=REPO)
     wheel = next(dist.glob("*.whl"))
 
     # Install into an isolated venv OUTSIDE the repo tree
     venv = tmp_path / "venv"
-    subprocess.run(["uv", "venv", str(venv)], check=True)
+    _uv("venv", str(venv))
     bin_dir = venv / ("Scripts" if (venv / "Scripts").exists() else "bin")
-    subprocess.run(["uv", "pip", "install", "--python", str(bin_dir / "python"), str(wheel)], check=True)
+    _uv("pip", "install", "--python", str(bin_dir / "python"), str(wheel))
 
     # Seed a synthetic catalog + project entirely outside the repo
     toolkit = tmp_path / "toolkit"
@@ -1767,6 +1875,10 @@ def test_mcp_install_from_wheel(tmp_path):
     (toolkit / "mcps" / "demo.toolkit.yaml").write_text(
         "name: demo\ndescription: x.\ntransport: stdio\ninstall_method: npx\n"
     )
+    # Markers required by _repo_resolution._is_toolkit_repo()
+    (toolkit / ".agent-toolkit-source").write_text("")
+    (toolkit / "schemas").mkdir()
+    (toolkit / "schemas" / "asset-frontmatter.v1alpha2.json").write_text("{}\n")
     project = tmp_path / "proj"
     project.mkdir()
 
@@ -1774,7 +1886,7 @@ def test_mcp_install_from_wheel(tmp_path):
     import os
     env = {**os.environ, **env}
     r = subprocess.run(
-        [str(bin_dir / "agent-toolkit"), "mcp", "install", "demo", "--harness", "claude", "-p"],
+        [str(bin_dir / "agent-toolkit-cli"), "mcp", "install", "demo", "--harness", "claude-code", "-p"],
         cwd=project, env=env, capture_output=True, text=True,
     )
     assert r.returncode == 0, r.stderr + r.stdout
@@ -1811,7 +1923,7 @@ In `docs/agent-toolkit/roadmap.md`, update the Phase 2 heading and table: remove
 In `README.md`, add MCP to the supported-kinds list with the foundations caveat:
 
 ```markdown
-- **MCPs** — `agent-toolkit mcp install <slug>` projects a catalog MCP into
+- **MCPs** — `agent-toolkit-cli mcp install <slug>` projects a catalog MCP into
   Claude / Codex / OpenCode / Pi by surgically editing each harness's native
   config (manage-by-name, never file ownership; loud atomic writes). `list`,
   `status`, `uninstall`, `remove`, and a read-only `doctor` are supported.
@@ -1856,15 +1968,31 @@ Use `superpowers:finishing-a-development-branch` to open the PR (target: PR awai
 - Four harness strategy table (claude/codex/opencode/pi) → Tasks 4 (3 JSON) + 5 (codex TOML), all-four round-trip in Task 9. ✅
 - Acceptance #1 install via mechanism without secrets → Task 8/9 (env passed through verbatim, never read). ✅
 - Acceptance #2 byte-identical re-run → idempotency tests Tasks 4/5. ✅
-- Acceptance #3 unlink removes only named entry, neighbours byte-equal → Tasks 4/5/9. ✅
-- Acceptance #4 list shows install state → Task 8 `list_cmd`. ✅
-- Acceptance #6 doctor reports drift / missing env → Task 8 `doctor_cmd` (read-only subset). ✅
-- Acceptance #8 round-trip byte-equal with comments+unknown sections → Task 5 TOML test. ✅
+- Acceptance #3 unlink removes only named entry → Tasks 4/5/9. ✅ **with a recorded deviation:** neighbours are byte-equal for the TOML family only; the JSON family guarantees structural equality + preserved entry order (whole-document `json.dumps` re-serialisation makes byte-equality unachievable there — see Task 4 contract note #1).
+- Acceptance #4 list shows install state → Task 8 `list_cmd` (MCP-only view; the cross-kind four-glyph integration is deferred with the TUI). ✅
+- Acceptance #6 doctor reports drift / missing env → Task 8 `doctor_cmd`: orphans + **structural drift detection (spec Rule 4)** + env-name-only presence warnings, all read-only. ✅
+- Acceptance #8 round-trip byte-equal with comments+unknown sections → Task 5 TOML test (byte-level); JSON family covered structurally per the Acceptance #3 deviation. ✅
 - The empty-`{}` / absent-`.mcp.json` failure-mode notes (added 2026-06-07) → Task 4 normalisation tests. ✅
 - **Deferred (explicitly out of scope, not gaps):** schema v1alpha2 bump (Acc #9), `diff` (Acc #5), `fix` (Acc #7), TUI (Acc #10), `--force` running-process guard. Recorded in "Out of scope".
 
 **2. Placeholder scan:** No "TBD"/"handle edge cases"/"similar to Task N" — every code step has concrete code. The verb files in Task 8 beyond `install_cmd` are described by behaviour + "mirror the agent sibling" rather than full code; this is deliberate (they are thin and the agent sibling IS the concrete template the engineer reads in Step 1), but it is the one spot a builder must read siblings rather than copy-paste. Flagged here honestly.
 
-**3. Type consistency:** `McpAsset` (catalog) / `McpAdapter` (Protocol) / `McpLockEntry` (lock) used consistently. `get_adapter(harness)` signature identical across base, install facade, and tests. `config_target(scope=, home=, project=)`, `install(slug, inner_config, scope=, home=, project=)`, `uninstall(slug, scope=, home=, project=)`, `is_installed(...)` — identical across `json_config`, `toml_config`, Protocol, facade, and tests. `scope_and_roots(global_=, project_=, read_only=)` matches the agent sibling (verified in Task 6 Step 1 / Task 8 Step 1 — the one place the builder must confirm the real signature and adjust if it differs).
+**3. Type consistency:** `McpAsset` (catalog) / `McpAdapter` (Protocol) / `McpLockEntry` (lock) used consistently. `get_adapter(harness)` signature identical across base, install facade, and tests. `config_target(scope=, home=, project=)`, `install(slug, inner_config, scope=, home=, project=)`, `uninstall(slug, scope=, home=, project=)`, `is_installed(...)` — identical across `json_config`, `toml_config`, Protocol, facade, and tests. `scope_and_roots(global_, project, ctx_project, *, read_only=)` → 3-tuple, copied into `commands/mcp/_common.py` with the `mcps-lock.json` probe (verified against `commands/agent/_common.py:20` during critical review — the original plan's 4-tuple/`agent_paths` assumption was wrong and has been corrected in Tasks 6/8).
 
 **One known soft spot the builder must resolve by reading siblings:** the exact toolkit-repo resolution mechanism (`AGENT_TOOLKIT_REPO` env vs `--toolkit-repo` flag vs `_repo_resolution.py` default) and the precise `scope_and_roots` return tuple. Tasks 6 and 8 both instruct reading the agent sibling first and adjusting; the tests note the same. This is correct dependency-direction (reuse the shared resolver) but cannot be pinned to exact code without the sibling open.
+
+---
+
+## Deferred / Open Questions
+
+### From 2026-06-10 review (#329 critical review — deep tier)
+
+> **Both questions RESOLVED by AJ, 2026-06-10, same session:**
+> 1. **Catalog → dedicated `ajanderson1/mcps` repo** (consistent with the #341 per-category split). Applied: Task 0 prerequisite added; Tech Stack catalog note; Task 10 smoke repointed; `_SOURCE_REF = "ajanderson1/mcps"`.
+> 2. **Lock → independent `McpLockEntry`, ALIGNED**: renamed `mcps-lock.json` (plural convention), versioned envelope (`"version": 1`), tolerant read reserving the bundle grouping field. Applied throughout Task 6. The intro's old "mcpPath on shared LockEntry" wording was the error; the independent-but-aligned shape is authoritative.
+>
+> Original entries kept below for the decision record.
+
+1. **[P0 — BLOCKS Tasks 2 & 10 — RESOLVED, see above] Where does the MCP catalog live post-#341?** The plan and spec assume `~/GitHub/agent-toolkit/mcps/` holds ~20 entries shaped `mcps/<slug>/{config.json, README.md}` + `<slug>.toolkit.yaml` sidecars. Verified 2026-06-10: that directory holds exactly TWO full standalone server repos (`mcp_android/`, `mcp_pocketsmith/` — each with `.git`, `src/`, `pyproject.toml`), zero `config.json` files, zero sidecars. The repo also fails `_is_toolkit_repo()` (no `schemas/` dir), so `resolve_toolkit_root()` cannot resolve it. Task 10's real-catalog smoke (`context7`, `playwright`, …) cannot pass against reality. Options include: (a) re-author catalog entries + markers in `agent-toolkit`, (b) a dedicated MCP catalog repo (consistent with the #341 per-category split), (c) per-server-repo metadata. Product decision required before Tasks 2/10 are executable. *(adversarial + feasibility reviewers, confidence 100)*
+
+2. **[P1 — BLOCKS Task 6 — RESOLVED, see above] Lock model: independent `McpLockEntry` vs shared `LockEntry`/`KindBinding`.** Task 6 drafts a bespoke `McpLockEntry` + `{"mcps": {...}}` schema (no version field, no `sourceType`/`ref`/`sha`, filename `mcps-lock.json` breaking the plural convention). The bundle-composite ADR (`docs/solutions/architecture-patterns/clone-and-project-substrate-for-bundle-plugin-capability-2026-06-10.md`) plans "the lock gains a grouping field" ACROSS the per-kind lockfiles and lists MCP as bundle step 1 — a fifth lockfile with an incompatible schema cannot participate without special-casing. Counter-argument (coherence reviewer): MCP's record shape (a LIST of per-harness projections per slug, no canonical path) is genuinely different from the one-path-per-slug shape `LockEntry` assumes, so forcing the shared machinery may distort it. Decide: (a) keep independent entry but adopt `mcps-lock.json` naming + a version field + alignment hooks for the bundle grouping field, or (b) full `KindBinding` + shared `LockEntry` with the projection list in the v3 extras dict. *(coherence + adversarial reviewers, confidence 100 — genuine tradeoff)*

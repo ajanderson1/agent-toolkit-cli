@@ -1,6 +1,12 @@
 # AGENTS.md — agent-toolkit-cli
 
-The Python CLI (`src/agent_toolkit_cli`) and the Textual TUI (`src/agent_toolkit_tui`) for managing AI-agent skills. v2.3.0 removed the pre-v2 surface (`check`, `link`, `doctor`, ...); only `skill` remains. The frozen v1 surface is pinned at the `v1.0.0` tag — see `README.md` for the install command.
+The Python CLI (`src/agent_toolkit_cli`) and the Textual TUI (`src/agent_toolkit_tui`) for managing AI-agent assets across harnesses. v2.3.0 removed the pre-v2 surface (`check`, `link`, `doctor`, ...); the v3 per-kind architecture has since re-introduced four kinds — `skill`, `agent`, `instructions`, `pi-extension` (each with its own `commands/<kind>/` verb group, `<kind>_install.py` facade, adapters package, and per-kind lockfile); the `mcp` kind is being re-ported (#329). The frozen v1 surface is pinned at the `v1.0.0` tag — see `README.md` for the install command.
+
+## Agent operation
+
+- **Project-default trust level: L3 (Conditional)** — raise on plan divergence, out-of-scope blast radius, or low confidence (see `~/.conventions/conventions/aj-workflow.md` § Trust ladder).
+- **L4+ raise timeout: 30 minutes** — on timeout the worker parks and escalates to AJ on the next watch cycle.
+- `main` has no branch protection; squash-merges land immediately. Re-check `git branch --show-current` after long sessions — releases move `main` underneath you.
 
 ## Code map
 
