@@ -169,7 +169,8 @@ By mechanism: **symlink** (Claude-compatible markdown drop-in) — `augment`,
     (https://docs.devin.ai/cli/subagents § Importing From Other Tools). Devin's
     global agents live in the `~/.config/devin/agents/{profile}/AGENT.md` tree,
     NOT `~/.claude/agents/` — so devin is a project-scope reader only.
-  - The remaining 21 supported harnesses were swept on 2026-06-10
+  - The plan's 21 named sweep harnesses (the supported set minus the five
+    known readers, codex, and pi) were swept on 2026-06-10
     (`"<harness>" ".claude/agents"` searches + official docs): no other harness
     reads `.claude/agents/` by default. Near-misses that do NOT count:
     `droid` (one-time *import* command copying into `~/.factory/droids/`),
