@@ -254,7 +254,8 @@ this page by hand.
 — not applicable (no such concept in the harness, by design) ·
 ❓ unknown (no public evidence found)
 
-<table class="harness-matrix" markdown>
+<div class="harness-matrix" markdown>
+<table markdown>
 <thead markdown>
 {head}
 </thead>
@@ -268,6 +269,7 @@ this page by hand.
 {other_rows}
 </tbody>
 </table>
+</div>
 
 ## The kinds
 

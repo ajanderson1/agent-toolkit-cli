@@ -12,7 +12,8 @@ this page by hand.
 — not applicable (no such concept in the harness, by design) ·
 ❓ unknown (no public evidence found)
 
-<table class="harness-matrix" markdown>
+<div class="harness-matrix" markdown>
+<table markdown>
 <thead markdown>
 <tr markdown><th markdown>Harness</th><th markdown>[Instructions](kinds/instructions.md)</th><th markdown>[Skills](kinds/skills.md)</th><th markdown>[Agents](kinds/agents.md)</th><th markdown>[MCP](kinds/mcp.md)</th><th markdown>[Pi extensions](kinds/pi-extensions.md)</th></tr>
 </thead>
@@ -78,6 +79,7 @@ this page by hand.
 <tr markdown><td markdown>[Zencoder](harnesses/zencoder.md)</td><td markdown>[✅](harnesses/zencoder.md#instructions)</td><td markdown>[✅](harnesses/zencoder.md#skills)</td><td markdown>—</td><td markdown>—</td><td markdown>—</td></tr>
 </tbody>
 </table>
+</div>
 
 ## The kinds
 
