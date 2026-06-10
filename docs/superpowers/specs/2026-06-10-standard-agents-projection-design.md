@@ -94,13 +94,18 @@ The TUI/composition layer consumes this via a new per-scope helper —
 
 ### TUI agents tab
 
-Columns become:
+Columns become (per the post-#351-demo decisions: single-line headers, no
+group-tag row, **no long-tail pseudo-column — the long tail is CLI-only**):
 
 ```
-AGENT ⓘ | Standard ⓘ | Cursor ⓘ | Pi ⓘ | Gemini CLI ⓘ | … +N ⓘ | State | Source
+AGENT ⓘ | Standard ⓘ | Cursor ⓘ | Pi ⓘ | Gemini CLI ⓘ | OpenCode ⓘ | State | Source
 ```
 
-- Single-line headers (post-#351 demo decision — no group-tag row).
+- The rendered set = Standard + the `MAIN_HARNESSES` members that support the
+  agent kind and are not standard-covered at the current scope. Today:
+  cursor, pi, gemini-cli, opencode (codex is `unsupported (by design)` —
+  registry-gated, pending PR5a — and therefore exempt from the coverage
+  guarantee). The #351 coverage-guard test gains an agents-kind case.
 - The Standard cell shows the `.claude/agents/<slug>.md` slot state at the
   current scope (linked / unlinked / drift), via the same adapter-aware check
   the claude-code cell used.
@@ -108,12 +113,9 @@ AGENT ⓘ | Standard ⓘ | Cursor ⓘ | Pi ⓘ | Gemini CLI ⓘ | … +N ⓘ | S
   `{"kind": "agents", "names": agents_standard_covered(scope)}` — exhaustive,
   counted, derived at open time. At global scope it appends a note that
   `devin` is covered at project scope only.
-- The long-tail pseudo-column (`… +N ⓘ`) and expand/collapse machinery from
-  #351 are reused as-is; covered harnesses are excluded from both the big-five
-  and tail sets per scope.
-- Composition: agents-kind helpers added to `composition.py`
-  (`agents_nonstandard_big_five(scope)`, `agents_longtail(scope)`), built from
-  the catalog + adapter support minus `agents_standard_covered(scope)`.
+- Composition: agents-kind helper added to `composition.py`
+  (`agents_nonstandard_main(scope)`), built from `MAIN_HARNESSES` + adapter
+  support minus `agents_standard_covered(scope)`.
 
 ### Doctor
 
@@ -152,7 +154,9 @@ upstream docs/source:
 2. Default fan-out installs `standard` + non-covered harnesses only.
 3. Agents tab shows the Standard column (absorbing claude-code's column);
    cells reflect slot state; ⓘ panel enumerates the per-scope covered set
-   with count and the devin caveat at global scope.
+   with count and the devin caveat at global scope. Every MAIN_HARNESSES
+   member that supports the agent kind is standard-covered or rendered
+   (coverage guard extended); no long-tail pseudo-column.
 4. Coverage is derived from `STANDARD_AGENT_READERS` (single source) — no
    hardcoded harness names in TUI or CLI paths.
 5. Research step completed: every supported harness re-verified for
