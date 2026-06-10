@@ -411,8 +411,16 @@ class TUIApp(App):
             self.query_one("#scope-toggle", ScopeToggle).set_active(scope)
         except NoMatches:
             pass
+        # Preserve pending across the toggle (#349): set_scope/set_rows clear
+        # by contract, so save the active grid's queue and put it back. One
+        # app-side site — no per-grid preservation logic.
+        grid = self._active_grid()
+        saved = grid.pending_entries() if grid is not None else {}
         self._refresh_active_view()
+        if grid is not None and saved:
+            grid.restore_pending(saved)  # type: ignore[arg-type]
         self._refresh_content_header()
+        self._refresh_pending_label()
         self._refresh_status_bar()
 
     def action_scope_toggle(self) -> None:
