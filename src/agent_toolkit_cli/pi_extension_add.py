@@ -9,6 +9,8 @@ Mirrors skill_add's global-only posture. Lock is written ONLY after a
 successful clone (store-owned) — never before (#283)."""
 from __future__ import annotations
 
+import re
+import shutil
 from pathlib import Path
 
 from agent_toolkit_cli import skill_git
@@ -29,6 +31,18 @@ class AddError(RuntimeError):
 def _npm_slug(spec: str) -> str:
     # "npm:@scope/name" -> "@scope/name"
     return spec.split(":", 1)[1]
+
+
+def looks_like_sha(ref: str | None) -> bool:
+    """True when `ref` can only sensibly be a commit SHA (lowercase hex,
+    7-40 chars — git's abbreviated-to-full range).
+
+    Why a heuristic is safe both ways: `git clone --branch` rejects a 40-hex
+    *branch name* anyway, so classifying one as a SHA is strictly more
+    correct than today; and a short all-hex *tag* (e.g. `abc1234`) classified
+    as a SHA still resolves — `fetch_ref` + `checkout` accept tag names too.
+    """
+    return bool(ref) and re.fullmatch(r"[0-9a-f]{7,40}", ref) is not None
 
 
 def _derive_slug(parsed: ParsedSource) -> str | None:
@@ -91,8 +105,33 @@ def add(
         return ext_slug
 
     canonical.parent.mkdir(parents=True, exist_ok=True)
+    # `git clone --branch` accepts only branch/tag names — a raw SHA must be
+    # cloned at HEAD then fetched + checked out (the import pattern, #259).
+    pin_sha = parsed.ref if looks_like_sha(parsed.ref) else None
     # May raise GitError -> no lock write (lock honesty, #283).
-    skill_git.clone(parsed.url, canonical, ref=parsed.ref, env=env)
+    skill_git.clone(
+        parsed.url, canonical, ref=None if pin_sha else parsed.ref, env=env,
+    )
+    if pin_sha and skill_git.is_git_repo(canonical):
+        # fetch_ref is BEST-EFFORT: a full clone already holds every
+        # ref-reachable object, so the fetch only rescues full-SHA pins
+        # not reachable from advertised tips — and it ALWAYS fails for
+        # abbreviated pins (git fetch accepts only remote refs and full
+        # object IDs, while checkout resolves abbreviations locally).
+        try:
+            skill_git.fetch_ref(canonical, ref=pin_sha, env=env)
+        except skill_git.GitError:
+            pass
+        # checkout is the FAIL-LOUD authority. Deliberate divergence from
+        # import's swallow-and-stay-at-HEAD: add is a single explicit pin —
+        # silently landing on the wrong commit would violate fail-loud.
+        # Clean up the clone so a failed pin leaves no orphaned store dir
+        # (#313) and no lock entry (#283).
+        try:
+            skill_git.checkout(canonical, ref=pin_sha, env=env)
+        except skill_git.GitError:
+            shutil.rmtree(canonical, ignore_errors=True)
+            raise
 
     # Clone succeeded -> safe to record the lock entry.
     if skill_git.is_git_repo(canonical):

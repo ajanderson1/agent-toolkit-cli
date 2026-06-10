@@ -22,11 +22,13 @@ Fact-check finding (0.77.0 package-manager.js):
 """
 from __future__ import annotations
 
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Literal
 
 from agent_toolkit_cli import _pi_settings, skill_git
+from agent_toolkit_cli.pi_extension_add import looks_like_sha
 from agent_toolkit_cli.pi_extension_lock import LockFile, read_lock
 from agent_toolkit_cli.pi_extension_paths import (
     Scope,
@@ -335,20 +337,48 @@ def _make_relink_action(*, link: Path, canonical: Path) -> FixAction:
 
 
 def _make_reclone_action(*, slug: str, entry: object) -> FixAction:
-    """Re-clone the store copy from the lock entry's source."""
+    """Re-clone the store copy from the lock entry's source.
+
+    Pin ONLY when the entry's `ref` is a SHA — NEVER from `upstream_sha`,
+    which add() records for every store-owned entry as the observed tip at
+    add time; pinning on it would detach every branch-tracking entry at a
+    stale SHA (#330 review). `git clone --branch` rejects raw SHAs, so a pin
+    is applied post-clone: best-effort fetch_ref (rescues full-SHA wants;
+    always fails for abbreviations), then checkout as the fail-loud
+    authority. A failed checkout removes the partial clone and re-raises —
+    fail loud, no orphan dir (#313).
+    """
     source = getattr(entry, "source", "")
     ref = getattr(entry, "ref", None)
     canonical = library_pi_extension_path(slug)
+
+    ref_is_sha = looks_like_sha(ref)
+    pin_sha = ref if ref_is_sha else None
+    clone_ref = None if ref_is_sha else ref
 
     def _apply() -> None:
         if canonical.exists():
             return  # idempotent
         canonical.parent.mkdir(parents=True, exist_ok=True)
-        skill_git.clone(source, canonical, ref=ref, env=None)
+        skill_git.clone(source, canonical, ref=clone_ref, env=None)
+        if pin_sha and skill_git.is_git_repo(canonical):
+            try:
+                skill_git.fetch_ref(canonical, ref=pin_sha, env=None)
+            except skill_git.GitError:
+                pass  # best-effort; checkout resolves locally
+            try:
+                skill_git.checkout(canonical, ref=pin_sha, env=None)
+            except skill_git.GitError:
+                shutil.rmtree(canonical, ignore_errors=True)
+                raise
 
     return FixAction(
         description=f"Re-clone {slug} from {source}",
-        shell_preview=f"git clone{(' --branch ' + ref) if ref else ''} {source} {canonical}",
+        shell_preview=(
+            f"git clone{(' --branch ' + clone_ref) if clone_ref else ''} "
+            f"{source} {canonical}"
+            + (f" && git -C {canonical} checkout {pin_sha}" if pin_sha else "")
+        ),
         apply=_apply,
     )
 

@@ -130,6 +130,48 @@ def test_update_no_args_updates_all(tmp_path, monkeypatch, git_sandbox):
     assert r.exit_code == 0, r.output
 
 
+def _seed_pinned_entry(tmp_path, git_sandbox) -> str:
+    """Store-owned entry pinned to a SHA, with a real clone on disk.
+    Returns the pinned SHA."""
+    from agent_toolkit_cli import pi_extension_add as pea
+    sha = subprocess.run(
+        ["git", "-C", str(git_sandbox.clone), "rev-parse", "HEAD"],
+        check=True, env=git_sandbox.env, capture_output=True, text=True,
+    ).stdout.strip()
+    pea.add(
+        source=f"file://{git_sandbox.upstream}/tree/{sha}",
+        slug="pinned", env=git_sandbox.env,
+    )
+    return sha
+
+
+def test_update_skips_pinned_entry(tmp_path, monkeypatch, git_sandbox):
+    """A SHA-pinned entry must not poison `update`: skip + exit 0 (#330)."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    sha = _seed_pinned_entry(tmp_path, git_sandbox)
+
+    r = CliRunner().invoke(main, ["pi-extension", "update", "-g"])
+    assert r.exit_code == 0, r.output
+    assert "pinned" in r.output.lower()
+    assert sha[:7] in r.output
+    assert "conflict" not in r.output.lower()
+
+
+def test_reset_skips_pinned_entry(tmp_path, monkeypatch, git_sandbox):
+    """`reset` on a pinned entry: informational skip, exit 0 (#330)."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    sha = _seed_pinned_entry(tmp_path, git_sandbox)
+
+    r = CliRunner().invoke(main, ["pi-extension", "reset", "pinned", "-g"])
+    assert r.exit_code == 0, r.output
+    assert "pinned to" in r.output.lower()
+    assert sha[:7] in r.output
+
+
 # ---------------------------------------------------------------------------
 # Task B2: push
 # ---------------------------------------------------------------------------
@@ -397,6 +439,97 @@ def test_doctor_detects_missing_canonical(tmp_path, monkeypatch, git_sandbox):
     r = CliRunner().invoke(main, ["pi-extension", "doctor", "-g", "--no-fix"])
     assert "demo" in r.output
     # Doctor does NOT auto-fix without --fix / prompt.
+
+
+def test_doctor_reclone_sha_pinned_lands_on_pin(tmp_path, monkeypatch, git_sandbox):
+    """Reclone of a SHA-pinned entry must land on the pin, not HEAD (#330)."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    def git(*args):
+        return subprocess.run(
+            ["git", "-C", str(git_sandbox.clone), *args],
+            check=True, env=git_sandbox.env, capture_output=True, text=True,
+        ).stdout.strip()
+
+    first_sha = git("rev-parse", "HEAD")
+    (git_sandbox.clone / "EXTRA.md").write_text("second\n")
+    git("add", "-A"); git("commit", "-m", "second"); git("push", "origin", "main")
+
+    # Lock entry: store-owned, pinned to first_sha, store copy MISSING.
+    # upstream_sha=None matches what a real SHA-pinned add records (the
+    # post-checkout `rev-parse origin/<sha>` fails and is caught).
+    lock_path = pep.library_lock_path(env={})
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    write_lock(lock_path, LockFile(version=1, skills={
+        "pinned": LockEntry(
+            source=str(git_sandbox.upstream), source_type="git",
+            ref=first_sha, pi_extension_path="pinned", upstream_sha=None,
+        ),
+    }))
+
+    from agent_toolkit_cli import pi_extension_doctor as ped
+    findings = ped.diagnose(slugs=None, scope="global", home=tmp_path, project=None)
+    reclone = next(
+        f for f in findings
+        if f.fix_action is not None and "Re-clone" in f.fix_action.description
+    )
+    reclone.fix_action.apply()
+
+    canonical = pep.library_pi_extension_path("pinned", env={})
+    head = subprocess.run(
+        ["git", "-C", str(canonical), "rev-parse", "HEAD"],
+        check=True, env=git_sandbox.env, capture_output=True, text=True,
+    ).stdout.strip()
+    assert head == first_sha
+    assert not (canonical / "EXTRA.md").exists()
+
+
+def test_doctor_reclone_branch_entry_lands_on_current_tip(
+    tmp_path, monkeypatch, git_sandbox,
+):
+    """Regression: a BRANCH entry whose upstream_sha is stale (one commit
+    behind the pushed tip) must reclone onto the CURRENT tip, on the branch —
+    upstream_sha is the observed tip at add time, NOT a pin (#330 review)."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    def git(*args):
+        return subprocess.run(
+            ["git", "-C", str(git_sandbox.clone), *args],
+            check=True, env=git_sandbox.env, capture_output=True, text=True,
+        ).stdout.strip()
+
+    first_sha = git("rev-parse", "HEAD")
+    (git_sandbox.clone / "EXTRA.md").write_text("second\n")
+    git("add", "-A"); git("commit", "-m", "second"); git("push", "origin", "main")
+    second_sha = git("rev-parse", "HEAD")
+
+    lock_path = pep.library_lock_path(env={})
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    write_lock(lock_path, LockFile(version=1, skills={
+        "tracking": LockEntry(
+            source=str(git_sandbox.upstream), source_type="git",
+            ref="main", pi_extension_path="tracking", upstream_sha=first_sha,
+        ),
+    }))
+
+    from agent_toolkit_cli import pi_extension_doctor as ped
+    findings = ped.diagnose(slugs=None, scope="global", home=tmp_path, project=None)
+    reclone = next(
+        f for f in findings
+        if f.fix_action is not None and "Re-clone" in f.fix_action.description
+    )
+    reclone.fix_action.apply()
+
+    canonical = pep.library_pi_extension_path("tracking", env={})
+
+    def store_git(*args):
+        return subprocess.run(
+            ["git", "-C", str(canonical), *args],
+            check=True, env=git_sandbox.env, capture_output=True, text=True,
+        ).stdout.strip()
+
+    assert store_git("rev-parse", "HEAD") == second_sha  # CURRENT tip, not stale
+    assert store_git("rev-parse", "--abbrev-ref", "HEAD") == "main"  # on branch
 
 
 def test_doctor_detects_drifted_symlink(tmp_path, monkeypatch, git_sandbox):
