@@ -1,6 +1,6 @@
 """Standard agents projection (#361): the .claude/agents/<slug>.md slot.
 
-`.claude/agents/` is the de-facto agents-kind convergence dir — read natively
+`.claude/agents/` is the de-facto agents asset-type convergence dir — read natively
 by multiple harnesses (per-scope table below). Installing `standard` writes
 ONE file that all covered harnesses consume; it is the same file the
 claude-code symlink-adapter cell writes (one artifact, one name — every scan

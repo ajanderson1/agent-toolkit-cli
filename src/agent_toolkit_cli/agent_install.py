@@ -5,7 +5,7 @@ Binds AGENT_BINDING + _AGENT_SYNTHETIC_NAMES into the core. apply()
 dispatches to per-mechanism adapters from `agent_adapters/` instead of
 the skill facade's uniform-symlink projection.
 
-The agents kind's standard projection is the `.claude/agents/<slug>.md`
+The agents asset type's standard projection is the `.claude/agents/<slug>.md`
 slot (#361) — `standard_bundle_link` stays None because the slot is an
 adapter, not a core bundle link. The slot is ONE file with many native
 readers; harness tokens whose destination IS that file (claude-code at
@@ -41,7 +41,7 @@ from agent_toolkit_cli.skill_source import ParsedSource
 
 # Catalog tokens that are virtual entries, not real harness install targets.
 # "standard-agent" mirrors "standard-skill" from the skill facade. "standard"
-# is NOT synthetic for the agent kind (#361): it is the real installable
+# is NOT synthetic for the agent asset type (#361): it is the real installable
 # .claude/agents/<slug>.md slot, dispatched in agent_adapters.get_adapter()
 # ahead of the catalog (whose "standard" entry is the skills pseudo-agent).
 _AGENT_SYNTHETIC_NAMES: frozenset[str] = frozenset({"standard-agent"})
@@ -140,7 +140,7 @@ def _current_linked_agents(
     for name in _AGENTS:
         if name == "standard":
             # The catalog's "standard" entry is the skills bundle pseudo-
-            # agent; the agents-kind slot was handled above.
+            # agent; the agents asset-type slot was handled above.
             continue
         if name in synthetic_names or name in _AGENT_SYNTHETIC_NAMES:
             continue
