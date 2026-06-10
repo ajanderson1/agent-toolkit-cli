@@ -37,14 +37,13 @@ async def test_columns_have_info_glyph_except_source():
         await pilot.pause()
         table = a.query_one("#skill-table", DataTable)
         labels = [str(c.label) for c in table.columns.values()]
-        # Layout (#351): SKILL | Standard | Claude Code | Pi | … +N | State |
-        # Source — single-line labels; Standard leads, the rest is implicitly
-        # non-standard.
+        # Layout (#351): SKILL | Standard | Claude Code | Pi | State | Source —
+        # single-line labels; Standard leads, the rest is implicitly
+        # non-standard; the long tail is CLI-only.
         assert labels[0] == "SKILL ⓘ", f"slug label: {labels[0]!r}"
         assert labels[1] == "Standard ⓘ", f"standard label: {labels[1]!r}"
         assert labels[2] == "Claude Code ⓘ", f"claude-code label: {labels[2]!r}"
         assert labels[3] == "Pi ⓘ", f"pi label: {labels[3]!r}"
-        assert labels[4].startswith("… +"), f"pseudo label: {labels[4]!r}"
         assert labels[-2] == "State ⓘ", f"state label: {labels[-2]!r}"
         assert labels[-1] == "Source", f"source label: {labels[-1]!r}"
         assert "ⓘ" not in labels[-1], f"source must not have glyph: {labels[-1]!r}"
@@ -123,7 +122,7 @@ async def test_press_i_on_slug_column_opens_cell_info():
 
 @pytest.mark.asyncio
 async def test_column_key_for_index_resolves_state():
-    """Layout (#351): [0]=SKILL, [1..N]=agents, [N+1]=longtail, [N+2]=State, [N+3]=Source."""
+    """Layout: [0]=SKILL, [1..N]=agents, [N+1]=State, [N+2]=Source."""
     from textual.app import App
     from agent_toolkit_tui.skill_state import INTERACTIVE_AGENTS
 
@@ -139,9 +138,8 @@ async def test_column_key_for_index_resolves_state():
         assert g._column_key_for_index(0) is None       # SKILL
         for i, agent in enumerate(INTERACTIVE_AGENTS, start=1):
             assert g._column_key_for_index(i) == agent
-        assert g._column_key_for_index(n + 1) == "longtail"
-        assert g._column_key_for_index(n + 2) == "state"
-        assert g._column_key_for_index(n + 3) is None  # Source
+        assert g._column_key_for_index(n + 1) == "state"
+        assert g._column_key_for_index(n + 2) is None  # Source
 
 
 @pytest.mark.asyncio
@@ -159,7 +157,7 @@ async def test_press_i_on_state_column_opens_modal():
     async with a.run_test() as pilot:
         await pilot.pause()
         table = a.query_one("#skill-table", DataTable)
-        state_col = len(INTERACTIVE_AGENTS) + 2  # +1 = longtail pseudo (#351)
+        state_col = len(INTERACTIVE_AGENTS) + 1
         table.cursor_coordinate = Coordinate(row=0, column=state_col)
         table.focus()  # filter Input is focused on open (#249); table needs focus to receive `i`
         await pilot.pause()
@@ -201,7 +199,7 @@ async def test_state_header_is_capitalised_with_glyph():
         await pilot.pause()
         table = a.query_one("#skill-table", DataTable)
         labels = [str(c.label) for c in table.columns.values()]
-        state_col = len(INTERACTIVE_AGENTS) + 2  # +1 = longtail pseudo (#351)
+        state_col = len(INTERACTIVE_AGENTS) + 1
         assert labels[state_col] == "State ⓘ", f"state header: {labels[state_col]!r}"
 
 
@@ -219,14 +217,12 @@ async def test_full_header_row():
     async with a.run_test() as pilot:
         await pilot.pause()
         table = a.query_one("#skill-table", DataTable)
-        from agent_toolkit_tui.composition import skills_longtail
         labels = [str(c.label) for c in table.columns.values()]
         assert labels == [
             "SKILL ⓘ",
             "Standard ⓘ",
             "Claude Code ⓘ",
             "Pi ⓘ",
-            f"… +{len(skills_longtail())} ⓘ",
             "State ⓘ",
             "Source",
         ], f"unexpected header row: {labels!r}"

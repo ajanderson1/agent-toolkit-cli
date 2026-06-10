@@ -1,6 +1,6 @@
 """Interactive DataTable for the TUI's instruction tab.
 
-Columns (#351): INSTRUCTION ⓘ | STANDARD/standard ⓘ | NON-STD/<active harnesses…> | NON-STD/… +N ⓘ | Source.
+Columns (#351): INSTRUCTION ⓘ | standard ⓘ | <non-covered main harnesses…> | Source.
 
 Mirrors agent_grid.py: per-harness columns, scope toggle, toggle-queue →
 pending → apply. Pending key shape: (scope, harness_name, slug) — same
@@ -26,11 +26,7 @@ from textual.message import Message
 from textual.widgets import DataTable
 
 from agent_toolkit_tui.column_info import get_column_info
-from agent_toolkit_tui.composition import (
-    LONGTAIL_KEY,
-    instructions_longtail,
-    instructions_nonstandard_big_five,
-)
+from agent_toolkit_tui.composition import instructions_nonstandard_main
 from agent_toolkit_tui.instruction_state import InstructionRow
 from agent_toolkit_tui.widgets.column_info_modal import ColumnInfoModal
 
@@ -42,12 +38,11 @@ _PENDING_UNLINK  = "[yellow]-[/]"
 _INFO_GLYPH      = "ⓘ"
 _NOT_AVAIL_GLYPH = "[dim]—[/]"
 
-# Column index offsets (#351):
+# Column index offsets:
 #   0 = slug (INSTRUCTION)
 #   1 = standard (read-only canonical status)
 #   2..2+N-1 = active harness columns (_active_harnesses())
-#   2+N = longtail pseudo-column
-#   2+N+1 = Source
+#   2+N = Source
 _HARNESS_COL_OFFSET = 2
 
 Op = Literal["link", "unlink"]
@@ -84,13 +79,11 @@ class InstructionGrid(Vertical):
         self._scope: Literal["global", "project"] = "global"
         # (scope, harness_name, slug) -> op
         self._pending: dict[tuple[str, str, str], Op] = {}
-        self._longtail_expanded: bool = False  # session-only, per grid (#351)
 
     def _active_harnesses(self) -> tuple[str, ...]:
-        cols = instructions_nonstandard_big_five()
-        if self._longtail_expanded:
-            cols += instructions_longtail()
-        return cols
+        # Standard column + non-covered main harnesses. The long tail is
+        # CLI-only (#351 post-demo decision).
+        return instructions_nonstandard_main()
 
     @property
     def row_count(self) -> int:
@@ -162,10 +155,10 @@ class InstructionGrid(Vertical):
         self._toggle_at(table.cursor_coordinate)
 
     def action_info(self) -> None:
-        """Route `i` by column. Columns with a registered ColumnInfo
-        (standard, longtail) open ColumnInfoModal — the registry path that
-        replaced the old inline column-1 branch (#351). Everything else opens
-        CellInfoScreen with the per-cell state."""
+        """Route `i` by column. The standard column has registered ColumnInfo
+        and opens ColumnInfoModal — the registry path that replaced the old
+        inline column-1 branch (#351). Everything else opens CellInfoScreen
+        with the per-cell state."""
         from agent_toolkit_tui.screens.cell_info import CellInfoScreen
 
         try:
@@ -291,20 +284,6 @@ class InstructionGrid(Vertical):
         self._notify_pending()
 
     def _toggle_at(self, coord: Coordinate) -> None:
-        # `space` on the longtail pseudo-column expands/collapses in place
-        # (#351); the cursor follows the pseudo-column to its moved index.
-        if coord.column == _HARNESS_COL_OFFSET + len(self._active_harnesses()):
-            try:
-                table = self.query_one("#instruction-table", DataTable)
-            except Exception:
-                return
-            self._longtail_expanded = not self._longtail_expanded
-            self._rebuild(table)
-            table.cursor_coordinate = Coordinate(
-                row=table.cursor_coordinate.row,
-                column=_HARNESS_COL_OFFSET + len(self._active_harnesses()),
-            )
-            return
         # Slug column (0), standard column (1), or source column → no-op.
         harness = self._harness_for_column(coord.column)
         if harness is None:
@@ -334,12 +313,11 @@ class InstructionGrid(Vertical):
     def _harness_for_column(self, col: int) -> str | None:
         """Return the harness name for a table column index, or None.
 
-        Column layout (#351):
+        Column layout:
           0 = slug (INSTRUCTION)
           1 = standard (read-only)
           2..2+N-1 = _active_harnesses()
-          2+N = longtail pseudo-column
-          2+N+1 = Source
+          2+N = Source
         """
         if col < _HARNESS_COL_OFFSET:
             # Slug or standard — not an interactive harness column.
@@ -353,25 +331,16 @@ class InstructionGrid(Vertical):
     def _column_key_for_index(self, col: int) -> str | None:
         """Resolve a column index to a COLUMN_INFO registry key (#351).
 
-        Only the standard column and the longtail pseudo-column have
-        registered ColumnInfo; harness/slug/source columns return None and
-        fall through to CellInfoScreen.
+        Only the standard column has registered ColumnInfo; harness/slug/
+        source columns return None and fall through to CellInfoScreen.
         """
         if col == 1:
             return "standard"
-        if col == _HARNESS_COL_OFFSET + len(self._active_harnesses()):
-            return LONGTAIL_KEY
         return None
 
     def _context_for(self, *, key: str) -> dict | None:
         """Context for get_column_info(): the standard panel enumerates the
-        native AGENTS.md readers from the harness-matrix SSOT; the longtail
-        panel lists the collapsed harness names (#351)."""
-        if key == LONGTAIL_KEY:
-            return {
-                "names": instructions_longtail(),
-                "expanded": self._longtail_expanded,
-            }
+        native AGENTS.md readers from the harness-matrix SSOT (#351)."""
         if key == "standard":
             from agent_toolkit_cli.instructions_matrix import instructions_matrix_rows
 
@@ -407,16 +376,6 @@ class InstructionGrid(Vertical):
         for harness in active:
             display = _HARNESS_DISPLAY.get(harness, harness)
             table.add_column(f"{display} {_INFO_GLYPH}", width=14)
-        # Longtail pseudo-column (#351); keep-and-indicate ±N marker for
-        # pending ops on collapsed tail columns (#349 bug class).
-        tail = instructions_longtail()
-        tail_pending = sum(1 for (_s, h, _slug) in self._pending if h in tail)
-        marker = f" [yellow]±{tail_pending}[/]" if tail_pending else ""
-        pseudo = (
-            "… collapse" if self._longtail_expanded
-            else f"… +{len(tail)}{marker} {_INFO_GLYPH}"
-        )
-        table.add_column(pseudo, width=14)
         # Source column — passive.
         table.add_column("Source", width=30)
 
@@ -425,14 +384,13 @@ class InstructionGrid(Vertical):
             cells.append(self._standard_glyph(row))
             for harness in active:
                 cells.append(self._cell_glyph(row=row, harness=harness))
-            cells.append("[dim]·[/]")  # placeholder under the pseudo-column
             cells.append(row.source)
             table.add_row(*cells, key=f"instruction:{row.slug}")
 
         if self._rows:
             max_row = len(self._rows) - 1
-            # Layout: slug + standard + N harness cols + pseudo + source.
-            max_col = _HARNESS_COL_OFFSET + len(active) + 1
+            # Layout: slug + standard + N harness cols + source.
+            max_col = _HARNESS_COL_OFFSET + len(active)
             table.cursor_coordinate = Coordinate(
                 row=min(saved.row, max_row),
                 column=min(saved.column, max_col),

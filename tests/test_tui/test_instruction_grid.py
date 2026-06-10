@@ -107,8 +107,8 @@ async def test_instruction_grid_mounts_with_correct_columns():
         await pilot.pause()
         table = app.query_one("#instruction-table", DataTable)
         labels = [str(c.label) for c in table.columns.values()]
-        # Slug + standard + N harness cols + longtail pseudo (#351) + Source
-        assert len(labels) == len(INTERACTIVE_HARNESSES) + 4
+        # Slug + standard + N harness cols + Source
+        assert len(labels) == len(INTERACTIVE_HARNESSES) + 3
         assert any("INSTRUCTION" in lbl for lbl in labels)
         assert any("standard" in lbl for lbl in labels)
         assert any("Source" in lbl for lbl in labels)

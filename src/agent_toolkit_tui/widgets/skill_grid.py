@@ -27,11 +27,7 @@ from textual.widgets import DataTable, Input
 
 from agent_toolkit_cli.skill_agents import AGENTS
 from agent_toolkit_tui.column_info import COLUMN_INFO, get_column_info
-from agent_toolkit_tui.composition import (
-    LONGTAIL_KEY,
-    skills_longtail,
-    skills_nonstandard_big_five,
-)
+from agent_toolkit_tui.composition import skills_nonstandard_main
 from agent_toolkit_tui.skill_state import SkillRow
 from agent_toolkit_tui.widgets.column_info_modal import ColumnInfoModal
 
@@ -117,13 +113,11 @@ class SkillGrid(Vertical):
         self._pending: dict[tuple[str, str, str], Op] = {}
         # Case-insensitive substring filter on slug (#249). "" = show all.
         self._filter: str = ""
-        self._longtail_expanded: bool = False  # session-only, per grid (#351)
 
     def _active_agents(self) -> tuple[str, ...]:
-        cols = ("standard",) + skills_nonstandard_big_five()
-        if self._longtail_expanded:
-            cols += skills_longtail()
-        return cols
+        # Standard column + non-covered main harnesses. The long tail is
+        # CLI-only (#351 post-demo decision).
+        return ("standard",) + skills_nonstandard_main()
 
     @property
     def row_count(self) -> int:
@@ -483,11 +477,8 @@ class SkillGrid(Vertical):
         """Build the per-call context dict for get_column_info().
 
         The 'standard' key surfaces whether the focused row is also installed
-        globally so the modal can omit the 🌐 paragraph when it's not. The
-        longtail pseudo-column surfaces the collapsed names (#351).
+        globally so the modal can omit the 🌐 paragraph when it's not.
         """
-        if key == LONGTAIL_KEY:
-            return {"names": skills_longtail(), "expanded": self._longtail_expanded}
         if key != "standard":
             return None
         # row_index comes from the table cursor → index the visible rows (#249).
@@ -502,20 +493,6 @@ class SkillGrid(Vertical):
         try:
             table = self.query_one("#skill-table", DataTable)
         except Exception:
-            return
-        # `space` on the longtail pseudo-column expands/collapses in place
-        # (#351). After the rebuild the pseudo-column has MOVED (by the tail
-        # length), so the cursor explicitly follows it instead of landing on
-        # a random tail column.
-        active_n = len(self._active_agents())
-        if coord.column == 1 + active_n:
-            self._longtail_expanded = not self._longtail_expanded
-            self._rebuild(table)
-            # Cursor follows the pseudo-column to its new index.
-            table.cursor_coordinate = Coordinate(
-                row=table.cursor_coordinate.row,
-                column=1 + len(self._active_agents()),
-            )
             return
         agent = self._agent_for_column(coord.column)
         if agent is None:
@@ -540,8 +517,7 @@ class SkillGrid(Vertical):
         self._notify_pending()
 
     def _column_index(self, agent_name: str) -> int:
-        # Layout: [0]=slug, [1..N]=_active_agents(), [N+1]=longtail pseudo,
-        # [N+2]=state, [N+3]=source (#351).
+        # Layout: [0]=slug, [1..N]=_active_agents(), [N+1]=state, [N+2]=source.
         try:
             return 1 + self._active_agents().index(agent_name)
         except ValueError:
@@ -556,17 +532,15 @@ class SkillGrid(Vertical):
     def _column_key_for_index(self, col: int) -> str | None:
         """Resolve a column index to a COLUMN_INFO key.
 
-        Layout: [0]=slug, [1..N]=_active_agents(), [N+1]=longtail pseudo,
-        [N+2]=state, [N+3]=source. Returns None for unknown indices (cols 0
-        and N+3 — "slug" and "source" are not in the info registry today).
+        Layout: [0]=slug, [1..N]=_active_agents(), [N+1]=state, [N+2]=source.
+        Returns None for unknown indices (cols 0 and N+2 — "slug" and
+        "source" are not in the info registry today).
         """
         active = self._active_agents()
         n = len(active)
         if 1 <= col <= n:
             return active[col - 1]
         if col == n + 1:
-            return LONGTAIL_KEY
-        if col == n + 2:
             return "state"
         return None
 
@@ -595,17 +569,6 @@ class SkillGrid(Vertical):
             # (group-tag header row removed per AJ demo feedback, #351).
             base = "Standard" if agent == "standard" else AGENTS[agent].display_name
             table.add_column(f"{base} {_INFO_GLYPH}", width=14)
-        # Longtail pseudo-column (#351). Pending ops on collapsed tail columns
-        # stay applied/revertible but would be invisible (#349 bug class:
-        # revert-destroys-invisible-ops) — keep-and-indicate via a ±N marker.
-        tail = skills_longtail()
-        tail_pending = sum(1 for (_s, a, _slug) in self._pending if a in tail)
-        marker = f" [yellow]±{tail_pending}[/]" if tail_pending else ""
-        pseudo = (
-            "… collapse" if self._longtail_expanded
-            else f"… +{len(tail)}{marker} {_INFO_GLYPH}"
-        )
-        table.add_column(pseudo, width=14)
         # State has a column-info modal → glyph it.
         table.add_column(f"State {_INFO_GLYPH}", width=10)
         # Source is passive — no info panel, no glyph.
@@ -615,14 +578,13 @@ class SkillGrid(Vertical):
             cells: list[str] = [row.slug]
             for agent in active:
                 cells.append(self._cell_glyph(row=row, agent=agent))
-            cells.append("[dim]·[/]")  # placeholder under the pseudo-column
             cells.append(_STATE_MARKUP.get(row.state, row.state))
             cells.append(row.source)
             table.add_row(*cells, key=f"skill:{row.slug}")
         if visible:
             max_row = len(visible) - 1
-            # Layout: slug + N agent cols + pseudo + state + source.
-            max_col = 3 + len(active)
+            # Layout: slug + N agent cols + state + source.
+            max_col = 2 + len(active)
             table.cursor_coordinate = Coordinate(
                 row=min(saved.row, max_row),
                 column=min(saved.column, max_col),

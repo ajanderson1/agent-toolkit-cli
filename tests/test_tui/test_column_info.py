@@ -126,11 +126,3 @@ def test_standard_info_is_kind_aware():
     # The 🌐 marker block is skills-only.
     assert "🌐" not in text
 
-
-def test_longtail_info_lists_collapsed_names():
-    from agent_toolkit_tui.composition import LONGTAIL_KEY, skills_longtail
-    info = get_column_info(LONGTAIL_KEY, context={"names": skills_longtail(), "expanded": False})
-    assert info is not None
-    for name in skills_longtail()[:3]:
-        assert any(name in line for line in info.lines)
-    assert "expand" in info.title.lower() or any("expand" in l for l in info.lines)

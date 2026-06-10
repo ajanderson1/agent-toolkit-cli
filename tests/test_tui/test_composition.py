@@ -1,46 +1,61 @@
-"""Column composition for the Standard / Non-standard matrix groups (#351)."""
+"""Column composition for the Standard / Non-standard split (#351).
+
+The TUI renders the standard column plus the non-covered MAIN_HARNESSES only;
+the long tail is CLI-only (post-demo AJ decision). The coverage guard below is
+the load-bearing invariant: every main harness must be covered — standard or
+own column — on every kind it supports.
+"""
 from agent_toolkit_cli.skill_agents import AGENTS
 from agent_toolkit_tui.composition import (
-    BIG_FIVE,
-    LONGTAIL_KEY,
-    instructions_longtail,
-    instructions_nonstandard_big_five,
-    skills_longtail,
-    skills_nonstandard_big_five,
+    MAIN_HARNESSES,
+    instructions_nonstandard_main,
+    skills_nonstandard_main,
 )
 
 
-def test_big_five_members():
-    assert BIG_FIVE == ("claude-code", "pi", "codex", "gemini-cli", "opencode")
+def test_main_harnesses_members():
+    assert MAIN_HARNESSES == (
+        "claude-code", "gemini-cli", "codex", "opencode", "pi", "cursor",
+    )
 
 
-def test_skills_nonstandard_big_five_today():
-    # codex / gemini-cli / opencode read .agents/skills → standard for skills.
-    assert skills_nonstandard_big_five() == ("claude-code", "pi")
+def test_skills_nonstandard_main_today():
+    # gemini-cli / codex / opencode / cursor read .agents/skills → standard.
+    assert skills_nonstandard_main() == ("claude-code", "pi")
 
 
-def test_skills_longtail_properties():
-    tail = skills_longtail()
-    assert tail == tuple(sorted(tail))                      # deterministic order
-    assert set(tail).isdisjoint(BIG_FIVE)                   # big five never in tail
-    assert set(tail).isdisjoint({"standard", "standard-skill", "standard-agent"})
-    for name in tail:
-        assert not AGENTS[name].is_standard                 # tail is non-compliant only
-    assert len(tail) > 10                                   # sanity: tail is the long tail
+def test_instructions_nonstandard_main_today():
+    # codex / opencode / pi / cursor read AGENTS.md natively → standard.
+    assert instructions_nonstandard_main() == ("claude-code", "gemini-cli")
 
 
-def test_skills_sets_partition_catalog():
+def test_skills_coverage_guard():
+    """Every main harness is standard-covered or has its own skills column."""
+    standard = {n for n, c in AGENTS.items() if c.is_standard}
+    rendered = set(skills_nonstandard_main())
+    for h in MAIN_HARNESSES:
+        assert h in standard or h in rendered, (
+            f"{h} is neither standard-covered nor a rendered skills column"
+        )
+
+
+def test_instructions_coverage_guard():
+    """Every main harness that supports the instructions kind is covered:
+    native verdict (standard column) or a rendered pointer column."""
+    from agent_toolkit_cli.instructions_matrix import instructions_matrix_rows
+
+    verdicts = {r["harness"]: r["verdict"] for r in instructions_matrix_rows()}
+    rendered = set(instructions_nonstandard_main())
+    for h in MAIN_HARNESSES:
+        verdict = verdicts.get(h, "")
+        if verdict.startswith("unsupported") or verdict.startswith("unknown"):
+            continue  # the harness can't consume the kind at all
+        assert verdict == "native" or h in rendered, (
+            f"{h} (verdict {verdict!r}) is neither native (standard) nor a "
+            f"rendered instructions column"
+        )
+
+
+def test_rendered_columns_disjoint_from_standard():
     standard = {n for n, c in AGENTS.items() if c.is_standard and c.show_in_standard_list}
-    cols = set(skills_nonstandard_big_five()) | set(skills_longtail())
-    assert cols.isdisjoint(standard)
-
-
-def test_instructions_composition_today():
-    assert instructions_nonstandard_big_five() == ("claude-code", "gemini-cli")
-    tail = instructions_longtail()
-    assert tail == tuple(sorted(tail))
-    assert set(tail) == {"augment", "codebuddy", "iflow-cli", "replit", "tabnine-cli"}
-
-
-def test_longtail_key_is_not_a_catalog_name():
-    assert LONGTAIL_KEY not in AGENTS
+    assert set(skills_nonstandard_main()).isdisjoint(standard)

@@ -57,23 +57,6 @@ def _standard_info(context: dict | None = None) -> ColumnInfo:
     )
 
 
-def _longtail_info(context: dict | None = None) -> ColumnInfo:
-    # Names arrive via context — nothing imported from composition, keeping
-    # this module kind-agnostic (#351).
-    names = tuple((context or {}).get("names", ()))
-    expanded = bool((context or {}).get("expanded", False))
-    head = "Collapsed non-standard harnesses" if not expanded else "Expanded long tail"
-    return ColumnInfo(
-        title=f"{head} ({len(names)})",
-        lines=[
-            "Press space on this column to expand/collapse in place.",
-            "Expanded columns are browsed with the arrow keys (no jump-to-column).",
-            "",
-            *[f"  • {n}" for n in names],
-        ],
-    )
-
-
 def _state_info(context: dict | None = None) -> ColumnInfo:
     # Source of truth for badge meaning: _STATE_MARKUP in
     # agent_toolkit_tui/widgets/skill_grid.py (declaration order preserved).
@@ -95,7 +78,6 @@ def _state_info(context: dict | None = None) -> ColumnInfo:
 COLUMN_INFO: dict[str, Callable[..., ColumnInfo]] = {
     "standard": _standard_info,
     "state": _state_info,
-    "longtail": _longtail_info,
 }
 
 
