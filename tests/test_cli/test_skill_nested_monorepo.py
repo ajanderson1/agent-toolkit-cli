@@ -130,8 +130,8 @@ def test_doctor_repairs_broken_nested_canonical_by_resymlinking(
     findings = skill_doctor.diagnose(
         slugs=("aj-flow",), scope="global", home=None, project=None,
     )
-    missing = [f for f in findings if f.kind == "missing_canonical"]
-    assert len(missing) == 1, [f.kind for f in findings]
+    missing = [f for f in findings if f.finding_type == "missing_canonical"]
+    assert len(missing) == 1, [f.finding_type for f in findings]
     assert missing[0].fix_action is not None
 
     missing[0].fix_action.apply()

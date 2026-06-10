@@ -2,13 +2,13 @@
 
 `mcpjam` · one row of the [compatibility matrix](../matrix.md)
 
-| Kind | Support | How |
+| Asset type | Support | How |
 |---|:-:|---|
-| [Instructions](../kinds/instructions.md) | N/A | no instruction-file concept |
-| [Skills](../kinds/skills.md) | [✅](#skills) | `.mcpjam/skills` |
-| [Agents (subagents)](../kinds/agents.md) | N/A | no subagent concept |
-| [MCP servers](../kinds/mcp.md) | — | planned kind |
-| [Pi extensions](../kinds/pi-extensions.md) | N/A | Pi-only kind |
+| [Instructions](../asset-types/instructions.md) | N/A | no instruction-file concept |
+| [Skills](../asset-types/skills.md) | [✅](#skills) | `.mcpjam/skills` |
+| [Agents (subagents)](../asset-types/agents.md) | N/A | no subagent concept |
+| [MCP servers](../asset-types/mcp.md) | — | planned asset type |
+| [Pi extensions](../asset-types/pi-extensions.md) | N/A | Pi-only asset type |
 
 ## Instructions { #instructions }
 
@@ -22,7 +22,7 @@ Not applicable — no root instruction-file concept at all.
 
 ## Skills { #skills }
 
-Supported — every harness in the catalog has a skills directory the [skills kind](../kinds/skills.md) projects into.
+Supported — every harness in the catalog has a skills directory the [skills asset type](../asset-types/skills.md) projects into.
 
 - **Project dir:** `.mcpjam/skills`
 - **Global dir:** `~/.mcpjam/skills`

@@ -12,7 +12,7 @@ from .uninstall_cmd import uninstall_cmd
 
 @click.group(help="Manage harness-aware pointers to a canonical AGENTS.md.")
 def instructions() -> None:
-    """Root for the instructions-kind verb group."""
+    """Root for the instructions-asset-type verb group."""
 
 
 instructions.add_command(install_cmd, name="install")

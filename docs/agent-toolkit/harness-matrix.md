@@ -1,22 +1,22 @@
 # Harness compatibility matrix
 
-Single source of truth for which (asset-kind × harness) pairs are supported and
+Single source of truth for which (asset type × harness) pairs are supported and
 how each is projected. Machine-read by the CLI (shipped in the wheel) and
 guarded by parity tests; the human-friendly [matrix](../matrix.md) and the
 per-harness pages are generated views of this file
-(`scripts/gen_harness_docs.py`). This doc currently covers two kinds, each in
+(`scripts/gen_harness_docs.py`). This doc currently covers two asset types, each in
 its own section below:
 
-- the **`agent` (subagent) kind** — v3.0.0 Phase A deliverable for #252
+- the **`agent` (subagent) asset type** — v3.0.0 Phase A deliverable for #252
   (v3.1.0 milestone). Parity test: `tests/test_subagent_matrix.py`.
-- the **`instructions` kind** — v3.0.0 Phase A deliverable for #269
+- the **`instructions` asset type** — v3.0.0 Phase A deliverable for #269
   (v3.0.0 milestone). Parity test: `tests/test_instructions_matrix.py`.
 
-The legacy multi-kind grid (the v1 `skill | command | hook | plugin | mcp |
+The legacy multi-asset-type grid (the v1 `skill | command | hook | plugin | mcp |
 pi-extension` table, removed in the strip-back) returns alongside the
-projection adapters as each kind lands.
+projection adapters as each asset type lands.
 
-## Mechanisms — agent (subagent) kind
+## Mechanisms — agent (subagent) asset type
 
 How an `agent` (subagent) asset is projected into a harness:
 
@@ -51,7 +51,7 @@ How an `agent` (subagent) asset is projected into a harness:
   private repo, unreleased, or unidentifiable product). Absence of evidence, not
   evidence of absence; revisit if the product publishes.
 
-## Subagent (agent kind) support — all harnesses
+## Subagent (agent asset type) support — all harnesses
 
 This table is the v3.0.0 Phase A deliverable: the `agent` (subagent) verdict for
 every harness in the catalog (`src/agent_toolkit_cli/skill_agents.py`, excluding
@@ -134,7 +134,7 @@ By mechanism: **symlink** (Claude-compatible markdown drop-in) — `augment`,
 | `windsurf` | unsupported (by design) |  |  | Cascade single-agent; parallel sessions are full agents not file-defined; AGENTS.md=context | https://docs.windsurf.com/windsurf/cascade/agents-md |
 | `zencoder` | unsupported (by design) |  |  | Zen Agents marketplace/UI-defined; no local file-drop dir | https://zencoder.ai/blog/introducing-zen-agents-mcp-library-and-marketplace |
 
-## Notes for Phase B — agent (subagent) kind
+## Notes for Phase B — agent (subagent) asset type
 
 - **Mechanism normalization:** the research fragments labelled several
   Claude-compatible markdown drop-ins as `config_file+folder`; that was the
@@ -160,9 +160,9 @@ By mechanism: **symlink** (Claude-compatible markdown drop-in) — `augment`,
   symlink into `~/.claude/agents/` may satisfy multiple harnesses — a Phase B
   optimization to weigh against per-harness slot explicitness.
 
-## Instruction-file (`instructions` kind) support — all harnesses
+## Instruction-file (`instructions` asset type) support — all harnesses
 
-This table is the **v3.0.0 Phase A deliverable** for the `instructions` kind:
+This table is the **v3.0.0 Phase A deliverable** for the `instructions` asset type:
 for every harness in the catalog, what file does the harness load by **default**
 (no flags, no config) as its root project/global instruction context, and can a
 per-harness pointer symlink to a canonical `AGENTS.md` satisfy it? It is the
@@ -172,14 +172,14 @@ pointer (e.g. `CLAUDE.md → AGENTS.md`). Guarded by
 trails live in `docs/agent-toolkit/research/instructions-fragments/`. Tracked in
 #269.
 
-### Mechanisms (instructions kind)
+### Mechanisms (instructions asset type)
 
 > **Terminology:** *standard* — formerly "general" (v3), earlier "universal" (pre-v3). The old token spellings still work for one cycle with a deprecation warning and are removed in v4.
 
-This kind has only **one action verdict**. The five-cell vocabulary is:
+This asset type has only **one action verdict**. The five-cell vocabulary is:
 
 - **native** — harness reads `AGENTS.md` by default at one or both scopes. No
-  pointer needed; this set is the per-kind "standard" column.
+  pointer needed; this set is the per-asset-type "standard" column.
 - **symlink** — harness reads a fixed own-name file by default (e.g.
   `CLAUDE.md`, `GEMINI.md`, `IFLOW.md`). Adapter creates a same-name pointer
   symlink → `AGENTS.md`.
@@ -190,14 +190,14 @@ This kind has only **one action verdict**. The five-cell vocabulary is:
 - **unknown — no public evidence found** — bounded search surfaced no default
   instruction-file convention.
 
-There is no `translate`, no `config_file`, no `dual-symlink` for this kind.
+There is no `translate`, no `config_file`, no `dual-symlink` for this asset type.
 Pointer symlinks only.
 
 **Summary (Phase A):** 39 native · 7 symlink · 4 unsupported (gap) · 2 unsupported (by design) · 2 unknown.
 
 **Symlink set (Phase B work surface, alphabetical):** `augment`, `claude-code`, `codebuddy`, `gemini-cli`, `iflow-cli`, `replit`, `tabnine-cli`.
 
-These 7 are the per-harness pointer targets the `instructions` kind will create.
+These 7 are the per-harness pointer targets the `instructions` asset type will create.
 All 39 native readers cost zero adapter work — the canonical `AGENTS.md` 
 satisfies them as-is.
 
@@ -258,7 +258,7 @@ satisfies them as-is.
 | `windsurf` | native | `AGENTS.md` | `./AGENTS.md` (project root) / Cascade memories UI + `global_rules.md` via "Manage memories" | yes |  | https://docs.windsurf.com/windsurf/cascade/agents-md |
 | `zencoder` | native | `AGENTS.md` | `./AGENTS.md` / none documented (the `.zencoder/rules/*.md` tree is a *directory* of rules, not a global `AGENTS.md`) | yes |  | Feb 2026 Zencoder changelog reports "AGENTS.md support — agent instructions are now resolved from AGENTS.md files at the CLI level" (https://docs.zencoder.ai/changelog/february-2026, surfaced via search; page returns 403 to anonymous fetch) |
 
-## Notes for Phase B — instructions kind
+## Notes for Phase B — instructions asset type
 
 - **Massively native-skewed result.** 39/54 harnesses (72%) read `AGENTS.md`
   natively at one or both scopes. The `AGENTS.md` standard has become the
@@ -280,6 +280,6 @@ satisfies them as-is.
 - **`continue` reclassified `gap`.** The spec's priors list assumed `continue`
   was unsupported; current upstream loads `.continue/rules/*.md` directories
   but no single root file → file-vs-directory rule → `gap`.
-- **Per-kind "standard" set is large.** Per the sibling spec's per-kind standard
-  model, the 39 `native` readers ARE the "standard" column for this kind —
+- **Per-asset-type "standard" set is large.** Per the sibling spec's per-asset-type standard
+  model, the 39 `native` readers ARE the "standard" column for this asset type —
   rendered in the TUI as informational (always satisfied, no toggle).

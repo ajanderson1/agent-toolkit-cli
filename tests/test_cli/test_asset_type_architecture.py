@@ -1,19 +1,20 @@
-"""Architecture guard: pin the per-kind-module design for the agent kind.
+"""Architecture guard: pin the per-asset-type-module design for the agent asset type.
 
-These tests assert that the install/lock/paths architecture is PER-KIND
-(one module per kind), NOT discriminated by a runtime `kind=` parameter.
-They lock the design decision so future refactors cannot silently drift
-back toward a single generic module with a kind discriminator.
+These tests assert that the install/lock/paths architecture is PER ASSET TYPE
+(one module per asset type), NOT discriminated by a runtime `asset_type=`
+parameter. They lock the design decision so future refactors cannot silently
+drift back toward a single generic module with an asset-type discriminator.
 
-Background (#252 "generalize install/lock/paths to a kind dimension"):
+Background (#252 "generalize install/lock/paths to an asset-type dimension"):
   The original #252 spec anticipated a single install module that accepted
-  a `kind` argument.  The project instead shipped parallel modules per kind:
+  an asset-type discriminator argument.  The project instead shipped parallel
+  modules per asset type:
     - skill_install / skill_lock / skill_paths
     - agent_install / agent_lock / agent_paths
     - instructions_install / instructions_lock / instructions_paths
     - pi_extension_install / pi_extension_lock / pi_extension_paths
   The #252 "generalize" item is obsolete — superseded four times over.
-  See docs/superpowers/plans/2026-05-30-agent-kind-pr3-5-plan.md § PR3.
+  See the 2026-05-30 agent PR3–5 plan in docs/superpowers/plans/ § PR3.
 """
 from __future__ import annotations
 
@@ -51,8 +52,8 @@ def test_agent_paths_is_a_separate_module():
     assert ap.__file__ != sp.__file__
 
 
-def test_all_four_kind_install_modules_exist():
-    """All four kinds have their own install module."""
+def test_all_four_asset_type_install_modules_exist():
+    """All four asset types have their own install module."""
     expected_modules = [
         "agent_toolkit_cli.skill_install",
         "agent_toolkit_cli.agent_install",
@@ -64,8 +65,8 @@ def test_all_four_kind_install_modules_exist():
         assert mod is not None, f"module {mod_name!r} must exist"
 
 
-def test_all_four_kind_lock_modules_exist():
-    """All four kinds have their own lock module."""
+def test_all_four_asset_type_lock_modules_exist():
+    """All four asset types have their own lock module."""
     expected_modules = [
         "agent_toolkit_cli.skill_lock",
         "agent_toolkit_cli.agent_lock",
@@ -77,8 +78,8 @@ def test_all_four_kind_lock_modules_exist():
         assert mod is not None, f"module {mod_name!r} must exist"
 
 
-def test_all_four_kind_paths_modules_exist():
-    """All four kinds have their own paths module."""
+def test_all_four_asset_type_paths_modules_exist():
+    """All four asset types have their own paths module."""
     expected_modules = [
         "agent_toolkit_cli.skill_paths",
         "agent_toolkit_cli.agent_paths",
@@ -90,16 +91,16 @@ def test_all_four_kind_paths_modules_exist():
         assert mod is not None, f"module {mod_name!r} must exist"
 
 
-# ── 2. No `kind=` parameter on agent install/uninstall entrypoints ───────────
+# ── 2. No `asset_type=` parameter on agent install/uninstall entrypoints ─────
 
 
-def test_install_is_per_kind_not_discriminated():
-    """No agent install/uninstall entrypoint accepts a `kind=` parameter.
+def test_install_is_per_asset_type_not_discriminated():
+    """No agent install/uninstall entrypoint accepts an `asset_type=` parameter.
 
-    The per-kind-module architecture means each module IS the kind — there
-    is no runtime discriminator.  If a `kind` param appears on any of these
-    functions, the architecture has drifted back toward the rejected
-    single-module-with-discriminator design.
+    The per-asset-type-module architecture means each module IS the asset
+    type — there is no runtime discriminator.  If an `asset_type` param
+    appears on any of these functions, the architecture has drifted back
+    toward the rejected single-module-with-discriminator design.
     """
     import agent_toolkit_cli.agent_install as ai
 
@@ -107,43 +108,43 @@ def test_install_is_per_kind_not_discriminated():
         fn = getattr(ai, fn_name, None)
         assert fn is not None, f"agent_install.{fn_name} must exist"
         sig = inspect.signature(fn)
-        assert "kind" not in sig.parameters, (
-            f"agent_install.{fn_name} must NOT accept a `kind=` parameter — "
-            f"the per-kind-module architecture eliminates the need for a "
-            f"runtime kind discriminator."
+        assert "asset_type" not in sig.parameters, (
+            f"agent_install.{fn_name} must NOT accept an `asset_type=` parameter — "
+            f"the per-asset-type-module architecture eliminates the need for a "
+            f"runtime asset-type discriminator."
         )
 
 
-def test_skill_install_has_no_kind_param():
-    """Symmetry check: skill_install also must not accept a `kind=` param."""
+def test_skill_install_has_no_asset_type_param():
+    """Symmetry check: skill_install also must not accept an `asset_type=` param."""
     import agent_toolkit_cli.skill_install as si
 
     for fn_name in ("plan", "apply", "install", "uninstall"):
         fn = getattr(si, fn_name, None)
         assert fn is not None, f"skill_install.{fn_name} must exist"
         sig = inspect.signature(fn)
-        assert "kind" not in sig.parameters, (
-            f"skill_install.{fn_name} must NOT accept a `kind=` parameter"
+        assert "asset_type" not in sig.parameters, (
+            f"skill_install.{fn_name} must NOT accept an `asset_type=` parameter"
         )
 
 
-# ── 3. _install_core stays kind-blind ────────────────────────────────────────
+# ── 3. _install_core stays asset-type-blind ──────────────────────────────────
 
 
-def test_install_core_plan_has_no_kind_param():
-    """_install_core.plan() is kind-blind — kind-specific logic lives in facades."""
+def test_install_core_plan_has_no_asset_type_param():
+    """_install_core.plan() is asset-type-blind — asset-type-specific logic lives in facades."""
     from agent_toolkit_cli._install_core import plan
 
     sig = inspect.signature(plan)
-    assert "kind" not in sig.parameters, (
-        "_install_core.plan() must not accept `kind=`; kind-specific binding "
-        "is done at the facade level via canonical_dir_resolver / "
+    assert "asset_type" not in sig.parameters, (
+        "_install_core.plan() must not accept `asset_type=`; asset-type-specific "
+        "binding is done at the facade level via canonical_dir_resolver / "
         "standard_bundle_link / synthetic_names / current_linked_resolver."
     )
 
 
-def test_install_core_accepts_kind_specific_overrides_via_callables():
-    """The core accepts kind-specific behaviour via injected callables, not a kind= param.
+def test_install_core_accepts_asset_type_specific_overrides_via_callables():
+    """The core accepts asset-type-specific behaviour via injected callables, not a param.
 
     The facade pattern: canonical_dir_resolver, standard_bundle_link,
     synthetic_names, and current_linked_resolver are the injection points.
@@ -161,6 +162,6 @@ def test_install_core_accepts_kind_specific_overrides_via_callables():
     missing = expected_injection_points - set(sig.parameters)
     assert not missing, (
         f"_install_core.plan() is missing facade injection points: {missing}. "
-        f"These callables let each kind facade bind kind-specific behaviour "
-        f"without a runtime `kind=` discriminator."
+        f"These callables let each asset-type facade bind asset-type-specific "
+        f"behaviour without a runtime `asset_type=` discriminator."
     )

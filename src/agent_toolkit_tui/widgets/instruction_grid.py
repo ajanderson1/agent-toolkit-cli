@@ -348,7 +348,7 @@ class InstructionGrid(Vertical):
                 r["harness"] for r in instructions_matrix_rows()
                 if r["verdict"] == "native"
             )
-            return {"kind": "instructions", "names": native}
+            return {"asset_type": "instructions", "names": native}
         return None
 
     def _rebuild(self, table: DataTable) -> None:

@@ -24,13 +24,13 @@ class ColumnInfo:
 
 
 def _standard_info(context: dict | None = None) -> ColumnInfo:
-    # Kind-agnostic via context (#351): the instruction grid reuses this
-    # registry key with its own names/kind; names default to the skills set.
+    # Asset-type-agnostic via context (#351): the instruction grid reuses this
+    # registry key with its own names/asset type; names default to the skills set.
     ctx = context or {}
-    kind = ctx.get("kind", "skills")
+    asset_type = ctx.get("asset_type", "skills")
     harness_names = tuple(ctx.get("names") or get_standard_agents())
     description = [
-        f"Covered by the standard convention for {kind} ({len(harness_names)}):",
+        f"Covered by the standard convention for {asset_type} ({len(harness_names)}):",
         "",
     ]
     bullets = [
@@ -41,7 +41,7 @@ def _standard_info(context: dict | None = None) -> ColumnInfo:
     # The 🌐 marker block is contextual AND skills-only (instructions has no
     # global-marker concept): it only makes sense when the focused row IS
     # installed globally. Omit it when the caller says otherwise.
-    show_marker = kind == "skills" and (
+    show_marker = asset_type == "skills" and (
         context is None or bool(ctx.get("global_linked", True))
     )
     indicator_note = [

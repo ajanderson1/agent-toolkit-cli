@@ -13,7 +13,7 @@ Covers:
 - apply store-owned project writes project lock
 - apply InstallError surfaces notify + footer
 - apply PiSettingsError surfaces notify + footer
-- kind sidebar lists both kinds
+- asset-type sidebar lists both asset types
 - switch-to-pi shows PiGrid
 - switch-to-skill shows SkillGrid
 - existing skill TUI tests still pass (separate file)
@@ -421,7 +421,7 @@ async def test_apply_store_owned_global(monkeypatch):
     app = TUIApp()
     async with app.run_test() as pilot:
         await pilot.pause()
-        app._active_kind = "pi-extension"
+        app._active_asset_type = "pi-extension"
         grid = app.query_one("#pi-grid", PiGrid)
         grid.set_rows([_store_row("alpha", global_loaded=False)])
         grid.restore_pending({("global", "alpha"): "link"})
@@ -475,7 +475,7 @@ async def test_apply_npm_global_and_project(monkeypatch):
     app = TUIApp()
     async with app.run_test() as pilot:
         await pilot.pause()
-        app._active_kind = "pi-extension"
+        app._active_asset_type = "pi-extension"
         grid = app.query_one("#pi-grid", PiGrid)
         grid.set_rows([_npm_row("@scope/pkg", global_loaded=False, project_loaded=True)])
         grid.restore_pending({
@@ -555,7 +555,7 @@ async def test_apply_store_owned_project_writes_lock(monkeypatch, tmp_path):
     app = TUIApp()
     async with app.run_test() as pilot:
         await pilot.pause()
-        app._active_kind = "pi-extension"
+        app._active_asset_type = "pi-extension"
         grid = app.query_one("#pi-grid", PiGrid)
         grid.set_rows([_store_row("alpha", project_loaded=False)])
         grid.restore_pending({("project", "alpha"): "link"})
@@ -612,7 +612,7 @@ async def test_apply_install_error_surfaces_notify_and_footer(monkeypatch):
             return orig_notify(*a, **k)
 
         monkeypatch.setattr(app, "notify", spy_notify)
-        app._active_kind = "pi-extension"
+        app._active_asset_type = "pi-extension"
         grid = app.query_one("#pi-grid", PiGrid)
         grid.set_rows([_store_row("alpha", global_loaded=False)])
         grid.restore_pending({("global", "alpha"): "link"})
@@ -665,7 +665,7 @@ async def test_apply_pi_settings_error_surfaces(monkeypatch):
             return orig_notify(*a, **k)
 
         monkeypatch.setattr(app, "notify", spy_notify)
-        app._active_kind = "pi-extension"
+        app._active_asset_type = "pi-extension"
         grid = app.query_one("#pi-grid", PiGrid)
         grid.set_rows([_npm_row("bad-pkg", global_loaded=False)])
         grid.restore_pending({("global", "bad-pkg"): "link"})
@@ -709,7 +709,7 @@ async def test_apply_failure_preserves_pending(monkeypatch):
     app = TUIApp()
     async with app.run_test() as pilot:
         await pilot.pause()
-        app.action_kind("pi-extension")
+        app.action_asset_type("pi-extension")
         await pilot.pause()
         grid = app.query_one("#pi-grid", PiGrid)
         grid._pending[("global", "alpha")] = "link"
@@ -749,7 +749,7 @@ async def test_apply_multi_scope_footer_is_scope_tagged(monkeypatch):
     app = TUIApp()
     async with app.run_test() as pilot:
         await pilot.pause()
-        app.action_kind("pi-extension")
+        app.action_asset_type("pi-extension")
         await pilot.pause()
         grid = app.query_one("#pi-grid", PiGrid)
         grid._pending[("global", "alpha")] = "link"
@@ -763,19 +763,19 @@ async def test_apply_multi_scope_footer_is_scope_tagged(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# Kind sidebar tests
+# Asset-type sidebar tests
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_kind_sidebar_lists_both_kinds():
+async def test_asset_type_sidebar_lists_both_asset_types():
     """The sidebar OptionList must include both 'skill' and 'pi-extension' options."""
     from agent_toolkit_tui.app import TUIApp
 
     app = TUIApp()
     async with app.run_test() as pilot:
         await pilot.pause()
-        ol = app.query_one("#kinds-list", OptionList)
+        ol = app.query_one("#asset-types-list", OptionList)
         # Get option prompts
         prompts = [str(ol.get_option_at_index(i).prompt) for i in range(ol.option_count)]
         assert "skill" in prompts
@@ -784,13 +784,13 @@ async def test_kind_sidebar_lists_both_kinds():
 
 @pytest.mark.asyncio
 async def test_switch_to_pi_shows_pi_grid():
-    """Switching to pi-extension kind makes PiGrid visible and SkillGrid hidden."""
+    """Switching to pi-extension asset type makes PiGrid visible and SkillGrid hidden."""
     from agent_toolkit_tui.app import TUIApp
 
     app = TUIApp()
     async with app.run_test() as pilot:
         await pilot.pause()
-        app.action_kind("pi-extension")
+        app.action_asset_type("pi-extension")
         await pilot.pause()
         pi_grid = app.query_one("#pi-grid", PiGrid)
         skill_grid = app.query_one("#skill-grid", SkillGrid)
@@ -800,7 +800,7 @@ async def test_switch_to_pi_shows_pi_grid():
 
 @pytest.mark.asyncio
 async def test_switch_to_skill_shows_skill_grid():
-    """Starting on skill kind: SkillGrid is visible, PiGrid is not."""
+    """Starting on the skill asset type: SkillGrid is visible, PiGrid is not."""
     from agent_toolkit_tui.app import TUIApp
 
     app = TUIApp()
@@ -821,9 +821,9 @@ async def test_switch_pi_then_back_to_skill():
     app = TUIApp()
     async with app.run_test() as pilot:
         await pilot.pause()
-        app.action_kind("pi-extension")
+        app.action_asset_type("pi-extension")
         await pilot.pause()
-        app.action_kind("skill")
+        app.action_asset_type("skill")
         await pilot.pause()
         pi_grid = app.query_one("#pi-grid", PiGrid)
         skill_grid = app.query_one("#skill-grid", SkillGrid)
@@ -833,7 +833,7 @@ async def test_switch_pi_then_back_to_skill():
 
 @pytest.mark.asyncio
 async def test_ctrl_s_routes_to_pi_apply_when_active(monkeypatch):
-    """ctrl+s dispatches to _apply_pi_pending when pi-extension kind is active."""
+    """ctrl+s dispatches to _apply_pi_pending when pi-extension asset type is active."""
     from agent_toolkit_tui.app import TUIApp
 
     called: list[str] = []
@@ -850,7 +850,7 @@ async def test_ctrl_s_routes_to_pi_apply_when_active(monkeypatch):
     app = TUIApp()
     async with app.run_test() as pilot:
         await pilot.pause()
-        app._active_kind = "pi-extension"
+        app._active_asset_type = "pi-extension"
         await pilot.press("ctrl+s")
         await pilot.pause()
 
@@ -860,7 +860,7 @@ async def test_ctrl_s_routes_to_pi_apply_when_active(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_ctrl_s_routes_to_skill_apply_when_active(monkeypatch):
-    """ctrl+s dispatches to _apply_skill_pending when skill kind is active (default)."""
+    """ctrl+s dispatches to _apply_skill_pending when skill asset type is active (default)."""
     from agent_toolkit_tui.app import TUIApp
 
     called: list[str] = []
@@ -877,7 +877,7 @@ async def test_ctrl_s_routes_to_skill_apply_when_active(monkeypatch):
     app = TUIApp()
     async with app.run_test() as pilot:
         await pilot.pause()
-        # Default kind is skill
+        # Default asset type is skill
         await pilot.press("ctrl+s")
         await pilot.pause()
 

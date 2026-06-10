@@ -13,7 +13,7 @@ def _write_skill_lock(library_root: Path, skills: dict) -> None:
     """Write a minimal skills-lock.json adjacent to *library_root*.
 
     The global lock lives at <library_root>.parent/skills-lock.json per
-    library_lock_path_for_kind in _paths_core.py.
+    library_lock_path_for_asset_type in _paths_core.py.
     """
     library_root.mkdir(parents=True, exist_ok=True)
     lock_path = library_root.parent / "skills-lock.json"

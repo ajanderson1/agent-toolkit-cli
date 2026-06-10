@@ -18,10 +18,10 @@ def test_finding_has_expected_fields():
         description="noop", shell_preview="true", apply=lambda: None,
     )
     f = Finding(
-        kind="drifted_symlink", slug="demo", scope="global",
+        finding_type="drifted_symlink", slug="demo", scope="global",
         path=Path("/tmp/x"), detail="example", fix_action=fa,
     )
-    assert f.kind == "drifted_symlink"
+    assert f.finding_type == "drifted_symlink"
     assert f.slug == "demo"
     assert f.scope == "global"
     assert f.path == Path("/tmp/x")
@@ -83,8 +83,8 @@ def test_diagnose_missing_canonical(git_sandbox, tmp_path: Path, monkeypatch):
     findings = diagnose(
         slugs=None, scope="global", home=fake_home, project=None,
     )
-    kinds = [f.kind for f in findings]
-    assert "missing_canonical" in kinds
+    finding_types = [f.finding_type for f in findings]
+    assert "missing_canonical" in finding_types
 
 
 def test_missing_canonical_fix_reclones(git_sandbox, tmp_path: Path, monkeypatch):
@@ -105,7 +105,7 @@ def test_missing_canonical_fix_reclones(git_sandbox, tmp_path: Path, monkeypatch
     findings = diagnose(
         slugs=None, scope="global", home=fake_home, project=None,
     )
-    f = next(f for f in findings if f.kind == "missing_canonical")
+    f = next(f for f in findings if f.finding_type == "missing_canonical")
     assert f.fix_action is not None
     f.fix_action.apply()
     assert (library_root / "demo" / "SKILL.md").exists()
@@ -197,7 +197,7 @@ def test_diagnose_drifted_symlink_global(git_sandbox, tmp_path: Path, monkeypatc
     findings = diagnose(
         slugs=None, scope="global", home=fake_home, project=None,
     )
-    drift = [f for f in findings if f.kind == "drifted_symlink"]
+    drift = [f for f in findings if f.finding_type == "drifted_symlink"]
     assert len(drift) == 1
     assert drift[0].path == stale
 
@@ -212,7 +212,7 @@ def test_drifted_symlink_fix_relinks(git_sandbox, tmp_path: Path, monkeypatch):
         f for f in diagnose(
             slugs=None, scope="global", home=fake_home, project=None,
         )
-        if f.kind == "drifted_symlink"
+        if f.finding_type == "drifted_symlink"
     )
     f.fix_action.apply()
     assert stale.is_symlink()
@@ -244,7 +244,7 @@ def test_diagnose_wrong_type_bundle_global(git_sandbox, tmp_path: Path, monkeypa
     findings = diagnose(
         slugs=None, scope="global", home=fake_home, project=None,
     )
-    wrong = [f for f in findings if f.kind == "wrong_type_bundle"]
+    wrong = [f for f in findings if f.finding_type == "wrong_type_bundle"]
     assert len(wrong) == 1
     assert wrong[0].path == bundle
 
@@ -272,7 +272,7 @@ def test_wrong_type_bundle_fix_moves_and_relinks(
         f for f in diagnose(
             slugs=None, scope="global", home=fake_home, project=None,
         )
-        if f.kind == "wrong_type_bundle"
+        if f.finding_type == "wrong_type_bundle"
     )
     f.fix_action.apply()
 
@@ -310,7 +310,7 @@ def test_diagnose_orphan_symlink(git_sandbox, tmp_path: Path, monkeypatch):
     findings = diagnose(
         slugs=None, scope="global", home=fake_home, project=None,
     )
-    orphans = [f for f in findings if f.kind == "orphan_symlink"]
+    orphans = [f for f in findings if f.finding_type == "orphan_symlink"]
     assert len(orphans) == 1
 
 
@@ -338,7 +338,7 @@ def test_orphan_symlink_fix_unlinks(git_sandbox, tmp_path: Path, monkeypatch):
         f for f in diagnose(
             slugs=None, scope="global", home=fake_home, project=None,
         )
-        if f.kind == "orphan_symlink"
+        if f.finding_type == "orphan_symlink"
     )
     f.fix_action.apply()
     assert not broken.is_symlink()
@@ -379,7 +379,7 @@ def test_diagnose_foreign_symlink_report_only(
     findings = diagnose(
         slugs=None, scope="global", home=fake_home, project=None,
     )
-    foreign_findings = [f for f in findings if f.kind == "foreign_symlink"]
+    foreign_findings = [f for f in findings if f.finding_type == "foreign_symlink"]
     assert len(foreign_findings) == 1
     # Report-only by default.
     assert foreign_findings[0].fix_action is None
@@ -414,7 +414,7 @@ def test_diagnose_foreign_symlink_repair_foreign(
         slugs=None, scope="global", home=fake_home, project=None,
         repair_foreign=True,
     )
-    f = next(f for f in findings if f.kind == "foreign_symlink")
+    f = next(f for f in findings if f.finding_type == "foreign_symlink")
     assert f.fix_action is not None
     f.fix_action.apply()
     assert not link.is_symlink()
@@ -439,7 +439,7 @@ def test_diagnose_dirty_tree(git_sandbox, tmp_path: Path, monkeypatch):
     findings = diagnose(
         slugs=None, scope="global", home=fake_home, project=None,
     )
-    dirty = [f for f in findings if f.kind == "dirty_tree"]
+    dirty = [f for f in findings if f.finding_type == "dirty_tree"]
     assert len(dirty) == 1
     # Report-only.
     assert dirty[0].fix_action is None
@@ -480,9 +480,9 @@ def test_diagnose_v21_bundle_target_is_drift(
     findings = diagnose(
         slugs=None, scope="global", home=fake_home, project=None,
     )
-    drift = [f for f in findings if f.kind == "drifted_symlink" and f.path == link]
-    foreign = [f for f in findings if f.kind == "foreign_symlink" and f.path == link]
-    assert len(drift) == 1, [f.kind for f in findings]
+    drift = [f for f in findings if f.finding_type == "drifted_symlink" and f.path == link]
+    foreign = [f for f in findings if f.finding_type == "foreign_symlink" and f.path == link]
+    assert len(drift) == 1, [f.finding_type for f in findings]
     assert len(foreign) == 0
     # Fix action present and idempotent: relinks at library canonical.
     assert drift[0].fix_action is not None
@@ -522,7 +522,7 @@ def test_diagnose_lock_source_mismatch(git_sandbox, tmp_path: Path, monkeypatch)
     findings = diagnose(
         slugs=None, scope="global", home=fake_home, project=None,
     )
-    mismatch = [f for f in findings if f.kind == "lock_source_mismatch"]
+    mismatch = [f for f in findings if f.finding_type == "lock_source_mismatch"]
     assert len(mismatch) == 1
     assert mismatch[0].fix_action is None
 
@@ -598,7 +598,7 @@ def test_diagnose_stray_symlink_global(git_sandbox, tmp_path: Path, monkeypatch)
     findings = diagnose(
         slugs=None, scope="global", home=fake_home, project=None,
     )
-    strays = [f for f in findings if f.kind == "stray_symlink"]
+    strays = [f for f in findings if f.finding_type == "stray_symlink"]
     assert len(strays) == 1
     assert strays[0].slug == "old-slug"
     assert strays[0].path == stray
@@ -632,7 +632,7 @@ def test_stray_symlink_fix_unlinks(git_sandbox, tmp_path: Path, monkeypatch):
         f for f in diagnose(
             slugs=None, scope="global", home=fake_home, project=None,
         )
-        if f.kind == "stray_symlink"
+        if f.finding_type == "stray_symlink"
     )
     f.fix_action.apply()
     assert not stray.is_symlink()
@@ -669,7 +669,7 @@ def test_stray_scan_skipped_when_slugs_provided(
     findings = diagnose(
         slugs=("demo",), scope="global", home=fake_home, project=None,
     )
-    assert not any(f.kind == "stray_symlink" for f in findings)
+    assert not any(f.finding_type == "stray_symlink" for f in findings)
 
 
 def test_diagnose_stray_symlink_project(git_sandbox, tmp_path: Path, monkeypatch):
@@ -697,7 +697,7 @@ def test_diagnose_stray_symlink_project(git_sandbox, tmp_path: Path, monkeypatch
     findings = diagnose(
         slugs=None, scope="project", home=None, project=project,
     )
-    strays = [f for f in findings if f.kind == "stray_symlink"]
+    strays = [f for f in findings if f.finding_type == "stray_symlink"]
     assert any(f.slug == "aj-workflow" and f.path == stray for f in strays)
 
 
@@ -735,8 +735,8 @@ def test_diagnose_stray_bundle_dir_global(tmp_path: Path, monkeypatch):
     (ghost / "SKILL.md").write_text("# ghost\n")
     from agent_toolkit_cli.skill_doctor import diagnose
     findings = diagnose(slugs=None, scope="global", home=fake_home, project=None)
-    strays = [f for f in findings if f.kind == "stray_bundle_dir"]
-    assert len(strays) == 1, [f.kind for f in findings]
+    strays = [f for f in findings if f.finding_type == "stray_bundle_dir"]
+    assert len(strays) == 1, [f.finding_type for f in findings]
     assert strays[0].slug == "ghost"
     assert strays[0].path == ghost
     assert strays[0].fix_action is not None
@@ -750,7 +750,7 @@ def test_stray_bundle_dir_fix_moves_to_bak(tmp_path: Path, monkeypatch):
     (ghost / "SKILL.md").write_text("# ghost\n")
     from agent_toolkit_cli.skill_doctor import diagnose
     findings = diagnose(slugs=None, scope="global", home=fake_home, project=None)
-    stray = next(f for f in findings if f.kind == "stray_bundle_dir")
+    stray = next(f for f in findings if f.finding_type == "stray_bundle_dir")
     stray.fix_action.apply()
     assert not ghost.exists(), "original stray dir must be moved away"
     baks = list((fake_home / ".agents" / "skills").glob("ghost.bak-doctor-*"))
@@ -769,7 +769,7 @@ def test_stray_bundle_dir_skips_symlink(tmp_path: Path, monkeypatch):
     (bundle_root / "linked").symlink_to(target)
     from agent_toolkit_cli.skill_doctor import diagnose
     findings = diagnose(slugs=None, scope="global", home=fake_home, project=None)
-    assert not [f for f in findings if f.kind == "stray_bundle_dir"]
+    assert not [f for f in findings if f.finding_type == "stray_bundle_dir"]
 
 
 def test_diagnose_bak_doctor_dirs_offered_for_cleanup(tmp_path: Path, monkeypatch):
@@ -780,7 +780,7 @@ def test_diagnose_bak_doctor_dirs_offered_for_cleanup(tmp_path: Path, monkeypatc
     from agent_toolkit_cli.skill_doctor import diagnose
     findings = diagnose(slugs=None, scope="global", home=fake_home, project=None)
     bak_findings = [f for f in findings if f.path == bak]
-    assert len(bak_findings) == 1, [f.kind for f in findings]
+    assert len(bak_findings) == 1, [f.finding_type for f in findings]
     bak_findings[0].fix_action.apply()
     assert not bak.exists(), "leftover backup must be removable by the fix"
 
@@ -809,5 +809,5 @@ def test_stray_bundle_dir_skips_known_slug(git_sandbox, tmp_path: Path, monkeypa
     demo_bundle.mkdir(parents=True)
     from agent_toolkit_cli.skill_doctor import diagnose
     findings = diagnose(slugs=None, scope="global", home=fake_home, project=None)
-    assert not [f for f in findings if f.kind == "stray_bundle_dir"], \
+    assert not [f for f in findings if f.finding_type == "stray_bundle_dir"], \
         "in-lock real dir must not be reported as stray_bundle_dir"

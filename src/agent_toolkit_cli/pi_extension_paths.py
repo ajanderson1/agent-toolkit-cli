@@ -1,5 +1,5 @@
-"""Path facade for the pi-extension kind. Binds PI_EXTENSION_BINDING to the
-kind-agnostic helpers in _paths_core, and owns the Pi-specific projection
+"""Path facade for the pi-extension asset type. Binds PI_EXTENSION_BINDING to the
+asset-type-agnostic helpers in _paths_core, and owns the Pi-specific projection
 dirs (~/.pi/agent/extensions and <project>/.pi/extensions). Mirrors
 agent_paths.py / skill_paths.py. Pi-only: there is no per-harness fan-out."""
 from __future__ import annotations
@@ -9,11 +9,11 @@ from typing import Literal
 
 from agent_toolkit_cli._paths_core import (
     PI_EXTENSION_BINDING,
-    library_lock_path_for_kind,
-    library_root_for_kind,
+    library_lock_path_for_asset_type,
+    library_root_for_asset_type,
 )
 
-# Reuse the kind-agnostic project-store helpers verbatim.
+# Reuse the asset-type-agnostic project-store helpers verbatim.
 from agent_toolkit_cli.skill_paths import (
     parent_clone_path,
     project_id,
@@ -43,7 +43,7 @@ __all__ = [
 
 
 def library_root(env: dict[str, str] | None = None) -> Path:
-    return library_root_for_kind(PI_EXTENSION_BINDING, env)
+    return library_root_for_asset_type(PI_EXTENSION_BINDING, env)
 
 
 def library_pi_extension_path(slug: str, *, env: dict[str, str] | None = None) -> Path:
@@ -51,7 +51,7 @@ def library_pi_extension_path(slug: str, *, env: dict[str, str] | None = None) -
 
 
 def library_lock_path(env: dict[str, str] | None = None) -> Path:
-    return library_lock_path_for_kind(PI_EXTENSION_BINDING, env)
+    return library_lock_path_for_asset_type(PI_EXTENSION_BINDING, env)
 
 
 def canonical_pi_extension_dir(

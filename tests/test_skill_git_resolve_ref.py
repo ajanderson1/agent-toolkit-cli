@@ -1,9 +1,9 @@
 """Unit tests for the default-branch detection that the `*.ref or "main"`
 fix relies on.
 
-`resolve_ref` / `default_branch` are kind-agnostic — every asset kind (skill,
+`resolve_ref` / `default_branch` are asset-type-agnostic — every asset type (skill,
 agent, pi_extension) routes its ref resolution through them, so covering them
-here covers the master-default fix for all kinds without duplicating each CLI
+here covers the master-default fix for all asset types without duplicating each CLI
 round-trip. The regression these guard: a `master`-default upstream (e.g.
 upstash/context7) used to merge against the nonexistent `origin/main`.
 """

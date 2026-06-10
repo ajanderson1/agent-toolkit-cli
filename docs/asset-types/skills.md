@@ -1,6 +1,6 @@
 # Skills
 
-The `skill` [kind](../glossary.md#kind) manages reusable skill folders (a
+The `skill` [asset type](../glossary.md#asset-type) manages reusable skill folders (a
 `SKILL.md` plus supporting files) and projects them into every harness you
 use. The lock file and layout are byte-compatible with
 [`vercel-labs/skills`](https://github.com/vercel-labs/skills).

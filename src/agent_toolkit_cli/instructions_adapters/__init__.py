@@ -1,8 +1,8 @@
-"""Adapter dispatcher for the instructions kind.
+"""Adapter dispatcher for the instructions asset type.
 
 Only one mechanism exists (`symlink`), so the dispatcher is trivially thin —
 get_adapter(harness) just delegates to symlink.adapter_for(harness).
-Kept as a layer for symmetry with the agent kind's mechanism-dispatcher
+Kept as a layer for symmetry with the agent asset type's mechanism-dispatcher
 (which has 3 mechanisms) and to give a clean import boundary for the CLI.
 """
 from __future__ import annotations

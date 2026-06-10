@@ -1,7 +1,7 @@
 """Data model for the TUI's instruction tab.
 
 Reads the instructions lock + filesystem to produce InstructionRow records with
-per-harness cell state. Mirrors agent_state.py for the instruction kind.
+per-harness cell state. Mirrors agent_state.py for the instruction asset type.
 
 Key differences from agent_state:
 - Manages pointer symlinks to a canonical AGENTS.md file, not copies.

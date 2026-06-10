@@ -2,17 +2,17 @@
 
 `tabnine-cli` · one row of the [compatibility matrix](../matrix.md)
 
-| Kind | Support | How |
+| Asset type | Support | How |
 |---|:-:|---|
-| [Instructions](../kinds/instructions.md) | [✅](#instructions) | pointer symlink (`TABNINE.md` → `AGENTS.md`) |
-| [Skills](../kinds/skills.md) | [✅](#skills) | `.tabnine/agent/skills` |
-| [Agents (subagents)](../kinds/agents.md) | N/A | no subagent concept |
-| [MCP servers](../kinds/mcp.md) | — | planned kind |
-| [Pi extensions](../kinds/pi-extensions.md) | N/A | Pi-only kind |
+| [Instructions](../asset-types/instructions.md) | [✅](#instructions) | pointer symlink (`TABNINE.md` → `AGENTS.md`) |
+| [Skills](../asset-types/skills.md) | [✅](#skills) | `.tabnine/agent/skills` |
+| [Agents (subagents)](../asset-types/agents.md) | N/A | no subagent concept |
+| [MCP servers](../asset-types/mcp.md) | — | planned asset type |
+| [Pi extensions](../asset-types/pi-extensions.md) | N/A | Pi-only asset type |
 
 ## Instructions { #instructions }
 
-Reads a fixed own-name file (`TABNINE.md`) instead of `AGENTS.md`. The [instructions kind](../kinds/instructions.md) creates a same-name pointer symlink → `AGENTS.md`.
+Reads a fixed own-name file (`TABNINE.md`) instead of `AGENTS.md`. The [instructions asset type](../asset-types/instructions.md) creates a same-name pointer symlink → `AGENTS.md`.
 
 - **Verdict:** symlink
 - **Default file:** `TABNINE.md`
@@ -22,7 +22,7 @@ Reads a fixed own-name file (`TABNINE.md`) instead of `AGENTS.md`. The [instruct
 
 ## Skills { #skills }
 
-Supported — every harness in the catalog has a skills directory the [skills kind](../kinds/skills.md) projects into.
+Supported — every harness in the catalog has a skills directory the [skills asset type](../asset-types/skills.md) projects into.
 
 - **Project dir:** `.tabnine/agent/skills`
 - **Global dir:** `~/.tabnine/agent/skills`

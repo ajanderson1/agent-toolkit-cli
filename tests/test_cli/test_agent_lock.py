@@ -1,4 +1,4 @@
-"""agent_lock.py facade — re-exports kind-blind lock primitives from skill_lock.
+"""agent_lock.py facade — re-exports asset-type-blind lock primitives from skill_lock.
 
 Per spec correction B, no behavioural divergence in PR2 — LockEntry has
 agent_path as a real field (Task 2), and the format is the same.
@@ -40,7 +40,7 @@ def test_agent_lock_round_trip_with_agent_path(tmp_path):
     )
 
     lock_path = tmp_path / "agents-lock.json"
-    # `skills` is the kind-blind entries-by-slug dict (per PR2 spec Correction B);
+    # `skills` is the asset-type-blind entries-by-slug dict (per PR2 spec Correction B);
     # the same struct holds both skill and agent entries — distinguished by
     # which `*_path` field is populated on each LockEntry.
     lock = LockFile(version=1, skills={})

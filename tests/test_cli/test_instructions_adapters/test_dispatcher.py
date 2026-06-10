@@ -14,7 +14,7 @@ from agent_toolkit_cli.instructions_adapters.symlink import (
 )
 
 _DOC = Path(__file__).resolve().parents[3] / "docs/agent-toolkit/harness-matrix.md"
-_SECTION_HEADING = "## Instruction-file (`instructions` kind) support — all harnesses"
+_SECTION_HEADING = "## Instruction-file (`instructions` asset type) support — all harnesses"
 _ROW_RE = re.compile(
     r"^\|\s*`(?P<harness>[a-z][a-z0-9-]*)`\s*\|"
     r"(?P<verdict>[^|]+)\|"

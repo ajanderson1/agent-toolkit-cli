@@ -2,13 +2,13 @@
 
 `codearts-agent` · one row of the [compatibility matrix](../matrix.md)
 
-| Kind | Support | How |
+| Asset type | Support | How |
 |---|:-:|---|
-| [Instructions](../kinds/instructions.md) | [?](#instructions) | no public evidence |
-| [Skills](../kinds/skills.md) | [✅](#skills) | `.codeartsdoer/skills` |
-| [Agents (subagents)](../kinds/agents.md) | [?](#agents) | no public evidence |
-| [MCP servers](../kinds/mcp.md) | — | planned kind |
-| [Pi extensions](../kinds/pi-extensions.md) | N/A | Pi-only kind |
+| [Instructions](../asset-types/instructions.md) | [?](#instructions) | no public evidence |
+| [Skills](../asset-types/skills.md) | [✅](#skills) | `.codeartsdoer/skills` |
+| [Agents (subagents)](../asset-types/agents.md) | [?](#agents) | no public evidence |
+| [MCP servers](../asset-types/mcp.md) | — | planned asset type |
+| [Pi extensions](../asset-types/pi-extensions.md) | N/A | Pi-only asset type |
 
 ## Instructions { #instructions }
 
@@ -22,7 +22,7 @@ Unknown — bounded search surfaced no public evidence.
 
 ## Skills { #skills }
 
-Supported — every harness in the catalog has a skills directory the [skills kind](../kinds/skills.md) projects into.
+Supported — every harness in the catalog has a skills directory the [skills asset type](../asset-types/skills.md) projects into.
 
 - **Project dir:** `.codeartsdoer/skills`
 - **Global dir:** `~/.codeartsdoer/skills`

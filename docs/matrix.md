@@ -1,7 +1,7 @@
 # Compatibility matrix
 
-One row per harness, one column per asset [kind](glossary.md#kind). Every
-harness links to its own page with per-kind detail; every tick links straight
+One row per harness, one column per [asset type](glossary.md#asset-type). Every
+harness links to its own page with per-asset-type detail; every tick links straight
 to the relevant section. The main harnesses are pinned at the top — expand the
 row beneath them for the rest, alphabetically. Derived from the machine-read
 [SSOT](glossary.md#ssot) ([`harness-matrix.md`](agent-toolkit/harness-matrix.md))
@@ -11,12 +11,12 @@ this page by hand.
 **Legend:** ✅ supported by the harness and the toolkit ·
 — gap (the harness supports it; the toolkit hasn't implemented it yet) ·
 N/A — the harness has no such concept ·
-? unknown (no public evidence of how the harness handles this kind)
+? unknown (no public evidence of how the harness handles this asset type)
 
 <div class="harness-matrix" markdown>
 <table markdown>
 <thead markdown>
-<tr markdown><th markdown>Harness</th><th markdown>[Instructions](kinds/instructions.md)</th><th markdown>[Skills](kinds/skills.md)</th><th markdown>[Agents](kinds/agents.md)</th><th markdown>[MCP](kinds/mcp.md)</th><th markdown>[Pi extensions](kinds/pi-extensions.md)</th></tr>
+<tr markdown><th markdown>Harness</th><th markdown>[Instructions](asset-types/instructions.md)</th><th markdown>[Skills](asset-types/skills.md)</th><th markdown>[Agents](asset-types/agents.md)</th><th markdown>[MCP](asset-types/mcp.md)</th><th markdown>[Pi extensions](asset-types/pi-extensions.md)</th></tr>
 </thead>
 <tbody markdown>
 <tr markdown><td markdown>[Claude Code](harnesses/claude-code.md)</td><td markdown>[✅](harnesses/claude-code.md#instructions)</td><td markdown>[✅](harnesses/claude-code.md#skills)</td><td markdown>[✅](harnesses/claude-code.md#agents)</td><td markdown>—</td><td markdown>N/A</td></tr>
@@ -82,13 +82,13 @@ N/A — the harness has no such concept ·
 </table>
 </div>
 
-## The kinds
+## The asset types
 
-- **[Instructions](kinds/instructions.md)** — one canonical `AGENTS.md`,
+- **[Instructions](asset-types/instructions.md)** — one canonical `AGENTS.md`,
   pointer symlinks for harnesses that read an own-name file.
-- **[Skills](kinds/skills.md)** — `SKILL.md` folders projected into each
+- **[Skills](asset-types/skills.md)** — `SKILL.md` folders projected into each
   harness's skills directory.
-- **[Agents (subagents)](kinds/agents.md)** — subagent definitions projected
+- **[Agents (subagents)](asset-types/agents.md)** — subagent definitions projected
   per-harness (symlink, translate, or registry mechanisms).
-- **[MCP servers](kinds/mcp.md)** — placeholder; not yet a managed kind.
-- **[Pi extensions](kinds/pi-extensions.md)** — Pi-only extension packages.
+- **[MCP servers](asset-types/mcp.md)** — placeholder; not yet a managed asset type.
+- **[Pi extensions](asset-types/pi-extensions.md)** — Pi-only extension packages.

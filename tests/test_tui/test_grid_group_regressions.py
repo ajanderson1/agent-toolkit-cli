@@ -1,6 +1,6 @@
 """#351 must not touch the agents and pi-extensions grids.
 
-The agents kind has no standard projection today (standard-agent is
+The agents asset type has no standard projection today (standard-agent is
 synthetic, mechanism="none") and pi-extensions has no standard concept —
 neither grid gets group tags, a pseudo-column, or a two-line header.
 """

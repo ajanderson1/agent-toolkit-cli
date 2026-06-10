@@ -1,7 +1,7 @@
-"""Parity test for the all-harness instruction-file (instructions kind) support table.
+"""Parity test for the all-harness instruction-file (instructions asset type) support table.
 
 The table lives in docs/agent-toolkit/harness-matrix.md under the heading
-"## Instruction-file (`instructions` kind) support — all harnesses". Every
+"## Instruction-file (`instructions` asset type) support — all harnesses". Every
 harness in the catalog (agent_toolkit_cli.skill_agents, excluding the synthetic
 `universal`, `standard-skill`, and `standard-agent` entries) must appear exactly
 once with a recognised verdict.
@@ -24,8 +24,8 @@ from agent_toolkit_cli import skill_agents
 _REPO_ROOT = Path(__file__).parent.parent
 _DOC_PATH = _REPO_ROOT / "docs" / "agent-toolkit" / "harness-matrix.md"
 
-# The 5 verdict keywords the instructions kind uses. Smaller vocabulary than
-# the subagent kind — pointers are the only action.
+# The 5 verdict keywords the instructions asset type uses. Smaller vocabulary than
+# the subagent asset type — pointers are the only action.
 _VERDICTS = (
     "native",
     "symlink",
@@ -35,7 +35,7 @@ _VERDICTS = (
 )
 
 # Section heading that contains the 54-row table.
-_SECTION_HEADING = "## Instruction-file (`instructions` kind) support — all harnesses"
+_SECTION_HEADING = "## Instruction-file (`instructions` asset type) support — all harnesses"
 
 # Row shape: | `<harness>` | <verdict> | <default> | <paths> | <native?> | <mechanism> | <citation> |
 _ROW_RE = re.compile(
@@ -54,7 +54,7 @@ def _catalog_harnesses() -> set[str]:
 
     Mirrors `test_subagent_matrix._catalog_harnesses` — both tables index the
     same catalog and exclude the same synthetics. `standard-agent` is the
-    agent-kind synthetic added in PR2 of #252; it resolves to a convergence
+    agent-asset-type synthetic added in PR2 of #252; it resolves to a convergence
     path and is not an instruction-file harness, so it is excluded here too.
     """
     return set(skill_agents.AGENTS) - {"standard", "standard-skill", "standard-agent"}
@@ -89,7 +89,7 @@ def rows() -> dict[str, dict[str, str]]:
     assert _DOC_PATH.exists(), f"{_DOC_PATH} not found"
     parsed = _parse_section()
     assert parsed, (
-        f"No rows parsed under '{_SECTION_HEADING}'. The instructions-kind "
+        f"No rows parsed under '{_SECTION_HEADING}'. The instructions-asset-type "
         "Phase A table must be assembled before this test can pass."
     )
     return parsed
@@ -106,7 +106,7 @@ def test_all_catalog_harnesses_present(rows):
 
 
 def test_every_verdict_recognised(rows):
-    """Each row's verdict cell must start with a known instructions-kind verdict."""
+    """Each row's verdict cell must start with a known instructions-asset-type verdict."""
     bad = {
         h: r["verdict"]
         for h, r in rows.items()
@@ -132,7 +132,7 @@ def test_symlink_rows_have_default_paths_citation(rows):
 
 def test_symlink_rows_declare_symlink_mechanism(rows):
     """Symlink-verdict rows must carry mechanism='symlink' (the one action
-    keyword for this kind). Non-symlink rows must leave the mechanism cell
+    keyword for this asset type). Non-symlink rows must leave the mechanism cell
     blank — there is no `translate`/`config_file` for instructions."""
     bad_symlink = {
         h: r["mechanism"]

@@ -1,5 +1,5 @@
 """Build the unified pi-extension inventory (spec §5): one record per
-extension Pi could load, across three surfaces — the kind lock
+extension Pi could load, across three surfaces — the asset-type lock
 (store-owned + tracked npm), loose entries in Pi's extensions/ dir
 (untracked), and packages[] in settings.json (npm). Origin is a field,
 not a gate. Read-only; PR2 adds projection/state."""

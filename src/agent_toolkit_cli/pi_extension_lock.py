@@ -1,6 +1,6 @@
-"""Kind-aligned re-export of the kind-blind lock primitives for the
-pi-extension kind. Behaviourally identical to `skill_lock`; exists so
-pi-extension call sites read from a kind-named module (mirrors agent_lock)."""
+"""Asset-type-aligned re-export of the asset-type-blind lock primitives for the
+pi-extension asset type. Behaviourally identical to `skill_lock`; exists so
+pi-extension call sites read from a asset-type-named module (mirrors agent_lock)."""
 from __future__ import annotations
 
 from agent_toolkit_cli.skill_lock import (

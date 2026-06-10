@@ -53,7 +53,7 @@ async def test_columns_are_standard_plus_noncovered_main():
 async def test_press_i_on_standard_column_opens_registry_modal():
     """The inline coord.column==1 branch is replaced by the registry path:
     `i` on the standard column opens ColumnInfoModal with the exhaustive
-    native list (kind-aware via context)."""
+    native list (asset-type-aware via context)."""
     from agent_toolkit_tui.widgets.column_info_modal import ColumnInfoModal
 
     app = _GridApp()

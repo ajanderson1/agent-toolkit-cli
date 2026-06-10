@@ -1,4 +1,4 @@
-"""Harness-matrix parser for the instructions kind (moved from
+"""Harness-matrix parser for the instructions asset type (moved from
 commands/instructions/list_cmd.py for reuse by the TUI's standard-coverage
 panel, #351 — list_cmd imports it back).
 
@@ -19,7 +19,7 @@ from pathlib import Path
 _DATA_PACKAGE = "agent_toolkit_cli.data"
 _MATRIX_FILENAME = "harness-matrix.md"
 _SOURCE_TREE_MATRIX = Path(__file__).resolve().parents[2] / "docs/agent-toolkit/harness-matrix.md"
-_SECTION_HEADING = "## Instruction-file (`instructions` kind) support — all harnesses"
+_SECTION_HEADING = "## Instruction-file (`instructions` asset type) support — all harnesses"
 _ROW_RE = re.compile(
     r"^\|\s*`(?P<harness>[a-z][a-z0-9-]*)`\s*\|"
     r"(?P<verdict>[^|]+)\|"
@@ -52,7 +52,7 @@ def _read_matrix_text() -> str:
 
 
 def instructions_matrix_rows() -> list[dict[str, str]]:
-    """Parse the instructions-kind section into per-harness verdict rows."""
+    """Parse the instructions-asset-type section into per-harness verdict rows."""
     text = _read_matrix_text()
     section = text.split(_SECTION_HEADING, 1)[1]
     section = re.split(r"^## ", section, maxsplit=1, flags=re.MULTILINE)[0]

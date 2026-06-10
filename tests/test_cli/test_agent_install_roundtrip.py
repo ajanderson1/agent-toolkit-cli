@@ -3,7 +3,7 @@
 Two regressions are guarded here:
 
 1. PR #268 (orphaned projections): agent_install.uninstall() relied on the
-   skill-centric scan which always returned () for the agent kind, so projected
+   skill-centric scan which always returned () for the agent asset type, so projected
    real files were ORPHANED. Fixed by removing each requested harness's real
    file via its own adapter. The "projection GONE after uninstall" assertions
    below guard this.

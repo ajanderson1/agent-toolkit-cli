@@ -2,17 +2,17 @@
 
 `forgecode` · one row of the [compatibility matrix](../matrix.md)
 
-| Kind | Support | How |
+| Asset type | Support | How |
 |---|:-:|---|
-| [Instructions](../kinds/instructions.md) | [✅](#instructions) | native `AGENTS.md` reader |
-| [Skills](../kinds/skills.md) | [✅](#skills) | `.forge/skills` |
-| [Agents (subagents)](../kinds/agents.md) | [✅](#agents) | symlink |
-| [MCP servers](../kinds/mcp.md) | — | planned kind |
-| [Pi extensions](../kinds/pi-extensions.md) | N/A | Pi-only kind |
+| [Instructions](../asset-types/instructions.md) | [✅](#instructions) | native `AGENTS.md` reader |
+| [Skills](../asset-types/skills.md) | [✅](#skills) | `.forge/skills` |
+| [Agents (subagents)](../asset-types/agents.md) | [✅](#agents) | symlink |
+| [MCP servers](../asset-types/mcp.md) | — | planned asset type |
+| [Pi extensions](../asset-types/pi-extensions.md) | N/A | Pi-only asset type |
 
 ## Instructions { #instructions }
 
-Reads the canonical `AGENTS.md` natively — no pointer needed; the [instructions kind](../kinds/instructions.md) is satisfied as-is.
+Reads the canonical `AGENTS.md` natively — no pointer needed; the [instructions asset type](../asset-types/instructions.md) is satisfied as-is.
 
 - **Verdict:** native
 - **Default file:** `AGENTS.md`
@@ -22,7 +22,7 @@ Reads the canonical `AGENTS.md` natively — no pointer needed; the [instruction
 
 ## Skills { #skills }
 
-Supported — every harness in the catalog has a skills directory the [skills kind](../kinds/skills.md) projects into.
+Supported — every harness in the catalog has a skills directory the [skills asset type](../asset-types/skills.md) projects into.
 
 - **Project dir:** `.forge/skills`
 - **Global dir:** `~/.forge/skills`
@@ -31,7 +31,7 @@ Supported — every harness in the catalog has a skills directory the [skills ki
 
 ## Agents (subagents) { #agents }
 
-Supported via the **symlink** mechanism — see the [agents kind](../kinds/agents.md) for what each mechanism means.
+Supported via the **symlink** mechanism — see the [agents asset type](../asset-types/agents.md) for what each mechanism means.
 
 - **Mechanism:** symlink
 - **User / project path:** `~/.forge/agents/<slug>.md` (legacy `~/forge/agents/`) / `.forge/agents/<slug>.md`

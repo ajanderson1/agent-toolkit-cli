@@ -1,4 +1,4 @@
-"""Per-harness symlink adapter for the instructions kind.
+"""Per-harness symlink adapter for the instructions asset type.
 
 Drops a same-name pointer symlink (CLAUDE.md, GEMINI.md, etc.) at each
 harness's expected path, pointing at the canonical AGENTS.md.

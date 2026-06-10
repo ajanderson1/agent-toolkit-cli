@@ -38,7 +38,7 @@ from agent_toolkit_cli.pi_extension_paths import (
 )
 
 
-FindingKind = Literal[
+FindingType = Literal[
     "missing_canonical",
     "drifted_symlink",
     "stray_symlink",
@@ -57,7 +57,7 @@ class FixAction:
 
 @dataclass(frozen=True)
 class Finding:
-    kind: FindingKind
+    finding_type: FindingType
     slug: str
     scope: Scope
     path: Path
@@ -126,7 +126,7 @@ def _check_slug(
         canonical = library_pi_extension_path(slug)
         if not canonical.exists():
             findings.append(Finding(
-                kind="missing_canonical", slug=slug, scope=scope,
+                finding_type="missing_canonical", slug=slug, scope=scope,
                 path=canonical,
                 detail=(
                     f"lock has '{slug}' but store copy is gone. "
@@ -141,7 +141,7 @@ def _check_slug(
         if skill_git.is_git_repo(canonical):
             if skill_git.status(canonical, env=None) == skill_git.GitWorkingTreeStatus.DIRTY:
                 findings.append(Finding(
-                    kind="dirty_tree", slug=slug, scope=scope,
+                    finding_type="dirty_tree", slug=slug, scope=scope,
                     path=canonical,
                     detail=f"working tree at {canonical} has uncommitted changes",
                     fix_action=None,
@@ -160,7 +160,7 @@ def _check_slug(
         target = link.resolve()
         if target != canonical_path.resolve():
             findings.append(Finding(
-                kind="drifted_symlink", slug=slug, scope=scope,
+                finding_type="drifted_symlink", slug=slug, scope=scope,
                 path=link,
                 detail=(
                     f"symlink at {link} points to {target}, "
@@ -174,7 +174,7 @@ def _check_slug(
         # overwrite it; doctor surfaces the problem so the user can act.
         # fix_action is intentionally None — we never auto-delete user data.
         findings.append(Finding(
-            kind="squatted_projection", slug=slug, scope=scope,
+            finding_type="squatted_projection", slug=slug, scope=scope,
             path=link,
             detail=(
                 f"{link} is occupied by a real "
@@ -227,7 +227,7 @@ def _scan_stray_symlinks(
         except OSError:
             target = Path("(unreadable)")
         findings.append(Finding(
-            kind="stray_symlink", slug=slug, scope=scope,
+            finding_type="stray_symlink", slug=slug, scope=scope,
             path=path,
             detail=(
                 f"{path} -> {target}: '{slug}' is not in the {scope} lock; "
@@ -289,7 +289,7 @@ def _scan_orphaned_overrides(
             path = base_dir / path
         if not path.exists():
             findings.append(Finding(
-                kind="orphaned_override", slug=raw_entry, scope=scope,
+                finding_type="orphaned_override", slug=raw_entry, scope=scope,
                 path=path,
                 detail=(
                     f"extensions[] entry {raw_entry!r} resolves to {path} "

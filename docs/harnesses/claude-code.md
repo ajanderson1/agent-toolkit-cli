@@ -2,17 +2,17 @@
 
 `claude-code` · one row of the [compatibility matrix](../matrix.md)
 
-| Kind | Support | How |
+| Asset type | Support | How |
 |---|:-:|---|
-| [Instructions](../kinds/instructions.md) | [✅](#instructions) | pointer symlink (`CLAUDE.md` → `AGENTS.md`) |
-| [Skills](../kinds/skills.md) | [✅](#skills) | `.claude/skills` |
-| [Agents (subagents)](../kinds/agents.md) | [✅](#agents) | symlink |
-| [MCP servers](../kinds/mcp.md) | — | planned kind |
-| [Pi extensions](../kinds/pi-extensions.md) | N/A | Pi-only kind |
+| [Instructions](../asset-types/instructions.md) | [✅](#instructions) | pointer symlink (`CLAUDE.md` → `AGENTS.md`) |
+| [Skills](../asset-types/skills.md) | [✅](#skills) | `.claude/skills` |
+| [Agents (subagents)](../asset-types/agents.md) | [✅](#agents) | symlink |
+| [MCP servers](../asset-types/mcp.md) | — | planned asset type |
+| [Pi extensions](../asset-types/pi-extensions.md) | N/A | Pi-only asset type |
 
 ## Instructions { #instructions }
 
-Reads a fixed own-name file (`CLAUDE.md`) instead of `AGENTS.md`. The [instructions kind](../kinds/instructions.md) creates a same-name pointer symlink → `AGENTS.md`.
+Reads a fixed own-name file (`CLAUDE.md`) instead of `AGENTS.md`. The [instructions asset type](../asset-types/instructions.md) creates a same-name pointer symlink → `AGENTS.md`.
 
 - **Verdict:** symlink
 - **Default file:** `CLAUDE.md`
@@ -22,7 +22,7 @@ Reads a fixed own-name file (`CLAUDE.md`) instead of `AGENTS.md`. The [instructi
 
 ## Skills { #skills }
 
-Supported — every harness in the catalog has a skills directory the [skills kind](../kinds/skills.md) projects into.
+Supported — every harness in the catalog has a skills directory the [skills asset type](../asset-types/skills.md) projects into.
 
 - **Project dir:** `.claude/skills`
 - **Global dir:** `~/.claude/skills`
@@ -31,7 +31,7 @@ Supported — every harness in the catalog has a skills directory the [skills ki
 
 ## Agents (subagents) { #agents }
 
-Supported via the **symlink** mechanism — see the [agents kind](../kinds/agents.md) for what each mechanism means.
+Supported via the **symlink** mechanism — see the [agents asset type](../asset-types/agents.md) for what each mechanism means.
 
 - **Mechanism:** symlink
 - **User / project path:** `~/.claude/agents/<slug>.md` / `.claude/agents/<slug>.md` (recursive)

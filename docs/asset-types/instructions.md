@@ -1,6 +1,6 @@
 # Instructions
 
-The `instructions` [kind](../glossary.md#kind) manages one canonical
+The `instructions` [asset type](../glossary.md#asset-type) manages one canonical
 `AGENTS.md` per [scope](../glossary.md#scope) and makes every harness read it —
 your root instruction context written once, satisfied everywhere.
 
@@ -10,7 +10,7 @@ Most harnesses read `AGENTS.md` natively, so the canonical file satisfies them
 with zero work. The handful that read a fixed own-name file instead (e.g.
 `CLAUDE.md`, `GEMINI.md`) get a same-name
 [pointer symlink](../glossary.md#mechanism) → `AGENTS.md`. There is no
-translate step and no config mutation for this kind — pointer symlinks only,
+translate step and no config mutation for this asset type — pointer symlinks only,
 and `install` never clobbers a real file or a foreign symlink.
 
 - **Canonical file:** `./AGENTS.md` (project scope) or
@@ -25,7 +25,7 @@ Per the [compatibility matrix](../matrix.md): **39 native** readers ·
 **7 pointer-symlink** harnesses (Augment, [Claude Code](../harnesses/claude-code.md),
 CodeBuddy, [Gemini CLI](../harnesses/gemini-cli.md), iFlow CLI, Replit,
 Tabnine CLI) · 4 gaps · 2 not applicable · 2 unknown. The 39 native readers
-are this kind's [general](../glossary.md#general) set — always satisfied, no
+are this asset type's [general](../glossary.md#general) set — always satisfied, no
 toggle.
 
 ## CLI

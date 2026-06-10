@@ -8,14 +8,14 @@ Layout (matches existing CSS scaffold in css/app.tcss):
 
   Header
   Horizontal#main
-    Vertical#kinds-sidebar
+    Vertical#asset-types-sidebar
       Static.rail-header
-      OptionList#kinds-list  ("instruction" / separator / "skill" / "pi-extension" / "agent")
+      OptionList#asset-types-list  ("instruction" / separator / "skill" / "pi-extension" / "agent")
     Vertical#content
       Horizontal#content-header-row
         Static#content-header
-        [ScopeToggle — skill, instruction, and agent kinds only]
-      InstructionGrid | SkillGrid | PiGrid | AgentGrid   (swapped by action_kind)
+        [ScopeToggle — skill, instruction, and agent asset types only]
+      InstructionGrid | SkillGrid | PiGrid | AgentGrid   (swapped by action_asset_type)
   Static#status-bar
   Static#footer-pending
   Footer
@@ -43,9 +43,9 @@ from agent_toolkit_tui.pi_extension_state import build_pi_rows
 from agent_toolkit_tui.skill_state import build_skill_rows
 from agent_toolkit_tui.widgets import AgentGrid, InstructionGrid, PiGrid, ScopeToggle, SkillGrid
 
-Kind = Literal["instruction", "skill", "pi-extension", "agent"]
+AssetType = Literal["instruction", "skill", "pi-extension", "agent"]
 
-_KIND_LABELS: dict[Kind, str] = {
+_ASSET_TYPE_LABELS: dict[AssetType, str] = {
     "instruction": "Instruction",
     "skill": "Skill",
     "pi-extension": "Pi Extension",
@@ -147,21 +147,21 @@ class TUIApp(App):
     def __init__(self) -> None:
         super().__init__()
         self._scope: str = "project"
-        self._active_kind: Kind = "skill"
+        self._active_asset_type: AssetType = "skill"
         self.sub_title = f"v{__version__}"
 
     def compose(self) -> ComposeResult:
         yield Header()
         with Horizontal(id="main"):
-            with Vertical(id="kinds-sidebar"):
-                yield Static("Kind", classes="rail-header")
+            with Vertical(id="asset-types-sidebar"):
+                yield Static("Asset type", classes="rail-header")
                 yield OptionList(
-                    Option("instruction", id="kind-instruction"),
-                    Option("─────────────", id="kind-separator", disabled=True),
-                    Option("skill", id="kind-skill"),
-                    Option("pi-extension", id="kind-pi-extension"),
-                    Option("agent", id="kind-agent"),
-                    id="kinds-list",
+                    Option("instruction", id="asset-type-instruction"),
+                    Option("─────────────", id="asset-type-separator", disabled=True),
+                    Option("skill", id="asset-type-skill"),
+                    Option("pi-extension", id="asset-type-pi-extension"),
+                    Option("agent", id="asset-type-agent"),
+                    id="asset-types-list",
                 )
             with Vertical(id="content"):
                 with Horizontal(id="content-header-row"):
@@ -180,8 +180,8 @@ class TUIApp(App):
             self.theme = "gruvbox"
         except Exception:
             pass
-        # Start with skill kind active; hide others initially.
-        self._show_kind("skill")
+        # Start with the skill asset type active; hide others initially.
+        self._show_asset_type("skill")
         self._refresh_skill_view()
         self._refresh_content_header()
         self._refresh_pending_label()
@@ -192,9 +192,9 @@ class TUIApp(App):
         except Exception:
             pass
 
-    # ----- kind switching ----------------------------------------------------
+    # ----- asset-type switching -----------------------------------------------------
 
-    def _show_kind(self, kind: Kind) -> None:
+    def _show_asset_type(self, asset_type: AssetType) -> None:
         """Show the active grid and hide the inactive ones."""
         try:
             instruction_grid = self.query_one("#instruction-grid", InstructionGrid)
@@ -206,28 +206,28 @@ class TUIApp(App):
             return
 
         # Keep the sidebar highlight in lock-step with the displayed grid (#328).
-        # This is the choke point both on_mount and action_kind call, so every
-        # kind switch — however triggered — moves the highlight, not just a
+        # This is the choke point both on_mount and action_asset_type call, so every
+        # asset-type switch — however triggered — moves the highlight, not just a
         # direct click on the option.
         try:
-            kinds_list = self.query_one("#kinds-list", OptionList)
-            kinds_list.highlighted = kinds_list.get_option_index(f"kind-{kind}")
+            asset_types_list = self.query_one("#asset-types-list", OptionList)
+            asset_types_list.highlighted = asset_types_list.get_option_index(f"asset-type-{asset_type}")
         except (NoMatches, OptionDoesNotExist):
             pass
 
-        if kind == "instruction":
+        if asset_type == "instruction":
             instruction_grid.display = True
             skill_grid.display = False
             pi_grid.display = False
             agent_grid.display = False
             scope_toggle.display = True
-        elif kind == "skill":
+        elif asset_type == "skill":
             instruction_grid.display = False
             skill_grid.display = True
             pi_grid.display = False
             agent_grid.display = False
             scope_toggle.display = True
-        elif kind == "pi-extension":
+        elif asset_type == "pi-extension":
             instruction_grid.display = False
             skill_grid.display = False
             pi_grid.display = True
@@ -243,29 +243,29 @@ class TUIApp(App):
     def on_option_list_option_selected(
         self, event: OptionList.OptionSelected
     ) -> None:
-        """Handle sidebar kind selection."""
-        if event.option_list.id != "kinds-list":
+        """Handle sidebar asset-type selection."""
+        if event.option_list.id != "asset-types-list":
             return
         opt_id = event.option.id
         # Guard against separator or unknown options.
-        if opt_id is None or opt_id == "kind-separator":
+        if opt_id is None or opt_id == "asset-type-separator":
             return
-        if opt_id == "kind-instruction":
-            self.action_kind("instruction")
-        elif opt_id == "kind-skill":
-            self.action_kind("skill")
-        elif opt_id == "kind-pi-extension":
-            self.action_kind("pi-extension")
-        elif opt_id == "kind-agent":
-            self.action_kind("agent")
+        if opt_id == "asset-type-instruction":
+            self.action_asset_type("instruction")
+        elif opt_id == "asset-type-skill":
+            self.action_asset_type("skill")
+        elif opt_id == "asset-type-pi-extension":
+            self.action_asset_type("pi-extension")
+        elif opt_id == "asset-type-agent":
+            self.action_asset_type("agent")
 
-    def action_kind(self, kind: str) -> None:
-        if kind not in ("instruction", "skill", "pi-extension", "agent"):
+    def action_asset_type(self, asset_type: str) -> None:
+        if asset_type not in ("instruction", "skill", "pi-extension", "agent"):
             return
-        if kind == self._active_kind:
+        if asset_type == self._active_asset_type:
             return
-        self._active_kind = kind  # type: ignore[assignment]
-        self._show_kind(kind)  # type: ignore[arg-type]
+        self._active_asset_type = asset_type  # type: ignore[assignment]
+        self._show_asset_type(asset_type)  # type: ignore[arg-type]
         self._refresh_active_view()
         self._refresh_content_header()
         self._refresh_pending_label()
@@ -280,11 +280,11 @@ class TUIApp(App):
 
     def _active_grid(self) -> InstructionGrid | SkillGrid | PiGrid | AgentGrid | None:
         selector: str
-        if self._active_kind == "instruction":
+        if self._active_asset_type == "instruction":
             selector = "#instruction-grid"
-        elif self._active_kind == "skill":
+        elif self._active_asset_type == "skill":
             selector = "#skill-grid"
-        elif self._active_kind == "pi-extension":
+        elif self._active_asset_type == "pi-extension":
             selector = "#pi-grid"
         else:
             selector = "#agent-grid"
@@ -294,11 +294,11 @@ class TUIApp(App):
             return None
 
     def _refresh_active_view(self) -> None:
-        if self._active_kind == "instruction":
+        if self._active_asset_type == "instruction":
             self._refresh_instruction_view()
-        elif self._active_kind == "skill":
+        elif self._active_asset_type == "skill":
             self._refresh_skill_view()
-        elif self._active_kind == "pi-extension":
+        elif self._active_asset_type == "pi-extension":
             self._refresh_pi_view()
         else:
             self._refresh_agent_view()
@@ -435,19 +435,19 @@ class TUIApp(App):
 
     def action_info_pass(self) -> None:
         """Delegate `i` to the active grid widget."""
-        if self._active_kind == "instruction":
+        if self._active_asset_type == "instruction":
             try:
                 igrid = self.query_one("#instruction-grid", InstructionGrid)
             except NoMatches:
                 return
             igrid.action_info()
-        elif self._active_kind == "skill":
+        elif self._active_asset_type == "skill":
             try:
                 sgrid = self.query_one("#skill-grid", SkillGrid)
             except NoMatches:
                 return
             sgrid.action_info()
-        elif self._active_kind == "pi-extension":
+        elif self._active_asset_type == "pi-extension":
             try:
                 pgrid = self.query_one("#pi-grid", PiGrid)
             except NoMatches:
@@ -492,11 +492,11 @@ class TUIApp(App):
         )
 
     def action_apply(self) -> None:
-        if self._active_kind == "instruction":
+        if self._active_asset_type == "instruction":
             self._apply_instruction_pending()
-        elif self._active_kind == "skill":
+        elif self._active_asset_type == "skill":
             self._apply_skill_pending()
-        elif self._active_kind == "pi-extension":
+        elif self._active_asset_type == "pi-extension":
             self._apply_pi_pending()
         else:
             self._apply_agent_pending()
@@ -915,18 +915,18 @@ class TUIApp(App):
     # ----- header + status ---------------------------------------------------
 
     def _build_content_header(self) -> str:
-        kind_label = _KIND_LABELS.get(self._active_kind, self._active_kind)
-        if self._active_kind == "instruction":
+        asset_type_label = _ASSET_TYPE_LABELS.get(self._active_asset_type, self._active_asset_type)
+        if self._active_asset_type == "instruction":
             try:
                 n = self.query_one("#instruction-grid", InstructionGrid).row_count
             except (NoMatches, Exception):
                 n = 0
-        elif self._active_kind == "skill":
+        elif self._active_asset_type == "skill":
             try:
                 n = self.query_one("#skill-grid", SkillGrid).row_count
             except (NoMatches, Exception):
                 n = 0
-        elif self._active_kind == "pi-extension":
+        elif self._active_asset_type == "pi-extension":
             try:
                 n = self.query_one("#pi-grid", PiGrid).row_count
             except (NoMatches, Exception):
@@ -936,7 +936,7 @@ class TUIApp(App):
                 n = self.query_one("#agent-grid", AgentGrid).row_count
             except (NoMatches, Exception):
                 n = 0
-        return f"  [b]{kind_label}[/]   [dim]·[/]   {n} items"
+        return f"  [b]{asset_type_label}[/]   [dim]·[/]   {n} items"
 
     def _refresh_content_header(self) -> None:
         try:
@@ -962,7 +962,7 @@ class TUIApp(App):
 
     def _refresh_status_bar(self) -> None:
         """Roll up active grid rows into status counts."""
-        active = getattr(self, "_active_kind", "skill")
+        active = getattr(self, "_active_asset_type", "skill")
         if active == "instruction":
             linked = 0
             try:

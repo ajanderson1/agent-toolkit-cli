@@ -59,7 +59,7 @@ def doctor_cmd(
     quit_loop = False
     for f in findings:
         click.echo("")
-        click.echo(f"{f.slug} · {f.kind} ({f.scope})")
+        click.echo(f"{f.slug} · {f.finding_type} ({f.scope})")
         click.echo(f"  path:   {f.path}")
         click.echo(f"  detail: {f.detail}")
         if f.fix_action is None or no_fix or quit_loop:

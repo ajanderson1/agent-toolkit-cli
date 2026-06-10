@@ -189,7 +189,7 @@ class PiGrid(Vertical):
                 f"[b]npm[/]: registry package in Pi settings.json packages[];\n"
                 f"  managed via pi-extension install (scope toggle).\n"
                 f"[b]untracked[/]: found in Pi's extensions/ dir but not in\n"
-                f"  the kind lock. Use pi-extension import to adopt."
+                f"  the asset-type lock. Use pi-extension import to adopt."
             )
         else:
             return
@@ -206,7 +206,7 @@ class PiGrid(Vertical):
         if row.origin == "untracked":
             return (
                 f"[dim]Untracked extension.[/]\n\n"
-                f"This extension is not in the kind lock and cannot be\n"
+                f"This extension is not in the asset-type lock and cannot be\n"
                 f"toggled here. To adopt it, run:\n"
                 f"  [b]agent-toolkit-cli pi-extension import {row.slug}[/]"
             )

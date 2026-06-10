@@ -504,7 +504,7 @@ def test_doctor_detects_orphan_canonical(
     r = CliRunner().invoke(main, ["agent", "doctor", "-g", "--no-fix"])
     assert r.exit_code != 0, f"doctor should report findings:\n{r.output}"
     assert "orphan-canonical" in r.output, (
-        f"doctor must report orphan-canonical kind: {r.output!r}"
+        f"doctor must report orphan-canonical finding: {r.output!r}"
     )
     assert "stray-orphan" in r.output, (
         f"doctor must name the stray slug: {r.output!r}"
