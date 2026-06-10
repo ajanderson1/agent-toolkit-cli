@@ -1,6 +1,6 @@
 """Direct tests against _install_core to prove kind-agnosticism.
 
-These tests use a synthetic KindBinding to confirm the core does not hard-
+These tests use a synthetic AssetTypeBinding to confirm the core does not hard-
 code 'skill' anywhere; they do not exercise file-system side effects.
 """
 from __future__ import annotations
@@ -12,11 +12,11 @@ from agent_toolkit_cli._install_core import (
     InstallPlan,
     InstallResult,
 )
-from agent_toolkit_cli._paths_core import KindBinding
+from agent_toolkit_cli._paths_core import AssetTypeBinding
 
 
-FAKE_BINDING = KindBinding(
-    kind="x",
+FAKE_BINDING = AssetTypeBinding(
+    asset_type="x",
     canonical_dirname="xs",
     library_subdir="xs",
     lock_filename="xs-lock.json",
@@ -90,7 +90,7 @@ def test_install_core_has_no_hardcoded_skill_string():
             or "skill_git" in line      # cross-kind git helpers (PR2 renames)
             or "canonical_skill_dir" in line  # imported from skill_paths facade
             or "agent-toolkit-cli skill doctor" in line  # facade-level CLI hint
-            or 'kind_noun: str = "skill"' in line  # _doctor_hint default (PR2)
+            or 'asset_type_noun: str = "skill"' in line  # _doctor_hint default (PR2)
             or stripped.startswith("#")
             or stripped.startswith('"""')
             or stripped.startswith("'''")

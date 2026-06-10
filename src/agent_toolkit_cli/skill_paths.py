@@ -30,8 +30,8 @@ from typing import Literal
 
 from agent_toolkit_cli._paths_core import (
     SKILL_BINDING,
-    library_lock_path_for_kind,
-    library_root_for_kind,
+    library_lock_path_for_asset_type,
+    library_root_for_asset_type,
 )
 from agent_toolkit_cli.skill_agents import AGENTS, UnknownAgentError
 
@@ -51,10 +51,10 @@ def _root(scope: Scope, home: Path | None, project: Path | None) -> Path:
 def library_root(env: dict[str, str] | None = None) -> Path:
     """Return the root of the global skill library.
 
-    Thin shim over `_paths_core.library_root_for_kind(SKILL_BINDING, …)`.
+    Thin shim over `_paths_core.library_root_for_asset_type(SKILL_BINDING, …)`.
     Honors $AGENT_TOOLKIT_SKILLS_ROOT for backward compatibility.
     """
-    return library_root_for_kind(SKILL_BINDING, env)
+    return library_root_for_asset_type(SKILL_BINDING, env)
 
 
 def library_skill_path(slug: str, *, env: dict[str, str] | None = None) -> Path:
@@ -65,10 +65,10 @@ def library_skill_path(slug: str, *, env: dict[str, str] | None = None) -> Path:
 def library_lock_path(env: dict[str, str] | None = None) -> Path:
     """Return the path of the global skills-lock.json for v2.2+.
 
-    Thin shim over `_paths_core.library_lock_path_for_kind(SKILL_BINDING, …)`.
+    Thin shim over `_paths_core.library_lock_path_for_asset_type(SKILL_BINDING, …)`.
     Lives at <library_root>.parent / "skills-lock.json" by default.
     """
-    return library_lock_path_for_kind(SKILL_BINDING, env)
+    return library_lock_path_for_asset_type(SKILL_BINDING, env)
 
 
 def canonical_skill_dir(

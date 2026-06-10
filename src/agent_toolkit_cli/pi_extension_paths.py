@@ -9,8 +9,8 @@ from typing import Literal
 
 from agent_toolkit_cli._paths_core import (
     PI_EXTENSION_BINDING,
-    library_lock_path_for_kind,
-    library_root_for_kind,
+    library_lock_path_for_asset_type,
+    library_root_for_asset_type,
 )
 
 # Reuse the kind-agnostic project-store helpers verbatim.
@@ -43,7 +43,7 @@ __all__ = [
 
 
 def library_root(env: dict[str, str] | None = None) -> Path:
-    return library_root_for_kind(PI_EXTENSION_BINDING, env)
+    return library_root_for_asset_type(PI_EXTENSION_BINDING, env)
 
 
 def library_pi_extension_path(slug: str, *, env: dict[str, str] | None = None) -> Path:
@@ -51,7 +51,7 @@ def library_pi_extension_path(slug: str, *, env: dict[str, str] | None = None) -
 
 
 def library_lock_path(env: dict[str, str] | None = None) -> Path:
-    return library_lock_path_for_kind(PI_EXTENSION_BINDING, env)
+    return library_lock_path_for_asset_type(PI_EXTENSION_BINDING, env)
 
 
 def canonical_pi_extension_dir(

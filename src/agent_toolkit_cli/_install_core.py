@@ -4,7 +4,7 @@ so existing call sites keep working.
 
 PR1 boundary: any helper that has to know whether the asset is a skill or
 an agent (e.g. _standard_bundle_link, _project_standard_link) lives in
-the facade, NOT here. The core takes a KindBinding when it needs to know
+the facade, NOT here. The core takes a AssetTypeBinding when it needs to know
 the canonical dirname, lock filename, or general-harness name.
 """
 from __future__ import annotations
@@ -29,15 +29,15 @@ class InstallError(RuntimeError):
     """Base error for install failures."""
 
 
-def _doctor_hint(slug: str, scope: str, kind_noun: str = "skill") -> str:
+def _doctor_hint(slug: str, scope: str, asset_type_noun: str = "skill") -> str:
     """Suggest the doctor command that clears a blocking stray symlink.
 
-    `kind_noun` is the CLI noun for the asset kind ("skill" today; "agent"
+    `asset_type_noun` is the CLI noun for the asset kind ("skill" today; "agent"
     once PR4 adds the agent CLI verb group). Defaults to "skill" so existing
     skill-facade callers keep their current error message verbatim.
     """
     flag = "-g" if scope == "global" else "-p"
-    return f"\n  Run: agent-toolkit-cli {kind_noun} doctor {flag}  (removes stray symlinks)"
+    return f"\n  Run: agent-toolkit-cli {asset_type_noun} doctor {flag}  (removes stray symlinks)"
 
 
 class LockMismatchError(InstallError):

@@ -13,7 +13,7 @@ def _write_agent_lock(home: Path, agents: dict) -> None:
     """Write a minimal agents-lock.json at the global library lock path.
 
     The global agent lock lives at ~/.agent-toolkit/agents-lock.json per
-    library_lock_path_for_kind with AGENT_BINDING in _paths_core.py.
+    library_lock_path_for_asset_type with AGENT_BINDING in _paths_core.py.
     """
     lock_path = home / ".agent-toolkit" / "agents-lock.json"
     lock_path.parent.mkdir(parents=True, exist_ok=True)

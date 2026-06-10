@@ -28,8 +28,8 @@ from typing import Literal
 
 from agent_toolkit_cli._paths_core import (
     AGENT_BINDING,
-    library_lock_path_for_kind,
-    library_root_for_kind,
+    library_lock_path_for_asset_type,
+    library_root_for_asset_type,
 )
 # Shared helpers (independent of kind) re-exported from skill_paths.
 # Re-exporting (rather than hoisting into _paths_core) is deliberate: it
@@ -71,10 +71,10 @@ __all__ = [
 def library_root(env: dict[str, str] | None = None) -> Path:
     """Return the root of the global agent library.
 
-    Thin shim over `_paths_core.library_root_for_kind(AGENT_BINDING, …)`.
+    Thin shim over `_paths_core.library_root_for_asset_type(AGENT_BINDING, …)`.
     Does NOT honor $AGENT_TOOLKIT_SKILLS_ROOT (that env var is skill-only).
     """
-    return library_root_for_kind(AGENT_BINDING, env)
+    return library_root_for_asset_type(AGENT_BINDING, env)
 
 
 def library_agent_path(slug: str, *, env: dict[str, str] | None = None) -> Path:
@@ -84,7 +84,7 @@ def library_agent_path(slug: str, *, env: dict[str, str] | None = None) -> Path:
 
 def library_lock_path(env: dict[str, str] | None = None) -> Path:
     """Return the path of the global agents-lock.json."""
-    return library_lock_path_for_kind(AGENT_BINDING, env)
+    return library_lock_path_for_asset_type(AGENT_BINDING, env)
 
 
 def canonical_agent_dir(

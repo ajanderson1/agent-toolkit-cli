@@ -23,8 +23,8 @@ from typing import Literal
 
 from agent_toolkit_cli._paths_core import (
     INSTRUCTIONS_BINDING,
-    library_lock_path_for_kind,
-    library_root_for_kind,
+    library_lock_path_for_asset_type,
+    library_root_for_asset_type,
 )
 
 Scope = Literal["global", "project"]
@@ -36,12 +36,12 @@ def library_root() -> Path:
     Reserved for future use (e.g. canonical-content backups). Phase B does not
     write here — the canonical lives at the parent (~/.agent-toolkit/AGENTS.md).
     """
-    return library_root_for_kind(INSTRUCTIONS_BINDING)
+    return library_root_for_asset_type(INSTRUCTIONS_BINDING)
 
 
 def library_lock_path() -> Path:
     """Global lock at ~/.agent-toolkit/instructions-lock.json."""
-    return library_lock_path_for_kind(INSTRUCTIONS_BINDING)
+    return library_lock_path_for_asset_type(INSTRUCTIONS_BINDING)
 
 
 def project_lock_path(project_root: Path) -> Path:
