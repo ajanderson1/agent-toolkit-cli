@@ -19,6 +19,13 @@ dev = [
     "pytest-snapshot>=0.9",
     "pytest-asyncio>=0.23",
 ]
+docs = [
+    "mkdocs-material>=9.5",
+    "mkdocstrings[python]>=0.25",
+]
+
+[tool.uv]
+default-groups = ["dev", "docs"]
 
 [build-system]
 requires = ["hatchling"]

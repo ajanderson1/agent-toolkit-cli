@@ -34,3 +34,6 @@ audit/.*.log
 
 # cmux-pm overseer runtime state
 .cmux-pm/
+
+# MkDocs build output
+site/

@@ -1,0 +1,117 @@
+# Requires the `docs` dependency group: uv sync (mkdocs-material + mkdocstrings)
+site_name: agent-toolkit-cli
+site_description: Python CLI and Textual TUI for managing AI-agent skills across harnesses
+site_url: https://ajanderson1.github.io/agent-toolkit-cli/
+repo_url: https://github.com/ajanderson1/agent-toolkit-cli
+
+strict: true
+
+validation:
+  omitted_files: warn
+  absolute_links: warn
+  unrecognized_links: warn
+
+# Internal artifacts — for humans/agents reading the repo, not the published site.
+# See ~/.conventions/conventions/mkdocs.md § Exclusions.
+exclude_docs: |
+  superpowers/
+  solutions/
+  audit/
+  agent-toolkit/research/
+
+theme:
+  name: material
+  palette:
+    - media: '(prefers-color-scheme)'
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to light mode
+    - media: '(prefers-color-scheme: light)'
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: '(prefers-color-scheme: dark)'
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to system preference
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.top
+    - navigation.instant
+    - navigation.instant.progress
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+    - toc.follow
+
+plugins:
+  - search
+  - mkdocstrings:
+      enabled: !ENV [ENABLE_MKDOCSTRINGS, true]
+      handlers:
+        python:
+          paths: [src]
+          options:
+            show_source: true
+            show_root_heading: true
+
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.snippets:
+      base_path: ['.']
+      check_paths: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+
+nav:
+  - Home: index.md
+  - Reference:
+    - CLI reference: agent-toolkit/cli.md
+    - Harness compatibility matrix: agent-toolkit/harness-matrix.md
+    - Asset schema: agent-toolkit/schema.md
+    - Skill lock management: agent-toolkit/skill-lock.md
+    - Roadmap: agent-toolkit/roadmap.md
+  - API Reference: api/index.md
+  - Changelog: changelog.md

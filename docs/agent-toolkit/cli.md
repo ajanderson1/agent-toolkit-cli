@@ -1,6 +1,6 @@
 # agent-toolkit CLI reference
 
-`agent-toolkit-cli` is a single-command CLI for managing AI-agent skills. Post-v2.3.0 the only top-level command is `skill`; the pre-v2 surface (`check`, `link`, `doctor`, `fix`, `ingest`, `inventory`, `migrate-skills`, `new`, `diff`, `list`, `unlink`, `pi`) was removed in [#160](https://github.com/ajanderson1/agent-toolkit-cli/issues/160). The frozen v1 surface is pinned at the `v1.0.0` tag — see the [README](../../README.md) for the install command.
+`agent-toolkit-cli` is a single-command CLI for managing AI-agent skills. Post-v2.3.0 the only top-level command is `skill`; the pre-v2 surface (`check`, `link`, `doctor`, `fix`, `ingest`, `inventory`, `migrate-skills`, `new`, `diff`, `list`, `unlink`, `pi`) was removed in [#160](https://github.com/ajanderson1/agent-toolkit-cli/issues/160). The frozen v1 surface is pinned at the `v1.0.0` tag — see the [README](../index.md) for the install command.
 
 ## Commands
 
