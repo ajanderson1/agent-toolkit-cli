@@ -1,0 +1,37 @@
+# IBM Bob
+
+`bob` · one row of the [compatibility matrix](../matrix.md)
+
+| Kind | Support | How |
+|---|:-:|---|
+| [Instructions](../kinds/instructions.md) | [✅](#instructions) | native `AGENTS.md` reader |
+| [Skills](../kinds/skills.md) | [✅](#skills) | `.bob/skills` |
+| [Agents (subagents)](../kinds/agents.md) | [❌](#agents) | no file-drop convention |
+| [MCP servers](../kinds/mcp.md) | — | planned kind |
+| [Pi extensions](../kinds/pi-extensions.md) | — | Pi-only kind |
+
+## Instructions { #instructions }
+
+Reads the canonical `AGENTS.md` natively — no pointer needed; the [instructions kind](../kinds/instructions.md) is satisfied as-is.
+
+- **Verdict:** native
+- **Default file:** `AGENTS.md`
+- **Project / global path:** `./AGENTS.md` / none (global-only) — global is `~/.bob/rules/*.md` (a *rules* directory, not AGENTS.md)
+- **Reads `AGENTS.md` natively:** yes
+- **Source:** https://bob.ibm.com/docs/ide/configuration/rules ("`AGENTS.md` file in your workspace root … Automatically loaded by default") and https://bob.ibm.com/docs/ide/getting-started/tutorials/start-a-project ("Bob automatically applies the `AGENTS.md` to new conversations")
+
+## Skills { #skills }
+
+Supported — every harness in the catalog has a skills directory the [skills kind](../kinds/skills.md) projects into.
+
+- **Project dir:** `.bob/skills`
+- **Global dir:** `~/.bob/skills`
+- **[General-dir](../glossary.md#general) (`.agents/skills`) reader:** no — gets its own projection
+
+## Agents (subagents) { #agents }
+
+Not supported (gap) — tracked for possible future work.
+
+- **Verdict:** unsupported (gap)
+- **Why:** `.bob/rules*/` + modes only; no `agents/` dir; orchestration IBM-internal
+- **Source:** https://bob.ibm.com/docs/ide/configuration/rules
