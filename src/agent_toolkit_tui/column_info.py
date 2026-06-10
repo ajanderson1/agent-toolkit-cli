@@ -24,20 +24,26 @@ class ColumnInfo:
 
 
 def _standard_info(context: dict | None = None) -> ColumnInfo:
-    harness_names = get_standard_agents()
+    # Kind-agnostic via context (#351): the instruction grid reuses this
+    # registry key with its own names/kind; names default to the skills set.
+    ctx = context or {}
+    kind = ctx.get("kind", "skills")
+    harness_names = tuple(ctx.get("names") or get_standard_agents())
     description = [
-        "Toggles link/unlink for every harness whose",
-        "skillsDir is `.agents/skills`.",
+        f"Covered by the standard convention for {kind} ({len(harness_names)}):",
         "",
-        "Included harnesses:",
     ]
     bullets = [
         f"  • {name} — {AGENTS[name].display_name}"
+        if name in AGENTS else f"  • {name}"
         for name in harness_names
     ]
-    # The 🌐 marker block is contextual: it only makes sense when the focused
-    # row IS installed globally. Omit it when the caller says otherwise.
-    show_marker = context is None or bool(context.get("global_linked", True))
+    # The 🌐 marker block is contextual AND skills-only (instructions has no
+    # global-marker concept): it only makes sense when the focused row IS
+    # installed globally. Omit it when the caller says otherwise.
+    show_marker = kind == "skills" and (
+        context is None or bool(ctx.get("global_linked", True))
+    )
     indicator_note = [
         "",
         "🌐 marker (project scope only):",
@@ -48,6 +54,23 @@ def _standard_info(context: dict | None = None) -> ColumnInfo:
         # v3.7 full rename (#350): key and title both say "standard".
         title="Standard bundle",
         lines=description + bullets + indicator_note,
+    )
+
+
+def _longtail_info(context: dict | None = None) -> ColumnInfo:
+    # Names arrive via context — nothing imported from composition, keeping
+    # this module kind-agnostic (#351).
+    names = tuple((context or {}).get("names", ()))
+    expanded = bool((context or {}).get("expanded", False))
+    head = "Collapsed non-standard harnesses" if not expanded else "Expanded long tail"
+    return ColumnInfo(
+        title=f"{head} ({len(names)})",
+        lines=[
+            "Press space on this column to expand/collapse in place.",
+            "Expanded columns are browsed with the arrow keys (no jump-to-column).",
+            "",
+            *[f"  • {n}" for n in names],
+        ],
     )
 
 
@@ -72,6 +95,7 @@ def _state_info(context: dict | None = None) -> ColumnInfo:
 COLUMN_INFO: dict[str, Callable[..., ColumnInfo]] = {
     "standard": _standard_info,
     "state": _state_info,
+    "longtail": _longtail_info,
 }
 
 
