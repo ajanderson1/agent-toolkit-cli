@@ -153,7 +153,16 @@ class AgentAdapter(Protocol):
         home: Path | None = None,
         project: Path | None = None,
     ) -> None:
-        """Remove the projection. Idempotent."""
+        """Remove the projection. Idempotent.
+
+        The standard adapter (#361) additionally accepts an optional
+        `canonical_content: Path | None` keyword beyond this Protocol: the
+        facade threads the scope's canonical `<slug>.md` so a sentinel-less
+        slot that still byte-matches the canonical (a pre-#361 claude-code
+        install) is recognised as tool-owned and detached. Other adapters do
+        not take the kwarg; the facade only passes it when dispatching to
+        the standard adapter.
+        """
         ...
 
 
@@ -172,6 +181,13 @@ def get_adapter(harness_name: str) -> AgentAdapter:
     Raises UnknownAgentError if harness_name is not in AGENTS.
     Raises UnsupportedMechanismError if the harness has subagent_mechanism='none'.
     """
+    if harness_name == "standard":
+        # #361: the standard agents projection — a real installable slot
+        # (.claude/agents/<slug>.md), dispatched ahead of the catalog lookup
+        # because the catalog's "standard" entry is the skills bundle
+        # pseudo-agent with subagent_mechanism='none'.
+        from agent_toolkit_cli.agent_adapters import standard
+        return standard.adapter_for()
     if harness_name not in AGENTS:
         raise UnknownAgentError(harness_name)
     cfg = AGENTS[harness_name]

@@ -5,9 +5,13 @@ Binds AGENT_BINDING + _AGENT_SYNTHETIC_NAMES into the core. apply()
 dispatches to per-mechanism adapters from `agent_adapters/` instead of
 the skill facade's uniform-symlink projection.
 
-No standard-bundle concept exists for agents (per spec: agents
-don't bundle into a megaprompt), so the facade injects
-standard_bundle_link=None.
+The agents kind's standard projection is the `.claude/agents/<slug>.md`
+slot (#361) — `standard_bundle_link` stays None because the slot is an
+adapter, not a core bundle link. The slot is ONE file with many native
+readers; harness tokens whose destination IS that file (claude-code at
+both scopes, kode at project scope) are normalized to `standard` in every
+facade path (plan targets, the linked scan, apply, uninstall) so scans
+never double-report it and no computed delta can delete the shared file.
 """
 from __future__ import annotations
 
@@ -36,8 +40,10 @@ from agent_toolkit_cli.skill_agents import (
 from agent_toolkit_cli.skill_source import ParsedSource
 
 # Catalog tokens that are virtual entries, not real harness install targets.
-# Note: no "standard" bundle — that's skill-only. "standard-agent" mirrors
-# "standard-skill" from the skill facade.
+# "standard-agent" mirrors "standard-skill" from the skill facade. "standard"
+# is NOT synthetic for the agent kind (#361): it is the real installable
+# .claude/agents/<slug>.md slot, dispatched in agent_adapters.get_adapter()
+# ahead of the catalog (whose "standard" entry is the skills pseudo-agent).
 _AGENT_SYNTHETIC_NAMES: frozenset[str] = frozenset({"standard-agent"})
 
 
@@ -64,10 +70,20 @@ def plan(
     returns () for agents, which (a) makes a full-remove plan empty (uninstall
     orphans every file — the PR #268 bug) and (b) makes every re-install
     spuriously re-add already-installed harnesses.
+
+    Target tokens are normalized to `standard` when their destination IS the
+    standard slot (#361): the scan reports the slot as `standard`, so an
+    unnormalized covered token (e.g. target=('claude-code',) over an existing
+    slot) would compute add=claude-code + remove=standard — a delta that,
+    applied, installs then deletes the SAME shared file.
     """
+    normalized_target = tuple(dict.fromkeys(
+        _normalize_to_standard(n, slug, scope=scope, home=home, project=project)
+        for n in target_agents
+    ))
     return _core_plan(
         slug=slug, scope=scope, source=source, ref=ref,
-        target_agents=target_agents, home=home, project=project,
+        target_agents=normalized_target, home=home, project=project,
         canonical_dir_resolver=canonical_agent_dir,
         standard_bundle_link=None,
         synthetic_names=_AGENT_SYNTHETIC_NAMES,
@@ -95,14 +111,37 @@ def _current_linked_agents(
     Adapters that fail-loud on a destination they cannot resolve (e.g. dexto
     at project scope) are treated as not-linked rather than crashing the scan.
 
+    Dedupe-by-destination (#361): the standard slot is checked FIRST and
+    reported as `standard`; any harness whose destination is the SAME file
+    (claude-code at both scopes, kode at project scope) is skipped, or the
+    scan would double-report one file and a computed delta could remove the
+    shared slot out from under its other readers.
+
     The kwargs `canonical_dir_resolver`/`standard_bundle_link` are accepted
     only to satisfy the core's `current_linked_resolver` call signature; they
     are irrelevant to the agent asset type and ignored.
     """
     from agent_toolkit_cli.agent_adapters import UnsupportedMechanismError
+    from agent_toolkit_cli.agent_adapters.standard import adapter_for as _std
 
     linked: list[str] = []
+    seen_dests: set[Path] = set()
+    try:
+        std_dest = _std().destination(
+            slug, scope=scope, home=home, project=project,
+        )
+    except ValueError:
+        # Slot unresolvable for these args (e.g. global scope, home=None).
+        std_dest = None
+    if std_dest is not None:
+        seen_dests.add(std_dest)
+        if std_dest.exists() or std_dest.is_symlink():
+            linked.append("standard")
     for name in _AGENTS:
+        if name == "standard":
+            # The catalog's "standard" entry is the skills bundle pseudo-
+            # agent; the agents-kind slot was handled above.
+            continue
         if name in synthetic_names or name in _AGENT_SYNTHETIC_NAMES:
             continue
         try:
@@ -117,9 +156,42 @@ def _current_linked_agents(
             # Adapter can't resolve a destination for this scope/args (e.g.
             # dexto project scope) — it cannot be linked here. Skip.
             continue
+        if dest in seen_dests:
+            continue
         if dest.exists() or dest.is_symlink():
             linked.append(name)
     return tuple(linked)
+
+
+def _normalize_to_standard(
+    name: str, slug: str, *, scope: Scope,
+    home: Path | None, project: Path | None,
+) -> str:
+    """Return 'standard' when `name`'s destination IS the standard slot
+    (claude-code at both scopes; kode at project scope), else `name` (#361).
+
+    Shared by BOTH facade mutation paths (apply's add/remove loops and
+    uninstall's direct adapter loop) plus plan()'s target normalization:
+    the slot is ONE file with many readers, so a covered token must route
+    to the standard adapter (sentinel + ownership guard), never to its own
+    per-harness adapter, which would bypass the sentinel contract.
+    """
+    if name == "standard":
+        return name
+    from agent_toolkit_cli.agent_adapters import UnsupportedMechanismError
+    from agent_toolkit_cli.agent_adapters.standard import adapter_for as _std
+
+    try:
+        std_dest = _std().destination(
+            slug, scope=scope, home=home, project=project,
+        )
+        adapter = agent_adapters.get_adapter(name)
+        dest = adapter.destination(slug, scope=scope, home=home, project=project)
+        if dest == std_dest:
+            return "standard"
+    except (ValueError, _UnknownAgentError, UnsupportedMechanismError):
+        pass
+    return name
 
 
 def apply(
@@ -133,13 +205,23 @@ def apply(
 
     For each agent in plan.add_agents:
       - Skip synthetic tokens (standard-agent).
+      - Normalize to "standard" when the token's destination IS the standard
+        slot (#361); a seen-set skips tokens that normalize to an
+        already-processed name.
       - Resolve the mechanism via agent_adapters.get_adapter().
       - If get_adapter() raises UnsupportedMechanismError, record as skipped.
       - Otherwise call adapter.install(slug, canonical_path/<agent_file>, …).
 
     For each agent in plan.remove_agents:
       - Skip synthetic tokens.
+      - Normalize + seen-set dedupe, as above; the standard adapter gets
+        canonical_content threaded for its ownership-guarded detach.
       - Call adapter.uninstall(slug, …). Idempotent.
+
+    Plans should come from plan(), which normalizes target tokens BEFORE the
+    delta: a hand-built plan whose add_agents and remove_agents both contain
+    tokens that normalize to "standard" nets to a DELETE of the shared slot
+    (add installs it, the remove loop then unlinks it).
     """
     from agent_toolkit_cli.agent_adapters import UnsupportedMechanismError
     from agent_toolkit_cli.agent_lock import (
@@ -181,9 +263,20 @@ def apply(
     created: list[Path] = []
     skipped: list[str] = []
 
+    # #361: tokens whose destination IS the standard slot route through the
+    # standard adapter (sentinel + ownership guard). A seen-set prevents
+    # double-processing when several tokens normalize to the same slot
+    # (e.g. claude-code + kode at project scope).
+    seen_add: set[str] = set()
     for name in plan.add_agents:
         if name in _AGENT_SYNTHETIC_NAMES:
             continue
+        name = _normalize_to_standard(
+            name, plan.slug, scope=plan.scope, home=home, project=project,
+        )
+        if name in seen_add:
+            continue
+        seen_add.add(name)
         try:
             adapter = agent_adapters.get_adapter(name)
         except UnsupportedMechanismError:
@@ -197,17 +290,33 @@ def apply(
         created.append(out)
 
     removed: list[Path] = []
+    seen_remove: set[str] = set()
     for name in plan.remove_agents:
         if name in _AGENT_SYNTHETIC_NAMES:
             continue
+        name = _normalize_to_standard(
+            name, plan.slug, scope=plan.scope, home=home, project=project,
+        )
+        if name in seen_remove:
+            continue
+        seen_remove.add(name)
         try:
             adapter = agent_adapters.get_adapter(name)
         except UnsupportedMechanismError:
             continue
-        adapter.uninstall(
-            plan.slug,
-            scope=plan.scope, home=home, project=project,
-        )
+        if name == "standard":
+            # Ownership-guarded detach: the canonical content authorizes
+            # removal of a sentinel-less pre-#361 slot (see adapter docstring).
+            adapter.uninstall(
+                plan.slug,
+                scope=plan.scope, home=home, project=project,
+                canonical_content=content_path,
+            )
+        else:
+            adapter.uninstall(
+                plan.slug,
+                scope=plan.scope, home=home, project=project,
+            )
 
     # Update lock — agent_path identifies which file was written.
     lock_action: Literal["added", "updated", "unchanged"] = "unchanged"
@@ -305,18 +414,45 @@ def uninstall(
     """
     from agent_toolkit_cli.agent_adapters import UnsupportedMechanismError
 
+    # #361: the standard adapter's detach is ownership-guarded — the scope's
+    # canonical <slug>.md authorizes removing a sentinel-less pre-#361 slot.
+    canonical_content: Path | None
+    try:
+        canonical_content = canonical_agent_dir(
+            slug, scope=scope, home=home, project=project,
+        ) / f"{slug}.md"
+    except ValueError:
+        canonical_content = None
+
     # Remove every requested projected file via its own adapter (idempotent).
     # The canonical and the lock entry are deliberately left intact — see the
     # docstring (#303). `remove()` owns library deletion.
+    # Tokens whose destination IS the standard slot normalize to "standard"
+    # (#361) so the .attk sentinel is cleaned up with the file; the seen-set
+    # keeps e.g. harnesses=("standard", "claude-code") from double-processing
+    # one slot.
+    seen: set[str] = set()
     for name in harnesses:
         if name in _AGENT_SYNTHETIC_NAMES:
             continue
+        name = _normalize_to_standard(
+            name, slug, scope=scope, home=home, project=project,
+        )
+        if name in seen:
+            continue
+        seen.add(name)
         try:
             adapter = agent_adapters.get_adapter(name)
         except (UnsupportedMechanismError, _UnknownAgentError):
             continue
         try:
-            adapter.uninstall(slug, scope=scope, home=home, project=project)
+            if name == "standard":
+                adapter.uninstall(
+                    slug, scope=scope, home=home, project=project,
+                    canonical_content=canonical_content,
+                )
+            else:
+                adapter.uninstall(slug, scope=scope, home=home, project=project)
         except ValueError:
             # Adapter can't resolve a destination for these args (e.g. a
             # {HOME}-template harness called with home=None, or dexto at

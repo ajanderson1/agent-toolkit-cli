@@ -109,6 +109,24 @@ def test_symlink_uninstall_idempotent(harness, global_tpl, project_tpl, tmp_path
     adapter.uninstall("test-agent", scope="global", home=tmp_path)
 
 
+def test_symlink_uninstall_removes_orphan_sentinel(tmp_path, fake_content):
+    """#361: uninstall must also remove a leftover .attk sentinel — an
+    orphaned sentinel would later authorize a silent clobber of a file the
+    user re-authored at this path (via _guard_foreign). kode at GLOBAL scope
+    (.kode/agents/) is deliberately NOT the standard slot, so this exercises
+    the plain symlink adapter, not the standard adapter."""
+    from agent_toolkit_cli.agent_adapters import _sentinel_path, symlink
+
+    adapter = symlink.adapter_for("kode")
+    dest = adapter.install("test-agent", fake_content, scope="global", home=tmp_path)
+    sentinel = _sentinel_path(dest)
+    sentinel.write_text("")
+    assert dest.exists() and sentinel.exists()
+    adapter.uninstall("test-agent", scope="global", home=tmp_path)
+    assert not dest.exists()
+    assert not sentinel.exists(), "orphaned .attk sentinel after uninstall"
+
+
 def test_pi_global_path_honours_env_override(tmp_path, monkeypatch, fake_content):
     """pi's $PI_CODING_AGENT_DIR overrides the default ~/.pi/agent/agents/ path."""
     custom = tmp_path / "custom_pi"
