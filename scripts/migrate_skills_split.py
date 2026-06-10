@@ -7,7 +7,9 @@ transactional --apply. See docs/superpowers/specs/2026-06-10-skills-split-into-c
 """
 from __future__ import annotations
 import json
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Callable
 
 OWNER = "ajanderson1"
 SOURCE_REPO = "ajanderson1/skills"
@@ -87,3 +89,89 @@ def find_lock_scopes_for_slug(slug: str, *, lock_paths: list[Path]) -> list[Path
         if entry and entry.get("source") == SOURCE_REPO:
             hits.append(lock)
     return hits
+
+
+@dataclass(frozen=True)
+class Action:
+    phase: str            # "A" (global) | "B" (project)
+    verb: str             # remove | add | install | uninstall | needs-decision
+    slug: str
+    scope: Path
+    new_source: str | None = None
+    agents: tuple[str, ...] = field(default_factory=tuple)
+
+
+def projected_agents(slug: str, scope: str, lock: Path) -> tuple[str, ...]:
+    """Agent TOKENS (as accepted by `--agents`) whose on-disk projection
+    symlink for `slug` exists at this scope.
+
+    Lock entries do NOT record agents (LockEntry has no such field — parked
+    #230), so the symlinks are the only source of truth. NOTE this is NOT a
+    straight copy of remove_cmd's will_delete loop: that loop only enumerates
+    paths to DELETE, so synthetic catalog names are harmless there — but THIS
+    list is fed back into `--agents`, and _resolve_agents
+    (commands/skill/__init__.py) hard-rejects synthetics like "general-skill".
+    Two rules:
+      1. skip ALL synthetic catalog entries, not just "universal";
+      2. a universal-bundle link surfaces as the literal "universal" token —
+         the only token that restores the bundle BY DESIGN (real agents like
+         dexto sharing .agents/skills restore it only by coincidence) — and
+         agents whose projection dir IS the bundle path collapse into it.
+    """
+    from agent_toolkit_cli.skill_paths import AGENTS, agent_projection_dir
+
+    synthetic = {"universal", "general-skill", "general-agent"}
+    project = None if scope == "global" else lock.parent
+    bundle = agent_projection_dir("universal", slug, scope=scope, home=None, project=project)
+    found: list[str] = []
+    if bundle.is_symlink():
+        found.append("universal")
+    for name in AGENTS:
+        if name in synthetic:
+            continue
+        link = agent_projection_dir(name, slug, scope=scope, home=None, project=project)
+        if link.is_symlink() and link != bundle:
+            found.append(name)
+    return tuple(dict.fromkeys(found))
+
+
+def _global_entry(global_lock: Path, slug: str) -> dict | None:
+    return json.loads(global_lock.read_text()).get("skills", {}).get(slug)
+
+
+def build_action_plan(
+    *, slugs: list[str], global_lock: Path, project_locks: list[Path],
+    projected_agents: Callable[[str, str, Path], tuple[str, ...]] = projected_agents,
+) -> list[Action]:
+    """Phase A (global) for every slug FIRST, then Phase B (project).
+
+    Global rule per slug: entry on NEW source -> no-op; entry on OLD source ->
+    remove+add+install (the install restores the agent projections `remove
+    --force` deletes and `add` does not recreate); entry MISSING -> prerequisite
+    add (covers project-only slugs like apk-workbench AND the remove-succeeded/
+    add-failed stranded state, so re-runs self-heal instead of skipping)."""
+    a: list[Action] = []
+    b: list[Action] = []
+    for slug in slugs:
+        new_source = f"{OWNER}/{repo_for_slug(slug)}"
+        entry = _global_entry(global_lock, slug)
+        if entry is None:
+            a += [Action("A", "add", slug, global_lock, new_source)]
+        elif entry.get("source") == SOURCE_REPO:
+            agents = projected_agents(slug, "global", global_lock)
+            a += [Action("A", "remove", slug, global_lock),
+                  Action("A", "add", slug, global_lock, new_source)]
+            if agents:
+                a += [Action("A", "install", slug, global_lock, new_source, agents=agents)]
+        for scope in find_lock_scopes_for_slug(slug, lock_paths=project_locks):
+            agents = projected_agents(slug, "project", scope)
+            if not agents:
+                # projection-less old-source entry (live: whatsapp_sync et al.):
+                # an uninstall/install pair would let `uninstall -p` destroy the
+                # lock entry BEFORE any empty-agents guard can fire. Plan a
+                # needs-decision marker instead; main() blocks --apply on these.
+                b += [Action("B", "needs-decision", slug, scope)]
+                continue
+            b += [Action("B", "uninstall", slug, scope, agents=agents),
+                  Action("B", "install", slug, scope, new_source, agents=agents)]
+    return a + b
