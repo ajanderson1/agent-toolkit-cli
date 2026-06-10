@@ -19,15 +19,25 @@ from pathlib import Path
 from typing import Literal
 
 from agent_toolkit_cli import instructions_paths
+from agent_toolkit_tui.composition import (
+    instructions_longtail,
+    instructions_nonstandard_big_five,
+)
 from agent_toolkit_cli.instructions_adapters.symlink import _pointer_path
 from agent_toolkit_cli.instructions_lock import read_lock
 
 Scope = Literal["global", "project"]
 
-# Pinned shortlist of installable harnesses whose cells the TUI grid renders
-# interactively. `standard` is informational only and NOT included here.
-# This is the single knob to add/remove interactive columns.
-INTERACTIVE_HARNESSES: tuple[str, ...] = ("claude-code", "gemini-cli")
+# Derived shortlist of installable harnesses whose cells the TUI grid renders
+# by default (#351 — derived from the composition, not pinned). `standard` is
+# informational only and NOT included here.
+INTERACTIVE_HARNESSES: tuple[str, ...] = instructions_nonstandard_big_five()
+
+
+def all_cell_harnesses() -> tuple[str, ...]:
+    """Probe set for the state loader: every potential column (big five +
+    long tail), so expanding the long tail never needs a reload (#351)."""
+    return instructions_nonstandard_big_five() + instructions_longtail()
 
 
 @dataclass(frozen=True)
@@ -148,7 +158,7 @@ def build_instruction_rows(
             canonical_exists=True,
             cells={},
         )
-        for harness in INTERACTIVE_HARNESSES:
+        for harness in all_cell_harnesses():
             cell = _cell_for(
                 "AGENTS.md", harness,
                 scope=scope, home=home, project=project,
@@ -163,7 +173,7 @@ def build_instruction_rows(
     for slug in sorted(lock.instructions):
         entry = lock.instructions[slug]
         cells: dict[tuple[str, str], InstructionCell] = {}
-        for harness in INTERACTIVE_HARNESSES:
+        for harness in all_cell_harnesses():
             cell = _cell_for(
                 slug, harness,
                 scope=scope, home=home, project=project,

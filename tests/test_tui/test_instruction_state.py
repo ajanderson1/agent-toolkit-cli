@@ -289,3 +289,33 @@ def test_build_instruction_rows_conflict_cell(tmp_path: Path, monkeypatch):
 def test_interactive_harnesses_are_correct():
     """INTERACTIVE_HARNESSES must be exactly the 2 pinned harnesses."""
     assert INTERACTIVE_HARNESSES == ("claude-code", "gemini-cli")
+
+
+# ---------------------------------------------------------------------------
+# Full-composition cell probing (#351)
+# ---------------------------------------------------------------------------
+
+def test_rows_carry_cells_for_longtail_harnesses(tmp_path: Path, monkeypatch):
+    """Every loaded row has cells for long-tail harnesses, so expanding the
+    long tail never needs a reload (#351)."""
+    from agent_toolkit_tui.composition import instructions_longtail
+
+    home = tmp_path / "home"
+    home.mkdir()
+    agent_toolkit_dir = home / ".agent-toolkit"
+    agent_toolkit_dir.mkdir(parents=True)
+    (agent_toolkit_dir / "AGENTS.md").write_text("# AGENTS\n")
+
+    monkeypatch.setattr(
+        "agent_toolkit_cli.instructions_paths.library_root",
+        lambda: home / ".agent-toolkit" / "instructions",
+    )
+    monkeypatch.setattr(
+        "agent_toolkit_cli.instructions_paths.global_canonical_agents_md",
+        lambda: agent_toolkit_dir / "AGENTS.md",
+    )
+    rows = build_instruction_rows(scope="global", home=home, project=None)
+    assert rows, "expected the fresh-user AGENTS.md row"
+    # augment is global-capable; tabnine-cli etc. may be scope-limited, so
+    # assert on a tail harness known to have a global pointer slot.
+    assert ("augment", "global") in rows[0].cells
