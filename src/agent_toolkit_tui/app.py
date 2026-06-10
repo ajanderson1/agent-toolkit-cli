@@ -1015,23 +1015,24 @@ class TUIApp(App):
                 f"[b red]{broken}[/] broken"
             )
         elif active == "pi-extension":
-            loaded_global = loaded_project = 0
+            loaded = 0
             try:
                 grid_pi = self.query_one("#pi-grid", PiGrid)
             except (NoMatches, Exception):
                 grid_pi = None
             if grid_pi is not None:
+                scope = self._scope_to_roots()[0]
                 for pi_row in grid_pi._rows:
-                    if pi_row.global_cell.global_loaded:
-                        loaded_global += 1
-                    if pi_row.project_cell.project_loaded:
-                        loaded_project += 1
+                    if scope == "global":
+                        if pi_row.global_cell.global_loaded:
+                            loaded += 1
+                    elif pi_row.project_cell.project_loaded:
+                        loaded += 1
                 pending = len(grid_pi.pending_entries())
             else:
                 pending = 0
             text = (
-                f"  [b green]{loaded_global}[/] global   "
-                f"[b cyan]{loaded_project}[/] project   "
+                f"  [b green]{loaded}[/] loaded   "
                 f"[b yellow]{pending}[/] pending"
             )
         else:  # "agent"

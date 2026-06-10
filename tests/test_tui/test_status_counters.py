@@ -182,3 +182,38 @@ async def test_apply_failed_count_is_symmetric(monkeypatch):
     assert "apply failed" in footer
     assert titles, "expected an error notify with a summary title"
     assert "3 failed" in titles[-1]
+
+
+@pytest.mark.asyncio
+async def test_pi_status_bar_shows_active_scope_only(monkeypatch):
+    """Pi status bar reports the ACTIVE scope's loaded count + pending (#349)
+    instead of 'N global · M project'. New test — no prior pi case existed."""
+    from textual.widgets import Static
+
+    from agent_toolkit_tui.app import TUIApp
+    from agent_toolkit_tui.pi_extension_state import PiCell, PiExtensionRow
+
+    def _row(slug: str, *, g: bool, p: bool) -> PiExtensionRow:
+        cell = PiCell(global_loaded=g, project_loaded=p, origin="store-owned")
+        return PiExtensionRow(slug=slug, origin="store-owned",
+                              source=f"git@github.com:x/{slug}",
+                              global_cell=cell, project_cell=cell)
+
+    monkeypatch.setattr(
+        "agent_toolkit_tui.app.build_pi_rows",
+        lambda **kwargs: [_row("a", g=True, p=False), _row("b", g=True, p=True)],
+    )
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        app.action_kind("pi-extension")
+        await pilot.pause()
+        bar = str(app.query_one("#status-bar", Static).render())
+        # project scope is active on load: exactly one project-loaded row.
+        assert "1" in bar and "loaded" in bar and "pending" in bar
+        assert "global" not in bar
+
+        await pilot.press("ctrl+g")
+        await pilot.pause()
+        bar = str(app.query_one("#status-bar", Static).render())
+        assert "2" in bar and "loaded" in bar
