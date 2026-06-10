@@ -81,33 +81,47 @@ The TUI/composition layer consumes this via a new per-scope helper —
   `--harnesses claude-code` install) and is byte-identical to the canonical
   content, installing `standard` succeeds as a no-op adoption (it becomes
   tool-owned via the `.attk` sentinel; deleting it later loses nothing — the
-  content is the canonical's by definition). **Conflict contract (corrected
-  by review):** the foreign-content fail-loud guard applies to slugs WITHOUT
-  a lock entry at the active scope (fresh installs). For locked slugs the
-  facade sets `overwrite=True` (tool-owned refresh) — same contract as every
-  existing adapter. Both behaviors are pinned by tests at the adapter AND
-  CLI layers.
+  content is the canonical's by definition).
+- **Ownership contract for the standard slot (PM-review correction):** in the
+  shared `.claude/agents/` dir, the **`.attk` sentinel is the only per-file
+  ownership record** — lock membership is NOT ownership evidence (every
+  CLI-installable slug has a global lock entry, and #362 means project locks
+  don't exist, so a lock-derived `overwrite=True` would silently clobber a
+  hand-authored `~/.claude/agents/<slug>.md`). The standard adapter therefore
+  derives overwrite from the sentinel and IGNORES the facade's lock-based
+  overwrite flag for foreign files: byte-identical → adopt; sentinel present
+  → tool-owned refresh; otherwise → AgentProjectionConflictError, even when
+  the facade passed `overwrite=True`. Pinned by tests at the adapter AND CLI
+  layers (project-scope foreign-file install fails loud; sentineled refresh
+  succeeds).
 - **`claude-code` stays a valid input token, normalized to `standard`** at
-  every boundary (CLI parse + facade uninstall path) — it is never dispatched
-  to the legacy claude-code symlink cell again. One slot, one adapter, one
-  name: reporting (status/TUI) says `standard`; the per-scope covered set
-  explains who reads it. (Review finding: leaving two adapters writing the
-  same file makes the delta/dedupe machinery unsound.)
+  every boundary — and normalization is **destination-based on BOTH the
+  install and uninstall facade paths** (PM-review correction: name-based
+  install normalization alone left `--harnesses kode -p` writing the slot
+  through the sentinel-unaware symlink cell, recreating the second-writer
+  the dedupe outlawed). `apply()`'s add loop and `uninstall()`'s adapter
+  loop each route any harness whose destination resolves to the standard
+  slot through the standard adapter. One slot, one adapter, one name:
+  reporting (status/TUI) says `standard`.
 - **Uninstall:** `--harnesses standard` removes the slot file (the usual
-  non-destructive detach; canonical + lock untouched). Normalization is
-  destination-based in the facade: any requested harness whose destination
-  resolves to the standard slot (claude-code everywhere; kode at project
-  scope, whose project cell IS `.claude/agents/<slug>.md`) routes to the
-  standard adapter — so sentinel cleanup always happens and detaching a
-  covered token detaches the slot all covered harnesses read (documented in
-  cli.md). The **default** uninstall set stays maximal (standard + ALL
-  enabled harnesses — adapters are idempotent), so pre-#361 per-harness
-  projections in kode/neovate/cortex's own dirs are still cleaned up; only
-  the **install** default is covered-aware.
+  non-destructive detach; canonical + lock untouched), with an **ownership
+  guard** (PM-review correction — "adapters are idempotent so over-listing
+  is harmless" is false in a shared dir): the slot is unlinked only when its
+  sentinel exists OR its content matches the scope canonical (covers
+  pre-#361 sentinel-less claude-code installs); a sentinel-less,
+  content-divergent file is left in place with a "not managed by this tool"
+  notice. Destination-based normalization (claude-code everywhere; kode at
+  project scope) routes every slot deletion through this guard and the
+  sentinel cleanup. The **default** uninstall set stays maximal (standard +
+  ALL enabled harnesses — own-dir adapters only ever touch their own
+  destinations), so pre-#361 projections in kode/neovate/cortex's own dirs
+  are still cleaned up; only the **install** default is covered-aware.
 - **Default fan-out** (`agent install` with no `--harnesses`): `standard` +
   the enabled harnesses **not** covered at that scope. Covered harnesses no
   longer receive individual default installs (they read the standard slot).
-- The synthetic-name guard keeps rejecting `standard-agent` as a user token.
+- ALL synthetic catalog names (`standard-skill`, `standard-agent`; their
+  #350 aliases resolve to these first) are rejected with an explicit
+  UsageError at the agent-kind boundary.
 
 ### TUI agents tab
 
@@ -133,18 +147,32 @@ skills/instructions helpers' convention.)
 - Standard ⓘ panel: reuses the kind-agnostic `_standard_info` with
   `{"kind": "agents", "names": agents_standard_covered(scope)}` — exhaustive,
   counted, derived at open time. At global scope it appends a note that
-  `devin` is covered at project scope only.
+  `devin` is covered at project scope only. The modal **title** is
+  kind-aware: "Standard slot (agents)" — not the skills-kind "Standard
+  bundle" (PM-review: the slot is an adapter, not a bundle link).
 - Composition: agents-kind helper added to `composition.py`
   (`agents_nonstandard_main(scope)`), built from `MAIN_HARNESSES` + adapter
   support minus `agents_standard_covered(scope)`.
 
 ### Doctor
 
-The standard slot joins agent doctor's scan: drift (slot file differs from
-the scope-appropriate canonical — project doctor compares against the
-PROJECT canonical, not the global library) and orphan (slot `.md` file with
-no lock entry, found by a directory sweep after the per-slug loop, skipping
-`.attk` sidecars) findings, named `standard` in output.
+The standard slot joins agent doctor's scan, **sentinel-aware** (PM-review
+correction: `.claude/agents/` is the primary dir where users hand-author
+Claude Code subagents — this very repo's advisor bench lives there — so
+"no lock entry" must never imply an `rm` fix):
+
+- **drift** — slot file differs from the scope-appropriate canonical
+  (project doctor compares against the PROJECT canonical, not the global
+  library).
+- **orphan** — a `.md` file **with a `.attk` sentinel** (tool-written) and
+  no lock entry → `rm` fix offered.
+- **unmanaged** — a sentinel-less `.md` file with no lock entry →
+  report-only notice, NO fix action (mirrors the #337 doctor posture:
+  adopt/report, never delete user files).
+- **dangling sidecar** — a `.attk` sentinel whose main `.md` file is gone
+  (e.g. manually deleted slot) → remove-sidecar fix; otherwise the stale
+  sentinel would later authorize a silent clobber of a new same-named
+  user file via `_guard_foreign`.
 
 ### Research step (mandated)
 
@@ -174,8 +202,10 @@ upstream docs/source:
    `~/.claude/agents/<slug>.md` (global) / `<project>/.claude/agents/<slug>.md`
    (project); round-trips with uninstall (incl. sentinel cleanup on every
    deletion path); adopt-if-identical on existing claude-code installs;
-   conflict on foreign content for unlocked slugs (locked slugs refresh as
-   tool-owned — the existing facade contract).
+   **slot ownership = sentinel**: foreign (sentinel-less, content-divergent)
+   files conflict on install — regardless of lock state — and are never
+   unlinked on uninstall; sentineled or content-matching slots refresh and
+   detach normally. Pinned at adapter + CLI layers.
 2. Default fan-out installs `standard` + non-covered harnesses only.
 3. Agents tab shows the Standard column (absorbing claude-code's column);
    cells reflect slot state; ⓘ panel enumerates the per-scope covered set
@@ -186,8 +216,12 @@ upstream docs/source:
    hardcoded harness names in TUI or CLI paths.
 5. Research step completed: every supported harness re-verified for
    `.claude/agents/` reading, fragments + matrix updated with citations.
-6. Doctor reports drift/orphan on the standard slot.
-7. `standard-agent` (and the other synthetic catalog names) rejected with an
-   explicit UsageError at the agent-kind boundary ("synthetic; use
-   'standard'") — review found the old behavior was a silent no-op, not a
-   rejection; #350 alias behavior unchanged; full suite green.
+6. Doctor reports drift / orphan (sentinel-gated) / unmanaged (report-only)
+   / dangling-sidecar on the standard slot; it never offers `rm` for a
+   sentinel-less user file.
+7. ALL synthetic catalog names (`standard-skill`, `standard-agent` — #350
+   aliases resolve to these first, so `general-skill` etc. are covered)
+   rejected with an explicit UsageError at the agent-kind boundary
+   ("synthetic; use 'standard'") — review found the old behavior was a
+   silent no-op, not a rejection; #350 alias behavior unchanged; full suite
+   green.
