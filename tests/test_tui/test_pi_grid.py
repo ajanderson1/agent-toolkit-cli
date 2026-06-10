@@ -642,6 +642,89 @@ async def test_apply_pi_settings_error_surfaces(monkeypatch):
     assert notify_calls[-1].get("severity") == "error"
 
 
+@pytest.mark.asyncio
+async def test_apply_failure_preserves_pending(monkeypatch):
+    """Latent bug (#349 spec §5): on failure _apply_pi_pending skipped
+    clear_pending() but _refresh_pi_view()'s set_rows cleared anyway."""
+    from agent_toolkit_tui.app import TUIApp
+    import agent_toolkit_cli.pi_extension_install as _pi_install
+    import agent_toolkit_cli.pi_extension_lock as _lock
+    import agent_toolkit_cli.pi_extension_ops as _ops
+
+    entry = MagicMock()
+    fake_lock = MagicMock()
+    fake_lock.skills = {"alpha": entry}
+    monkeypatch.setattr(_lock, "read_lock", lambda path: fake_lock)
+    monkeypatch.setattr(
+        "agent_toolkit_cli.pi_extension_paths.library_lock_path",
+        lambda env=None: Path("/fake/lock"),
+    )
+
+    def _boom(**kwargs: Any) -> None:
+        raise _pi_install.InstallError("boom")
+
+    monkeypatch.setattr(_ops, "install", _boom)
+    monkeypatch.setattr(
+        "agent_toolkit_tui.app.build_pi_rows",
+        lambda **kwargs: [_store_row("alpha")],
+    )
+
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        app.action_kind("pi-extension")
+        await pilot.pause()
+        grid = app.query_one("#pi-grid", PiGrid)
+        grid._pending[("global", "alpha")] = "link"
+
+        app.action_apply()
+        await pilot.pause()
+
+        assert grid.pending_entries() == {("global", "alpha"): "link"}, (
+            "failed ops must stay queued for retry, like the other grids"
+        )
+
+
+@pytest.mark.asyncio
+async def test_apply_multi_scope_footer_is_scope_tagged(monkeypatch):
+    """Spanning-scope apply tags the footer summary (#349). Single-scope
+    pending yields an empty tag, so only this fixture can catch a missing
+    apply tag."""
+    from agent_toolkit_tui.app import TUIApp
+    import agent_toolkit_cli.pi_extension_lock as _lock
+    import agent_toolkit_cli.pi_extension_ops as _ops
+
+    entry = MagicMock()
+    fake_lock = MagicMock()
+    fake_lock.skills = {"alpha": entry}
+    monkeypatch.setattr(_lock, "read_lock", lambda path: fake_lock)
+    monkeypatch.setattr(
+        "agent_toolkit_cli.pi_extension_paths.library_lock_path",
+        lambda env=None: Path("/fake/lock"),
+    )
+    monkeypatch.setattr(_ops, "install", lambda **kwargs: None)
+    monkeypatch.setattr(_ops, "uninstall", lambda **kwargs: None)
+    monkeypatch.setattr(
+        "agent_toolkit_tui.app.build_pi_rows",
+        lambda **kwargs: [_store_row("alpha")],
+    )
+
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        app.action_kind("pi-extension")
+        await pilot.pause()
+        grid = app.query_one("#pi-grid", PiGrid)
+        grid._pending[("global", "alpha")] = "link"
+        grid._pending[("project", "alpha")] = "unlink"
+
+        app.action_apply()
+        await pilot.pause()
+        footer = str(app.query_one("#footer-pending", Static).render())
+
+    assert "applied: 2 ok, 0 failed (1 global, 1 project)" in footer
+
+
 # ---------------------------------------------------------------------------
 # Kind sidebar tests
 # ---------------------------------------------------------------------------

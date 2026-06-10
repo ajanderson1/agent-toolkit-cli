@@ -782,9 +782,12 @@ class TUIApp(App):
                 errors.append(f"{slug}: {exc}")
                 failed += 1
 
+        saved = grid.pending_entries() if failed else {}
         if failed == 0:
             grid.clear_pending()
         self._refresh_pi_view()
+        if saved:
+            grid.restore_pending(saved)
         self._refresh_pending_label()
         self._refresh_status_bar()
 
