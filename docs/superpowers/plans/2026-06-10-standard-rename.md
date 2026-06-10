@@ -139,10 +139,32 @@ comment with: `# v3.7 full rename (#350): key and title both say "standard".`
 
 `instruction_grid.py:339`: `f"general {_INFO_GLYPH}"` → `f"standard {_INFO_GLYPH}"`.
 
-- [ ] **Step 6: Sweep every remaining quoted token literal in src/ and tests/**
+Display strings the sweep regex can NOT catch (review finding — edit by hand):
+
+`widgets/skill_grid.py:564` (also update the stale #304 comment above it):
+```python
+    base = "Standard" if agent == "standard" else AGENTS[agent].display_name
+```
+
+`widgets/skill_grid.py:364`: `f"General agent — no symlink needed.\n"` →
+`f"Standard agent — no symlink needed.\n"`.
+
+`widgets/instruction_grid.py:185-188`: modal `title = "general · instruction"` →
+`"standard · instruction"`; body `f"[b]general[/] — canonical AGENTS.md\n\n"` →
+`f"[b]standard[/] — canonical AGENTS.md\n\n"`; plus the surrounding "general
+column" docstrings/comments (lines 3, 9, 40, 248, 283, 314, 361, 372-373) and
+`instruction_state.py:10,28`.
+
+`commands/skill/wizard.py:78` banner: `"\n── Universal (.agents/skills) ── always
+included ──"` → `"\n── Standard (.agents/skills) ── always included ──"`; line 69
+docstring: "Two-section wizard: Standard (auto-listed) + Additional agents…".
+
+- [ ] **Step 6: Sweep every remaining quoted token literal in src/ and tests/ —
+  EXCLUDING `tests/fixtures/`** (the vendored `vercel-labs-skills-agents.ts`
+  snapshot must stay a faithful upstream copy; upstream still says `universal`)
 
 ```bash
-grep -rln '"universal"\|'"'"'universal'"'"'\|general-skill\|general-agent' src/ tests/ | while read -r f; do
+grep -rln --exclude-dir=fixtures '"universal"\|'"'"'universal'"'"'\|general-skill\|general-agent' src/ tests/ | while read -r f; do
   sed -i '' \
     -e 's/"universal"/"standard"/g' -e "s/'universal'/'standard'/g" \
     -e 's/general-skill/standard-skill/g' \
@@ -150,14 +172,53 @@ grep -rln '"universal"\|'"'"'universal'"'"'\|general-skill\|general-agent' src/ 
 done
 ```
 
-Then verify nothing quoted remains (identifiers like `get_universal_agents` and
-`general_harness_name` WILL still match a bare grep — that is expected until Task 3):
+Then verify nothing quoted remains outside fixtures (identifiers like
+`get_universal_agents` and `general_harness_name` WILL still match a bare grep —
+that is expected until Task 3):
 
 ```bash
-grep -rn '"universal"\|'"'"'universal'"'"'\|general-skill\|general-agent' src/ tests/
+grep -rn --exclude-dir=fixtures '"universal"\|'"'"'universal'"'"'\|general-skill\|general-agent' src/ tests/
 ```
 Expected: no output. Manually eyeball `git diff` for sed collateral (docstrings
 reading "the standard bundle" etc. should read naturally; fix wording by hand).
+
+- [ ] **Step 6b: Display-string sweep over tests** — the Step 6 regex misses
+  capitalized display labels that tests assert on. Update by hand:
+
+  - `tests/test_cli/test_agent_general_rename.py:44,54` — `"General (agents)"` →
+    `"Standard (agents)"`, `"General (skills)"` → `"Standard (skills)"`. Rename
+    the file to `tests/test_cli/test_agent_standard_rename.py` and update its
+    docstrings: it pinned the #304 display-only rename; it now pins the #350
+    full rename.
+  - `tests/test_tui/test_column_info_modal.py:28` — `"General"` → `"Standard"`.
+  - `tests/test_tui/test_skill_grid_column_info.py:42,222` — `"General ⓘ"` →
+    `"Standard ⓘ"`.
+  - Checkpoint: `grep -rn '"General\|General ⓘ\|Universal' tests/ --exclude-dir=fixtures`
+    → expected: no output.
+
+- [ ] **Step 6c: Interop divergence map** — `tests/test_cli/test_skill_agents_interop.py`
+  asserts every key in the vendored fixture exists in AGENTS; the fixture keeps
+  `universal`, so encode the deliberate divergence:
+
+```python
+# Deliberate naming divergence from upstream vercel-labs/skills (#350):
+# upstream's `universal` is our `standard`. Applied before comparison so the
+# vendored fixture stays a verbatim snapshot.
+_RENAMED_FROM_UPSTREAM = {"universal": "standard"}
+
+ts_names = {_RENAMED_FROM_UPSTREAM.get(n, n) for n in ts_names}
+```
+
+- [ ] **Step 6d: Compound literals the token sed cannot match** — rename by hand:
+
+  - `_install_core.py:131`: `return True, "universal-global"` →
+    `return True, "standard-global"`, plus its two assertions:
+    `tests/test_cli/test_skill_install_engine.py:40` and the assertion in the
+    (renamed) `test_agent_standard_rename.py:121` — `"universal-global"` →
+    `"standard-global"` in each.
+  - `skill_install.py:187,193,242`: the three error prefixes
+    `f"{plan.slug}/universal: conflicting symlink at {link}: "` →
+    `f"{plan.slug}/standard: …"` (no tests assert these strings — verified).
 
 - [ ] **Step 7: Run the full suite**
 
@@ -216,12 +277,14 @@ def test_alias_maps_old_to_new(old, new):
 
 
 def test_expected_alias_table():
+    # Only tokens a user could actually have typed at a CLI boundary.
+    # general-instructions / general-pi-extension were never accepted values
+    # anywhere, so aliasing them would warn-then-error on a token the user
+    # never typed (review finding — deliberately excluded).
     assert DEPRECATED_TOKEN_ALIASES == {
         "universal": "standard",
         "general-skill": "standard-skill",
         "general-agent": "standard-agent",
-        "general-instructions": "standard-instructions",
-        "general-pi-extension": "standard-pi-extension",
     }
 
 
@@ -241,8 +304,6 @@ def test_warning_printed_once_per_token(capsys):
 
 def test_aliased_catalog_targets_exist():
     for new in DEPRECATED_TOKEN_ALIASES.values():
-        if new in {"standard-instructions", "standard-pi-extension"}:
-            continue  # defensive aliases — these were never catalog entries
         assert new in AGENTS
 ```
 
@@ -261,8 +322,6 @@ DEPRECATED_TOKEN_ALIASES: dict[str, str] = {
     "universal": "standard",
     "general-skill": "standard-skill",
     "general-agent": "standard-agent",
-    "general-instructions": "standard-instructions",
-    "general-pi-extension": "standard-pi-extension",
 }
 
 _warned_deprecated: set[str] = set()
@@ -293,7 +352,7 @@ Add `import sys` to the module imports if absent.
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/test_token_aliases.py -q`
-Expected: PASS (9 tests).
+Expected: PASS (7 tests).
 
 - [ ] **Step 5: Wire the five CLI boundaries**
 
@@ -304,16 +363,21 @@ from agent_toolkit_cli.skill_agents import resolve_agent_token
 ```python
     parts = [resolve_agent_token(p.strip()) for p in agents_str.split(",") if p.strip()]
 ```
-Append to the docstring: `Deprecated spellings ("universal", "general-skill", …)
-are aliased with a stderr warning via resolve_agent_token().`
+Append to the docstring (unquoted token names — quoted old spellings would trip
+the Task 4 arch guard): `Deprecated spellings (universal, general-*) are aliased
+with a stderr warning via resolve_agent_token().`
 
-`commands/skill/list_cmd.py` — before the validation block:
+`commands/skill/list_cmd.py` — add the import, then before the validation block:
+```python
+from agent_toolkit_cli.skill_agents import resolve_agent_token
+```
 ```python
     if agent is not None:
         agent = resolve_agent_token(agent)
 ```
 
-`commands/skill/_common.py` `validate_agent_names`:
+`commands/skill/_common.py` — add `from agent_toolkit_cli.skill_agents import
+resolve_agent_token` to the imports, then:
 ```python
 def validate_agent_names(names: tuple[str, ...]) -> tuple[str, ...]:
     """Resolve deprecated aliases, then raise UsageError on unknown names."""
@@ -325,8 +389,9 @@ def validate_agent_names(names: tuple[str, ...]) -> tuple[str, ...]:
 ```
 
 `commands/agent/install_cmd.py` `_resolve_harnesses` and
-`commands/agent/uninstall_cmd.py` `_resolve_harnesses_for_uninstall` — same
-one-line change in each:
+`commands/agent/uninstall_cmd.py` `_resolve_harnesses_for_uninstall` — add
+`from agent_toolkit_cli.skill_agents import resolve_agent_token` to each file's
+imports, then the same one-line change in each:
 ```python
         parts = [resolve_agent_token(p.strip()) for p in harnesses_str.split(",") if p.strip()]
 ```
@@ -394,15 +459,31 @@ than deleted because #351's per-kind info panel will consume it.)
 
 - [ ] **Step 2: Identifier sweep**
 
+The pattern must also cover the bundle-helper family (review finding): the
+`universal_bundle_link` keyword parameter spans `_install_core.py:145` ↔
+`skill_install.py`/`agent_install.py` call sites, and `skill_doctor.py:20`
+imports `_universal_bundle_link` by name — the sweep covers all files, so the
+cross-module rename stays synchronized as long as every substitution below runs.
+
 ```bash
-grep -rln 'is_universal\|show_in_universal_list\|get_universal_agents\|general_harness_name' src/ tests/ | while read -r f; do
+grep -rln --exclude-dir=fixtures 'is_universal\|show_in_universal_list\|universal_agents\|universal_bundle\|_project_universal_link\|_universal_info\|general_harness_name' src/ tests/ | while read -r f; do
   sed -i '' \
     -e 's/show_in_universal_list/show_in_standard_list/g' \
+    -e 's/get_non_universal_agents/get_non_standard_agents/g' \
     -e 's/get_universal_agents/get_standard_agents/g' \
+    -e 's/universal_bundle/standard_bundle/g' \
+    -e 's/_project_universal_link/_project_standard_link/g' \
+    -e 's/_universal_info/_standard_info/g' \
     -e 's/is_universal/is_standard/g' \
     -e 's/general_harness_name/standard_harness_name/g' "$f"
 done
 ```
+
+(`s/universal_bundle/standard_bundle/g` intentionally covers
+`_universal_bundle_link`, the `universal_bundle_link` kwarg,
+`_universal_bundle_root`, and `_is_universal_bundle_target` — the
+`is_universal` rule and this one compose to the same final names regardless of
+order.)
 
 Update the `get_standard_agents` docstring in `skill_agents.py` by hand:
 ```python
@@ -518,11 +599,17 @@ Line 20: `…filters to skills currently symlinked into that agent (or the
 > (pre-v3). The old token spellings still work for one cycle with a deprecation
 > warning and are removed in v4.
 
-- [ ] **Step 2: `index.md:34`**
+- [ ] **Step 2: `index.md:34` — CONDITIONAL**
 
+`docs/index.md` is currently untracked (it belongs to an in-flight mkdocs
+initiative not yet committed). If the file exists in the worker's branch:
 `Universal agents (…)` → `Standard harnesses (codex, opencode, gemini-cli, +11
 more whose skillsDir == .agents/skills)`; `Non-universal agents` →
-`Non-standard harnesses`. Add the same terminology note as Step 1.
+`Non-standard harnesses`; add the same terminology note as Step 1. If it does
+NOT exist, skip and note in the PR description that the Universal→Standard
+wording must land with the mkdocs PR instead. Either way, re-verify all Task 5
+line numbers against the branch's HEAD before editing (`cli.md` also has
+uncommitted local modifications at plan-authoring time).
 
 - [ ] **Step 3: `harness-matrix.md`**
 

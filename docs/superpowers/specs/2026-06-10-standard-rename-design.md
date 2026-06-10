@@ -52,17 +52,21 @@ DEPRECATED_TOKEN_ALIASES: dict[str, str] = {
     "universal": "standard",
     "general-skill": "standard-skill",
     "general-agent": "standard-agent",
-    "general-instructions": "standard-instructions",
-    "general-pi-extension": "standard-pi-extension",
 }
 
 def resolve_agent_token(name: str) -> str: ...
 ```
 
+The table holds only tokens a user could actually have typed at a CLI boundary.
+`general-instructions`/`general-pi-extension` were never accepted values
+anywhere, so aliasing them would produce a warn-then-error UX naming a token the
+user never typed (critical-review finding); they are internal `KindBinding`
+values renamed directly.
+
 - Applied **only where user input enters**: CLI `--agents`/`-a` parsing and any
   command that accepts agent tokens. Internal call paths never pass old tokens.
 - On alias hit: warn once per invocation to stderr —
-  `"'universal' is deprecated; renamed to 'standard'. The old spelling will be removed in v4."`
+  `"warning: 'universal' is deprecated; renamed to 'standard'. The old spelling will be removed in v4."`
   — then proceed with the new token.
 - Unknown tokens (neither new nor aliased) raise `UnknownAgentError` exactly as
   today.
@@ -129,7 +133,11 @@ follow-up issue on the v4.0.0 milestone.
 2. `-a standard` (and `standard-*` where applicable) accepted everywhere
    `-a universal` was; `-a universal` still works and prints the deprecation
    warning to stderr; unknown tokens still raise `UnknownAgentError`.
-3. TUI shows "Standard bundle" / `standard ⓘ`; info modal keyed by `standard`.
+3. TUI shows "Standard bundle" / `standard ⓘ`; info modal keyed by `standard`;
+   the skill-grid column header (`skill_grid.py:564`), the "Standard agent — no
+   symlink needed" cell message, the instruction-grid cell modal, and the
+   `skill add` wizard banner all say Standard — no user-visible "General"/
+   "Universal" remains outside historical docs.
 4. Docs updated per the sweep list, each SSOT doc carrying the deprecation note.
 5. Full test suite green; new alias/warning/arch-guard tests in place.
 6. A follow-up issue exists for alias removal, tagged v4.0.0.
