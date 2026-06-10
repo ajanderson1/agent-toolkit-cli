@@ -1,9 +1,13 @@
 """Interactive DataTable for the TUI's pi-extension tab.
 
-Columns: EXTENSION | Pi (global) | Pi (project) | Origin | Source.
+Columns: EXTENSION | Pi | Origin | Source.
 
-Both scope columns are always visible — no scope toggle (Pi has no per-harness
-fan-out; five columns always fit comfortably).
+One scope is visible at a time; the app's ctrl+g scope toggle flips it
+app-wide (#349). The header carries no scope name — the ScopeToggle widget
+communicates scope, and in project scope a 🌐 suffix marks rows that are
+loaded globally (both match the other asset-type grids). set_scope() follows
+the same contract as the other grids (sets scope, clears pending); pending
+preservation across the toggle is orchestrated by the App, not the widget.
 
 `space` queues a link/unlink for the cell under the cursor.
 `ctrl+s` Apply is handled by the App, which reads pending_entries().
@@ -38,6 +42,7 @@ _PENDING_LINK    = "[yellow]+[/]"
 _PENDING_UNLINK  = "[yellow]-[/]"
 _UNTRACKED_GLYPH = "[dim]—[/]"
 _INFO_GLYPH      = "ⓘ"
+_GLOBAL_GLYPH    = "🌐"
 
 _ORIGIN_MARKUP = {
     "store-owned": "[blue]store[/]",
@@ -45,12 +50,11 @@ _ORIGIN_MARKUP = {
     "untracked":   "[dim]untracked[/]",
 }
 
-# Column indices (fixed, both scopes always shown).
+# Column indices (single scope column; the active scope is self._scope).
 _COL_EXTENSION = 0
-_COL_GLOBAL    = 1
-_COL_PROJECT   = 2
-_COL_ORIGIN    = 3
-_COL_SOURCE    = 4
+_COL_SCOPE     = 1
+_COL_ORIGIN    = 2
+_COL_SOURCE    = 3
 
 
 class PiGrid(Vertical):
@@ -76,6 +80,7 @@ class PiGrid(Vertical):
     def __init__(self, rows: list[PiExtensionRow], *, id: str | None = None) -> None:
         super().__init__(id=id)
         self._rows: list[PiExtensionRow] = sorted(rows, key=lambda r: r.slug)
+        self._scope: Literal["global", "project"] = "global"
         # (scope: "global"|"project", slug) -> Op
         self._pending: dict[tuple[str, str], Op] = {}
 
@@ -93,6 +98,18 @@ class PiGrid(Vertical):
         try:
             table = self.query_one("#pi-table", DataTable)
             self._rebuild(table)
+        except Exception:
+            pass
+
+    def set_scope(self, scope: Literal["global", "project"]) -> None:
+        self._scope = scope
+        self._pending.clear()
+        # Snap the cursor to the single interactive scope column (same row).
+        try:
+            table = self.query_one("#pi-table", DataTable)
+            table.cursor_coordinate = Coordinate(
+                row=table.cursor_coordinate.row, column=_COL_SCOPE
+            )
         except Exception:
             pass
 
@@ -159,13 +176,9 @@ class PiGrid(Vertical):
                 from agent_toolkit_cli.pi_extension_paths import library_pi_extension_path
                 ext_dir = library_pi_extension_path(row.slug)
                 body += f"\nStore path: {ext_dir}"
-        elif col == _COL_GLOBAL:
-            scope = "global"
-            title = f"{row.slug} · Pi (global)"
-            body = self._info_body(row=row, scope=scope)
-        elif col == _COL_PROJECT:
-            scope = "project"
-            title = f"{row.slug} · Pi (project)"
+        elif col == _COL_SCOPE:
+            scope = self._scope
+            title = f"{row.slug} · Pi ({scope})"
             body = self._info_body(row=row, scope=scope)
         elif col == _COL_ORIGIN:
             title = f"{row.slug} · origin"
@@ -258,13 +271,9 @@ class PiGrid(Vertical):
         if row.origin == "untracked":
             return
 
-        scope: str | None = None
-        if coord.column == _COL_GLOBAL:
-            scope = "global"
-        elif coord.column == _COL_PROJECT:
-            scope = "project"
-        else:
+        if coord.column != _COL_SCOPE:
             return
+        scope = self._scope
 
         key = (scope, row.slug)
         if key in self._pending:
@@ -294,16 +303,14 @@ class PiGrid(Vertical):
         saved_scroll = (table.scroll_x, table.scroll_y)
         table.clear(columns=True)
         table.add_column(f"EXTENSION {_INFO_GLYPH}", width=24)
-        table.add_column(f"Pi (global) {_INFO_GLYPH}", width=14)
-        table.add_column(f"Pi (project) {_INFO_GLYPH}", width=14)
+        table.add_column(f"Pi {_INFO_GLYPH}", width=14)
         table.add_column("Origin", width=12)
         table.add_column("Source", width=30)
 
         for row in self._rows:
             cells = [
                 row.slug,
-                self._cell_glyph(row=row, scope="global"),
-                self._cell_glyph(row=row, scope="project"),
+                self._cell_glyph(row=row, scope=self._scope),
                 self._origin_glyph(row.origin),
                 row.source,
             ]
@@ -333,10 +340,16 @@ class PiGrid(Vertical):
         )
         pending = self._pending.get((scope, row.slug))
         if pending == "link":
-            return _PENDING_LINK
-        if pending == "unlink":
-            return _PENDING_UNLINK
-        return _LOADED_GLYPH if loaded else _UNLOADED_GLYPH
+            base = _PENDING_LINK
+        elif pending == "unlink":
+            base = _PENDING_UNLINK
+        else:
+            base = _LOADED_GLYPH if loaded else _UNLOADED_GLYPH
+        # In project scope, mark rows that are also loaded globally — same
+        # indicator as the skill grid's global indicator (#349).
+        if scope == "project" and row.global_cell.global_loaded:
+            return f"{base} {_GLOBAL_GLYPH}"
+        return base
 
     def _origin_glyph(self, origin: str) -> str:
         """Return styled markup for an origin label. Never named _render_*."""

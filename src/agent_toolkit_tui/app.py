@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from pathlib import Path
-from typing import Literal, cast
+from typing import Iterable, Literal, cast
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -51,6 +51,22 @@ _KIND_LABELS: dict[Kind, str] = {
     "pi-extension": "Pi Extension",
     "agent": "Agent",
 }
+
+
+def _scope_tag(keys: Iterable[tuple[str, ...]]) -> str:
+    """Return ' (N global, M project)' when pending ops span both scopes.
+
+    Every grid's pending key starts with the scope string — (scope, slug)
+    for pi, (scope, harness, slug) for the rest — so key[0] is the scope in
+    all four shapes. Iterating a pending dict yields its keys, so both dicts
+    and key lists are accepted. Empty or single-scope input returns ''.
+    """
+    ks = list(keys)
+    n_global = sum(1 for k in ks if k[0] == "global")
+    n_project = len(ks) - n_global
+    if n_global and n_project:
+        return f" ({n_global} global, {n_project} project)"
+    return ""
 
 
 class ConfirmDiscardScreen(ModalScreen[bool]):
@@ -216,7 +232,7 @@ class TUIApp(App):
             skill_grid.display = False
             pi_grid.display = True
             agent_grid.display = False
-            scope_toggle.display = False
+            scope_toggle.display = True
         else:  # "agent"
             instruction_grid.display = False
             skill_grid.display = False
@@ -250,14 +266,7 @@ class TUIApp(App):
             return
         self._active_kind = kind  # type: ignore[assignment]
         self._show_kind(kind)  # type: ignore[arg-type]
-        if kind == "instruction":
-            self._refresh_instruction_view()
-        elif kind == "skill":
-            self._refresh_skill_view()
-        elif kind == "pi-extension":
-            self._refresh_pi_view()
-        else:
-            self._refresh_agent_view()
+        self._refresh_active_view()
         self._refresh_content_header()
         self._refresh_pending_label()
         self._refresh_status_bar()
@@ -268,6 +277,31 @@ class TUIApp(App):
         if self._scope == "global":
             return "global", Path.home(), None
         return "project", Path.home(), Path.cwd()
+
+    def _active_grid(self) -> InstructionGrid | SkillGrid | PiGrid | AgentGrid | None:
+        selector: str
+        if self._active_kind == "instruction":
+            selector = "#instruction-grid"
+        elif self._active_kind == "skill":
+            selector = "#skill-grid"
+        elif self._active_kind == "pi-extension":
+            selector = "#pi-grid"
+        else:
+            selector = "#agent-grid"
+        try:
+            return self.query_one(selector)  # type: ignore[return-value]
+        except NoMatches:
+            return None
+
+    def _refresh_active_view(self) -> None:
+        if self._active_kind == "instruction":
+            self._refresh_instruction_view()
+        elif self._active_kind == "skill":
+            self._refresh_skill_view()
+        elif self._active_kind == "pi-extension":
+            self._refresh_pi_view()
+        else:
+            self._refresh_agent_view()
 
     def _refresh_instruction_view(self) -> None:
         try:
@@ -296,6 +330,7 @@ class TUIApp(App):
             grid = self.query_one("#pi-grid", PiGrid)
         except NoMatches:
             return
+        grid.set_scope(self._scope)  # type: ignore[arg-type]
         grid.set_rows(build_pi_rows(home=Path.home(), project=Path.cwd()))
 
     # ----- agent-view --------------------------------------------------------
@@ -376,13 +411,16 @@ class TUIApp(App):
             self.query_one("#scope-toggle", ScopeToggle).set_active(scope)
         except NoMatches:
             pass
-        if self._active_kind == "instruction":
-            self._refresh_instruction_view()
-        elif self._active_kind == "agent":
-            self._refresh_agent_view()
-        else:
-            self._refresh_skill_view()
+        # Preserve pending across the toggle (#349): set_scope/set_rows clear
+        # by contract, so save the active grid's queue and put it back. One
+        # app-side site — no per-grid preservation logic.
+        grid = self._active_grid()
+        saved = grid.pending_entries() if grid is not None else {}
+        self._refresh_active_view()
+        if grid is not None and saved:
+            grid.restore_pending(saved)  # type: ignore[arg-type]
         self._refresh_content_header()
+        self._refresh_pending_label()
         self._refresh_status_bar()
 
     def action_scope_toggle(self) -> None:
@@ -423,93 +461,34 @@ class TUIApp(App):
             agrid.action_info()
 
     def action_refresh(self) -> None:
-        if self._active_kind == "instruction":
-            self._refresh_instruction_view()
-        elif self._active_kind == "skill":
-            self._refresh_skill_view()
-        elif self._active_kind == "pi-extension":
-            self._refresh_pi_view()
-        else:
-            self._refresh_agent_view()
+        self._refresh_active_view()
         self._refresh_pending_label()
         self._refresh_content_header()
         self._refresh_status_bar()
 
     def action_revert(self) -> None:
-        if self._active_kind == "instruction":
-            try:
-                igrid = self.query_one("#instruction-grid", InstructionGrid)
-            except NoMatches:
-                return
-            n = len(igrid.pending_entries())
-            igrid.clear_pending()
-            self._refresh_pending_label()
-            self.query_one("#footer-pending", Static).update(
-                f"reverted: {n} pending cleared"
-            )
-        elif self._active_kind == "skill":
-            try:
-                sgrid = self.query_one("#skill-grid", SkillGrid)
-            except NoMatches:
-                return
-            n = len(sgrid.pending_entries())
-            sgrid.clear_pending()
-            self._refresh_pending_label()
-            self.query_one("#footer-pending", Static).update(
-                f"reverted: {n} pending cleared"
-            )
-        elif self._active_kind == "pi-extension":
-            try:
-                pgrid = self.query_one("#pi-grid", PiGrid)
-            except NoMatches:
-                return
-            n = len(pgrid.pending_entries())
-            pgrid.clear_pending()
-            self._refresh_pending_label()
-            self.query_one("#footer-pending", Static).update(
-                f"reverted: {n} pending cleared"
-            )
-        else:
-            try:
-                agrid = self.query_one("#agent-grid", AgentGrid)
-            except NoMatches:
-                return
-            n = len(agrid.pending_entries())
-            agrid.clear_pending()
-            self._refresh_pending_label()
-            self.query_one("#footer-pending", Static).update(
-                f"reverted: {n} pending cleared"
-            )
+        grid = self._active_grid()
+        if grid is None:
+            return
+        # ctrl+z clears the active grid's WHOLE queue — both scopes, including
+        # ops queued in the currently-invisible scope — and says so (#349).
+        keys = list(grid.pending_entries().keys())
+        n = len(keys)
+        grid.clear_pending()
+        self._refresh_pending_label()
+        self.query_one("#footer-pending", Static).update(
+            f"reverted: {n} pending cleared{_scope_tag(keys)}"
+        )
 
     def action_diff(self) -> None:
-        if self._active_kind == "instruction":
-            try:
-                igrid = self.query_one("#instruction-grid", InstructionGrid)
-            except NoMatches:
-                return
-            all_ops: list[str] = list(igrid.pending_entries().values())
-        elif self._active_kind == "skill":
-            try:
-                sgrid = self.query_one("#skill-grid", SkillGrid)
-            except NoMatches:
-                return
-            all_ops = list(sgrid.pending_entries().values())
-        elif self._active_kind == "pi-extension":
-            try:
-                pgrid = self.query_one("#pi-grid", PiGrid)
-            except NoMatches:
-                return
-            all_ops = list(pgrid.pending_entries().values())
-        else:
-            try:
-                agrid = self.query_one("#agent-grid", AgentGrid)
-            except NoMatches:
-                return
-            all_ops = list(agrid.pending_entries().values())
-        n_link = sum(1 for op in all_ops if op == "link")
-        n_unlink = sum(1 for op in all_ops if op == "unlink")
+        grid = self._active_grid()
+        if grid is None:
+            return
+        pending = grid.pending_entries()
+        n_link = sum(1 for op in pending.values() if op == "link")
+        n_unlink = sum(1 for op in pending.values() if op == "unlink")
         self.query_one("#footer-pending", Static).update(
-            f"diff: {n_link} would-link, {n_unlink} would-unlink"
+            f"diff: {n_link} would-link, {n_unlink} would-unlink{_scope_tag(pending)}"
         )
 
     def action_apply(self) -> None:
@@ -554,6 +533,7 @@ class TUIApp(App):
         pending = grid.pending_entries()
         if not pending:
             return
+        tag = _scope_tag(pending)
 
         # Group by scope → {slug: (adds set, removes set)}. apply() is
         # whole-lock, so all mutations for a scope are written before its single
@@ -657,7 +637,7 @@ class TUIApp(App):
             first = " ".join(errors[0].split())
             extra = f" (+{len(errors) - 1} more)" if len(errors) > 1 else ""
             self.query_one("#footer-pending", Static).update(
-                f"[red]apply failed[/] — {first}{extra}"
+                f"[red]apply failed[/] — {first}{extra}{tag}"
             )
             self.notify(
                 "\n\n".join(errors),
@@ -667,7 +647,7 @@ class TUIApp(App):
             )
         else:
             self.query_one("#footer-pending", Static).update(
-                f"applied: {ok} ok, {failed} failed"
+                f"applied: {ok} ok, {failed} failed{tag}"
             )
 
     def _apply_skill_pending(self) -> None:
@@ -684,6 +664,7 @@ class TUIApp(App):
         pending = grid.pending_entries()
         if not pending:
             return
+        tag = _scope_tag(pending)
         by_slug: dict[tuple[str, str], tuple[set[str], set[str]]] = defaultdict(
             lambda: (set(), set())
         )
@@ -731,7 +712,7 @@ class TUIApp(App):
             first = " ".join(errors[0].split())
             extra = f" (+{len(errors) - 1} more)" if len(errors) > 1 else ""
             self.query_one("#footer-pending", Static).update(
-                f"[red]apply failed[/] — {first}{extra}"
+                f"[red]apply failed[/] — {first}{extra}{tag}"
             )
             self.notify(
                 "\n\n".join(errors),
@@ -741,7 +722,7 @@ class TUIApp(App):
             )
         else:
             self.query_one("#footer-pending", Static).update(
-                f"applied: {ok} ok, {failed} failed"
+                f"applied: {ok} ok, {failed} failed{tag}"
             )
 
     def _apply_pi_pending(self) -> None:
@@ -758,6 +739,7 @@ class TUIApp(App):
         pending = grid.pending_entries()
         if not pending:
             return
+        tag = _scope_tag(pending)
 
         home = Path.home()
         ok = failed = 0
@@ -800,9 +782,12 @@ class TUIApp(App):
                 errors.append(f"{slug}: {exc}")
                 failed += 1
 
+        saved = grid.pending_entries() if failed else {}
         if failed == 0:
             grid.clear_pending()
         self._refresh_pi_view()
+        if saved:
+            grid.restore_pending(saved)
         self._refresh_pending_label()
         self._refresh_status_bar()
 
@@ -810,7 +795,7 @@ class TUIApp(App):
             first = " ".join(errors[0].split())
             extra = f" (+{len(errors) - 1} more)" if len(errors) > 1 else ""
             self.query_one("#footer-pending", Static).update(
-                f"[red]apply failed[/] — {first}{extra}"
+                f"[red]apply failed[/] — {first}{extra}{tag}"
             )
             self.notify(
                 "\n\n".join(errors),
@@ -820,7 +805,7 @@ class TUIApp(App):
             )
         else:
             self.query_one("#footer-pending", Static).update(
-                f"applied: {ok} ok, {failed} failed"
+                f"applied: {ok} ok, {failed} failed{tag}"
             )
 
     def _apply_agent_pending(self) -> None:
@@ -837,6 +822,7 @@ class TUIApp(App):
         pending = grid.pending_entries()
         if not pending:
             return
+        tag = _scope_tag(pending)
 
         # Group by (scope, slug) → (adds set, removes set) of harnesses.
         by_slug: dict[tuple[str, str], tuple[set[str], set[str]]] = defaultdict(
@@ -913,7 +899,7 @@ class TUIApp(App):
             first = " ".join(errors[0].split())
             extra = f" (+{len(errors) - 1} more)" if len(errors) > 1 else ""
             self.query_one("#footer-pending", Static).update(
-                f"[red]apply failed[/] — {first}{extra}"
+                f"[red]apply failed[/] — {first}{extra}{tag}"
             )
             self.notify(
                 "\n\n".join(errors),
@@ -923,7 +909,7 @@ class TUIApp(App):
             )
         else:
             self.query_one("#footer-pending", Static).update(
-                f"applied: {ok} ok, {failed} failed"
+                f"applied: {ok} ok, {failed} failed{tag}"
             )
 
     # ----- header + status ---------------------------------------------------
@@ -961,25 +947,16 @@ class TUIApp(App):
             pass
 
     def _refresh_pending_label(self) -> None:
-        n = 0
+        keys: list[tuple[str, ...]] = []
+        for selector in ("#instruction-grid", "#skill-grid", "#pi-grid", "#agent-grid"):
+            try:
+                keys.extend(self.query_one(selector).pending_entries().keys())  # type: ignore[attr-defined]
+            except Exception:
+                pass
         try:
-            n += len(self.query_one("#instruction-grid", InstructionGrid).pending_entries())
-        except Exception:
-            pass
-        try:
-            n += len(self.query_one("#skill-grid", SkillGrid).pending_entries())
-        except Exception:
-            pass
-        try:
-            n += len(self.query_one("#pi-grid", PiGrid).pending_entries())
-        except Exception:
-            pass
-        try:
-            n += len(self.query_one("#agent-grid", AgentGrid).pending_entries())
-        except Exception:
-            pass
-        try:
-            self.query_one("#footer-pending", Static).update(f"Pending: {n}")
+            self.query_one("#footer-pending", Static).update(
+                f"Pending: {len(keys)}{_scope_tag(keys)}"
+            )
         except Exception:
             pass
 
@@ -1038,23 +1015,24 @@ class TUIApp(App):
                 f"[b red]{broken}[/] broken"
             )
         elif active == "pi-extension":
-            loaded_global = loaded_project = 0
+            loaded = 0
             try:
                 grid_pi = self.query_one("#pi-grid", PiGrid)
             except (NoMatches, Exception):
                 grid_pi = None
             if grid_pi is not None:
+                scope = self._scope_to_roots()[0]
                 for pi_row in grid_pi._rows:
-                    if pi_row.global_cell.global_loaded:
-                        loaded_global += 1
-                    if pi_row.project_cell.project_loaded:
-                        loaded_project += 1
+                    if scope == "global":
+                        if pi_row.global_cell.global_loaded:
+                            loaded += 1
+                    elif pi_row.project_cell.project_loaded:
+                        loaded += 1
                 pending = len(grid_pi.pending_entries())
             else:
                 pending = 0
             text = (
-                f"  [b green]{loaded_global}[/] global   "
-                f"[b cyan]{loaded_project}[/] project   "
+                f"  [b green]{loaded}[/] loaded   "
                 f"[b yellow]{pending}[/] pending"
             )
         else:  # "agent"

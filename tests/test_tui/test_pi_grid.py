@@ -95,8 +95,10 @@ def _untracked_row(slug: str) -> PiExtensionRow:
 
 
 @pytest.mark.asyncio
-async def test_pi_grid_mounts_with_correct_columns():
-    """Grid must show EXTENSION, Pi (global), Pi (project), Origin, Source."""
+async def test_pi_grid_mounts_with_single_scope_column():
+    """Grid shows EXTENSION, Pi, Origin, Source — 4 columns. The header
+    carries NO scope name (the ScopeToggle communicates scope, matching the
+    other asset-type tabs, #349)."""
 
     class _A(App):
         def compose(self) -> ComposeResult:
@@ -107,13 +109,80 @@ async def test_pi_grid_mounts_with_correct_columns():
         await pilot.pause()
         table = app.query_one("#pi-table", DataTable)
         labels = [str(c.label) for c in table.columns.values()]
-        assert len(labels) == 5
-        # Check the canonical column names (strip the ⓘ glyph via 'in').
+        assert len(labels) == 4
         assert any("EXTENSION" in lbl for lbl in labels)
-        assert any("global" in lbl.lower() for lbl in labels)
-        assert any("project" in lbl.lower() for lbl in labels)
+        assert any(lbl.startswith("Pi ") for lbl in labels)
+        assert not any("global" in lbl.lower() for lbl in labels)
+        assert not any("project" in lbl.lower() for lbl in labels)
         assert any("Origin" in lbl for lbl in labels)
         assert any("Source" in lbl for lbl in labels)
+
+
+@pytest.mark.asyncio
+async def test_pi_grid_set_scope_clears_pending_and_snaps_cursor():
+    """set_scope clears pending (uniform widget contract — preservation is
+    the app's job) and snaps the cursor to the scope column (#349)."""
+
+    class _A(App):
+        def compose(self) -> ComposeResult:
+            yield PiGrid([_store_row("alpha")], id="g")
+
+    app = _A()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        g = app.query_one("#g", PiGrid)
+        table = app.query_one("#pi-table", DataTable)
+        table.cursor_coordinate = table.cursor_coordinate.__class__(row=0, column=1)
+        table.focus()
+        await pilot.pause()
+        await pilot.press("space")
+        assert g.pending_entries() == {("global", "alpha"): "link"}
+
+        # Park the cursor on Origin (old project-column index) to prove the snap.
+        table.cursor_coordinate = table.cursor_coordinate.__class__(row=0, column=2)
+        g.set_scope("project")
+        g.set_rows([_store_row("alpha")])  # app always refreshes after set_scope
+        await pilot.pause()
+        assert g.pending_entries() == {}
+        # Cursor snapped to the scope column — without the snap a cursor on the
+        # removed project column lands on non-interactive Origin (#349 review).
+        assert table.cursor_coordinate.column == 1
+
+
+@pytest.mark.asyncio
+async def test_pi_grid_globe_indicator_in_project_scope():
+    """Project scope shows the 🌐 indicator on rows loaded globally, matching
+    the skill grid's global indicator; global scope never shows it (#349)."""
+    from textual.coordinate import Coordinate
+
+    def _rows():
+        return [
+            _store_row("alpha", global_loaded=True, project_loaded=False),
+            _store_row("beta", global_loaded=False, project_loaded=False),
+        ]
+
+    class _A(App):
+        def compose(self) -> ComposeResult:
+            yield PiGrid(_rows(), id="g")
+
+    app = _A()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        g = app.query_one("#g", PiGrid)
+        table = app.query_one("#pi-table", DataTable)
+
+        # Global scope (default): alpha renders loaded, NO globe anywhere.
+        assert "✔" in str(table.get_cell_at(Coordinate(0, 1)))
+        assert "🌐" not in str(table.get_cell_at(Coordinate(0, 1)))
+
+        g.set_scope("project")
+        g.set_rows(_rows())
+        await pilot.pause()
+        # Project scope: alpha is unloaded here but loaded globally → ☐ 🌐.
+        alpha_cell = str(table.get_cell_at(Coordinate(0, 1)))
+        assert "☐" in alpha_cell and "🌐" in alpha_cell
+        # beta is loaded nowhere → no globe.
+        assert "🌐" not in str(table.get_cell_at(Coordinate(1, 1)))
 
 
 @pytest.mark.asyncio
@@ -155,7 +224,7 @@ async def test_toggle_global_queues_link():
 
 @pytest.mark.asyncio
 async def test_toggle_project_queues_link():
-    """Space on a project cell with unloaded store-owned row queues 'link'."""
+    """Space on the scope cell in project scope queues 'link' (#349)."""
 
     class _A(App):
         def compose(self) -> ComposeResult:
@@ -165,9 +234,11 @@ async def test_toggle_project_queues_link():
     async with app.run_test() as pilot:
         await pilot.pause()
         g = app.query_one("#g", PiGrid)
+        g.set_scope("project")
+        g.set_rows([_store_row("alpha", project_loaded=False)])
         table = app.query_one("#pi-table", DataTable)
-        # Column 2 = Pi (project)
-        table.cursor_coordinate = table.cursor_coordinate.__class__(row=0, column=2)
+        # Column 1 = Pi (<active scope>)
+        table.cursor_coordinate = table.cursor_coordinate.__class__(row=0, column=1)
         table.focus()
         await pilot.pause()
         await pilot.press("space")
@@ -216,15 +287,16 @@ async def test_toggle_twice_clears_pending():
 
 
 @pytest.mark.asyncio
-async def test_npm_row_toggles_both_scopes():
-    """npm row: independently toggle global and project scopes."""
+async def test_npm_row_toggles_per_scope():
+    """npm row: each scope queues its own op via the single scope column;
+    set_scope clears the queue (uniform widget contract, #349)."""
+
+    def _rows():
+        return [_npm_row("@scope/pkg", global_loaded=False, project_loaded=True)]
 
     class _A(App):
         def compose(self) -> ComposeResult:
-            yield PiGrid(
-                [_npm_row("@scope/pkg", global_loaded=False, project_loaded=True)],
-                id="g",
-            )
+            yield PiGrid(_rows(), id="g")
 
     app = _A()
     async with app.run_test() as pilot:
@@ -232,20 +304,24 @@ async def test_npm_row_toggles_both_scopes():
         g = app.query_one("#g", PiGrid)
         table = app.query_one("#pi-table", DataTable)
 
-        # Toggle global (col 1) → link
+        # Global scope (default): toggle → link, key is global.
         table.cursor_coordinate = table.cursor_coordinate.__class__(row=0, column=1)
         table.focus()
         await pilot.pause()
         await pilot.press("space")
+        assert g.pending_entries() == {("global", "@scope/pkg"): "link"}
 
-        # Toggle project (col 2) → unlink (already loaded)
-        table.cursor_coordinate = table.cursor_coordinate.__class__(row=0, column=2)
+        # Scope switch clears the queue.
+        g.set_scope("project")
+        g.set_rows(_rows())
+        await pilot.pause()
+        assert g.pending_entries() == {}
+
+        # Project scope: toggle → unlink (already loaded), key is project.
+        table.cursor_coordinate = table.cursor_coordinate.__class__(row=0, column=1)
         await pilot.pause()
         await pilot.press("space")
-
-        pending = g.pending_entries()
-        assert pending.get(("global", "@scope/pkg")) == "link"
-        assert pending.get(("project", "@scope/pkg")) == "unlink"
+        assert g.pending_entries() == {("project", "@scope/pkg"): "unlink"}
 
 
 @pytest.mark.asyncio
@@ -601,6 +677,89 @@ async def test_apply_pi_settings_error_surfaces(monkeypatch):
     assert "apply failed" in footer
     assert notify_calls, "expected notify to be called with error"
     assert notify_calls[-1].get("severity") == "error"
+
+
+@pytest.mark.asyncio
+async def test_apply_failure_preserves_pending(monkeypatch):
+    """Latent bug (#349 spec §5): on failure _apply_pi_pending skipped
+    clear_pending() but _refresh_pi_view()'s set_rows cleared anyway."""
+    from agent_toolkit_tui.app import TUIApp
+    import agent_toolkit_cli.pi_extension_install as _pi_install
+    import agent_toolkit_cli.pi_extension_lock as _lock
+    import agent_toolkit_cli.pi_extension_ops as _ops
+
+    entry = MagicMock()
+    fake_lock = MagicMock()
+    fake_lock.skills = {"alpha": entry}
+    monkeypatch.setattr(_lock, "read_lock", lambda path: fake_lock)
+    monkeypatch.setattr(
+        "agent_toolkit_cli.pi_extension_paths.library_lock_path",
+        lambda env=None: Path("/fake/lock"),
+    )
+
+    def _boom(**kwargs: Any) -> None:
+        raise _pi_install.InstallError("boom")
+
+    monkeypatch.setattr(_ops, "install", _boom)
+    monkeypatch.setattr(
+        "agent_toolkit_tui.app.build_pi_rows",
+        lambda **kwargs: [_store_row("alpha")],
+    )
+
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        app.action_kind("pi-extension")
+        await pilot.pause()
+        grid = app.query_one("#pi-grid", PiGrid)
+        grid._pending[("global", "alpha")] = "link"
+
+        app.action_apply()
+        await pilot.pause()
+
+        assert grid.pending_entries() == {("global", "alpha"): "link"}, (
+            "failed ops must stay queued for retry, like the other grids"
+        )
+
+
+@pytest.mark.asyncio
+async def test_apply_multi_scope_footer_is_scope_tagged(monkeypatch):
+    """Spanning-scope apply tags the footer summary (#349). Single-scope
+    pending yields an empty tag, so only this fixture can catch a missing
+    apply tag."""
+    from agent_toolkit_tui.app import TUIApp
+    import agent_toolkit_cli.pi_extension_lock as _lock
+    import agent_toolkit_cli.pi_extension_ops as _ops
+
+    entry = MagicMock()
+    fake_lock = MagicMock()
+    fake_lock.skills = {"alpha": entry}
+    monkeypatch.setattr(_lock, "read_lock", lambda path: fake_lock)
+    monkeypatch.setattr(
+        "agent_toolkit_cli.pi_extension_paths.library_lock_path",
+        lambda env=None: Path("/fake/lock"),
+    )
+    monkeypatch.setattr(_ops, "install", lambda **kwargs: None)
+    monkeypatch.setattr(_ops, "uninstall", lambda **kwargs: None)
+    monkeypatch.setattr(
+        "agent_toolkit_tui.app.build_pi_rows",
+        lambda **kwargs: [_store_row("alpha")],
+    )
+
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        app.action_kind("pi-extension")
+        await pilot.pause()
+        grid = app.query_one("#pi-grid", PiGrid)
+        grid._pending[("global", "alpha")] = "link"
+        grid._pending[("project", "alpha")] = "unlink"
+
+        app.action_apply()
+        await pilot.pause()
+        footer = str(app.query_one("#footer-pending", Static).render())
+
+    assert "applied: 2 ok, 0 failed (1 global, 1 project)" in footer
 
 
 # ---------------------------------------------------------------------------

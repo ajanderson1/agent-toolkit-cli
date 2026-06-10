@@ -142,3 +142,219 @@ def test_scope_to_roots_global_mode_unchanged():
     assert scope == "global"
     assert home == Path.home()
     assert project is None
+
+
+@pytest.mark.asyncio
+async def test_ctrl_g_on_pi_pane_refreshes_pi_not_skill():
+    """Regression (#349): the old action_scope else-branch refreshed the
+    HIDDEN skill grid when the pi pane was active, clearing its pending."""
+    from agent_toolkit_tui.widgets import PiGrid, SkillGrid
+
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        skill_grid = app.query_one("#skill-grid", SkillGrid)
+        skill_grid._pending[("global", "claude", "alpha")] = "link"
+
+        app.action_kind("pi-extension")
+        await pilot.pause()
+        await pilot.press("ctrl+g")
+        await pilot.pause()
+
+        assert skill_grid.pending_entries() == {
+            ("global", "claude", "alpha"): "link"
+        }, "hidden skill grid's pending must survive ctrl+g on the pi pane"
+
+
+@pytest.mark.asyncio
+async def test_pi_pane_shows_scope_toggle_and_cells_track_scope(monkeypatch):
+    """The pi pane joins the scope toggle: widget visible, cell glyphs track
+    the active scope with ctrl+g (the header carries no scope name, matching
+    the other tabs, #349)."""
+    from textual.coordinate import Coordinate
+    from textual.widgets import DataTable
+    from agent_toolkit_tui.pi_extension_state import PiCell, PiExtensionRow
+
+    def _row(slug):
+        cell = PiCell(global_loaded=True, project_loaded=False, origin="store-owned")
+        return PiExtensionRow(slug=slug, origin="store-owned",
+                              source=f"git@github.com:x/{slug}",
+                              global_cell=cell, project_cell=cell)
+
+    monkeypatch.setattr(
+        "agent_toolkit_tui.app.build_pi_rows", lambda **kwargs: [_row("alpha")]
+    )
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        app.action_kind("pi-extension")
+        await pilot.pause()
+        assert app.query_one("#scope-toggle", ScopeToggle).display is True
+
+        table = app.query_one("#pi-table", DataTable)
+        labels = [str(c.label) for c in table.columns.values()]
+        assert not any("global" in lbl.lower() or "project" in lbl.lower()
+                       for lbl in labels)
+        # App starts in project scope: alpha unloaded here, loaded globally.
+        cell = str(table.get_cell_at(Coordinate(0, 1)))
+        assert "☐" in cell and "🌐" in cell
+
+        await pilot.press("ctrl+g")
+        await pilot.pause()
+        # Global scope: loaded glyph, no globe indicator.
+        cell = str(table.get_cell_at(Coordinate(0, 1)))
+        assert "✔" in cell and "🌐" not in cell
+
+
+@pytest.mark.asyncio
+async def test_pending_survives_scope_round_trip_pi(monkeypatch):
+    """Queue pi ops → ctrl+g away and back → ops still queued AND still
+    RENDERED (#349). The glyph assertion is load-bearing: restore_pending
+    swallows rebuild failures in try/except, so dict equality alone cannot
+    catch ops that were restored but never re-rendered."""
+    from textual.coordinate import Coordinate
+    from textual.widgets import DataTable
+    from agent_toolkit_tui.pi_extension_state import PiCell, PiExtensionRow
+    from agent_toolkit_tui.widgets import PiGrid
+
+    def _row(slug):
+        cell = PiCell(global_loaded=False, project_loaded=False, origin="store-owned")
+        return PiExtensionRow(slug=slug, origin="store-owned",
+                              source=f"git@github.com:x/{slug}",
+                              global_cell=cell, project_cell=cell)
+
+    monkeypatch.setattr(
+        "agent_toolkit_tui.app.build_pi_rows",
+        lambda **kwargs: [_row("alpha"), _row("beta")],
+    )
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        app.action_kind("pi-extension")
+        await pilot.pause()
+        pi_grid = app.query_one("#pi-grid", PiGrid)
+        pi_grid._pending[("project", "alpha")] = "link"
+        pi_grid._pending[("global", "beta")] = "unlink"
+
+        await pilot.press("ctrl+g")
+        await pilot.pause()
+        await pilot.press("ctrl+g")
+        await pilot.pause()
+
+        assert pi_grid.pending_entries() == {
+            ("project", "alpha"): "link",
+            ("global", "beta"): "unlink",
+        }
+        # Back in project scope: row 0 (alpha) must RENDER its pending '+'.
+        table = app.query_one("#pi-table", DataTable)
+        assert "+" in str(table.get_cell_at(Coordinate(0, 1)))
+
+
+@pytest.mark.asyncio
+async def test_pending_survives_scope_round_trip_skill():
+    """Same single mechanism covers the harness-keyed grids (#349)."""
+    from agent_toolkit_tui.widgets import SkillGrid
+
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()  # skill pane is active on load
+        skill_grid = app.query_one("#skill-grid", SkillGrid)
+        skill_grid._pending[("project", "claude", "alpha")] = "link"
+
+        await pilot.press("ctrl+g")
+        await pilot.pause()
+        assert skill_grid.pending_entries() == {
+            ("project", "claude", "alpha"): "link"
+        }, "pending must survive the toggle away"
+
+
+@pytest.mark.asyncio
+async def test_footer_pending_label_scope_tagged_when_spanning():
+    from textual.widgets import Static
+    from agent_toolkit_tui.widgets import PiGrid
+
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        app.action_kind("pi-extension")
+        await pilot.pause()
+        pi_grid = app.query_one("#pi-grid", PiGrid)
+        pi_grid._pending[("project", "alpha")] = "link"
+        pi_grid._pending[("global", "beta")] = "link"
+        pi_grid._pending[("global", "gamma")] = "unlink"
+        app._refresh_pending_label()
+        label = str(app.query_one("#footer-pending", Static).render())
+        assert "Pending: 3 (2 global, 1 project)" in label
+
+
+@pytest.mark.asyncio
+async def test_footer_pending_label_plain_when_single_scope():
+    from textual.widgets import Static
+    from agent_toolkit_tui.widgets import PiGrid
+
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        pi_grid = app.query_one("#pi-grid", PiGrid)
+        pi_grid._pending[("global", "beta")] = "link"
+        app._refresh_pending_label()
+        label = str(app.query_one("#footer-pending", Static).render())
+        assert "Pending: 1" in label
+        assert "(" not in label.split("Pending: 1")[1][:2]
+
+
+@pytest.mark.asyncio
+async def test_diff_scope_tagged_when_spanning():
+    """ctrl+d output attributes ops when they span scopes (#349)."""
+    from textual.widgets import Static
+    from agent_toolkit_tui.widgets import PiGrid
+
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        app.action_kind("pi-extension")
+        await pilot.pause()
+        pi_grid = app.query_one("#pi-grid", PiGrid)
+        pi_grid._pending[("project", "alpha")] = "link"
+        pi_grid._pending[("global", "beta")] = "unlink"
+        app.action_diff()
+        label = str(app.query_one("#footer-pending", Static).render())
+        assert "diff: 1 would-link, 1 would-unlink (1 global, 1 project)" in label
+
+
+@pytest.mark.asyncio
+async def test_revert_clears_both_scopes_and_is_scope_tagged():
+    """ctrl+z is the one destructive surface that can consume invisible
+    other-scope ops — it clears the whole grid dict and says so (#349)."""
+    from textual.widgets import Static
+    from agent_toolkit_tui.widgets import PiGrid
+
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        app.action_kind("pi-extension")
+        await pilot.pause()
+        pi_grid = app.query_one("#pi-grid", PiGrid)
+        pi_grid._pending[("project", "alpha")] = "link"
+        pi_grid._pending[("global", "beta")] = "unlink"
+        pi_grid._pending[("global", "gamma")] = "link"
+        app.action_revert()
+        await pilot.pause()
+        assert pi_grid.pending_entries() == {}
+        label = str(app.query_one("#footer-pending", Static).render())
+        assert "reverted: 3 pending cleared (2 global, 1 project)" in label
+
+
+@pytest.mark.asyncio
+async def test_ctrl_r_still_clears_pending():
+    """Explicit refresh keeps its clearing semantics (#349 out-of-scope guard)."""
+    from agent_toolkit_tui.widgets import SkillGrid
+
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        skill_grid = app.query_one("#skill-grid", SkillGrid)
+        skill_grid._pending[("project", "claude", "alpha")] = "link"
+        await pilot.press("ctrl+r")
+        await pilot.pause()
+        assert skill_grid.pending_entries() == {}
