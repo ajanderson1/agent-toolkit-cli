@@ -18,7 +18,7 @@ Reads a fixed own-name file (`replit.md`) instead of `AGENTS.md`. The [instructi
 - **Default file:** `replit.md`
 - **Project / global path:** `./replit.md` (project root only) / none (project-only)
 - **Reads `AGENTS.md` natively:** no
-- **Source:** https://docs.replit.com/replitai/replit-dot-md
+- **Source:** [docs.replit.com/replitai/replit-dot-md](https://docs.replit.com/replitai/replit-dot-md)
 
 ## Skills { #skills }
 
@@ -27,6 +27,7 @@ Supported — every harness in the catalog has a skills directory the [skills ki
 - **Project dir:** `.agents/skills`
 - **Global dir:** `~/.config/agents/skills`
 - **[General-dir](../glossary.md#general) (`.agents/skills`) reader:** yes — reads the per-kind general directory directly
+- **Source:** [vercel-labs/skills · `src/agents.ts`](https://github.com/vercel-labs/skills/blob/main/src/agents.ts) — the upstream per-harness catalog these directories come from (ported as `skill_agents.py`, parity-tested)
 
 ## Agents (subagents) { #agents }
 
@@ -34,4 +35,4 @@ Not supported (gap) — tracked for possible future work.
 
 - **Verdict:** unsupported (gap)
 - **Why:** Agent 3/4 spawns subagents at runtime; no user file-drop convention
-- **Source:** https://docs.replit.com/replitai/agent
+- **Source:** [docs.replit.com/replitai/agent](https://docs.replit.com/replitai/agent)

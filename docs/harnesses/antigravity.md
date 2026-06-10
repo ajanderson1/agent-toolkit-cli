@@ -27,6 +27,7 @@ Supported — every harness in the catalog has a skills directory the [skills ki
 - **Project dir:** `.agents/skills`
 - **Global dir:** `~/.gemini/antigravity/skills`
 - **[General-dir](../glossary.md#general) (`.agents/skills`) reader:** yes — reads the per-kind general directory directly
+- **Source:** [vercel-labs/skills · `src/agents.ts`](https://github.com/vercel-labs/skills/blob/main/src/agents.ts) — the upstream per-harness catalog these directories come from (ported as `skill_agents.py`, parity-tested)
 
 ## Agents (subagents) { #agents }
 
@@ -34,4 +35,4 @@ Unknown — bounded search surfaced no public evidence.
 
 - **Verdict:** unknown — no public evidence found
 - **Why:** dynamic orchestrator-spawned only; closed-source Go binary; community `agent.json` unconfirmed
-- **Source:** GitHub discussion #27305 (gemini-cli)
+- **Source:** [google-gemini/gemini-cli discussion #27305](https://github.com/google-gemini/gemini-cli/discussions/27305)

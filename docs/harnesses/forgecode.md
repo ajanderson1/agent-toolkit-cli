@@ -18,7 +18,7 @@ Reads the canonical `AGENTS.md` natively — no pointer needed; the [instruction
 - **Default file:** `AGENTS.md`
 - **Project / global path:** `./AGENTS.md` (recursively: env `base_path` → git root → cwd) / `none (project-only)`
 - **Reads `AGENTS.md` natively:** yes
-- **Source:** https://forgecode.dev/docs/custom-rules-guide/
+- **Source:** [forgecode.dev/docs/custom-rules-guide/](https://forgecode.dev/docs/custom-rules-guide/)
 
 ## Skills { #skills }
 
@@ -27,6 +27,7 @@ Supported — every harness in the catalog has a skills directory the [skills ki
 - **Project dir:** `.forge/skills`
 - **Global dir:** `~/.forge/skills`
 - **[General-dir](../glossary.md#general) (`.agents/skills`) reader:** no — gets its own projection
+- **Source:** [vercel-labs/skills · `src/agents.ts`](https://github.com/vercel-labs/skills/blob/main/src/agents.ts) — the upstream per-harness catalog these directories come from (ported as `skill_agents.py`, parity-tested)
 
 ## Agents (subagents) { #agents }
 
@@ -36,4 +37,4 @@ Supported via the **symlink** mechanism — see the [agents kind](../kinds/agent
 - **User / project path:** `~/.forge/agents/<slug>.md` (legacy `~/forge/agents/`) / `.forge/agents/<slug>.md`
 - **Format:** markdown+frontmatter; `id` auto from filename, all else optional; project overrides global
 - **Toolkit adapter:** enabled (symlink)
-- **Source:** github.com/antinomyhq/forgecode crates/forge_repo/src/agent.rs
+- **Source:** [antinomyhq/forgecode crates/forge_repo/src/agent.rs](https://github.com/antinomyhq/forgecode/blob/main/crates/forge_repo/src/agent.rs)

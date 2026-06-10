@@ -18,7 +18,7 @@ Reads the canonical `AGENTS.md` natively — no pointer needed; the [instruction
 - **Default file:** `AGENTS.md`
 - **Project / global path:** `./.junie/AGENTS.md` (preferred) or `./AGENTS.md` (fallback) / `~/.junie/AGENTS.md`
 - **Reads `AGENTS.md` natively:** yes
-- **Source:** https://junie.jetbrains.com/docs/guidelines-and-memory.html
+- **Source:** [junie.jetbrains.com/docs/guidelines-and-memory.html](https://junie.jetbrains.com/docs/guidelines-and-memory.html)
 
 ## Skills { #skills }
 
@@ -27,6 +27,7 @@ Supported — every harness in the catalog has a skills directory the [skills ki
 - **Project dir:** `.junie/skills`
 - **Global dir:** `~/.junie/skills`
 - **[General-dir](../glossary.md#general) (`.agents/skills`) reader:** no — gets its own projection
+- **Source:** [vercel-labs/skills · `src/agents.ts`](https://github.com/vercel-labs/skills/blob/main/src/agents.ts) — the upstream per-harness catalog these directories come from (ported as `skill_agents.py`, parity-tested)
 
 ## Agents (subagents) { #agents }
 
@@ -36,4 +37,4 @@ Supported via the **symlink** mechanism — see the [agents kind](../kinds/agent
 - **User / project path:** `~/.junie/agents/<slug>.md` (also `~/.agents/`) / `.junie/agents/<slug>.md`
 - **Format:** markdown+frontmatter; required `description`; Claude-compatible optional fields
 - **Toolkit adapter:** enabled (symlink)
-- **Source:** https://junie.jetbrains.com/docs/junie-cli-subagents.html
+- **Source:** [junie.jetbrains.com/docs/junie-cli-subagents.html](https://junie.jetbrains.com/docs/junie-cli-subagents.html)

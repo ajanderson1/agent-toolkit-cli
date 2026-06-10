@@ -18,7 +18,7 @@ Reads the canonical `AGENTS.md` natively — no pointer needed; the [instruction
 - **Default file:** `AGENTS.md`
 - **Project / global path:** `./AGENTS.md` (nearest while walking up from cwd) / none documented (project-only auto-load)
 - **Reads `AGENTS.md` natively:** yes
-- **Source:** https://codingagents.md/agents/adal/ ; https://docs.sylph.ai/
+- **Source:** [codingagents.md/agents/adal/](https://codingagents.md/agents/adal/) ; [docs.sylph.ai/](https://docs.sylph.ai/)
 
 ## Skills { #skills }
 
@@ -27,6 +27,7 @@ Supported — every harness in the catalog has a skills directory the [skills ki
 - **Project dir:** `.adal/skills`
 - **Global dir:** `~/.adal/skills`
 - **[General-dir](../glossary.md#general) (`.agents/skills`) reader:** no — gets its own projection
+- **Source:** [vercel-labs/skills · `src/agents.ts`](https://github.com/vercel-labs/skills/blob/main/src/agents.ts) — the upstream per-harness catalog these directories come from (ported as `skill_agents.py`, parity-tested)
 
 ## Agents (subagents) { #agents }
 
@@ -34,4 +35,4 @@ Unknown — bounded search surfaced no public evidence.
 
 - **Verdict:** unknown — no public evidence found
 - **Why:** AdaL CLI codebase private; public repo docs-only; no public subagent file convention
-- **Source:** codingagents.md/agents/adal/
+- **Source:** [codingagents.md/agents/adal](https://codingagents.md/agents/adal/)

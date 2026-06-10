@@ -1,7 +1,8 @@
 # Glossary
 
 The shared vocabulary of the [compatibility matrix](matrix.md), the
-per-harness pages, and the kind pages — grouped for skimming.
+per-harness pages, and the kind pages — grouped for skimming, highest-level
+terms first.
 
 ## Core model
 
@@ -12,10 +13,17 @@ per-harness pages, and the kind pages — grouped for skimming.
     *agent* for the subagent kind.)
 
 **Kind** { #kind }
-:   A category of installable asset with its own lock file and CLI surface:
-    [instructions](kinds/instructions.md), [skills](kinds/skills.md),
-    [agents](kinds/agents.md), [pi extensions](kinds/pi-extensions.md), and
-    (planned) [MCP servers](kinds/mcp.md).
+:   The toolkit's central organising concept: a category of installable asset
+    that harnesses consume in structurally the same way, so one set of verbs
+    can manage it across all of them. Each kind owns its own
+    [adopted convention](#adopted-convention), [lock file](#lock-file),
+    [doctor](#doctor), projection [mechanisms](#mechanism), and CLI namespace.
+    Five kinds: [instructions](kinds/instructions.md) (always-loaded context),
+    [skills](kinds/skills.md) (on-demand instruction folders),
+    [agents](kinds/agents.md) (delegable subagents),
+    [pi extensions](kinds/pi-extensions.md) (Pi-only packages), and (planned)
+    [MCP servers](kinds/mcp.md). The [matrix](matrix.md) has one column — and
+    every harness page one section — per kind.
 
 **Asset** { #asset }
 :   One installable thing of a kind — a skill folder, a subagent definition,

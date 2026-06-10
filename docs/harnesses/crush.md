@@ -18,7 +18,7 @@ Reads the canonical `AGENTS.md` natively — no pointer needed; the [instruction
 - **Default file:** `AGENTS.md`
 - **Project / global path:** `./AGENTS.md` / none (global-only)
 - **Reads `AGENTS.md` natively:** yes
-- **Source:** charmbracelet/crush `internal/config/config.go` — `defaultContextPaths` includes `AGENTS.md` / `agents.md` / `Agents.md`; `InitializeAs` JSON-schema `default=AGENTS.md`
+- **Source:** [charmbracelet/crush `internal/config/config.go`](https://github.com/charmbracelet/crush/blob/main/internal/config/config.go) — `defaultContextPaths` includes `AGENTS.md` / `agents.md` / `Agents.md`; `InitializeAs` JSON-schema `default=AGENTS.md`
 
 ## Skills { #skills }
 
@@ -27,6 +27,7 @@ Supported — every harness in the catalog has a skills directory the [skills ki
 - **Project dir:** `.crush/skills`
 - **Global dir:** `~/.config/crush/skills`
 - **[General-dir](../glossary.md#general) (`.agents/skills`) reader:** no — gets its own projection
+- **Source:** [vercel-labs/skills · `src/agents.ts`](https://github.com/vercel-labs/skills/blob/main/src/agents.ts) — the upstream per-harness catalog these directories come from (ported as `skill_agents.py`, parity-tested)
 
 ## Agents (subagents) { #agents }
 
@@ -34,4 +35,4 @@ Not supported (gap) — tracked for possible future work.
 
 - **Verdict:** unsupported (gap)
 - **Why:** delegation runtime-only (`agent`/`agentic_fetch` tools); no user agent files (issue #1807 open)
-- **Source:** github.com/charmbracelet/crush#1807
+- **Source:** [charmbracelet/crush#1807](https://github.com/charmbracelet/crush/issues/1807)

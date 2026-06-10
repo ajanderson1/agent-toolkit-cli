@@ -18,7 +18,7 @@ Reads the canonical `AGENTS.md` natively — no pointer needed; the [instruction
 - **Default file:** `AGENTS.md`
 - **Project / global path:** `./AGENTS.md` / none (project-only)
 - **Reads `AGENTS.md` natively:** yes
-- **Source:** https://kilo.ai/docs/agent-behavior/agents-md
+- **Source:** [kilo.ai/docs/agent-behavior/agents-md](https://kilo.ai/docs/agent-behavior/agents-md)
 
 ## Skills { #skills }
 
@@ -27,6 +27,7 @@ Supported — every harness in the catalog has a skills directory the [skills ki
 - **Project dir:** `.kilocode/skills`
 - **Global dir:** `~/.kilocode/skills`
 - **[General-dir](../glossary.md#general) (`.agents/skills`) reader:** no — gets its own projection
+- **Source:** [vercel-labs/skills · `src/agents.ts`](https://github.com/vercel-labs/skills/blob/main/src/agents.ts) — the upstream per-harness catalog these directories come from (ported as `skill_agents.py`, parity-tested)
 
 ## Agents (subagents) { #agents }
 
@@ -36,4 +37,4 @@ Supported via the **translate** mechanism — see the [agents kind](../kinds/age
 - **User / project path:** `~/.config/kilo/agent/<slug>.md` / `.kilo/agents/<slug>.md`
 - **Format:** markdown+frontmatter; required `description`,`mode`(inject `subagent`); optional `model`,`permission`
 - **Toolkit adapter:** enabled (translate)
-- **Source:** https://kilo.ai/docs/agent-behavior/custom-modes
+- **Source:** [kilo.ai/docs/agent-behavior/custom-modes](https://kilo.ai/docs/agent-behavior/custom-modes)

@@ -18,7 +18,7 @@ Reads the canonical `AGENTS.md` natively — no pointer needed; the [instruction
 - **Default file:** `AGENTS.md` (project also walks for `CLAUDE.md`, `NEOVATE.md`; global also checks `NEOVATE.md` and `~/.claude/CLAUDE.md`)
 - **Project / global path:** `<cwd>/AGENTS.md` walking up to filesystem root / `~/.neovate/AGENTS.md`
 - **Reads `AGENTS.md` natively:** yes
-- **Source:** https://github.com/neovateai/neovate-code/blob/master/src/rules.ts (`getLlmsRules`, `projectRuleNames`/`globalRuleNames` starting with `'AGENTS.md'`)
+- **Source:** [github.com/neovateai/neovate-code/blob/master/src/rules.ts](https://github.com/neovateai/neovate-code/blob/master/src/rules.ts) (`getLlmsRules`, `projectRuleNames`/`globalRuleNames` starting with `'AGENTS.md'`)
 
 ## Skills { #skills }
 
@@ -27,6 +27,7 @@ Supported — every harness in the catalog has a skills directory the [skills ki
 - **Project dir:** `.neovate/skills`
 - **Global dir:** `~/.neovate/skills`
 - **[General-dir](../glossary.md#general) (`.agents/skills`) reader:** no — gets its own projection
+- **Source:** [vercel-labs/skills · `src/agents.ts`](https://github.com/vercel-labs/skills/blob/main/src/agents.ts) — the upstream per-harness catalog these directories come from (ported as `skill_agents.py`, parity-tested)
 
 ## Agents (subagents) { #agents }
 
@@ -36,4 +37,4 @@ Supported via the **symlink** mechanism — see the [agents kind](../kinds/agent
 - **User / project path:** `~/.claude/agents/<slug>.md` (also `~/.neovate/agents/`) / `.claude/agents/<slug>.md`
 - **Format:** markdown+frontmatter; required `name`(≤64),`description`(≤1024); Claude-identical
 - **Toolkit adapter:** enabled (symlink)
-- **Source:** `neovateai/neovate-code:src/agent/agentManager.ts:162-235`
+- **Source:** [`neovateai/neovate-code:src/agent/agentManager.ts:162-235`](https://github.com/neovateai/neovate-code/blob/master/src/agent/agentManager.ts)

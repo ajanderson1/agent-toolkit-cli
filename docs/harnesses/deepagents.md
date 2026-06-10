@@ -18,7 +18,7 @@ Not supported (gap) — no default root instruction file a pointer symlink could
 - **Default file:** none (memory middleware requires explicit `agentId` + source paths)
 - **Project / global path:** none (no auto-load) / none (no auto-load)
 - **Reads `AGENTS.md` natively:** no
-- **Source:** https://deepagentsdk.dev/docs/guides/agent-memory ("Create memory middleware" requires `createAgentMemoryMiddleware({ agentId })`; project memory only loads via `requestProjectApproval`)
+- **Source:** [deepagentsdk.dev/docs/guides/agent-memory](https://deepagentsdk.dev/docs/guides/agent-memory) ("Create memory middleware" requires `createAgentMemoryMiddleware({ agentId })`; project memory only loads via `requestProjectApproval`)
 
 ## Skills { #skills }
 
@@ -27,6 +27,7 @@ Supported — every harness in the catalog has a skills directory the [skills ki
 - **Project dir:** `.agents/skills`
 - **Global dir:** `~/.deepagents/agent/skills`
 - **[General-dir](../glossary.md#general) (`.agents/skills`) reader:** yes — reads the per-kind general directory directly
+- **Source:** [vercel-labs/skills · `src/agents.ts`](https://github.com/vercel-labs/skills/blob/main/src/agents.ts) — the upstream per-harness catalog these directories come from (ported as `skill_agents.py`, parity-tested)
 
 ## Agents (subagents) { #agents }
 
@@ -34,4 +35,4 @@ Not applicable — no subagent concept; won't be filled.
 
 - **Verdict:** unsupported (by design)
 - **Why:** Python library; subagents are code `SubAgent` TypedDicts; no file-drop convention
-- **Source:** github.com/langchain-ai/deepagents .../middleware/subagents.py
+- **Source:** [langchain-ai/deepagents libs/deepagents/deepagents/middleware/subagents.py](https://github.com/langchain-ai/deepagents/blob/main/libs/deepagents/deepagents/middleware/subagents.py)

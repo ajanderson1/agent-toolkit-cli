@@ -27,6 +27,7 @@ Supported — every harness in the catalog has a skills directory the [skills ki
 - **Project dir:** `.iflow/skills`
 - **Global dir:** `~/.iflow/skills`
 - **[General-dir](../glossary.md#general) (`.agents/skills`) reader:** no — gets its own projection
+- **Source:** [vercel-labs/skills · `src/agents.ts`](https://github.com/vercel-labs/skills/blob/main/src/agents.ts) — the upstream per-harness catalog these directories come from (ported as `skill_agents.py`, parity-tested)
 
 ## Agents (subagents) { #agents }
 
@@ -34,4 +35,4 @@ Not supported (gap) — tracked for possible future work.
 
 - **Verdict:** unsupported (gap)
 - **Why:** DEFUNCT (shut 2026-04-17); was `.iflow/agents/<slug>.md` req `agentType`/`systemPrompt`/`whenToUse`
-- **Source:** platform.iflow.cn/en/cli/examples/subagent (archived)
+- **Source:** [platform.iflow.cn/en/cli/examples/subagent](https://platform.iflow.cn/en/cli/examples/subagent) (archived)

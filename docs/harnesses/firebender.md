@@ -18,7 +18,7 @@ Reads the canonical `AGENTS.md` natively — no pointer needed; the [instruction
 - **Default file:** `AGENTS.md`
 - **Project / global path:** `./AGENTS.md` (also `./.firebender/AGENTS.md`) / `~/.firebender/AGENTS.md`
 - **Reads `AGENTS.md` natively:** yes
-- **Source:** https://docs.firebender.com/api-reference/agents-md.md ("automatically discovered… No configuration in `firebender.json` is required"); changelog v0.15.5 (2026-01-28) https://docs.firebender.com/about/changelog
+- **Source:** [docs.firebender.com/api-reference/agents-md.md](https://docs.firebender.com/api-reference/agents-md.md) ("automatically discovered… No configuration in `firebender.json` is required"); changelog v0.15.5 (2026-01-28) [docs.firebender.com/about/changelog](https://docs.firebender.com/about/changelog)
 
 ## Skills { #skills }
 
@@ -27,6 +27,7 @@ Supported — every harness in the catalog has a skills directory the [skills ki
 - **Project dir:** `.agents/skills`
 - **Global dir:** `~/.firebender/skills`
 - **[General-dir](../glossary.md#general) (`.agents/skills`) reader:** yes — reads the per-kind general directory directly
+- **Source:** [vercel-labs/skills · `src/agents.ts`](https://github.com/vercel-labs/skills/blob/main/src/agents.ts) — the upstream per-harness catalog these directories come from (ported as `skill_agents.py`, parity-tested)
 
 ## Agents (subagents) { #agents }
 
@@ -36,4 +37,4 @@ Supported via the **config_file+folder** mechanism — see the [agents kind](../
 - **User / project path:** `~/.firebender/firebender.json`→md / `firebender.json`→`.firebender/agents/<slug>.md`
 - **Format:** markdown+frontmatter req `name`,`description`,`callable:true` to spawn; registered in `firebender.json` array
 - **Toolkit adapter:** currently disabled — would mutate a hot-reloaded IDE registry (firebender.json); pending AJ decision to accept shared-config mutation (PR5a)
-- **Source:** https://docs.firebender.com/multi-agent/subagents
+- **Source:** [docs.firebender.com/multi-agent/subagents](https://docs.firebender.com/multi-agent/subagents)

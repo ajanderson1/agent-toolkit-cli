@@ -18,7 +18,7 @@ Reads the canonical `AGENTS.md` natively — no pointer needed; the [instruction
 - **Default file:** `AGENTS.md` (priority over `CLAUDE.md`, then `GEMINI.md`)
 - **Project / global path:** `<workspaceRoot>/AGENTS.md` / none (global-only AGENTS.md not auto-loaded; only `~/.dexto/commands/` is global)
 - **Reads `AGENTS.md` natively:** yes
-- **Source:** https://github.com/truffle-ai/dexto/blob/main/packages/agent-management/src/config/discover-prompts.ts (`AGENT_INSTRUCTION_FILES = ['agents.md', 'claude.md', 'gemini.md']`, `discoverAgentInstructionFile`)
+- **Source:** [github.com/truffle-ai/dexto/blob/main/packages/agent-management/src/config/discover-prompts.ts](https://github.com/truffle-ai/dexto/blob/main/packages/agent-management/src/config/discover-prompts.ts) (`AGENT_INSTRUCTION_FILES = ['agents.md', 'claude.md', 'gemini.md']`, `discoverAgentInstructionFile`)
 
 ## Skills { #skills }
 
@@ -27,6 +27,7 @@ Supported — every harness in the catalog has a skills directory the [skills ki
 - **Project dir:** `.agents/skills`
 - **Global dir:** `~/.agents/skills`
 - **[General-dir](../glossary.md#general) (`.agents/skills`) reader:** yes — reads the per-kind general directory directly
+- **Source:** [vercel-labs/skills · `src/agents.ts`](https://github.com/vercel-labs/skills/blob/main/src/agents.ts) — the upstream per-harness catalog these directories come from (ported as `skill_agents.py`, parity-tested)
 
 ## Agents (subagents) { #agents }
 
@@ -36,4 +37,4 @@ Supported via the **config_file+folder** mechanism — see the [agents kind](../
 - **User / project path:** `agents/<name>.yml` (project; global unconfirmed) / `agents/<name>.yml`
 - **Format:** YAML; req `systemPrompt`,`llm.*`; spawn via `tools[].type: agent-spawner` registry
 - **Toolkit adapter:** enabled (config_file+folder)
-- **Source:** docs.dexto.ai/docs/guides/configuring-dexto/agent-yml
+- **Source:** [docs.dexto.ai/docs/guides/configuring-dexto/agent-yml](https://docs.dexto.ai/docs/guides/configuring-dexto/agent-yml)

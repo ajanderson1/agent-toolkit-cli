@@ -18,7 +18,7 @@ Reads the canonical `AGENTS.md` natively — no pointer needed; the [instruction
 - **Default file:** `AGENTS.md`
 - **Project / global path:** `./AGENTS.md` / `~/.config/opencode/AGENTS.md`
 - **Reads `AGENTS.md` natively:** yes
-- **Source:** https://opencode.ai/docs/rules/
+- **Source:** [opencode.ai/docs/rules/](https://opencode.ai/docs/rules/)
 
 ## Skills { #skills }
 
@@ -27,6 +27,7 @@ Supported — every harness in the catalog has a skills directory the [skills ki
 - **Project dir:** `.agents/skills`
 - **Global dir:** `~/.config/opencode/skills`
 - **[General-dir](../glossary.md#general) (`.agents/skills`) reader:** yes — reads the per-kind general directory directly
+- **Source:** [vercel-labs/skills · `src/agents.ts`](https://github.com/vercel-labs/skills/blob/main/src/agents.ts) — the upstream per-harness catalog these directories come from (ported as `skill_agents.py`, parity-tested)
 
 ## Agents (subagents) { #agents }
 
@@ -36,4 +37,4 @@ Supported via the **translate** mechanism — see the [agents kind](../kinds/age
 - **User / project path:** `~/.config/opencode/{agent,agents}/**/*.md` / `.opencode/{agent,agents}/**/*.md`
 - **Format:** markdown+frontmatter; inject `mode: subagent`; name from filename; glob singular+plural
 - **Toolkit adapter:** enabled (translate)
-- **Source:** `packages/opencode/src/config/agent.ts` load(); `agent/agent.ts:32`
+- **Source:** [`packages/opencode/src/config/agent.ts`](https://github.com/sst/opencode/blob/dev/packages/opencode/src/config/agent.ts) load(); [`agent/agent.ts:32`](https://github.com/sst/opencode/blob/dev/packages/opencode/src/agent/agent.ts)

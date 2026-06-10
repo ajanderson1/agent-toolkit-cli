@@ -18,7 +18,7 @@ Not supported (gap) — no default root instruction file a pointer symlink could
 - **Default file:** `project_rules.md` (in `.trae/rules/` directory)
 - **Project / global path:** `./.trae/rules/project_rules.md` / `./.trae/rules/user_rules.md` (workspace-level "user rules", not OS-global)
 - **Reads `AGENTS.md` natively:** no
-- **Source:** https://docs.trae.ai/ide/rules?_lang=en ; https://github.com/Trae-AI/Trae/issues/1911
+- **Source:** [docs.trae.ai/ide/rules?_lang=en](https://docs.trae.ai/ide/rules?_lang=en) ; [github.com/Trae-AI/Trae/issues/1911](https://github.com/Trae-AI/Trae/issues/1911)
 
 ## Skills { #skills }
 
@@ -27,6 +27,7 @@ Supported — every harness in the catalog has a skills directory the [skills ki
 - **Project dir:** `.trae/skills`
 - **Global dir:** `~/.trae/skills`
 - **[General-dir](../glossary.md#general) (`.agents/skills`) reader:** no — gets its own projection
+- **Source:** [vercel-labs/skills · `src/agents.ts`](https://github.com/vercel-labs/skills/blob/main/src/agents.ts) — the upstream per-harness catalog these directories come from (ported as `skill_agents.py`, parity-tested)
 
 ## Agents (subagents) { #agents }
 
@@ -34,4 +35,4 @@ Not applicable — no subagent concept; won't be filled.
 
 - **Verdict:** unsupported (by design)
 - **Why:** custom agents UI-configured (Builder), stored server-side; no on-disk file
-- **Source:** https://docs.trae.ai/ide/agent
+- **Source:** [docs.trae.ai/ide/agent](https://docs.trae.ai/ide/agent)

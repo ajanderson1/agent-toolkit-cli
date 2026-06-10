@@ -27,6 +27,7 @@ Supported — every harness in the catalog has a skills directory the [skills ki
 - **Project dir:** `.agents/skills`
 - **Global dir:** `~/.gemini/skills`
 - **[General-dir](../glossary.md#general) (`.agents/skills`) reader:** yes — reads the per-kind general directory directly
+- **Source:** [vercel-labs/skills · `src/agents.ts`](https://github.com/vercel-labs/skills/blob/main/src/agents.ts) — the upstream per-harness catalog these directories come from (ported as `skill_agents.py`, parity-tested)
 
 ## Agents (subagents) { #agents }
 
@@ -36,4 +37,4 @@ Supported via the **translate** mechanism — see the [agents kind](../kinds/age
 - **User / project path:** `~/.gemini/agents/<slug>.md` / `.gemini/agents/<slug>.md`
 - **Format:** markdown+frontmatter; ONLY `name`+`description` (zod `.strict()` rejects extras)
 - **Toolkit adapter:** enabled (translate)
-- **Source:** `agentLoader.ts` localAgentSchema.strict() + `storage.ts:117-118,309-310`
+- **Source:** [`packages/core/src/agents/agentLoader.ts`](https://github.com/google-gemini/gemini-cli/blob/main/packages/core/src/agents/agentLoader.ts) localAgentSchema.strict() + `storage.ts:117-118,309-310`

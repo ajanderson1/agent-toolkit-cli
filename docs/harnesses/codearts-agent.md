@@ -27,6 +27,7 @@ Supported — every harness in the catalog has a skills directory the [skills ki
 - **Project dir:** `.codeartsdoer/skills`
 - **Global dir:** `~/.codeartsdoer/skills`
 - **[General-dir](../glossary.md#general) (`.agents/skills`) reader:** no — gets its own projection
+- **Source:** [vercel-labs/skills · `src/agents.ts`](https://github.com/vercel-labs/skills/blob/main/src/agents.ts) — the upstream per-harness catalog these directories come from (ported as `skill_agents.py`, parity-tested)
 
 ## Agents (subagents) { #agents }
 
@@ -34,4 +35,4 @@ Unknown — bounded search surfaced no public evidence.
 
 - **Verdict:** unknown — no public evidence found
 - **Why:** Huawei CodeArts beta; mentions MCP+Skills, no public subagent file dir
-- **Source:** huaweicloud.com/intl/en-us/product/codearts/ai.html
+- **Source:** [huaweicloud.com/intl/en-us/product/codearts/ai.html](https://www.huaweicloud.com/intl/en-us/product/codearts/ai.html)

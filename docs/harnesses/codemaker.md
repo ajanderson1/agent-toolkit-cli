@@ -18,7 +18,7 @@ Not applicable — no root instruction-file concept at all.
 - **Default file:** none
 - **Project / global path:** none / none
 - **Reads `AGENTS.md` natively:** no
-- **Source:** https://github.com/codemakerai/codemaker-cli README ("Context-aware source code generation … Generating source code documentation … Fixing syntax"; usage is `codemaker generate docs **/*.java`)
+- **Source:** [github.com/codemakerai/codemaker-cli](https://github.com/codemakerai/codemaker-cli) README ("Context-aware source code generation … Generating source code documentation … Fixing syntax"; usage is `codemaker generate docs **/*.java`)
 
 ## Skills { #skills }
 
@@ -27,6 +27,7 @@ Supported — every harness in the catalog has a skills directory the [skills ki
 - **Project dir:** `.codemaker/skills`
 - **Global dir:** `~/.codemaker/skills`
 - **[General-dir](../glossary.md#general) (`.agents/skills`) reader:** no — gets its own projection
+- **Source:** [vercel-labs/skills · `src/agents.ts`](https://github.com/vercel-labs/skills/blob/main/src/agents.ts) — the upstream per-harness catalog these directories come from (ported as `skill_agents.py`, parity-tested)
 
 ## Agents (subagents) { #agents }
 
@@ -34,4 +35,4 @@ Not applicable — no subagent concept; won't be filled.
 
 - **Verdict:** unsupported (by design)
 - **Why:** batch code-gen CLI; no subagent concept
-- **Source:** https://github.com/codemakerai/codemaker-cli
+- **Source:** [github.com/codemakerai/codemaker-cli](https://github.com/codemakerai/codemaker-cli)

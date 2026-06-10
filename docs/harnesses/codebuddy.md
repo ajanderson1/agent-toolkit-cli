@@ -18,7 +18,7 @@ Reads a fixed own-name file (`CODEBUDDY.md`) instead of `AGENTS.md`. The [instru
 - **Default file:** `CODEBUDDY.md`
 - **Project / global path:** `./CODEBUDDY.md` (recursive up from cwd) / `~/.codebuddy/CODEBUDDY.md`
 - **Reads `AGENTS.md` natively:** no (own-name preferred; AGENTS.md only as fallback when CODEBUDDY.md absent)
-- **Source:** https://www.codebuddy.ai/docs/cli/memory
+- **Source:** [www.codebuddy.ai/docs/cli/memory](https://www.codebuddy.ai/docs/cli/memory)
 
 ## Skills { #skills }
 
@@ -27,6 +27,7 @@ Supported — every harness in the catalog has a skills directory the [skills ki
 - **Project dir:** `.codebuddy/skills`
 - **Global dir:** `~/.codebuddy/skills`
 - **[General-dir](../glossary.md#general) (`.agents/skills`) reader:** no — gets its own projection
+- **Source:** [vercel-labs/skills · `src/agents.ts`](https://github.com/vercel-labs/skills/blob/main/src/agents.ts) — the upstream per-harness catalog these directories come from (ported as `skill_agents.py`, parity-tested)
 
 ## Agents (subagents) { #agents }
 
@@ -36,4 +37,4 @@ Supported via the **symlink** mechanism — see the [agents kind](../kinds/agent
 - **User / project path:** `~/.codebuddy/agents/<slug>.md` / `.codebuddy/agents/<slug>.md`
 - **Format:** markdown+frontmatter; required `name`(lc+hyphens),`description`; optional `tools`,`model`,`permissionMode`,`skills`
 - **Toolkit adapter:** enabled (symlink)
-- **Source:** https://www.codebuddy.ai/docs/cli/sub-agents
+- **Source:** [www.codebuddy.ai/docs/cli/sub-agents](https://www.codebuddy.ai/docs/cli/sub-agents)

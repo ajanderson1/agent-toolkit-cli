@@ -18,7 +18,7 @@ Reads the canonical `AGENTS.md` natively — no pointer needed; the [instruction
 - **Default file:** `README.pochi.md` OR `AGENTS.md` (treated identically)
 - **Project / global path:** `./AGENTS.md` (or `./README.pochi.md`) / `~/.pochi/README.pochi.md` (AGENTS.md alternative implied — docs say files are "treated identically")
 - **Reads `AGENTS.md` natively:** yes
-- **Source:** https://docs.getpochi.com/rules/
+- **Source:** [docs.getpochi.com/rules/](https://docs.getpochi.com/rules/)
 
 ## Skills { #skills }
 
@@ -27,6 +27,7 @@ Supported — every harness in the catalog has a skills directory the [skills ki
 - **Project dir:** `.pochi/skills`
 - **Global dir:** `~/.pochi/skills`
 - **[General-dir](../glossary.md#general) (`.agents/skills`) reader:** no — gets its own projection
+- **Source:** [vercel-labs/skills · `src/agents.ts`](https://github.com/vercel-labs/skills/blob/main/src/agents.ts) — the upstream per-harness catalog these directories come from (ported as `skill_agents.py`, parity-tested)
 
 ## Agents (subagents) { #agents }
 
@@ -36,4 +37,4 @@ Supported via the **symlink** mechanism — see the [agents kind](../kinds/agent
 - **User / project path:** `~/.pochi/agents/<name>.md` / `.pochi/agents/<name>.md`
 - **Format:** markdown+frontmatter; required `description`; optional `name`,`tools`; spawn via `newTask(<name>)`
 - **Toolkit adapter:** enabled (symlink)
-- **Source:** https://docs.getpochi.com/custom-agent
+- **Source:** [docs.getpochi.com/custom-agent](https://docs.getpochi.com/custom-agent)

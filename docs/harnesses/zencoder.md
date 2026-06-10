@@ -27,6 +27,7 @@ Supported — every harness in the catalog has a skills directory the [skills ki
 - **Project dir:** `.zencoder/skills`
 - **Global dir:** `~/.zencoder/skills`
 - **[General-dir](../glossary.md#general) (`.agents/skills`) reader:** no — gets its own projection
+- **Source:** [vercel-labs/skills · `src/agents.ts`](https://github.com/vercel-labs/skills/blob/main/src/agents.ts) — the upstream per-harness catalog these directories come from (ported as `skill_agents.py`, parity-tested)
 
 ## Agents (subagents) { #agents }
 
@@ -34,4 +35,4 @@ Not applicable — no subagent concept; won't be filled.
 
 - **Verdict:** unsupported (by design)
 - **Why:** Zen Agents marketplace/UI-defined; no local file-drop dir
-- **Source:** https://zencoder.ai/blog/introducing-zen-agents...
+- **Source:** [zencoder.ai/blog/introducing-zen-agents-mcp-library-and-marketplace](https://zencoder.ai/blog/introducing-zen-agents-mcp-library-and-marketplace)

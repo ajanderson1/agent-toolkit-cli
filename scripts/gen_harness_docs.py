@@ -175,6 +175,18 @@ def tilde(p: object) -> str:
     return str(p).replace(HOME, "~")
 
 
+# Bare URLs in SSOT citations — not already inside a markdown link/autolink.
+_BARE_URL = re.compile(r"(?<![(<])(https?://[^\s|)\]>]+)")
+
+
+def linkify(citation: str) -> str:
+    """Make bare citation URLs clickable (the site has no magiclink extension);
+    URLs already wrapped in markdown links are left alone."""
+    return _BARE_URL.sub(
+        lambda m: f"[{m.group(1).removeprefix('https://')}]({m.group(1)})", citation
+    )
+
+
 def sym_agent(v: str) -> str:
     if v in AGENT_SUPPORTED:
         return "✅"
@@ -313,7 +325,7 @@ def instr_section(row: InstrRow) -> str:
         f"- **Default file:** {row.default_file or '—'}",
         f"- **Project / global path:** {row.paths or '—'}",
         f"- **Reads `AGENTS.md` natively:** {row.native or '—'}",
-        f"- **Source:** {row.citation}",
+        f"- **Source:** {linkify(row.citation)}",
     ]
     return "\n".join(lines)
 
@@ -334,6 +346,10 @@ def skills_section(slug: str) -> str:
         f"- **Project dir:** `{cfg.skills_dir}`",
         f"- **Global dir:** `{tilde(cfg.global_skills_dir)}`",
         f"- **[General-dir](../glossary.md#general) (`.agents/skills`) reader:** {general}",
+        "- **Source:** [vercel-labs/skills · `src/agents.ts`]"
+        "(https://github.com/vercel-labs/skills/blob/main/src/agents.ts) — the "
+        "upstream per-harness catalog these directories come from (ported as "
+        "`skill_agents.py`, parity-tested)",
     ])
 
 
@@ -368,7 +384,7 @@ def agent_section(slug: str, row: AgentRow) -> str:
         lines += ["", f"- **Verdict:** {row.verdict}"]
         if row.fmt:
             lines.append(f"- **Why:** {row.fmt}")
-    lines.append(f"- **Source:** {row.citation}")
+    lines.append(f"- **Source:** {linkify(row.citation)}")
     return "\n".join(lines)
 
 
@@ -382,6 +398,10 @@ def pi_ext_section(slug: str) -> str:
         "[pi-extension kind](../kinds/pi-extensions.md) targets Pi alone.",
         "Extensions are git-sourced (branch- or SHA-pinned) and projected by",
         "symlink into Pi's extension directory.",
+        "",
+        "- **Source:** [pi.dev/docs/latest/extensions]"
+        "(https://pi.dev/docs/latest/extensions) — Pi's extension docs "
+        "(packages, load paths)",
     ])
 
 

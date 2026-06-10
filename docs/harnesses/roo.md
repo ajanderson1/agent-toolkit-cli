@@ -18,7 +18,7 @@ Reads the canonical `AGENTS.md` natively — no pointer needed; the [instruction
 - **Default file:** `AGENTS.md`
 - **Project / global path:** `./AGENTS.md` / `~/.roo/rules/` (directory, not single file)
 - **Reads `AGENTS.md` natively:** yes
-- **Source:** https://roocodeinc.github.io/Roo-Code/features/custom-instructions
+- **Source:** [roocodeinc.github.io/Roo-Code/features/custom-instructions](https://roocodeinc.github.io/Roo-Code/features/custom-instructions)
 
 ## Skills { #skills }
 
@@ -27,6 +27,7 @@ Supported — every harness in the catalog has a skills directory the [skills ki
 - **Project dir:** `.roo/skills`
 - **Global dir:** `~/.roo/skills`
 - **[General-dir](../glossary.md#general) (`.agents/skills`) reader:** no — gets its own projection
+- **Source:** [vercel-labs/skills · `src/agents.ts`](https://github.com/vercel-labs/skills/blob/main/src/agents.ts) — the upstream per-harness catalog these directories come from (ported as `skill_agents.py`, parity-tested)
 
 ## Agents (subagents) { #agents }
 
@@ -34,4 +35,4 @@ Not supported (gap) — tracked for possible future work.
 
 - **Verdict:** unsupported (gap)
 - **Why:** custom modes (`.roomodes`) delegation targets via `new_task` but mode-switch, not independent-context spawn
-- **Source:** roocodeinc.github.io/Roo-Code/features/custom-modes
+- **Source:** [roocodeinc.github.io/Roo-Code/features/custom-modes](https://roocodeinc.github.io/Roo-Code/features/custom-modes)

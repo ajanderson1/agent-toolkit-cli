@@ -18,7 +18,7 @@ Reads a fixed own-name file (`CLAUDE.md`) instead of `AGENTS.md`. The [instructi
 - **Default file:** `CLAUDE.md`
 - **Project / global path:** `./CLAUDE.md` or `./.claude/CLAUDE.md` / `~/.claude/CLAUDE.md`
 - **Reads `AGENTS.md` natively:** no
-- **Source:** https://code.claude.com/docs/en/memory § "AGENTS.md" ("Claude Code reads `CLAUDE.md`, not `AGENTS.md`")
+- **Source:** [code.claude.com/docs/en/memory](https://code.claude.com/docs/en/memory) § "AGENTS.md" ("Claude Code reads `CLAUDE.md`, not `AGENTS.md`")
 
 ## Skills { #skills }
 
@@ -27,6 +27,7 @@ Supported — every harness in the catalog has a skills directory the [skills ki
 - **Project dir:** `.claude/skills`
 - **Global dir:** `~/.claude/skills`
 - **[General-dir](../glossary.md#general) (`.agents/skills`) reader:** no — gets its own projection
+- **Source:** [vercel-labs/skills · `src/agents.ts`](https://github.com/vercel-labs/skills/blob/main/src/agents.ts) — the upstream per-harness catalog these directories come from (ported as `skill_agents.py`, parity-tested)
 
 ## Agents (subagents) { #agents }
 
@@ -36,4 +37,4 @@ Supported via the **symlink** mechanism — see the [agents kind](../kinds/agent
 - **User / project path:** `~/.claude/agents/<slug>.md` / `.claude/agents/<slug>.md` (recursive)
 - **Format:** markdown+frontmatter; required `name`,`description`; extra keys ignored; 15 optional fields
 - **Toolkit adapter:** enabled (symlink)
-- **Source:** https://code.claude.com/docs/en/sub-agents
+- **Source:** [code.claude.com/docs/en/sub-agents](https://code.claude.com/docs/en/sub-agents)

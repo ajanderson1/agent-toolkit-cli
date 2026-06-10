@@ -18,7 +18,7 @@ Reads the canonical `AGENTS.md` natively — no pointer needed; the [instruction
 - **Default file:** `AGENTS.md`
 - **Project / global path:** `./AGENTS.md` / `~/.pi/agent/AGENTS.md`
 - **Reads `AGENTS.md` natively:** yes
-- **Source:** https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/README.md (current upstream README documents AGENTS.md loaded at startup from cwd + parents + `~/.pi/agent/AGENTS.md`)
+- **Source:** [github.com/badlogic/pi-mono/blob/main/packages/coding-agent/README.md](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/README.md) (current upstream README documents AGENTS.md loaded at startup from cwd + parents + `~/.pi/agent/AGENTS.md`)
 
 ## Skills { #skills }
 
@@ -27,6 +27,7 @@ Supported — every harness in the catalog has a skills directory the [skills ki
 - **Project dir:** `.pi/skills`
 - **Global dir:** `~/.pi/agent/skills`
 - **[General-dir](../glossary.md#general) (`.agents/skills`) reader:** no — gets its own projection
+- **Source:** [vercel-labs/skills · `src/agents.ts`](https://github.com/vercel-labs/skills/blob/main/src/agents.ts) — the upstream per-harness catalog these directories come from (ported as `skill_agents.py`, parity-tested)
 
 ## Agents (subagents) { #agents }
 
@@ -36,7 +37,7 @@ Supported via the **dual-symlink** mechanism — see the [agents kind](../kinds/
 - **User / project path:** `~/.pi/agent/agents/<slug>.md` / `.pi/agents/<slug>.md` (legacy `.agents/` fallback)
 - **Format:** markdown+frontmatter (all optional); read by 3rd-party `@tintinweb/pi-subagents` ext
 - **Toolkit adapter:** enabled (symlink)
-- **Source:** github.com/tintinweb/pi-subagents ; pi.dev/packages/pi-subagents
+- **Source:** [github.com/tintinweb/pi-subagents](https://github.com/tintinweb/pi-subagents) ; [pi.dev/packages/pi-subagents](https://pi.dev/packages/pi-subagents)
 
 ## Pi extensions { #pi-extensions }
 
@@ -44,3 +45,5 @@ Pi is the only harness with an extension-package concept, so the
 [pi-extension kind](../kinds/pi-extensions.md) targets Pi alone.
 Extensions are git-sourced (branch- or SHA-pinned) and projected by
 symlink into Pi's extension directory.
+
+- **Source:** [pi.dev/docs/latest/extensions](https://pi.dev/docs/latest/extensions) — Pi's extension docs (packages, load paths)
