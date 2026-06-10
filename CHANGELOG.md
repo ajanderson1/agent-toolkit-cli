@@ -1,5 +1,26 @@
 # Changelog
 
+## [3.7.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v3.6.4...v3.7.0) (2026-06-10)
+
+
+### Features
+
+* **tui:** pi grid follows the app-wide scope toggle ([#349](https://github.com/ajanderson1/agent-toolkit-cli/issues/349)) ([22c71a9](https://github.com/ajanderson1/agent-toolkit-cli/commit/22c71a9f566ae97a6201fe354c0e072699798af6))
+
+
+### Documentation
+
+* **plan:** pi-grid scope toggle implementation plan ([#349](https://github.com/ajanderson1/agent-toolkit-cli/issues/349)) ([dd30812](https://github.com/ajanderson1/agent-toolkit-cli/commit/dd30812acfbcd83e4710f0e778f6ac80ca12f64f))
+* **plan:** standard-matrix-groups implementation plan for [#351](https://github.com/ajanderson1/agent-toolkit-cli/issues/351) ([42dd94b](https://github.com/ajanderson1/agent-toolkit-cli/commit/42dd94b1095c5ac6789c1842c702e4afb523043d))
+* **plan:** standard-rename implementation plan for [#350](https://github.com/ajanderson1/agent-toolkit-cli/issues/350) ([b8d593c](https://github.com/ajanderson1/agent-toolkit-cli/commit/b8d593c544d339481f7c3d8a1ac5657ad2462cc3))
+* **spec,plan:** resolve critical-review findings for [#349](https://github.com/ajanderson1/agent-toolkit-cli/issues/349) ([e611388](https://github.com/ajanderson1/agent-toolkit-cli/commit/e6113885918ad55f072453fe97b7996a77166131))
+* **spec,plan:** resolve critical-review findings for [#350](https://github.com/ajanderson1/agent-toolkit-cli/issues/350) ([d461825](https://github.com/ajanderson1/agent-toolkit-cli/commit/d461825ca17fd9455c9161037d14a11634894445))
+* **spec,plan:** resolve critical-review findings for [#351](https://github.com/ajanderson1/agent-toolkit-cli/issues/351) ([e155b1d](https://github.com/ajanderson1/agent-toolkit-cli/commit/e155b1df8354df8303d4d61fec9533809587a2c7))
+* **spec:** [#349](https://github.com/ajanderson1/agent-toolkit-cli/issues/349) preservation goes app-wide via single app-side site (PM correction) ([2e811eb](https://github.com/ajanderson1/agent-toolkit-cli/commit/2e811eb1eb525454ec12cf9120ba3ed4f1d4d2cd))
+* **spec:** pi grid joins app-wide scope toggle ([#349](https://github.com/ajanderson1/agent-toolkit-cli/issues/349)) ([4fc7db4](https://github.com/ajanderson1/agent-toolkit-cli/commit/4fc7db4c032218fd4f6dbcda0605d573aa84b94b))
+* **spec:** standard-rename design for [#350](https://github.com/ajanderson1/agent-toolkit-cli/issues/350) (premise-corrected, no migration) ([73961df](https://github.com/ajanderson1/agent-toolkit-cli/commit/73961dfbf6610ed2eaa6f4d0b31de9c4cabfc6b4))
+* **spec:** standard/non-standard matrix groups design for [#351](https://github.com/ajanderson1/agent-toolkit-cli/issues/351) ([5d9251e](https://github.com/ajanderson1/agent-toolkit-cli/commit/5d9251ea8916f5edc49f2a11df19672f13115f25))
+
 ## [3.6.4](https://github.com/ajanderson1/agent-toolkit-cli/compare/v3.6.3...v3.6.4) (2026-06-10)
 
 
