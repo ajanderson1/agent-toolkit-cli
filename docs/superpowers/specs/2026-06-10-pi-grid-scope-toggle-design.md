@@ -49,6 +49,10 @@ Two concrete defects fall out of the special-casing:
   pending key stays `(scope, slug)`. Untracked rows stay non-interactive.
 - The #321 viewport save/restore in `_rebuild` is untouched; only the
   `max_col` clamp changes for the 4-column layout.
+- **Cursor snap on scope change:** `set_scope` moves the cursor to the scope
+  column (same row). Without this, a cursor on the removed project column
+  (old index 2) silently lands on non-interactive Origin after the toggle
+  and the user's next `space` is a no-op.
 
 ### 2. Pending preserved across ctrl+g — ONE app-side site, all four grids
 
@@ -70,6 +74,10 @@ grid.restore_pending(saved)          # both scopes' ops come back
   are — uniformity preserved at the widget layer.
 - **Explicit ctrl+r refresh still clears pending** (unchanged semantics).
   Kind-switch clearing is also unchanged (pre-existing, out of scope).
+- **ctrl+z revert clears BOTH scopes' ops in the active grid** — today's
+  whole-dict `clear_pending()` semantics made explicit. Because the cleared
+  set can now include invisible other-scope ops, the revert message is
+  scope-tagged (§4) so the user sees what was destroyed.
 - Hidden grids are untouched by the toggle (their refresh happens on kind
   switch, as today).
 - The apply paths already group by scope from the pending key (all four), so
@@ -92,7 +100,7 @@ A single module-level helper computes the tag from any pending dict (scope is
 `key[0]` in every grid's key shape):
 
 ```python
-def _scope_tag(pending: dict) -> str:
+def _scope_tag(keys: Iterable[tuple[str, ...]]) -> str:
     """Return ' (a global, b project)' when ops span scopes, else ''."""
 ```
 
@@ -105,6 +113,9 @@ Applied at:
 - All four post-apply summaries: `applied: 3 ok, 0 failed (2 global,
   1 project)` — multi-scope pending is now reachable in every grid, so every
   apply path gets the tag.
+- ctrl+z revert (`action_revert`, all four branches): `reverted: 4 pending
+  cleared (3 global, 1 project)` — the one destructive surface that can
+  consume invisible other-scope ops, so the tag matters most here.
 
 ### 5. Consistency fixes that fall out
 
@@ -132,7 +143,7 @@ Applied at:
 
 ## Test surface
 
-Headless Textual tests (`tests/tui/`), following the #321 learnings (scroll
+Headless Textual tests (`tests/test_tui/`), following the #321 learnings (scroll
 tests need an overflowing container, a mid-pane cursor, and a proven-RED
 baseline):
 
@@ -154,6 +165,12 @@ baseline):
 7. Untracked rows remain non-interactive in the single-column layout.
 8. `i` info pane shows the active scope's cell context.
 9. `_scope_tag` unit tests: empty, single-scope, spanning.
+10. ctrl+z revert with both-scope pending: clears all of the active grid's
+    ops and the message is scope-tagged.
+11. Round-trip and tag assertions are falsifiable: the round-trip test
+    asserts the rendered pending glyph (not just dict state), and apply/diff
+    tag tests use multi-scope pending (single-scope yields an empty tag, so
+    only a spanning fixture can catch a missing tag).
 
 ## Affected files
 
@@ -163,9 +180,9 @@ baseline):
   single save/restore wrap, `_active_grid()` / `_refresh_active_view()`
   helpers, `_refresh_pi_view` scope pass-through, `_show_kind` ScopeToggle
   visibility, `_scope_tag` helper + call sites (`_refresh_pending_label`,
-  `action_diff`, all four `_apply_*_pending`), pi status bar branch,
-  pi apply-failure restore parity.
-- `tests/tui/…` — per the test surface above.
+  `action_diff`, all four `_apply_*_pending`, all four `action_revert`
+  branches), pi status bar branch, pi apply-failure restore parity.
+- `tests/test_tui/…` — per the test surface above.
 - `src/agent_toolkit_tui/pi_extension_state.py` — **unchanged**.
 - Other grid widgets — **unchanged** (the whole point of the single app-side
   mechanism).

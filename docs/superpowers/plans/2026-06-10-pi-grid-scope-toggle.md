@@ -145,12 +145,17 @@ async def test_pi_grid_set_scope_switches_column_and_clears_pending():
         await pilot.press("space")
         assert g.pending_entries() == {("global", "alpha"): "link"}
 
+        # Park the cursor on Origin (old project-column index) to prove the snap.
+        table.cursor_coordinate = table.cursor_coordinate.__class__(row=0, column=2)
         g.set_scope("project")
         g.set_rows([_store_row("alpha")])  # app always refreshes after set_scope
         await pilot.pause()
         labels = [str(c.label) for c in table.columns.values()]
         assert any("Pi (project)" in lbl for lbl in labels)
         assert g.pending_entries() == {}
+        # Cursor snapped to the scope column — without the snap a cursor on the
+        # removed project column lands on non-interactive Origin (#349 review).
+        assert table.cursor_coordinate.column == 1
 ```
 
 Then sweep the rest of the file: every existing test that toggles the
@@ -202,12 +207,23 @@ In `__init__`, after `self._rows = ...`:
 self._scope: Literal["global", "project"] = "global"
 ```
 
-Add after `set_rows` (mirroring `instruction_grid.set_scope`):
+Add after `set_rows` (mirroring `instruction_grid.set_scope`, plus the
+cursor snap — after a scope change the old column identities are
+meaningless, and a cursor left on the removed project column would land on
+non-interactive Origin):
 
 ```python
 def set_scope(self, scope: Literal["global", "project"]) -> None:
     self._scope = scope
     self._pending.clear()
+    # Snap the cursor to the single interactive scope column (same row).
+    try:
+        table = self.query_one("#pi-table", DataTable)
+        table.cursor_coordinate = Coordinate(
+            row=table.cursor_coordinate.row, column=_COL_SCOPE
+        )
+    except Exception:
+        pass
 ```
 
 `_rebuild` — replace the two scope `add_column` calls and the row-cells list:
@@ -409,10 +425,26 @@ Device: $(hostname -s)"
 
 ```python
 @pytest.mark.asyncio
-async def test_pending_survives_scope_round_trip_pi():
-    """Queue pi ops → ctrl+g away and back → ops still queued (#349)."""
+async def test_pending_survives_scope_round_trip_pi(monkeypatch):
+    """Queue pi ops → ctrl+g away and back → ops still queued AND still
+    RENDERED (#349). The glyph assertion is load-bearing: restore_pending
+    swallows rebuild failures in try/except, so dict equality alone cannot
+    catch ops that were restored but never re-rendered."""
+    from textual.coordinate import Coordinate
+    from textual.widgets import DataTable
+    from agent_toolkit_tui.pi_extension_state import PiCell, PiExtensionRow
     from agent_toolkit_tui.widgets import PiGrid
 
+    def _row(slug):
+        cell = PiCell(global_loaded=False, project_loaded=False, origin="store-owned")
+        return PiExtensionRow(slug=slug, origin="store-owned",
+                              source=f"git@github.com:x/{slug}",
+                              global_cell=cell, project_cell=cell)
+
+    monkeypatch.setattr(
+        "agent_toolkit_tui.app.build_pi_rows",
+        lambda **kwargs: [_row("alpha"), _row("beta")],
+    )
     app = TUIApp()
     async with app.run_test() as pilot:
         await pilot.pause()
@@ -431,6 +463,9 @@ async def test_pending_survives_scope_round_trip_pi():
             ("project", "alpha"): "link",
             ("global", "beta"): "unlink",
         }
+        # Back in project scope: row 0 (alpha) must RENDER its pending '+'.
+        table = app.query_one("#pi-table", DataTable)
+        assert "+" in str(table.get_cell_at(Coordinate(0, 1)))
 
 
 @pytest.mark.asyncio
@@ -515,10 +550,10 @@ Device: $(hostname -s)"
 
 ---
 
-### Task 5: scope-tagged summaries (footer, diff, apply)
+### Task 5: scope-tagged summaries (footer, diff, apply, revert)
 
 **Files:**
-- Modify: `src/agent_toolkit_tui/app.py` (`_refresh_pending_label`, `action_diff`, all four `_apply_*_pending` footer lines)
+- Modify: `src/agent_toolkit_tui/app.py` (`_refresh_pending_label`, `action_diff`, all four `_apply_*_pending` footer lines, all four `action_revert` branches)
 - Test: `tests/test_tui/test_scope_toggle.py` (add)
 
 - [ ] **Step 1: Write the failing test**
@@ -557,6 +592,48 @@ async def test_footer_pending_label_plain_when_single_scope():
         label = str(app.query_one("#footer-pending", Static).renderable)
         assert "Pending: 1" in label
         assert "(" not in label.split("Pending: 1")[1][:2]
+
+
+@pytest.mark.asyncio
+async def test_diff_scope_tagged_when_spanning():
+    """ctrl+d output attributes ops when they span scopes (#349)."""
+    from textual.widgets import Static
+    from agent_toolkit_tui.widgets import PiGrid
+
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        app.action_kind("pi-extension")
+        await pilot.pause()
+        pi_grid = app.query_one("#pi-grid", PiGrid)
+        pi_grid._pending[("project", "alpha")] = "link"
+        pi_grid._pending[("global", "beta")] = "unlink"
+        app.action_diff()
+        label = str(app.query_one("#footer-pending", Static).renderable)
+        assert "diff: 1 would-link, 1 would-unlink (1 global, 1 project)" in label
+
+
+@pytest.mark.asyncio
+async def test_revert_clears_both_scopes_and_is_scope_tagged():
+    """ctrl+z is the one destructive surface that can consume invisible
+    other-scope ops — it clears the whole grid dict and says so (#349)."""
+    from textual.widgets import Static
+    from agent_toolkit_tui.widgets import PiGrid
+
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        app.action_kind("pi-extension")
+        await pilot.pause()
+        pi_grid = app.query_one("#pi-grid", PiGrid)
+        pi_grid._pending[("project", "alpha")] = "link"
+        pi_grid._pending[("global", "beta")] = "unlink"
+        pi_grid._pending[("global", "gamma")] = "link"
+        app.action_revert()
+        await pilot.pause()
+        assert pi_grid.pending_entries() == {}
+        label = str(app.query_one("#footer-pending", Static).renderable)
+        assert "reverted: 3 pending cleared (2 global, 1 project)" in label
 ```
 
 - [ ] **Step 2: Run to verify they fail**
@@ -599,6 +676,19 @@ Each of the four `_apply_*_pending`: right after `pending = grid.pending_entries
 / the early-return guard, capture `tag = _scope_tag(pending)`; append `{tag}`
 to the two footer lines (`applied: {ok} ok, {failed} failed{tag}` and
 `[red]apply failed[/] — {first}{extra}{tag}`).
+
+Each of the four `action_revert` branches: capture the keys before clearing
+and tag the message (mechanical copy per branch):
+
+```python
+keys = list(grid.pending_entries().keys())
+n = len(keys)
+grid.clear_pending()
+self._refresh_pending_label()
+self.query_one("#footer-pending", Static).update(
+    f"reverted: {n} pending cleared{_scope_tag(keys)}"
+)
+```
 
 - [ ] **Step 4: Run the TUI suite**
 
@@ -702,12 +792,22 @@ with:
             grid.restore_pending(saved)
 ```
 
-- [ ] **Step 4: Run the tests**
+- [ ] **Step 4: Add the multi-scope apply-tag test (same fakes, success path)**
+
+In the same file, duplicate the Step 1 scaffolding but with `_ops.install` /
+`_ops.uninstall` monkeypatched to no-op successes, seed
+`grid._pending = {("global", "alpha"): "link", ("project", "alpha"): "unlink"}`,
+run `app.action_apply()`, and assert the footer reads
+`applied: 2 ok, 0 failed (1 global, 1 project)`. This is the only test shape
+that can catch a missing apply tag — single-scope pending yields an empty
+tag, so the existing apply tests stay green even if the tag is never wired.
+
+- [ ] **Step 5: Run the tests**
 
 Run: `uv run pytest tests/test_tui/test_pi_grid.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add src/agent_toolkit_tui/app.py tests/test_tui/test_pi_grid.py
@@ -722,21 +822,54 @@ Device: $(hostname -s)"
 
 **Files:**
 - Modify: `src/agent_toolkit_tui/app.py` (`_refresh_status_bar` pi branch)
-- Test: `tests/test_tui/test_status_counters.py` (amend the pi case)
+- Test: `tests/test_tui/test_status_counters.py` (add — NO pi case exists in
+  this file today; it is SkillGrid-only)
 
-- [ ] **Step 1: Amend the existing pi status test**
+- [ ] **Step 1: Write a NEW failing test for the pi status bar**
 
-Find the pi-extension case in `tests/test_tui/test_status_counters.py`
-(asserts `global` + `project` counts side by side) and replace its
-expectations: with `app._scope = "project"` the bar shows the
-project-loaded count as `N loaded`, no `global` segment; flipping
-`app._scope = "global"` (or pressing ctrl+g) shows the global-loaded count.
-Keep the `pending` segment assertion.
+Append to `tests/test_tui/test_status_counters.py`:
+
+```python
+@pytest.mark.asyncio
+async def test_pi_status_bar_shows_active_scope_only(monkeypatch):
+    """Pi status bar reports the ACTIVE scope's loaded count + pending (#349)
+    instead of 'N global · M project'. New test — no prior pi case existed."""
+    from textual.widgets import Static
+
+    from agent_toolkit_tui.app import TUIApp
+    from agent_toolkit_tui.pi_extension_state import PiCell, PiExtensionRow
+
+    def _row(slug: str, *, g: bool, p: bool) -> PiExtensionRow:
+        cell = PiCell(global_loaded=g, project_loaded=p, origin="store-owned")
+        return PiExtensionRow(slug=slug, origin="store-owned",
+                              source=f"git@github.com:x/{slug}",
+                              global_cell=cell, project_cell=cell)
+
+    monkeypatch.setattr(
+        "agent_toolkit_tui.app.build_pi_rows",
+        lambda **kwargs: [_row("a", g=True, p=False), _row("b", g=True, p=True)],
+    )
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        app.action_kind("pi-extension")
+        await pilot.pause()
+        bar = str(app.query_one("#status-bar", Static).renderable)
+        # project scope is active on load: exactly one project-loaded row.
+        assert "1" in bar and "loaded" in bar and "pending" in bar
+        assert "global" not in bar
+
+        await pilot.press("ctrl+g")
+        await pilot.pause()
+        bar = str(app.query_one("#status-bar", Static).renderable)
+        assert "2" in bar and "loaded" in bar
+```
 
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `uv run pytest tests/test_tui/test_status_counters.py -v`
-Expected: amended case FAIL (both counts still rendered)
+Expected: FAIL — the bar still renders the old `2 global   1 project` form,
+so `"global" not in bar` is False (and `"loaded"` never appears)
 
 - [ ] **Step 3: Implement — replace the pi branch text block**
 
@@ -798,10 +931,11 @@ Expected: PASS. Known local-only failure `test_empty_machine_is_empty`
 (global pi inventory ignores `home=`) is pre-existing and green on CI —
 ignore it if it is the ONLY failure.
 
-- [ ] **Step 3: Lint + types**
+- [ ] **Step 3: Re-run the full suite after sweep fixes**
 
-Run: `uv run ruff check . && uv run mypy src/`
-Expected: clean (the two sanctioned `type: ignore`s carry comments)
+Run: `uv run pytest`
+Expected: PASS (this repo's only verification gate is pytest — ruff/mypy are
+NOT installed or configured here; do not add them as part of #349)
 
 - [ ] **Step 4: Commit any sweep fixes**
 
@@ -820,10 +954,12 @@ Device: $(hostname -s)"
 |---|---|
 | 1. 4 columns, header tracks scope | Task 2 step 1, Task 3 step 1 |
 | 2. Round-trip preserved (pi + skill) | Task 4 step 1 |
-| 3. Both-scope apply + tagged summary | existing apply tests (dict shape unchanged) + Task 5 |
+| 3. Both-scope apply + tagged summary | Task 6 step 4 (multi-scope apply-tag test) + Task 5 (diff tag test) |
 | 4. Apply-failure pending survives (RED first) | Task 6 |
 | 5. ctrl+r clears | Task 4 step 1 |
 | 6. Kind-aware action_scope regression | Task 3 step 1 |
 | 7. Untracked non-interactive | existing `test_untracked_row_is_non_interactive` (column 1 unchanged) |
 | 8. Info pane active scope | Task 2 (action_info re-key) + existing cell-info tests amended |
 | 9. `_scope_tag` units | Task 1 |
+| 10. Revert clears both scopes + tagged message | Task 5 step 1 (revert test) |
+| 11. Falsifiable round-trip/tag assertions | Task 4 (glyph assertion), Task 5 (diff), Task 6 step 4 (apply tag) |
