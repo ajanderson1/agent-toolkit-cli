@@ -8,6 +8,7 @@ per-harness symlink is needed at global scope).
 from __future__ import annotations
 
 import os
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Literal
@@ -525,6 +526,38 @@ def get_agent(name: str) -> AgentConfig:
     if name not in AGENTS:
         raise UnknownAgentError(name)
     return AGENTS[name]
+
+
+# --- Deprecated token aliases (#350) -----------------------------------------
+# Old spellings accepted for one cycle with a stderr warning; the whole block
+# (table + resolver + call sites) is deleted in v4.
+DEPRECATED_TOKEN_ALIASES: dict[str, str] = {
+    "universal": "standard",
+    "general-skill": "standard-skill",
+    "general-agent": "standard-agent",
+}
+
+_warned_deprecated: set[str] = set()
+
+
+def resolve_agent_token(name: str) -> str:
+    """Map a deprecated agent/harness token to its 'standard' replacement.
+
+    Warns once per old token per process on stderr. Names that are not in the
+    alias table pass through unchanged — unknown-token validation stays at the
+    callers (UnknownAgentError / click.UsageError).
+    """
+    new = DEPRECATED_TOKEN_ALIASES.get(name)
+    if new is None:
+        return name
+    if name not in _warned_deprecated:
+        _warned_deprecated.add(name)
+        print(
+            f"warning: '{name}' is deprecated; renamed to '{new}'. "
+            f"The old spelling will be removed in v4.",
+            file=sys.stderr,
+        )
+    return new
 
 
 def get_universal_agents() -> list[str]:

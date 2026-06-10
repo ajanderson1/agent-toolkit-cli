@@ -5,7 +5,11 @@ from pathlib import Path
 
 import click
 
-from agent_toolkit_cli.skill_agents import AGENTS, UnknownAgentError
+from agent_toolkit_cli.skill_agents import (
+    AGENTS,
+    UnknownAgentError,
+    resolve_agent_token,
+)
 
 
 def scope_and_roots(
@@ -36,8 +40,9 @@ def scope_and_roots(
 
 
 def validate_agent_names(names: tuple[str, ...]) -> tuple[str, ...]:
-    """Raise UsageError if any name isn't in the AGENTS catalog."""
-    for n in names:
+    """Resolve deprecated aliases, then raise UsageError on unknown names."""
+    resolved = tuple(resolve_agent_token(n) for n in names)
+    for n in resolved:
         if n not in AGENTS:
             raise click.UsageError(f"unknown agent: {n}")
-    return names
+    return resolved

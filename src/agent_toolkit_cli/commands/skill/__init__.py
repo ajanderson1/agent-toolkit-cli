@@ -10,7 +10,11 @@ import click
 import yaml
 
 from agent_toolkit_cli import skill_git
-from agent_toolkit_cli.skill_agents import AGENTS, detect_installed_agents
+from agent_toolkit_cli.skill_agents import (
+    AGENTS,
+    detect_installed_agents,
+    resolve_agent_token,
+)
 from agent_toolkit_cli.skill_install import (
     DirtyCanonicalError,
     InstallError,
@@ -203,10 +207,13 @@ def _resolve_agents(agents_str: str, scope: str) -> tuple[str, ...]:
     Special values:
       "standard" → the standard bundle token (creates ~/.agents/skills/<slug>)
       "all"      → every agent detected as installed at the given scope
+
+    Deprecated spellings (universal, general-*) are aliased with a stderr
+    warning via resolve_agent_token().
     """
     if agents_str == "all":
         return tuple(detect_installed_agents())
-    parts = [p.strip() for p in agents_str.split(",") if p.strip()]
+    parts = [resolve_agent_token(p.strip()) for p in agents_str.split(",") if p.strip()]
     # "standard" is a valid token; other names must be in the catalog.
     unknown = [p for p in parts if p != "standard" and p not in AGENTS]
     if unknown:

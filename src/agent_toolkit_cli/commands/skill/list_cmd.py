@@ -5,7 +5,7 @@ import json
 
 import click
 
-from agent_toolkit_cli.skill_agents import AGENTS
+from agent_toolkit_cli.skill_agents import AGENTS, resolve_agent_token
 from agent_toolkit_cli.table import render_table
 from agent_toolkit_cli.skill_install import _current_linked_agents
 from agent_toolkit_cli.skill_lock import LockFile, read_lock
@@ -50,6 +50,8 @@ def list_cmd(
         read_only=True,
     )
 
+    if agent is not None:
+        agent = resolve_agent_token(agent)
     if agent is not None and agent != "standard" and agent not in AGENTS:
         raise click.UsageError(f"unknown agent: {agent}")
     if agent == "standard-skill":
