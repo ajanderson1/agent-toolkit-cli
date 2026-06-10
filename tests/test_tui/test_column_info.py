@@ -98,3 +98,31 @@ def test_standard_info_includes_global_marker_when_no_context():
     assert info is not None
     joined = "\n".join(info.lines)
     assert "🌐" in joined, f"info missing global marker glyph: {info.lines}"
+
+
+# ---------------------------------------------------------------------------
+# #351: exhaustive standard coverage + long-tail panel
+# ---------------------------------------------------------------------------
+
+def test_standard_info_is_exhaustive_with_count():
+    from agent_toolkit_cli.skill_agents import get_standard_agents
+    info = get_column_info("standard")
+    names = get_standard_agents()
+    assert f"({len(names)})" in " ".join(info.lines)
+    for name in names:
+        assert any(name in line for line in info.lines)
+
+
+def test_standard_info_is_kind_aware():
+    """The factory takes the names (and kind) from context so the instruction
+    grid can reuse the same registry key (#351)."""
+    info = get_column_info(
+        "standard",
+        context={"kind": "instructions", "names": ("alpha-harness", "beta-harness")},
+    )
+    text = " ".join(info.lines)
+    assert "instructions" in text and "(2)" in text
+    assert "alpha-harness" in text and "beta-harness" in text
+    # The 🌐 marker block is skills-only.
+    assert "🌐" not in text
+

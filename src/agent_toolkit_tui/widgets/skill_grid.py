@@ -27,7 +27,8 @@ from textual.widgets import DataTable, Input
 
 from agent_toolkit_cli.skill_agents import AGENTS
 from agent_toolkit_tui.column_info import COLUMN_INFO, get_column_info
-from agent_toolkit_tui.skill_state import INTERACTIVE_AGENTS, SkillRow
+from agent_toolkit_tui.composition import skills_nonstandard_main
+from agent_toolkit_tui.skill_state import SkillRow
 from agent_toolkit_tui.widgets.column_info_modal import ColumnInfoModal
 
 _STATE_MARKUP = {
@@ -112,6 +113,11 @@ class SkillGrid(Vertical):
         self._pending: dict[tuple[str, str, str], Op] = {}
         # Case-insensitive substring filter on slug (#249). "" = show all.
         self._filter: str = ""
+
+    def _active_agents(self) -> tuple[str, ...]:
+        # Standard column + non-covered main harnesses. The long tail is
+        # CLI-only (#351 post-demo decision).
+        return ("standard",) + skills_nonstandard_main()
 
     @property
     def row_count(self) -> int:
@@ -470,9 +476,8 @@ class SkillGrid(Vertical):
     def _context_for(self, *, key: str, row_index: int) -> dict | None:
         """Build the per-call context dict for get_column_info().
 
-        Today only the 'standard' key uses it: we surface whether the focused
-        row is also installed globally so the modal can omit the 🌐 paragraph
-        when it's not.
+        The 'standard' key surfaces whether the focused row is also installed
+        globally so the modal can omit the 🌐 paragraph when it's not.
         """
         if key != "standard":
             return None
@@ -512,30 +517,29 @@ class SkillGrid(Vertical):
         self._notify_pending()
 
     def _column_index(self, agent_name: str) -> int:
-        # Layout: [0]=slug, [1..N]=INTERACTIVE_AGENTS, [N+1]=state, [N+2]=source.
+        # Layout: [0]=slug, [1..N]=_active_agents(), [N+1]=state, [N+2]=source.
         try:
-            return 1 + list(INTERACTIVE_AGENTS).index(agent_name)
+            return 1 + self._active_agents().index(agent_name)
         except ValueError:
             return -1
 
     def _agent_for_column(self, col: int) -> str | None:
-        if col < 1:
-            return None
-        idx = col - 1
-        if 0 <= idx < len(INTERACTIVE_AGENTS):
-            return INTERACTIVE_AGENTS[idx]
+        active = self._active_agents()
+        if 1 <= col <= len(active):
+            return active[col - 1]
         return None
 
     def _column_key_for_index(self, col: int) -> str | None:
         """Resolve a column index to a COLUMN_INFO key.
 
-        Layout: [0]=slug, [1..N]=INTERACTIVE_AGENTS, [N+1]=state, [N+2]=source.
+        Layout: [0]=slug, [1..N]=_active_agents(), [N+1]=state, [N+2]=source.
         Returns None for unknown indices (cols 0 and N+2 — "slug" and
         "source" are not in the info registry today).
         """
-        n = len(INTERACTIVE_AGENTS)
+        active = self._active_agents()
+        n = len(active)
         if 1 <= col <= n:
-            return INTERACTIVE_AGENTS[col - 1]
+            return active[col - 1]
         if col == n + 1:
             return "state"
         return None
@@ -555,11 +559,14 @@ class SkillGrid(Vertical):
         table.clear(columns=True)
         # Slug column has cell-info (the slug-cell panel) → glyph it.
         table.add_column(f"SKILL {_INFO_GLYPH}", width=20)
-        for agent in INTERACTIVE_AGENTS:
+        active = self._active_agents()
+        for agent in active:
             # Every interactive agent column exposes either a column-info
-            # modal (Standard) or per-cell info (Claude Code, Pi via
+            # modal (Standard) or per-cell info (e.g. Claude Code, Pi via
             # CellInfoScreen) — glyph them all. "standard" is the
-            # load-bearing bundle key (v3.7 full rename, #350).
+            # load-bearing bundle key (v3.7 full rename, #350). The Standard
+            # column leads; everything after it is implicitly non-standard
+            # (group-tag header row removed per AJ demo feedback, #351).
             base = "Standard" if agent == "standard" else AGENTS[agent].display_name
             table.add_column(f"{base} {_INFO_GLYPH}", width=14)
         # State has a column-info modal → glyph it.
@@ -569,7 +576,7 @@ class SkillGrid(Vertical):
         visible = self._visible_rows()
         for row in visible:
             cells: list[str] = [row.slug]
-            for agent in INTERACTIVE_AGENTS:
+            for agent in active:
                 cells.append(self._cell_glyph(row=row, agent=agent))
             cells.append(_STATE_MARKUP.get(row.state, row.state))
             cells.append(row.source)
@@ -577,7 +584,7 @@ class SkillGrid(Vertical):
         if visible:
             max_row = len(visible) - 1
             # Layout: slug + N agent cols + state + source.
-            max_col = 2 + len(INTERACTIVE_AGENTS)
+            max_col = 2 + len(active)
             table.cursor_coordinate = Coordinate(
                 row=min(saved.row, max_row),
                 column=min(saved.column, max_col),

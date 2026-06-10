@@ -37,7 +37,9 @@ async def test_columns_have_info_glyph_except_source():
         await pilot.pause()
         table = a.query_one("#skill-table", DataTable)
         labels = [str(c.label) for c in table.columns.values()]
-        # Layout: SKILL | Standard | Claude Code | Pi | State | Source
+        # Layout (#351): SKILL | Standard | Claude Code | Pi | State | Source —
+        # single-line labels; Standard leads, the rest is implicitly
+        # non-standard; the long tail is CLI-only.
         assert labels[0] == "SKILL ⓘ", f"slug label: {labels[0]!r}"
         assert labels[1] == "Standard ⓘ", f"standard label: {labels[1]!r}"
         assert labels[2] == "Claude Code ⓘ", f"claude-code label: {labels[2]!r}"
@@ -133,13 +135,11 @@ async def test_column_key_for_index_resolves_state():
         await pilot.pause()
         g = a.query_one("#g", SkillGrid)
         n = len(INTERACTIVE_AGENTS)
-        state_col = n + 1
-        source_col = n + 2
         assert g._column_key_for_index(0) is None       # SKILL
         for i, agent in enumerate(INTERACTIVE_AGENTS, start=1):
             assert g._column_key_for_index(i) == agent
-        assert g._column_key_for_index(state_col) == "state"
-        assert g._column_key_for_index(source_col) is None  # Source
+        assert g._column_key_for_index(n + 1) == "state"
+        assert g._column_key_for_index(n + 2) is None  # Source
 
 
 @pytest.mark.asyncio
@@ -219,8 +219,12 @@ async def test_full_header_row():
         table = a.query_one("#skill-table", DataTable)
         labels = [str(c.label) for c in table.columns.values()]
         assert labels == [
-            "SKILL ⓘ", "Standard ⓘ", "Claude Code ⓘ", "Pi ⓘ",
-            "State ⓘ", "Source",
+            "SKILL ⓘ",
+            "Standard ⓘ",
+            "Claude Code ⓘ",
+            "Pi ⓘ",
+            "State ⓘ",
+            "Source",
         ], f"unexpected header row: {labels!r}"
 
 

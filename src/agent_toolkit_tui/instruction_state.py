@@ -19,15 +19,16 @@ from pathlib import Path
 from typing import Literal
 
 from agent_toolkit_cli import instructions_paths
+from agent_toolkit_tui.composition import instructions_nonstandard_main
 from agent_toolkit_cli.instructions_adapters.symlink import _pointer_path
 from agent_toolkit_cli.instructions_lock import read_lock
 
 Scope = Literal["global", "project"]
 
-# Pinned shortlist of installable harnesses whose cells the TUI grid renders
-# interactively. `standard` is informational only and NOT included here.
-# This is the single knob to add/remove interactive columns.
-INTERACTIVE_HARNESSES: tuple[str, ...] = ("claude-code", "gemini-cli")
+# Derived shortlist of installable harnesses whose cells the TUI grid renders
+# (#351 — derived from the composition, not pinned; the long tail is
+# CLI-only). `standard` is informational only and NOT included here.
+INTERACTIVE_HARNESSES: tuple[str, ...] = instructions_nonstandard_main()
 
 
 @dataclass(frozen=True)

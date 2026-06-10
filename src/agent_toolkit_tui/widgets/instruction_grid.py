@@ -1,6 +1,6 @@
 """Interactive DataTable for the TUI's instruction tab.
 
-Columns: INSTRUCTION ⓘ | standard ⓘ | <INTERACTIVE_HARNESSES...> | Source.
+Columns (#351): INSTRUCTION ⓘ | standard ⓘ | <non-covered main harnesses…> | Source.
 
 Mirrors agent_grid.py: per-harness columns, scope toggle, toggle-queue →
 pending → apply. Pending key shape: (scope, harness_name, slug) — same
@@ -25,7 +25,10 @@ from textual.coordinate import Coordinate
 from textual.message import Message
 from textual.widgets import DataTable
 
-from agent_toolkit_tui.instruction_state import INTERACTIVE_HARNESSES, InstructionRow
+from agent_toolkit_tui.column_info import get_column_info
+from agent_toolkit_tui.composition import instructions_nonstandard_main
+from agent_toolkit_tui.instruction_state import InstructionRow
+from agent_toolkit_tui.widgets.column_info_modal import ColumnInfoModal
 
 _LINKED_GLYPH    = "[green]✔[/]"
 _UNLINKED_GLYPH  = "☐"
@@ -38,7 +41,7 @@ _NOT_AVAIL_GLYPH = "[dim]—[/]"
 # Column index offsets:
 #   0 = slug (INSTRUCTION)
 #   1 = standard (read-only canonical status)
-#   2..2+N-1 = interactive harness columns
+#   2..2+N-1 = active harness columns (_active_harnesses())
 #   2+N = Source
 _HARNESS_COL_OFFSET = 2
 
@@ -46,7 +49,7 @@ Op = Literal["link", "unlink"]
 
 
 class InstructionGrid(Vertical):
-    """One row per locked slug; interactive cells for INTERACTIVE_HARNESSES."""
+    """One row per locked slug; interactive cells for the active harness columns."""
 
     class PendingChanged(Message):
         """Posted whenever the pending toggle set changes.
@@ -76,6 +79,11 @@ class InstructionGrid(Vertical):
         self._scope: Literal["global", "project"] = "global"
         # (scope, harness_name, slug) -> op
         self._pending: dict[tuple[str, str, str], Op] = {}
+
+    def _active_harnesses(self) -> tuple[str, ...]:
+        # Standard column + non-covered main harnesses. The long tail is
+        # CLI-only (#351 post-demo decision).
+        return instructions_nonstandard_main()
 
     @property
     def row_count(self) -> int:
@@ -147,7 +155,10 @@ class InstructionGrid(Vertical):
         self._toggle_at(table.cursor_coordinate)
 
     def action_info(self) -> None:
-        """Open CellInfoScreen for the cell under the cursor."""
+        """Route `i` by column. The standard column has registered ColumnInfo
+        and opens ColumnInfoModal — the registry path that replaced the old
+        inline column-1 branch (#351). Everything else opens CellInfoScreen
+        with the per-cell state."""
         from agent_toolkit_tui.screens.cell_info import CellInfoScreen
 
         try:
@@ -155,6 +166,12 @@ class InstructionGrid(Vertical):
         except Exception:
             return
         coord = table.cursor_coordinate
+        key = self._column_key_for_index(coord.column)
+        if key is not None:
+            info = get_column_info(key, context=self._context_for(key=key))
+            if info is not None:
+                self.app.push_screen(ColumnInfoModal(info))
+                return
         if coord.row >= len(self._rows):
             return
         row = self._rows[coord.row]
@@ -179,19 +196,6 @@ class InstructionGrid(Vertical):
                 f"Source: {row.source}\n"
                 f"Scope:  {self._scope}\n"
                 f"Canonical: {canonical_path}"
-            )
-        elif coord.column == 1:
-            # Standard column — explain canonical + native readers.
-            title = "standard · instruction"
-            status = "✔ present" if row.canonical_exists else "✘ missing"
-            body = (
-                f"[b]standard[/] — canonical AGENTS.md\n\n"
-                f"Status: {status}\n\n"
-                "The canonical AGENTS.md is what every native reader (39 harnesses) "
-                "consumes directly, and what every pointer symlink ultimately resolves to.\n\n"
-                "This column is read-only — the TUI manages pointers, not the canonical "
-                "file itself. If missing, pointer installs will be refused "
-                "(CanonicalMissingError)."
             )
         else:
             harness = self._harness_for_column(coord.column)
@@ -312,15 +316,39 @@ class InstructionGrid(Vertical):
         Column layout:
           0 = slug (INSTRUCTION)
           1 = standard (read-only)
-          2..2+N-1 = INTERACTIVE_HARNESSES
+          2..2+N-1 = _active_harnesses()
           2+N = Source
         """
         if col < _HARNESS_COL_OFFSET:
             # Slug or standard — not an interactive harness column.
             return None
+        active = self._active_harnesses()
         idx = col - _HARNESS_COL_OFFSET
-        if 0 <= idx < len(INTERACTIVE_HARNESSES):
-            return INTERACTIVE_HARNESSES[idx]
+        if 0 <= idx < len(active):
+            return active[idx]
+        return None
+
+    def _column_key_for_index(self, col: int) -> str | None:
+        """Resolve a column index to a COLUMN_INFO registry key (#351).
+
+        Only the standard column has registered ColumnInfo; harness/slug/
+        source columns return None and fall through to CellInfoScreen.
+        """
+        if col == 1:
+            return "standard"
+        return None
+
+    def _context_for(self, *, key: str) -> dict | None:
+        """Context for get_column_info(): the standard panel enumerates the
+        native AGENTS.md readers from the harness-matrix SSOT (#351)."""
+        if key == "standard":
+            from agent_toolkit_cli.instructions_matrix import instructions_matrix_rows
+
+            native = tuple(
+                r["harness"] for r in instructions_matrix_rows()
+                if r["verdict"] == "native"
+            )
+            return {"kind": "instructions", "names": native}
         return None
 
     def _rebuild(self, table: DataTable) -> None:
@@ -335,14 +363,17 @@ class InstructionGrid(Vertical):
         table.clear(columns=True)
         # Slug column.
         table.add_column(f"INSTRUCTION {_INFO_GLYPH}", width=22)
-        # Standard column — read-only canonical status.
+        # Standard column — read-only canonical status. It leads; everything
+        # after it is implicitly non-standard (group-tag header row removed
+        # per AJ demo feedback, #351).
         table.add_column(f"standard {_INFO_GLYPH}", width=12)
         # Per-harness interactive columns.
         _HARNESS_DISPLAY: dict[str, str] = {
             "claude-code": "CLAUDE.md",
             "gemini-cli": "GEMINI.md",
         }
-        for harness in INTERACTIVE_HARNESSES:
+        active = self._active_harnesses()
+        for harness in active:
             display = _HARNESS_DISPLAY.get(harness, harness)
             table.add_column(f"{display} {_INFO_GLYPH}", width=14)
         # Source column — passive.
@@ -351,7 +382,7 @@ class InstructionGrid(Vertical):
         for row in self._rows:
             cells: list[str] = [row.slug]
             cells.append(self._standard_glyph(row))
-            for harness in INTERACTIVE_HARNESSES:
+            for harness in active:
                 cells.append(self._cell_glyph(row=row, harness=harness))
             cells.append(row.source)
             table.add_row(*cells, key=f"instruction:{row.slug}")
@@ -359,7 +390,7 @@ class InstructionGrid(Vertical):
         if self._rows:
             max_row = len(self._rows) - 1
             # Layout: slug + standard + N harness cols + source.
-            max_col = _HARNESS_COL_OFFSET + len(INTERACTIVE_HARNESSES)
+            max_col = _HARNESS_COL_OFFSET + len(active)
             table.cursor_coordinate = Coordinate(
                 row=min(saved.row, max_row),
                 column=min(saved.column, max_col),
