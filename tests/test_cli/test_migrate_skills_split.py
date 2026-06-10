@@ -158,6 +158,20 @@ def test_projected_agents_collapses_bundle_to_universal_token(tmp_path):
     assert not {"general-skill", "general-agent"} & set(agents)
 
 
+def test_secret_scan_flags_credential_files_and_uuids(tmp_path):
+    skill = tmp_path / "bank-statement-download" / "references"; skill.mkdir(parents=True)
+    (skill / "credentials.md").write_text(
+        "N26 vault item: 3f2a9c14-1b2d-4e6a-9f01-aabbccddeeff\nacct 51412937\n"
+    )
+    (tmp_path / "journal").mkdir()
+    (tmp_path / "journal" / "SKILL.md").write_text("name: journal\n")
+
+    hits = mss.scan_for_secrets(tmp_path)
+    files = {str(h.relative_to(tmp_path)) for h in hits}
+    assert "bank-statement-download/references/credentials.md" in files
+    assert not any("journal" in f for f in files)
+
+
 def test_action_plan_flags_projectionless_scope_for_manual_decision(tmp_path):
     # live state: several project locks (whatsapp_sync et al.) hold old-source
     # entries with ZERO projection symlinks. A planned uninstall/install pair

@@ -7,6 +7,7 @@ transactional --apply. See docs/superpowers/specs/2026-06-10-skills-split-into-c
 """
 from __future__ import annotations
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
@@ -133,6 +134,27 @@ def projected_agents(slug: str, scope: str, lock: Path) -> tuple[str, ...]:
         if link.is_symlink() and link != bundle:
             found.append(name)
     return tuple(dict.fromkeys(found))
+
+
+_SECRET_NAME_RE = re.compile(r"(credentials|learnings)\.md$", re.I)
+_UUID_RE = re.compile(r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b", re.I)
+
+
+def scan_for_secrets(skill_tree: Path) -> list[Path]:
+    """Files that match secret-bearing names OR contain a UUID (Bitwarden item id
+    shape). The migration MUST halt for human review on any hit before publishing."""
+    hits: list[Path] = []
+    for f in skill_tree.rglob("*"):
+        if not f.is_file():
+            continue
+        if _SECRET_NAME_RE.search(f.name):
+            hits.append(f); continue
+        try:
+            if _UUID_RE.search(f.read_text(errors="ignore")):
+                hits.append(f)
+        except OSError:
+            pass
+    return sorted(set(hits))
 
 
 def _global_entry(global_lock: Path, slug: str) -> dict | None:
