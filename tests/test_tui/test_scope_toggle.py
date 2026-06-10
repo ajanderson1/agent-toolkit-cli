@@ -142,3 +142,48 @@ def test_scope_to_roots_global_mode_unchanged():
     assert scope == "global"
     assert home == Path.home()
     assert project is None
+
+
+@pytest.mark.asyncio
+async def test_ctrl_g_on_pi_pane_refreshes_pi_not_skill():
+    """Regression (#349): the old action_scope else-branch refreshed the
+    HIDDEN skill grid when the pi pane was active, clearing its pending."""
+    from agent_toolkit_tui.widgets import PiGrid, SkillGrid
+
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        skill_grid = app.query_one("#skill-grid", SkillGrid)
+        skill_grid._pending[("global", "claude", "alpha")] = "link"
+
+        app.action_kind("pi-extension")
+        await pilot.pause()
+        await pilot.press("ctrl+g")
+        await pilot.pause()
+
+        assert skill_grid.pending_entries() == {
+            ("global", "claude", "alpha"): "link"
+        }, "hidden skill grid's pending must survive ctrl+g on the pi pane"
+
+
+@pytest.mark.asyncio
+async def test_pi_pane_shows_scope_toggle_and_header_tracks_scope():
+    """The pi pane joins the scope toggle: widget visible, column header
+    flips with ctrl+g (#349)."""
+    from textual.widgets import DataTable
+
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        app.action_kind("pi-extension")
+        await pilot.pause()
+        assert app.query_one("#scope-toggle", ScopeToggle).display is True
+
+        table = app.query_one("#pi-table", DataTable)
+        labels = [str(c.label) for c in table.columns.values()]
+        assert any("Pi (project)" in lbl for lbl in labels)  # app starts project
+
+        await pilot.press("ctrl+g")
+        await pilot.pause()
+        labels = [str(c.label) for c in table.columns.values()]
+        assert any("Pi (global)" in lbl for lbl in labels)

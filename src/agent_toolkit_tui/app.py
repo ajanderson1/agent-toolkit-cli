@@ -232,7 +232,7 @@ class TUIApp(App):
             skill_grid.display = False
             pi_grid.display = True
             agent_grid.display = False
-            scope_toggle.display = False
+            scope_toggle.display = True
         else:  # "agent"
             instruction_grid.display = False
             skill_grid.display = False
@@ -266,14 +266,7 @@ class TUIApp(App):
             return
         self._active_kind = kind  # type: ignore[assignment]
         self._show_kind(kind)  # type: ignore[arg-type]
-        if kind == "instruction":
-            self._refresh_instruction_view()
-        elif kind == "skill":
-            self._refresh_skill_view()
-        elif kind == "pi-extension":
-            self._refresh_pi_view()
-        else:
-            self._refresh_agent_view()
+        self._refresh_active_view()
         self._refresh_content_header()
         self._refresh_pending_label()
         self._refresh_status_bar()
@@ -284,6 +277,31 @@ class TUIApp(App):
         if self._scope == "global":
             return "global", Path.home(), None
         return "project", Path.home(), Path.cwd()
+
+    def _active_grid(self) -> InstructionGrid | SkillGrid | PiGrid | AgentGrid | None:
+        selector: str
+        if self._active_kind == "instruction":
+            selector = "#instruction-grid"
+        elif self._active_kind == "skill":
+            selector = "#skill-grid"
+        elif self._active_kind == "pi-extension":
+            selector = "#pi-grid"
+        else:
+            selector = "#agent-grid"
+        try:
+            return self.query_one(selector)  # type: ignore[return-value]
+        except NoMatches:
+            return None
+
+    def _refresh_active_view(self) -> None:
+        if self._active_kind == "instruction":
+            self._refresh_instruction_view()
+        elif self._active_kind == "skill":
+            self._refresh_skill_view()
+        elif self._active_kind == "pi-extension":
+            self._refresh_pi_view()
+        else:
+            self._refresh_agent_view()
 
     def _refresh_instruction_view(self) -> None:
         try:
@@ -312,6 +330,7 @@ class TUIApp(App):
             grid = self.query_one("#pi-grid", PiGrid)
         except NoMatches:
             return
+        grid.set_scope(self._scope)  # type: ignore[arg-type]
         grid.set_rows(build_pi_rows(home=Path.home(), project=Path.cwd()))
 
     # ----- agent-view --------------------------------------------------------
@@ -392,12 +411,7 @@ class TUIApp(App):
             self.query_one("#scope-toggle", ScopeToggle).set_active(scope)
         except NoMatches:
             pass
-        if self._active_kind == "instruction":
-            self._refresh_instruction_view()
-        elif self._active_kind == "agent":
-            self._refresh_agent_view()
-        else:
-            self._refresh_skill_view()
+        self._refresh_active_view()
         self._refresh_content_header()
         self._refresh_status_bar()
 
@@ -439,14 +453,7 @@ class TUIApp(App):
             agrid.action_info()
 
     def action_refresh(self) -> None:
-        if self._active_kind == "instruction":
-            self._refresh_instruction_view()
-        elif self._active_kind == "skill":
-            self._refresh_skill_view()
-        elif self._active_kind == "pi-extension":
-            self._refresh_pi_view()
-        else:
-            self._refresh_agent_view()
+        self._refresh_active_view()
         self._refresh_pending_label()
         self._refresh_content_header()
         self._refresh_status_bar()
