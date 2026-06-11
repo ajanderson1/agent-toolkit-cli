@@ -178,9 +178,13 @@ By mechanism: **symlink** (Claude-compatible markdown drop-in) — `augment`,
     `.junie/agents/`), `kiro-cli` (documented as having no `.claude/` compat),
     `qwen-code` (extension-install-time conversion only). Evidence trails in
     the per-batch fragments.
-  - A single write into `.claude/agents/` satisfies all readers at that scope —
-    this is the coverage basis for the `standard` agents projection (#361,
-    `STANDARD_AGENT_READERS`).
+  - A single write into `.claude/agents/` satisfies all readers at that scope.
+    This single-shared-file approach is now **implemented** as the standard
+    agents projection (#361): `agent install --harnesses standard` writes the
+    one shared slot file, and
+    `src/agent_toolkit_cli/agent_adapters/standard.py::STANDARD_AGENT_READERS`
+    is the SSOT for the per-scope covered sets (this doc records the evidence;
+    the code table is what the CLI/TUI actually consult).
 
 ## Instruction-file (`instructions` asset type) support — all harnesses
 
