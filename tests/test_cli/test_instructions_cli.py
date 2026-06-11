@@ -764,3 +764,53 @@ def test_doctor_backup_fix_rolls_back_when_lock_write_fails(tmp_path, monkeypatc
     assert not (project / "CLAUDE.md.pre-adopt.bak").exists()
     assert (project / "AGENTS.md").read_text() == "# real canon\n"
     assert not (project / "instructions-lock.json").exists()
+
+
+def test_doctor_backup_fix_global_second_harness(tmp_path, monkeypatch):
+    """The #375 live repro: claude-code already managed at global scope; a real
+    ~/.gemini/GEMINI.md gets the backup fix and joins the existing lock entry."""
+    home = _global_home(tmp_path, monkeypatch)
+    runner = CliRunner()
+    runner.invoke(main, [
+        "instructions", "install", "--scope", "global", "--harness", "claude-code",
+    ])
+    gemini = home / ".gemini" / "GEMINI.md"
+    gemini.parent.mkdir(parents=True, exist_ok=True)
+    gemini.write_text("# gemini instructions\n")
+
+    result = runner.invoke(main, ["instructions", "doctor", "--scope", "global"], input="y\n")
+    assert result.exit_code == 0, result.output
+
+    canonical = home / ".agent-toolkit" / "AGENTS.md"
+    backup = home / ".gemini" / "GEMINI.md.pre-adopt.bak"
+    assert backup.is_file() and backup.read_text() == "# gemini instructions\n"
+    assert gemini.is_symlink() and gemini.resolve() == canonical.resolve()
+    lock = json.loads((home / ".agent-toolkit" / "instructions-lock.json").read_text())
+    assert lock["instructions"]["AGENTS.md"]["harnesses"] == ["claude-code", "gemini-cli"]
+
+    again = runner.invoke(main, ["instructions", "doctor", "--scope", "global"])
+    assert again.exit_code == 0, again.output
+    assert "clean" in again.output.lower()
+
+
+def test_doctor_backup_fix_augment_global_slot_records_augment(tmp_path, monkeypatch):
+    """~/.augment/CLAUDE.md at global scope is augment's OWN slot: the backup
+    fix must record augment in the lock and must NOT fabricate a claude-code
+    pointer (AC5 — _adopt_harness_for path-match rule)."""
+    home = _global_home(tmp_path, monkeypatch)  # seeds populated canonical
+    augment_slot = home / ".augment" / "CLAUDE.md"
+    augment_slot.parent.mkdir(parents=True, exist_ok=True)
+    augment_slot.write_text("# augment instructions\n")
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["instructions", "doctor", "--scope", "global"], input="y\n")
+    assert result.exit_code == 0, result.output
+
+    canonical = home / ".agent-toolkit" / "AGENTS.md"
+    backup = home / ".augment" / "CLAUDE.md.pre-adopt.bak"
+    assert canonical.read_text() == "# global canon\n"  # canonical untouched
+    assert backup.read_text() == "# augment instructions\n"
+    assert augment_slot.is_symlink() and augment_slot.resolve() == canonical.resolve()
+    assert not (home / ".claude" / "CLAUDE.md").exists(), "fabricated an unrelated claude-code pointer"
+    lock = json.loads((home / ".agent-toolkit" / "instructions-lock.json").read_text())
+    assert lock["instructions"]["AGENTS.md"]["harnesses"] == ["augment"]
