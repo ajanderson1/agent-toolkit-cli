@@ -624,3 +624,30 @@ def test_doctor_backup_fix_renames_to_bak_and_symlinks(tmp_path, monkeypatch):
     again = runner.invoke(main, ["instructions", "doctor", "--scope", "project"])
     assert again.exit_code == 0, again.output
     assert "clean" in again.output.lower()
+
+
+def test_doctor_backup_fix_fails_loudly_on_existing_bak(tmp_path, monkeypatch):
+    """A pre-existing CLAUDE.md.pre-adopt.bak: the fix refuses, nothing changes
+    (never clobber, never silently discard — AC3)."""
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / "AGENTS.md").write_text("# real canon\n")
+    (project / "CLAUDE.md").write_text("# mine\n")
+    (project / "CLAUDE.md.pre-adopt.bak").write_text("# old backup\n")
+    monkeypatch.chdir(project)
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["instructions", "doctor", "--scope", "project"], input="y\n")
+    assert result.exit_code != 0, result.output
+    assert "already exists" in result.output.lower()
+
+    # Nothing changed.
+    claude = project / "CLAUDE.md"
+    assert claude.is_file() and not claude.is_symlink()
+    assert claude.read_text() == "# mine\n"
+    assert (project / "CLAUDE.md.pre-adopt.bak").read_text() == "# old backup\n"
+    assert (project / "AGENTS.md").read_text() == "# real canon\n"
+    lock_file = project / "instructions-lock.json"
+    if lock_file.exists():
+        lock = json.loads(lock_file.read_text())
+        assert lock.get("instructions", {}) == {}
