@@ -152,10 +152,15 @@ class AgentAdapter(Protocol):
         scope: str,
         home: Path | None = None,
         project: Path | None = None,
-    ) -> None:
+    ) -> Path | None:
         """Remove the projection. Idempotent.
 
-        The standard adapter (#361) additionally accepts an optional
+        Returns None normally. The standard adapter (#361) returns the
+        destination Path when it REFUSED to remove a non-owned slot file
+        (structured refusal, PM review F5) so callers can surface the
+        left-in-place file; other adapters always return None.
+
+        The standard adapter additionally accepts an optional
         `canonical_content: Path | None` keyword beyond this Protocol: the
         facade threads the scope's canonical `<slug>.md` so a sentinel-less
         slot that still byte-matches the canonical (a pre-#361 claude-code

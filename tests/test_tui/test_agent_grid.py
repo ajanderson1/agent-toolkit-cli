@@ -581,3 +581,81 @@ async def test_apply_project_scope_seeds_canonical(monkeypatch, tmp_path):
     # copytree was called because project canonical was missing.
     assert copytree_calls, "expected shutil.copytree to seed project canonical"
     assert "applied:" in footer
+
+
+@pytest.mark.asyncio
+async def test_apply_unlink_refusal_surfaces_warning_and_cell_stays_linked(
+    monkeypatch, tmp_path,
+):
+    """F5 pin (PM adversarial review): unlinking over a sentinel-less,
+    content-DIVERGENT slot file makes the standard adapter refuse (leave the
+    user's file in place). The TUI must NOT swallow that: a warning
+    notification fires, the file is intact, and the re-scanned cell still
+    shows linked (truthful grid state).
+
+    Exercises the REAL agent_install.uninstall() + standard adapter — no
+    mocks on the uninstall path.
+    """
+    from agent_toolkit_cli.agent_adapters import _sentinel_path
+    from agent_toolkit_cli.agent_lock import (
+        LockEntry, add_entry, read_lock, write_lock,
+    )
+    from agent_toolkit_cli.agent_paths import canonical_agent_dir, library_lock_path
+    from agent_toolkit_tui.app import TUIApp
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+
+    # Real global canonical + lock entry (so the row exists in the grid).
+    canonical = canonical_agent_dir("my-agent", scope="global")
+    canonical.mkdir(parents=True)
+    (canonical / "my-agent.md").write_text("---\nname: my-agent\n---\ncanonical\n")
+    lock_path = library_lock_path()
+    write_lock(lock_path, add_entry(
+        read_lock(lock_path), "my-agent",
+        LockEntry(
+            source="https://github.com/test/my-agent",
+            source_type="github", agent_path="my-agent.md",
+        ),
+    ))
+    # The slot holds a sentinel-less file whose content DIVERGES from the
+    # canonical — by the ownership contract it is the user's file.
+    slot = tmp_path / ".claude" / "agents" / "my-agent.md"
+    slot.parent.mkdir(parents=True)
+    slot.write_text("user's own hand-authored agent\n")
+    assert not _sentinel_path(slot).exists()
+
+    notify_calls: list[Any] = []
+
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        orig_notify = app.notify
+
+        def spy_notify(*a, **k):
+            notify_calls.append((a, k))
+            return orig_notify(*a, **k)
+
+        monkeypatch.setattr(app, "notify", spy_notify)
+        app._active_asset_type = "agent"
+        app._scope = "global"
+        app._refresh_agent_view()
+        grid = app.query_one("#agent-grid", AgentGrid)
+        await pilot.pause()
+        # Sanity: the real scan sees the slot file as linked.
+        row = next(r for r in grid._rows if r.slug == "my-agent")
+        assert row.cells[("standard", "global")].linked
+
+        grid.restore_pending({("global", "standard", "my-agent"): "unlink"})
+        await pilot.pause()
+        app._apply_agent_pending()
+        await pilot.pause()
+
+        # The refusal surfaced as a WARNING notification.
+        warnings = [k for (a, k) in notify_calls if k.get("severity") == "warning"]
+        assert warnings, f"expected a warning notification, got {notify_calls!r}"
+        # The user's file is intact.
+        assert slot.read_text() == "user's own hand-authored agent\n"
+        # The re-scanned cell still shows linked — the grid stays truthful.
+        row = next(r for r in grid._rows if r.slug == "my-agent")
+        assert row.cells[("standard", "global")].linked

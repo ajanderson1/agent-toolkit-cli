@@ -100,13 +100,20 @@ class _StandardAdapter:
         self, slug: str, *, scope: str,
         home: Path | None = None, project: Path | None = None,
         canonical_content: Path | None = None,
-    ) -> None:
+    ) -> Path | None:
         """Detach the slot — ownership-guarded (PM review): unlink only when
         the sentinel exists OR the slot matches `canonical_content` (covers
         pre-#361 sentinel-less claude-code installs). A sentinel-less,
-        content-divergent file is a user's — leave it and say so."""
+        content-divergent file is a user's — leave it and say so.
+
+        Returns the destination path when removal was REFUSED (structured
+        refusal, PM review F5 — callers like the TUI must be able to surface
+        the left-in-place file instead of counting it as removed); None when
+        the slot was removed or absent. The stderr notice stays for the CLI.
+        """
         dest = self.destination(slug, scope=scope, home=home, project=project)
         sentinel = _sentinel_path(dest)
+        refused: Path | None = None
         if dest.exists() or dest.is_symlink():
             owned = sentinel.exists() or (
                 canonical_content is not None
@@ -117,6 +124,7 @@ class _StandardAdapter:
             if owned:
                 dest.unlink()
             else:
+                refused = dest
                 print(
                     f"standard: {dest} not managed by this tool "
                     f"(no sentinel, content differs) — left in place",
@@ -124,6 +132,7 @@ class _StandardAdapter:
                 )
         if sentinel.exists() and not dest.exists():
             sentinel.unlink()
+        return refused
 
 
 def adapter_for() -> _StandardAdapter:

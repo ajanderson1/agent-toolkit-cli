@@ -394,7 +394,7 @@ def uninstall(
     home: Path | None,
     project: Path | None,
     harnesses: tuple[str, ...],
-) -> None:
+) -> tuple[tuple[str, Path], ...]:
     """Detach — remove the requested harnesses' projection files only.
 
     NON-DESTRUCTIVE (issue #303): keeps the library canonical AND the lock
@@ -402,6 +402,12 @@ def uninstall(
     canonical untouched") and the CLI command's own contract ("Keeps the
     canonical library entry. Use `agent remove` to fully drop from the
     library."). The destructive path lives in `remove()`.
+
+    Returns the refusals as (harness, dest) pairs (PM review F5): the
+    standard adapter REFUSES to unlink a sentinel-less, content-divergent
+    slot file (it is the user's) — a structured return lets callers like the
+    TUI surface the left-in-place file instead of silently counting it as
+    removed. Empty tuple = everything requested was removed or absent.
 
     The agent asset type cannot rely on the core's symlink-at-skill-path scan to
     discover projections: adapters write REAL FILES, so the scan returned ()
@@ -432,6 +438,7 @@ def uninstall(
     # keeps e.g. harnesses=("standard", "claude-code") from double-processing
     # one slot.
     seen: set[str] = set()
+    refusals: list[tuple[str, Path]] = []
     for name in harnesses:
         if name in _AGENT_SYNTHETIC_NAMES:
             continue
@@ -447,10 +454,12 @@ def uninstall(
             continue
         try:
             if name == "standard":
-                adapter.uninstall(
+                refused = adapter.uninstall(
                     slug, scope=scope, home=home, project=project,
                     canonical_content=canonical_content,
                 )
+                if refused is not None:
+                    refusals.append((name, refused))
             else:
                 adapter.uninstall(slug, scope=scope, home=home, project=project)
         except ValueError:
@@ -459,6 +468,7 @@ def uninstall(
             # project scope). There is nothing to remove there — treat as a
             # no-op rather than crashing the uninstall.
             continue
+    return tuple(refusals)
 
 
 def remove(
