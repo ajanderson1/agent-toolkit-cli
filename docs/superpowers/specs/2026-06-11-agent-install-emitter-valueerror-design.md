@@ -55,9 +55,16 @@ rollback (or reporting the partial set on failure) is a possible follow-up.
 Regression test mirroring the repro: a canonical agent `.md` with **no YAML
 frontmatter**, installed via the CLI with **no `--harnesses`** (default
 fan-out) in a HOME-isolated sandbox → exit code ≠ 0, output contains
-`github-copilot` and `description`, no `Traceback` in output. Plus a direct
-adapter-level test: `adapter_for("github-copilot").install(...)` over a
-frontmatter-less file raises `InstallError`.
+`github-copilot` and `description`, no `Traceback` in output. At the adapter
+level, the two **existing** tests covering these scenarios
+(`test_translate.py:327-349`, currently asserting `pytest.raises(ValueError)`)
+are retyped in place to assert `InstallError` — no duplicate tests added
+(critical-review finding). The adjacent `requires home=` contract-error test
+stays on `ValueError`: it fires in `_resolve_dest`, before the wrap.
+
+Empirically confirmed on the unfixed baseline (sandbox HOME): the default
+fan-out writes 13 files across 10 harnesses before the ValueError lands at
+`github-copilot` (index 10), with empty CLI output.
 
 ## Acceptance criteria
 

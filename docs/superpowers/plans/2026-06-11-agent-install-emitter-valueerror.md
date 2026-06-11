@@ -18,49 +18,53 @@
 
 **Files:**
 - Modify: `src/agent_toolkit_cli/agent_adapters/translate.py` (imports ~line 18; `_TranslateAdapter.install` ~lines 381-398)
-- Test: `tests/test_cli/test_agent_adapters/test_translate.py`
+- Modify (retype in place): `tests/test_cli/test_agent_adapters/test_translate.py:327-349`
 
-- [ ] **Step 1: Write the failing adapter tests**
+- [ ] **Step 1: Retype the two existing adapter tests to the new contract**
 
-Append to `tests/test_cli/test_agent_adapters/test_translate.py`:
+`test_translate.py` ALREADY covers both scenarios (critical-review finding):
+`test_github_copilot_install_raises_when_description_missing` (line 327) and
+`test_mistral_vibe_install_raises_on_invalid_safety` (line 338) assert
+`pytest.raises(ValueError)`. Do NOT append duplicate tests — retype these two
+in place to pin the #370 contract:
 
 ```python
-# ---------------------------------------------------------------------------
-# #370: data-dependent emitter failures surface as InstallError
-# ---------------------------------------------------------------------------
-
-def test_copilot_missing_description_raises_install_error(tmp_path):
+def test_github_copilot_install_raises_when_description_missing(tmp_path):
+    """github-copilot REQUIRES `description` in frontmatter; data-dependent
+    emitter failures surface as InstallError at the adapter boundary (#370)
+    so the CLI layer converts them to a clean ClickException."""
+    content = tmp_path / "no-desc.md"
+    content.write_text("---\nname: test-agent\n---\n\nBody.\n")
     from agent_toolkit_cli._install_core import InstallError
-    from agent_toolkit_cli.agent_adapters.translate import adapter_for
-    content = tmp_path / "canonical" / "no-fm.md"
-    content.parent.mkdir(parents=True)
-    content.write_text("Body only, no frontmatter.\n")
-    adapter = adapter_for("github-copilot")
+    from agent_toolkit_cli.agent_adapters import translate
+    adapter = translate.adapter_for("github-copilot")
     with pytest.raises(InstallError, match="description"):
-        adapter.install(
-            "no-fm", content, scope="global", home=tmp_path / "home",
-        )
+        adapter.install("test-agent", content, scope="global", home=tmp_path)
 
 
-def test_mistral_vibe_bad_safety_raises_install_error(tmp_path):
-    from agent_toolkit_cli._install_core import InstallError
-    from agent_toolkit_cli.agent_adapters.translate import adapter_for
-    content = tmp_path / "canonical" / "bad-safety.md"
-    content.parent.mkdir(parents=True)
+def test_mistral_vibe_install_raises_on_invalid_safety(tmp_path):
+    """mistral-vibe `safety` must be one of safe|neutral|destructive|yolo.
+    Anything else surfaces as InstallError at the adapter boundary (#370)
+    rather than a raw ValueError traceback mid-fan-out."""
+    content = tmp_path / "bad-safety.md"
     content.write_text(
-        "---\nname: bad-safety\ndescription: d\nsafety: bogus\n---\n\nBody.\n"
+        "---\nname: test\ndescription: test\nsafety: tornado\n---\n\nBody.\n"
     )
-    adapter = adapter_for("mistral-vibe")
+    from agent_toolkit_cli._install_core import InstallError
+    from agent_toolkit_cli.agent_adapters import translate
+    adapter = translate.adapter_for("mistral-vibe")
     with pytest.raises(InstallError, match="safety"):
-        adapter.install(
-            "bad-safety", content, scope="global", home=tmp_path / "home",
-        )
+        adapter.install("test", content, scope="global", home=tmp_path)
 ```
+
+**Leave untouched** the adjacent `requires home=` test (~line 320): that one
+asserts a *contract* ValueError from `_resolve_dest`, which runs BEFORE the
+wrap added in Step 3 and must stay a ValueError.
 
 - [ ] **Step 2: Run them to verify they fail**
 
-Run: `uv run pytest tests/test_cli/test_agent_adapters/test_translate.py -k "install_error" -v`
-Expected: 2 FAILED — `ValueError` raised where `InstallError` expected (pytest reports the ValueError propagating out of `install`).
+Run: `uv run pytest tests/test_cli/test_agent_adapters/test_translate.py -k "description_missing or invalid_safety" -v`
+Expected: 2 FAILED on the unfixed baseline — the emitters still raise `ValueError`, which is not an `InstallError` (`InstallError` subclasses `RuntimeError`), so `pytest.raises(InstallError)` does not catch it and pytest reports the escaping ValueError. (The `InstallError` import succeeds on the baseline — `_install_core.py:28` already defines it; the red state is the wrong exception type, not an ImportError.)
 
 - [ ] **Step 3: Implement the wrap**
 
@@ -97,7 +101,9 @@ with:
 - [ ] **Step 4: Run the tests to verify they pass**
 
 Run: `uv run pytest tests/test_cli/test_agent_adapters/test_translate.py -v`
-Expected: ALL PASS (the two new tests plus the existing translate suite).
+Expected: ALL PASS — the two retyped tests now catch `InstallError`, and the
+rest of the translate suite (including the `requires home=` contract test) is
+unaffected because the wrap covers only the parse+emit step.
 
 - [ ] **Step 5: Commit**
 
@@ -140,15 +146,18 @@ def test_default_fanout_missing_description_clean_error(
     assert not isinstance(r.exception, ValueError), (
         f"raw ValueError escaped the CLI layer:\n{r.output}"
     )
-    # Clean message names the harness and the missing key.
+    # Clean message names the harness and the missing key, with no traceback.
     assert "github-copilot" in r.output
     assert "description" in r.output
+    assert "Traceback" not in r.output, (
+        f"raw Traceback leaked into output:\n{r.output}"
+    )
 ```
 
 - [ ] **Step 2: Run it to verify it fails on current main**
 
 Run: `uv run pytest tests/test_cli/test_cli_agent_group.py::test_default_fanout_missing_description_clean_error -v`
-Expected on the unfixed baseline: FAIL — `r.exception` is the escaped `ValueError` and `r.output` lacks the message. After Task 1 it must PASS; if executing tasks in order, verify the red state by temporarily reverting Task 1's wrap (`git stash` the translate.py hunk, run, unstash) OR by checking out the pre-fix baseline — the red-green cycle is required, not optional.
+Expected on the unfixed baseline: FAIL — `r.exception` is the escaped `ValueError` and `r.output` lacks the message. After Task 1 it must PASS; if executing tasks in order, verify the red state by running this test from a throwaway worktree of the pre-fix commit (`git worktree add .worktrees/370-baseline <pre-fix-sha>`), per the repo convention — do NOT `git stash` live edits to peek the baseline (recorded learning: a blocked stash pop has stranded work before). The red-green cycle is required, not optional.
 
 - [ ] **Step 3: Run the test to verify it passes with Task 1 applied**
 
