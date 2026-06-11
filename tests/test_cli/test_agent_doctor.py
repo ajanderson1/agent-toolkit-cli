@@ -438,3 +438,43 @@ def test_doctor_cursor_shadow_identical_copy_is_clean(
     assert _by_type(findings, "cursor-shadow") == [], (
         [f.finding_type for f in findings]
     )
+
+
+def test_project_install_is_not_flagged_as_orphan(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#362 × #366: a successful `agent install -p` must NOT be flagged by
+    project-scope doctor's orphan sweep (pre-fix, the sentineled slot file
+    had no lock entry → standard-slot-orphan with an rm fix offered)."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    project = tmp_path / "proj"
+    project.mkdir()
+    from agent_toolkit_cli._install_core import InstallPlan
+    from agent_toolkit_cli.agent_install import apply
+    from agent_toolkit_cli.agent_paths import canonical_agent_dir
+
+    _seed_global_canonical()
+    _write_global_lock()
+    proj_canonical = canonical_agent_dir(
+        "demo-agent", scope="project", project=project,
+    )
+    proj_canonical.mkdir(parents=True)
+    (proj_canonical / "demo-agent.md").write_text(_CONTENT)
+
+    apply(
+        InstallPlan(
+            slug="demo-agent", scope="project", source=None, ref=None,
+            add_agents=("claude-code",), remove_agents=(),
+        ),
+        project=project,
+    )
+    assert (project / ".claude" / "agents" / "demo-agent.md").exists()
+
+    findings = _diagnose(
+        slugs=None, scope="project", home=tmp_path, project=project,
+    )
+    orphans = _by_type(findings, "standard-slot-orphan")
+    assert orphans == [], (
+        f"#362: doctor misclassifies its own install as orphan: "
+        f"{[f.finding_type for f in findings]}"
+    )
