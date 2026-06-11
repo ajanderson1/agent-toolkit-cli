@@ -13,7 +13,7 @@ No State column (agents are installed real files, not git working trees).
 
 CRITICAL: never name any method `_render_*` — it collides with Textual's
 internal flag mechanism and produces "bool is not callable" from compose.
-All glyph helpers are named `_cell_glyph`, `_harness_glyph`, `_rebuild`.
+All glyph helpers are named `_cell_glyph`, `_rebuild`.
 """
 from __future__ import annotations
 
@@ -378,8 +378,3 @@ class AgentGrid(Vertical):
         if pending == "unlink":
             return _PENDING_UNLINK
         return _LINKED_GLYPH if cell.linked else _UNLINKED_GLYPH
-
-    def _harness_glyph(self, harness: str) -> str:
-        """Return display name for a harness. Never named _render_*."""
-        cfg = AGENTS.get(harness)
-        return cfg.display_name if cfg else harness

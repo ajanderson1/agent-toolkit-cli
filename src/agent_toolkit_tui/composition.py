@@ -14,6 +14,7 @@ tests/test_tui/test_composition.py.
 """
 from __future__ import annotations
 
+from agent_toolkit_cli.agent_adapters.standard import agents_standard_covered
 from agent_toolkit_cli.instructions_adapters import SUPPORTED_HARNESSES
 from agent_toolkit_cli.skill_agents import AGENTS
 
@@ -38,8 +39,6 @@ def agents_nonstandard_main(scope: str) -> tuple[str, ...]:
     """Main harnesses that need their own agents column at `scope`:
     support the agent asset type (mechanism != 'none') and are not covered
     by the standard .claude/agents slot (#361)."""
-    from agent_toolkit_cli.agent_adapters.standard import agents_standard_covered
-
     covered = agents_standard_covered(scope)
     return tuple(
         h for h in MAIN_HARNESSES

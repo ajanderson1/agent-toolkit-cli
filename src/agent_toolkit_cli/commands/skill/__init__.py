@@ -16,15 +16,12 @@ from agent_toolkit_cli.skill_agents import (
     resolve_agent_token,
 )
 from agent_toolkit_cli.skill_install import (
-    DirtyCanonicalError,
     InstallError,
     InstallPlan,
     _current_linked_agents,
     _standard_bundle_link,
     apply as engine_apply,
     ensure_project_canonical,
-    plan as engine_plan,
-    uninstall,
 )
 from agent_toolkit_cli.skill_lock import LockFile, read_lock, remove_entry, write_lock
 from agent_toolkit_cli.skill_paths import (
@@ -34,7 +31,6 @@ from agent_toolkit_cli.skill_paths import (
 )
 from agent_toolkit_cli.skill_source import ParsedSource, SourceParseError, parse_source
 
-from ._common import scope_and_roots, validate_agent_names
 from .doctor_cmd import doctor_cmd
 from .import_cmd import import_cmd
 from .list_cmd import list_cmd

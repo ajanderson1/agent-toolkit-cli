@@ -98,6 +98,27 @@ async def test_standard_modal_at_project_scope_lists_devin_without_note():
 
 
 @pytest.mark.asyncio
+async def test_press_i_on_nonstandard_column_falls_through_to_cell_info():
+    """Registry dispatch must not swallow the existing per-cell path: `i` on
+    a NON-standard harness column (Pi) opens CellInfoScreen, not the modal."""
+    from agent_toolkit_tui.screens.cell_info import CellInfoScreen
+    from agent_toolkit_tui.widgets.column_info_modal import ColumnInfoModal
+
+    app = _A()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        table = app.query_one("#agent-table", DataTable)
+        pi_col = 1 + INTERACTIVE_HARNESSES.index("pi")
+        table.cursor_coordinate = Coordinate(row=0, column=pi_col)
+        table.focus()
+        await pilot.pause()
+        await pilot.press("i")
+        await pilot.pause()
+        assert isinstance(app.screen, CellInfoScreen)
+        assert not isinstance(app.screen, ColumnInfoModal)
+
+
+@pytest.mark.asyncio
 async def test_standard_cell_toggles_like_any_other():
     """Space on the standard cell queues link — the slot is interactive."""
     app = _A()

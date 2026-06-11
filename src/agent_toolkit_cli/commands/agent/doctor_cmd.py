@@ -46,6 +46,15 @@ def _rm_file_and_sidecar(dest: Path) -> None:
     _sentinel_path(dest).unlink(missing_ok=True)
 
 
+def _reseed_slot(canonical_content: Path, slot: Path) -> None:
+    """Re-seed the standard slot from the canonical and (re)write the `.attk`
+    ownership sidecar — consistent with the adapter's adopt-if-identical
+    contract: a slot the tool just made byte-equal to the canonical is
+    tool-owned."""
+    shutil.copy2(canonical_content, slot)
+    _sentinel_path(slot).write_text("")
+
+
 @dataclass
 class Finding:
     slug: str
@@ -112,7 +121,7 @@ def _diagnose(
             except skill_git.GitError:
                 pass
 
-        # 5. Standard-slot drift (#361): the .claude/agents/<slug>.md slot
+        # 4. Standard-slot drift (#361): the .claude/agents/<slug>.md slot
         # exists but differs from the SCOPE-APPROPRIATE canonical. The
         # per-slug `canonical` above is the GLOBAL library; a project slot is
         # seeded from the PROJECT canonical and may legitimately differ from
@@ -140,17 +149,19 @@ def _diagnose(
                 detail=(
                     "standard slot differs from canonical — local edits to "
                     f"{slot} will be DISCARDED by the fix "
-                    f"(baseline: {scope_content})"
+                    f"(baseline: {scope_content}; inspect first with: "
+                    f"diff {slot} {scope_content})"
                 ),
                 fix_action=FixAction(
                     shell_preview=(
-                        f"diff {slot} {scope_content}; cp {scope_content} {slot}"
+                        f"cp {scope_content} {slot} "
+                        f"&& touch {_sentinel_path(slot)}"
                     ),
-                    apply=lambda c=scope_content, s=slot: shutil.copy2(c, s),
+                    apply=lambda c=scope_content, s=slot: _reseed_slot(c, s),
                 ),
             ))
 
-        # 5b. cursor-shadow (#361, spec § Doctor): cursor reads the standard
+        # 4b. cursor-shadow (#361, spec § Doctor): cursor reads the standard
         # .claude/agents/ dir natively, but its OWN .cursor/agents/<slug>.md
         # WINS name conflicts — a pre-existing cursor projection therefore
         # shadows the standard slot with a stale copy. Ownership is sentinel-
@@ -201,7 +212,7 @@ def _diagnose(
                         fix_action=None,
                     ))
 
-    # 4. Orphan canonicals — directories under the library base with no lock
+    # 5. Orphan canonicals — directories under the library base with no lock
     # entry. This catches the #313 class of orphan: a clone left behind by a
     # failed `agent add` (slug mismatch, no --slug) before the lock is written.
     # Only run when no slug filter is active (targeted run won't see orphans)
@@ -311,9 +322,13 @@ def doctor_cmd(
 ) -> None:
     """Diagnose agent installation drift.
 
-    Checks for missing canonicals, missing content files, and dirty working
-    trees. Reports findings and (unless --no-fix) offers to apply automatic
-    repairs where available.
+    Checks for missing canonicals, missing content files, dirty working
+    trees, and orphan canonicals, plus the standard .claude/agents slot
+    (#361): standard-slot-drift, cursor-shadow (a stale .cursor/agents copy
+    shadowing the slot), standard-slot-orphan, standard-slot-unmanaged
+    (hand-authored files — report-only), and standard-slot-dangling-sidecar.
+    Reports findings and (unless --no-fix) offers to apply automatic repairs
+    where available.
     """
     scope, home, project_root = scope_and_roots(
         global_, project_flag,

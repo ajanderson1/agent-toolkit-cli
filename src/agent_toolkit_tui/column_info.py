@@ -90,7 +90,10 @@ def get_column_info(name: str, *, context: dict | None = None) -> ColumnInfo | N
     """Return a fresh ColumnInfo for `name`, or None if unregistered.
 
     `context` is forwarded to the factory. Today only `_standard_info` reads
-    it (`global_linked` flag).
+    it: `asset_type` (skills/instructions/agents — adjusts title and copy),
+    `names` (override the harness list, e.g. the per-scope covered set for
+    agents), `extra_lines` (caller-supplied trailing lines, e.g. the agents
+    panel's devin note), and `global_linked` (skills-only 🌐 marker block).
     """
     factory = COLUMN_INFO.get(name)
     if factory is None:

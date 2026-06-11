@@ -108,7 +108,9 @@ def test_doctor_flags_standard_slot_drift(
     monkeypatch.setenv("HOME", str(tmp_path))
     canonical = _seed_global_canonical()
     _write_global_lock()
-    slot = _write_slot(tmp_path, content=_DIVERGED)
+    # No sentinel: proves the fix WRITES the ownership sidecar, not merely
+    # that a pre-existing one survives.
+    slot = _write_slot(tmp_path, content=_DIVERGED, sentinel=False)
 
     findings = _diagnose(slugs=None, scope="global", home=tmp_path, project=None)
     drift = _by_type(findings, "standard-slot-drift")
@@ -116,21 +118,25 @@ def test_doctor_flags_standard_slot_drift(
     f = drift[0]
     assert f.slug == "demo-agent"
     assert f.path == slot
-    # Review-mandated disclosure: the fix overwrites local edits.
+    # Review-mandated disclosure: the fix overwrites local edits, and the
+    # detail (not the preview) carries the inspect-first diff hint.
     assert "DISCARDED" in f.detail
+    assert "diff " in f.detail
     assert f.fix_action is not None
-    # Diff-first preview so the user can inspect before applying.
-    assert f.fix_action.shell_preview.startswith("diff ")
-    assert "cp " in f.fix_action.shell_preview
+    # Preview equals the actual mutation: the cp + ownership sidecar.
+    assert f.fix_action.shell_preview.startswith("cp ")
+    assert "diff " not in f.fix_action.shell_preview
 
     # CLI surface names the finding.
     r = CliRunner().invoke(main, ["agent", "doctor", "-g", "--no-fix"])
     assert r.exit_code != 0, r.output
     assert "standard-slot-drift" in r.output
 
-    # Applying the fix re-seeds the slot from the canonical.
+    # Applying the fix re-seeds the slot from the canonical AND writes the
+    # ownership sentinel (adopt-if-identical contract).
     f.fix_action.apply()
     assert slot.read_text() == (canonical / "demo-agent.md").read_text()
+    assert _sentinel_path(slot).exists()
 
 
 def test_doctor_clean_when_slot_matches(
