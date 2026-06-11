@@ -619,3 +619,30 @@ def test_library_state_preserved_for_uninstalled(git_sandbox, tmp_path: Path, mo
 
     rows = build_skill_rows(scope="project", home=None, project=project)
     assert any(row.slug == "demo" and row.state == "library" for row in rows)
+
+
+def test_unlisted_without_canonical_is_missing(git_sandbox, tmp_path: Path, monkeypatch):
+    """#360 G2: a project lock entry with NO store canonical (fresh-machine
+    clone of a committed skills-lock.json) is `missing`, not `unlisted` —
+    the install is broken, not functional."""
+    import shutil
+
+    project = tmp_path / "proj"
+    project.mkdir()
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+
+    runner = CliRunner()
+    r = _add_demo_project(runner, git_sandbox.upstream, project, library_root)
+    assert r.exit_code == 0, r.output
+    r = runner.invoke(main, ["skill", "remove", "demo", "--force"])
+    assert r.exit_code == 0, r.output
+    # Simulate the fresh machine: project lock entry survives, store canonical absent.
+    shutil.rmtree(canonical_skill_dir("demo", scope="project", project=project))
+
+    rows = build_skill_rows(scope="project", home=None, project=project)
+    demo = [row for row in rows if row.slug == "demo"]
+    assert len(demo) == 1
+    assert demo[0].state == "missing"

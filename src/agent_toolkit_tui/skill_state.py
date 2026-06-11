@@ -184,7 +184,10 @@ def build_skill_rows(
         if slug in unlisted:
             # Project-lock-only: functional install, library no longer tracks
             # it. Supersedes the git working-tree badge, like `library` does.
-            state: State = "unlisted"
+            # `unlisted` requires the project canonical on disk — a fresh
+            # clone of a committed skills-lock.json has the entry but no
+            # store canonical, which is a broken install: `missing` (G2).
+            state: State = "unlisted" if canonical.exists() else "missing"
         elif not canonical.exists():
             # Project scope: slug is in the library but not yet installed here.
             # Global scope: library entry recorded but directory was deleted.

@@ -415,7 +415,8 @@ def _scan_unlisted_entries(
 ) -> list[Finding]:
     """#360 AC4: project lock entries whose slug is missing from the library lock.
 
-    The install is functional (project canonicals are independent of the
+    The install remains functional while the project canonical exists
+    (project canonicals are independent of the
     library); the finding flags that the library no longer tracks the slug
     and offers to re-add it from the entry's recorded source+ref."""
     if scope != "project":
@@ -430,7 +431,8 @@ def _scan_unlisted_entries(
             path=lock_file_path(scope=scope, home=home, project=project),
             detail=(
                 "project lock entry's slug is missing from the library lock "
-                "(install is functional; the library no longer tracks it)"
+                "(install remains functional while the project canonical exists; "
+                "the library no longer tracks it)"
             ),
             fix_action=_make_readd_library_action(slug=slug, entry=entry),
         ))

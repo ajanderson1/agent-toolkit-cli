@@ -129,17 +129,28 @@ def _diagnose(
         if slugs else dict(lock.skills)
     )
 
+    # At project scope, a slug absent from the library lock is the `unlisted`
+    # condition — section 4.5 owns it (fixable re-add). Stage 1's report-only
+    # missing-canonical would double-fire for the same root cause (the library
+    # canonical is absent BY DEFINITION for unlisted entries), so it skips
+    # those slugs at project scope (#360 G3).
+    project_lib_slugs: set[str] | None = (
+        set(read_lock(library_lock_path()).skills)
+        if scope == "project" else None
+    )
+
     for slug, entry in sorted(targets.items()):
         canonical = library_agent_path(slug)
 
         # 1. Missing canonical directory.
         if not canonical.exists():
-            findings.append(Finding(
-                slug=slug, finding_type="missing-canonical", scope=scope,
-                path=canonical,
-                detail="lock entry exists but canonical directory is absent",
-                fix_action=None,  # reclone would require source URL access
-            ))
+            if project_lib_slugs is None or slug in project_lib_slugs:
+                findings.append(Finding(
+                    slug=slug, finding_type="missing-canonical", scope=scope,
+                    path=canonical,
+                    detail="lock entry exists but canonical directory is absent",
+                    fix_action=None,  # reclone would require source URL access
+                ))
             continue
 
         # 2. Missing content file.
@@ -247,7 +258,7 @@ def _diagnose(
     # scope (the library lock is the global authority; this check is meaningless
     # for global scope). Actionable — NOT in _INFORMATIONAL_TYPES.
     if not slugs and scope == "project":
-        lib_slugs = set(read_lock(library_lock_path()).skills)
+        lib_slugs = project_lib_slugs if project_lib_slugs is not None else set()
         for slug, entry in sorted(targets.items()):
             if slug in lib_slugs:
                 continue
@@ -255,8 +266,8 @@ def _diagnose(
                 slug=slug, finding_type="unlisted", scope=scope, path=lock_path,
                 detail=(
                     "project lock entry's slug is missing from the library "
-                    "lock (install is functional; the library no longer "
-                    "tracks it)"
+                    "lock (install remains functional while the canonical "
+                    "exists; the library no longer tracks it)"
                 ),
                 fix_action=_make_readd_library_action(slug=slug, entry=entry),
             ))
