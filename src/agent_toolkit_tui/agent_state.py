@@ -9,6 +9,12 @@ Key differences from skill_state:
 - No git working-tree state badge (agents are installed files, not git repos per-se).
 - Linked = adapter destination exists (adapter.destination(...).exists() or .is_symlink()).
 - INTERACTIVE_HARNESSES is derived: standard slot + non-covered main harnesses.
+
+Row-universe contract: union(library lock, scope lock) — canonical statement
+in skill_state.py's module docstring (#360). Rows carry a `state`:
+`installed` (in the scope lock), `library` (library-only, dim available),
+`unlisted` (scope-lock-only, warning). Pre-#362 the CLI never writes a
+project lock, so at project scope the union degenerates to library rows.
 """
 from __future__ import annotations
 
@@ -22,6 +28,7 @@ from agent_toolkit_cli.agent_paths import lock_file_path
 from agent_toolkit_tui.composition import agents_nonstandard_main
 
 Scope = Literal["global", "project"]
+State = Literal["installed", "library", "unlisted"]
 
 # Rendered columns (#361): the standard slot first, then the non-covered
 # main harnesses (derived per scope; the two scopes yield the same set
@@ -39,11 +46,12 @@ class AgentCell:
 
 @dataclass
 class AgentRow:
-    """One row per locked agent slug."""
+    """One row per slug in union(library lock, scope lock)."""
 
     slug: str
     source: str
     ref: str
+    state: State = "installed"
     # Key: (scope, harness_name) → AgentCell
     cells: dict[tuple[str, str], AgentCell] = field(default_factory=dict)
 
@@ -83,22 +91,34 @@ def build_agent_rows(
     home: Path | None,
     project: Path | None,
 ) -> list[AgentRow]:
-    """Build AgentRow list from the agent lock + filesystem.
+    """Build AgentRow list from union(library lock, scope lock) + filesystem.
 
-    Reads the scope-appropriate agent lock. For each slug × enabled harness
-    in INTERACTIVE_HARNESSES, tests whether the adapter destination exists.
-
-    Returns rows sorted by slug.
+    See the module docstring for the row-universe contract (#360).
     """
-    try:
-        lock_path = lock_file_path(scope=scope, home=home, project=project)
-        lock = read_lock(lock_path)
-    except FileNotFoundError:
-        return []
+    from agent_toolkit_cli.agent_paths import library_lock_path
+
+    def _read(path: Path) -> dict:
+        # read_lock returns an empty LockFile on FileNotFoundError — no try/except needed.
+        return dict(read_lock(path).skills)
+
+    lib_slugs = _read(library_lock_path())
+    scope_slugs = _read(lock_file_path(scope=scope, home=home, project=project))
+    # At global scope library_lock_path() IS the scope lock — same file.
+    # Merge order: the scope-lock entry wins source/ref for slugs in both
+    # locks (skill_state.py inverts this — library wins). Unobservable
+    # pre-#362: the CLI writes no agent project lock, and at global scope
+    # both reads are the same file.
+    universe = {**lib_slugs, **scope_slugs}
 
     rows: list[AgentRow] = []
-    for slug in sorted(lock.skills):
-        entry = lock.skills[slug]
+    for slug in sorted(universe):
+        entry = universe[slug]
+        if slug in scope_slugs:
+            # At global scope the scope lock IS the library lock (same file),
+            # so this branch covers every slug and yields "installed".
+            state: State = "installed" if slug in lib_slugs else "unlisted"
+        else:
+            state = "library"
         cells: dict[tuple[str, str], AgentCell] = {}
         for harness in INTERACTIVE_HARNESSES:
             cell = _cell_for(slug, harness, scope=scope, home=home, project=project)
@@ -108,6 +128,7 @@ def build_agent_rows(
             slug=slug,
             source=entry.source,
             ref=entry.ref or "(default)",
+            state=state,
             cells=cells,
         ))
     return rows
