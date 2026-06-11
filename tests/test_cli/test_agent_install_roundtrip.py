@@ -347,3 +347,246 @@ def test_install_refresh_tool_owned_file_allowed(tmp_path, monkeypatch):
     )
     assert dest in result.created
     assert "New body." in dest.read_text(), "refresh did not update our own file"
+
+
+# ── #362: project installs (source=None, the real CLI/TUI shape) must write
+#    a derived project lock entry ─────────────────────────────────────────────
+
+def _write_global_lock_entry(slug="rt-agent", ref=None):
+    """Write a global library lock entry (honours monkeypatched HOME)."""
+    from agent_toolkit_cli.agent_lock import (
+        LockEntry, add_entry, read_lock, write_lock,
+    )
+    from agent_toolkit_cli.agent_paths import library_lock_path
+
+    lock_path = library_lock_path()
+    lock = read_lock(lock_path)
+    entry = LockEntry(
+        source=f"x/{slug}", source_type="github", ref=ref,
+        agent_path=f"{slug}.md",
+    )
+    write_lock(lock_path, add_entry(lock, slug, entry))
+
+
+def _source_none_plan(slug="rt-agent", add=("claude-code", "gemini-cli")):
+    from agent_toolkit_cli._install_core import InstallPlan
+
+    return InstallPlan(
+        slug=slug, scope="project", source=None, ref=None,
+        add_agents=tuple(add), remove_agents=(),
+    )
+
+
+def test_project_install_source_none_writes_derived_lock_entry(
+    tmp_path, monkeypatch,
+):
+    """#362 core: apply(source=None, project scope) derives the project lock
+    entry from the global entry; full lifecycle: install → entry present →
+    uninstall keeps it (#303) → remove drops it."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    project = tmp_path / "proj"
+    project.mkdir()
+    from agent_toolkit_cli.agent_install import apply, remove, uninstall
+    from agent_toolkit_cli.agent_lock import read_lock
+    from agent_toolkit_cli.agent_paths import lock_file_path
+
+    _seed_global_canonical()
+    _write_global_lock_entry(ref="main")
+    _seed_project_canonical(project)
+
+    result = apply(_source_none_plan(), project=project)
+
+    lock_path = lock_file_path(scope="project", project=project)
+    entry = read_lock(lock_path).skills.get("rt-agent")
+    assert entry is not None, "#362: project install wrote NO project lock entry"
+    assert entry.source == "x/rt-agent"
+    assert entry.source_type == "github"
+    assert entry.ref == "main"
+    assert entry.agent_path == "rt-agent.md"
+    assert entry.upstream_sha is None and entry.local_sha is None, (
+        "project entries don't pin SHAs (skills precedent)"
+    )
+    assert result.lock_action == "added"
+
+    uninstall(
+        slug="rt-agent", scope="project", home=None, project=project,
+        harnesses=("claude-code", "gemini-cli"),
+    )
+    assert "rt-agent" in read_lock(lock_path).skills, (
+        "uninstall must KEEP the lock entry (#303)"
+    )
+
+    remove(
+        slug="rt-agent", scope="project", home=None, project=project,
+        harnesses=("claude-code", "gemini-cli"),
+    )
+    assert "rt-agent" not in read_lock(lock_path).skills, (
+        "remove must DROP the lock entry"
+    )
+
+
+def test_project_install_no_global_entry_fails_before_projection(
+    tmp_path, monkeypatch,
+):
+    """No global lock entry → InstallError BEFORE any file is projected."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    project = tmp_path / "proj"
+    project.mkdir()
+    import pytest as _pytest
+
+    from agent_toolkit_cli.agent_install import InstallError, apply
+    from agent_toolkit_cli.agent_lock import read_lock
+    from agent_toolkit_cli.agent_paths import lock_file_path
+
+    _seed_global_canonical()  # canonical only — NO global lock entry
+    _seed_project_canonical(project)
+
+    with _pytest.raises(InstallError, match="no global lock entry"):
+        apply(_source_none_plan(), project=project)
+
+    assert not (project / ".claude" / "agents" / "rt-agent.md").exists(), (
+        "fail-loud must come BEFORE projection (no orphaned files)"
+    )
+    assert not (project / ".gemini" / "agents" / "rt-agent.md").exists()
+    lock_path = lock_file_path(scope="project", project=project)
+    assert "rt-agent" not in read_lock(lock_path).skills
+
+
+def test_project_reinstall_source_none_is_idempotent(tmp_path, monkeypatch):
+    """Second apply() succeeds: the entry written by the first run makes the
+    slug tool-owned (overwrite=True), fixing the F3 re-install conflict."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    project = tmp_path / "proj"
+    project.mkdir()
+    from agent_toolkit_cli.agent_install import apply
+
+    _seed_global_canonical()
+    _write_global_lock_entry()
+    _seed_project_canonical(project)
+
+    r1 = apply(_source_none_plan(), project=project)
+    assert r1.lock_action == "added"
+    r2 = apply(_source_none_plan(), project=project)  # must not raise
+    assert r2.lock_action == "unchanged"
+    assert (project / ".gemini" / "agents" / "rt-agent.md").exists()
+
+
+def test_project_first_install_still_refuses_foreign_file(
+    tmp_path, monkeypatch,
+):
+    """Foreign pre-existing destination still refused on FIRST install
+    (overwrite must stay False until the entry exists) — and the failed
+    install writes NO lock entry."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    project = tmp_path / "proj"
+    project.mkdir()
+    import pytest as _pytest
+
+    from agent_toolkit_cli.agent_adapters import AgentProjectionConflictError
+    from agent_toolkit_cli.agent_install import apply
+    from agent_toolkit_cli.agent_lock import read_lock
+    from agent_toolkit_cli.agent_paths import lock_file_path
+
+    _seed_global_canonical()
+    _write_global_lock_entry()
+    _seed_project_canonical(project)
+    foreign = project / ".gemini" / "agents" / "rt-agent.md"
+    foreign.parent.mkdir(parents=True)
+    foreign.write_text("# user's own file\n")
+
+    with _pytest.raises(AgentProjectionConflictError):
+        apply(_source_none_plan(add=("gemini-cli",)), project=project)
+
+    assert foreign.read_text() == "# user's own file\n", "foreign file clobbered"
+    lock_path = lock_file_path(scope="project", project=project)
+    assert "rt-agent" not in read_lock(lock_path).skills, (
+        "a FAILED install must not write a lock entry"
+    )
+
+
+def test_project_unlisted_entry_operable_without_global_entry(
+    tmp_path, monkeypatch,
+):
+    """#360 'unlisted' contract: slug already in the PROJECT lock installs
+    fine with NO global lock entry (the new fail-loud must be exempt), and a
+    pure-remove plan never consults the global lock."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    project = tmp_path / "proj"
+    project.mkdir()
+    from agent_toolkit_cli._install_core import InstallPlan
+    from agent_toolkit_cli.agent_install import apply
+    from agent_toolkit_cli.agent_lock import (
+        LockEntry, add_entry, read_lock, write_lock,
+    )
+    from agent_toolkit_cli.agent_paths import lock_file_path
+
+    _seed_global_canonical()  # NO global lock entry
+    _seed_project_canonical(project)
+    # Pre-existing project lock entry (the #360 unlisted shape).
+    lock_path = lock_file_path(scope="project", project=project)
+    write_lock(lock_path, add_entry(
+        read_lock(lock_path), "rt-agent",
+        LockEntry(source="x/rt-agent", source_type="github",
+                  agent_path="rt-agent.md"),
+    ))
+
+    apply(_source_none_plan(add=("gemini-cli",)), project=project)  # no raise
+    assert (project / ".gemini" / "agents" / "rt-agent.md").exists()
+
+    # Pure-remove plan with NO lock entries anywhere: must not raise either.
+    pure_remove = InstallPlan(
+        slug="other-agent", scope="project", source=None, ref=None,
+        add_agents=(), remove_agents=("gemini-cli",),
+    )
+    apply(pure_remove, project=project)
+
+
+def test_project_install_all_skipped_writes_no_lock_entry(tmp_path, monkeypatch):
+    """Critical-review G4: an install whose requested harnesses are ALL
+    skipped as unsupported projects nothing — it must NOT write a project
+    lock entry, or the zero-projection install claims tool ownership and
+    flips overwrite=True for a later first REAL projection (guard bypass)."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    project = tmp_path / "proj"
+    project.mkdir()
+    from agent_toolkit_cli.agent_install import apply
+    from agent_toolkit_cli.agent_lock import read_lock
+    from agent_toolkit_cli.agent_paths import lock_file_path
+
+    _seed_global_canonical()
+    _write_global_lock_entry()
+    _seed_project_canonical(project)
+
+    # codex is a real catalog entry with subagent_mechanism='none' → skipped.
+    result = apply(_source_none_plan(add=("codex",)), project=project)
+
+    assert result.skipped == ("codex",)
+    assert result.lock_action == "unchanged"
+    lock_path = lock_file_path(scope="project", project=project)
+    assert "rt-agent" not in read_lock(lock_path).skills, (
+        "G4: zero-projection install must not claim ownership"
+    )
+
+
+def test_global_install_source_none_writes_no_global_entry(
+    tmp_path, monkeypatch,
+):
+    """AC9: global installs never write lock entries (that is `agent add`'s
+    job) — behaviour unchanged for canonical-only global slugs."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    from agent_toolkit_cli._install_core import InstallPlan
+    from agent_toolkit_cli.agent_install import apply
+    from agent_toolkit_cli.agent_lock import read_lock
+    from agent_toolkit_cli.agent_paths import library_lock_path
+
+    _seed_global_canonical()  # canonical only — NO lock entry
+
+    result = apply(
+        InstallPlan(
+            slug="rt-agent", scope="global", source=None, ref=None,
+            add_agents=("gemini-cli",), remove_agents=(),
+        ),
+        home=tmp_path,
+    )
+    assert result.lock_action == "unchanged"
+    assert "rt-agent" not in read_lock(library_lock_path()).skills
