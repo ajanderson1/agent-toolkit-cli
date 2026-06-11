@@ -679,8 +679,8 @@ async def test_state_column_rendered():
         await pilot.pause()
         table = app.query_one(DataTable)
         labels = [str(c.label) for c in table.columns.values()]
-        assert any("State" in l for l in labels)
+        assert any("State" in lbl for lbl in labels)
         # State column sits immediately before Source.
-        state_i = next(i for i, l in enumerate(labels) if "State" in l)
-        source_i = next(i for i, l in enumerate(labels) if "Source" in l)
+        state_i = next(i for i, lbl in enumerate(labels) if "State" in lbl)
+        source_i = next(i for i, lbl in enumerate(labels) if "Source" in lbl)
         assert source_i == state_i + 1
