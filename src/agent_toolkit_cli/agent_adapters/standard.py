@@ -13,6 +13,7 @@ import shutil
 import sys
 from pathlib import Path
 
+from agent_toolkit_cli._install_core import InstallError
 from agent_toolkit_cli.agent_adapters import _guard_foreign, _sentinel_path
 
 # Harnesses that natively read the standard agents dir, per scope.
@@ -63,6 +64,15 @@ class _StandardAdapter:
         overwrite: bool = False,
     ) -> Path:
         dest = self.destination(slug, scope=scope, home=home, project=project)
+        # Fail loud on a missing canonical content file (PM review F8) —
+        # BEFORE any filecmp/copy2 call raises a raw OSError mid-fan-out.
+        # InstallError is the type install_cmd already catches and presents
+        # as a clean ClickException.
+        if not content_path.exists():
+            raise InstallError(
+                f"standard: {slug}: canonical content file missing: "
+                f"{content_path} — re-run `agent add {slug}` to restore it"
+            )
         # Adopt-if-identical (#361): a pre-existing byte-identical file (e.g.
         # a prior `--harnesses claude-code` install) becomes tool-owned.
         if dest.exists() and not dest.is_symlink() and filecmp.cmp(
@@ -77,6 +87,11 @@ class _StandardAdapter:
         # sentinel authorizes overwriting a divergent existing file.
         _guard_foreign(dest, harness="standard", overwrite=False)
         dest.parent.mkdir(parents=True, exist_ok=True)
+        # A symlink at the slot (e.g. a stale sentinel + a user-replaced
+        # symlink) must be REPLACED, never written through — copy2 over a
+        # symlink would write into its target (PM review F6).
+        if dest.is_symlink():
+            dest.unlink()
         shutil.copy2(content_path, dest)
         _sentinel_path(dest).write_text("")
         return dest

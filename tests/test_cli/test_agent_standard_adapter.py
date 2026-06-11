@@ -149,6 +149,48 @@ def test_reinstall_refreshes_own_slot(tmp_path):
     assert out.read_text() == content.read_text()
 
 
+def test_install_replaces_slot_symlink_instead_of_writing_through(tmp_path):
+    """PM review F6: stale sentinel + a user-replaced SYMLINK at the slot —
+    copy2 over a symlink writes THROUGH it into the target (e.g. a dotfiles
+    source). Install must replace the symlink with a real file and leave the
+    symlink target untouched."""
+    from agent_toolkit_cli.agent_adapters import _sentinel_path
+    content = _canonical(tmp_path)
+    user_target = tmp_path / "dotfiles" / "my-agent.md"
+    user_target.parent.mkdir(parents=True)
+    user_target.write_text("user's dotfiles-managed agent\n")
+    dest = tmp_path / ".claude" / "agents" / "demo.md"
+    dest.parent.mkdir(parents=True)
+    dest.symlink_to(user_target)
+    _sentinel_path(dest).write_text("")  # stale sentinel authorizes the write
+    a = adapter_for()
+    out = a.install("demo", content, scope="global", home=tmp_path)
+    assert out == dest
+    assert not dest.is_symlink(), "slot must become a real file"
+    assert dest.read_text() == content.read_text()
+    assert user_target.read_text() == "user's dotfiles-managed agent\n", (
+        "symlink target must be untouched"
+    )
+
+
+def test_install_missing_canonical_raises_install_error(tmp_path):
+    """PM review F8: a missing canonical content file must raise a clean
+    InstallError (which install_cmd catches), not a raw OSError traceback
+    from filecmp/copy2 mid-fan-out."""
+    from agent_toolkit_cli._install_core import InstallError
+    missing = tmp_path / "canonical" / "demo.md"  # never created
+    a = adapter_for()
+    with pytest.raises(InstallError, match="demo"):
+        a.install("demo", missing, scope="global", home=tmp_path)
+    # Also when a (sentinel-less, divergent) file already sits at the slot:
+    # the existence check must come before any filecmp comparison.
+    dest = tmp_path / ".claude" / "agents" / "demo.md"
+    dest.parent.mkdir(parents=True)
+    dest.write_text("something\n")
+    with pytest.raises(InstallError, match="demo"):
+        a.install("demo", missing, scope="global", home=tmp_path)
+
+
 def test_uninstall_removes_sentinelless_content_match(tmp_path):
     """Pre-#361 claude-code installs wrote no sentinel; content matching the
     canonical is sufficient ownership evidence for detach."""

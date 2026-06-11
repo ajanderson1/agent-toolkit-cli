@@ -28,6 +28,7 @@ def _all_enabled_harnesses() -> tuple[str, ...]:
     the enabled set — remove must never orphan the sidecar.
     """
     from agent_toolkit_cli.agent_adapters import UnsupportedMechanismError, get_adapter
+    from agent_toolkit_cli.skill_agents import UnknownAgentError
     result = []
     for name, cfg in AGENTS.items():
         if cfg.subagent_mechanism == "none":
@@ -35,7 +36,9 @@ def _all_enabled_harnesses() -> tuple[str, ...]:
         try:
             get_adapter(name)
             result.append(name)
-        except (UnsupportedMechanismError, Exception):
+        except (UnsupportedMechanismError, UnknownAgentError):
+            # Known not-installable states only (PM review F7) — a genuinely
+            # broken adapter must fail loud, not silently orphan projections.
             pass
     return ("standard", *result)
 

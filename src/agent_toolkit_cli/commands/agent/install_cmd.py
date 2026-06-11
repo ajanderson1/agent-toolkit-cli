@@ -36,6 +36,7 @@ def _default_harnesses(scope: str) -> tuple[str, ...]:
     """
     from agent_toolkit_cli.agent_adapters import UnsupportedMechanismError, get_adapter
     from agent_toolkit_cli.agent_adapters.standard import agents_standard_covered
+    from agent_toolkit_cli.skill_agents import UnknownAgentError
     covered = agents_standard_covered(scope)
     result = []
     for name, cfg in AGENTS.items():
@@ -46,7 +47,9 @@ def _default_harnesses(scope: str) -> tuple[str, ...]:
         try:
             get_adapter(name)
             result.append(name)
-        except (UnsupportedMechanismError, Exception):
+        except (UnsupportedMechanismError, UnknownAgentError):
+            # Known not-installable states only (PM review F7) — a genuinely
+            # broken adapter must fail loud, not silently drop the harness.
             pass
     return ("standard", *sorted(result))
 

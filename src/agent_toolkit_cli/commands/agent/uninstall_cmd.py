@@ -35,6 +35,7 @@ def _resolve_harnesses_for_uninstall(
     # normalizes same-destination tokens to "standard" and its seen-set
     # dedupes the slot itself.
     from agent_toolkit_cli.agent_adapters import UnsupportedMechanismError, get_adapter
+    from agent_toolkit_cli.skill_agents import UnknownAgentError
     result = []
     for name, cfg in AGENTS.items():
         if cfg.subagent_mechanism == "none":
@@ -42,7 +43,9 @@ def _resolve_harnesses_for_uninstall(
         try:
             get_adapter(name)
             result.append(name)
-        except (UnsupportedMechanismError, Exception):
+        except (UnsupportedMechanismError, UnknownAgentError):
+            # Known not-installable states only (PM review F7) — a genuinely
+            # broken adapter must fail loud, not silently orphan projections.
             pass
     return ("standard", *sorted(result))
 
