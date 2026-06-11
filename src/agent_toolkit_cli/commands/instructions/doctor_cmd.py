@@ -110,7 +110,9 @@ def _backup_then_symlink_finding(
                 harnesses=new_harnesses,
             ))
             write_lock(lock_path, new)
-            instructions_install.apply(scope=scope, project_root=project_root, home=home)
+            instructions_install.apply(
+                scope=cast("Scope", scope), project_root=project_root, home=home,
+            )
         except Exception as exc:
             # Stronger than the adopt fix's contract: roll back on ANY failure
             # after the rename (lock write or apply). Drop any symlink apply()
