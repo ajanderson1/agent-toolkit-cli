@@ -20,7 +20,7 @@
 - Modify: `src/agent_toolkit_cli/agent_adapters/translate.py` (imports ~line 18; `_TranslateAdapter.install` ~lines 381-398)
 - Modify (retype in place): `tests/test_cli/test_agent_adapters/test_translate.py:327-349`
 
-- [ ] **Step 1: Retype the two existing adapter tests to the new contract**
+- [x] **Step 1: Retype the two existing adapter tests to the new contract**
 
 `test_translate.py` ALREADY covers both scenarios (critical-review finding):
 `test_github_copilot_install_raises_when_description_missing` (line 327) and
@@ -61,12 +61,12 @@ def test_mistral_vibe_install_raises_on_invalid_safety(tmp_path):
 asserts a *contract* ValueError from `_resolve_dest`, which runs BEFORE the
 wrap added in Step 3 and must stay a ValueError.
 
-- [ ] **Step 2: Run them to verify they fail**
+- [x] **Step 2: Run them to verify they fail**
 
 Run: `uv run pytest tests/test_cli/test_agent_adapters/test_translate.py -k "description_missing or invalid_safety" -v`
 Expected: 2 FAILED on the unfixed baseline — the emitters still raise `ValueError`, which is not an `InstallError` (`InstallError` subclasses `RuntimeError`), so `pytest.raises(InstallError)` does not catch it and pytest reports the escaping ValueError. (The `InstallError` import succeeds on the baseline — `_install_core.py:28` already defines it; the red state is the wrong exception type, not an ImportError.)
 
-- [ ] **Step 3: Implement the wrap**
+- [x] **Step 3: Implement the wrap**
 
 In `src/agent_toolkit_cli/agent_adapters/translate.py`, add to the imports block:
 
@@ -98,14 +98,14 @@ with:
             raise InstallError(str(exc)) from exc
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `uv run pytest tests/test_cli/test_agent_adapters/test_translate.py -v`
 Expected: ALL PASS — the two retyped tests now catch `InstallError`, and the
 rest of the translate suite (including the `requires home=` contract test) is
 unaffected because the wrap covers only the parse+emit step.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/agent_toolkit_cli/agent_adapters/translate.py tests/test_cli/test_agent_adapters/test_translate.py
@@ -121,7 +121,7 @@ git commit -m "fix(agent): surface translate-emitter frontmatter failures as Ins
 **Files:**
 - Test: `tests/test_cli/test_cli_agent_group.py`
 
-- [ ] **Step 1: Write the failing CLI regression test**
+- [x] **Step 1: Write the failing CLI regression test**
 
 Append to `tests/test_cli/test_cli_agent_group.py` (reuses the module's existing helpers `_seed_global_canonical` / `_write_global_lock` and the autouse `_clean_env` fixture):
 
@@ -154,17 +154,17 @@ def test_default_fanout_missing_description_clean_error(
     )
 ```
 
-- [ ] **Step 2: Run it to verify it fails on current main**
+- [x] **Step 2: Run it to verify it fails on current main**
 
 Run: `uv run pytest tests/test_cli/test_cli_agent_group.py::test_default_fanout_missing_description_clean_error -v`
 Expected on the unfixed baseline: FAIL — `r.exception` is the escaped `ValueError` and `r.output` lacks the message. After Task 1 it must PASS; if executing tasks in order, verify the red state by running this test from a throwaway worktree of the pre-fix commit (`git worktree add .worktrees/370-baseline <pre-fix-sha>`), per the repo convention — do NOT `git stash` live edits to peek the baseline (recorded learning: a blocked stash pop has stranded work before). The red-green cycle is required, not optional.
 
-- [ ] **Step 3: Run the test to verify it passes with Task 1 applied**
+- [x] **Step 3: Run the test to verify it passes with Task 1 applied**
 
 Run: `uv run pytest tests/test_cli/test_cli_agent_group.py::test_default_fanout_missing_description_clean_error -v`
 Expected: PASS
 
-- [ ] **Step 4: Full suite + commit**
+- [x] **Step 4: Full suite + commit**
 
 Run: `uv run pytest -q`
 Expected: green. Known local-only failure exempt per memory: `test_empty_machine_is_empty` (global pi inventory ignores `home=`); if it is the ONLY failure, proceed (it is green on CI).
@@ -178,6 +178,6 @@ git commit -m "test(agent): regression — default fan-out over frontmatter-less
 
 ### Verification (whole-issue)
 
-- [ ] `uv run pytest -q` green (modulo the known local-only `test_empty_machine_is_empty`).
-- [ ] Manual smoke in a HOME-isolated sandbox: `agent add` a hermetic repo whose `demo-agent.md` has no frontmatter, then `agent install demo-agent -g` with no `--harnesses` → one-line `Error: github-copilot: 'description' is required in frontmatter but was not found`, exit 1, no traceback.
-- [ ] Note in the PR body that partially-written harness files before the failure remain on disk (out-of-scope follow-up: rollback or partial-set reporting).
+- [x] `uv run pytest -q` green (modulo the known local-only `test_empty_machine_is_empty`).
+- [x] Manual smoke in a HOME-isolated sandbox: `agent add` a hermetic repo whose `demo-agent.md` has no frontmatter, then `agent install demo-agent -g` with no `--harnesses` → one-line `Error: github-copilot: 'description' is required in frontmatter but was not found`, exit 1, no traceback.
+- [x] Note in the PR body that partially-written harness files before the failure remain on disk (out-of-scope follow-up: rollback or partial-set reporting).
