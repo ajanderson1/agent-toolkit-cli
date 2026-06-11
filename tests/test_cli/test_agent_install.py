@@ -300,6 +300,17 @@ def test_install_kode_project_scope_routes_to_standard_adapter(tmp_path, monkeyp
     canonical = canonical_agent_dir("demo", scope="project", project=project)
     canonical.mkdir(parents=True)
     (canonical / "demo.md").write_text("x\n")
+    # #362: a project-scope source=None install now derives its project lock
+    # entry from the global entry — seed one (the pre-fix setup relied on the
+    # silently-broken no-lock-write path).
+    from agent_toolkit_cli.agent_lock import (
+        LockEntry, add_entry, read_lock, write_lock,
+    )
+    from agent_toolkit_cli.agent_paths import library_lock_path
+    write_lock(library_lock_path(), add_entry(
+        read_lock(library_lock_path()), "demo",
+        LockEntry(source="x/demo", source_type="github", agent_path="demo.md"),
+    ))
     p = InstallPlan(slug="demo", scope="project", source=None, ref=None,
                     add_agents=("kode",), remove_agents=())
     agent_install.apply(p, project=project)

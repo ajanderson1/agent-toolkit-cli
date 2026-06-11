@@ -235,6 +235,32 @@ def apply(
     lock = read_lock(lock_path)
     existing_entry = lock.skills.get(plan.slug)
 
+    # #362: a project-scope install driven by the CLI/TUI plan shape
+    # (source=None) must leave a project lock entry behind, derived from
+    # the global library entry — otherwise every project read surface
+    # (list / TUI / doctor / remove) is blind to the install and doctor's
+    # orphan sweep (#366) misclassifies our own files. Validate BEFORE any
+    # mutation so a failed install projects nothing. Exempt: pure-remove
+    # plans (a slug whose library entry was dropped must stay removable)
+    # and slugs already in the project lock (#360 "unlisted" entries stay
+    # operable without a library entry).
+    derive_project_entry = (
+        plan.scope == "project"
+        and plan.source is None
+        and bool(plan.add_agents)
+        and existing_entry is None
+    )
+    global_entry = None
+    if derive_project_entry:
+        from agent_toolkit_cli.agent_paths import library_lock_path
+
+        global_entry = read_lock(library_lock_path()).skills.get(plan.slug)
+        if global_entry is None:
+            raise InstallError(
+                f"{plan.slug}: no global lock entry; "
+                f"run `agent add {plan.slug}` first"
+            )
+
     # Clone canonical if needed (same pattern as skill_install.apply).
     if plan.source is not None and not canonical.exists():
         canonical.parent.mkdir(parents=True, exist_ok=True)
@@ -341,6 +367,27 @@ def apply(
         )
         write_lock(lock_path, add_entry(lock, plan.slug, entry))
         lock_action = "added" if existing_entry is None else "updated"
+    elif derive_project_entry and created:
+        # #362: derived project entry, written only AFTER the projection
+        # loops succeeded so `overwrite` stays False on a first install
+        # (foreign-file guard) and a failed install leaves no entry. The
+        # `created` gate keeps an all-skipped install (every harness
+        # unsupported) from claiming ownership of files it never wrote.
+        # Mirrors skill_install.ensure_project_canonical's derivation:
+        # project entries copy source/ref identity but never pin SHAs.
+        assert global_entry is not None  # guaranteed by pre-validation
+        entry = LockEntry(
+            source=global_entry.source,
+            source_type=global_entry.source_type,
+            ref=global_entry.ref,
+            agent_path=global_entry.agent_path or f"{plan.slug}.md",
+            upstream_sha=None,
+            local_sha=None,
+            parent_url=global_entry.parent_url,
+            read_only=global_entry.read_only,
+        )
+        write_lock(lock_path, add_entry(lock, plan.slug, entry))
+        lock_action = "added"
 
     return InstallResult(
         plan=plan,
