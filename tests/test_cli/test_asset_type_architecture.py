@@ -21,6 +21,20 @@ from __future__ import annotations
 import importlib
 import inspect
 
+import pytest
+
+# Both spellings of the rejected runtime discriminator: `asset_type` (current
+# vocabulary) and `kind` (pre-#355 vocabulary, still present in history).
+BANNED_DISCRIMINATORS = ("kind", "asset_type")
+
+# Public verb surface per install module — the surfaces genuinely differ.
+INSTALL_ENTRYPOINTS = {
+    "agent_toolkit_cli.skill_install": ("plan", "apply", "install", "uninstall"),
+    "agent_toolkit_cli.agent_install": ("plan", "apply", "install", "uninstall", "remove"),
+    "agent_toolkit_cli.instructions_install": ("plan", "apply", "uninstall"),
+    "agent_toolkit_cli.pi_extension_install": ("plan", "apply"),
+}
+
 
 # ── 1. Separate module existence ─────────────────────────────────────────────
 
@@ -91,41 +105,31 @@ def test_all_four_asset_type_paths_modules_exist():
         assert mod is not None, f"module {mod_name!r} must exist"
 
 
-# ── 2. No `asset_type=` parameter on agent install/uninstall entrypoints ─────
+# ── 2. No runtime-discriminator parameter on install entrypoints ─────────────
 
 
-def test_install_is_per_asset_type_not_discriminated():
-    """No agent install/uninstall entrypoint accepts an `asset_type=` parameter.
+@pytest.mark.parametrize("mod_name", sorted(INSTALL_ENTRYPOINTS))
+def test_install_is_per_asset_type_not_discriminated(mod_name):
+    """No install-module entrypoint accepts a runtime discriminator parameter.
 
     The per-asset-type-module architecture means each module IS the asset
-    type — there is no runtime discriminator.  If an `asset_type` param
-    appears on any of these functions, the architecture has drifted back
-    toward the rejected single-module-with-discriminator design.
+    type — there is no runtime discriminator.  If a `kind=` or `asset_type=`
+    param appears on any of these functions, the architecture has drifted
+    back toward the rejected single-module-with-discriminator design
+    (`kind` is the pre-#355 spelling of the same discriminator).
     """
-    import agent_toolkit_cli.agent_install as ai
+    mod = importlib.import_module(mod_name)
 
-    for fn_name in ("plan", "apply", "install", "uninstall"):
-        fn = getattr(ai, fn_name, None)
-        assert fn is not None, f"agent_install.{fn_name} must exist"
+    for fn_name in INSTALL_ENTRYPOINTS[mod_name]:
+        fn = getattr(mod, fn_name, None)
+        assert fn is not None, f"{mod_name}.{fn_name} must exist"
         sig = inspect.signature(fn)
-        assert "asset_type" not in sig.parameters, (
-            f"agent_install.{fn_name} must NOT accept an `asset_type=` parameter — "
-            f"the per-asset-type-module architecture eliminates the need for a "
-            f"runtime asset-type discriminator."
-        )
-
-
-def test_skill_install_has_no_asset_type_param():
-    """Symmetry check: skill_install also must not accept an `asset_type=` param."""
-    import agent_toolkit_cli.skill_install as si
-
-    for fn_name in ("plan", "apply", "install", "uninstall"):
-        fn = getattr(si, fn_name, None)
-        assert fn is not None, f"skill_install.{fn_name} must exist"
-        sig = inspect.signature(fn)
-        assert "asset_type" not in sig.parameters, (
-            f"skill_install.{fn_name} must NOT accept an `asset_type=` parameter"
-        )
+        for banned in BANNED_DISCRIMINATORS:
+            assert banned not in sig.parameters, (
+                f"{mod_name}.{fn_name} must NOT accept a `{banned}=` parameter — "
+                f"the per-asset-type-module architecture eliminates the need for "
+                f"a runtime asset-type discriminator."
+            )
 
 
 # ── 3. _install_core stays asset-type-blind ──────────────────────────────────
@@ -136,11 +140,12 @@ def test_install_core_plan_has_no_asset_type_param():
     from agent_toolkit_cli._install_core import plan
 
     sig = inspect.signature(plan)
-    assert "asset_type" not in sig.parameters, (
-        "_install_core.plan() must not accept `asset_type=`; asset-type-specific "
-        "binding is done at the facade level via canonical_dir_resolver / "
-        "standard_bundle_link / synthetic_names / current_linked_resolver."
-    )
+    for banned in BANNED_DISCRIMINATORS:
+        assert banned not in sig.parameters, (
+            f"_install_core.plan() must not accept `{banned}=`; asset-type-specific "
+            "binding is done at the facade level via canonical_dir_resolver / "
+            "standard_bundle_link / synthetic_names / current_linked_resolver."
+        )
 
 
 def test_install_core_accepts_asset_type_specific_overrides_via_callables():
