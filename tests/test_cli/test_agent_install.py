@@ -317,3 +317,25 @@ def test_install_kode_project_scope_routes_to_standard_adapter(tmp_path, monkeyp
     slot = project / ".claude" / "agents" / "demo.md"
     assert slot.exists()
     assert _sentinel_path(slot).exists()
+
+
+def test_uninstall_collects_refusals_from_symlink_adapters(tmp_path, monkeypatch):
+    """#368: facade uninstall() returns refusals from EVERY adapter, not just
+    standard — a hand-authored file at a symlink-cell destination is left in
+    place and reported."""
+    from agent_toolkit_cli import agent_install
+    from agent_toolkit_cli.agent_adapters import symlink
+    home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(home))
+    # A foreign file at cursor's GLOBAL destination (never installed by us).
+    dest = symlink.adapter_for("cursor").destination(
+        "test-agent", scope="global", home=home,
+    )
+    dest.parent.mkdir(parents=True)
+    dest.write_text("# hand-authored\n")
+    refusals = agent_install.uninstall(
+        slug="test-agent", scope="global", home=home, project=None,
+        harnesses=("cursor",),
+    )
+    assert refusals == (("cursor", dest),)
+    assert dest.exists()
