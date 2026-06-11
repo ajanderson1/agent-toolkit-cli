@@ -15,6 +15,7 @@ import re
 from pathlib import Path
 from typing import Any, Callable
 
+from agent_toolkit_cli._install_core import InstallError
 from agent_toolkit_cli.agent_adapters import _guard_foreign
 from agent_toolkit_cli.skill_agents import UnknownAgentError
 
@@ -391,8 +392,14 @@ class _TranslateAdapter:
         dest = self._resolve_dest(slug, scope=scope, home=home, project=project)
         _guard_foreign(dest, harness=self.harness, overwrite=overwrite)
         raw = content_path.read_text()
-        fm, body = _parse_frontmatter(raw)
-        output = self._emitter(fm, body, slug)
+        try:
+            fm, body = _parse_frontmatter(raw)
+            output = self._emitter(fm, body, slug)
+        except ValueError as exc:
+            # Data-dependent translation failure (missing/invalid frontmatter).
+            # Emitter messages already name the harness and key; InstallError
+            # is what the CLI layer converts to a clean ClickException.
+            raise InstallError(str(exc)) from exc
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_text(output)
         return dest
