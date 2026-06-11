@@ -79,9 +79,12 @@ same net behaviour as today's lock-flag path, now explicit.
   `canonical_content: Path | None = None` and returns `Path | None` for all
   adapters (today only standard takes the kwarg / returns refusals). The
   `name == "standard"` special-casing in `apply()`'s remove loop and in
-  `uninstall()` collapses; both thread `canonical_content` to every adapter
-  and collect refusals from every adapter. config_file_folder adapters accept
-  the kwarg and ignore it (their removal semantics are out of scope).
+  `uninstall()` collapses; both thread `canonical_content` to every adapter.
+  `uninstall()` collects refusals from every adapter; `apply()` keeps its
+  `InstallResult` shape (refusals in its remove loop surface via the
+  adapters' stderr notice — expanding `InstallResult` is YAGNI).
+  config_file_folder adapters accept the kwarg and ignore it (their removal
+  semantics are out of scope).
 - `uninstall()`'s refusal return shape `tuple[(harness, dest), ...]` is
   unchanged — existing CLI stderr + TUI surfacing (F5 machinery) picks up the
   new refusals with no caller changes.
