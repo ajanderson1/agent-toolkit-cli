@@ -811,3 +811,107 @@ def test_stray_bundle_dir_skips_known_slug(git_sandbox, tmp_path: Path, monkeypa
     findings = diagnose(slugs=None, scope="global", home=fake_home, project=None)
     assert not [f for f in findings if f.finding_type == "stray_bundle_dir"], \
         "in-lock real dir must not be reported as stray_bundle_dir"
+
+
+# ── #360 AC4: unlisted finding ────────────────────────────────────────────
+
+
+def test_unlisted_finding_fires_at_project_scope(git_sandbox, tmp_path, monkeypatch):
+    """#360 AC4: project lock entry whose slug is missing from the library lock."""
+    project = tmp_path / "proj"
+    project.mkdir()
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+
+    runner = CliRunner()
+    r = runner.invoke(main, ["skill", "add", str(git_sandbox.upstream), "--slug", "demo"])
+    assert r.exit_code == 0, r.output
+    (project / ".claude").mkdir(exist_ok=True)
+    r = runner.invoke(main, [
+        "--project", str(project),
+        "skill", "install", "demo", "--scope", "project",
+        "--agents", "claude-code",
+    ])
+    assert r.exit_code == 0, r.output
+    r = runner.invoke(main, ["skill", "remove", "demo", "--force"])
+    assert r.exit_code == 0, r.output
+
+    from agent_toolkit_cli.skill_doctor import diagnose
+    findings = diagnose(slugs=None, scope="project", home=None, project=project)
+    unlisted = [f for f in findings if f.finding_type == "unlisted"]
+    assert len(unlisted) == 1
+    assert unlisted[0].slug == "demo"
+    assert unlisted[0].fix_action is not None
+
+
+def test_unlisted_fix_action_readds_to_library(git_sandbox, tmp_path, monkeypatch):
+    project = tmp_path / "proj"
+    project.mkdir()
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    runner = CliRunner()
+    r = runner.invoke(main, ["skill", "add", str(git_sandbox.upstream), "--slug", "demo"])
+    assert r.exit_code == 0, r.output
+    (project / ".claude").mkdir(exist_ok=True)
+    r = runner.invoke(main, [
+        "--project", str(project),
+        "skill", "install", "demo", "--scope", "project",
+        "--agents", "claude-code",
+    ])
+    assert r.exit_code == 0, r.output
+    r = runner.invoke(main, ["skill", "remove", "demo", "--force"])
+    assert r.exit_code == 0, r.output
+
+    from agent_toolkit_cli.skill_doctor import diagnose
+    from agent_toolkit_cli.skill_lock import read_lock
+    from agent_toolkit_cli.skill_paths import library_lock_path, library_skill_path
+
+    findings = diagnose(slugs=None, scope="project", home=None, project=project)
+    fix = next(f for f in findings if f.finding_type == "unlisted").fix_action
+    fix.apply()
+    fix.apply()  # idempotent: second apply is a no-op, not an error
+
+    assert "demo" in read_lock(library_lock_path()).skills   # lock entry restored
+    assert library_skill_path("demo").exists()               # canonical re-materialised
+    # Finding clears on the next run.
+    findings2 = diagnose(slugs=None, scope="project", home=None, project=project)
+    assert not [f for f in findings2 if f.finding_type == "unlisted"]
+
+
+def test_unlisted_not_checked_at_global_scope(tmp_path, monkeypatch):
+    library_root = tmp_path / "lib" / "skills"
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    from agent_toolkit_cli.skill_doctor import diagnose
+    findings = diagnose(slugs=None, scope="global", home=tmp_path, project=None)
+    assert not [f for f in findings if f.finding_type == "unlisted"]
+
+
+def test_unlisted_not_fired_for_targeted_doctor(git_sandbox, tmp_path, monkeypatch):
+    """Targeted skill doctor <slug> -p does NOT fire the unlisted finding (sweep-only)."""
+    project = tmp_path / "proj"
+    project.mkdir()
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+
+    runner = CliRunner()
+    r = runner.invoke(main, ["skill", "add", str(git_sandbox.upstream), "--slug", "demo"])
+    assert r.exit_code == 0, r.output
+    (project / ".claude").mkdir(exist_ok=True)
+    r = runner.invoke(main, [
+        "--project", str(project),
+        "skill", "install", "demo", "--scope", "project",
+        "--agents", "claude-code",
+    ])
+    assert r.exit_code == 0, r.output
+    r = runner.invoke(main, ["skill", "remove", "demo", "--force"])
+    assert r.exit_code == 0, r.output
+
+    from agent_toolkit_cli.skill_doctor import diagnose
+    findings = diagnose(slugs=("demo",), scope="project", home=None, project=project)
+    assert not [f for f in findings if f.finding_type == "unlisted"]
