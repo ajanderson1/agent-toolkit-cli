@@ -162,15 +162,33 @@ In `src/agent_toolkit_cli/agent_adapters/symlink.py`: add `import filecmp` and `
 Run: `uv run pytest tests/test_cli/test_agent_adapters/test_symlink.py -v`
 Expected: all PASS. (`test_symlink_uninstall_idempotent` still passes: uninstall already removes the sentinel via the #366 cleanup.)
 
-- [ ] **Step 5: Run the facade + CLI agent suites for collateral**
+- [ ] **Step 5: Flip the now-false doctor-test premise**
 
-Run: `uv run pytest tests/test_cli/ -x -q -k "agent"`
-Expected: PASS. If a facade test relied on lock-flag-authorized clobber of a divergent sentinel-less file, STOP and re-read it — the G5 semantics change is intentional; update that test's expectation to `AgentProjectionConflictError` only if it manufactures a foreign file (not a tool projection).
+`tests/test_cli/test_agent_doctor.py::test_doctor_cursor_shadow_via_real_adapter_is_report_only` (line ~391) asserts the real cursor adapter writes NO sentinel:
 
-- [ ] **Step 6: Commit**
+```python
+    assert not _sentinel_path(cursor_dest).exists(), (
+        "premise: the real cursor adapter writes no ownership sentinel"
+    )
+```
+
+That premise is false as of this task. Flip it now (the rest of the test — `fix_action is None`, exit-0 — stays TRUE until Task 8 adds the sentinel-gated fix, which then updates this test again):
+
+```python
+    assert _sentinel_path(cursor_dest).exists(), (
+        "premise (#368): the real cursor adapter writes the ownership sentinel"
+    )
+```
+
+- [ ] **Step 6: Run the facade + CLI agent suites for collateral**
+
+Run: `uv run pytest tests/test_cli/ -q -k "agent"`
+(No `-x`: let the full collateral surface.) Expected: PASS. If a facade test relied on lock-flag-authorized clobber of a divergent sentinel-less file, STOP and re-read it — the G5 semantics change is intentional; update that test's expectation to `AgentProjectionConflictError` only if it manufactures a foreign file (not a tool projection).
+
+- [ ] **Step 7: Commit**
 
 ```bash
-git add src/agent_toolkit_cli/agent_adapters/symlink.py tests/test_cli/test_agent_adapters/test_symlink.py
+git add src/agent_toolkit_cli/agent_adapters/symlink.py tests/test_cli/test_agent_adapters/test_symlink.py tests/test_cli/test_agent_doctor.py
 git commit -m "feat(agent): symlink adapter writes ownership sidecars, sentinel-only overwrite
 
 Adopt-if-identical + ignore the lock-derived overwrite flag (G5 expansion-
@@ -464,8 +482,10 @@ In `translate.py`, replace the `install` method (the emit now happens BEFORE the
             raise InstallError(str(exc)) from exc
         # Adopt-if-identical (#368): "identical" for translate means the file
         # matches what the emitter would write NOW (emission-identical) — the
-        # destination never holds the canonical bytes.
-        if dest.exists() and not dest.is_symlink() and dest.read_text() == output:
+        # destination never holds the canonical bytes. Compare BYTES, not
+        # decoded text: a foreign non-UTF8 file at the destination must route
+        # to the conflict branch below, not raise UnicodeDecodeError.
+        if dest.exists() and not dest.is_symlink() and dest.read_bytes() == output.encode():
             _sentinel_path(dest).write_text("")
             return dest
         # Ownership = SENTINEL, not lock (#368, standard-adapter parity; G5).
@@ -621,7 +641,13 @@ In `translate.py`, add `import sys` to the imports, then replace `uninstall` and
             owned = sentinel.exists()
             if not owned and not dest.is_symlink():
                 expected = self._emitted_or_none(canonical_content, slug)
-                owned = expected is not None and dest.read_text() == expected
+                # Bytes compare + OSError guard: a foreign non-UTF8 or
+                # unreadable file must refuse, never crash the detach.
+                try:
+                    owned = (expected is not None
+                             and dest.read_bytes() == expected.encode())
+                except OSError:
+                    owned = False
             if owned:
                 dest.unlink()
             else:
@@ -662,6 +688,8 @@ Device: $(hostname -s)"
 ### Task 5: config_file_folder — codex/firebender sentinel write + cleanup, uniform uninstall signature
 
 Codex and firebender guard their per-slug file but never write the sidecar (re-install conflicts on our own files). Aider-desk/dexto already write it. All four adapters additionally accept (and ignore) `canonical_content=` so Task 6 can thread it uniformly. Shared-registry mutation and unconditional removal semantics are UNCHANGED.
+
+NOTE: codex and firebender are **catalog-disabled** (`subagent_mechanism="none"` in `skill_agents.py`, intentionally, pending PR5a) — `get_adapter()` never dispatches to them, so this contract is exercised via direct `config_file_folder.adapter_for()` calls only and becomes facade-reachable when the cells are enabled. This is forward-provisioning, not a live-path fix; do not be surprised that `agent install` reports these harnesses as skipped.
 
 **Files:**
 - Modify: `src/agent_toolkit_cli/agent_adapters/config_file_folder.py`
@@ -714,6 +742,18 @@ def test_firebender_install_writes_sentinel_and_uninstall_cleans_it(tmp_path, se
     assert not sidecar.exists(), "orphaned .attk after firebender uninstall"
 
 
+def test_codex_uninstall_cleans_orphan_sidecar(tmp_path, sentinel_content):
+    """#368 review F3: the per-slug file deleted out-of-band must not strand
+    its sidecar — an orphan .attk would authorize a future silent clobber."""
+    from agent_toolkit_cli.agent_adapters import _sentinel_path, config_file_folder
+    adapter = config_file_folder.adapter_for("codex")
+    dest = adapter.install("test-agent", sentinel_content, scope="global", home=tmp_path)
+    dest.unlink()  # user removes the projection by hand
+    assert _sentinel_path(dest).exists()
+    adapter.uninstall("test-agent", scope="global", home=tmp_path)
+    assert not _sentinel_path(dest).exists(), "orphan sidecar survived uninstall"
+
+
 def test_cff_uninstall_accepts_canonical_content_kwarg(tmp_path, sentinel_content):
     """#368 Protocol uniformity: all four cff adapters tolerate the kwarg
     (and ignore it — their removal semantics are out of scope)."""
@@ -741,16 +781,21 @@ In `config_file_folder.py`:
 ```python
         _sentinel_path(toml_path).write_text("")
 ```
-2. `_CodexAdapter.uninstall` — after `toml_path.unlink()` (line ~347), add:
+2. `_CodexAdapter.uninstall` — OUTSIDE (after) the `if toml_path.exists():` block, add:
 ```python
+        # Unconditional: clean the sidecar even when the .toml was already
+        # deleted out-of-band — an orphan sidecar would later authorize a
+        # silent clobber via _guard_foreign (#361 hazard, #368 review F3).
         _sentinel_path(toml_path).unlink(missing_ok=True)
 ```
 3. `_FirebenderAdapter.install` — after `md.write_text(text)` (line ~220), add:
 ```python
         _sentinel_path(md).write_text("")
 ```
-4. `_FirebenderAdapter.uninstall` — after `md.unlink()` (line ~252), add:
+4. `_FirebenderAdapter.uninstall` — OUTSIDE (after) the `if md.exists():` block, add:
 ```python
+        # Unconditional: clean the sidecar even when the .md was already
+        # deleted out-of-band (orphan-sidecar hygiene, as in codex above).
         _sentinel_path(md).unlink(missing_ok=True)
 ```
 5. All four adapters' `uninstall` signatures gain the trailing parameter and explicit return type:
@@ -825,7 +870,7 @@ def test_uninstall_collects_refusals_from_symlink_adapters(tmp_path):
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest tests/test_cli/test_agent_install.py -v -k "collects_refusals"`
-Expected: FAIL — today the cursor branch hits `adapter.uninstall(...)` without `canonical_content` and ignores the return, deleting the file and returning `()`.
+Expected: FAIL — the Task-2 adapter already refuses (the file is left in place and the stderr notice prints), but the facade's non-standard branch ignores the return value, so `refusals` comes back `()` instead of `(("cursor", dest),)`.
 
 - [ ] **Step 3: Update the Protocol**
 
@@ -932,34 +977,23 @@ These are the issue's two motivating defects, pinned through the REAL facade (`a
 
 - [ ] **Step 1: Write the tests**
 
-Look at the top of `tests/test_cli/test_agent_install.py` for how existing tests build a plan — there is an `AgentInstallPlan` (imported from `agent_toolkit_cli.agent_install`) with `slug/scope/source/ref/add_agents/remove_agents` fields; mirror the construction pattern used by the file's existing `apply()` tests (source=None skips the clone path; pre-create the canonical dir + `<slug>.md` by hand). Then add:
+Build the plans by constructing `InstallPlan` DIRECTLY (the file's existing idiom — see `test_agent_install.py:49` and `:303`; `from agent_toolkit_cli._install_core import InstallPlan`). Do NOT use `agent_install.plan()` here: its adapter-aware linked scan treats ANY existing file at a destination as "currently linked" (`dest.exists()`, no ownership check) and computes `add = target - current`, so a pre-existing foreign file would silently drop the harness from `add_agents` and `apply()` would never reach the adapter — the G5 test would fail with DID-NOT-RAISE for the wrong reason, and the F3 test could pass vacuously. Direct `InstallPlan` is also the TUI's real apply path (`app.py:909-914`). Mirror the file's canonical-seeding idiom (see its existing `apply()` tests around line 45: `canonical_agent_dir(...)` + write `<slug>.md`; the file's HOME-isolation fixtures apply). Then add:
 
 ```python
-def _seed_canonical(home, slug="test-agent"):
-    """Place a canonical <slug>.md where canonical_agent_dir resolves it.
-    Mirror the seeding helper already used by this file's apply() tests —
-    if one exists, use that instead of this helper."""
-    from agent_toolkit_cli.agent_install import canonical_agent_dir
-    canonical = canonical_agent_dir(slug, scope="global", home=home)
-    canonical.mkdir(parents=True, exist_ok=True)
-    (canonical / f"{slug}.md").write_text(
-        "---\nname: test-agent\ndescription: testing\n---\n\nBody.\n"
-    )
-    return canonical / f"{slug}.md"
-
-
 def test_reinstall_self_authorizes_without_lock_entry(tmp_path):
     """#368 F3 pin: apply() twice with NO lock entry (overwrite=False both
     times) — the second run succeeds because the first run's sentinels
     authorize the refresh. Before #368 this raised
     AgentProjectionConflictError on the tool's own files."""
     from agent_toolkit_cli import agent_install
+    from agent_toolkit_cli._install_core import InstallPlan
     home = tmp_path / "home"
     home.mkdir()
-    _seed_canonical(home)
-    p = agent_install.plan(
+    # Seed the canonical <slug>.md per the file's existing idiom (see the
+    # apply() tests near line 45 — canonical_agent_dir + write test-agent.md).
+    p = InstallPlan(
         slug="test-agent", scope="global", source=None, ref=None,
-        target_agents=("cursor", "gemini-cli"), home=home, project=None,
+        add_agents=("cursor", "gemini-cli"), remove_agents=(),
     )
     agent_install.apply(p, home=home, project=None)
     agent_install.apply(p, home=home, project=None)  # must not raise
@@ -971,48 +1005,37 @@ def test_expansion_does_not_clobber_foreign_file(tmp_path):
     destination holds a user-authored file still REFUSES."""
     import pytest
     from agent_toolkit_cli import agent_install
+    from agent_toolkit_cli._install_core import InstallPlan
     from agent_toolkit_cli.agent_adapters import (
         AgentProjectionConflictError, symlink,
     )
     home = tmp_path / "home"
     home.mkdir()
-    _seed_canonical(home)
-    # First install establishes... a lock entry requires source!=None; the
-    # overwrite flag in apply() derives from existing_entry. Simplest true
-    # repro: seed the lock the way the file's other lock-dependent tests do
-    # (read the existing tests for the helper; agent_lock.add_entry +
-    # write_lock with a LockEntry(source=..., agent_path="test-agent.md")).
-    from agent_toolkit_cli.agent_install import lock_file_path
-    from agent_toolkit_cli.agent_lock import LockEntry, add_entry, read_lock, write_lock
-    lock_path = lock_file_path(scope="global", home=home)
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    write_lock(lock_path, add_entry(
-        read_lock(lock_path), "test-agent",
-        LockEntry(source="example/test-agent", source_type="github",
-                  ref=None, agent_path="test-agent.md",
-                  upstream_sha=None, local_sha=None),
-    ))
+    # Seed the canonical <slug>.md per the file's existing idiom, THEN seed a
+    # lock entry so apply() derives overwrite=True (mirror the file's
+    # lock-seeding idiom: agent_lock.add_entry + write_lock with a
+    # LockEntry(source=..., agent_path="test-agent.md")).
     # User-authored file at a destination we never projected:
     dest = symlink.adapter_for("cursor").destination(
         "test-agent", scope="global", home=home,
     )
     dest.parent.mkdir(parents=True)
     dest.write_text("# the user's own cursor agent\n")
-    p = agent_install.plan(
+    p = InstallPlan(
         slug="test-agent", scope="global", source=None, ref=None,
-        target_agents=("cursor",), home=home, project=None,
+        add_agents=("cursor",), remove_agents=(),
     )
     with pytest.raises(AgentProjectionConflictError):
         agent_install.apply(p, home=home, project=None)
     assert dest.read_text() == "# the user's own cursor agent\n"
 ```
 
-IMPORTANT for the implementer: the two tests above sketch the seeding; the file's EXISTING tests show the canonical/lock seeding idioms (e.g. how `plan()` is called with `source=None`, the exact `LockEntry` fields, whether `plan()` needs the lock pre-seeded to compute deltas). Adapt the seeding to the file's idiom — the ASSERTIONS (second apply must not raise; expansion must raise and leave the file untouched) are the contract and may not be weakened.
+IMPORTANT for the implementer: the seeding comments above defer to the file's EXISTING idioms (canonical seeding near line 45; lock seeding via `LockEntry` — check the exact field values its other lock tests use). The ASSERTIONS (second apply must not raise; expansion must raise and leave the file untouched) are the contract and may not be weakened. Keep the direct-`InstallPlan` construction — that requirement is load-bearing, not stylistic.
 
 - [ ] **Step 2: Run the tests**
 
 Run: `uv run pytest tests/test_cli/test_agent_install.py -v -k "self_authorizes or expansion"`
-Expected: PASS (Tasks 1–6 already landed the behavior). If `test_expansion_does_not_clobber_foreign_file` FAILS because apply() passes `overwrite=True` and the adapter honors it — a Task 1/3 regression; go back.
+Expected: PASS (Tasks 1–6 already landed the behavior). If `test_expansion_does_not_clobber_foreign_file` fails with DID-NOT-RAISE, first check the test still constructs `InstallPlan` directly (a `plan()` call would have dropped cursor from add_agents via the linked scan); only if the adapter genuinely overwrote the file is it a Task 1/3 regression.
 
 - [ ] **Step 3: Commit**
 
@@ -1062,7 +1085,7 @@ def test_doctor_cursor_shadow_with_sentinel_offers_removal_fix(
     assert not _sentinel_path(cursor_dest).exists()
 ```
 
-2. `test_doctor_cursor_shadow_via_real_adapter_is_report_only` (line ~391) asserts `assert not _sentinel_path(cursor_dest).exists()` as its premise — **false after Task 1** (the real cursor adapter now writes sentinels). Rename it to `test_doctor_cursor_shadow_via_real_adapter_offers_fix` and update: drop the no-sentinel premise assertion (replace with `assert _sentinel_path(cursor_dest).exists()`), assert `f.fix_action is not None`, and keep the exit-code block asserting `--no-fix` still exits 0 (informational semantics).
+2. `test_doctor_cursor_shadow_via_real_adapter_is_report_only` (line ~391; its no-sentinel premise was already flipped in Task 1 Step 5) — now its `fix_action is None` assertions invert too. Rename it to `test_doctor_cursor_shadow_via_real_adapter_offers_fix` and update: assert `f.fix_action is not None`, and keep the exit-code block asserting `--no-fix` still exits 0 (informational semantics).
 
 - [ ] **Step 2: Write the new failing tests**
 
@@ -1100,7 +1123,14 @@ def test_doctor_cursor_shadow_fix_decline_keeps_exit_zero(
     assert cursor_dest.exists()
 ```
 
-`test_doctor_cursor_shadow_divergent_copy_report_only` (sentinel=False) must keep passing UNCHANGED — it pins the sentinel-less report-only branch.
+`test_doctor_cursor_shadow_divergent_copy_report_only` (sentinel=False) keeps pinning the sentinel-less report-only branch, but its MESSAGE assertions change with the detail text: replace the `assert "agent uninstall" in f.detail` / `assert "--harnesses cursor" in f.detail` pair with:
+
+```python
+    assert "remove the file manually" in f.detail
+    assert "--harnesses cursor" not in f.detail  # the old dead-end suggestion
+```
+
+Keep `fix_action is None` and the file-still-exists assertions unchanged.
 
 - [ ] **Step 2b: Run to verify they fail**
 
@@ -1142,12 +1172,15 @@ In `doctor_cmd.py` section 4b (lines 237-252), replace the single `findings.appe
                         detail=(
                             "cursor reads its own .cursor/agents first, so this "
                             f"file shadows the standard slot at {slot} — if the "
-                            "shadowing is unintended, remove it manually or run "
-                            f"`agent uninstall {slug} --harnesses cursor`"
+                            "shadowing is unintended, remove the file manually "
+                            "(it may be hand-authored; `agent uninstall` would "
+                            "refuse it for the same reason no fix is offered)"
                         ),
                         fix_action=None,
                     ))
 ```
+
+Review F4 (#368 critical review): the OLD detail suggested `agent uninstall <slug> --harnesses cursor`, but in this branch the file is sentinel-less AND divergent — exactly the class the new guarded uninstall refuses — so the suggested command was a guaranteed dead end. Manual removal is the only honest remediation here.
 
 Also update the stale comment block above it (lines 221-228): the "ALWAYS report-only (PM review F2)" rationale is superseded — replace with "Report-only UNLESS the shadowing file carries our .attk sidecar (#368): sentinel-less files may equally be user-authored."
 
@@ -1233,7 +1266,7 @@ Device: $(hostname -s)"
 Line 47 currently says cursor-shadow is "report-only, since cursor installs carry no ownership sentinel". Replace that clause with:
 
 ```markdown
-`cursor-shadow` (a divergent pre-existing `.cursor/agents/<slug>.md` file — cursor's own dir **wins** name conflicts, so it shadows the slot; when the file carries the tool's `.attk` ownership sidecar the doctor offers to remove it, otherwise it is report-only — a sentinel-less file may equally be hand-authored; remove it manually or run `agent uninstall <slug> --harnesses cursor`)
+`cursor-shadow` (a divergent pre-existing `.cursor/agents/<slug>.md` file — cursor's own dir **wins** name conflicts, so it shadows the slot; when the file carries the tool's `.attk` ownership sidecar the doctor offers to remove it, otherwise it is report-only — a sentinel-less divergent file may equally be hand-authored, and `agent uninstall` refuses exactly that class, so remove it manually if the shadowing is unintended)
 ```
 
 Then check for other stale ownership claims:

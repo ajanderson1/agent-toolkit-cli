@@ -52,11 +52,13 @@ adapter (sidecar = `D.parent / f".{D.name}.attk"`, the existing `_sentinel_path`
 "What install would write now":
 - **symlink cells** — the canonical `<slug>.md` bytes (`filecmp.cmp(..., shallow=False)`).
 - **translate cells** — the emitter output over the parsed canonical
-  (`_emitter(_parse_frontmatter(canonical_text))`), compared as text. On the
+  (`_emitter(_parse_frontmatter(canonical_text))`), compared as **bytes**
+  (`dest.read_bytes() == output.encode()`) so a foreign non-UTF8 file routes
+  to conflict/refusal instead of raising `UnicodeDecodeError`. On the
   install path an emitter `ValueError` stays an `InstallError` (existing
-  behaviour). On the **uninstall** path an emitter failure (or a missing/None
-  `canonical_content`) is treated as *no match* — detach must not crash; the
-  sidecar alone then decides.
+  behaviour). On the **uninstall** path an emitter failure, an unreadable
+  destination (`OSError`), or a missing/None `canonical_content` is treated
+  as *no match* — detach must not crash; the sidecar alone then decides.
 
 ### Per-mechanism scope
 
@@ -65,7 +67,7 @@ adapter (sidecar = `D.parent / f".{D.name}.attk"`, the existing `_sentinel_path`
 | `standard.py` | **No change** (already the reference implementation). |
 | `symlink.py` (15 cells) | Full contract 1–5. |
 | `translate.py` (10 cells) | Full contract 1–5; its uninstall additionally gains the orphan-sentinel cleanup symlink got in #366 (today it cleans nothing). |
-| `config_file_folder.py` codex + firebender | Contract **1 only** plus sidecar unlink on uninstall — sentinel write beside the per-slug `.toml`/`.md`, sidecar removed in uninstall. Shared-registry mutation (`config.toml`, `firebender.json`) and their unconditional removal semantics are **unchanged**. |
+| `config_file_folder.py` codex + firebender | Contract **1 only** plus sidecar unlink on uninstall — sentinel write beside the per-slug `.toml`/`.md`, sidecar removed in uninstall (unconditionally, so an out-of-band-deleted file cannot strand an orphan sidecar). Shared-registry mutation (`config.toml`, `firebender.json`) and their unconditional removal semantics are **unchanged**. Both cells are catalog-disabled (`subagent_mechanism="none"`, pending PR5a): the contract is exercised module-direct and becomes facade-reachable when they are enabled. |
 | `config_file_folder.py` aider-desk + dexto | No change (sidecar already written; `rmtree` of the per-slug subdir removes it). |
 
 devin note (translate): its destination is a fixed `AGENT.md` shared across
@@ -96,7 +98,10 @@ same net behaviour as today's lock-flag path, now explicit.
 Sentinel-gated automatic fix, restoring F2's original intent now that the
 gate can actually fire: when the shadowing `.cursor/agents/<slug>.md` has an
 `.attk` sidecar → offer a `fix_action` that removes the file *and* its
-sidecar; sentinel-less → today's report-only message, unchanged.
+sidecar; sentinel-less → report-only, with the message amended to recommend
+**manual removal only** (the old text suggested `agent uninstall …
+--harnesses cursor`, which the new guarded uninstall refuses for exactly
+this sentinel-less + divergent class — critical-review F4).
 `cursor-shadow` **stays in `_INFORMATIONAL_TYPES`** — exit-code semantics do
 not change (F1's exit-0 guarantee for hand-authored content holds).
 
@@ -105,8 +110,11 @@ not change (F1's exit-0 guarantee for hand-authored content holds).
 - Pre-#368 sentinel-less projections: **adopted** on the next install when
   identical (case 2) and **detached** on uninstall via content-match (case 5).
 - Drifted pre-#368 projections (canonical updated since they were written):
-  one-time install refusal with the existing clear conflict message; recover
-  via `agent uninstall --harnesses <h>` → re-install, or delete the file.
+  one-time install refusal with the existing clear conflict message. Recovery
+  is **manual deletion of the file, then re-install** — `agent uninstall`
+  would refuse the same file for the same reason (sentinel-less + divergent
+  is indistinguishable from a user's file), so user-facing messages must NOT
+  suggest it for this class (critical-review F4: the circular-recovery trap).
   Accepted cost, mirrors #361's accepted edge for the standard slot.
 - The #362 partial-failure limitation self-heals: succeeded projections now
   carry sidecars, so the retry is self-authorizing.
@@ -150,6 +158,12 @@ rebases trivially.
   and aider-desk/dexto uninstall semantics.
 - A doctor sweep for orphaned `.attk` sidecars across all adapter dirs
   (follow-up candidate).
+- Gitignore guidance / cross-machine semantics for `.attk` sidecars written
+  into committed project dirs (`.cursor/`, `.github/`, …): a checked-in
+  sidecar travels to machines that never ran the install and authorizes
+  refresh/removal there. Pre-existing class for the standard adapter's
+  `.claude/agents/`; this issue widens the surface — follow-up candidate
+  alongside the doctor sweep (critical-review FYI).
 - Other asset types (skills, instructions, pi-extension) — their projection
   models differ (symlink-at-path is self-identifying).
 - Retroactive sidecar backfill for existing installs (adopt-on-touch only).
