@@ -51,9 +51,14 @@ helpers. Two additions, both gated on
 `InstallError(f"{slug}: no global lock entry; run `agent add {slug}` first")`
 *before* the projection loops, so a failed install leaves no orphaned files.
 
-**(b) Lock write — after the projection loops succeed.** If the project lock
-has no entry for the slug, derive one from the global entry and write it
-(existing v1 writer, atomic). `lock_action` reports `"added"`.
+**(b) Lock write — after the projection loops succeed AND at least one file
+was actually projected** (`created` non-empty). If the project lock has no
+entry for the slug, derive one from the global entry and write it (existing
+v1 writer, atomic). `lock_action` reports `"added"`. The `created` gate
+matters (critical-review finding G4): an install whose requested harnesses
+are ALL skipped as unsupported (e.g. `--harnesses codex`) projects nothing —
+writing an entry for it would claim tool ownership and flip `overwrite=True`
+for a later first REAL projection, silently disabling the foreign-file guard.
 
 Pure-remove plans (`add_agents` empty) are exempt from both: uninstalling a
 slug whose library entry was dropped must keep working.
@@ -82,6 +87,21 @@ to clobber a pre-existing foreign file. From the second run on the entry
 exists → `overwrite=True` → re-install is a permitted refresh of the tool's
 own files. This fixes the F3 re-install conflict for post-fix installs as a
 side effect, without weakening the guard.
+
+Two accepted limitations of per-slug (not per-destination) ownership, both
+routed to the sentinel-adoption follow-up (#368):
+
+- **Harness-expansion clobber (parity with global scope):** once the entry
+  exists, a later install that EXPANDS to a harness never previously
+  projected also runs with `overwrite=True` and would overwrite a
+  user-authored file at that new destination. This mirrors the existing
+  global-scope semantics (the `agent add` entry has always done this);
+  per-destination ownership sentinels (#368) are the real fix.
+- **Partial multi-harness failure:** if adapter N succeeds and adapter N+1
+  raises, earlier sentinel-less projections stay on disk with NO entry, and
+  the retry conflicts on the tool's own files (uninstall → re-install
+  recovers). The write-after-success ordering deliberately accepts this
+  pre-existing class.
 
 ### 4. Fail-loud on the manually-seeded edge (decided with PM)
 
@@ -122,12 +142,15 @@ sentinel-adoption follow-up (filed from the #366 review), not this issue.
    install).
 7. Project install of a slug with no global lock entry fails loud, before any
    file is projected.
-8. Round-trip at **both** scopes (the #283/#268 mandate), driven through the
-   real `source=None` plan shape:
-   install → list shows it → uninstall (projections gone, canonical + lock
-   entry KEPT, #303) → remove (lock entry dropped).
-9. Global-scope behaviour unchanged: `agent install -g` writes no new global
-   lock entries (that remains `agent add`'s job).
+8. Round-trip at project scope driven through the real `source=None` plan
+   shape (the #283/#268 mandate): install → list shows it → uninstall
+   (projections gone, canonical + lock entry KEPT, #303) → remove (lock
+   entry dropped). Global-scope round-trips stay covered by the existing
+   source-present tests plus AC9.
+9. Global-scope behaviour unchanged: `agent install -g` with `source=None`
+   writes no new global lock entries (that remains `agent add`'s job).
+10. An install whose requested harnesses are ALL skipped as unsupported
+    writes NO project lock entry (`lock_action == "unchanged"`).
 
 ## Out of scope
 
@@ -140,9 +163,10 @@ sentinel-adoption follow-up (filed from the #366 review), not this issue.
 
 ## Test surface
 
-`tests/test_cli/test_agent_install_roundtrip.py` (extend with `source=None`
-round-trips at both scopes), `tests/test_cli/test_agent_install.py` /
-`test_agent_install_e2e.py` (CLI-level list-after-install, fail-loud edge,
-re-install), `tests/test_cli/test_agent_doctor.py` (no-orphan-after-install),
-`tests/test_tui/test_agent_grid.py` or `test_agent_state.py` (TUI plan shape
-writes the entry).
+`tests/test_cli/test_agent_install_roundtrip.py` (facade tests with
+`source=None`: derived entry + lifecycle, fail-before-projection, re-install,
+foreign-file refusal, all-skipped no-write, #360 unlisted exemption, global
+unchanged — these drive the exact plan shape the TUI builds, covering AC3),
+`tests/test_cli/test_cli_agent_group.py` (CLI install→lock→list round-trip,
+fail-before-seeding), `tests/test_cli/test_agent_doctor.py`
+(no-orphan-after-install).

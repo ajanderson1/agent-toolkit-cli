@@ -23,7 +23,7 @@ The existing round-trip tests pass `source=src` into `apply()`, which exercises 
 **Files:**
 - Modify: `tests/test_cli/test_agent_install_roundtrip.py` (append; reuse the module's `_seed_global_canonical`, `_seed_project_canonical`, `_CONTENT` helpers and the autouse `_clean_env` fixture)
 
-- [ ] **Step 1: Add a global-lock-entry helper + the six tests**
+- [ ] **Step 1: Add a global-lock-entry helper + the seven tests**
 
 Append to `tests/test_cli/test_agent_install_roundtrip.py`:
 
@@ -220,6 +220,33 @@ def test_project_unlisted_entry_operable_without_global_entry(
     apply(pure_remove, project=project)
 
 
+def test_project_install_all_skipped_writes_no_lock_entry(tmp_path, monkeypatch):
+    """Critical-review G4: an install whose requested harnesses are ALL
+    skipped as unsupported projects nothing — it must NOT write a project
+    lock entry, or the zero-projection install claims tool ownership and
+    flips overwrite=True for a later first REAL projection (guard bypass)."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    project = tmp_path / "proj"
+    project.mkdir()
+    from agent_toolkit_cli.agent_install import apply
+    from agent_toolkit_cli.agent_lock import read_lock
+    from agent_toolkit_cli.agent_paths import lock_file_path
+
+    _seed_global_canonical()
+    _write_global_lock_entry()
+    _seed_project_canonical(project)
+
+    # codex is a real catalog entry with subagent_mechanism='none' → skipped.
+    result = apply(_source_none_plan(add=("codex",)), project=project)
+
+    assert result.skipped == ("codex",)
+    assert result.lock_action == "unchanged"
+    lock_path = lock_file_path(scope="project", project=project)
+    assert "rt-agent" not in read_lock(lock_path).skills, (
+        "G4: zero-projection install must not claim ownership"
+    )
+
+
 def test_global_install_source_none_writes_no_global_entry(
     tmp_path, monkeypatch,
 ):
@@ -246,7 +273,7 @@ def test_global_install_source_none_writes_no_global_entry(
 
 - [ ] **Step 2: Run the new tests, verify the right RED/GREEN split**
 
-Run: `uv run pytest tests/test_cli/test_agent_install_roundtrip.py -v -k "source_none or unlisted or foreign or reinstall"`
+Run: `uv run pytest tests/test_cli/test_agent_install_roundtrip.py -v -k "source_none or unlisted or foreign or reinstall or global_entry or all_skipped"`
 
 Expected failures (RED — the bug):
 - `test_project_install_source_none_writes_derived_lock_entry` — entry is None
@@ -256,6 +283,7 @@ Expected failures (RED — the bug):
 Expected passes already (regression pins, must STAY green):
 - `test_project_first_install_still_refuses_foreign_file`
 - `test_project_unlisted_entry_operable_without_global_entry`
+- `test_project_install_all_skipped_writes_no_lock_entry` (pre-fix nothing is ever written; post-fix the `created` gate keeps it green)
 - `test_global_install_source_none_writes_no_global_entry`
 
 If a "must stay green" test fails BEFORE the implementation, stop — the test or the understanding is wrong.
@@ -321,10 +349,12 @@ Change the lock-update block at the end of `apply()` (currently `if plan.source 
     lock_action: Literal["added", "updated", "unchanged"] = "unchanged"
     if plan.source is not None:
         # …existing body unchanged…
-    elif derive_project_entry:
+    elif derive_project_entry and created:
         # #362: derived project entry, written only AFTER the projection
         # loops succeeded so `overwrite` stays False on a first install
-        # (foreign-file guard) and a failed install leaves no entry.
+        # (foreign-file guard) and a failed install leaves no entry. The
+        # `created` gate keeps an all-skipped install (every harness
+        # unsupported) from claiming ownership of files it never wrote.
         # Mirrors skill_install.ensure_project_canonical's derivation:
         # project entries copy source/ref identity but never pin SHAs.
         assert global_entry is not None  # guaranteed by pre-validation
@@ -342,7 +372,7 @@ Change the lock-update block at the end of `apply()` (currently `if plan.source 
         lock_action = "added"
 ```
 
-- [ ] **Step 3: Run the Task 1 tests — all six pass**
+- [ ] **Step 3: Run the Task 1 tests — all seven pass**
 
 Run: `uv run pytest tests/test_cli/test_agent_install_roundtrip.py -v`
 Expected: PASS (all, including the pre-existing round-trip tests).
@@ -365,7 +395,7 @@ Device: $(hostname -s)" -- src/agent_toolkit_cli/agent_install.py tests/test_cli
 
 ### Task 3: CLI fail-loud before seeding + CLI-level round-trip
 
-`apply()` already fail-louds, but the CLI seeds the project canonical (copytree) BEFORE calling it — a doomed install would leave canonical residue. Move the check ahead of the seeding. The TUI is left as-is: its seeding residue lands in the external store and doctor reclaims it.
+`apply()` already fail-louds, but the CLI seeds the project canonical (copytree) BEFORE calling it — a doomed install would leave canonical residue. Move the check ahead of the seeding. The TUI is left as-is: its seeding residue lands in the external store (outside the project tree, harmless, reused by a later successful install); note no doctor sweep reclaims project-scope agent canonicals today — that gap belongs to the existing doctor follow-ups, not this issue. Placement note: the new check sits BEFORE the `no enabled harnesses; nothing to do` early return, so a canonical-only slug with an empty harness set now fails loud instead of no-op'ing — consistent with the fail-loud contract.
 
 **Files:**
 - Modify: `src/agent_toolkit_cli/commands/agent/install_cmd.py` (install_cmd body, lines ~99–133)
@@ -575,15 +605,16 @@ Expected: no NEW errors versus main (main has pre-existing mypy/ruff counts; com
 
 - [ ] **Step 3: Verify the demo repro from the issue is fixed**
 
-In a sandbox HOME + scratch project:
+In a sandbox HOME + scratch project. CAUTION: a bare `uv run agent-toolkit-cli` from a scratch cwd finds no project and resolves the PATH-installed tool (v3.8.x, pre-fix) — pin every invocation to the working tree with `--project`:
 
 ```bash
+REPO=<absolute path to the worktree under test>
 SANDBOX=$(mktemp -d) && cd $(mktemp -d) && git init -q .
-HOME=$SANDBOX uv run agent-toolkit-cli agent add /path/to/any/local/agent/repo --slug demo-agent
-HOME=$SANDBOX uv run agent-toolkit-cli agent install demo-agent -p --harnesses claude-code
-HOME=$SANDBOX uv run agent-toolkit-cli agent list -p     # MUST show demo-agent ✔
-HOME=$SANDBOX uv run agent-toolkit-cli agent doctor -p   # MUST be clean (no orphan)
-HOME=$SANDBOX uv run agent-toolkit-cli agent install demo-agent -p --harnesses claude-code  # re-install MUST succeed
+HOME=$SANDBOX uv run --project "$REPO" agent-toolkit-cli agent add /path/to/any/local/agent/repo --slug demo-agent
+HOME=$SANDBOX uv run --project "$REPO" agent-toolkit-cli agent install demo-agent -p --harnesses claude-code
+HOME=$SANDBOX uv run --project "$REPO" agent-toolkit-cli agent list -p     # MUST show demo-agent ✔
+HOME=$SANDBOX uv run --project "$REPO" agent-toolkit-cli agent doctor -p   # MUST be clean (no orphan)
+HOME=$SANDBOX uv run --project "$REPO" agent-toolkit-cli agent install demo-agent -p --harnesses claude-code  # re-install MUST succeed
 ```
 
 - [ ] **Step 4: Push and open the PR**
