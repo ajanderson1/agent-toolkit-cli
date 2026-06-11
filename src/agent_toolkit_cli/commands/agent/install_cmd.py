@@ -99,7 +99,8 @@ def install_cmd(
     # Verify the slug exists in the global library (canonical or lock entry).
     # We check BOTH the lock file and the canonical directory: a slug that
     # has been `agent add`-ed has a lock entry; a manually-seeded canonical
-    # also counts. Either is sufficient to proceed.
+    # also counts. Either is sufficient to proceed — at GLOBAL scope. PROJECT
+    # scope additionally requires a global lock entry (#362, below).
     from agent_toolkit_cli.agent_paths import canonical_agent_dir as _cad
     global_lock = read_lock(library_lock_path())
     global_canonical = _cad(slug, scope="global")
@@ -107,6 +108,25 @@ def install_cmd(
         raise click.ClickException(
             f"{slug}: not in the global library; run `agent add` first"
         )
+
+    # #362: a project install derives its project lock entry from the
+    # GLOBAL lock entry — require it before seeding the project canonical
+    # so a doomed install leaves no residue. Exempt slugs already in the
+    # project lock (#360 "unlisted" entries reinstall without a library
+    # entry). apply() re-checks this; the duplicate here is purely to
+    # fail before the copytree.
+    if scope == "project" and project is not None:
+        from agent_toolkit_cli.agent_paths import lock_file_path
+        project_lock = read_lock(
+            lock_file_path(scope="project", project=project)
+        )
+        if (
+            slug not in project_lock.skills
+            and slug not in global_lock.skills
+        ):
+            raise click.ClickException(
+                f"{slug}: no global lock entry; run `agent add {slug}` first"
+            )
 
     try:
         target_harnesses = _resolve_harnesses(harnesses, scope)

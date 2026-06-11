@@ -1019,3 +1019,72 @@ def test_default_fanout_missing_description_clean_error(
     assert "Traceback" not in r.output, (
         f"raw Traceback leaked into output:\n{r.output}"
     )
+
+
+# ---------------------------------------------------------------------------
+# #362 — project install writes the project lock; list -p sees it
+# ---------------------------------------------------------------------------
+
+
+def test_project_install_writes_lock_and_list_shows_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#362 round-trip mandate: install -p → agents-lock.json entry →
+    `agent list -p` lists the slug as projected."""
+    import json as _json
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    project = tmp_path / "proj"
+    project.mkdir()
+    _seed_global_canonical(tmp_path)
+    _write_global_lock(tmp_path)
+    _seed_project_canonical(project)
+
+    runner = CliRunner()
+    r_install = runner.invoke(
+        main, ["--project", str(project),
+               "agent", "install", "demo-agent", "-p",
+               "--harnesses", _TEST_HARNESSES],
+    )
+    assert r_install.exit_code == 0, r_install.output
+
+    lock_file = project / "agents-lock.json"
+    assert lock_file.exists(), "#362: install -p wrote no project lock"
+    data = _json.loads(lock_file.read_text())
+    assert "demo-agent" in data["skills"], data
+
+    r_list = runner.invoke(
+        main, ["--project", str(project), "agent", "list", "-p"],
+    )
+    assert r_list.exit_code == 0, r_list.output
+    assert "demo-agent" in r_list.output, (
+        f"#362: list -p blind to installed agent:\n{r_list.output}"
+    )
+    assert "✔" in r_list.output, "expected projected marker"
+
+
+def test_project_install_without_global_entry_fails_before_seeding(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Canonical-only slug (no global lock entry): project install fails
+    loud BEFORE seeding the project canonical — no residue anywhere."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    project = tmp_path / "proj"
+    project.mkdir()
+    _seed_global_canonical(tmp_path)  # NO _write_global_lock
+
+    runner = CliRunner()
+    r = runner.invoke(
+        main, ["--project", str(project),
+               "agent", "install", "demo-agent", "-p",
+               "--harnesses", _TEST_HARNESSES],
+    )
+    assert r.exit_code != 0
+    assert "no global lock entry" in r.output, r.output
+
+    from agent_toolkit_cli.agent_paths import canonical_agent_dir
+    assert not canonical_agent_dir(
+        "demo-agent", scope="project", project=project,
+    ).exists(), "doomed install must not seed the project canonical"
+    assert not (project / ".claude" / "agents" / "demo-agent.md").exists()
+    assert not (project / "agents-lock.json").exists()
