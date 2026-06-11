@@ -221,11 +221,10 @@ def _diagnose(
         # 4b. cursor-shadow (#361, spec § Doctor): cursor reads the standard
         # .claude/agents/ dir natively, but its OWN .cursor/agents/<slug>.md
         # WINS name conflicts — a pre-existing cursor projection therefore
-        # shadows the standard slot with a divergent copy. ALWAYS report-only
-        # (PM review F2): cursor installs go through the symlink adapter,
-        # which writes NO ownership sentinel, so a sentinel-gated removal fix
-        # could never fire in reality — and the file may equally be
-        # user-authored there. Informational (see _INFORMATIONAL_TYPES).
+        # shadows the standard slot with a divergent copy. Report-only UNLESS
+        # the shadowing file carries our .attk sidecar (#368): sentinel-less
+        # files may equally be user-authored. Informational either way (see
+        # _INFORMATIONAL_TYPES) — the fix offer never changes exit codes.
         if scope_content.exists() and slot is not None and slot.exists():
             cursor_dest: Path | None
             try:
@@ -239,17 +238,37 @@ def _diagnose(
                 and cursor_dest.exists()
                 and not filecmp.cmp(scope_content, cursor_dest, shallow=False)
             ):
-                findings.append(Finding(
-                    slug=slug, finding_type="cursor-shadow", scope=scope,
-                    path=cursor_dest,
-                    detail=(
-                        "cursor reads its own .cursor/agents first, so this "
-                        f"file shadows the standard slot at {slot} — if the "
-                        "shadowing is unintended, remove it manually or run "
-                        f"`agent uninstall {slug} --harnesses cursor`"
-                    ),
-                    fix_action=None,
-                ))
+                if _sentinel_path(cursor_dest).exists():
+                    # #368: the sidecar proves the tool wrote this file — a
+                    # stale projection shadowing the slot; offer removal.
+                    findings.append(Finding(
+                        slug=slug, finding_type="cursor-shadow", scope=scope,
+                        path=cursor_dest,
+                        detail=(
+                            "cursor reads its own .cursor/agents first, so "
+                            f"this tool-installed file shadows the standard "
+                            f"slot at {slot}"
+                        ),
+                        fix_action=FixAction(
+                            shell_preview=(
+                                f"rm {cursor_dest} {_sentinel_path(cursor_dest)}"
+                            ),
+                            apply=lambda d=cursor_dest: _rm_file_and_sidecar(d),
+                        ),
+                    ))
+                else:
+                    findings.append(Finding(
+                        slug=slug, finding_type="cursor-shadow", scope=scope,
+                        path=cursor_dest,
+                        detail=(
+                            "cursor reads its own .cursor/agents first, so this "
+                            f"file shadows the standard slot at {slot} — if the "
+                            "shadowing is unintended, remove the file manually "
+                            "(it may be hand-authored; `agent uninstall` would "
+                            "refuse it for the same reason no fix is offered)"
+                        ),
+                        fix_action=None,
+                    ))
 
     # 4.5: unlisted — project lock entry whose slug is missing from the
     # library lock (#360). Inert until #362 lands (the CLI writes no project
@@ -416,10 +435,34 @@ def doctor_cmd(
         click.echo(f"  path:   {f.path}")
         click.echo(f"  detail: {f.detail}")
         if f.finding_type in _INFORMATIONAL_TYPES:
-            # Report-only notice about a file we do not manage — visible,
-            # but never fails the exit code or the clean verdict (F1).
+            # Never fails the exit code or the clean verdict (F1) — but a
+            # sentinel-backed informational finding MAY carry a fix (#368
+            # cursor-shadow). Declining must not count as 'skipped' (which
+            # drives exit 1); applying counts as fixed.
             informational += 1
-            click.echo("  (informational — no automatic fix)")
+            if f.fix_action is None or no_fix or quit_loop:
+                click.echo("  (informational — no automatic fix)")
+                continue
+            click.echo(f"  fix:    {f.fix_action.shell_preview}")
+            try:
+                ans = click.prompt(
+                    "  apply?", default="N", show_default=False,
+                    type=click.Choice(["y", "N", "q"], case_sensitive=False),
+                )
+            except (click.Abort, EOFError, OSError):
+                click.echo("\n  (no input available — leaving as-is)")
+                quit_loop = True
+                continue
+            ans = ans.lower()
+            if ans == "y":
+                try:
+                    f.fix_action.apply()
+                    click.echo("  fixed.")
+                    fixed += 1
+                except Exception as exc:
+                    click.echo(f"  fix failed: {exc}")
+            elif ans == "q":
+                quit_loop = True
             continue
         if f.fix_action is None or no_fix or quit_loop:
             skipped += 1
