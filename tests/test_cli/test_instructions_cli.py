@@ -417,8 +417,9 @@ def test_doctor_unmanaged_non_tty_does_not_mutate(tmp_path, monkeypatch):
     assert "no input available" in result.output.lower()
 
 
-def test_doctor_unmanaged_does_not_clobber_existing_agents(tmp_path, monkeypatch):
-    """Real CLAUDE.md + non-empty AGENTS.md: reported but report-only; 'y' must not destroy either."""
+def test_doctor_backup_fix_decline_keeps_finding(tmp_path, monkeypatch):
+    """Real CLAUDE.md + populated AGENTS.md: 'N' leaves everything untouched,
+    the finding stays reported, exit 1 (AC6)."""
     project = tmp_path / "proj"
     project.mkdir()
     (project / "AGENTS.md").write_text("# real canon\n")
@@ -426,13 +427,14 @@ def test_doctor_unmanaged_does_not_clobber_existing_agents(tmp_path, monkeypatch
     monkeypatch.chdir(project)
 
     runner = CliRunner()
-    result = runner.invoke(main, ["instructions", "doctor", "--scope", "project"], input="y\n")
-    # Reported as unmanaged (real file, not in lock) but adopt is skipped → exit 1.
+    result = runner.invoke(main, ["instructions", "doctor", "--scope", "project"], input="N\n")
     assert result.exit_code != 0, result.output
     assert "unmanaged" in result.output.lower()
-    # Neither file destroyed.
     assert (project / "AGENTS.md").read_text() == "# real canon\n"
-    assert (project / "CLAUDE.md").read_text() == "# different\n"
+    claude = project / "CLAUDE.md"
+    assert claude.is_file() and not claude.is_symlink()
+    assert claude.read_text() == "# different\n"
+    assert not (project / "CLAUDE.md.pre-adopt.bak").exists()
 
 
 def test_doctor_adopt_global(tmp_path, monkeypatch):
@@ -588,3 +590,37 @@ def test_doctor_adopts_augment_global_slot_as_augment_not_claude(tmp_path, monke
 
     lock = json.loads((home / ".agent-toolkit" / "instructions-lock.json").read_text())
     assert lock["instructions"]["AGENTS.md"]["harnesses"] == ["augment"]
+
+
+# --- #375 backup-then-symlink fix (canonical already populated) ----------------
+
+
+def test_doctor_backup_fix_renames_to_bak_and_symlinks(tmp_path, monkeypatch):
+    """Populated AGENTS.md + unmanaged CLAUDE.md: 'y' backs the file up to
+    CLAUDE.md.pre-adopt.bak, symlinks the slot at canonical, merges the lock,
+    and doctor is clean on re-run. Content is never merged or destroyed."""
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / "AGENTS.md").write_text("# real canon\n")
+    (project / "CLAUDE.md").write_text("# different\n")
+    monkeypatch.chdir(project)
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["instructions", "doctor", "--scope", "project"], input="y\n")
+    assert result.exit_code == 0, result.output
+
+    agents = project / "AGENTS.md"
+    pointer = project / "CLAUDE.md"
+    backup = project / "CLAUDE.md.pre-adopt.bak"
+    assert agents.read_text() == "# real canon\n"  # canonical untouched
+    assert backup.is_file() and backup.read_text() == "# different\n"
+    assert pointer.is_symlink() and pointer.resolve() == agents.resolve()
+    # Output points the user at the backup (manual content reconciliation).
+    assert "pre-adopt.bak" in result.output
+
+    lock = json.loads((project / "instructions-lock.json").read_text())
+    assert "claude-code" in lock["instructions"]["AGENTS.md"]["harnesses"]
+
+    again = runner.invoke(main, ["instructions", "doctor", "--scope", "project"])
+    assert again.exit_code == 0, again.output
+    assert "clean" in again.output.lower()
