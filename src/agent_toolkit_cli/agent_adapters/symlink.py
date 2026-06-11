@@ -9,6 +9,7 @@ from __future__ import annotations
 import filecmp
 import os
 import shutil
+import sys
 from pathlib import Path
 
 from agent_toolkit_cli._install_core import InstallError
@@ -177,16 +178,36 @@ class _SymlinkAdapter:
         scope: str,
         home: Path | None = None,
         project: Path | None = None,
-    ) -> None:
+        canonical_content: Path | None = None,
+    ) -> Path | None:
+        """Ownership-guarded detach (#368, standard-adapter parity): unlink
+        only when the sentinel exists OR the file byte-matches
+        `canonical_content` (covers pre-sentinel installs). A sentinel-less,
+        content-divergent file is the user's — leave it, return its path as
+        a structured refusal. The sidecar is removed whenever the file is
+        gone (orphan hygiene, #361/#366)."""
         dest = self._resolve_dest(slug, scope=scope, home=home, project=project)
-        if dest.exists() or dest.is_symlink():
-            dest.unlink()
-        # Destination-generic sentinel cleanup (#361 review finding): an
-        # orphaned .attk left behind would later authorize a silent clobber
-        # via _guard_foreign of a file the user re-authored at this path.
         sentinel = _sentinel_path(dest)
-        if sentinel.exists():
+        refused: Path | None = None
+        if dest.exists() or dest.is_symlink():
+            owned = sentinel.exists() or (
+                canonical_content is not None
+                and canonical_content.exists()
+                and not dest.is_symlink()
+                and filecmp.cmp(canonical_content, dest, shallow=False)
+            )
+            if owned:
+                dest.unlink()
+            else:
+                refused = dest
+                print(
+                    f"{self.harness}: {dest} not managed by this tool "
+                    f"(no sentinel, content differs) — left in place",
+                    file=sys.stderr,
+                )
+        if sentinel.exists() and not dest.exists():
             sentinel.unlink()
+        return refused
 
 
 def adapter_for(harness: str) -> _SymlinkAdapter:

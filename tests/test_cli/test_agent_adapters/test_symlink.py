@@ -264,3 +264,61 @@ def test_install_missing_canonical_raises_install_error(tmp_path):
     missing = tmp_path / "canonical" / "test-agent.md"
     with pytest.raises(InstallError, match="canonical content file missing"):
         adapter.install("test-agent", missing, scope="global", home=tmp_path)
+
+
+# ── #368: guarded uninstall ──────────────────────────────────────────────
+
+def test_uninstall_with_sentinel_removes_even_if_edited(tmp_path, fake_content):
+    """Sentinel present → we own the path; remove even a user-edited copy."""
+    from agent_toolkit_cli.agent_adapters import symlink
+    adapter = symlink.adapter_for("cursor")
+    dest = adapter.install("test-agent", fake_content, scope="global", home=tmp_path)
+    dest.write_text("user edited this projection\n")
+    refused = adapter.uninstall("test-agent", scope="global", home=tmp_path)
+    assert refused is None
+    assert not dest.exists()
+
+
+def test_uninstall_content_match_detaches_sentinel_less_file(tmp_path, fake_content):
+    """#368 migration: a pre-sentinel projection byte-matching the canonical
+    is detached via canonical_content (content-match detach)."""
+    from agent_toolkit_cli.agent_adapters import symlink
+    adapter = symlink.adapter_for("cursor")
+    dest = adapter.destination("test-agent", scope="global", home=tmp_path)
+    dest.parent.mkdir(parents=True)
+    dest.write_text(fake_content.read_text())  # no sentinel
+    refused = adapter.uninstall(
+        "test-agent", scope="global", home=tmp_path,
+        canonical_content=fake_content,
+    )
+    assert refused is None
+    assert not dest.exists()
+
+
+def test_uninstall_refuses_foreign_file(tmp_path, fake_content, capsys):
+    """Sentinel-less + divergent = the user's file: leave it, return the
+    path (structured refusal), say so on stderr."""
+    from agent_toolkit_cli.agent_adapters import symlink
+    adapter = symlink.adapter_for("cursor")
+    dest = adapter.destination("test-agent", scope="global", home=tmp_path)
+    dest.parent.mkdir(parents=True)
+    dest.write_text("# hand-authored\n")
+    refused = adapter.uninstall(
+        "test-agent", scope="global", home=tmp_path,
+        canonical_content=fake_content,
+    )
+    assert refused == dest
+    assert dest.exists()
+    assert "left in place" in capsys.readouterr().err
+
+
+def test_uninstall_without_canonical_content_still_guarded(tmp_path, fake_content):
+    """canonical_content=None (default) → only the sentinel authorizes."""
+    from agent_toolkit_cli.agent_adapters import symlink
+    adapter = symlink.adapter_for("cursor")
+    dest = adapter.destination("test-agent", scope="global", home=tmp_path)
+    dest.parent.mkdir(parents=True)
+    dest.write_text("# hand-authored\n")
+    refused = adapter.uninstall("test-agent", scope="global", home=tmp_path)
+    assert refused == dest
+    assert dest.exists()
