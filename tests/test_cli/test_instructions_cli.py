@@ -651,3 +651,116 @@ def test_doctor_backup_fix_fails_loudly_on_existing_bak(tmp_path, monkeypatch):
     if lock_file.exists():
         lock = json.loads(lock_file.read_text())
         assert lock.get("instructions", {}) == {}
+
+
+def test_doctor_backup_fix_rolls_back_on_apply_failure(tmp_path, monkeypatch):
+    """If install.apply() raises ANY error mid-fix, the user's file comes back
+    from the .bak, the .bak is gone, canonical untouched, no lock entry (AC4)."""
+    import agent_toolkit_cli.instructions_install as install_mod
+
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / "AGENTS.md").write_text("# real canon\n")
+    (project / "CLAUDE.md").write_text("# mine\n")
+    monkeypatch.chdir(project)
+
+    def boom(*a, **k):
+        raise OSError("disk gone")
+
+    # doctor_cmd calls instructions_install.apply via the module attribute —
+    # patch the source module (Click re-exports would not be reached).
+    monkeypatch.setattr(install_mod, "apply", boom)
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["instructions", "doctor", "--scope", "project"], input="y\n")
+    assert result.exit_code != 0, result.output
+    assert "adopt failed" in result.output.lower()
+
+    claude = project / "CLAUDE.md"
+    assert claude.is_file() and not claude.is_symlink()
+    assert claude.read_text() == "# mine\n"
+    assert not (project / "CLAUDE.md.pre-adopt.bak").exists()
+    assert (project / "AGENTS.md").read_text() == "# real canon\n"
+    lock_file = project / "instructions-lock.json"
+    if lock_file.exists():
+        lock = json.loads(lock_file.read_text())
+        assert lock.get("instructions", {}) == {}, "lock claims a fix that was rolled back"
+
+
+def test_doctor_backup_fix_rolls_back_partial_apply_with_prior_lock(tmp_path, monkeypatch):
+    """apply() that lays our slot's symlink then raises on a different slot must
+    restore the user's file AND the prior lock verbatim — no half-applied state."""
+    import agent_toolkit_cli.instructions_install as install_mod
+
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / "AGENTS.md").write_text("# real canon\n")
+    (project / "CLAUDE.md").write_text("# mine\n")
+    (project / "instructions-lock.json").write_text(json.dumps({
+        "version": 1,
+        "instructions": {"AGENTS.md": {
+            "scope": "project", "source": "AGENTS.md", "harnesses": ["gemini-cli"],
+        }},
+    }))
+    monkeypatch.chdir(project)
+
+    def apply_then_fail(*a, **k):
+        # Simulate apply() creating our symlink (slot is free: the real file
+        # was renamed to .bak), then failing on another slot.
+        (project / "CLAUDE.md").symlink_to(project / "AGENTS.md")
+        raise install_mod.CanonicalMissingError("boom on other slot")
+
+    monkeypatch.setattr(install_mod, "apply", apply_then_fail)
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["instructions", "doctor", "--scope", "project"], input="y\n")
+    assert result.exit_code != 0, result.output
+
+    claude = project / "CLAUDE.md"
+    assert claude.is_file() and not claude.is_symlink(), "symlink not cleaned up on rollback"
+    assert claude.read_text() == "# mine\n"
+    assert not (project / "CLAUDE.md.pre-adopt.bak").exists()
+    assert (project / "AGENTS.md").read_text() == "# real canon\n"
+    lock = json.loads((project / "instructions-lock.json").read_text())
+    assert lock["instructions"]["AGENTS.md"]["harnesses"] == ["gemini-cli"]
+
+
+def test_doctor_backup_fix_rolls_back_when_lock_write_fails(tmp_path, monkeypatch):
+    """write_lock failing right after the rename must restore the user's file
+    from the .bak — otherwise the file is stranded at the .bak with an empty
+    slot and a doctor re-run reports clean (critical-review finding, #375)."""
+    import importlib
+
+    # The instructions package re-exports the Click command `doctor_cmd` over
+    # the submodule name, so attribute access yields a Command, not the
+    # module — fetch the module explicitly to patch its namespace.
+    doctor_mod = importlib.import_module(
+        "agent_toolkit_cli.commands.instructions.doctor_cmd"
+    )
+
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / "AGENTS.md").write_text("# real canon\n")
+    (project / "CLAUDE.md").write_text("# mine\n")
+    monkeypatch.chdir(project)
+
+    def boom(*a, **k):
+        raise OSError("lock dir read-only")
+
+    # doctor_cmd does `from ...instructions_lock import write_lock` — patch
+    # the name in doctor_cmd's namespace. (No prior lock file exists, so the
+    # rollback's lock-restore path takes the unlink branch and never calls
+    # the patched write_lock itself.)
+    monkeypatch.setattr(doctor_mod, "write_lock", boom)
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["instructions", "doctor", "--scope", "project"], input="y\n")
+    assert result.exit_code != 0, result.output
+    assert "adopt failed" in result.output.lower()
+
+    claude = project / "CLAUDE.md"
+    assert claude.is_file() and not claude.is_symlink()
+    assert claude.read_text() == "# mine\n"
+    assert not (project / "CLAUDE.md.pre-adopt.bak").exists()
+    assert (project / "AGENTS.md").read_text() == "# real canon\n"
+    assert not (project / "instructions-lock.json").exists()
