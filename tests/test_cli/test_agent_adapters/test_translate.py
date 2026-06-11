@@ -433,3 +433,65 @@ def test_install_missing_canonical_raises_install_error(tmp_path):
     missing = tmp_path / "canonical" / "test-agent.md"
     with pytest.raises(InstallError, match="canonical content file missing"):
         adapter.install("test-agent", missing, scope="global", home=tmp_path)
+
+
+# ── #368: guarded uninstall ──────────────────────────────────────────────
+
+def test_uninstall_with_sentinel_removes(tmp_path, fake_content):
+    from agent_toolkit_cli.agent_adapters import _sentinel_path, translate
+    adapter = translate.adapter_for("gemini-cli")
+    dest = adapter.install("test-agent", fake_content, scope="global", home=tmp_path)
+    refused = adapter.uninstall("test-agent", scope="global", home=tmp_path)
+    assert refused is None
+    assert not dest.exists()
+    assert not _sentinel_path(dest).exists(), "orphaned .attk after uninstall"
+
+
+def test_uninstall_emission_match_detaches_sentinel_less_file(tmp_path, fake_content):
+    """#368 migration: a pre-sentinel projection matching the re-run emitter
+    output is detached via canonical_content."""
+    from agent_toolkit_cli.agent_adapters import _sentinel_path, translate
+    adapter = translate.adapter_for("gemini-cli")
+    dest = adapter.install("test-agent", fake_content, scope="global", home=tmp_path)
+    _sentinel_path(dest).unlink()  # fake a pre-#368 projection
+    refused = adapter.uninstall(
+        "test-agent", scope="global", home=tmp_path,
+        canonical_content=fake_content,
+    )
+    assert refused is None
+    assert not dest.exists()
+
+
+def test_uninstall_refuses_foreign_file(tmp_path, fake_content, capsys):
+    from agent_toolkit_cli.agent_adapters import translate
+    adapter = translate.adapter_for("gemini-cli")
+    dest = adapter.destination("test-agent", scope="global", home=tmp_path)
+    dest.parent.mkdir(parents=True)
+    dest.write_text("# hand-authored\n")
+    refused = adapter.uninstall(
+        "test-agent", scope="global", home=tmp_path,
+        canonical_content=fake_content,
+    )
+    assert refused == dest
+    assert dest.exists()
+    assert "left in place" in capsys.readouterr().err
+
+
+def test_uninstall_emitter_failure_treated_as_no_match(tmp_path):
+    """#368: a canonical that no longer emits (e.g. github-copilot without
+    description) must NOT crash uninstall — it just can't authorize, so a
+    sentinel-less file is refused, not an exception."""
+    from agent_toolkit_cli.agent_adapters import translate
+    bad_canonical = tmp_path / "canonical" / "test-agent.md"
+    bad_canonical.parent.mkdir(parents=True)
+    bad_canonical.write_text("---\nname: test-agent\n---\nNo description.\n")
+    adapter = translate.adapter_for("github-copilot")
+    dest = adapter.destination("test-agent", scope="global", home=tmp_path)
+    dest.parent.mkdir(parents=True)
+    dest.write_text("whatever was projected long ago\n")
+    refused = adapter.uninstall(
+        "test-agent", scope="global", home=tmp_path,
+        canonical_content=bad_canonical,
+    )
+    assert refused == dest
+    assert dest.exists()
