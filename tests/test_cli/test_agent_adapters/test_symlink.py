@@ -184,3 +184,83 @@ def test_pi_install_global_without_env_or_home_raises(tmp_path, fake_content):
     adapter = symlink.adapter_for("pi")
     with pytest.raises(ValueError, match="PI_CODING_AGENT_DIR"):
         adapter.install("test", fake_content, scope="global", home=None)
+
+
+# ── #368: install-side ownership contract ────────────────────────────────
+
+@pytest.mark.parametrize("harness, global_tpl, project_tpl", SYMLINK_CELLS)
+def test_install_writes_sentinel(harness, global_tpl, project_tpl, tmp_path, fake_content):
+    """#368: every symlink-cell install writes the .attk ownership sidecar."""
+    from agent_toolkit_cli.agent_adapters import _sentinel_path, symlink
+    adapter = symlink.adapter_for(harness)
+    dest = adapter.install("test-agent", fake_content, scope="global", home=tmp_path)
+    assert _sentinel_path(dest).exists(), f"{harness}: no sentinel beside {dest}"
+
+
+def test_install_adopts_identical_sentinel_less_file(tmp_path, fake_content):
+    """#368 (F3): a pre-existing byte-identical file is adopted — sentinel
+    written, no error, file untouched."""
+    from agent_toolkit_cli.agent_adapters import _sentinel_path, symlink
+    adapter = symlink.adapter_for("cursor")
+    dest = adapter.destination("test-agent", scope="global", home=tmp_path)
+    dest.parent.mkdir(parents=True)
+    dest.write_text(fake_content.read_text())  # identical, no sentinel
+    out = adapter.install("test-agent", fake_content, scope="global", home=tmp_path)
+    assert out == dest
+    assert _sentinel_path(dest).exists()
+
+
+def test_install_ignores_facade_overwrite_flag(tmp_path, fake_content):
+    """#368 (G5, waived from #362): a divergent sentinel-less file at the
+    destination refuses install EVEN WITH overwrite=True — lock-derived
+    per-slug ownership must not clobber a user file at a destination the
+    tool never projected."""
+    from agent_toolkit_cli.agent_adapters import AgentProjectionConflictError, symlink
+    adapter = symlink.adapter_for("cursor")
+    dest = adapter.destination("test-agent", scope="global", home=tmp_path)
+    dest.parent.mkdir(parents=True)
+    dest.write_text("# user-authored, divergent\n")
+    with pytest.raises(AgentProjectionConflictError):
+        adapter.install("test-agent", fake_content, scope="global",
+                        home=tmp_path, overwrite=True)
+    assert dest.read_text() == "# user-authored, divergent\n"  # untouched
+
+
+def test_install_with_sentinel_overwrites_divergent_file(tmp_path, fake_content):
+    """#368: the sentinel authorizes refreshing our own (even drifted) file."""
+    from agent_toolkit_cli.agent_adapters import _sentinel_path, symlink
+    adapter = symlink.adapter_for("cursor")
+    dest = adapter.destination("test-agent", scope="global", home=tmp_path)
+    dest.parent.mkdir(parents=True)
+    dest.write_text("stale projection\n")
+    _sentinel_path(dest).write_text("")
+    adapter.install("test-agent", fake_content, scope="global", home=tmp_path)
+    assert dest.read_text() == fake_content.read_text()
+
+
+def test_install_replaces_symlink_at_destination(tmp_path, fake_content):
+    """#368 (F6 parity): a symlink at the destination is REPLACED — copy2
+    through it would write into its target."""
+    from agent_toolkit_cli.agent_adapters import _sentinel_path, symlink
+    adapter = symlink.adapter_for("cursor")
+    dest = adapter.destination("test-agent", scope="global", home=tmp_path)
+    dest.parent.mkdir(parents=True)
+    target = tmp_path / "users-dotfile.md"
+    target.write_text("user dotfile source\n")
+    dest.symlink_to(target)
+    _sentinel_path(dest).write_text("")  # stale sentinel scenario
+    adapter.install("test-agent", fake_content, scope="global", home=tmp_path)
+    assert not dest.is_symlink()
+    assert dest.read_text() == fake_content.read_text()
+    assert target.read_text() == "user dotfile source\n"  # NOT written through
+
+
+def test_install_missing_canonical_raises_install_error(tmp_path):
+    """#368 (F8 parity): a missing canonical content file raises InstallError,
+    not a raw OSError from filecmp/copy2."""
+    from agent_toolkit_cli._install_core import InstallError
+    from agent_toolkit_cli.agent_adapters import symlink
+    adapter = symlink.adapter_for("cursor")
+    missing = tmp_path / "canonical" / "test-agent.md"
+    with pytest.raises(InstallError, match="canonical content file missing"):
+        adapter.install("test-agent", missing, scope="global", home=tmp_path)

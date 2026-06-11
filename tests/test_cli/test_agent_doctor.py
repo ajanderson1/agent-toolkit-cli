@@ -404,8 +404,8 @@ def test_doctor_cursor_shadow_via_real_adapter_is_report_only(
         "demo-agent", canonical / "demo-agent.md",
         scope="global", home=tmp_path,
     )
-    assert not _sentinel_path(cursor_dest).exists(), (
-        "premise: the real cursor adapter writes no ownership sentinel"
+    assert _sentinel_path(cursor_dest).exists(), (
+        "premise (#368): the real cursor adapter writes the ownership sentinel"
     )
     # ...then the canonical moves on and the slot is re-seeded — the cursor
     # copy is now a stale shadow.
