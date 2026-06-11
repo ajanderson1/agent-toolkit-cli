@@ -9,11 +9,14 @@ Detects:
   - standard-slot drift (#361: slot differs from the scope's canonical)
   - cursor-shadow (#361: stale .cursor/agents copy shadowing the slot)
   - standard-slot orphan / unmanaged / dangling-sidecar (#361 sweep)
+  - unlisted project entries (#360: project lock entry missing from the
+    library lock; inert until #362)
 
 Repair actions are offered interactively unless --no-fix is given.
 """
 from __future__ import annotations
 
+import dataclasses
 import filecmp
 import shutil
 from dataclasses import dataclass
@@ -23,11 +26,14 @@ from typing import Callable
 import click
 
 from agent_toolkit_cli.agent_adapters import _sentinel_path, get_adapter
-from agent_toolkit_cli.agent_lock import read_lock
+from agent_toolkit_cli.agent_lock import (
+    LockEntry, add_entry, clone_url_from_entry, read_lock, write_lock,
+)
 from agent_toolkit_cli.agent_paths import (
     Scope,
     canonical_agent_dir,
     library_agent_path,
+    library_lock_path,
     lock_file_path,
 )
 from agent_toolkit_cli.commands.agent._common import scope_and_roots
@@ -71,11 +77,39 @@ class Finding:
 # in .claude/agents/ (the dir's primary population) must not make doctor
 # exit 1 forever. Pre-#361 report-only types (missing-canonical,
 # missing-content-file, dirty-canonical) describe MANAGED assets in a bad
-# state and keep their original exit-1 semantics.
+# state and keep their original exit-1 semantics. `unlisted` (#360) is
+# deliberately NOT here: it is actionable (re-add fix-action) and keeps
+# exit-1 semantics.
 _INFORMATIONAL_TYPES: frozenset[str] = frozenset({
     "standard-slot-unmanaged",
     "cursor-shadow",
 })
+
+
+def _make_readd_library_action(*, slug: str, entry: LockEntry) -> FixAction:
+    """#360: re-add an unlisted agent to the library from its recorded
+    source+ref — clone the canonical if missing, then write the library lock
+    entry (SHAs reset; `agent update` re-resolves)."""
+    canonical = library_agent_path(slug)
+    url = clone_url_from_entry(entry)
+
+    def _apply() -> None:
+        if not canonical.exists():
+            canonical.parent.mkdir(parents=True, exist_ok=True)
+            skill_git.clone(url, canonical, ref=entry.ref, env=None)
+        lib_path = library_lock_path()
+        lib = read_lock(lib_path)
+        if slug not in lib.skills:
+            write_lock(lib_path, add_entry(
+                lib, slug,
+                dataclasses.replace(entry, upstream_sha=None, local_sha=None),
+            ))
+
+    ref_arg = f" --ref {entry.ref}" if entry.ref else ""
+    return FixAction(
+        shell_preview=f"agent-toolkit-cli agent add {entry.source}{ref_arg} --slug {slug}",
+        apply=_apply,
+    )
 
 
 def _diagnose(
@@ -87,10 +121,8 @@ def _diagnose(
 ) -> list[Finding]:
     findings: list[Finding] = []
     lock_path = lock_file_path(scope=scope, home=home, project=project)
-    try:
-        lock = read_lock(lock_path)
-    except FileNotFoundError:
-        return findings
+    # read_lock returns an empty LockFile for a missing file — never raises.
+    lock = read_lock(lock_path)
 
     targets = (
         {k: v for k, v in lock.skills.items() if k in set(slugs)}
@@ -207,6 +239,27 @@ def _diagnose(
                     ),
                     fix_action=None,
                 ))
+
+    # 4.5: unlisted — project lock entry whose slug is missing from the
+    # library lock (#360). Inert until #362 lands (the CLI writes no project
+    # lock today); ships now for forward-compatibility.
+    # Only run when no slug filter is active (sweep run), and only for project
+    # scope (the library lock is the global authority; this check is meaningless
+    # for global scope). Actionable — NOT in _INFORMATIONAL_TYPES.
+    if not slugs and scope == "project":
+        lib_slugs = set(read_lock(library_lock_path()).skills)
+        for slug, entry in sorted(targets.items()):
+            if slug in lib_slugs:
+                continue
+            findings.append(Finding(
+                slug=slug, finding_type="unlisted", scope=scope, path=lock_path,
+                detail=(
+                    "project lock entry's slug is missing from the library "
+                    "lock (install is functional; the library no longer "
+                    "tracks it)"
+                ),
+                fix_action=_make_readd_library_action(slug=slug, entry=entry),
+            ))
 
     # 5. Orphan canonicals — directories under the library base with no lock
     # entry. This catches the #313 class of orphan: a clone left behind by a
