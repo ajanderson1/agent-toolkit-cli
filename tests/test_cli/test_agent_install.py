@@ -339,3 +339,70 @@ def test_uninstall_collects_refusals_from_symlink_adapters(tmp_path, monkeypatch
     )
     assert refusals == (("cursor", dest),)
     assert dest.exists()
+
+
+def test_reinstall_self_authorizes_without_lock_entry(tmp_path, monkeypatch):
+    """#368 F3 pin: apply() twice with NO lock entry (overwrite=False both
+    times) — the second run succeeds because the first run's sentinels
+    authorize the refresh. Before #368 this raised
+    AgentProjectionConflictError on the tool's own files."""
+    from agent_toolkit_cli import agent_install
+    from agent_toolkit_cli._install_core import InstallPlan
+    from agent_toolkit_cli.agent_paths import canonical_agent_dir
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    canonical = canonical_agent_dir("test-agent", scope="global", home=home)
+    canonical.mkdir(parents=True)
+    (canonical / "test-agent.md").write_text(
+        "---\nname: test-agent\ndescription: testing\n---\n\nBody.\n"
+    )
+    p = InstallPlan(
+        slug="test-agent", scope="global", source=None, ref=None,
+        add_agents=("cursor", "gemini-cli"), remove_agents=(),
+    )
+    agent_install.apply(p, home=home, project=None)
+    agent_install.apply(p, home=home, project=None)  # must not raise
+
+
+def test_expansion_does_not_clobber_foreign_file(tmp_path, monkeypatch):
+    """#368 G5 pin (waived from #362): with a lock entry present
+    (overwrite=True from the facade), expanding to a harness whose
+    destination holds a user-authored file still REFUSES."""
+    import pytest
+    from agent_toolkit_cli import agent_install
+    from agent_toolkit_cli._install_core import InstallPlan
+    from agent_toolkit_cli.agent_adapters import (
+        AgentProjectionConflictError, symlink,
+    )
+    from agent_toolkit_cli.agent_lock import (
+        LockEntry, add_entry, read_lock, write_lock,
+    )
+    from agent_toolkit_cli.agent_paths import canonical_agent_dir, library_lock_path
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    canonical = canonical_agent_dir("test-agent", scope="global", home=home)
+    canonical.mkdir(parents=True)
+    (canonical / "test-agent.md").write_text(
+        "---\nname: test-agent\ndescription: testing\n---\n\nBody.\n"
+    )
+    # A lock entry so apply() derives overwrite=True (tool "owns" the slug).
+    write_lock(library_lock_path(), add_entry(
+        read_lock(library_lock_path()), "test-agent",
+        LockEntry(source="x/test-agent", source_type="github",
+                  agent_path="test-agent.md"),
+    ))
+    # User-authored file at a destination we never projected:
+    dest = symlink.adapter_for("cursor").destination(
+        "test-agent", scope="global", home=home,
+    )
+    dest.parent.mkdir(parents=True)
+    dest.write_text("# the user's own cursor agent\n")
+    p = InstallPlan(
+        slug="test-agent", scope="global", source=None, ref=None,
+        add_agents=("cursor",), remove_agents=(),
+    )
+    with pytest.raises(AgentProjectionConflictError):
+        agent_install.apply(p, home=home, project=None)
+    assert dest.read_text() == "# the user's own cursor agent\n"
