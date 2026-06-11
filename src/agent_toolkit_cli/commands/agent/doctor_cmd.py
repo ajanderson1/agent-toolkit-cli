@@ -65,6 +65,19 @@ class Finding:
     fix_action: FixAction | None = None
 
 
+# Informational finding types (#361, PM review F1): report-only notices about
+# files this tool does NOT manage. They stay visible in the output but never
+# fail the exit code or suppress the clean verdict — one hand-authored agent
+# in .claude/agents/ (the dir's primary population) must not make doctor
+# exit 1 forever. Pre-#361 report-only types (missing-canonical,
+# missing-content-file, dirty-canonical) describe MANAGED assets in a bad
+# state and keep their original exit-1 semantics.
+_INFORMATIONAL_TYPES: frozenset[str] = frozenset({
+    "standard-slot-unmanaged",
+    "cursor-shadow",
+})
+
+
 def _diagnose(
     *,
     slugs: tuple[str, ...] | None,
@@ -147,10 +160,11 @@ def _diagnose(
                 slug=slug, finding_type="standard-slot-drift", scope=scope,
                 path=slot,
                 detail=(
-                    "standard slot differs from canonical — local edits to "
-                    f"{slot} will be DISCARDED by the fix "
-                    f"(baseline: {scope_content}; inspect first with: "
-                    f"diff {slot} {scope_content})"
+                    "standard slot differs from the canonical — the file at "
+                    f"{slot} may be hand-edited or hand-authored; the fix "
+                    "re-seeds it from the canonical and its current content "
+                    f"will be DISCARDED (baseline: {scope_content}; inspect "
+                    f"first with: diff {slot} {scope_content})"
                 ),
                 fix_action=FixAction(
                     shell_preview=(
@@ -164,10 +178,11 @@ def _diagnose(
         # 4b. cursor-shadow (#361, spec § Doctor): cursor reads the standard
         # .claude/agents/ dir natively, but its OWN .cursor/agents/<slug>.md
         # WINS name conflicts — a pre-existing cursor projection therefore
-        # shadows the standard slot with a stale copy. Ownership is sentinel-
-        # gated: only a tool-written cursor file (sidecar present) gets a
-        # removal fix; a sentinel-less file may be deliberately user-authored
-        # there, so it is report-only.
+        # shadows the standard slot with a divergent copy. ALWAYS report-only
+        # (PM review F2): cursor installs go through the symlink adapter,
+        # which writes NO ownership sentinel, so a sentinel-gated removal fix
+        # could never fire in reality — and the file may equally be
+        # user-authored there. Informational (see _INFORMATIONAL_TYPES).
         if scope_content.exists() and slot is not None and slot.exists():
             cursor_dest: Path | None
             try:
@@ -181,36 +196,17 @@ def _diagnose(
                 and cursor_dest.exists()
                 and not filecmp.cmp(scope_content, cursor_dest, shallow=False)
             ):
-                cursor_sentinel = _sentinel_path(cursor_dest)
-                if cursor_sentinel.exists():
-                    findings.append(Finding(
-                        slug=slug, finding_type="cursor-shadow", scope=scope,
-                        path=cursor_dest,
-                        detail=(
-                            "cursor reads its own .cursor/agents first; this "
-                            "stale tool-written copy shadows the standard "
-                            f"slot at {slot} — removing it lets cursor see "
-                            "the standard slot"
-                        ),
-                        fix_action=FixAction(
-                            shell_preview=f"rm {cursor_dest} {cursor_sentinel}",
-                            apply=lambda p=cursor_dest: _rm_file_and_sidecar(p),
-                        ),
-                    ))
-                else:
-                    findings.append(Finding(
-                        slug=slug, finding_type="cursor-shadow", scope=scope,
-                        path=cursor_dest,
-                        detail=(
-                            "cursor reads its own .cursor/agents first; this "
-                            "divergent copy shadows the standard slot at "
-                            f"{slot}, but it was not written by "
-                            "agent-toolkit-cli (no sentinel) — remove or "
-                            "update it manually if the shadowing is "
-                            "unintended"
-                        ),
-                        fix_action=None,
-                    ))
+                findings.append(Finding(
+                    slug=slug, finding_type="cursor-shadow", scope=scope,
+                    path=cursor_dest,
+                    detail=(
+                        "cursor reads its own .cursor/agents first, so this "
+                        f"file shadows the standard slot at {slot} — if the "
+                        "shadowing is unintended, remove it manually or run "
+                        f"`agent uninstall {slug} --harnesses cursor`"
+                    ),
+                    fix_action=None,
+                ))
 
     # 5. Orphan canonicals — directories under the library base with no lock
     # entry. This catches the #313 class of orphan: a clone left behind by a
@@ -324,11 +320,12 @@ def doctor_cmd(
 
     Checks for missing canonicals, missing content files, dirty working
     trees, and orphan canonicals, plus the standard .claude/agents slot
-    (#361): standard-slot-drift, cursor-shadow (a stale .cursor/agents copy
-    shadowing the slot), standard-slot-orphan, standard-slot-unmanaged
-    (hand-authored files — report-only), and standard-slot-dangling-sidecar.
-    Reports findings and (unless --no-fix) offers to apply automatic repairs
-    where available.
+    (#361): standard-slot-drift, cursor-shadow (a divergent .cursor/agents
+    copy shadowing the slot — informational), standard-slot-orphan,
+    standard-slot-unmanaged (hand-authored files — informational), and
+    standard-slot-dangling-sidecar. Informational findings are reported but
+    never fail the exit code. Reports findings and (unless --no-fix) offers
+    to apply automatic repairs where available.
     """
     scope, home, project_root = scope_and_roots(
         global_, project_flag,
@@ -344,13 +341,22 @@ def doctor_cmd(
         click.echo("all clean")
         return
 
-    fixed = skipped = 0
+    fixed = skipped = informational = 0
+    actionable_total = sum(
+        1 for f in findings if f.finding_type not in _INFORMATIONAL_TYPES
+    )
     quit_loop = False
     for f in findings:
         click.echo("")
         click.echo(f"{f.slug} · {f.finding_type} ({f.scope})")
         click.echo(f"  path:   {f.path}")
         click.echo(f"  detail: {f.detail}")
+        if f.finding_type in _INFORMATIONAL_TYPES:
+            # Report-only notice about a file we do not manage — visible,
+            # but never fails the exit code or the clean verdict (F1).
+            informational += 1
+            click.echo("  (informational — no automatic fix)")
+            continue
         if f.fix_action is None or no_fix or quit_loop:
             skipped += 1
             if f.fix_action is None:
@@ -383,8 +389,14 @@ def doctor_cmd(
             skipped += 1
 
     click.echo("")
-    click.echo(
-        f"summary: {len(findings)} findings, {fixed} fixed, {skipped} skipped"
-    )
-    if skipped > 0 or fixed < len(findings):
+    parts = f"summary: {len(findings)} findings, {fixed} fixed, {skipped} skipped"
+    if informational:
+        parts += f", {informational} informational"
+    click.echo(parts)
+    # Exit semantics consider ACTIONABLE findings only (F1): informational
+    # notices never fail doctor, and an informational-only run is clean.
+    if actionable_total == 0:
+        click.echo(f"all clean ({informational} informational)")
+        return
+    if skipped > 0 or fixed < actionable_total:
         ctx.exit(1)

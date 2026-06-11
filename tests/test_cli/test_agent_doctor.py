@@ -197,6 +197,43 @@ def test_doctor_flags_sentineled_orphan_only(
     assert advisor.exists(), "user-authored file must never be touched"
 
 
+def test_doctor_exit_zero_all_clean_with_only_hand_authored_agents(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """F1 pin (PM adversarial review): hand-authored files are the PRIMARY
+    population of .claude/agents/ — an informational `standard-slot-unmanaged`
+    finding must NOT fail the exit code or suppress the clean verdict."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    agents_dir = tmp_path / ".claude" / "agents"
+    agents_dir.mkdir(parents=True)
+    (agents_dir / "my-advisor.md").write_text("# hand-authored advisor\n")
+
+    r = CliRunner().invoke(main, ["agent", "doctor", "-g"])
+    assert r.exit_code == 0, r.output
+    # The finding stays VISIBLE (informational), and the clean verdict prints.
+    assert "standard-slot-unmanaged" in r.output
+    assert "informational" in r.output.lower()
+    assert "clean" in r.output.lower()
+
+
+def test_doctor_actionable_finding_still_exits_nonzero_alongside_informational(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An actionable finding (drift, skipped under --no-fix) keeps exit 1 even
+    when informational findings are also present."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _seed_global_canonical()
+    _write_global_lock()
+    _write_slot(tmp_path, content=_DIVERGED, sentinel=False)  # drift
+    agents_dir = tmp_path / ".claude" / "agents"
+    (agents_dir / "my-advisor.md").write_text("# hand-authored advisor\n")
+
+    r = CliRunner().invoke(main, ["agent", "doctor", "-g", "--no-fix"])
+    assert r.exit_code != 0, r.output
+    assert "standard-slot-drift" in r.output
+    assert "standard-slot-unmanaged" in r.output
+
+
 def test_doctor_sweep_skipped_when_slug_filtered(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -308,13 +345,15 @@ def _write_cursor_file(tmp_path: Path, content: str, sentinel: bool) -> Path:
     return cursor_dest
 
 
-def test_doctor_cursor_shadow_sentineled_offers_removal(
+def test_doctor_cursor_shadow_divergent_copy_report_only(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Stale tool-written cursor projection → finding WITH a removal fix."""
+    """Divergent cursor copy → informational finding, NO fix (PM review F2:
+    cursor installs never write sentinels, so a sentinel-gated removal fix
+    was dead code; cursor-shadow is always report-only)."""
     monkeypatch.setenv("HOME", str(tmp_path))
     _seed_locked_slug_with_matching_slot(tmp_path)
-    cursor_dest = _write_cursor_file(tmp_path, _DIVERGED, sentinel=True)
+    cursor_dest = _write_cursor_file(tmp_path, _DIVERGED, sentinel=False)
 
     findings = _diagnose(slugs=None, scope="global", home=tmp_path, project=None)
     shadows = _by_type(findings, "cursor-shadow")
@@ -323,26 +362,65 @@ def test_doctor_cursor_shadow_sentineled_offers_removal(
     assert f.slug == "demo-agent"
     assert f.path == cursor_dest
     assert "shadows" in f.detail, f.detail
-    assert f.fix_action is not None
+    # Accurate remediation guidance, no automatic fix.
+    assert "agent uninstall" in f.detail
+    assert "--harnesses cursor" in f.detail
+    assert f.fix_action is None
+    assert cursor_dest.exists()
 
-    f.fix_action.apply()
-    assert not cursor_dest.exists()
-    assert not _sentinel_path(cursor_dest).exists()
 
-
-def test_doctor_cursor_shadow_sentinel_less_report_only(
+def test_doctor_cursor_shadow_sentineled_no_longer_special(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Sentinel-less divergent cursor file may be user-authored → report-only."""
+    """A hand-made sentinel next to the cursor copy changes nothing: the
+    finding is the same report-only shape (no removal fix)."""
     monkeypatch.setenv("HOME", str(tmp_path))
     _seed_locked_slug_with_matching_slot(tmp_path)
-    cursor_dest = _write_cursor_file(tmp_path, _DIVERGED, sentinel=False)
+    cursor_dest = _write_cursor_file(tmp_path, _DIVERGED, sentinel=True)
 
     findings = _diagnose(slugs=None, scope="global", home=tmp_path, project=None)
     shadows = _by_type(findings, "cursor-shadow")
     assert len(shadows) == 1, [f.finding_type for f in findings]
     assert shadows[0].fix_action is None
     assert cursor_dest.exists()
+
+
+def test_doctor_cursor_shadow_via_real_adapter_is_report_only(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """F2 pin (PM adversarial review): exercise the shadow through the REAL
+    cursor adapter (which writes copy2 + NO sentinel) — the finding must fire
+    as report-only without any hand-manufactured sentinel."""
+    from agent_toolkit_cli.agent_adapters import get_adapter
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    canonical = _seed_global_canonical()
+    _write_global_lock()
+    # Real cursor install of the CURRENT canonical content...
+    cursor_dest = get_adapter("cursor").install(
+        "demo-agent", canonical / "demo-agent.md",
+        scope="global", home=tmp_path,
+    )
+    assert not _sentinel_path(cursor_dest).exists(), (
+        "premise: the real cursor adapter writes no ownership sentinel"
+    )
+    # ...then the canonical moves on and the slot is re-seeded — the cursor
+    # copy is now a stale shadow.
+    (canonical / "demo-agent.md").write_text(_DIVERGED)
+    _write_slot(tmp_path, content=_DIVERGED)
+
+    findings = _diagnose(slugs=None, scope="global", home=tmp_path, project=None)
+    shadows = _by_type(findings, "cursor-shadow")
+    assert len(shadows) == 1, [f.finding_type for f in findings]
+    f = shadows[0]
+    assert f.path == cursor_dest
+    assert f.fix_action is None
+    assert cursor_dest.exists()
+
+    # Informational: the shadow alone must not fail the doctor exit code.
+    r = CliRunner().invoke(main, ["agent", "doctor", "-g", "--no-fix"])
+    assert r.exit_code == 0, r.output
+    assert "cursor-shadow" in r.output
 
 
 def test_doctor_cursor_shadow_identical_copy_is_clean(

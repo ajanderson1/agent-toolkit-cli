@@ -183,8 +183,13 @@ Claude Code subagents — this very repo's advisor bench lives there — so
   user file via `_guard_foreign`.
 - **cursor-shadow** — a `.cursor/agents/<slug>.md` projection exists for a
   slug whose standard slot is installed and differs from the scope canonical
-  → stale shadow (cursor's own dir wins name conflicts); sentinel-gated fix
-  (rm projection + sidecar) or report-only if sentinel-less.
+  → shadow (cursor's own dir wins name conflicts). ALWAYS report-only (PM
+  adversarial review F2: cursor installs go through the symlink adapter,
+  which writes no ownership sentinel, so a sentinel-gated removal fix could
+  never fire in reality); the detail recommends manual removal or
+  `agent uninstall <slug> --harnesses cursor`. Together with **unmanaged**
+  it is informational: visible in output, never fails the doctor exit code
+  or the clean verdict (F1).
 
 ### Research step (mandated)
 
