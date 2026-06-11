@@ -24,3 +24,17 @@
 ## Baseline deltas (vs v1 tag v1.0.0)
 
 - None in v1's 5. FOUR newly-supported: **codebuddy, forgecode, augment** (markdown drop-in → symlink/translate), **kiro-cli** (JSON → translate to JSON). hermes = by design; codestudio = unknown.
+
+## Re-verification 2026-06-10 — `.claude/agents/` readers (#361)
+
+- `codebuddy`: re-fetched codebuddy.ai/docs/cli/sub-agents — scans only
+  `.codebuddy/agents/` + `~/.codebuddy/agents/`; no `.claude/agents/` mention.
+  Negative.
+- `forgecode`: WebSearch — no evidence; `~/.forge/agents/` + `.forge/agents/`
+  only. Negative.
+- `kiro-cli`: WebSearch — migration write-ups state Kiro does **not** read
+  `.claude/` folders (its only compat layer is `.amazonq/`); agents are JSON in
+  `.kiro/agents/`. Negative.
+- `augment`: WebSearch — no evidence; own `.augment/agents/` dirs only (a
+  known anthropics/claude-code issue #24439 about `.claude/agents/` concerns
+  Claude Code's own VS Code extension, not Augment). Negative.

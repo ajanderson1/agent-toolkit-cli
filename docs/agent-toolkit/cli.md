@@ -1,6 +1,6 @@
 # agent-toolkit CLI reference
 
-`agent-toolkit-cli` is a single-command CLI for managing AI-agent skills. Post-v2.3.0 the only top-level command is `skill`; the pre-v2 surface (`check`, `link`, `doctor`, `fix`, `ingest`, `inventory`, `migrate-skills`, `new`, `diff`, `list`, `unlink`, `pi`) was removed in [#160](https://github.com/ajanderson1/agent-toolkit-cli/issues/160). The frozen v1 surface is pinned at the `v1.0.0` tag — see the [README](../index.md) for the install command.
+`agent-toolkit-cli` is a per-asset-type CLI for managing AI-agent assets. Post-v2.3.0 the top-level commands are the asset-type groups (`skill`, `agent`, `instructions`, `pi-extension`); the pre-v2 surface (`check`, `link`, `doctor`, `fix`, `ingest`, `inventory`, `migrate-skills`, `new`, `diff`, `list`, `unlink`, `pi`) was removed in [#160](https://github.com/ajanderson1/agent-toolkit-cli/issues/160). The frozen v1 surface is pinned at the `v1.0.0` tag — see the [README](../index.md) for the install command.
 
 ## Commands
 
@@ -22,6 +22,29 @@ agent-toolkit-cli skill remove <slug>... [-g|-p] [--force]          # alias: rm
 > **Terminology:** *standard* — formerly "general" (v3), earlier "universal" (pre-v3). The old token spellings still work for one cycle with a deprecation warning and are removed in v4.
 
 Full reference, lock-file format, and skills.sh interop notes live in [`skill-lock.md`](skill-lock.md).
+
+### `agent`
+
+Manage subagent definitions (the `agent` [asset type](../asset-types/agents.md)) — one canonical markdown file per agent, projected per harness.
+
+```text
+agent-toolkit-cli agent add <source> [--slug <slug>] [--ref <ref>]
+agent-toolkit-cli agent install <slug> [-g|-p] [--harnesses <h>[,<h>...]]
+agent-toolkit-cli agent uninstall <slug> [-g|-p] [--harnesses <h>[,<h>...]]   # non-destructive
+agent-toolkit-cli agent remove <slug> [--force]                               # destructive
+agent-toolkit-cli agent list / status / doctor [-g|-p]
+
+agent-toolkit-cli agent install my-agent -g --harnesses standard
+agent-toolkit-cli agent install my-agent -g                       # covered-aware fan-out
+agent-toolkit-cli agent uninstall my-agent -g                     # maximal sweep
+```
+
+- `--harnesses standard` (#361) writes the single shared `.claude/agents/<slug>.md` slot (`~/.claude/agents/` at global scope, `<project>/.claude/agents/` at project scope) that every harness in the per-scope covered set reads natively — `agent_adapters/standard.py::STANDARD_AGENT_READERS` is the SSOT for that set (as of 2026-06: claude-code, kode, neovate, cortex, cursor at both scopes, plus devin at project scope only).
+- `--harnesses claude-code` is normalized to `standard`: claude-code's destination IS the standard slot, so one file under one token — every scan dedupes by destination and reports it as `standard`.
+- `agent install` with no `--harnesses` defaults covered-aware: the standard slot plus every enabled harness the slot does **not** cover at that scope (no redundant own-dir copies for the covered readers). `agent uninstall` with no `--harnesses` deliberately stays **maximal** — the standard slot plus *all* enabled harnesses — so it also cleans own-dir files left by pre-#361 installs.
+- Synthetic catalog names (`standard-skill`, `standard-agent`) are rejected with an explicit error telling you to use `standard`, instead of the previous silent no-op.
+
+`agent doctor` also checks the standard slot (#361 finding families): `standard-slot-drift` (slot differs from the scope's canonical; fix re-seeds it), `cursor-shadow` (a divergent pre-existing `.cursor/agents/<slug>.md` file — cursor's own dir **wins** name conflicts, so it shadows the slot; report-only, since cursor installs carry no ownership sentinel the tool cannot tell a stale projection from a hand-authored file — remove it manually or run `agent uninstall <slug> --harnesses cursor`), `standard-slot-orphan` (tool-written slot file with no lock entry), `standard-slot-unmanaged` (hand-authored files in `.claude/agents/` — **never** auto-removed), and `standard-slot-dangling-sidecar` (stale `.attk` ownership sidecar without its slot file). `cursor-shadow` and `standard-slot-unmanaged` are **informational**: they stay visible in the output but never fail the doctor exit code or suppress the clean verdict.
 
 ### `tui` (separate binary)
 

@@ -20,3 +20,11 @@
 ## Baseline deltas (vs v1 tag v1.0.0)
 
 - **opencode:** v1 = `translate → ~/.config/opencode/agents/<slug>.md` (user) / `.opencode/agents/<slug>.md` (project), inject `mode: subagent`. CONFIRMED + REFINED: loader globs BOTH `{agent,agents}` (singular AND plural accepted) recursively (`**`). Mechanism stays **translate** (inject `mode: subagent`). Citation upgraded to `agent.ts` load() + `agent.ts:32`. Baseline holds with the singular/plural refinement.
+
+## Re-verification 2026-06-10 — `.claude/agents/` readers (#361)
+
+- `opencode`: WebSearch `opencode ".claude/agents"` — no compat layer;
+  community gists exist precisely to *manually convert* Claude agents into
+  `~/.config/opencode/agent/` format, confirming no native read. Negative.
+- `aider-desk`: WebSearch — no evidence; agent profiles remain
+  `.aider-desk/agents/<slug>/config.json` (JSON registry). Negative.

@@ -7,7 +7,7 @@
 |---|---|---|---|---|---|
 | `junie` | `config_file+folder` | markdown+frontmatter | `~/.junie/agents/<slug>.md` or `~/.agents/<slug>.md` / `.junie/agents/<slug>.md` or `.agents/<slug>.md` | markdown; required `description`; optional `name`, `tools`, `disallowedTools`, `model`, `reasoningLevel`, `skills`, `allowPromptArgument` | https://junie.jetbrains.com/docs/junie-cli-subagents.html |
 | `qoder` | `config_file+folder` | markdown+frontmatter | `~/.qoder/agents/<name>.md` / `${project}/.qoder/agents/<name>.md` | markdown; required `name`, `description`; optional `tools` (comma-sep), `skills`, `mcpServers` | https://docs.qoder.com/extensions/subagent |
-| `cursor` | `config_file+folder` | markdown+frontmatter | `~/.cursor/agents/<slug>.md` / `.cursor/agents/<slug>.md` | markdown; required `name`, `description`; optional `model` (default `inherit`), `readonly`, `is_background` | https://cursor.com/docs/subagents |
+| `cursor` | `config_file+folder` | markdown+frontmatter | `~/.cursor/agents/<slug>.md` (also `~/.claude/agents/`, `~/.codex/agents/`) / `.cursor/agents/<slug>.md` (also `.claude/agents/`, `.codex/agents/`) | markdown; required `name`, `description`; optional `model` (default `inherit`), `readonly`, `is_background` | https://cursor.com/docs/subagents (re-verified 2026-06-10) |
 | `kilo` | `config_file+folder` | markdown+frontmatter | `~/.config/kilo/agent/<slug>.md` / `.kilo/agents/<slug>.md` or `.kilo/agent/<slug>.md` | markdown; required `description`, `mode` (primary/subagent/all); optional `model`, `color`, `permission`, `temperature`; `mode: subagent` = only invokable via `task` tool | https://kilo.ai/docs/agent-behavior/custom-modes |
 | `roo` | `unsupported (gap)` | | global `custom_modes.yaml/json` / `.roomodes` (workspace root) | mode/persona defs (YAML/JSON); delegation via Orchestrator `new_task` tool + `whenToUse`; mode-switch not independent-context spawn | https://roocodeinc.github.io/Roo-Code/features/custom-modes ; .../boomerang-tasks |
 | `continue` | `unknown — no public evidence found` | | `.continue/agents/` mentioned in passing (issue #9550); config.yaml-based, internal testing | no stable public file-based subagent spec | https://github.com/continuedev/continue/issues/9550 |
@@ -29,3 +29,23 @@
 ## Baseline deltas (vs v1 tag v1.0.0)
 
 - None of these 9 were in v1's 5 baselines. SIX are newly-relevant: **cursor, junie, qoder, kilo** newly support file-drop subagents (cursor + qoder + junie are Claude-style markdown → symlink/translate; kilo needs a `mode` field → translate). **roo** is a near-miss gap. **continue** is unknown (private testing).
+
+## Re-verification 2026-06-10 — `.claude/agents/` readers (#361)
+
+- `cursor`: **JOINS the `.claude/agents/` covered set (both scopes).** Fetched
+  https://cursor.com/docs/subagents.md — default discovery locations are now
+  `.cursor/agents/`, `.claude/agents/`, `.codex/agents/` (project) and
+  `~/.cursor/agents/`, `~/.claude/agents/`, `~/.codex/agents/` (user), no
+  flags/config; `.cursor/` wins name conflicts. Table row above updated. This
+  postdates the original Phase A finding (own dirs only).
+- `junie`: WebSearch + junie.jetbrains.com/docs/junie-cli-subagents.html —
+  Junie *detects* `.cursor/agents/`, `.claude/agents/`, `.codex/agents/` files
+  and **suggests importing** them into `.junie/agents/`. Import-on-prompt, not
+  a default read → does NOT count as a `.claude/agents/` reader.
+- `qoder`: WebSearch `Qoder ".claude/agents"` — no evidence; own
+  `~/.qoder/agents/` + `.qoder/agents/` dirs only. Negative.
+- `kilo`: Fetched kilo.ai/docs/agent-behavior/custom-modes — scans
+  `.kilo/agents/`, `.kilo/agent/`, `.opencode/agents/` (project) and
+  `~/.config/kilo/agent/` (global); no `.claude/agents/` mention. Negative.
+  (Note: kilo DOES read `.opencode/agents/` — an opencode compat layer, not a
+  claude one.)

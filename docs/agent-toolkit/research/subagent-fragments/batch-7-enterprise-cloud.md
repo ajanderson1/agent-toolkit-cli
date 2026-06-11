@@ -28,3 +28,24 @@
 ## Baseline deltas (vs v1 tag v1.0.0)
 
 - None in v1's 5. FIVE newly-supported via markdown drop-in: **cortex, devin, droid, rovodev** (+ cortex/devin also read `.claude/agents/`). bob = near-miss gap; codearts-agent = unknown; tabnine/zencoder = by design.
+
+## Re-verification 2026-06-10 — `.claude/agents/` readers (#361)
+
+- `cortex`: re-fetched docs.snowflake.com/en/user-guide/cortex-code/extensibility —
+  three documented locations still include Project `.cortex/agents/` **or**
+  `.claude/agents/` and User `~/.claude/agents/` (plus Global
+  `~/.snowflake/cortex/agents/`), no conditions. HOLDS at both scopes.
+- `devin`: original citation `cli.devin.ai/docs/subagents` now **301s to
+  https://docs.devin.ai/cli/subagents** (matrix citation updated). The page's
+  "Importing From Other Tools" table lists `.claude/agents/*.md` ("each `.md`
+  file becomes a subagent profile") as a **project-relative** import source;
+  `tools`/`allowed-tools` frontmatter both accepted. Global scope is the
+  profile-dir tree (`~/.config/devin/agents/{profile}/AGENT.md`), NOT
+  `~/.claude/agents/` → devin is a **project-scope `.claude/agents/` reader
+  only**. Also new: project paths now include `.agents/agents/{name}/AGENT.md`.
+  HOLDS (project scope only).
+- `droid`: WebSearch + docs.factory.ai/cli/configuration/custom-droids — Factory
+  supports a one-time **import** of a project's `.claude/agents/` that *copies*
+  into `~/.factory/droids/`; not a default read → does NOT count. Negative.
+- `rovodev`: WebSearch `Rovo Dev CLI ".claude/agents"` — no evidence; own
+  `.rovodev/subagents/` dirs only. Negative.

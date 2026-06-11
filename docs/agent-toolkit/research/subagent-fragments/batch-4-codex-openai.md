@@ -20,3 +20,12 @@
 
 - **codex:** v1 = `translate → ~/.codex/agents/<slug>.toml` (TOML name/description/developer_instructions, #140). CURRENT source contradicts the pure-translate model: codex requires an `[agents.<role>]` declaration in `config.toml` that POINTS to the TOML file via `config_file=`. So the real mechanism is **config_file** (mutate `config.toml` to register the role) **+folder** (materialize the pointed TOML) — i.e. `config_file+folder` in our vocabulary, NOT translate. This is a material baseline change for Phase B (#140's translate-only adapter is insufficient). FLAGGED.
 - **neovate:** NOT in v1 — new supported harness, Claude-compatible markdown → symlink.
+
+## Re-verification 2026-06-10 — `.claude/agents/` readers (#361)
+
+- `neovate`: re-fetched `src/agent/agentManager.ts` (master) — still constructs
+  a globalClaude dir (`~/.claude/agents/`) and a projectClaude dir
+  (`<project>/.claude/agents/`) alongside the neovate-native dirs, scanned by
+  default. HOLDS at both scopes.
+- `dexto`: WebSearch — no evidence; agents remain YAML registry entries
+  (`agent-spawner`), no `.claude/agents/` read. Negative.

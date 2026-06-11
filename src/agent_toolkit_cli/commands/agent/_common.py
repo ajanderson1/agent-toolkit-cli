@@ -16,6 +16,43 @@ _LOCK_FILENAME = AGENT_BINDING.lock_filename
 
 Scope = Literal["project", "global"]
 
+# Synthetic catalog names (#361 AC7): real AGENTS entries that are NOT
+# installable harnesses for the agent asset type. Rejected with an explicit
+# UsageError instead of the previous silent no-op. #350 aliases resolve
+# first, so e.g. general-skill is rejected the same way.
+_SYNTHETIC_HARNESS_TOKENS = frozenset({"standard-skill", "standard-agent"})
+
+
+def parse_harness_tokens(harnesses_str: str) -> tuple[str, ...]:
+    """Parse an explicit --harnesses value into validated harness names.
+
+    Shared by install and uninstall: resolves #350 aliases, rejects the
+    synthetic catalog names, normalizes claude-code → standard (claude-code's
+    destination IS the standard slot at both scopes; one slot, one token —
+    prevents a dual-name delta where plan() removes one alias while
+    installing the other), validates against the catalog, and dedupes
+    preserving order.
+    """
+    from agent_toolkit_cli.skill_agents import AGENTS, resolve_agent_token
+
+    parts = [resolve_agent_token(p.strip()) for p in harnesses_str.split(",") if p.strip()]
+    synthetic = [p for p in parts if p in _SYNTHETIC_HARNESS_TOKENS]
+    if synthetic:
+        raise click.UsageError(
+            f"synthetic catalog name(s): {', '.join(synthetic)}; use 'standard'"
+        )
+    parts = ["standard" if p == "claude-code" else p for p in parts]
+    unknown = [p for p in parts if p not in AGENTS]
+    if unknown:
+        raise click.UsageError(f"unknown harness(es): {', '.join(unknown)}")
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for p in parts:
+        if p not in seen:
+            seen.add(p)
+            deduped.append(p)
+    return tuple(deduped)
+
 
 def scope_and_roots(
     global_: bool,

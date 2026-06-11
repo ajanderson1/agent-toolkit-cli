@@ -10,7 +10,7 @@ import os
 import shutil
 from pathlib import Path
 
-from agent_toolkit_cli.agent_adapters import _guard_foreign
+from agent_toolkit_cli.agent_adapters import _guard_foreign, _sentinel_path
 from agent_toolkit_cli.skill_agents import UnknownAgentError
 
 
@@ -156,6 +156,12 @@ class _SymlinkAdapter:
         dest = self._resolve_dest(slug, scope=scope, home=home, project=project)
         if dest.exists() or dest.is_symlink():
             dest.unlink()
+        # Destination-generic sentinel cleanup (#361 review finding): an
+        # orphaned .attk left behind would later authorize a silent clobber
+        # via _guard_foreign of a file the user re-authored at this path.
+        sentinel = _sentinel_path(dest)
+        if sentinel.exists():
+            sentinel.unlink()
 
 
 def adapter_for(harness: str) -> _SymlinkAdapter:

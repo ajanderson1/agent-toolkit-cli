@@ -7,7 +7,6 @@ import click
 
 from agent_toolkit_cli.skill_agents import (
     AGENTS,
-    UnknownAgentError,
     resolve_agent_token,
 )
 

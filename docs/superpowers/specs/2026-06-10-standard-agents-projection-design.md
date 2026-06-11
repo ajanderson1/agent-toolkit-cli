@@ -24,9 +24,12 @@ agents tab its Standard column.
    reads `.claude/agents/` at that scope. Evidence today (re-verified by the
    plan's research step before the table is written):
    - global: `claude-code` (recursive), `kode`, `neovate`, `cortex` (or-path
-     with `~/.snowflake/cortex/agents/`).
-   - project: those four **plus `devin`** (reads `.claude/agents/*.md` at
-     project scope only; its global path is a profile-dir `AGENT.md`).
+     with `~/.snowflake/cortex/agents/`), `cursor` (cursor.com/docs/subagents,
+     re-verified 2026-06-10; `.cursor/` wins name conflicts).
+   - project: those five **plus `devin`** (reads `.claude/agents/*.md` at
+     project scope only; its global path is a profile-dir `AGENT.md`); `cursor`
+     reads project `.claude/agents/` too (cursor.com/docs/subagents,
+     re-verified 2026-06-10; `.cursor/` wins name conflicts).
 3. **CLI token: `standard`** at the agent-kind `--harnesses` boundary — same
    bundle-token UX as the skills kind. `standard-agent` stays an internal
    synthetic name (post-#350 semantics unchanged).
@@ -63,8 +66,8 @@ agents tab its Standard column.
 # Evidence: docs/agent-toolkit/research/subagent-fragments/ + re-verification
 # (#361). Derived consumers: composition.agents_standard_covered(scope).
 STANDARD_AGENT_READERS: dict[str, frozenset[str]] = {
-    "global":  frozenset({"claude-code", "kode", "neovate", "cortex"}),
-    "project": frozenset({"claude-code", "kode", "neovate", "cortex", "devin"}),
+    "global":  frozenset({"claude-code", "kode", "neovate", "cortex", "cursor"}),
+    "project": frozenset({"claude-code", "kode", "neovate", "cortex", "cursor", "devin"}),
 }
 ```
 
@@ -122,6 +125,11 @@ The TUI/composition layer consumes this via a new per-scope helper —
 - ALL synthetic catalog names (`standard-skill`, `standard-agent`; their
   #350 aliases resolve to these first) are rejected with an explicit
   UsageError at the agent-kind boundary.
+- **Cursor shadowing trap** (post-Task-0): cursor's own
+  `.cursor/agents/<slug>.md` wins name conflicts over the standard slot, so a
+  pre-existing cursor projection shadows the slot with a stale copy after
+  fan-out drops cursor — remediation is uninstalling the old cursor
+  projection; doctor gains a check (Task 5).
 
 ### TUI agents tab
 
@@ -129,7 +137,7 @@ Columns become (per the post-#351-demo decisions: single-line headers, no
 group-tag row, **no long-tail pseudo-column — the long tail is CLI-only**):
 
 ```
-AGENT ⓘ | Standard ⓘ | Gemini CLI ⓘ | OpenCode ⓘ | Pi ⓘ | Cursor ⓘ | State | Source
+AGENT ⓘ | Standard ⓘ | Gemini CLI ⓘ | OpenCode ⓘ | Pi ⓘ | State | Source
 ```
 
 (Column order = `MAIN_HARNESSES` declaration order filtered, matching the
@@ -137,7 +145,7 @@ skills/instructions helpers' convention.)
 
 - The rendered set = Standard + the `MAIN_HARNESSES` members that support the
   agent kind and are not standard-covered at the current scope. Today:
-  gemini-cli, opencode, pi, cursor — in `MAIN_HARNESSES` declaration order
+  gemini-cli, opencode, pi — in `MAIN_HARNESSES` declaration order
   (codex is `unsupported (by design)` — registry-gated, pending PR5a — and
   therefore exempt from the coverage guarantee). The #351 coverage-guard test
   gains an agents-kind case.
@@ -173,6 +181,15 @@ Claude Code subagents — this very repo's advisor bench lives there — so
   (e.g. manually deleted slot) → remove-sidecar fix; otherwise the stale
   sentinel would later authorize a silent clobber of a new same-named
   user file via `_guard_foreign`.
+- **cursor-shadow** — a `.cursor/agents/<slug>.md` projection exists for a
+  slug whose standard slot is installed and differs from the scope canonical
+  → shadow (cursor's own dir wins name conflicts). ALWAYS report-only (PM
+  adversarial review F2: cursor installs go through the symlink adapter,
+  which writes no ownership sentinel, so a sentinel-gated removal fix could
+  never fire in reality); the detail recommends manual removal or
+  `agent uninstall <slug> --harnesses cursor`. Together with **unmanaged**
+  it is informational: visible in output, never fails the doctor exit code
+  or the clean verdict (F1).
 
 ### Research step (mandated)
 
@@ -225,3 +242,17 @@ upstream docs/source:
    ("synthetic; use 'standard'") — review found the old behavior was a
    silent no-op, not a rejection; #350 alias behavior unchanged; full suite
    green.
+
+## Amendments (2026-06-10, post-Task-0)
+
+Task 0 (commit 0b89cb4) re-verified every catalog harness for
+`.claude/agents/` reading, per the mandated research step. One delta vs the
+original evidence sets: **cursor reads `.claude/agents/` at BOTH scopes**
+(project + `~/.claude/agents/` user) by default — cursor.com/docs/subagents,
+verified 2026-06-10; cursor's own `.cursor/` dirs win name conflicts. PM
+adjudication: the verified sets are normative and supersede the spec's
+original inline values; cursor joins the covered set at both scopes, so it
+drops out of the rendered agents-tab columns (AC3's original column list is
+superseded — rendered set today: gemini-cli, opencode, pi). The cursor
+shadowing trap is recorded in § Installer and doctor gains the
+**cursor-shadow** check (§ Doctor, Task 5).

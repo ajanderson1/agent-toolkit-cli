@@ -834,6 +834,7 @@ class TUIApp(App):
 
         ok = failed = 0
         errors: list[str] = []
+        refusal_msgs: list[str] = []
 
         for (scope, slug), (adds, removes) in by_slug.items():
             # Global scope MUST pass home=Path.home() so adapters' {HOME}
@@ -875,13 +876,24 @@ class TUIApp(App):
             # Calling uninstall() directly avoids orphaning projected files.
             if removes:
                 try:
-                    agent_install.uninstall(
+                    # uninstall() returns structured refusals (PM review F5):
+                    # the standard adapter leaves a non-owned (sentinel-less,
+                    # content-divergent) slot file in place — surface each
+                    # instead of silently counting it as removed. The re-scan
+                    # below keeps the cell linked (truthful grid state).
+                    refusals = agent_install.uninstall(
                         slug=slug,
                         scope=scope,  # type: ignore[arg-type]
                         home=effective_home,
                         project=project,
                         harnesses=tuple(sorted(removes)),
-                    )
+                    ) or ()
+                    for harness, dest in refusals:
+                        refusal_msgs.append(
+                            f"{slug} ({harness}): {dest} is not managed by "
+                            "this tool (no ownership sentinel, content "
+                            "differs) — left in place"
+                        )
                     ok += len(removes)
                 except (InstallError, ValueError) as exc:
                     errors.append(f"{slug}: {exc}")
@@ -895,6 +907,13 @@ class TUIApp(App):
             grid.restore_pending(saved)
         self._refresh_pending_label()
         self._refresh_status_bar()
+        if refusal_msgs:
+            self.notify(
+                "\n\n".join(refusal_msgs),
+                title="Apply: some files left in place",
+                severity="warning",
+                timeout=12,
+            )
         if errors:
             first = " ".join(errors[0].split())
             extra = f" (+{len(errors) - 1} more)" if len(errors) > 1 else ""

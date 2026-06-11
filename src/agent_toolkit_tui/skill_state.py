@@ -12,7 +12,6 @@ from typing import Literal
 import yaml
 
 from agent_toolkit_cli import skill_git
-from agent_toolkit_cli.skill_agents import AGENTS
 from agent_toolkit_cli.skill_install import _should_skip_symlink
 from agent_toolkit_cli.skill_lock import read_lock
 from agent_toolkit_cli.skill_paths import (

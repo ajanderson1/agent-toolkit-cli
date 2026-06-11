@@ -717,6 +717,8 @@ def test_status_shows_agent(
 def test_status_shows_projected_harnesses_after_install(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Contract update (#361): claude-code's destination IS the standard
+    slot, so status dedupes by destination and reports it as `standard`."""
     monkeypatch.setenv("HOME", str(tmp_path))
     _seed_global_canonical(tmp_path)
     _write_global_lock(tmp_path)
@@ -728,7 +730,8 @@ def test_status_shows_projected_harnesses_after_install(
     )
     r = runner.invoke(main, ["agent", "status", "demo-agent", "-g"])
     assert r.exit_code == 0, r.output
-    assert "claude-code" in r.output
+    assert "standard" in r.output
+    assert "claude-code" not in r.output
 
 
 # ---------------------------------------------------------------------------

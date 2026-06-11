@@ -9,22 +9,42 @@ from agent_toolkit_cli.commands.agent._common import scope_and_roots
 
 
 def _projected_harnesses(slug: str, scope: str, home: object, project: object) -> list[str]:
-    """Return list of harness names that have a live projection on disk."""
+    """Return list of harness names that have a live projection on disk.
+
+    Dedupe-by-destination (#361): the standard slot is ONE file with many
+    readers, so it is checked first and reported once as "standard"; any
+    catalog cell whose destination IS the slot (claude-code at both scopes,
+    kode at project scope) is skipped rather than double-reported.
+    """
     from agent_toolkit_cli.agent_adapters import UnsupportedMechanismError, get_adapter
     from agent_toolkit_cli.skill_agents import AGENTS
     from pathlib import Path
 
+    home_p = home if isinstance(home, Path) else None
+    project_p = project if isinstance(project, Path) else None
+
     found = []
+    std_dest = None
+    try:
+        std_dest = get_adapter("standard").destination(
+            slug, scope=scope, home=home_p, project=project_p,
+        )
+        if std_dest.exists() or std_dest.is_symlink():
+            found.append("standard")
+    except ValueError:
+        # The slot can't be resolved for these args (e.g. home=None at
+        # global scope) — nothing to report; the per-cell scan still runs.
+        std_dest = None
     for name, cfg in AGENTS.items():
         if cfg.subagent_mechanism == "none":
             continue
         try:
             adapter = get_adapter(name)
             dest = adapter.destination(
-                slug, scope=scope,
-                home=home if isinstance(home, Path) else None,
-                project=project if isinstance(project, Path) else None,
+                slug, scope=scope, home=home_p, project=project_p,
             )
+            if std_dest is not None and dest == std_dest:
+                continue  # same-destination cell — already reported as standard
             if dest.exists() or dest.is_symlink():
                 found.append(name)
         except (UnsupportedMechanismError, ValueError, Exception):

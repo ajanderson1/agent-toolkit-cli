@@ -1,8 +1,8 @@
-"""#351 must not touch the agents and pi-extensions grids.
+"""Grid layout regression guards (#351, #361).
 
-The agents asset type has no standard projection today (standard-agent is
-synthetic, mechanism="none") and pi-extensions has no standard concept —
-neither grid gets group tags, a pseudo-column, or a two-line header.
+The agents asset type gained the standard .claude/agents slot column (#361),
+but neither grid gets group tags, a pseudo-column, or a two-line header —
+the long tail stays CLI-only. pi-extensions still has no standard concept.
 """
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import pytest
 from textual.app import App, ComposeResult
 from textual.widgets import DataTable
 
-from agent_toolkit_tui.agent_state import AgentCell, AgentRow
+from agent_toolkit_tui.agent_state import INTERACTIVE_HARNESSES, AgentCell, AgentRow
 from agent_toolkit_tui.pi_extension_state import PiCell, PiExtensionRow
 from agent_toolkit_tui.widgets.agent_grid import AgentGrid
 from agent_toolkit_tui.widgets.pi_grid import PiGrid
@@ -19,7 +19,7 @@ from agent_toolkit_tui.widgets.pi_grid import PiGrid
 def _agent_row(slug: str = "demo") -> AgentRow:
     return AgentRow(
         slug=slug, source=f"ajanderson1/{slug}", ref="main",
-        cells={("claude-code", "global"): AgentCell(linked=True)},
+        cells={(INTERACTIVE_HARNESSES[0], "global"): AgentCell(linked=True)},
     )
 
 
@@ -37,7 +37,8 @@ def _grouped_markers(labels: list[str]) -> list[str]:
 
 
 @pytest.mark.asyncio
-async def test_agent_grid_columns_unchanged():
+async def test_agent_grid_has_standard_but_no_pseudo_column():
+    """#361 gives agents a Standard column; the long tail stays CLI-only."""
     class _A(App):
         def compose(self) -> ComposeResult:
             yield AgentGrid([_agent_row()], id="g")
@@ -47,8 +48,9 @@ async def test_agent_grid_columns_unchanged():
         await pilot.pause()
         table = a.query_one("#agent-table", DataTable)
         labels = [str(c.label) for c in table.columns.values()]
+        assert any("Standard" in l for l in labels)
         assert not _grouped_markers(labels), \
-            f"agent grid must be untouched by #351: {labels!r}"
+            f"agent grid must not grow group tags or a pseudo-column: {labels!r}"
         assert table.header_height == 1
 
 
