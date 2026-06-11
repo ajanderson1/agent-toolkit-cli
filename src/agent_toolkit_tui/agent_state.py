@@ -104,11 +104,10 @@ def build_agent_rows(
     lib_slugs = _read(library_lock_path())
     scope_slugs = _read(lock_file_path(scope=scope, home=home, project=project))
     # At global scope library_lock_path() IS the scope lock — same file.
-    # Merge order: the scope-lock entry wins source/ref for slugs in both
-    # locks (skill_state.py inverts this — library wins). Unobservable
-    # pre-#362: the CLI writes no agent project lock, and at global scope
-    # both reads are the same file.
-    universe = {**lib_slugs, **scope_slugs}
+    # Merge order: the LIBRARY entry wins source/ref for slugs in both locks,
+    # matching skill_state.py (the canonical statement). Scope-lock entries
+    # only surface for unlisted (scope-only) slugs.
+    universe = {**scope_slugs, **lib_slugs}
 
     rows: list[AgentRow] = []
     for slug in sorted(universe):
