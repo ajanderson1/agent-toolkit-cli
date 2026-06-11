@@ -38,10 +38,16 @@ a **replace-with-pointer** fix-action in the same y/N/q loop:
    none) and write the lock.
 3. Reconcile via `instructions_install.apply(...)` so the slot gets its
    symlink.
-4. Same rollback contract as the adopt fix (#337): on ANY apply failure —
-   not just domain errors — undo the symlink apply() laid at our slot,
-   restore the user's file from the `.bak`, restore the prior lock (or delete
-   it if it didn't exist). Never leave a lying lock.
+4. Same rollback contract as the adopt fix (#337), with one deliberate
+   strengthening: roll back on ANY failure **after the backup rename** (lock
+   write or reconcile) — not just `apply()` failures, and not just domain
+   errors. Undo the symlink apply() laid at our slot, restore the user's file
+   from the `.bak`, restore the prior lock (or delete it if it didn't exist).
+   Never leave a lying lock. (Critical-review finding: the #337 adopt fix
+   opens its try-block after the lock write; here the try opens immediately
+   after the rename, so a `write_lock` failure cannot strand the user's file
+   at the `.bak` — a state a doctor re-run would report as *clean*, since an
+   empty slot produces no finding and `.bak` files are never reaped.)
 
 ### Detail decisions
 
@@ -77,9 +83,21 @@ a **replace-with-pointer** fix-action in the same y/N/q loop:
 | real file, not in lock | populated | report-only | **backup-then-symlink fix** |
 | real file, harness wanted in lock | any | `conflict` finding | unchanged |
 | `.pre-adopt.bak` already present | populated | n/a | fix fails loudly, nothing changed |
+| unmanaged file + coexisting `conflict` at another wanted slot | populated | report-only | fix offered; apply fails loudly + full rollback (see below) |
 
 Declining (`N`) keeps it a reported finding; `--no-fix` and non-TTY behaviour
 and exit-code semantics (any skipped finding → exit 1) are unchanged.
+
+**Coexisting-`conflict` interaction (critical-review finding, accepted
+behaviour):** `instructions_install.apply()` reconciles ALL wanted slots at
+the scope, so if another wanted slot holds a real file (a `conflict`
+finding), accepting this fix raises `PointerConflictError` and the rollback
+restores everything. The error names the conflicted slot, and the `conflict`
+finding was reported in the same doctor run, so the user has what they need
+to resolve it and re-run. A pre-flight conflict scan inside the fix was
+considered and declined: it would duplicate the enforcement `apply()`
+already does loudly, for a state the rollback already keeps safe
+(simple-defaults).
 
 ## Test surface
 
@@ -94,6 +112,11 @@ Mirror the #337 adopt tests (`tests/test_cli/test_instructions_cli.py`):
   module, both the plain-failure and symlink-then-fail variants) → full
   rollback: file restored from `.bak`, `.bak` gone, prior lock restored
   verbatim, no orphan symlink.
+- Lock-write failure immediately after the rename (monkeypatch `write_lock`
+  in `doctor_cmd`'s namespace — the package re-exports the Click command over
+  the submodule name, so the module must be fetched via
+  `importlib.import_module`) → file restored from `.bak`; proves the
+  try-block opens at the rename, not after the lock write.
 - Global scope (the live repro shape: claude-code already managed,
   `~/.gemini/GEMINI.md` unmanaged) and augment-global-slot attribution.
 - Project-scope shared-slot rule unaffected (`CLAUDE.md` → `claude-code`).

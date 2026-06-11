@@ -148,22 +148,27 @@ def _backup_then_symlink_finding(
             )
         prior = read_lock(lock_path)
         prior_existed = lock_path.exists()
-        # Rename BEFORE writing the lock so a failure never leaves a lying lock.
+        # Rename BEFORE writing the lock so a failure never leaves a lying
+        # lock. The try opens HERE — not after write_lock — so a lock-write
+        # failure also rolls the rename back; otherwise the user's file would
+        # be stranded at the .bak with an empty slot, a state a doctor re-run
+        # reports as clean (critical-review finding, #375).
         pointer.rename(backup)
-        existing = prior.instructions.get("AGENTS.md")
-        new_harnesses = sorted({*(existing.harnesses if existing else []), adopt_harness})
-        new = add_entry(prior, "AGENTS.md", InstructionsLockEntry(
-            scope=cast("Scope", scope),
-            source="AGENTS.md",
-            harnesses=new_harnesses,
-        ))
-        write_lock(lock_path, new)
         try:
+            existing = prior.instructions.get("AGENTS.md")
+            new_harnesses = sorted({*(existing.harnesses if existing else []), adopt_harness})
+            new = add_entry(prior, "AGENTS.md", InstructionsLockEntry(
+                scope=cast("Scope", scope),
+                source="AGENTS.md",
+                harnesses=new_harnesses,
+            ))
+            write_lock(lock_path, new)
             instructions_install.apply(scope=scope, project_root=project_root, home=home)
         except Exception as exc:
-            # Same contract as the adopt fix: roll back on ANY failure. Drop
-            # any symlink apply() laid at our slot, restore the user's file
-            # from the backup, then restore the prior lock.
+            # Stronger than the adopt fix's contract: roll back on ANY failure
+            # after the rename (lock write or apply). Drop any symlink apply()
+            # laid at our slot, restore the user's file from the backup, then
+            # restore the prior lock.
             if pointer.is_symlink():
                 pointer.unlink()
             if backup.exists() and not pointer.exists():
@@ -272,7 +277,7 @@ Device: $(hostname -s)"
 - Modify: `src/agent_toolkit_cli/commands/instructions/doctor_cmd.py` (only if tests fail)
 - Test: `tests/test_cli/test_instructions_cli.py`
 
-- [ ] **Step 1: Write both rollback tests**
+- [ ] **Step 1: Write the three rollback tests**
 
 ```python
 def test_doctor_backup_fix_rolls_back_on_apply_failure(tmp_path, monkeypatch):
@@ -353,10 +358,55 @@ conflict/orphan finding (canonical exists), so the only finding is our
 unmanaged CLAUDE.md — same shape as the existing
 `test_doctor_adopt_rolls_back_partial_apply_with_prior_lock`.
 
+Add a third rollback test — the critical-review finding this plan's `_apply`
+structure exists to close (try opens at the rename, not after the lock write):
+
+```python
+def test_doctor_backup_fix_rolls_back_when_lock_write_fails(tmp_path, monkeypatch):
+    """write_lock failing right after the rename must restore the user's file
+    from the .bak — otherwise the file is stranded at the .bak with an empty
+    slot and a doctor re-run reports clean (critical-review finding, #375)."""
+    import importlib
+
+    # The instructions package re-exports the Click command `doctor_cmd` over
+    # the submodule name, so attribute access yields a Command, not the
+    # module — fetch the module explicitly to patch its namespace.
+    doctor_mod = importlib.import_module(
+        "agent_toolkit_cli.commands.instructions.doctor_cmd"
+    )
+
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / "AGENTS.md").write_text("# real canon\n")
+    (project / "CLAUDE.md").write_text("# mine\n")
+    monkeypatch.chdir(project)
+
+    def boom(*a, **k):
+        raise OSError("lock dir read-only")
+
+    # doctor_cmd does `from ...instructions_lock import write_lock` — patch
+    # the name in doctor_cmd's namespace. (No prior lock file exists, so the
+    # rollback's lock-restore path takes the unlink branch and never calls
+    # the patched write_lock itself.)
+    monkeypatch.setattr(doctor_mod, "write_lock", boom)
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["instructions", "doctor", "--scope", "project"], input="y\n")
+    assert result.exit_code != 0, result.output
+    assert "adopt failed" in result.output.lower()
+
+    claude = project / "CLAUDE.md"
+    assert claude.is_file() and not claude.is_symlink()
+    assert claude.read_text() == "# mine\n"
+    assert not (project / "CLAUDE.md.pre-adopt.bak").exists()
+    assert (project / "AGENTS.md").read_text() == "# real canon\n"
+    assert not (project / "instructions-lock.json").exists()
+```
+
 - [ ] **Step 2: Run them**
 
 Run: `uv run pytest tests/test_cli/test_instructions_cli.py -k "backup_fix_rolls_back" -v`
-Expected: both PASS (rollback shipped in Task 1 Step 3). If either FAILS, fix the rollback block in `_apply` to match the assertions — the contract is: drop our-slot symlink → restore file from `.bak` → restore prior lock (or unlink if it didn't exist).
+Expected: all three PASS (rollback + try-at-rename placement shipped in Task 1 Step 3). If any FAILS, fix `_apply` to match the assertions — the contract is: try opens immediately after `pointer.rename(backup)`; on exception drop our-slot symlink → restore file from `.bak` → restore prior lock (or unlink if it didn't exist).
 
 - [ ] **Step 3: Commit**
 
@@ -485,6 +535,7 @@ PR title must be conventional (`feat(instructions): ...`) so release-please pick
 ## Self-review notes
 
 - Spec coverage: AC1 (Task 1), AC2 (Tasks 1+4), AC3 (Task 2), AC4 (Task 3), AC5 (Task 4 + untouched `_adopt_harness_for`), AC6 (Task 1 decline test; `--no-fix`/non-TTY paths are finding-agnostic loop code, already pinned by existing tests).
+- Critical-review resolutions baked in: try-block opens at the rename (Task 1 Step 3 + third rollback test in Task 3); coexisting-`conflict` interaction documented in the spec behaviour matrix as accepted rollback behaviour (no pre-flight guard — deliberate).
 - The adopt branch (canonical missing/empty) is behaviourally untouched; all #337 tests stay as-is.
 - `test_doctor_unmanaged_does_not_clobber_existing_agents` is deliberately replaced (its report-only assertion is the removed behaviour); its no-destruction intent survives in the Task 1 tests.
 - Types/names consistent: `_backup_then_symlink_finding`, `backup = pointer.with_name(pointer.name + ".pre-adopt.bak")`, message prefix `unmanaged:` retained (the dedupe-count test greps `unmanaged:`).
