@@ -100,9 +100,10 @@ async def test_agent_grid_mounts_with_correct_columns():
         await pilot.pause()
         table = app.query_one("#agent-table", DataTable)
         labels = [str(c.label) for c in table.columns.values()]
-        # Slug + N harness cols + Source = 2 + N
-        assert len(labels) == len(INTERACTIVE_HARNESSES) + 2
+        # Slug + N harness cols + State + Source = 3 + N  (#360: State column added)
+        assert len(labels) == len(INTERACTIVE_HARNESSES) + 3
         assert any("AGENT" in lbl for lbl in labels)
+        assert any("State" in lbl for lbl in labels)
         assert any("Source" in lbl for lbl in labels)
         # All harness display names must appear somewhere in the column labels
         from agent_toolkit_cli.skill_agents import AGENTS
@@ -659,3 +660,27 @@ async def test_apply_unlink_refusal_surfaces_warning_and_cell_stays_linked(
         # The re-scanned cell still shows linked — the grid stays truthful.
         row = next(r for r in grid._rows if r.slug == "my-agent")
         assert row.cells[("standard", "global")].linked
+
+
+@pytest.mark.asyncio
+async def test_state_column_rendered():
+    """#360: agent grid renders a State column between harnesses and Source."""
+    from textual.widgets import DataTable
+
+    row = _linked_row("reviewer")
+    row.state = "unlisted"
+
+    class _A(App):
+        def compose(self) -> ComposeResult:
+            yield AgentGrid([row], id="g")
+
+    app = _A()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        table = app.query_one(DataTable)
+        labels = [str(c.label) for c in table.columns.values()]
+        assert any("State" in l for l in labels)
+        # State column sits immediately before Source.
+        state_i = next(i for i, l in enumerate(labels) if "State" in l)
+        source_i = next(i for i, l in enumerate(labels) if "Source" in l)
+        assert source_i == state_i + 1
