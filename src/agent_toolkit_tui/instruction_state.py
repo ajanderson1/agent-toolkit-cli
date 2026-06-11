@@ -11,6 +11,12 @@ Key differences from agent_state:
   column (shows canonical_exists), NOT listed here.
 - If the lock is empty but the canonical AGENTS.md exists, emit a single
   AGENTS.md row so a fresh user can install pointers from the grid.
+
+Row-universe contract (#360): instructions are the documented by-design
+EXCEPTION to the union semantic (canonical statement: skill_state.py
+docstring) — this kind has no library concept (the global lock never
+feeds the project-scope universe); the universe is the scope lock plus
+the fresh-user canonical fallback above.
 """
 from __future__ import annotations
 

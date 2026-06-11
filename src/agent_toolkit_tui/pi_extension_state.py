@@ -2,6 +2,10 @@
 
 Reads the pi-extension inventory to produce PiExtensionRow records with
 per-scope (global, project) cell state.
+
+Row-universe contract (#360): this tab already implements the union semantic
+— build_inventory merges both scope locks, loose extension dirs, and
+settings.json packages. Canonical statement: skill_state.py docstring.
 """
 from __future__ import annotations
 
