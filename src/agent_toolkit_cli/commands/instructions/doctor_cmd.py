@@ -62,6 +62,88 @@ def _adopt_harness_for(
     return harness
 
 
+def _backup_then_symlink_finding(
+    *,
+    pointer: Path,
+    harness: str,
+    canonical: Path,
+    scope: str,
+    project_root: Path | None,
+    home: Path | None,
+    lock_path: Path,
+) -> Finding:
+    """Canonical AGENTS.md already has content: offer to back the unmanaged
+    file up beside itself and point its slot at canonical. Content is never
+    merged — the .bak keeps the user's text for manual reconciliation (#375).
+    """
+    backup = pointer.with_name(pointer.name + ".pre-adopt.bak")
+    adopt_harness = _adopt_harness_for(
+        pointer, harness, scope=scope, project_root=project_root, home=home,
+    )
+
+    def _apply() -> None:
+        # Re-assert guards at apply time — state may have changed since the
+        # scan. is_symlink() catches a dangling symlink (exists() is False but
+        # rename() onto it would still replace it).
+        if backup.exists() or backup.is_symlink():
+            raise click.ClickException(
+                f"{backup} already exists — refusing to overwrite a previous backup"
+            )
+        if not canonical.exists() or canonical.stat().st_size == 0:
+            raise click.ClickException(
+                f"{canonical} no longer has content — re-run doctor"
+            )
+        prior = read_lock(lock_path)
+        prior_existed = lock_path.exists()
+        # Rename BEFORE writing the lock so a failure never leaves a lying
+        # lock. The try opens HERE — not after write_lock — so a lock-write
+        # failure also rolls the rename back; otherwise the user's file would
+        # be stranded at the .bak with an empty slot, a state a doctor re-run
+        # reports as clean (critical-review finding, #375).
+        pointer.rename(backup)
+        try:
+            existing = prior.instructions.get("AGENTS.md")
+            new_harnesses = sorted({*(existing.harnesses if existing else []), adopt_harness})
+            new = add_entry(prior, "AGENTS.md", InstructionsLockEntry(
+                scope=cast("Scope", scope),
+                source="AGENTS.md",
+                harnesses=new_harnesses,
+            ))
+            write_lock(lock_path, new)
+            instructions_install.apply(
+                scope=cast("Scope", scope), project_root=project_root, home=home,
+            )
+        except Exception as exc:
+            # Stronger than the adopt fix's contract: roll back on ANY failure
+            # after the rename (lock write or apply). Drop any symlink apply()
+            # laid at our slot, restore the user's file from the backup, then
+            # restore the prior lock.
+            if pointer.is_symlink():
+                pointer.unlink()
+            if backup.exists() and not pointer.exists():
+                backup.rename(pointer)
+            if prior_existed:
+                write_lock(lock_path, prior)
+            else:
+                lock_path.unlink(missing_ok=True)
+            raise click.ClickException(str(exc)) from exc
+
+    return Finding(
+        message=(
+            f"unmanaged: real file at {pointer} is not in the lock; "
+            f"AGENTS.md already has content — fix backs the file up to "
+            f"{backup.name} (content is never merged; reconcile manually)"
+        ),
+        fix_action=FixAction(
+            shell_preview=(
+                f"mv {pointer.name} {backup.name} && "
+                f"instructions install --scope {scope} --harness {adopt_harness}"
+            ),
+            apply=_apply,
+        ),
+    )
+
+
 def _unmanaged_finding(
     *,
     pointer: Path,
@@ -72,13 +154,15 @@ def _unmanaged_finding(
     home: Path | None,
     lock_path: Path,
 ) -> Finding:
-    """Build an unmanaged finding. Report-only if canonical already has content."""
+    """Build an unmanaged finding. Dispatches on canonical state: missing/empty
+    → adopt fix (rename to canonical); populated → backup-then-symlink fix."""
     adoptable = not canonical.exists() or canonical.stat().st_size == 0
     if not adoptable:
-        return Finding(message=(
-            f"unmanaged: real file at {pointer} is not in the lock; "
-            f"AGENTS.md already exists — adopt skipped (content merge is out of scope)"
-        ))
+        return _backup_then_symlink_finding(
+            pointer=pointer, harness=harness, canonical=canonical,
+            scope=scope, project_root=project_root, home=home,
+            lock_path=lock_path,
+        )
 
     adopt_harness = _adopt_harness_for(
         pointer, harness, scope=scope, project_root=project_root, home=home,
