@@ -7,6 +7,7 @@ caller's responsibility (via fix_action.apply).
 """
 from __future__ import annotations
 
+import dataclasses
 import datetime as _dt
 import re
 import shutil
@@ -19,18 +20,19 @@ from agent_toolkit_cli._install_core import InstallError
 from agent_toolkit_cli.skill_agents import AGENTS
 from agent_toolkit_cli.skill_install import _should_skip_symlink, _standard_bundle_link
 from agent_toolkit_cli.skill_lock import (
-    LockEntry, LockFile, clone_url_from_entry, read_lock, remove_entry, write_lock,
+    LockEntry, LockFile, add_entry, clone_url_from_entry, read_lock, remove_entry,
+    write_lock,
 )
 from agent_toolkit_cli.skill_paths import (
-    Scope, agent_projection_dir, canonical_skill_dir, library_root as _library_root_fn,
-    lock_file_path,
+    Scope, agent_projection_dir, canonical_skill_dir, library_lock_path,
+    library_root as _library_root_fn, lock_file_path,
 )
 
 FindingType = Literal[
     "missing_canonical", "drifted_symlink",
     "wrong_type_bundle", "orphan_symlink", "foreign_symlink",
     "dirty_tree", "lock_source_mismatch", "stray_symlink",
-    "orphan_canonical", "stray_bundle_dir",
+    "orphan_canonical", "stray_bundle_dir", "unlisted",
 ]
 
 
@@ -86,6 +88,9 @@ def diagnose(
             scope=scope, home=home, project=project, lock=lock,
         ))
         findings.extend(_scan_stray_bundle_dirs(
+            scope=scope, home=home, project=project, lock=lock,
+        ))
+        findings.extend(_scan_unlisted_entries(
             scope=scope, home=home, project=project, lock=lock,
         ))
     return findings
@@ -401,6 +406,64 @@ def _make_monorepo_reclone_action(
             f"{entry.parent_url} {parent_dir} && "
             f"ln -s {parent_dir / skill_path} {canonical}"
         ),
+        apply=_apply,
+    )
+
+
+def _scan_unlisted_entries(
+    *, scope: Scope, home: Path | None, project: Path | None, lock: LockFile,
+) -> list[Finding]:
+    """#360 AC4: project lock entries whose slug is missing from the library lock.
+
+    The install remains functional while the project canonical exists
+    (project canonicals are independent of the
+    library); the finding flags that the library no longer tracks the slug
+    and offers to re-add it from the entry's recorded source+ref."""
+    if scope != "project":
+        return []
+    lib_lock = read_lock(library_lock_path())
+    findings: list[Finding] = []
+    for slug, entry in sorted(lock.skills.items()):
+        if slug in lib_lock.skills:
+            continue
+        findings.append(Finding(
+            finding_type="unlisted", slug=slug, scope=scope,
+            path=lock_file_path(scope=scope, home=home, project=project),
+            detail=(
+                "project lock entry's slug is missing from the library lock "
+                "(install remains functional while the project canonical exists; "
+                "the library no longer tracks it)"
+            ),
+            fix_action=_make_readd_library_action(slug=slug, entry=entry),
+        ))
+    return findings
+
+
+def _make_readd_library_action(*, slug: str, entry: LockEntry) -> FixAction:
+    """Re-add an unlisted slug to the library from its recorded source+ref.
+
+    Materialises the library canonical (reusing the reclone machinery at
+    global scope — monorepo entries take the parent-clone branch) and writes
+    the library lock entry. SHAs are reset to None; `skill update` re-resolves
+    them."""
+    reclone = _make_reclone_action(
+        slug=slug, scope="global", home=None, project=None, entry=entry,
+    )
+
+    def _apply() -> None:
+        reclone.apply()
+        lib_path = library_lock_path()
+        lib_lock = read_lock(lib_path)
+        if slug not in lib_lock.skills:
+            write_lock(lib_path, add_entry(
+                lib_lock, slug,
+                dataclasses.replace(entry, upstream_sha=None, local_sha=None),
+            ))
+
+    ref_arg = f" --ref {entry.ref}" if entry.ref else ""
+    return FixAction(
+        description=f"Re-add {slug} to the library from {entry.source}",
+        shell_preview=f"agent-toolkit-cli skill add {entry.source}{ref_arg} --slug {slug}",
         apply=_apply,
     )
 

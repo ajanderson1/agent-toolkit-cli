@@ -1,6 +1,8 @@
 """Interactive DataTable for the TUI's agent tab.
 
-Columns (#361): AGENT ⓘ | Standard ⓘ | <non-covered main harnesses…> | Source.
+Columns (#361/#360): AGENT ⓘ | Standard ⓘ | <non-covered main harnesses…> | State | Source.
+
+Layout: [0]=slug, [1..N]=harnesses, [N+1]=state, [N+2]=source.
 
 Mirrors skill_grid.py: per-harness columns, scope toggle, toggle-queue →
 pending → apply. Pending key shape: (scope, harness_name, slug) — same
@@ -8,8 +10,6 @@ pending → apply. Pending key shape: (scope, harness_name, slug) — same
 .claude/agents slot is a real installable destination) — it toggles like
 any other; `i` on it opens the registry-backed ColumnInfoModal listing
 the covered harnesses for the active scope.
-
-No State column (agents are installed real files, not git working trees).
 
 CRITICAL: never name any method `_render_*` — it collides with Textual's
 internal flag mechanism and produces "bool is not callable" from compose.
@@ -36,6 +36,15 @@ _UNLINKED_GLYPH = "☐"
 _PENDING_LINK   = "[yellow]+[/]"
 _PENDING_UNLINK = "[yellow]-[/]"
 _INFO_GLYPH     = "ⓘ"
+
+# Row-state badges (#360). `installed` renders as an em-dash to keep the
+# common case quiet; `library` mirrors skill_grid's dim available state;
+# `unlisted` gets a warning tint.
+_STATE_MARKUP = {
+    "installed": "[dim]—[/]",
+    "library": "[dim]library[/]",
+    "unlisted": "[yellow]unlisted[/]",
+}
 
 Op = Literal["link", "unlink"]
 
@@ -168,7 +177,8 @@ class AgentGrid(Vertical):
             body = (
                 f"Agent [b]{row.slug}[/]\n"
                 f"Source: {row.source}\n"
-                f"Ref:    {row.ref}"
+                f"Ref:    {row.ref}\n"
+                f"State:  {'—' if row.state == 'installed' else row.state}"
             )
         else:
             harness = self._harness_for_column(coord.column)
@@ -269,14 +279,14 @@ class AgentGrid(Vertical):
         self._notify_pending()
 
     def _column_index(self, harness_name: str) -> int:
-        """Return the table column index for a harness name. Layout: [0]=slug, [1..N]=harnesses, [N+1]=source."""
+        """Return the table column index for a harness name. Layout: [0]=slug, [1..N]=harnesses, [N+1]=state, [N+2]=source."""
         try:
             return 1 + list(INTERACTIVE_HARNESSES).index(harness_name)
         except ValueError:
             return -1
 
     def _harness_for_column(self, col: int) -> str | None:
-        """Return the harness name for a table column index, or None for slug/source cols."""
+        """Return the harness name for a table column index, or None for slug/state/source cols. Layout: [0]=slug, [1..N]=harnesses, [N+1]=state, [N+2]=source."""
         if col < 1:
             return None
         idx = col - 1
@@ -343,6 +353,8 @@ class AgentGrid(Vertical):
                 cfg = AGENTS.get(harness)
                 base = cfg.display_name if cfg else harness
             table.add_column(f"{base} {_INFO_GLYPH}", width=14)
+        # State column — shows installed/library/unlisted (#360).
+        table.add_column("State", width=10)
         # Source column — passive, no info popup.
         table.add_column("Source", width=30)
 
@@ -350,13 +362,14 @@ class AgentGrid(Vertical):
             cells: list[str] = [row.slug]
             for harness in INTERACTIVE_HARNESSES:
                 cells.append(self._cell_glyph(row=row, harness=harness))
+            cells.append(_STATE_MARKUP.get(row.state, row.state))
             cells.append(row.source)
             table.add_row(*cells, key=f"agent:{row.slug}")
 
         if self._rows:
             max_row = len(self._rows) - 1
-            # Layout: slug + N harness cols + source.
-            max_col = 1 + len(INTERACTIVE_HARNESSES)
+            # Layout: slug + N harness cols + state + source.
+            max_col = 2 + len(INTERACTIVE_HARNESSES)
             table.cursor_coordinate = Coordinate(
                 row=min(saved.row, max_row),
                 column=min(saved.column, max_col),

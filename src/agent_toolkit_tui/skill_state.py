@@ -2,6 +2,15 @@
 
 Reads the lock + filesystem to produce SkillRow records with per-(agent, scope)
 cell state plus a working-tree state badge.
+
+Row-universe contract (#360 — canonical statement, cross-referenced by
+agent_state.py, pi_extension_state.py and instruction_state.py):
+the row universe is the UNION of the library lock and the scope lock. At
+global scope the two are the same file, so the union is a no-op. At project
+scope: library-only slugs render as `library` (dim, available), slugs in both
+locks render their installed state, and project-lock-only slugs render as
+`unlisted` (warning) — installed and functional, but no longer tracked by the
+library.
 """
 from __future__ import annotations
 
@@ -16,14 +25,19 @@ from agent_toolkit_cli.skill_install import _should_skip_symlink
 from agent_toolkit_cli.skill_lock import read_lock
 from agent_toolkit_cli.skill_paths import (
     agent_projection_dir, canonical_skill_dir, library_lock_path,
-    library_skill_path, parent_clone_path, project_parents_root,
+    library_skill_path, lock_file_path, parent_clone_path,
+    project_parents_root,
 )
 from agent_toolkit_tui.composition import skills_nonstandard_main
 
 # "library" means the skill exists in the library but is not installed in this
 # project (no project canonical at <project>/.agents/skills/<slug>/). This is
 # the normal pre-install state and is rendered in dim/gray — not alarming.
-State = Literal["clean", "dirty", "missing", "copy", "library"]
+# "unlisted" means the inverse: installed at project scope (project lock entry
+# + working canonical) but the slug is missing from the library lock — e.g.
+# after `skill remove <slug>` at global scope. Functional, rendered with a
+# warning tint. See the module docstring for the row-universe contract.
+State = Literal["clean", "dirty", "missing", "copy", "library", "unlisted"]
 Scope = Literal["global", "project"]
 
 # Column composition is derived from the main-harness set (#351); the long
@@ -147,21 +161,37 @@ def _cell_for(
 def build_skill_rows(
     *, scope: Scope, home: Path | None, project: Path | None,
 ) -> list[SkillRow]:
-    # The library lock is the universe of slugs available on this machine.
-    # At global scope the library lock IS the scope lock, so this is equivalent
-    # to the previous behaviour. At project scope we read the library lock for
-    # row inclusion, then derive per-row state from the project's filesystem.
+    # Row universe = union(library lock, scope lock) — see module docstring.
+    # At global scope the library lock IS the scope lock, so the union is a
+    # no-op. At project scope, project-lock-only slugs are `unlisted`.
     lib_lock = read_lock(library_lock_path())
+    universe = dict(lib_lock.skills)
+    unlisted: set[str] = set()
+    if scope == "project":
+        proj_lock = read_lock(
+            lock_file_path(scope="project", home=home, project=project)
+        )
+        for slug, proj_entry in proj_lock.skills.items():
+            if slug not in universe:
+                universe[slug] = proj_entry
+                unlisted.add(slug)
     rows: list[SkillRow] = []
-    for slug in sorted(lib_lock.skills):
-        entry = lib_lock.skills[slug]
+    for slug in sorted(universe):
+        entry = universe[slug]
         canonical = canonical_skill_dir(
             slug, scope=scope, home=home, project=project,
         )
-        if not canonical.exists():
+        if slug in unlisted:
+            # Project-lock-only: functional install, library no longer tracks
+            # it. Supersedes the git working-tree badge, like `library` does.
+            # `unlisted` requires the project canonical on disk — a fresh
+            # clone of a committed skills-lock.json has the entry but no
+            # store canonical, which is a broken install: `missing` (G2).
+            state: State = "unlisted" if canonical.exists() else "missing"
+        elif not canonical.exists():
             # Project scope: slug is in the library but not yet installed here.
             # Global scope: library entry recorded but directory was deleted.
-            state: State = "library" if scope == "project" else "missing"
+            state = "library" if scope == "project" else "missing"
         elif entry.parent_url is not None:
             # Monorepo skill — state lives in the parent clone, not the
             # symlinked subpath (which has no `.git/` of its own).

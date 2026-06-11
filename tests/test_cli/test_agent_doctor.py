@@ -303,8 +303,11 @@ def test_doctor_project_drift_uses_project_canonical(
     monkeypatch.setenv("HOME", str(tmp_path))
     project = tmp_path / "proj"
     project.mkdir()
-    # Global library holds a DIVERGED version of the same slug.
+    # Global library holds a DIVERGED version of the same slug (canonical +
+    # library lock entry — without the lock entry the #360 `unlisted` finding
+    # would fire for the project entry and fail the exit-0 assertion below).
     _seed_global_canonical(content=_DIVERGED)
+    _write_global_lock()
     # Project canonical + project lock + slot seeded from the project canonical.
     _seed_project_canonical(project, content=_CONTENT)
     _write_project_lock(project)

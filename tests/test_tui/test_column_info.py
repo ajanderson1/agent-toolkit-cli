@@ -56,19 +56,19 @@ def test_get_column_info_state_returns_columninfo():
     assert info.title == "State badges"
 
 
-def test_get_column_info_state_lists_all_five_badges():
+def test_get_column_info_state_lists_all_six_badges():
     info = get_column_info("state")
     text = "\n".join(info.lines)
-    for badge in ("clean", "dirty", "missing", "copy", "library"):
+    for badge in ("clean", "dirty", "missing", "copy", "library", "unlisted"):
         assert badge in text, f"badge {badge!r} missing from state info"
 
 
 def test_get_column_info_state_badge_order_matches_state_markup():
-    """Order matches _STATE_MARKUP declaration order, with `library` last."""
+    """Order matches _STATE_MARKUP declaration order, with `library` and `unlisted` last."""
     info = get_column_info("state")
     bullets = [ln for ln in info.lines if ln.lstrip().startswith("•")]
     badges = [ln.split("—")[0].strip().lstrip("• ").strip() for ln in bullets]
-    assert badges == ["clean", "dirty", "missing", "copy", "library"]
+    assert badges == ["clean", "dirty", "missing", "copy", "library", "unlisted"]
 
 
 def test_standard_info_includes_global_marker_when_context_says_globally_linked():

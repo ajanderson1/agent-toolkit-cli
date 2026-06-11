@@ -673,6 +673,7 @@ class TUIApp(App):
             (adds if op == "link" else removes).add(agent)
         ok = failed = 0
         errors: list[str] = []
+        failed_groups: set[tuple[str, str]] = set()
         for (scope, slug), (adds, removes) in by_slug.items():
             n_writes = len(adds) + len(removes)
             home = Path.home() if scope == "global" else None
@@ -688,6 +689,7 @@ class TUIApp(App):
                 except InstallError as exc:
                     errors.append(f"{slug}: {exc}")
                     failed += n_writes
+                    failed_groups.add((scope, slug))
                     continue
             p = InstallPlan(
                 slug=slug, scope=scope, source=None, ref=None,
@@ -697,10 +699,24 @@ class TUIApp(App):
             try:
                 result = engine_apply(p, home=home, project=project, env=None)
                 ok += len(result.created) + len(result.removed)
+                if scope == "project" and not adds:
+                    self._drop_project_entry_if_unlisted_and_unlinked(
+                        slug=slug, project=project,  # type: ignore[arg-type]
+                    )
             except InstallError as exc:
                 errors.append(f"{slug}: {exc}")
                 failed += n_writes
-        saved = grid.pending_entries() if failed else {}
+                failed_groups.add((scope, slug))
+        # Restore only the ops of FAILED (scope, slug) groups (#360 G1).
+        # Successfully applied ops must never be re-queued: replaying a full
+        # unlisted uninstall (entry dropped, row gone) would fail with
+        # "not in global library" on every subsequent Apply, holding the
+        # genuinely-failed group's retry hostage.
+        saved = {
+            k: v
+            for k, v in grid.pending_entries().items()
+            if (k[0], k[2]) in failed_groups
+        } if failed else {}
         if failed == 0:
             grid.clear_pending()
         self._refresh_skill_view()
@@ -724,6 +740,38 @@ class TUIApp(App):
             self.query_one("#footer-pending", Static).update(
                 f"applied: {ok} ok, {failed} failed{tag}"
             )
+
+    def _drop_project_entry_if_unlisted_and_unlinked(
+        self, *, slug: str, project: Path,
+    ) -> None:
+        """#360 AC2: after a remove-only apply, drop the project lock entry of
+        an UNLISTED slug once no projection symlink remains. Listed slugs keep
+        today's behaviour (entry stays; the row remains visible via the
+        library universe). Non-destructive: the external-store canonical is
+        preserved; doctor's orphan sweep reclaims it if unreferenced."""
+        from agent_toolkit_cli.skill_agents import AGENTS
+        from agent_toolkit_cli.skill_lock import read_lock, remove_entry, write_lock
+        from agent_toolkit_cli.skill_paths import library_lock_path, lock_file_path
+        from agent_toolkit_tui.skill_state import _cell_for
+
+        if slug in read_lock(library_lock_path()).skills:
+            return  # listed — out of scope for the drop rule
+        # Probe the FULL agent universe, not just the rendered columns: a
+        # long-tail projection installed via the CLI must block the drop,
+        # otherwise the entry vanishes while a live symlink remains and
+        # doctor then offers destructive cleanup of a functional install.
+        # Mirrors skill_doctor._scan_stray_symlinks' universe.
+        probe = ("standard", *(a for a in AGENTS if not AGENTS[a].is_standard))
+        for agent in probe:
+            cell = _cell_for(slug, agent, scope="project", home=None, project=project)
+            if cell.skipped:
+                continue  # skipped cells report linked=canonical-exists, not a symlink
+            if cell.linked or cell.drift:
+                return  # a projection remains — not a full uninstall
+        lpath = lock_file_path(scope="project", project=project)
+        lock = read_lock(lpath)
+        if slug in lock.skills:
+            write_lock(lpath, remove_entry(lock, slug))
 
     def _apply_pi_pending(self) -> None:
         from agent_toolkit_cli import (

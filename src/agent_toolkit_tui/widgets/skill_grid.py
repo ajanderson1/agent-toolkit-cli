@@ -39,6 +39,9 @@ _STATE_MARKUP = {
     # "library" = in the library, not yet installed in this project. Normal
     # pre-install state. Rendered dim so it doesn't look alarming.
     "library": "[dim]library[/]",
+    # "unlisted" = installed in this project but missing from the library
+    # lock (#360). Functional; warning tint so it stands out from `library`.
+    "unlisted": "[yellow]unlisted[/]",
 }
 
 _LINKED_GLYPH   = "[green]✔[/]"
@@ -279,7 +282,12 @@ class SkillGrid(Vertical):
             # 'library' = no meaningful state (slug in library, not yet
             # installed here). Render as em-dash so the modal doesn't look
             # like it's printing a debug literal.
-            state_display = "—" if row.state == "library" else row.state
+            if row.state == "library":
+                state_display = "—"
+            elif row.state == "unlisted":
+                state_display = "unlisted — not in library (re-add via: skill doctor -p)"
+            else:
+                state_display = row.state
             title = f"{row.slug} · slug"
             body = (
                 f"Skill [b]{row.slug}[/]\n"

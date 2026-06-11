@@ -567,3 +567,82 @@ def test_build_skill_rows_global_scope_unchanged(
         assert (agent, "project") not in demo.cells, (
             f"unexpected project cell at global scope: {demo.cells.keys()}"
         )
+
+
+# ---------------------------------------------------------------------------
+# #360: union(library lock, project lock) row universe
+# ---------------------------------------------------------------------------
+
+
+def test_unlisted_row_after_global_remove(git_sandbox, tmp_path: Path, monkeypatch):
+    """#360: project-lock-only slug renders as an `unlisted` row at project scope."""
+    project = tmp_path / "proj"
+    project.mkdir()
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+
+    runner = CliRunner()
+    r = _add_demo_project(runner, git_sandbox.upstream, project, library_root)
+    assert r.exit_code == 0, r.output
+    # Remove from the library (destructive, global) — the project install survives.
+    r = runner.invoke(main, ["skill", "remove", "demo", "--force"])
+    assert r.exit_code == 0, r.output
+
+    rows = build_skill_rows(scope="project", home=None, project=project)
+    demo = [row for row in rows if row.slug == "demo"]
+    assert len(demo) == 1
+    assert demo[0].state == "unlisted"
+    # source/ref come from the project lock entry
+    assert demo[0].source  # non-empty
+    # cells still probed (canonical exists at project scope)
+    assert demo[0].cells
+
+    # Global scope: slug is gone from the universe entirely.
+    rows_g = build_skill_rows(scope="global", home=tmp_path, project=None)
+    assert not any(row.slug == "demo" for row in rows_g)
+
+
+def test_library_state_preserved_for_uninstalled(git_sandbox, tmp_path: Path, monkeypatch):
+    """#360 AC5 regression: library-but-not-in-project keeps the dim `library` state."""
+    project = tmp_path / "proj"
+    project.mkdir()
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+
+    runner = CliRunner()
+    r = runner.invoke(main, ["skill", "add", str(git_sandbox.upstream), "--slug", "demo"])
+    assert r.exit_code == 0, r.output
+
+    rows = build_skill_rows(scope="project", home=None, project=project)
+    assert any(row.slug == "demo" and row.state == "library" for row in rows)
+
+
+def test_unlisted_without_canonical_is_missing(git_sandbox, tmp_path: Path, monkeypatch):
+    """#360 G2: a project lock entry with NO store canonical (fresh-machine
+    clone of a committed skills-lock.json) is `missing`, not `unlisted` —
+    the install is broken, not functional."""
+    import shutil
+
+    project = tmp_path / "proj"
+    project.mkdir()
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+
+    runner = CliRunner()
+    r = _add_demo_project(runner, git_sandbox.upstream, project, library_root)
+    assert r.exit_code == 0, r.output
+    r = runner.invoke(main, ["skill", "remove", "demo", "--force"])
+    assert r.exit_code == 0, r.output
+    # Simulate the fresh machine: project lock entry survives, store canonical absent.
+    shutil.rmtree(canonical_skill_dir("demo", scope="project", project=project))
+
+    rows = build_skill_rows(scope="project", home=None, project=project)
+    demo = [row for row in rows if row.slug == "demo"]
+    assert len(demo) == 1
+    assert demo[0].state == "missing"

@@ -365,23 +365,34 @@ def ensure_project_canonical(
     Also writes the project lock entry if absent (same guarantee the CLI's
     install_cmd provides, so both call sites get a fully-ready project canonical).
 
-    Raises InstallError if the slug is not in the global library lock.
+    Raises InstallError if the slug is not in the global library lock and the
+    install is not already complete at project scope.
     """
     from agent_toolkit_cli.skill_lock import (
         LockEntry, add_entry, clone_url_from_entry, read_lock, write_lock,
     )
     from agent_toolkit_cli.skill_paths import (
-        lock_file_path, parent_clone_path, project_parents_root,
+        canonical_skill_dir, lock_file_path, parent_clone_path, project_parents_root,
     )
+
+    migrate_project_canonical(project=project, slug=slug)
+    project_canonical = canonical_skill_dir(slug, scope="project", project=project)
+
+    # Already fully installed at project scope (canonical on disk + project
+    # lock entry)? Nothing to ensure — return without consulting the global
+    # lock. This keeps `unlisted` installs (project entry whose slug was
+    # removed from the library, #360) operable: Apply must not fail on rows
+    # that need no materialisation. A broken canonical symlink fails the
+    # .exists() check and falls through to the normal (fail-loud) path.
+    if project_canonical.exists():
+        project_lock_path = lock_file_path(scope="project", project=project)
+        if slug in read_lock(project_lock_path).skills:
+            return project_canonical
 
     global_lock = read_lock(global_lock_path)
     entry = global_lock.skills.get(slug)
     if entry is None:
         raise InstallError(f"{slug}: not in global library")
-
-    from agent_toolkit_cli.skill_paths import canonical_skill_dir
-    migrate_project_canonical(project=project, slug=slug)
-    project_canonical = canonical_skill_dir(slug, scope="project", project=project)
 
     if entry.parent_url is not None:
         # Monorepo skill: clone the parent into the project-local _parents/
