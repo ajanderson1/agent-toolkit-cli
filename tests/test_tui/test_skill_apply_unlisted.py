@@ -116,3 +116,166 @@ async def test_apply_failure_keeps_project_entry(git_sandbox, tmp_path: Path, mo
 
     proj_lock = read_lock(lock_file_path(scope="project", project=project))
     assert "demo" in proj_lock.skills  # entry survives a failed apply
+
+
+@pytest.mark.asyncio
+async def test_apply_partial_failure_restores_only_failed_ops(
+    git_sandbox, tmp_path: Path, monkeypatch,
+):
+    """#360 G1: a mixed batch (one group fails, one unlisted full-unlink
+    succeeds with entry drop) must NOT re-queue the succeeded group's ops.
+    Replaying them would hit "not in global library" on every later Apply,
+    holding the genuinely-failed group's retry hostage."""
+    project = tmp_path / "proj"
+    project.mkdir()
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+
+    runner = CliRunner()
+    (project / ".claude").mkdir(exist_ok=True)
+    for slug in ("demo", "boom"):
+        r = runner.invoke(main, ["skill", "add", str(git_sandbox.upstream), "--slug", slug])
+        assert r.exit_code == 0, r.output
+        r = runner.invoke(main, [
+            "--project", str(project),
+            "skill", "install", slug, "--scope", "project",
+            "--agents", "claude-code",
+        ])
+        assert r.exit_code == 0, r.output
+    # demo becomes unlisted; boom stays listed.
+    r = runner.invoke(main, ["skill", "remove", "demo", "--force"])
+    assert r.exit_code == 0, r.output
+    monkeypatch.chdir(project)
+
+    import agent_toolkit_cli.skill_install as skill_install
+
+    real_apply = skill_install.apply
+
+    def _selective(plan, **kwargs):
+        if plan.slug == "boom":
+            raise skill_install.InstallError("boom exploded")
+        return real_apply(plan, **kwargs)
+
+    monkeypatch.setattr(skill_install, "apply", _selective)
+
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        from agent_toolkit_tui.widgets.skill_grid import SkillGrid
+        grid = app.query_one("#skill-grid", SkillGrid)
+        grid.restore_pending({
+            ("project", "claude-code", "demo"): "unlink",
+            ("project", "claude-code", "boom"): "unlink",
+        })
+        app._apply_skill_pending()
+        await pilot.pause()
+        # demo's successfully-applied ops are NOT re-queued; boom's failed op is.
+        assert grid.pending_entries() == {
+            ("project", "claude-code", "boom"): "unlink",
+        }
+        # Re-Apply replays only boom — no "not in global library" cascade.
+        app._apply_skill_pending()
+        await pilot.pause()
+        assert grid.pending_entries() == {
+            ("project", "claude-code", "boom"): "unlink",
+        }
+
+    proj_lock = read_lock(lock_file_path(scope="project", project=project))
+    assert "demo" not in proj_lock.skills  # the successful drop stuck
+    assert "boom" in proj_lock.skills      # failed group untouched
+
+
+@pytest.mark.asyncio
+async def test_longtail_projection_blocks_entry_drop(
+    git_sandbox, tmp_path: Path, monkeypatch,
+):
+    """#360 G5a: the drop probe sweeps the FULL agent universe — a long-tail
+    (non-rendered, CLI-installed) projection still on disk BLOCKS the entry
+    drop, otherwise the entry vanishes while a live symlink remains."""
+    project = tmp_path / "proj"
+    project.mkdir()
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+
+    runner = CliRunner()
+    r = runner.invoke(main, ["skill", "add", str(git_sandbox.upstream), "--slug", "demo"])
+    assert r.exit_code == 0, r.output
+    (project / ".claude").mkdir(exist_ok=True)
+    # goose is NOT in INTERACTIVE_AGENTS — a CLI-only long-tail projection.
+    from agent_toolkit_tui.skill_state import INTERACTIVE_AGENTS
+    assert "goose" not in INTERACTIVE_AGENTS
+    r = runner.invoke(main, [
+        "--project", str(project),
+        "skill", "install", "demo", "--scope", "project",
+        "--agents", "claude-code,goose",
+    ])
+    assert r.exit_code == 0, r.output
+    r = runner.invoke(main, ["skill", "remove", "demo", "--force"])
+    assert r.exit_code == 0, r.output
+    monkeypatch.chdir(project)
+
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        from agent_toolkit_tui.widgets.skill_grid import SkillGrid
+        grid = app.query_one("#skill-grid", SkillGrid)
+        # Unlink only the rendered claude-code cell; goose stays linked.
+        grid.restore_pending({("project", "claude-code", "demo"): "unlink"})
+        app._apply_skill_pending()
+        await pilot.pause()
+
+    proj_lock = read_lock(lock_file_path(scope="project", project=project))
+    assert "demo" in proj_lock.skills  # entry KEPT — goose projection remains
+    from agent_toolkit_cli.skill_paths import agent_projection_dir
+    goose_link = agent_projection_dir(
+        "goose", "demo", scope="project", home=None, project=project,
+    )
+    assert goose_link.is_symlink()
+    cc_link = agent_projection_dir(
+        "claude-code", "demo", scope="project", home=None, project=project,
+    )
+    assert not cc_link.is_symlink()  # the queued unlink itself DID apply
+
+
+@pytest.mark.asyncio
+async def test_apply_full_unlink_listed_slug_keeps_entry(
+    git_sandbox, tmp_path: Path, monkeypatch,
+):
+    """#360 G5b: a LISTED slug's full unlink keeps the project lock entry —
+    the designed asymmetry (the row stays visible via the library universe;
+    only unlisted slugs need the drop to avoid a stranded row)."""
+    project = tmp_path / "proj"
+    project.mkdir()
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+
+    runner = CliRunner()
+    r = runner.invoke(main, ["skill", "add", str(git_sandbox.upstream), "--slug", "demo"])
+    assert r.exit_code == 0, r.output
+    (project / ".claude").mkdir(exist_ok=True)
+    r = runner.invoke(main, [
+        "--project", str(project),
+        "skill", "install", "demo", "--scope", "project",
+        "--agents", "claude-code",
+    ])
+    assert r.exit_code == 0, r.output
+    # NO `skill remove` — demo stays listed.
+    monkeypatch.chdir(project)
+
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        from agent_toolkit_tui.widgets.skill_grid import SkillGrid
+        grid = app.query_one("#skill-grid", SkillGrid)
+        grid.restore_pending({("project", "claude-code", "demo"): "unlink"})
+        app._apply_skill_pending()
+        await pilot.pause()
+
+    proj_lock = read_lock(lock_file_path(scope="project", project=project))
+    assert "demo" in proj_lock.skills  # listed: entry stays

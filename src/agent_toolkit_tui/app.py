@@ -673,6 +673,7 @@ class TUIApp(App):
             (adds if op == "link" else removes).add(agent)
         ok = failed = 0
         errors: list[str] = []
+        failed_groups: set[tuple[str, str]] = set()
         for (scope, slug), (adds, removes) in by_slug.items():
             n_writes = len(adds) + len(removes)
             home = Path.home() if scope == "global" else None
@@ -688,6 +689,7 @@ class TUIApp(App):
                 except InstallError as exc:
                     errors.append(f"{slug}: {exc}")
                     failed += n_writes
+                    failed_groups.add((scope, slug))
                     continue
             p = InstallPlan(
                 slug=slug, scope=scope, source=None, ref=None,
@@ -704,7 +706,17 @@ class TUIApp(App):
             except InstallError as exc:
                 errors.append(f"{slug}: {exc}")
                 failed += n_writes
-        saved = grid.pending_entries() if failed else {}
+                failed_groups.add((scope, slug))
+        # Restore only the ops of FAILED (scope, slug) groups (#360 G1).
+        # Successfully applied ops must never be re-queued: replaying a full
+        # unlisted uninstall (entry dropped, row gone) would fail with
+        # "not in global library" on every subsequent Apply, holding the
+        # genuinely-failed group's retry hostage.
+        saved = {
+            k: v
+            for k, v in grid.pending_entries().items()
+            if (k[0], k[2]) in failed_groups
+        } if failed else {}
         if failed == 0:
             grid.clear_pending()
         self._refresh_skill_view()
