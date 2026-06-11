@@ -101,12 +101,16 @@ class _AiderDeskAdapter:
         scope: str,
         home: Path | None = None,
         project: Path | None = None,
-    ) -> None:
+        canonical_content: Path | None = None,
+    ) -> Path | None:
+        # canonical_content accepted for Protocol uniformity (#368); cff
+        # removal semantics unchanged.
         _check_scope(scope, "aider-desk")
         base = _resolve_base("aider-desk", scope, home, project, ".aider-desk")
         subdir = base / "agents" / slug
         if subdir.exists():
             shutil.rmtree(subdir)
+        return None
 
 
 # ── dexto ────────────────────────────────────────────────────────────────
@@ -166,15 +170,19 @@ class _DextoAdapter:
         scope: str,
         home: Path | None = None,
         project: Path | None = None,
-    ) -> None:
+        canonical_content: Path | None = None,
+    ) -> Path | None:
+        # canonical_content accepted for Protocol uniformity (#368); cff
+        # removal semantics unchanged.
         _check_scope(scope, "dexto")
         if scope != "global":
-            return  # project-scope is a no-op (was a raise on install)
+            return None  # project-scope is a no-op (was a raise on install)
         if home is None:
-            return  # nothing to clean up if we don't know where to look
+            return None  # nothing to clean up if we don't know where to look
         subdir = home / ".dexto" / "agents" / slug
         if subdir.exists():
             shutil.rmtree(subdir)
+        return None
 
 
 # ── firebender ───────────────────────────────────────────────────────────
@@ -218,6 +226,7 @@ class _FirebenderAdapter:
         else:
             text = "---\ncallable: true\n---\n" + text
         md.write_text(text)
+        _sentinel_path(md).write_text("")
         # Mutate firebender.json atomically.
         fb_json = base / "firebender.json"
         if fb_json.exists():
@@ -241,21 +250,28 @@ class _FirebenderAdapter:
         scope: str,
         home: Path | None = None,
         project: Path | None = None,
-    ) -> None:
+        canonical_content: Path | None = None,
+    ) -> Path | None:
+        # canonical_content accepted for Protocol uniformity (#368); cff
+        # removal semantics unchanged.
         _check_scope(scope, "firebender")
         try:
             base = _resolve_base("firebender", scope, home, project, ".firebender")
         except ValueError:
-            return  # nothing to clean up if args are missing
+            return None  # nothing to clean up if args are missing
         md = base / "agents" / f"{slug}.md"
         if md.exists():
             md.unlink()
+        # Unconditional: clean the sidecar even when the .md was already
+        # deleted out-of-band (orphan-sidecar hygiene, as in codex below).
+        _sentinel_path(md).unlink(missing_ok=True)
         fb_json = base / "firebender.json"
         if fb_json.exists():
             body = json.loads(fb_json.read_text())
             if "agents" in body:
                 body["agents"] = [p for p in body["agents"] if f"{slug}.md" not in p]
             _atomic_write(fb_json, json.dumps(body, indent=2) + "\n")
+        return None
 
 
 # ── codex ────────────────────────────────────────────────────────────────
@@ -304,6 +320,7 @@ class _CodexAdapter:
         toml_path.write_text(
             f"developer_instructions = '''\n{escaped}\n'''\n"
         )
+        _sentinel_path(toml_path).write_text("")
         # Mutate config.toml: add/update [agents.<slug>] section.
         config_toml = base / "config.toml"
         if config_toml.exists():
@@ -336,15 +353,22 @@ class _CodexAdapter:
         scope: str,
         home: Path | None = None,
         project: Path | None = None,
-    ) -> None:
+        canonical_content: Path | None = None,
+    ) -> Path | None:
+        # canonical_content accepted for Protocol uniformity (#368); cff
+        # removal semantics unchanged.
         _check_scope(scope, "codex")
         try:
             base = _resolve_base("codex", scope, home, project, ".codex")
         except ValueError:
-            return
+            return None
         toml_path = base / "agents" / f"{slug}.toml"
         if toml_path.exists():
             toml_path.unlink()
+        # Unconditional: clean the sidecar even when the .toml was already
+        # deleted out-of-band — an orphan sidecar would later authorize a
+        # silent clobber via _guard_foreign (#361 hazard, #368 review F3).
+        _sentinel_path(toml_path).unlink(missing_ok=True)
         config_toml = base / "config.toml"
         if config_toml.exists():
             existing = config_toml.read_text()
@@ -355,6 +379,7 @@ class _CodexAdapter:
                 flags=re.DOTALL,
             )
             _atomic_write(config_toml, cleaned)
+        return None
 
 
 _ADAPTERS: dict[str, type] = {
