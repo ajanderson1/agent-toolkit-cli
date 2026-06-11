@@ -1,5 +1,53 @@
 # Changelog
 
+## [3.8.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v3.7.0...v3.8.0) (2026-06-11)
+
+
+### Features
+
+* **agent:** standard agents projection (.claude/agents) + Standard column on the agents tab ([#366](https://github.com/ajanderson1/agent-toolkit-cli/issues/366)) ([05eb9b7](https://github.com/ajanderson1/agent-toolkit-cli/commit/05eb9b7c98fe52cda4d77d25ec1178e473da81a7))
+* **rename:** universal/general-* → standard throughout CLI and TUI ([#350](https://github.com/ajanderson1/agent-toolkit-cli/issues/350)) ([#357](https://github.com/ajanderson1/agent-toolkit-cli/issues/357)) ([fc639b6](https://github.com/ajanderson1/agent-toolkit-cli/commit/fc639b6e9eadbe2919cf7711aaf229eb9c692103))
+* **tui:** row-universe union — unlisted project installs visible across kinds ([#360](https://github.com/ajanderson1/agent-toolkit-cli/issues/360)) ([#367](https://github.com/ajanderson1/agent-toolkit-cli/issues/367)) ([7e503b0](https://github.com/ajanderson1/agent-toolkit-cli/commit/7e503b01a65af5506d11849ac1d76b513e6e9dc4))
+* **tui:** standard/non-standard matrix column groups ([#351](https://github.com/ajanderson1/agent-toolkit-cli/issues/351)) ([#359](https://github.com/ajanderson1/agent-toolkit-cli/issues/359)) ([728414f](https://github.com/ajanderson1/agent-toolkit-cli/commit/728414f1aa759838cd1090eb8f294469f15016b3))
+
+
+### Bug Fixes
+
+* **agent:** agent install default fan-out — clean error for translate-emitter frontmatter failures ([#372](https://github.com/ajanderson1/agent-toolkit-cli/issues/372)) ([f0a29fd](https://github.com/ajanderson1/agent-toolkit-cli/commit/f0a29fd2c7a175bae7e0510f0ac3f36f7efb73bc))
+
+
+### Refactors
+
+* rename 'kind' terminology to 'asset type' ([#363](https://github.com/ajanderson1/agent-toolkit-cli/issues/363)) ([268c855](https://github.com/ajanderson1/agent-toolkit-cli/commit/268c855e242e8f7df77b35cbc9bea93e1772ddb1))
+
+
+### Documentation
+
+* compatibility matrix page, per-harness + per-kind atomic notes, glossary ([91d3b66](https://github.com/ajanderson1/agent-toolkit-cli/commit/91d3b66e1608d9be6b7d42f48db21890de631458))
+* **glossary:** subsections, condensed def-list, conformance concepts ([ff3c443](https://github.com/ajanderson1/agent-toolkit-cli/commit/ff3c44370531eef7cb9eb853d2c286104bb5fa70))
+* **harnesses:** validating source link for every per-kind claim + richer Kind definition ([d29dbfb](https://github.com/ajanderson1/agent-toolkit-cli/commit/d29dbfba81c0d6913f8c9d6791c98f9d5a16d981))
+* **mcp:** [#329](https://github.com/ajanderson1/agent-toolkit-cli/issues/329) deep critical review — 16 fixes into spec+plan, catalog+lock decisions ([1c3fbe4](https://github.com/ajanderson1/agent-toolkit-cli/commit/1c3fbe43b012e07d87130419e3bf47afdc6adea2))
+* **mcp:** [#329](https://github.com/ajanderson1/agent-toolkit-cli/issues/329) final mechanism — direct writes, greedy scope-less update, unmanaged [!] coexistence ([c992b7f](https://github.com/ajanderson1/agent-toolkit-cli/commit/c992b7f494710a928f49cdc084c09738a77763f3))
+* **mcp:** [#329](https://github.com/ajanderson1/agent-toolkit-cli/issues/329) mechanism revision — library model, source flags, version transparency, update verb ([1f66650](https://github.com/ajanderson1/agent-toolkit-cli/commit/1f6665044aaaf57b4e11b1012b2fb9c5eb0c2e5f))
+* **mcp:** [#329](https://github.com/ajanderson1/agent-toolkit-cli/issues/329) update-verb scope semantics — two independent reconciliations ([c79cd06](https://github.com/ajanderson1/agent-toolkit-cli/commit/c79cd067a02d8b2b810b9f0ee32c6169c765e2dd))
+* **plan:** [#360](https://github.com/ajanderson1/agent-toolkit-cli/issues/360) TUI row-universe union implementation plan ([f2ece86](https://github.com/ajanderson1/agent-toolkit-cli/commit/f2ece86e9a2c970fb4690c331993f22e0f241562))
+* **plan:** standard-agents-projection implementation plan for [#361](https://github.com/ajanderson1/agent-toolkit-cli/issues/361) ([330f746](https://github.com/ajanderson1/agent-toolkit-cli/commit/330f746c07bdbda7be7ae26c5f6d13dc9679515b))
+* scaffold MkDocs Material site ([b144f1a](https://github.com/ajanderson1/agent-toolkit-cli/commit/b144f1a4d23dc74997fdeaeb7800d14f0bb80c29))
+* **site:** remap matrix glyphs, publish SSOT page, unbold nav mains ([e8ccbbe](https://github.com/ajanderson1/agent-toolkit-cli/commit/e8ccbbe9fa2e4fc36e1a801a651f03552e53f0b9))
+* **site:** restore Material styling on the matrix table ([d075bcf](https://github.com/ajanderson1/agent-toolkit-cli/commit/d075bcf788e7baf7d08637c699933c3b54caa2f3))
+* **site:** single foldable matrix, headline-first nav, harness logos ([086bab4](https://github.com/ajanderson1/agent-toolkit-cli/commit/086bab477eb76db7b3b67077eb6f469d8fea06d5))
+* **spec,plan:** apply critical-review findings to [#360](https://github.com/ajanderson1/agent-toolkit-cli/issues/360) ([1b70b86](https://github.com/ajanderson1/agent-toolkit-cli/commit/1b70b86fa63442745d143f31fd49bedb830a7a6f))
+* **spec,plan:** apply PM adversarial review to [#361](https://github.com/ajanderson1/agent-toolkit-cli/issues/361) — sentinel is the ownership record ([caa7720](https://github.com/ajanderson1/agent-toolkit-cli/commit/caa7720da298b7494abc22eda98ea9c4ff55fb32))
+* **spec,plan:** kind→asset-type rename plan for [#355](https://github.com/ajanderson1/agent-toolkit-cli/issues/355); spec covers mkdocs site ([21521fd](https://github.com/ajanderson1/agent-toolkit-cli/commit/21521fdfddcb138c2e05b6b0765a47869d873bf4))
+* **spec,plan:** resolve critical-review findings for [#355](https://github.com/ajanderson1/agent-toolkit-cli/issues/355) ([0a42890](https://github.com/ajanderson1/agent-toolkit-cli/commit/0a42890d2c0723653c8944ddcab1d37a1af73928))
+* **spec,plan:** resolve critical-review findings for [#361](https://github.com/ajanderson1/agent-toolkit-cli/issues/361) ([dd71d97](https://github.com/ajanderson1/agent-toolkit-cli/commit/dd71d972f2113abd15e2e88ab0bf4d132165ff3e))
+* **spec,plan:** resolve critical-review findings for [#370](https://github.com/ajanderson1/agent-toolkit-cli/issues/370) ([a551334](https://github.com/ajanderson1/agent-toolkit-cli/commit/a551334a982190fb9b4057e966d933012461f393))
+* **spec,plan:** translate-emitter ValueError clean-error design for [#370](https://github.com/ajanderson1/agent-toolkit-cli/issues/370) ([be0969e](https://github.com/ajanderson1/agent-toolkit-cli/commit/be0969e7de891cc591d382192c0649617d301423))
+* **spec:** [#360](https://github.com/ajanderson1/agent-toolkit-cli/issues/360) TUI row-universe union — unlisted project installs visible across kinds ([9260cf3](https://github.com/ajanderson1/agent-toolkit-cli/commit/9260cf398c6da19c1e8e4f99688af7190f445069))
+* **spec:** [#361](https://github.com/ajanderson1/agent-toolkit-cli/issues/361) spec tracks the long-tail-CLI-only + MAIN_HARNESSES decisions from the [#351](https://github.com/ajanderson1/agent-toolkit-cli/issues/351) demo ([62992a1](https://github.com/ajanderson1/agent-toolkit-cli/commit/62992a101f37a3c644a77cd3e8dcac7617019342))
+* **spec:** kind→asset-type rename design for [#355](https://github.com/ajanderson1/agent-toolkit-cli/issues/355) ([e3e0c32](https://github.com/ajanderson1/agent-toolkit-cli/commit/e3e0c32718fed4d1eb0824b0d59c40302916045b))
+* **spec:** standard agents projection design for [#361](https://github.com/ajanderson1/agent-toolkit-cli/issues/361) ([4d7aa0f](https://github.com/ajanderson1/agent-toolkit-cli/commit/4d7aa0f65057fb5ba6313c7f41ca53a1ba0aa077))
+
 ## [3.7.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v3.6.4...v3.7.0) (2026-06-10)
 
 
