@@ -240,7 +240,7 @@ upstream docs/source:
 
 ## Amendments (2026-06-10, post-Task-0)
 
-Task 0 (commit 4c0ef2a) re-verified every catalog harness for
+Task 0 (commit 0b89cb4) re-verified every catalog harness for
 `.claude/agents/` reading, per the mandated research step. One delta vs the
 original evidence sets: **cursor reads `.claude/agents/` at BOTH scopes**
 (project + `~/.claude/agents/` user) by default — cursor.com/docs/subagents,

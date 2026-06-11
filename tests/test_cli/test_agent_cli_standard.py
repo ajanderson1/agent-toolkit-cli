@@ -228,6 +228,18 @@ def test_projected_harnesses_reports_standard_once(tmp_path):
     assert "claude-code" not in found
 
 
+def test_list_count_dedupes_standard_slot(tmp_path):
+    """`agent list` counts the slot ONCE (#361 review): at project scope
+    claude-code AND kode both resolve to <project>/.claude/agents/<slug>.md,
+    so the pre-dedupe count reported 2 for one file."""
+    from agent_toolkit_cli.commands.agent.list_cmd import _count_projections
+    project = tmp_path / "proj"
+    slot = project / ".claude" / "agents" / "demo.md"
+    slot.parent.mkdir(parents=True)
+    slot.write_text("x\n")
+    assert _count_projections("demo", "project", None, project) == 1
+
+
 def test_cli_status_reports_standard_after_claude_code_install(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:

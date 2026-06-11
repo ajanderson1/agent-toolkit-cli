@@ -17,22 +17,43 @@ from agent_toolkit_cli.commands.agent._common import scope_and_roots
 
 
 def _count_projections(slug: str, scope: str, home: object, project: object) -> int:
-    """Count how many adapter destinations exist on disk for this slug."""
+    """Count how many adapter destinations exist on disk for this slug.
+
+    Dedupe-by-destination (#361, mirrors status_cmd._projected_harnesses):
+    the standard slot is ONE file with many readers, so it is probed first
+    and counted once; any catalog cell whose destination IS the slot
+    (claude-code at both scopes, kode at project scope) is skipped rather
+    than double-counted.
+    """
     from agent_toolkit_cli.agent_adapters import UnsupportedMechanismError, get_adapter
     from agent_toolkit_cli.skill_agents import AGENTS
     from pathlib import Path
 
+    home_p = home if isinstance(home, Path) else None
+    project_p = project if isinstance(project, Path) else None
+
     count = 0
+    std_dest = None
+    try:
+        std_dest = get_adapter("standard").destination(
+            slug, scope=scope, home=home_p, project=project_p,
+        )
+        if std_dest.exists() or std_dest.is_symlink():
+            count += 1
+    except ValueError:
+        # The slot can't be resolved for these args (e.g. home=None at
+        # global scope) — nothing to count; the per-cell scan still runs.
+        std_dest = None
     for name, cfg in AGENTS.items():
         if cfg.subagent_mechanism == "none":
             continue
         try:
             adapter = get_adapter(name)
             dest = adapter.destination(
-                slug, scope=scope,
-                home=home if isinstance(home, Path) else None,
-                project=project if isinstance(project, Path) else None,
+                slug, scope=scope, home=home_p, project=project_p,
             )
+            if std_dest is not None and dest == std_dest:
+                continue  # same-destination cell — already counted as the slot
             if dest.exists() or dest.is_symlink():
                 count += 1
         except (UnsupportedMechanismError, ValueError, Exception):

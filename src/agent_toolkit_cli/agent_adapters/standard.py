@@ -17,7 +17,7 @@ from agent_toolkit_cli.agent_adapters import _guard_foreign, _sentinel_path
 
 # Harnesses that natively read the standard agents dir, per scope.
 # Evidence: docs/agent-toolkit/research/subagent-fragments/ (re-verified for
-# #361, 2026-06-10 — see the Task 0 commit, 4c0ef2a). devin reads
+# #361, 2026-06-10 — see the Task 0 commit, 0b89cb4). devin reads
 # .claude/agents/*.md at project scope only; its global path is a profile-dir
 # AGENT.md. cursor reads the dir at both scopes (cursor.com/docs/subagents,
 # re-verified 2026-06-10; .cursor/ wins name conflicts).
