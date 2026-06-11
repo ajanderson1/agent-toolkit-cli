@@ -991,3 +991,31 @@ def test_full_loop_with_git_sandbox(
     assert r_remove.exit_code == 0, r_remove.output
     assert not cc.exists(), "projection still present after remove"
     assert not canonical.exists(), "canonical still present after remove"
+
+
+# ---------------------------------------------------------------------------
+# #370: default fan-out over frontmatter-less agent → clean error, no traceback
+# ---------------------------------------------------------------------------
+
+
+def test_default_fanout_missing_description_clean_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    canonical = _seed_global_canonical(tmp_path, slug="no-fm")
+    (canonical / "no-fm.md").write_text("Body only, no frontmatter.\n")
+    _write_global_lock(tmp_path, slug="no-fm")
+
+    r = CliRunner().invoke(main, ["agent", "install", "no-fm", "-g"])
+
+    assert r.exit_code != 0
+    # The failure must be a handled ClickException, not an escaped ValueError.
+    assert not isinstance(r.exception, ValueError), (
+        f"raw ValueError escaped the CLI layer:\n{r.output}"
+    )
+    # Clean message names the harness and the missing key, with no traceback.
+    assert "github-copilot" in r.output
+    assert "description" in r.output
+    assert "Traceback" not in r.output, (
+        f"raw Traceback leaked into output:\n{r.output}"
+    )
