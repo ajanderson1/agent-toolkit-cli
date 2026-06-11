@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from agent_toolkit_cli._install_core import InstallError
-from agent_toolkit_cli.agent_adapters import _guard_foreign
+from agent_toolkit_cli.agent_adapters import _guard_foreign, _sentinel_path
 from agent_toolkit_cli.skill_agents import UnknownAgentError
 
 
@@ -390,7 +390,13 @@ class _TranslateAdapter:
         overwrite: bool = False,
     ) -> Path:
         dest = self._resolve_dest(slug, scope=scope, home=home, project=project)
-        _guard_foreign(dest, harness=self.harness, overwrite=overwrite)
+        # Fail loud on a missing canonical content file (standard-adapter F8
+        # parity) BEFORE read_text raises a raw OSError mid-fan-out.
+        if not content_path.exists():
+            raise InstallError(
+                f"{self.harness}: {slug}: canonical content file missing: "
+                f"{content_path} — re-run `agent add {slug}` to restore it"
+            )
         raw = content_path.read_text()
         try:
             fm, body = _parse_frontmatter(raw)
@@ -400,8 +406,22 @@ class _TranslateAdapter:
             # Emitter messages already name the harness and key; InstallError
             # is what the CLI layer converts to a clean ClickException.
             raise InstallError(str(exc)) from exc
+        # Adopt-if-identical (#368): "identical" for translate means the file
+        # matches what the emitter would write NOW (emission-identical) — the
+        # destination never holds the canonical bytes. Compare BYTES, not
+        # decoded text: a foreign non-UTF8 file at the destination must route
+        # to the conflict branch below, not raise UnicodeDecodeError.
+        if dest.exists() and not dest.is_symlink() and dest.read_bytes() == output.encode():
+            _sentinel_path(dest).write_text("")
+            return dest
+        # Ownership = SENTINEL, not lock (#368, standard-adapter parity; G5).
+        _guard_foreign(dest, harness=self.harness, overwrite=False)
         dest.parent.mkdir(parents=True, exist_ok=True)
+        # Replace, never write through, a symlink at the slot (F6 parity).
+        if dest.is_symlink():
+            dest.unlink()
         dest.write_text(output)
+        _sentinel_path(dest).write_text("")
         return dest
 
     def uninstall(

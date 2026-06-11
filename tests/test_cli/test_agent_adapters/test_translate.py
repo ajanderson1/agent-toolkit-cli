@@ -350,3 +350,86 @@ def test_mistral_vibe_install_raises_on_invalid_safety(tmp_path):
     adapter = translate.adapter_for("mistral-vibe")
     with pytest.raises(InstallError, match="safety"):
         adapter.install("test", content, scope="global", home=tmp_path)
+
+
+# ── #368: install-side ownership contract ────────────────────────────────
+
+# All 10 translate cells; gemini-cli exercises the strict filter, codex the
+# TOML emitter, kiro-cli the JSON emitter — the sentinel must appear for all.
+TRANSLATE_HARNESSES = [
+    "codex", "devin", "gemini-cli", "github-copilot", "kilo",
+    "kiro-cli", "mistral-vibe", "mux", "opencode", "qwen-code",
+]
+
+
+@pytest.mark.parametrize("harness", TRANSLATE_HARNESSES)
+def test_install_writes_sentinel(harness, tmp_path, fake_content):
+    """#368: every translate-cell install writes the .attk ownership sidecar."""
+    from agent_toolkit_cli.agent_adapters import _sentinel_path, translate
+    adapter = translate.adapter_for(harness)
+    dest = adapter.install("test-agent", fake_content, scope="global", home=tmp_path)
+    assert _sentinel_path(dest).exists(), f"{harness}: no sentinel beside {dest}"
+
+
+def test_install_adopts_emission_identical_file(tmp_path, fake_content):
+    """#368 (F3): a pre-existing file matching the EMITTER OUTPUT (not the
+    canonical bytes) is adopted — sentinel written, no error."""
+    from agent_toolkit_cli.agent_adapters import _sentinel_path, translate
+    adapter = translate.adapter_for("gemini-cli")
+    # First install produces the emitted shape; strip the sentinel to fake
+    # a pre-#368 projection.
+    dest = adapter.install("test-agent", fake_content, scope="global", home=tmp_path)
+    _sentinel_path(dest).unlink()
+    out = adapter.install("test-agent", fake_content, scope="global", home=tmp_path)
+    assert out == dest
+    assert _sentinel_path(dest).exists()
+
+
+def test_install_ignores_facade_overwrite_flag(tmp_path, fake_content):
+    """#368 (G5): divergent sentinel-less file refuses even with overwrite=True."""
+    from agent_toolkit_cli.agent_adapters import AgentProjectionConflictError, translate
+    adapter = translate.adapter_for("gemini-cli")
+    dest = adapter.destination("test-agent", scope="global", home=tmp_path)
+    dest.parent.mkdir(parents=True)
+    dest.write_text("# user-authored, divergent\n")
+    with pytest.raises(AgentProjectionConflictError):
+        adapter.install("test-agent", fake_content, scope="global",
+                        home=tmp_path, overwrite=True)
+    assert dest.read_text() == "# user-authored, divergent\n"
+
+
+def test_install_with_sentinel_overwrites_divergent_file(tmp_path, fake_content):
+    """#368: the sentinel authorizes refreshing our own drifted projection."""
+    from agent_toolkit_cli.agent_adapters import _sentinel_path, translate
+    adapter = translate.adapter_for("gemini-cli")
+    dest = adapter.destination("test-agent", scope="global", home=tmp_path)
+    dest.parent.mkdir(parents=True)
+    dest.write_text("stale projection\n")
+    _sentinel_path(dest).write_text("")
+    adapter.install("test-agent", fake_content, scope="global", home=tmp_path)
+    assert "name: test-agent" in dest.read_text()
+
+
+def test_install_replaces_symlink_at_destination(tmp_path, fake_content):
+    """#368 (F6 parity): write_text through a symlink would land in its target."""
+    from agent_toolkit_cli.agent_adapters import _sentinel_path, translate
+    adapter = translate.adapter_for("gemini-cli")
+    dest = adapter.destination("test-agent", scope="global", home=tmp_path)
+    dest.parent.mkdir(parents=True)
+    target = tmp_path / "users-dotfile.md"
+    target.write_text("user dotfile source\n")
+    dest.symlink_to(target)
+    _sentinel_path(dest).write_text("")
+    adapter.install("test-agent", fake_content, scope="global", home=tmp_path)
+    assert not dest.is_symlink()
+    assert target.read_text() == "user dotfile source\n"
+
+
+def test_install_missing_canonical_raises_install_error(tmp_path):
+    """#368 (F8 parity): missing canonical → InstallError, not raw OSError."""
+    from agent_toolkit_cli._install_core import InstallError
+    from agent_toolkit_cli.agent_adapters import translate
+    adapter = translate.adapter_for("gemini-cli")
+    missing = tmp_path / "canonical" / "test-agent.md"
+    with pytest.raises(InstallError, match="canonical content file missing"):
+        adapter.install("test-agent", missing, scope="global", home=tmp_path)
