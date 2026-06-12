@@ -1179,8 +1179,16 @@ def test_install_error_output_names_slug(
     r = CliRunner().invoke(main, ["agent", "install", "no-fm", "-g"])
 
     assert r.exit_code != 0
-    assert "no-fm" in r.output, f"slug missing from error:\n{r.output}"
     assert "Traceback" not in r.output
+    # #373: pin the EXACT one-line shape "Error: <slug>: <harness>: <cause>"
+    # — slug named once, then the harness that failed (PM review F1: guards
+    # against a regression that doubles or drops the slug).
+    import re
+    assert re.search(
+        r"^Error: no-fm: github-copilot: .*description", r.output, re.MULTILINE
+    ), f"error line not in expected <slug>: <harness>: <cause> shape:\n{r.output}"
+    # Exactly once — not "no-fm: no-fm: ...".
+    assert r.output.count("no-fm") == 1, f"slug duplicated:\n{r.output}"
 
 
 def test_failed_fanout_retry_succeeds_after_fix(

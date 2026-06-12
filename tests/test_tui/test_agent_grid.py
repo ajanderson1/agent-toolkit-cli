@@ -517,6 +517,69 @@ async def test_apply_error_surfaces_notify_and_footer(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_apply_error_names_slug_exactly_once(monkeypatch, tmp_path):
+    """#373 (PM review F1): the facade seam already prefixes the slug onto
+    InstallError; the TUI must NOT prefix it again. Drives the REAL
+    agent_install.apply (no mock) over a non-UTF8 canonical — gemini-cli's
+    read raises InstallError, the seam tags it `my-agent: ...`, and the
+    surfaced footer/notify must contain the slug EXACTLY ONCE."""
+    from agent_toolkit_cli.agent_lock import (
+        LockEntry, add_entry, read_lock, write_lock,
+    )
+    from agent_toolkit_cli.agent_paths import canonical_agent_dir, library_lock_path
+    from agent_toolkit_tui.app import TUIApp
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+
+    # Real global canonical + lock entry, but the content file is non-UTF8 →
+    # gemini-cli's read_text raises (the Task 1 fix → InstallError).
+    canonical = canonical_agent_dir("my-agent", scope="global")
+    canonical.mkdir(parents=True)
+    (canonical / "my-agent.md").write_bytes(b"\xff\xfe not valid utf8")
+    lock_path = library_lock_path()
+    write_lock(lock_path, add_entry(
+        read_lock(lock_path), "my-agent",
+        LockEntry(
+            source="https://github.com/test/my-agent",
+            source_type="github", agent_path="my-agent.md",
+        ),
+    ))
+
+    notify_calls: list[Any] = []
+
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        orig_notify = app.notify
+
+        def spy_notify(*a, **k):
+            notify_calls.append((a, k))
+            return orig_notify(*a, **k)
+
+        monkeypatch.setattr(app, "notify", spy_notify)
+        app._active_asset_type = "agent"
+        app._scope = "global"
+        grid = app.query_one("#agent-grid", AgentGrid)
+        grid.set_rows([_full_row("my-agent", linked=False)])
+        grid.restore_pending({("global", "gemini-cli", "my-agent"): "link"})
+        await pilot.pause()
+
+        app._apply_agent_pending()
+        await pilot.pause()
+        footer = str(app.query_one("#footer-pending", Static).render())
+
+    # The error surfaced...
+    assert "apply failed" in footer
+    err_msgs = [a[0] for (a, k) in notify_calls if k.get("severity") == "error"]
+    assert err_msgs, f"expected an error notification, got {notify_calls!r}"
+    # ...and the slug appears EXACTLY ONCE (not "my-agent: my-agent: ...").
+    assert err_msgs[-1].count("my-agent") == 1, (
+        f"slug duplicated in TUI error message: {err_msgs[-1]!r}"
+    )
+
+
+@pytest.mark.asyncio
 async def test_apply_project_scope_seeds_canonical(monkeypatch, tmp_path):
     """Project scope apply copies global canonical to project when missing."""
     from agent_toolkit_tui.app import TUIApp
