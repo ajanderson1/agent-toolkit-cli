@@ -170,9 +170,9 @@ def test_uninstall_member_per_kind_argv(monkeypatch):
     uninstall_member(BundleMember(asset_type="skill", source="o/r/gw", slug="gw"), scope="project")
     uninstall_member(BundleMember(asset_type="agent", source="o/r/a/cr", slug="cr"), scope="global")
     uninstall_member(BundleMember(asset_type="pi-extension", source="o/r/tm", slug="tm"), scope="global")
-    assert calls[0] == ["skill", "uninstall", "--scope", "project", "--", "gw"]
-    assert calls[1] == ["agent", "uninstall", "-g", "--", "cr"]
-    assert calls[2] == ["pi-extension", "uninstall", "-g", "--", "tm"]
+    assert calls[0] == ["skill", "remove", "--force", "--", "gw"]
+    assert calls[1] == ["agent", "remove", "--force", "--", "cr"]
+    assert calls[2] == ["pi-extension", "remove", "--force", "--", "tm"]
 
 
 def test_uninstall_failure_wraps_in_dispatch_error(monkeypatch):
@@ -182,11 +182,12 @@ def test_uninstall_failure_wraps_in_dispatch_error(monkeypatch):
         uninstall_member(BundleMember(asset_type="skill", source="o/r/gw", slug="gw"), scope="global")
 
 
-def test_uninstall_project_scope_prepends_project_root(monkeypatch):
+def test_uninstall_ignores_project_root_for_remove(monkeypatch):
+    # `remove --force` is library/global-level — no --project prefix even when
+    # project_root is passed (rollback is scope-independent).
     calls = []
     monkeypatch.setattr("agent_toolkit_cli.bundle_dispatch._invoke_cli",
                         lambda argv: calls.append(argv))
     uninstall_member(BundleMember(asset_type="skill", source="o/r/gw", slug="gw"),
                      scope="project", project_root="/tmp/proj")
-    assert calls[0][:2] == ["--project", "/tmp/proj"]
-    assert calls[0][2:] == ["skill", "uninstall", "--scope", "project", "--", "gw"]
+    assert calls[0] == ["skill", "remove", "--force", "--", "gw"]

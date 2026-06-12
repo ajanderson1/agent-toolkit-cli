@@ -123,16 +123,22 @@ _INSTALL_BUILDERS = {
     "agent": _agent_install_argv,
     "pi-extension": _pi_ext_install_argv,
 }
+
+
 def _skill_uninstall_argv(slug: str, scope: str) -> list[str]:
-    return ["skill", "uninstall", "--scope", scope, "--", slug]
+    # Rollback must fully undo add+install → `remove --force` (drops lock entry +
+    # canonical + projections). `uninstall` is projection-only and would leave the
+    # member in the library lock, breaking all-or-nothing (AC4). `remove` takes no
+    # scope flag (it is library/global-level, like the add lock-precheck).
+    return ["skill", "remove", "--force", "--", slug]
 
 
 def _agent_uninstall_argv(slug: str, scope: str) -> list[str]:
-    return ["agent", "uninstall", _scope_flag(scope), "--", slug]
+    return ["agent", "remove", "--force", "--", slug]
 
 
 def _pi_ext_uninstall_argv(slug: str, scope: str) -> list[str]:
-    return ["pi-extension", "uninstall", _scope_flag(scope), "--", slug]
+    return ["pi-extension", "remove", "--force", "--", slug]
 
 
 _UNINSTALL_BUILDERS = {
@@ -199,12 +205,16 @@ def uninstall_member(
     scope: str,
     project_root: str | None = None,
 ) -> None:
-    """Roll back a member installed earlier this run (in-process)."""
+    """Roll back a member installed earlier this run (in-process).
+
+    Uses `<kind> remove --force` (not `uninstall`) so the library lock entry
+    and canonical are also removed — the true inverse of `add`+`install`.
+    `remove` is library-level (no scope flag), so `--project` is not prepended.
+    """
     _check_member(member)
     slug = member.slug or _derive_slug(member.source)
-    prefix = _project_prefix(scope, project_root)
     try:
-        _invoke_cli(prefix + _UNINSTALL_BUILDERS[member.asset_type](slug, scope))
+        _invoke_cli(_UNINSTALL_BUILDERS[member.asset_type](slug, scope))
     except (Exception, SystemExit) as exc:
         raise DispatchError(
             f"rollback of {slug!r} ({member.asset_type}) failed: {exc}"
