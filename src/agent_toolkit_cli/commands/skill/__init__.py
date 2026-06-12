@@ -507,8 +507,9 @@ Examples:
   agent-toolkit-cli skill install journal --agents claude-code -p
 """)
 @click.argument("slug", required=True)
-@click.option("--agents", "agents_str", required=True,
-              help="Comma-separated agent names, 'standard', or 'all'.")
+@click.option("--agents", "agents_str", default="standard", show_default=True,
+              help="Comma-separated agent names, 'standard', or 'all'. "
+                   "Defaults to the standard bundle.")
 @click.option("--scope", "scope", default="global",
               type=click.Choice(["global", "project"]),
               help="Scope: global (default) or project.")
