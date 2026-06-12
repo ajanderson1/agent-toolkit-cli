@@ -1216,3 +1216,26 @@ def test_failed_fanout_retry_succeeds_after_fix(
          "--harnesses", "gemini-cli,github-copilot"],
     )
     assert r2.exit_code == 0, f"retry wedged:\n{r2.output}"
+
+
+def test_uninstall_install_error_clean_message(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#373 (AC6): uninstall converts InstallError to a clean ClickException
+    (the data-dependent path is only reachable via catalog-disabled
+    harnesses today, so simulate it at the facade seam)."""
+    from agent_toolkit_cli import agent_install
+    from agent_toolkit_cli._install_core import InstallError
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    def _boom(**kwargs):
+        raise InstallError("retry-agent: firebender: /x/firebender.json: bad")
+
+    monkeypatch.setattr(agent_install, "uninstall", _boom)
+    r = CliRunner().invoke(main, ["agent", "uninstall", "retry-agent", "-g"])
+
+    assert r.exit_code != 0
+    assert not isinstance(r.exception, InstallError), "raw InstallError escaped"
+    assert "firebender.json" in r.output
+    assert "Traceback" not in r.output
