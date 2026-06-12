@@ -19,6 +19,9 @@ Three hardening rules (resolved critical-review findings):
 """
 from __future__ import annotations
 
+import shutil
+from pathlib import Path
+
 from agent_toolkit_cli.bundle_manifest import BundleMember
 
 INSTALLABLE_KINDS: tuple[str, ...] = ("skill", "agent", "pi-extension")
@@ -125,27 +128,59 @@ _INSTALL_BUILDERS = {
 }
 
 
-def _skill_uninstall_argv(slug: str, scope: str) -> list[str]:
-    # Rollback must fully undo add+install → `remove --force` (drops lock entry +
-    # canonical + projections). `uninstall` is projection-only and would leave the
-    # member in the library lock, breaking all-or-nothing (AC4). `remove` takes no
-    # scope flag (it is library/global-level, like the add lock-precheck).
+def _skill_remove_argv(slug: str) -> list[str]:
+    # `remove --force` drops lock entry + canonical + projections: the true
+    # inverse of `add`. It is library/global-level (no scope flag).
     return ["skill", "remove", "--force", "--", slug]
 
 
-def _agent_uninstall_argv(slug: str, scope: str) -> list[str]:
+def _skill_project_uninstall_argv(slug: str) -> list[str]:
+    """Remove project projection symlinks + project lock entry (non-destructive)."""
+    return ["skill", "uninstall", "-p", "--", slug]
+
+
+def _agent_remove_argv(slug: str) -> list[str]:
     return ["agent", "remove", "--force", "--", slug]
 
 
-def _pi_ext_uninstall_argv(slug: str, scope: str) -> list[str]:
+def _agent_project_uninstall_argv(slug: str) -> list[str]:
+    return ["agent", "uninstall", "-p", "--", slug]
+
+
+def _pi_ext_remove_argv(slug: str) -> list[str]:
     return ["pi-extension", "remove", "--force", "--", slug]
 
 
-_UNINSTALL_BUILDERS = {
-    "skill": _skill_uninstall_argv,
-    "agent": _agent_uninstall_argv,
-    "pi-extension": _pi_ext_uninstall_argv,
+def _pi_ext_project_uninstall_argv(slug: str) -> list[str]:
+    return ["pi-extension", "uninstall", "-p", "--", slug]
+
+
+_REMOVE_BUILDERS = {
+    "skill": _skill_remove_argv,
+    "agent": _agent_remove_argv,
+    "pi-extension": _pi_ext_remove_argv,
 }
+
+_PROJECT_UNINSTALL_BUILDERS = {
+    "skill": _skill_project_uninstall_argv,
+    "agent": _agent_project_uninstall_argv,
+    "pi-extension": _pi_ext_project_uninstall_argv,
+}
+
+
+def _project_canonical_dir(asset_type: str, slug: str, project_root: str) -> Path:
+    """Return the project-scope canonical dir path for a member, per kind."""
+    from agent_toolkit_cli.skill_paths import project_store_root
+
+    project = Path(project_root)
+    if asset_type in ("skill", "agent"):
+        # Both skill and agent share the same external store root (agent_paths
+        # re-exports project_store_root from skill_paths).
+        return project_store_root(project) / slug
+    # pi-extension uses a sibling "pi-extensions" subdir, not "skills".
+    from agent_toolkit_cli.pi_extension_paths import canonical_pi_extension_dir
+
+    return canonical_pi_extension_dir(slug, scope="project", project=project)
 
 
 def _lock_has_member(member: BundleMember) -> bool:
@@ -207,14 +242,37 @@ def uninstall_member(
 ) -> None:
     """Roll back a member installed earlier this run (in-process).
 
-    Uses `<kind> remove --force` (not `uninstall`) so the library lock entry
-    and canonical are also removed — the true inverse of `add`+`install`.
-    `remove` is library-level (no scope flag), so `--project` is not prepended.
+    Global scope: `<kind> remove --force` — drops library lock entry, canonical,
+    and all global projections. The true inverse of `add`+`install` at global.
+
+    Project scope: three-step teardown to undo the full add+install sequence:
+      1. `<kind> uninstall -p <slug>` — removes project projection symlinks +
+         project lock entry (non-destructive to canonicals).
+      2. `<kind> remove --force <slug>` — removes global library entry.
+      3. rmtree the project canonical dir (uninstall -p deliberately preserves
+         it for dirty-work survival; we must clean it for all-or-nothing AC4).
+    The `--project` prefix threads through step 1 so the CLI command resolves
+    the correct project root from ctx.obj.
     """
     _check_member(member)
     slug = member.slug or _derive_slug(member.source)
     try:
-        _invoke_cli(_UNINSTALL_BUILDERS[member.asset_type](slug, scope))
+        if scope == "project" and project_root is not None:
+            prefix = _project_prefix(scope, project_root)
+            # Step 1: remove project projections + project lock entry.
+            _invoke_cli(
+                prefix + _PROJECT_UNINSTALL_BUILDERS[member.asset_type](slug)
+            )
+            # Step 2: remove global library entry.
+            _invoke_cli(_REMOVE_BUILDERS[member.asset_type](slug))
+            # Step 3: remove project canonical dir (uninstall -p preserves it).
+            proj_canonical = _project_canonical_dir(
+                member.asset_type, slug, project_root
+            )
+            if proj_canonical.exists() or proj_canonical.is_symlink():
+                shutil.rmtree(proj_canonical, ignore_errors=True)
+        else:
+            _invoke_cli(_REMOVE_BUILDERS[member.asset_type](slug))
     except (Exception, SystemExit) as exc:
         raise DispatchError(
             f"rollback of {slug!r} ({member.asset_type}) failed: {exc}"

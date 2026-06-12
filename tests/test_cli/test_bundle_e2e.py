@@ -165,3 +165,62 @@ def test_rollback_on_second_member_unresolvable(tmp_path: Path, _bundle_env):
         assert "good" not in lock_text, (
             f"'good' still present in lock after rollback:\n{lock_text}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Test 3: project-scope rollback cleans project canonical + projections (BUG2)
+# ---------------------------------------------------------------------------
+
+def test_project_scope_rollback_cleans_project_canonical(
+    tmp_path: Path, _bundle_env, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """BUG2: a failed project-scope bundle install rolls back the first member's
+    project canonical dir AND project projection symlinks, not just the global entry.
+    """
+    _home, lib_root, lock_path = _bundle_env
+    good = _make_skill_repo(tmp_path / "repos", "good")
+    project_dir = tmp_path / "myproject"
+    project_dir.mkdir()
+    manifest = tmp_path / "b.bundle.json"
+    manifest.write_text(json.dumps({
+        "schema_version": 1,
+        "name": "demo",
+        "description": "",
+        "members": [
+            {"asset_type": "skill", "source": good, "slug": "good"},
+            {
+                "asset_type": "skill",
+                "source": f"file://{tmp_path}/does-not-exist.git",
+                "slug": "missing",
+            },
+        ],
+    }))
+
+    # bundle install --project uses Path.cwd() as the project root.
+    monkeypatch.chdir(project_dir)
+    res = CliRunner().invoke(main, ["bundle", "install", "--project", str(manifest)])
+    assert res.exit_code != 0, (
+        f"bundle install --project should have failed but exited 0:\n{res.output}"
+    )
+
+    # Compute the project canonical path that skill install would have written.
+    from agent_toolkit_cli.skill_paths import project_store_root
+    proj_canonical = project_store_root(project_dir) / "good"
+
+    # After rollback: the project canonical dir must be gone (BUG2 fix).
+    assert not proj_canonical.exists(), (
+        f"project canonical still present after rollback: {proj_canonical}"
+    )
+
+    # After rollback: the project projection symlink must be gone.
+    proj_symlink = project_dir / ".agents" / "skills" / "good"
+    assert not proj_symlink.exists() and not proj_symlink.is_symlink(), (
+        f"project projection symlink still present after rollback: {proj_symlink}"
+    )
+
+    # After rollback: the global library lock must NOT contain 'good'.
+    if lock_path.exists():
+        lock_text = lock_path.read_text()
+        assert "good" not in lock_text, (
+            f"'good' still in global library lock after rollback:\n{lock_text}"
+        )

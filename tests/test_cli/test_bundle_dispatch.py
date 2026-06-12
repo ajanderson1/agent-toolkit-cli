@@ -164,9 +164,11 @@ def test_dispatch_propagates_install_failure(monkeypatch):
 
 
 def test_uninstall_member_per_kind_argv(monkeypatch):
+    """Global-scope uninstall uses <kind> remove --force (no project prefix)."""
     calls = []
     monkeypatch.setattr("agent_toolkit_cli.bundle_dispatch._invoke_cli",
                         lambda argv: calls.append(argv))
+    # scope="project" with NO project_root falls through to global path.
     uninstall_member(BundleMember(asset_type="skill", source="o/r/gw", slug="gw"), scope="project")
     uninstall_member(BundleMember(asset_type="agent", source="o/r/a/cr", slug="cr"), scope="global")
     uninstall_member(BundleMember(asset_type="pi-extension", source="o/r/tm", slug="tm"), scope="global")
@@ -182,12 +184,50 @@ def test_uninstall_failure_wraps_in_dispatch_error(monkeypatch):
         uninstall_member(BundleMember(asset_type="skill", source="o/r/gw", slug="gw"), scope="global")
 
 
-def test_uninstall_ignores_project_root_for_remove(monkeypatch):
-    # `remove --force` is library/global-level — no --project prefix even when
-    # project_root is passed (rollback is scope-independent).
+def test_project_scope_rollback_runs_three_step_teardown(monkeypatch, tmp_path):
+    """BUG2: project-scope rollback does uninstall -p, then remove --force, then
+    rmtrees the project canonical dir. Three steps, not one global remove.
+    """
+    calls = []
+    rmtree_calls = []
+
+    monkeypatch.setattr("agent_toolkit_cli.bundle_dispatch._invoke_cli",
+                        lambda argv: calls.append(argv))
+    # Patch shutil.rmtree at the bundle_dispatch module scope.
+    monkeypatch.setattr(
+        "agent_toolkit_cli.bundle_dispatch.shutil.rmtree",
+        lambda path, **kw: rmtree_calls.append(path),
+    )
+
+    # Give the project canonical a real path under tmp_path so exists() is True.
+    from agent_toolkit_cli import bundle_dispatch as bd
+    fake_canonical = tmp_path / "skills" / "gw"
+    fake_canonical.mkdir(parents=True)
+    monkeypatch.setattr(bd, "_project_canonical_dir", lambda *_: fake_canonical)
+
+    uninstall_member(
+        BundleMember(asset_type="skill", source="o/r/gw", slug="gw"),
+        scope="project",
+        project_root="/tmp/proj",
+    )
+
+    # Step 1: project uninstall with --project prefix.
+    assert calls[0] == ["--project", "/tmp/proj", "skill", "uninstall", "-p", "--", "gw"]
+    # Step 2: global remove --force (no prefix).
+    assert calls[1] == ["skill", "remove", "--force", "--", "gw"]
+    # Step 3: rmtree called on the project canonical dir.
+    assert rmtree_calls[0] == fake_canonical
+
+
+def test_project_scope_rollback_no_project_root_falls_through(monkeypatch):
+    """When scope=project but project_root is None, fall back to global remove."""
     calls = []
     monkeypatch.setattr("agent_toolkit_cli.bundle_dispatch._invoke_cli",
                         lambda argv: calls.append(argv))
-    uninstall_member(BundleMember(asset_type="skill", source="o/r/gw", slug="gw"),
-                     scope="project", project_root="/tmp/proj")
+    uninstall_member(
+        BundleMember(asset_type="skill", source="o/r/gw", slug="gw"),
+        scope="project",
+        project_root=None,
+    )
+    assert len(calls) == 1
     assert calls[0] == ["skill", "remove", "--force", "--", "gw"]
