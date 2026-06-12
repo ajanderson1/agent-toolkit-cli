@@ -557,6 +557,31 @@ def test_already_present_skips_add_and_returns_sentinel(monkeypatch):
     assert called == []  # add+install skipped entirely
 
 
+def test_lock_has_member_reads_real_lock_shape(tmp_path, monkeypatch):
+    # Pin the on-disk lock key shape: _lock_has_member must return True for a slug
+    # genuinely present in a REAL written library lock (NOT monkeypatched). Guards
+    # against the `entries` vs `skills` key-shape bug.
+    from agent_toolkit_cli import bundle_dispatch
+    from agent_toolkit_cli.skill_lock import LockEntry, add_entry, read_lock, write_lock
+
+    lock_path = tmp_path / "skills-lock.json"
+    write_lock(lock_path, add_entry(
+        read_lock(lock_path), "gw",
+        LockEntry(source="o/r/gw", source_type="github", skill_path="SKILL.md"),
+    ))
+    monkeypatch.setattr(
+        "agent_toolkit_cli._paths_core.library_lock_path_for_asset_type",
+        lambda binding: lock_path,
+    )
+    assert bundle_dispatch._lock_has_member(
+        BundleMember(asset_type="skill", source="o/r/gw", slug="gw")
+    ) is True
+    # Different source for the same slug → NOT our member.
+    assert bundle_dispatch._lock_has_member(
+        BundleMember(asset_type="skill", source="o/r/OTHER", slug="gw")
+    ) is False
+
+
 def test_dispatch_propagates_install_failure(monkeypatch):
     _stub_not_present(monkeypatch)
 
@@ -754,6 +779,12 @@ def _lock_has_member(member: BundleMember) -> bool:
     which is itself idempotent).
     """
     from agent_toolkit_cli import _paths_core
+    # All three kinds serialize their library lock via the SAME primitives
+    # (agent_lock and pi_extension_lock re-export skill_lock.read_lock/write_lock),
+    # so the typed reader handles every kind. Using the typed reader — NOT raw
+    # json — means the on-disk key shape (`{"version":…, "skills": {slug: entry}}`)
+    # and the LockEntry field names (`source`) come from one place and cannot drift.
+    from agent_toolkit_cli.skill_lock import read_lock
 
     binding = {
         "skill": _paths_core.SKILL_BINDING,
@@ -763,17 +794,17 @@ def _lock_has_member(member: BundleMember) -> bool:
     lock_path = _paths_core.library_lock_path_for_asset_type(binding)
     slug = member.slug or _derive_slug(member.source)
     try:
-        import json
-
-        data = json.loads(lock_path.read_text())
+        lock = read_lock(lock_path)  # returns an empty LockFile if absent
     except (OSError, ValueError):
+        # Corrupt lock → treat as 'not present' and proceed to add (idempotent).
+        # NOTE: this is a fallback, not a guarantee — a corrupt lock silently
+        # disables already_present detection rather than failing loud.
         return False
-    entries = data.get("entries", data) if isinstance(data, dict) else {}
-    entry = entries.get(slug) if isinstance(entries, dict) else None
-    if not isinstance(entry, dict):
+    entry = lock.skills.get(slug)
+    if entry is None:
         return False
     # Same slug AND same source = a prior install of THIS member.
-    return entry.get("source") == member.source
+    return entry.source == member.source
 
 
 def install_member(
@@ -822,13 +853,13 @@ def uninstall_member(
 ```
 
 > **Worker note (verify-then-pin, not redesign):** the argv shapes above are the
-> verified post-#394 reality — pin them in the dispatch tests so any future
-> drift fails loudly. The one detail to confirm against the running code is the
-> **library-lock entry shape** `_lock_has_member` reads (`entries`/`source`
-> keys): inspect the kind's lock reader (`skill_lock.read_lock`,
-> `agent_paths.library_lock_path`, `pi_extension` lock) and adapt the key access
-> to the real `LockEntry` field names if they differ — the precheck is the single
-> place to fix. Do NOT change the argv builders or the seam; those are decided.
+> verified post-#394 reality — pin them in the dispatch tests so any future drift
+> fails loudly. `_lock_has_member` uses the **typed** `skill_lock.read_lock` (which
+> all three kinds re-export) and reads `lock.skills[slug].source` — so the on-disk
+> `{"version":…, "skills": {…}}` shape and the `source` field name come from one
+> typed source and cannot drift. Step 1's `test_already_present_skips_add_*` test
+> uses a REAL written lock (not a monkeypatched `_lock_has_member`) so the key shape
+> is genuinely pinned. Do NOT change the argv builders or the seam; those are decided.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
