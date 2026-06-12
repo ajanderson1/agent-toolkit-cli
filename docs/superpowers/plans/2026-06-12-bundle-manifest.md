@@ -4,11 +4,11 @@
 
 **Goal:** Add a toolkit-native JSON bundle manifest plus `bundle install` / `bundle validate` verbs that fan out to the existing per-kind installers (skills, agents, pi-extensions), all-or-nothing with rollback, stateless.
 
-**Architecture:** Four small units. `bundle_manifest` parses/validates JSON into typed records (pure data). `bundle_dispatch` maps one member → that kind's real add+install sequence (absorbs the kinds' heterogeneous entrypoints; calls in-process, no shelling out). `bundle_install` orchestrates: a resolve pass shared by both verbs (a `dry_run` flag suppresses disk writes) plus install-in-order with rollback-on-failure. A thin `bundle` Click group wires the two verbs. `mcp` members are reserved-but-hard-fail (#329); `instructions` is not a member type.
+**Architecture:** Four small units. `bundle_manifest` parses/validates JSON into typed records (pure data; rejects `-`-prefixed fields and a `pi-extension` with `ref`). `bundle_dispatch` maps one member → that kind's real add+install sequence using a **per-kind argv table** (the kinds are heterogeneous: skill uses `--scope`+`--agents`, agent/pi-ext use `-g/-p`, pi-ext has no `--ref`); it invokes the CLI in-process (no shelling out), inserts a `--` end-of-options sentinel before manifest positionals, and lock-prechecks for `already_present`. `bundle_install` orchestrates: a resolve pass shared by both verbs (a `dry_run` flag suppresses disk writes) plus install-in-order with rollback-on-failure (rollback failures warn, never swallow). A thin `bundle` Click group wires the two verbs and resolves the no-flag scope via a new `_paths_core.default_scope`. `mcp` members are reserved-but-hard-fail (#329); `instructions` is not a member type.
 
 **Tech Stack:** Python 3.12, Click, stdlib `json`, pytest with `CliRunner` + the existing `git_sandbox` hermetic `file://` bare-repo fixtures. No new runtime dependency.
 
-**Spec:** `docs/superpowers/specs/2026-06-12-bundle-manifest-design.md` (commit 6ce6931). **Depends on #329** for the `mcp` member to become installable.
+**Spec:** `docs/superpowers/specs/2026-06-12-bundle-manifest-design.md` (revised 2026-06-13 to resolve critical-review findings F1–F10). **Depends on #329** for the `mcp` member to become installable. **#393/#394 (default `skill install --agents standard`) is DONE**, so a skill member installs with no special-casing.
 
 ---
 
@@ -17,7 +17,8 @@
 | File | Responsibility |
 |---|---|
 | `src/agent_toolkit_cli/bundle_manifest.py` | `BundleMember`, `BundleManifest` dataclasses + `load(path)` / `parse(data)` with validation. Pure; no disk side-effects beyond reading the manifest file. |
-| `src/agent_toolkit_cli/bundle_dispatch.py` | `INSTALLABLE_KINDS`, `MemberOutcome`, `resolve(member)`, `install(member, scope)`, `uninstall(member, scope)`. The only unit that knows each kind's add+install sequence. |
+| `src/agent_toolkit_cli/bundle_dispatch.py` | `INSTALLABLE_KINDS`, `DispatchError`, `resolve_member(member)`, `install_member(member, scope, project_root)`, `uninstall_member(member, scope, project_root)`. The only unit that knows each kind's per-kind add+install argv. |
+| `src/agent_toolkit_cli/_paths_core.py` (modify) | Add `default_scope(cwd) -> str` (F3): project if any per-kind lock file is present in `cwd`, else global. The shared no-flag scope default for `bundle install`/`validate`. |
 | `src/agent_toolkit_cli/bundle_install.py` | `BundleInstallError`, `run(manifest, scope, dry_run)`: resolve-all, install-in-order, rollback-on-failure. Shared by both verbs. |
 | `src/agent_toolkit_cli/commands/bundle/__init__.py` | `bundle` Click group. |
 | `src/agent_toolkit_cli/commands/bundle/install_cmd.py` | `bundle install <ref> [--global/--project]`. |
@@ -170,6 +171,25 @@ def test_load_bad_json_raises_manifest_error(tmp_path: Path):
 def test_load_missing_file_raises_manifest_error(tmp_path: Path):
     with pytest.raises(ManifestError, match="not found"):
         load(tmp_path / "nope.json")
+
+
+def test_pi_extension_member_with_ref_rejected():
+    # F6: `pi-extension add` has no --ref option, so a pi-ext member carrying
+    # `ref` is rejected at parse — never silently dropped.
+    data = _valid()
+    data["members"][2]["ref"] = "v1.2.3"  # the pi-extension member
+    with pytest.raises(ManifestError, match="pi-extension does not support ref"):
+        parse(data)
+
+
+@pytest.mark.parametrize("field", ["source", "slug", "ref"])
+def test_dash_prefixed_field_rejected(field):
+    # F5 option-injection guard: a field value starting with '-' could be read
+    # by Click as a flag (e.g. slug="--force"). Reject at parse.
+    data = _valid()
+    data["members"][0][field] = "--force"
+    with pytest.raises(ManifestError, match="must not start with '-'"):
+        parse(data)
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -206,6 +226,12 @@ upgrade):
 `instructions` is NOT a member type (no shareable source). `mcp` is a valid
 member type for forward-compat, but the INSTALLER hard-fails on it until the
 mcp kind ships (#329) — that check lives in bundle_dispatch, not here.
+
+Two parse-time guards (resolved critical-review findings):
+- F5: any `source`/`slug`/`ref` value starting with '-' is rejected (an
+  option-injection guard — the value is later placed into a CLI argv).
+- F6: a `pi-extension` member carrying `ref` is rejected — `pi-extension add`
+  has no --ref option, so a pin cannot be honoured and must not be dropped.
 """
 from __future__ import annotations
 
@@ -267,6 +293,23 @@ def _parse_member(raw: object, index: int) -> BundleMember:
         raise ManifestError(f"member {index}: 'slug' must be a string")
     if ref is not None and not isinstance(ref, str):
         raise ManifestError(f"member {index}: 'ref' must be a string")
+    # F6: pi-extension `add` has no --ref option — reject a ref here rather than
+    # silently dropping the pin.
+    if asset_type == "pi-extension" and ref is not None:
+        raise ManifestError(
+            f"member {index} (pi-extension): pi-extension does not support ref "
+            "(its `add` has no --ref option). Remove the 'ref' field."
+        )
+    # F5 option-injection guard: a manifest-supplied value that begins with '-'
+    # could be interpreted by Click as a flag once placed into argv (e.g.
+    # slug='--force'). Reject every positional-bound field up front. Dispatch
+    # additionally inserts a `--` end-of-options sentinel (defence in depth).
+    for field_name, value in (("source", source), ("slug", slug), ("ref", ref)):
+        if isinstance(value, str) and value.startswith("-"):
+            raise ManifestError(
+                f"member {index}: {field_name!r} must not start with '-' "
+                f"(got {value!r}) — rejected as a possible option injection"
+            )
     return BundleMember(asset_type=asset_type, source=source, slug=slug, ref=ref)
 
 
@@ -330,23 +373,36 @@ Device: $(hostname -s)"
 - Create: `src/agent_toolkit_cli/bundle_dispatch.py`
 - Test: `tests/test_cli/test_bundle_dispatch.py`
 
-**Context the worker needs:** the kinds are heterogeneous. The cleanest in-process
-entrypoint per kind, verified against the code:
-- **agent** — `agent_install` has no single "add+install from source" function; the
-  add logic lives in `commands/agent/add_cmd.py` (`_add_single`/`_add_monorepo`,
-  Click-bound) and projection in `agent_install.apply()`. To stay in-process and
-  reuse the validated add+project path, dispatch invokes the Click commands through
-  `click.testing`-free direct calls is NOT possible (they're `@click.command`). So
-  dispatch shells out to the **same process** via `cli.main` using Click's
-  `CliRunner`? No — production code must not use the test runner. Instead, dispatch
-  calls the underlying library functions where they exist and invokes the Click
-  command callbacks via `ctx.invoke`. The simplest correct seam: dispatch builds the
-  argv and calls `cli.main(args, standalone_mode=False)` in-process (Click supports
-  programmatic invocation; `standalone_mode=False` raises exceptions instead of
-  `sys.exit`, which the orchestrator catches for rollback). This reuses every kind's
-  real add+install + its own validation, with no duplicated installer logic.
+**The seam (decided — F10).** Dispatch builds the same argv a human would type
+and invokes the toolkit CLI in-process via `cli.main.main(args=argv,
+standalone_mode=False)` (Click's programmatic mode raises on failure instead of
+`sys.exit`, so the orchestrator catches it for rollback). This reuses every kind's
+real validation, clone, projection, and lock-write with no duplicated installer
+logic. The install cores (`skill_install.apply`, `agent_install.apply`,
+`pi_extension_install.apply`) are importable, but the **add** halves are
+Click-command-bound (`_add_single`/`_add_monorepo` live under the command), so a
+pure-function seam would require extracting add cores first — widening v1. The
+in-process CLI is the smaller, reuse-maximising v1 choice.
 
-This is the load-bearing design choice for Task 2; the tests pin it.
+**The argv is per-kind, not uniform.** The kinds diverge (verified against the
+code, post-#394):
+
+| kind | add argv | install argv |
+|---|---|---|
+| `skill` | `skill add <source> [--slug …] [--ref …]` | `skill install <slug> --scope <global\|project>` (NOT `-g/-p`; `--agents` defaults to `standard` since #393/#394, so it is omitted) |
+| `agent` | `agent add <source> [--slug …] [--ref …]` | `agent install <slug> <-g\|-p>` |
+| `pi-extension` | `pi-extension add <source> [--slug …]` (**no `--ref`**) | `pi-extension install <slug> <-g\|-p>` |
+
+So dispatch has a **per-kind argv builder**, not one uniform `_install_argv`. Each
+builder puts all `--flag value` options FIRST, then the `--` end-of-options
+sentinel (F5 defence-in-depth), then exactly one manifest-derived positional LAST
+— because `--` makes everything after it positional, an option placed after the
+sentinel (e.g. `["skill","install","--","gw","--scope","project"]`) is rejected by
+Click as an unexpected extra argument; the correct form is
+`["skill","install","--scope","project","--","gw"]`. When project scope is active
+dispatch prepends `--project <root>` to the child argv (F8). `install_member` also
+lock-prechecks the slug BEFORE add and returns `"already_present"` when it is
+already in the library (F2). The tests below pin all of this.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -378,7 +434,16 @@ def test_mcp_member_hard_fails_with_329(monkeypatch):
         install_member(member, scope="global")
 
 
-def test_resolve_builds_argv_for_each_kind(monkeypatch):
+def _stub_not_present(monkeypatch):
+    """Lock-precheck always says 'not present' so install proceeds (F2)."""
+    monkeypatch.setattr(
+        "agent_toolkit_cli.bundle_dispatch._lock_has_member",
+        lambda member: False,
+    )
+
+
+def test_agent_member_builds_full_argv_with_g_flag(monkeypatch):
+    _stub_not_present(monkeypatch)
     calls = []
     monkeypatch.setattr(
         "agent_toolkit_cli.bundle_dispatch._invoke_cli",
@@ -389,16 +454,15 @@ def test_resolve_builds_argv_for_each_kind(monkeypatch):
                      slug="cr", ref="v1"),
         scope="global",
     )
-    # add then install — both threaded with source/slug/ref/scope
-    assert calls[0][:2] == ["agent", "add"]
-    assert "o/r/agents/cr" in calls[0]
-    assert "--slug" in calls[0] and "cr" in calls[0]
-    assert "--ref" in calls[0] and "v1" in calls[0]
-    assert calls[1][:2] == ["agent", "install"]
-    assert "-g" in calls[1] or "--global" in calls[1]
+    # agent: add then install -g; full argv asserted (F1). `--` ordering: options
+    # FIRST, then `--`, then the single positional LAST.
+    assert calls[0] == ["agent", "add", "--slug", "cr", "--ref", "v1",
+                        "--", "o/r/agents/cr"]
+    assert calls[1] == ["agent", "install", "-g", "--", "cr"]
 
 
-def test_skill_member_scope_project_threads_p_flag(monkeypatch):
+def test_skill_member_scope_project_threads_scope_not_p(monkeypatch):
+    _stub_not_present(monkeypatch)
     calls = []
     monkeypatch.setattr(
         "agent_toolkit_cli.bundle_dispatch._invoke_cli",
@@ -408,11 +472,94 @@ def test_skill_member_scope_project_threads_p_flag(monkeypatch):
         BundleMember(asset_type="skill", source="o/r/gw"),
         scope="project",
     )
-    # project scope must reach the install step
-    assert any("-p" in c or "--project" in c for c in calls)
+    # F1: skill install uses --scope project, NOT -p; --agents is omitted
+    # (defaults to standard since #393/#394). Slug derived from source.
+    # `--` ordering: --scope option BEFORE `--`, slug positional LAST.
+    assert calls[0] == ["skill", "add", "--", "o/r/gw"]
+    assert calls[1] == ["skill", "install", "--scope", "project", "--", "gw"]
+    assert "-p" not in calls[1]
+    assert "--agents" not in calls[1]
+
+
+def test_pi_extension_member_omits_ref_and_uses_g_flag(monkeypatch):
+    _stub_not_present(monkeypatch)
+    calls = []
+    monkeypatch.setattr(
+        "agent_toolkit_cli.bundle_dispatch._invoke_cli",
+        lambda argv: calls.append(argv),
+    )
+    install_member(
+        BundleMember(asset_type="pi-extension", source="o/r/tm", slug="tm"),
+        scope="global",
+    )
+    # F6: pi-extension add NEVER emits --ref (the option does not exist).
+    # `--` ordering: --slug option BEFORE `--`, source/slug positional LAST.
+    assert calls[0] == ["pi-extension", "add", "--slug", "tm", "--", "o/r/tm"]
+    assert "--ref" not in calls[0]
+    assert calls[1] == ["pi-extension", "install", "-g", "--", "tm"]
+
+
+def test_end_of_options_sentinel_precedes_positionals(monkeypatch):
+    # F5: a `--` sentinel sits before every manifest-derived positional so a
+    # crafted value can never be parsed as a flag. (Dash-prefixed values are
+    # already rejected at parse — this is defence in depth.)
+    _stub_not_present(monkeypatch)
+    calls = []
+    monkeypatch.setattr(
+        "agent_toolkit_cli.bundle_dispatch._invoke_cli",
+        lambda argv: calls.append(argv),
+    )
+    install_member(BundleMember(asset_type="skill", source="o/r/gw"),
+                   scope="global")
+    # `--` is the second-to-last element and the manifest positional is LAST, so
+    # no option ever follows the sentinel (which would be parsed as positional).
+    assert calls[0][-2:] == ["--", "o/r/gw"]
+    assert calls[1][-2:] == ["--", "gw"]
+
+
+def test_project_scope_prepends_project_root(monkeypatch):
+    # F8: when project scope is active and a project_root is supplied, each child
+    # argv is prefixed with `--project <root>` (the top-level flag is NOT
+    # inherited across independent in-process main() calls).
+    _stub_not_present(monkeypatch)
+    calls = []
+    monkeypatch.setattr(
+        "agent_toolkit_cli.bundle_dispatch._invoke_cli",
+        lambda argv: calls.append(argv),
+    )
+    install_member(
+        BundleMember(asset_type="agent", source="o/r/agents/cr", slug="cr"),
+        scope="project",
+        project_root="/tmp/proj",
+    )
+    assert calls[0][:2] == ["--project", "/tmp/proj"]
+    assert calls[1][:2] == ["--project", "/tmp/proj"]
+
+
+def test_already_present_skips_add_and_returns_sentinel(monkeypatch):
+    # F2: install_member reads the kind's library lock BEFORE add. If the slug
+    # is already present with the same source, it returns "already_present" and
+    # never invokes the CLI.
+    monkeypatch.setattr(
+        "agent_toolkit_cli.bundle_dispatch._lock_has_member",
+        lambda member: True,
+    )
+    called = []
+    monkeypatch.setattr(
+        "agent_toolkit_cli.bundle_dispatch._invoke_cli",
+        lambda argv: called.append(argv),
+    )
+    outcome = install_member(
+        BundleMember(asset_type="skill", source="o/r/gw", slug="gw"),
+        scope="global",
+    )
+    assert outcome == "already_present"
+    assert called == []  # add+install skipped entirely
 
 
 def test_dispatch_propagates_install_failure(monkeypatch):
+    _stub_not_present(monkeypatch)
+
     def boom(argv):
         raise RuntimeError("clone failed")
     monkeypatch.setattr("agent_toolkit_cli.bundle_dispatch._invoke_cli", boom)
@@ -434,14 +581,26 @@ Expected: FAIL — `ModuleNotFoundError: ...bundle_dispatch`.
 # src/agent_toolkit_cli/bundle_dispatch.py
 """Map one bundle member to its kind's real add+install sequence.
 
-The kinds are heterogeneous (agent/skill/pi-extension each have their own
-add + install verbs with different flags). Rather than duplicate any installer
-logic, dispatch builds the same argv a human would type and invokes the CLI
-in-process via Click's programmatic mode (`standalone_mode=False`), reusing
-every kind's validation, clone, projection, and lock-write. `mcp` is reserved
-but hard-fails until the mcp kind ships (#329).
+The kinds are heterogeneous (skill uses `--scope`+`--agents`; agent/pi-extension
+use `-g/-p`; pi-extension's `add` has no `--ref`). Rather than duplicate any
+installer logic, dispatch builds the same argv a human would type, per kind, and
+invokes the CLI in-process via Click's programmatic mode (`standalone_mode=False`),
+reusing every kind's validation, clone, projection, and lock-write. `mcp` is
+reserved but hard-fails until the mcp kind ships (#329).
+
+Three hardening rules (resolved critical-review findings):
+- F2 `already_present`: install_member reads the kind's library lock for the slug
+  BEFORE add. If present with the same source, it returns "already_present" and
+  skips add+install (so the orchestrator excludes it from the rollback set).
+- F5 sentinel: a `--` end-of-options marker precedes every manifest-derived
+  positional, so a crafted value can never be parsed by Click as a flag.
+- F8 `--project`: each independent in-process main() call is a fresh Click parse
+  with no inherited top-level flag, so when project scope is active dispatch
+  prepends `["--project", str(project_root)]` to the child argv.
 """
 from __future__ import annotations
+
+from pathlib import Path
 
 from agent_toolkit_cli.bundle_manifest import BundleMember
 
@@ -470,8 +629,15 @@ def _invoke_cli(argv: list[str]) -> None:
     main.main(args=argv, standalone_mode=False)
 
 
-def _scope_flag(scope: str) -> str:
-    return "-g" if scope == "global" else "-p"
+def _project_prefix(scope: str, project_root: str | None) -> list[str]:
+    """F8: prepend the top-level --project when installing at project scope.
+
+    Each in-process main() call is an independent Click parse; the top-level
+    --project is not inherited, so it must ride on every child argv.
+    """
+    if scope == "project" and project_root:
+        return ["--project", str(project_root)]
+    return []
 
 
 def _check_member(member: BundleMember) -> None:
@@ -481,41 +647,153 @@ def _check_member(member: BundleMember) -> None:
         raise DispatchError(f"un-installable member type {member.asset_type!r}")
 
 
-def resolve_member(member: BundleMember) -> None:
-    """Dry-run check: a member that cannot possibly install fails here.
-
-    v1 resolution is structural (type is installable, mcp rejected). Source/ref
-    reachability is proven by the real add during install; for validate we run
-    the same _check plus a lightweight existence note. Kept minimal by design.
-    """
-    _check_member(member)
-
-
-def _add_argv(member: BundleMember) -> list[str]:
-    argv = [member.asset_type, "add", member.source]
-    if member.slug:
-        argv += ["--slug", member.slug]
-    if member.ref:
-        argv += ["--ref", member.ref]
-    return argv
-
-
-def _install_argv(member: BundleMember, scope: str) -> list[str]:
-    slug = member.slug or _derive_slug(member.source)
-    return [member.asset_type, "install", slug, _scope_flag(scope)]
-
-
 def _derive_slug(source: str) -> str:
     """Last path segment, mirroring each kind's default slug derivation."""
     return source.rstrip("/").split("/")[-1]
 
 
-def install_member(member: BundleMember, scope: str) -> None:
-    """Add the member to the library, then project it at `scope`."""
+def resolve_member(member: BundleMember) -> None:
+    """Dry-run check: a member that cannot possibly install fails here.
+
+    v1 resolution is structural (type is installable, mcp rejected). Source/ref
+    reachability is proven by the real add during install; validate does NOT
+    probe the network (AC7). Kept minimal by design.
+    """
     _check_member(member)
+
+
+# ── per-kind argv builders (F1) ────────────────────────────────────────────
+# A single uniform builder is WRONG: skill install takes `--scope <s>` (and
+# `--agents` defaults to standard since #393/#394), while agent/pi-extension
+# take `-g/-p`, and pi-extension's `add` has no `--ref`. Each kind owns its argv.
+
+def _scope_flag(scope: str) -> str:
+    return "-g" if scope == "global" else "-p"
+
+
+# `--` ORDERING (verified against the real Click CLI): the `--` end-of-options
+# sentinel makes EVERYTHING after it positional, so options must come BEFORE it
+# and the single manifest-derived positional must be LAST. E.g.
+# `["skill","install","--","gw","--scope","project"]` FAILS ("unexpected extra
+# arguments --scope project"); the correct form is
+# `["skill","install","--scope","project","--","gw"]`. Every builder below puts
+# `--flag value` options first, then `--`, then exactly one positional.
+
+def _skill_add_argv(member: BundleMember) -> list[str]:
+    argv = ["skill", "add"]
+    if member.slug:
+        argv += ["--slug", member.slug]
+    if member.ref:
+        argv += ["--ref", member.ref]
+    return [*argv, "--", member.source]
+
+
+def _skill_install_argv(member: BundleMember, scope: str) -> list[str]:
+    slug = member.slug or _derive_slug(member.source)
+    # `--agents` is omitted: it defaults to `standard` (#393/#394). skill uses
+    # `--scope global|project`, NOT `-g/-p`. Options BEFORE `--`, slug LAST.
+    return ["skill", "install", "--scope", scope, "--", slug]
+
+
+def _agent_add_argv(member: BundleMember) -> list[str]:
+    argv = ["agent", "add"]
+    if member.slug:
+        argv += ["--slug", member.slug]
+    if member.ref:
+        argv += ["--ref", member.ref]
+    return [*argv, "--", member.source]
+
+
+def _agent_install_argv(member: BundleMember, scope: str) -> list[str]:
+    slug = member.slug or _derive_slug(member.source)
+    return ["agent", "install", _scope_flag(scope), "--", slug]
+
+
+def _pi_ext_add_argv(member: BundleMember) -> list[str]:
+    # F6: pi-extension add has NO --ref. (A pi-ext member carrying ref is already
+    # rejected at parse; we never emit --ref here regardless.)
+    argv = ["pi-extension", "add"]
+    if member.slug:
+        argv += ["--slug", member.slug]
+    return [*argv, "--", member.source]
+
+
+def _pi_ext_install_argv(member: BundleMember, scope: str) -> list[str]:
+    slug = member.slug or _derive_slug(member.source)
+    return ["pi-extension", "install", _scope_flag(scope), "--", slug]
+
+
+_ADD_BUILDERS = {
+    "skill": _skill_add_argv,
+    "agent": _agent_add_argv,
+    "pi-extension": _pi_ext_add_argv,
+}
+_INSTALL_BUILDERS = {
+    "skill": _skill_install_argv,
+    "agent": _agent_install_argv,
+    "pi-extension": _pi_ext_install_argv,
+}
+_UNINSTALL_KIND_FLAG = {  # skill uninstall also uses --scope; others -g/-p
+    "skill": lambda slug, scope: ["skill", "uninstall", "--scope", scope,
+                                  "--", slug],
+    "agent": lambda slug, scope: ["agent", "uninstall", _scope_flag(scope),
+                                  "--", slug],
+    "pi-extension": lambda slug, scope: ["pi-extension", "uninstall",
+                                         _scope_flag(scope), "--", slug],
+}
+
+
+def _lock_has_member(member: BundleMember) -> bool:
+    """F2: is this slug already in the kind's GLOBAL library lock at the same
+    source? The library (add) lock is scope-independent — add clones once into
+    `~/.agent-toolkit/<kind>/` regardless of projection scope — so a present
+    slug means a prior install we must not roll back.
+
+    Reads the per-kind library lock via that kind's lock reader + path helper.
+    Returns False on any read error (treat as 'not present' → proceed to add,
+    which is itself idempotent).
+    """
+    from agent_toolkit_cli import _paths_core
+
+    binding = {
+        "skill": _paths_core.SKILL_BINDING,
+        "agent": _paths_core.AGENT_BINDING,
+        "pi-extension": _paths_core.PI_EXTENSION_BINDING,
+    }[member.asset_type]
+    lock_path = _paths_core.library_lock_path_for_asset_type(binding)
+    slug = member.slug or _derive_slug(member.source)
     try:
-        _invoke_cli(_add_argv(member))
-        _invoke_cli(_install_argv(member, scope))
+        import json
+
+        data = json.loads(lock_path.read_text())
+    except (OSError, ValueError):
+        return False
+    entries = data.get("entries", data) if isinstance(data, dict) else {}
+    entry = entries.get(slug) if isinstance(entries, dict) else None
+    if not isinstance(entry, dict):
+        return False
+    # Same slug AND same source = a prior install of THIS member.
+    return entry.get("source") == member.source
+
+
+def install_member(
+    member: BundleMember,
+    scope: str,
+    project_root: str | None = None,
+) -> str | None:
+    """Add the member to the library, then project it at `scope`.
+
+    Returns "already_present" if the lock-precheck (F2) finds the slug already in
+    the library at the same source (add+install skipped); otherwise returns None
+    after a real add+install. project_root threads the top-level --project (F8).
+    """
+    _check_member(member)
+    if _lock_has_member(member):
+        return "already_present"
+    prefix = _project_prefix(scope, project_root)
+    try:
+        _invoke_cli(prefix + _ADD_BUILDERS[member.asset_type](member))
+        _invoke_cli(prefix + _INSTALL_BUILDERS[member.asset_type](member, scope))
     except DispatchError:
         raise
     except Exception as exc:  # ClickException, Abort, GitError, …
@@ -523,30 +801,34 @@ def install_member(member: BundleMember, scope: str) -> None:
             f"member {member.slug or member.source!r} ({member.asset_type}) "
             f"failed to install: {exc}"
         ) from exc
+    return None
 
 
-def uninstall_member(member: BundleMember, scope: str) -> None:
-    """Roll back a member installed earlier this run (best-effort, in-process)."""
+def uninstall_member(
+    member: BundleMember,
+    scope: str,
+    project_root: str | None = None,
+) -> None:
+    """Roll back a member installed earlier this run (in-process)."""
     _check_member(member)
     slug = member.slug or _derive_slug(member.source)
+    prefix = _project_prefix(scope, project_root)
     try:
-        _invoke_cli([member.asset_type, "uninstall", slug, _scope_flag(scope)])
+        _invoke_cli(prefix + _UNINSTALL_KIND_FLAG[member.asset_type](slug, scope))
     except Exception as exc:
         raise DispatchError(
             f"rollback of {slug!r} ({member.asset_type}) failed: {exc}"
         ) from exc
 ```
 
-> **Worker note:** the `agent install` flag is `-g/-p`? Verify against
-> `commands/agent/install_cmd.py` — it uses `scope_and_roots`, whose flag
-> convention is `-g/--global` / `-p/--project` (read-only=False). If a kind's
-> install verb uses `--scope global|project` instead (instructions does, but
-> instructions isn't a member), adjust `_install_argv` per-kind. Pin the actual
-> flags in the dispatch tests so a mismatch fails loudly. `skill` may need
-> `import`/wizard rather than `add`/`install` — confirm the skill verbs and adjust
-> `_add_argv`/`_install_argv` to the real skill entrypoints (the argv builder is
-> the single place to fix). This is the most reality-sensitive task; the scout/
-> red phase MUST confirm each kind's exact add+install argv before green.
+> **Worker note (verify-then-pin, not redesign):** the argv shapes above are the
+> verified post-#394 reality — pin them in the dispatch tests so any future
+> drift fails loudly. The one detail to confirm against the running code is the
+> **library-lock entry shape** `_lock_has_member` reads (`entries`/`source`
+> keys): inspect the kind's lock reader (`skill_lock.read_lock`,
+> `agent_paths.library_lock_path`, `pi_extension` lock) and adapt the key access
+> to the real `LockEntry` field names if they differ — the precheck is the single
+> place to fix. Do NOT change the argv builders or the seam; those are decided.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
@@ -596,9 +878,9 @@ def _manifest(*types_sources) -> BundleManifest:
 def test_happy_path_installs_every_member_in_order(monkeypatch):
     installed = []
     monkeypatch.setattr(bundle_install, "install_member",
-                        lambda m, scope: installed.append(m.source))
+                        lambda m, scope, project_root=None: installed.append(m.source))
     monkeypatch.setattr(bundle_install, "uninstall_member",
-                        lambda m, scope: pytest.fail("must not roll back"))
+                        lambda m, scope, project_root=None: pytest.fail("must not roll back"))
     monkeypatch.setattr(bundle_install, "resolve_member", lambda m: None)
     run(_manifest(("skill", "a"), ("agent", "b"), ("pi-extension", "c")),
         scope="global", dry_run=False)
@@ -608,14 +890,14 @@ def test_happy_path_installs_every_member_in_order(monkeypatch):
 def test_failure_midrun_rolls_back_prior_members_newest_first(monkeypatch):
     installed, rolled_back = [], []
 
-    def fake_install(m, scope):
+    def fake_install(m, scope, project_root=None):
         if m.source == "c":
             raise DispatchError("boom on c")
         installed.append(m.source)
 
     monkeypatch.setattr(bundle_install, "install_member", fake_install)
     monkeypatch.setattr(bundle_install, "uninstall_member",
-                        lambda m, scope: rolled_back.append(m.source))
+                        lambda m, scope, project_root=None: rolled_back.append(m.source))
     monkeypatch.setattr(bundle_install, "resolve_member", lambda m: None)
 
     with pytest.raises(BundleInstallError, match="boom on c"):
@@ -626,17 +908,19 @@ def test_failure_midrun_rolls_back_prior_members_newest_first(monkeypatch):
 
 
 def test_already_present_member_not_rolled_back(monkeypatch):
+    # 'a' is reported already_present by the dispatch lock-precheck (F2) → it is
+    # excluded from the rollback set when a later member fails.
     rolled_back = []
 
-    def fake_install(m, scope):
+    def fake_install(m, scope, project_root=None):
         if m.source == "a":
-            return "already_present"   # sentinel: no-op
+            return "already_present"   # lock-precheck: pre-existing, not ours
         if m.source == "b":
             raise DispatchError("boom on b")
 
     monkeypatch.setattr(bundle_install, "install_member", fake_install)
     monkeypatch.setattr(bundle_install, "uninstall_member",
-                        lambda m, scope: rolled_back.append(m.source))
+                        lambda m, scope, project_root=None: rolled_back.append(m.source))
     monkeypatch.setattr(bundle_install, "resolve_member", lambda m: None)
 
     with pytest.raises(BundleInstallError):
@@ -645,12 +929,36 @@ def test_already_present_member_not_rolled_back(monkeypatch):
     assert rolled_back == []  # 'a' was already present → not our install → no rollback
 
 
+def test_rollback_failure_is_warned_not_swallowed(monkeypatch, capsys):
+    # F9: a rollback uninstall that itself raises must NOT be silently swallowed —
+    # emit a warning naming the member and still propagate the original error.
+    def fake_install(m, scope, project_root=None):
+        if m.source == "c":
+            raise DispatchError("boom on c")
+        return None
+
+    def failing_uninstall(m, scope, project_root=None):
+        raise DispatchError(f"uninstall of {m.source} blew up")
+
+    monkeypatch.setattr(bundle_install, "install_member", fake_install)
+    monkeypatch.setattr(bundle_install, "uninstall_member", failing_uninstall)
+    monkeypatch.setattr(bundle_install, "resolve_member", lambda m: None)
+
+    with pytest.raises(BundleInstallError, match="boom on c"):
+        run(_manifest(("skill", "a"), ("agent", "b"), ("pi-extension", "c")),
+            scope="global", dry_run=False)
+    err = capsys.readouterr().err
+    # both prior members failed to roll back → both warned, original error stands
+    assert "warning: rollback" in err
+    assert "skill:a" in err and "agent:b" in err
+
+
 def test_dry_run_resolves_but_installs_nothing(monkeypatch):
     resolved, installed = [], []
     monkeypatch.setattr(bundle_install, "resolve_member",
                         lambda m: resolved.append(m.source))
     monkeypatch.setattr(bundle_install, "install_member",
-                        lambda m, scope: installed.append(m.source))
+                        lambda m, scope, project_root=None: installed.append(m.source))
     report = run(_manifest(("skill", "a"), ("agent", "b")), scope="global",
                  dry_run=True)
     assert resolved == ["a", "b"]
@@ -688,6 +996,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+import click
+
 # Imported at module scope so tests can monkeypatch these names on this module.
 from agent_toolkit_cli.bundle_dispatch import (
     DispatchError,
@@ -722,8 +1032,17 @@ def _label(member: BundleMember) -> str:
     return f"{member.asset_type}:{member.slug or member.source}"
 
 
-def run(manifest: BundleManifest, scope: str, dry_run: bool) -> ValidateReport:
-    """Resolve every member; if not dry_run, install in order with rollback."""
+def run(
+    manifest: BundleManifest,
+    scope: str,
+    dry_run: bool,
+    project_root: str | None = None,
+) -> ValidateReport:
+    """Resolve every member; if not dry_run, install in order with rollback.
+
+    `project_root` (F8) is threaded to dispatch so project-scope child argv carry
+    `--project <root>`.
+    """
     report = ValidateReport(ok=True)
 
     # Resolve pass — shared by both verbs.
@@ -747,33 +1066,46 @@ def run(manifest: BundleManifest, scope: str, dry_run: bool) -> ValidateReport:
     installed: list[BundleMember] = []
     for member in manifest.members:
         try:
-            outcome = install_member(member, scope=scope)
+            outcome = install_member(member, scope=scope, project_root=project_root)
         except DispatchError as exc:
-            for prior in reversed(installed):
-                try:
-                    uninstall_member(prior, scope=scope)
-                except DispatchError:
-                    # Best-effort rollback; report the original failure.
-                    pass
-            raise BundleInstallError(str(exc)) from exc
+            failed_rollbacks = _rollback(installed, scope, project_root)
+            msg = str(exc)
+            if failed_rollbacks:
+                msg += (
+                    "\n  NOTE: rollback failed for "
+                    f"{', '.join(failed_rollbacks)} — manual cleanup may be needed."
+                )
+            raise BundleInstallError(msg) from exc
         # Only track members WE installed (not pre-existing no-ops) for rollback.
         if outcome != "already_present":
             installed.append(member)
 
     return report
+
+
+def _rollback(
+    installed: list[BundleMember], scope: str, project_root: str | None
+) -> list[str]:
+    """Roll back this run's installs, newest-first. F9: a rollback failure is
+    WARNED (never swallowed) and the failed labels are collected and returned so
+    the caller can name them in the propagated BundleInstallError.
+    """
+    failed: list[str] = []
+    for prior in reversed(installed):
+        label = _label(prior)
+        try:
+            uninstall_member(prior, scope=scope, project_root=project_root)
+        except DispatchError as exc:
+            click.echo(f"warning: rollback of {label} failed: {exc}", err=True)
+            failed.append(label)
+    return failed
 ```
 
-> **Worker note:** `install_member` returns `None` on a real install in the
-> dispatch impl from Task 2. To support the `already_present` sentinel
-> (AC4: "an already-present member is not rolled back"), Task 2's
-> `install_member` must return the string `"already_present"` when the kind's
-> add reports the slug is already in the library / projection is a no-op, else
-> `None`. Add that return + a dispatch test for it when wiring Task 2 to real
-> installers (the kinds print "already in library" / "ok already-correct"). If
-> detecting no-op precisely is hard in v1, the safe conservative behaviour is to
-> treat every successful install as rollback-eligible (rollback then is a
-> uninstall of something that was already there) — but that violates AC4, so
-> prefer threading the sentinel. Pin it with the Task 2 dispatch test.
+> **Worker note:** `install_member` returns `"already_present"` (lock-precheck,
+> F2) or `None`; the orchestrator keys the rollback set on that. This is fully
+> resolved in Task 2 — no conservative fallback, no AC4 tension. The rollback
+> loop never swallows a failed uninstall (F9): it warns on stderr and still
+> raises the original `BundleInstallError`. Pin both with the Task 3 tests above.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
@@ -796,11 +1128,82 @@ Device: $(hostname -s)"
 ## Task 4: Click group + `install` / `validate` verbs
 
 **Files:**
+- Modify: `src/agent_toolkit_cli/_paths_core.py` (add `default_scope`, F3)
 - Create: `src/agent_toolkit_cli/commands/bundle/__init__.py`
 - Create: `src/agent_toolkit_cli/commands/bundle/install_cmd.py`
 - Create: `src/agent_toolkit_cli/commands/bundle/validate_cmd.py`
 - Modify: `src/agent_toolkit_cli/cli.py` (register the group)
+- Test: `tests/test_cli/test_paths_core_default_scope.py`
 - Test: `tests/test_cli/test_cli_bundle_group.py`
+
+- [ ] **Step 0 (F3): add `default_scope` to `_paths_core` — RED then GREEN**
+
+`_paths_core` has **no** `in_project` and **no** `default_scope` today (verified
+against main). The existing per-kind `scope_and_roots` keys project-vs-global on a
+per-kind lock filename; there is no binding-neutral "in a project" helper. Add one
+small, documented function — it is the single source of the no-flag scope default,
+reused by both bundle verbs. Each `AssetTypeBinding` already carries its
+`lock_filename` (`skills-lock.json` / `agents-lock.json` / `pi-extensions-lock.json`),
+so `default_scope` checks for any of those in `cwd`.
+
+Write the failing test first:
+
+```python
+# tests/test_cli/test_paths_core_default_scope.py
+from __future__ import annotations
+
+from pathlib import Path
+
+from agent_toolkit_cli._paths_core import default_scope
+
+
+def test_default_scope_project_when_a_lock_present(tmp_path: Path):
+    (tmp_path / "skills-lock.json").write_text("{}")
+    assert default_scope(tmp_path) == "project"
+
+
+def test_default_scope_project_for_any_kind_lock(tmp_path: Path):
+    (tmp_path / "agents-lock.json").write_text("{}")
+    assert default_scope(tmp_path) == "project"
+    (tmp_path / "pi-extensions-lock.json").write_text("{}")
+    assert default_scope(tmp_path) == "project"
+
+
+def test_default_scope_global_when_no_lock(tmp_path: Path):
+    assert default_scope(tmp_path) == "global"
+```
+
+Then the implementation:
+
+```python
+# src/agent_toolkit_cli/_paths_core.py — add near the other path helpers
+
+# The per-kind project-lock filenames that mark a directory as "a project".
+# Sourced from the bindings so it stays in step if a kind's lock filename changes.
+_PROJECT_LOCK_FILENAMES: tuple[str, ...] = (
+    SKILL_BINDING.lock_filename,
+    AGENT_BINDING.lock_filename,
+    PI_EXTENSION_BINDING.lock_filename,
+)
+
+
+def default_scope(cwd: Path) -> str:
+    """Toolkit no-flag scope default (F3): 'project' if `cwd` holds any per-kind
+    project lock (skills-/agents-/pi-extensions-lock.json), else 'global'.
+
+    This is the binding-neutral analogue of the per-kind `scope_and_roots`
+    detection; the per-kind verbs key on their own lock filename, while a bundle
+    spans kinds and so checks for any of them. instructions-lock.json is NOT
+    counted — instructions is not a bundle member type.
+    """
+    for filename in _PROJECT_LOCK_FILENAMES:
+        if (cwd / filename).is_file():
+            return "project"
+    return "global"
+```
+
+Run: `uv run pytest tests/test_cli/test_paths_core_default_scope.py -q` (RED →
+add `default_scope` → GREEN). This step can ride the Task 4 commit or be its own.
 
 - [ ] **Step 1: Write the failing tests** (CLI smoke + scope default + validate exit codes; hermetic)
 
@@ -869,6 +1272,49 @@ def test_install_mcp_member_hard_fails(tmp_path):
     res = CliRunner().invoke(main, ["bundle", "install", str(p)])
     assert res.exit_code != 0
     assert "#329" in res.output
+
+
+def test_install_threads_project_root_to_run(tmp_path, monkeypatch):
+    # F8: --project resolves a project_root and threads it into bundle_install.run.
+    import agent_toolkit_cli.commands.bundle.install_cmd as install_cmd_mod
+
+    captured = {}
+
+    def fake_run(manifest, scope, dry_run, project_root=None):
+        captured["scope"] = scope
+        captured["project_root"] = project_root
+        from agent_toolkit_cli.bundle_install import ValidateReport
+        return ValidateReport(ok=True)
+
+    monkeypatch.setattr(install_cmd_mod.bundle_install, "run", fake_run)
+    p = _write_manifest(tmp_path, [{"asset_type": "skill", "source": "o/r/gw"}])
+    res = CliRunner().invoke(
+        main, ["bundle", "install", "--project", str(p)], catch_exceptions=False
+    )
+    assert res.exit_code == 0, res.output
+    assert captured["scope"] == "project"
+    # project_root is the resolved project directory (cwd-derived), not None.
+    assert captured["project_root"] is not None
+
+
+def test_no_flag_scope_uses_default_scope(tmp_path, monkeypatch):
+    # AC5/F3: with no flag, scope follows _paths_core.default_scope(cwd).
+    import agent_toolkit_cli.commands.bundle.install_cmd as install_cmd_mod
+
+    monkeypatch.setattr(install_cmd_mod, "default_scope", lambda cwd: "global")
+    captured = {}
+
+    def fake_run(manifest, scope, dry_run, project_root=None):
+        captured["scope"] = scope
+        from agent_toolkit_cli.bundle_install import ValidateReport
+        return ValidateReport(ok=True)
+
+    monkeypatch.setattr(install_cmd_mod.bundle_install, "run", fake_run)
+    p = _write_manifest(tmp_path, [{"asset_type": "skill", "source": "o/r/gw"}])
+    res = CliRunner().invoke(main, ["bundle", "install", str(p)],
+                            catch_exceptions=False)
+    assert res.exit_code == 0, res.output
+    assert captured["scope"] == "global"
 ```
 
 For the full happy-path install/rollback at this layer, add ONE end-to-end test
@@ -915,6 +1361,7 @@ from pathlib import Path
 import click
 
 from agent_toolkit_cli import bundle_install
+from agent_toolkit_cli._paths_core import default_scope  # F3 shared helper
 from agent_toolkit_cli.bundle_manifest import ManifestError, load
 
 
@@ -922,31 +1369,36 @@ from agent_toolkit_cli.bundle_manifest import ManifestError, load
 @click.argument("ref", type=click.Path(path_type=Path))
 @click.option("--global", "global_", is_flag=True, help="Install all members globally.")
 @click.option("--project", "project_", is_flag=True, help="Install all members at project scope.")
-@click.pass_context
-def install_cmd(ctx: click.Context, ref: Path, global_: bool, project_: bool) -> None:
+def install_cmd(ref: Path, global_: bool, project_: bool) -> None:
     if global_ and project_:
         raise click.UsageError("pass at most one of --global / --project")
     scope = _resolve_scope(global_, project_)
+    # F8: at project scope, resolve the project root so dispatch can prepend
+    # `--project <root>` to each child argv (the top-level flag is not inherited
+    # across independent in-process main() calls). Mirrors scope_and_roots'
+    # `ctx_project or Path.cwd()` convention.
+    project_root = str(Path.cwd()) if scope == "project" else None
     try:
         manifest = load(ref)
     except ManifestError as exc:
         raise click.ClickException(str(exc)) from exc
     try:
-        bundle_install.run(manifest, scope=scope, dry_run=False)
+        bundle_install.run(
+            manifest, scope=scope, dry_run=False, project_root=project_root
+        )
     except bundle_install.BundleInstallError as exc:
         raise click.ClickException(str(exc)) from exc
     click.echo(f"installed bundle {manifest.name!r} ({len(manifest.members)} members, {scope})")
 
 
 def _resolve_scope(global_: bool, project_: bool) -> str:
-    """No flag → toolkit default: global outside a project, project inside one."""
+    """No flag → toolkit default via the shared `default_scope` helper (F3):
+    project inside a project (a per-kind lock present in cwd), else global."""
     if global_:
         return "global"
     if project_:
         return "project"
-    # Mirror scope_and_roots(read_only=False) default detection.
-    from agent_toolkit_cli._paths_core import in_project  # see worker note
-    return "project" if in_project(Path.cwd()) else "global"
+    return default_scope(Path.cwd())
 ```
 
 ```python
@@ -991,27 +1443,25 @@ from agent_toolkit_cli.commands.bundle import bundle
 main.add_command(bundle)
 ```
 
-> **Worker note:** `_paths_core.in_project` may not exist by that name. The
-> scope-default convention lives in each kind's `_common.scope_and_roots`
-> (`read_only=...`). Reuse the SAME detection the other verbs use — import and
-> call whatever `scope_and_roots` uses to decide project-vs-global with no flag,
-> rather than re-deriving it. Pin the no-flag default with a test: run
-> `bundle validate`/`install` from inside a temp git project vs outside and
-> assert the scope chosen. If a shared helper isn't cleanly importable, prefer
-> adding a tiny `default_scope(cwd) -> str` to `_paths_core` and have the other
-> verbs' logic point at it (small, in-scope refactor) — but do NOT duplicate the
-> rule inline.
+> **Worker note:** the no-flag scope default is the new `_paths_core.default_scope`
+> from Step 0 (F3) — `in_project` does NOT exist and must not be imported. The
+> bundle command imports `default_scope` directly (so the Task 4 test can
+> monkeypatch it on the module). `default_scope` is binding-neutral on purpose: a
+> bundle spans kinds, so it treats ANY per-kind lock in cwd as "in a project",
+> whereas each per-kind `scope_and_roots` keys only on its own lock. Pin the
+> no-flag default with the Step-0 test and the `test_no_flag_scope_uses_default_scope`
+> CLI test above.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `uv run pytest tests/test_cli/test_cli_bundle_group.py -q`
+Run: `uv run pytest tests/test_cli/test_paths_core_default_scope.py tests/test_cli/test_cli_bundle_group.py -q`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/agent_toolkit_cli/commands/bundle/ src/agent_toolkit_cli/cli.py tests/test_cli/test_cli_bundle_group.py
-git commit -m "feat(bundle): bundle install/validate CLI group
+git add src/agent_toolkit_cli/_paths_core.py src/agent_toolkit_cli/commands/bundle/ src/agent_toolkit_cli/cli.py tests/test_cli/test_paths_core_default_scope.py tests/test_cli/test_cli_bundle_group.py
+git commit -m "feat(bundle): bundle install/validate CLI group + default_scope helper
 
 Refs #369
 
@@ -1076,7 +1526,10 @@ def test_two_member_bundle_installs_both(tmp_path, _home):
     # NOTE: align member asset_types + source shapes with the real skill/agent
     # add entrypoints confirmed in Task 2. This test is the source of truth that
     # the dispatch argv matches reality; adjust sources to satisfy each kind's
-    # add (e.g. skill add accepts a file:// repo with SKILL.md at root).
+    # add (e.g. skill add accepts a file:// repo with SKILL.md at root). The real
+    # fan-out goes `skill add --slug gw -- <src>` then
+    # `skill install --scope global -- gw` (Task 2 argv: options first, then `--`,
+    # then the positional last) — the bundle `--global` flag is not forwarded.
     src = _make_skill_repo(tmp_path, "gw")
     manifest = tmp_path / "b.bundle.json"
     manifest.write_text(json.dumps({
@@ -1085,11 +1538,12 @@ def test_two_member_bundle_installs_both(tmp_path, _home):
     }))
     res = CliRunner().invoke(main, ["bundle", "install", "--global", str(manifest)])
     assert res.exit_code == 0, res.output
-    # member now in the skill lock — assert via `skill list` or the lock file
-    lock = json.loads((_home / ".agents" / ".skill-lock.json").read_text()) \
-        if (_home / ".agents" / ".skill-lock.json").exists() else {}
-    # Loose assertion; tighten to the real lock path/shape during implementation.
-    assert "gw" in json.dumps(lock) or res.exit_code == 0
+    # member now in the GLOBAL skill LIBRARY lock at ~/.agent-toolkit/skills-lock.json
+    # (the add lock; projection lands separately). Tighten path/shape to the real
+    # skill_lock during implementation.
+    lib_lock = _home / ".agent-toolkit" / "skills-lock.json"
+    assert lib_lock.exists()
+    assert "gw" in lib_lock.read_text()
 
 
 def test_rollback_on_second_member_unresolvable(tmp_path, _home):
@@ -1117,12 +1571,16 @@ Expected: FAIL initially (argv/source-shape mismatches). Iterate the manifest
 member shape + dispatch argv until both pass. **This task's whole value is
 forcing dispatch to match the real installers.**
 
-- [ ] **Step 3: Fix dispatch/argv until green**
+- [ ] **Step 3: Fix the test manifest sources until green (argv is decided)**
 
-Adjust `bundle_dispatch._add_argv` / `_install_argv` and the test manifest
-sources to the exact shapes `skill add` / `agent add` accept. Confirm the skill
-lock path the e2e asserts against (`~/.agents/.skill-lock.json` global, per
-`skill_lock` v3) and tighten the assertion.
+The per-kind argv builders are already pinned by the Task 2 unit tests — do NOT
+re-shape them here. This task's job is confirming the manifest `source` shapes the
+real `skill add` / `agent add` accept (a `file://` bare repo with `SKILL.md` at
+root) and tightening the e2e assertion against the real **library** lock path
+(`~/.agent-toolkit/skills-lock.json`, NOT the `~/.agents/.skill-lock.json`
+projection lock). If a real-installer mismatch surfaces, fix the Task 2 builder +
+its unit test together (single source of truth) — never let the e2e and the unit
+test disagree.
 
 - [ ] **Step 4: Run to verify it passes**
 
@@ -1150,10 +1608,13 @@ Device: $(hostname -s)"
 
 - [ ] **Step 1: Write the docs page**
 
-Document: the v1 schema (table of top-level + member fields), the two verbs with
-examples, the all-or-nothing guarantee, the `mcp`-reserved/`instructions`-excluded
-scope rulings, and a "v2 roadmap" note (uninstall, doctor, remote manifests,
-composite). Mirror the prose style of the existing per-kind docs.
+Document: the v1 schema (table of top-level + member fields, including that a
+`pi-extension` member must NOT carry `ref` (F6) and that `source`/`slug`/`ref`
+cannot start with `-` (F5)), the two verbs with examples, the all-or-nothing
+guarantee (with the already-present member excluded from rollback), the scope flag
++ no-flag default, the `mcp`-reserved/`instructions`-excluded rulings, and a "v2
+roadmap" note (uninstall, doctor, remote manifests, composite). Mirror the prose
+style of the existing per-kind docs.
 
 - [ ] **Step 2: Build docs to verify (if mkdocs strict)**
 
@@ -1207,32 +1668,48 @@ gh pr create --title "feat(bundle): toolkit-native bundle manifest + install/val
 |---|---|
 | AC1 schema validation | Task 1 |
 | AC2 install fan-out (local file) | Tasks 2, 4, 5 |
-| AC3 members in own locks, no bundle record | Tasks 2/5 (no lock written by bundle_*), e2e asserts member in kind lock |
-| AC4 all-or-nothing rollback | Task 3 (unit) + Task 5 (e2e) |
-| AC5 scope flag + default | Task 4 (`_resolve_scope`) + test |
-| AC6 mcp hard-fail #329 | Tasks 2, 4 |
-| AC7 validate = suppressed-write resolve pass | Tasks 3 (`dry_run`), 4 (`validate_cmd`) |
+| AC3 members in own locks, no bundle record | Tasks 2/5 (no lock written by bundle_*), e2e asserts member in kind library lock |
+| AC4 all-or-nothing rollback (already-present excluded) | Task 3 (unit, incl. F2 lock-precheck + F9 warn-on-rollback-fail) + Task 5 (e2e) |
+| AC5 scope flag + default via `default_scope` (F3) | Task 4 Step 0 (`_paths_core.default_scope`) + `_resolve_scope` + tests |
+| AC6 mcp hard-fail #329 (resolve pass) | Tasks 2, 4 |
+| AC7 validate = suppressed-write resolve pass (structural only, no network probe) | Tasks 3 (`dry_run`), 4 (`validate_cmd`) |
 | AC8 instructions + unknown type rejected | Task 1 + Task 4 CLI test |
+| AC9 option-injection guard (`-`-prefixed fields rejected at parse; `--` sentinel in argv) | Task 1 (F5 parse guard) + Task 2 (F5 sentinel) |
 
-No spec AC is unmapped.
+Plus the cross-AC findings now pinned: F6 (pi-extension `ref` rejected at parse,
+Task 1), F8 (`--project` threaded into the fan-out, Tasks 2/4). No spec AC is
+unmapped.
 
-**Placeholder scan:** Two `worker note` blocks (Tasks 2, 4) flag reality-sensitive
-seams (exact per-kind add/install argv; the scope-default helper). These are NOT
-placeholders for behaviour — the behaviour and tests are fully specified; the notes
-tell the worker to confirm exact flag spellings against the real commands and pin
-them in the already-written tests. That is the correct handling for the one genuine
-unknown (each kind's precise verb signature) without guessing it wrong in the plan.
+**Placeholder scan:** The two remaining `worker note` blocks (Tasks 2, 4) are
+*verify-then-pin* notes, not behaviour placeholders. The per-kind argv, the seam,
+the `default_scope` helper, and the `already_present` lock-precheck are all decided
+and fully written; the notes only ask the worker to confirm two narrow code
+realities against the running tree (the library-lock entry field names the F2
+precheck reads; the `file://` source shape `skill add` accepts) and keep the
+already-written tests as the single source of truth.
 
 **Type consistency:** `BundleMember(asset_type, source, slug, ref)`,
 `BundleManifest(name, description, members)`, `ManifestError`, `DispatchError`,
 `BundleInstallError`, `ValidateReport(ok, checked, failures)`, `run(manifest,
-scope, dry_run)`, `install_member`/`resolve_member`/`uninstall_member` —
-consistent across Tasks 1–5. `install_member` returns `"already_present"` | `None`
-(Task 3 worker note + Task 2 sentinel) — flagged for wiring.
+scope, dry_run, project_root=None)`,
+`install_member(member, scope, project_root=None) -> "already_present" | None`,
+`resolve_member(member)`, `uninstall_member(member, scope, project_root=None)`,
+`_paths_core.default_scope(cwd) -> str` — consistent across Tasks 1–5. The
+`already_present` value is produced by the Task 2 lock-precheck (F2) and consumed
+by the Task 3 rollback set; no sentinel guess, no fallback.
 
-**Known reality risks (carried into execution, not resolved on paper):**
-1. Exact per-kind add/install argv (esp. `skill` import-vs-add, and `-g/-p` vs
-   `--scope`) — Task 2 + Task 5 e2e force these to match reality.
-2. The scope-default helper's real name/location — Task 4 worker note.
-3. The `already_present` no-op detection — Task 3 worker note; conservative
-   fallback documented.
+**Resolved on revision (were "known reality risks", now decided in spec + plan):**
+1. **Per-kind add/install argv** — resolved: skill uses `--scope` (+ `--agents`
+   defaulting to standard, omitted), agent/pi-ext use `-g/-p`, pi-ext omits
+   `--ref`. Per-kind argv builders, full-argv unit tests (F1/F6).
+2. **`already_present` detection** — resolved: a library-lock precheck BEFORE add
+   (F2), not a return-scrape and not a conservative fallback. AC4 fully satisfied.
+3. **Scope-default helper** — resolved: new `_paths_core.default_scope(cwd)` (F3);
+   `in_project` never existed and is gone from the plan.
+4. **skill `--agents`** — resolved: defaults to `standard` post-#393/#394, so a
+   skill member installs with no special-casing.
+
+**Residual execution-time confirmations (narrow, non-blocking):** the library-lock
+entry field shape the F2 precheck reads (Task 2 note) and the exact `file://`
+source `skill add` accepts in the e2e (Task 5 note). Both pinned by already-written
+tests; neither is a design fork.
