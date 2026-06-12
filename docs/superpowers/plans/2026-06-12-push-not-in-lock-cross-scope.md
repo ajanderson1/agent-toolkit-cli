@@ -18,12 +18,12 @@
 
 | File | Change |
 |---|---|
-| `src/agent_toolkit_cli/commands/skill/push_cmd.py` | helper + branch change (lines 64-67) |
-| `src/agent_toolkit_cli/commands/agent/push_cmd.py` | helper + branch change (lines 62-64) |
-| `src/agent_toolkit_cli/commands/pi_extension/push_cmd.py` | helper + branch change (lines 61-63) |
+| `src/agent_toolkit_cli/commands/skill/push_cmd.py` | helper + branch change (lines 65-67) |
+| `src/agent_toolkit_cli/commands/agent/push_cmd.py` | helper + branch change (lines 63-65) |
+| `src/agent_toolkit_cli/commands/pi_extension/push_cmd.py` | helper + branch change (lines 62-64) |
 | `tests/test_cli/test_cli_skill_push.py` | 4 new tests + `_seed_lock` helper |
-| `tests/test_cli/test_cli_agent_group.py` | 2 new tests + local seed helper |
-| `tests/test_cli/test_cli_pi_extension_write.py` | 2 new tests + local seed helper |
+| `tests/test_cli/test_cli_agent_group.py` | 4 new tests + local seed helper |
+| `tests/test_cli/test_cli_pi_extension_write.py` | 4 new tests + local seed helper |
 
 Lock-path facts the tests rely on (verified):
 
@@ -238,6 +238,23 @@ def test_agent_push_project_scope_hints_global_lock(tmp_path, monkeypatch):
     assert "found in the global lock — re-run with -g" in result.output
 
 
+def test_agent_push_global_scope_hints_project_lock(tmp_path, monkeypatch):
+    """Slug only in the PROJECT agents lock, -g forces global → inverse hint + exit 1."""
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    project = tmp_path / "proj"
+    project.mkdir()
+    _seed_agent_lock(home / ".agent-toolkit" / "agents-lock.json", [])
+    _seed_agent_lock(project / "agents-lock.json", ["my-agent"])
+    result = CliRunner().invoke(
+        main, ["--project", str(project), "agent", "push", "-g", "my-agent"],
+    )
+    assert result.exit_code == 1, result.output
+    assert "my-agent: not in the global lock" in result.output
+    assert "found in the project lock — re-run with -p" in result.output
+
+
 def test_agent_push_slug_in_neither_lock_exits_nonzero(tmp_path, monkeypatch):
     home = tmp_path / "home"
     home.mkdir()
@@ -273,8 +290,8 @@ def test_agent_bare_push_empty_lock_unchanged(tmp_path, monkeypatch):
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `uv run pytest tests/test_cli/test_cli_agent_group.py -k "push_project_scope_hints or push_slug_in_neither" -v`
-Expected: both FAIL (exit code 0, old `not in lock` wording).
+Run: `uv run pytest tests/test_cli/test_cli_agent_group.py -k "push_project_scope_hints or push_global_scope_hints or push_slug_in_neither" -v`
+Expected: all three FAIL (exit code 0, old `not in lock` wording).
 
 - [ ] **Step 3: Implement**
 
@@ -371,7 +388,7 @@ def _seed_pi_lock(path, slugs):
     }))
 
 
-def test_pi_extension_push_project_scope_hints_global_lock(tmp_path, monkeypatch):
+def test_push_project_scope_hints_global_lock(tmp_path, monkeypatch):
     """Slug only in the GLOBAL pi-extensions lock, resolved scope project → hint + exit 1 (#371)."""
     home = tmp_path / "home"
     home.mkdir()
@@ -388,7 +405,24 @@ def test_pi_extension_push_project_scope_hints_global_lock(tmp_path, monkeypatch
     assert "found in the global lock — re-run with -g" in result.output
 
 
-def test_pi_extension_push_slug_in_neither_lock_exits_nonzero(tmp_path, monkeypatch):
+def test_push_global_scope_hints_project_lock(tmp_path, monkeypatch):
+    """Slug only in the PROJECT pi-extensions lock, -g forces global → inverse hint + exit 1."""
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    project = tmp_path / "proj"
+    project.mkdir()
+    _seed_pi_lock(home / ".agent-toolkit" / "pi-extensions-lock.json", [])
+    _seed_pi_lock(project / "pi-extensions-lock.json", ["my-ext"])
+    result = CliRunner().invoke(
+        main, ["--project", str(project), "pi-extension", "push", "-g", "my-ext"],
+    )
+    assert result.exit_code == 1, result.output
+    assert "my-ext: not in the global lock" in result.output
+    assert "found in the project lock — re-run with -p" in result.output
+
+
+def test_push_slug_in_neither_lock_exits_nonzero(tmp_path, monkeypatch):
     home = tmp_path / "home"
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))
@@ -404,7 +438,7 @@ def test_pi_extension_push_slug_in_neither_lock_exits_nonzero(tmp_path, monkeypa
     assert "found in" not in result.output
 
 
-def test_pi_extension_bare_push_empty_lock_unchanged(tmp_path, monkeypatch):
+def test_bare_push_empty_lock_unchanged(tmp_path, monkeypatch):
     """Bare push takes targets from the lock — never hits the branch; exit 0."""
     home = tmp_path / "home"
     home.mkdir()
@@ -423,8 +457,8 @@ def test_pi_extension_bare_push_empty_lock_unchanged(tmp_path, monkeypatch):
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `uv run pytest tests/test_cli/test_cli_pi_extension_write.py -k "push_project_scope_hints or push_slug_in_neither" -v`
-Expected: both FAIL (exit code 0, old wording).
+Run: `uv run pytest tests/test_cli/test_cli_pi_extension_write.py -k "push_project_scope_hints or push_global_scope_hints or push_slug_in_neither" -v`
+Expected: all three FAIL (exit code 0, old wording).
 
 - [ ] **Step 3: Implement**
 

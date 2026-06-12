@@ -60,6 +60,21 @@ introducing a shared push-core module for ~15 lines). Each helper takes
 - Bare `push` (no slugs) behaviour — unchanged.
 - Auto-retrying in the other scope ("did you mean" only; never push a scope
   the user didn't resolve to).
+- Upward project-root discovery. The project-lock probe is root-anchored
+  (`ctx_project or Path.cwd()`, matching existing scope-resolution
+  semantics); invoking from a project **subdirectory** gets the scope-naming
+  message without the hint. Accepted limitation — same as scope resolution
+  itself.
+- The sibling named-slug exit-0 dead-ends in the same loop: copy-mode
+  ("cannot push", exit 0) and clean-but-BEHIND/DIVERGED ("not pushing",
+  exit 0). Deliberately deferred — scripts still cannot treat push exit 0 as
+  "published or clean" for those branches; a follow-up issue may extend the
+  exit-code contract there (critical-review finding, 2026-06-12).
+- Gating the "re-run with -g/-p" hint on the other-scope entry's pushability
+  (npm row / read-only / copy-mode). Waived: the advised re-run produces a
+  precise loud diagnosis for npm and read-only rows (exit 1), which is
+  strictly better than today's silence; copy-mode's exit-0 "cannot push" is a
+  pre-existing dead-end recorded in the previous bullet.
 - `agent push`'s dead `except FileNotFoundError` around `read_lock`
   (`commands/agent/push_cmd.py:53-57` — `read_lock` never raises it); may be
   cleaned opportunistically if touched, not a requirement.
