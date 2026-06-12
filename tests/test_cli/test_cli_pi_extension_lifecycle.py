@@ -689,3 +689,35 @@ def test_doctor_squatted_projection_reported(tmp_path, monkeypatch, git_sandbox)
         "doctor must not remove or modify the foreign dir (clobber-safety)."
     )
     assert (link / "index.ts").exists()
+
+
+def test_status_reports_pin_column(tmp_path, monkeypatch, git_sandbox):
+    """status over a pinned entry shows a trailing pinned:<sha7> column (#346)."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    sha = _seed_pinned_entry(tmp_path, git_sandbox)
+
+    r = CliRunner().invoke(main, ["pi-extension", "status", "-g"])
+    assert r.exit_code == 0, r.output
+    line = next(ln for ln in r.output.splitlines() if ln.startswith("pinned\t"))
+    fields = line.split("\t")
+    assert fields[-1] == f"pinned:{sha[:7]}"
+    # load-scope column preserved (4 fields: slug, origin, loaded, pin)
+    assert len(fields) == 4
+
+
+def test_status_unpinned_has_empty_pin_field(tmp_path, monkeypatch, git_sandbox):
+    """A non-pinned store-owned entry prints an empty 4th field (#346)."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    _add_store_owned(tmp_path, git_sandbox.env, git_sandbox.upstream)  # 'demo'
+
+    r = CliRunner().invoke(main, ["pi-extension", "status", "-g"])
+    assert r.exit_code == 0, r.output
+    line = next(ln for ln in r.output.splitlines() if ln.startswith("demo\t"))
+    fields = line.split("\t")
+    assert len(fields) == 4
+    assert fields[-1] == ""
+    assert "pinned:" not in line

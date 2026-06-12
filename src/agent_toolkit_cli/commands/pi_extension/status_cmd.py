@@ -36,4 +36,5 @@ def status_cmd(
         if r.project_loaded:
             scopes.append("project")
         loaded = ",".join(scopes) if scopes else "-"
-        click.echo(f"{r.slug}\t{r.origin}\t{loaded}")
+        pin = f"pinned:{r.pinned_sha[:7]}" if r.pinned_sha else ""
+        click.echo(f"{r.slug}\t{r.origin}\t{loaded}\t{pin}")
