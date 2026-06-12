@@ -20,7 +20,7 @@
 - Modify: `src/agent_toolkit_cli/agent_adapters/symlink.py:150` (F8 message slug-drop)
 - Test: `tests/test_cli/test_agent_adapters/test_translate.py`
 
-- [ ] **Step 1: Write the failing test** (append near `test_install_missing_canonical_raises_install_error`):
+- [x] **Step 1: Write the failing test** (append near `test_install_missing_canonical_raises_install_error`):
 
 ```python
 def test_install_non_utf8_canonical_raises_install_error(tmp_path):
@@ -37,12 +37,12 @@ def test_install_non_utf8_canonical_raises_install_error(tmp_path):
         adapter.install("test-agent", content, scope="global", home=tmp_path)
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest tests/test_cli/test_agent_adapters/test_translate.py::test_install_non_utf8_canonical_raises_install_error -v`
 Expected: FAIL with `UnicodeDecodeError` (not `InstallError`).
 
-- [ ] **Step 3: Implement.** In `translate.py` `install()`, replace this block:
+- [x] **Step 3: Implement.** In `translate.py` `install()`, replace this block:
 
 ```python
         if not content_path.exists():
@@ -84,7 +84,7 @@ read moved inside the try; except widened to catch `UnicodeDecodeError`
             raise InstallError(str(exc)) from exc
 ```
 
-- [ ] **Step 4: Drop the slug from the standard + symlink F8 messages too.**
+- [x] **Step 4: Drop the slug from the standard + symlink F8 messages too.**
 The Task-4 seam prefixes the slug for EVERY mechanism; these two adapters
 carry the same `{slug}:`-embedding F8 message and would print it doubled
 (`my-agent: standard: my-agent: canonical…`) — and standard is the default
@@ -114,12 +114,12 @@ to:
 
 (Both keep the trailing ``re-run `agent add {slug}` to restore it`` hint.)
 
-- [ ] **Step 5: Run the adapter test files**
+- [x] **Step 5: Run the adapter test files**
 
 Run: `uv run pytest tests/test_cli/test_agent_adapters/ -v`
 Expected: ALL PASS (the existing F8 tests match on `"canonical content file missing"`, which survives the message change).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git commit --only tests/test_cli/test_agent_adapters/test_translate.py --only src/agent_toolkit_cli/agent_adapters/translate.py --only src/agent_toolkit_cli/agent_adapters/standard.py --only src/agent_toolkit_cli/agent_adapters/symlink.py -m "fix(agent): translate canonical read inside the InstallError wrap (#373)"
@@ -133,7 +133,7 @@ git commit --only tests/test_cli/test_agent_adapters/test_translate.py --only sr
 - Modify: `src/agent_toolkit_cli/agent_adapters/config_file_folder.py` (new helper + 4 install() call sites)
 - Test: `tests/test_cli/test_agent_adapters/test_config_file_folder.py`
 
-- [ ] **Step 1: Write the failing tests** (append to `test_config_file_folder.py`; module already imports `pytest` and `Path`):
+- [x] **Step 1: Write the failing tests** (append to `test_config_file_folder.py`; module already imports `pytest` and `Path`):
 
 ```python
 # ---------------------------------------------------------------------------
@@ -169,12 +169,12 @@ def test_install_non_utf8_canonical_raises_install_error(harness, tmp_path):
         adapter.install("test-agent", content, scope="global", home=tmp_path)
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_cli/test_agent_adapters/test_config_file_folder.py -k "test_install_missing_canonical or test_install_non_utf8" -v`
 Expected: 8 FAIL — `FileNotFoundError` / `UnicodeDecodeError` escape raw.
 
-- [ ] **Step 3: Implement.** In `config_file_folder.py`:
+- [x] **Step 3: Implement.** In `config_file_folder.py`:
 
 (a) Add the import (after the existing `_guard_foreign` import; translate.py
 already imports from `_install_core`, so no circularity):
@@ -217,12 +217,12 @@ moving the assignment above `_guard_foreign(cfg, ...)`; for dexto above
 file first — moving the canonical read to the top of install() is correct
 and harmless for all four.)
 
-- [ ] **Step 4: Run the cff test file**
+- [x] **Step 4: Run the cff test file**
 
 Run: `uv run pytest tests/test_cli/test_agent_adapters/test_config_file_folder.py -v`
 Expected: ALL PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git commit --only tests/test_cli/test_agent_adapters/test_config_file_folder.py --only src/agent_toolkit_cli/agent_adapters/config_file_folder.py -m "fix(agent): cff adapters guard canonical reads as InstallError (#373)"
@@ -236,7 +236,7 @@ git commit --only tests/test_cli/test_agent_adapters/test_config_file_folder.py 
 - Modify: `src/agent_toolkit_cli/agent_adapters/config_file_folder.py` (firebender install ~:233, firebender uninstall ~:270, codex install ~:327, codex uninstall ~:374)
 - Test: `tests/test_cli/test_agent_adapters/test_config_file_folder.py`
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
 
 ```python
 def _fb_content(tmp_path):
@@ -286,12 +286,12 @@ def test_codex_uninstall_corrupt_config_raises_install_error(tmp_path):
         adapter.uninstall("test-agent", scope="global", home=tmp_path)
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_cli/test_agent_adapters/test_config_file_folder.py -k "corrupt_registry or corrupt_config" -v`
 Expected: 3 FAIL with raw `json.decoder.JSONDecodeError` / `UnicodeDecodeError`.
 
-- [ ] **Step 3: Implement.** In `config_file_folder.py`, wrap the three
+- [x] **Step 3: Implement.** In `config_file_folder.py`, wrap the three
 registry/config reads (JSONDecodeError is a ValueError subclass):
 
 firebender `install()` — replace:
@@ -370,12 +370,12 @@ with:
                 raise InstallError(f"codex: {config_toml}: {exc}") from exc
 ```
 
-- [ ] **Step 4: Run the cff test file**
+- [x] **Step 4: Run the cff test file**
 
 Run: `uv run pytest tests/test_cli/test_agent_adapters/test_config_file_folder.py -v`
 Expected: ALL PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git commit --only tests/test_cli/test_agent_adapters/test_config_file_folder.py --only src/agent_toolkit_cli/agent_adapters/config_file_folder.py -m "fix(agent): firebender/codex registry reads guard as InstallError (#373)"
@@ -390,7 +390,7 @@ git commit --only tests/test_cli/test_agent_adapters/test_config_file_folder.py 
 - Modify: `src/agent_toolkit_cli/commands/agent/uninstall_cmd.py` (wrap the `agent_install.uninstall(...)` call)
 - Test: `tests/test_cli/test_agent_install.py` (seam tests); `tests/test_cli/test_cli_agent_group.py` (CLI assertion)
 
-- [ ] **Step 1: Write the failing seam tests** (append to `tests/test_cli/test_agent_install.py`; follow that file's existing fixture style for plan construction — it already builds `InstallPlan` objects and calls `agent_install.apply`):
+- [x] **Step 1: Write the failing seam tests** (append to `tests/test_cli/test_agent_install.py`; follow that file's existing fixture style for plan construction — it already builds `InstallPlan` objects and calls `agent_install.apply`):
 
 ```python
 def test_apply_install_error_names_slug(
@@ -458,12 +458,12 @@ NOTE for the implementer: if `InstallPlan` requires other kwargs, copy the
 construction shape from the existing tests in `test_agent_install.py` —
 the assertion contract (slug prefix + subtype) is what matters.
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_cli/test_agent_install.py -k "names_slug or keeps_subtype" -v`
 Expected: 2 FAIL — message lacks the `my-agent: ` prefix.
 
-- [ ] **Step 3: Implement the seam.** In `agent_install.py` `apply()`, wrap the install call (`:311`):
+- [x] **Step 3: Implement the seam.** In `agent_install.py` `apply()`, wrap the install call (`:311`):
 
 ```python
         try:
@@ -517,7 +517,7 @@ call exactly as `install_cmd.py:162-164` does:
 (Adjust to the actual call shape in the file — only the try/except is new;
 keep whatever the result variable is currently named.)
 
-- [ ] **Step 4: Write the CLI regression test** (it was RED before Step 3 and
+- [x] **Step 4: Write the CLI regression test** (it was RED before Step 3 and
 passes on the Step-3 tree — do NOT expect to prove RED here; the seam tests
 in Steps 1–2 carried the RED proof). Append to
 `tests/test_cli/test_cli_agent_group.py`, next to
@@ -540,12 +540,12 @@ def test_install_error_output_names_slug(
     assert "Traceback" not in r.output
 ```
 
-- [ ] **Step 5: Run the touched test files**
+- [x] **Step 5: Run the touched test files**
 
 Run: `uv run pytest tests/test_cli/test_agent_install.py tests/test_cli/test_cli_agent_group.py -v`
 Expected: ALL PASS (incl. the existing #370 test — its `github-copilot`/`description` assertions still hold with the slug prefix added).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git commit --only tests/test_cli/test_agent_install.py --only tests/test_cli/test_cli_agent_group.py --only src/agent_toolkit_cli/agent_install.py --only src/agent_toolkit_cli/commands/agent/uninstall_cmd.py -m "fix(agent): facade seam prefixes the slug on InstallError, uninstall CLI converts cleanly (#373)"
@@ -558,7 +558,7 @@ git commit --only tests/test_cli/test_agent_install.py --only tests/test_cli/tes
 **Files:**
 - Test: `tests/test_cli/test_cli_agent_group.py`
 
-- [ ] **Step 1: Write the test** (this should pass on the Task-4 tree — it pins behavior #368 already ships; if it FAILS, stop and raise, because the retry wedge is back):
+- [x] **Step 1: Write the test** (this should pass on the Task-4 tree — it pins behavior #368 already ships; if it FAILS, stop and raise, because the retry wedge is back):
 
 ```python
 def test_failed_fanout_retry_succeeds_after_fix(
@@ -600,12 +600,12 @@ NOTE: if the `--harnesses` token spelling differs (check `parse_harness_tokens`
 in `commands/agent/_common.py`), use the catalog names exactly as
 `AGENTS` keys them: `gemini-cli`, `github-copilot`.
 
-- [ ] **Step 2: Run it**
+- [x] **Step 2: Run it**
 
 Run: `uv run pytest tests/test_cli/test_cli_agent_group.py::test_failed_fanout_retry_succeeds_after_fix -v`
 Expected: PASS. (If FAIL with `AgentProjectionConflictError`: the #368 sentinel/adopt contract regressed — stop and raise, do not patch around it.)
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git commit --only tests/test_cli/test_cli_agent_group.py -m "test(agent): pin #368's dissolution of the failed-fan-out retry wedge (#373)"
@@ -615,17 +615,17 @@ git commit --only tests/test_cli/test_cli_agent_group.py -m "test(agent): pin #3
 
 ### Task 6: full verification
 
-- [ ] **Step 1: Full suite**
+- [x] **Step 1: Full suite**
 
 Run: `uv run pytest -q`
 Expected: everything green except (possibly) the 2 known HOME-isolation env failures (`test_empty_machine_is_empty`, `test_build_instruction_rows_empty_lock_no_canonical`) — both pre-existing on main; reproduce on a clean checkout before whitelisting anything else.
 
-- [ ] **Step 2: Lint/type checks**
+- [x] **Step 2: Lint/type checks**
 
 Run: `uv run ruff check src tests && uv run mypy src`
 Expected: no NEW errors versus main (main carries pre-existing counts; compare if non-zero).
 
-- [ ] **Step 3: CLI smoke** (sandbox HOME, no real installs):
+- [x] **Step 3: CLI smoke** (sandbox HOME, no real installs):
 
 ```bash
 HOME=$(mktemp -d) uv run agent-toolkit-cli agent install nonexistent -g 2>&1 | tail -3
