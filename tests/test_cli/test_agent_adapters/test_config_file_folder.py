@@ -249,3 +249,36 @@ def test_cff_uninstall_accepts_canonical_content_kwarg(tmp_path, fake_content):
             canonical_content=fake_content,
         )
         assert result is None
+
+
+# ---------------------------------------------------------------------------
+# #373: guarded canonical reads — InstallError, never a raw traceback
+# ---------------------------------------------------------------------------
+
+CFF_HARNESSES = ["aider-desk", "codex", "dexto", "firebender"]
+
+
+@pytest.mark.parametrize("harness", CFF_HARNESSES)
+def test_install_missing_canonical_raises_install_error(harness, tmp_path):
+    """#373: missing canonical → InstallError (translate F8 parity), not
+    FileNotFoundError. firebender/codex are catalog-disabled, so construct
+    the adapter directly."""
+    from agent_toolkit_cli._install_core import InstallError
+    from agent_toolkit_cli.agent_adapters import config_file_folder
+    adapter = config_file_folder.adapter_for(harness)
+    missing = tmp_path / "canonical" / "test-agent.md"
+    with pytest.raises(InstallError, match="canonical content file missing"):
+        adapter.install("test-agent", missing, scope="global", home=tmp_path)
+
+
+@pytest.mark.parametrize("harness", CFF_HARNESSES)
+def test_install_non_utf8_canonical_raises_install_error(harness, tmp_path):
+    """#373: non-UTF8 canonical → InstallError, not UnicodeDecodeError."""
+    from agent_toolkit_cli._install_core import InstallError
+    from agent_toolkit_cli.agent_adapters import config_file_folder
+    adapter = config_file_folder.adapter_for(harness)
+    content = tmp_path / "canonical" / "test-agent.md"
+    content.parent.mkdir(parents=True)
+    content.write_bytes(b"\xff\xfe invalid utf8")
+    with pytest.raises(InstallError):
+        adapter.install("test-agent", content, scope="global", home=tmp_path)
