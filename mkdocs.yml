@@ -68,6 +68,15 @@ plugins:
           options:
             show_source: true
             show_root_heading: true
+  # Preserve inbound links after the #355 kind→asset-type page rename (#364):
+  # docs/kinds/* was git-mv'd to docs/asset-types/* with no redirect mapping.
+  - redirects:
+      redirect_maps:
+        kinds/instructions.md: asset-types/instructions.md
+        kinds/skills.md: asset-types/skills.md
+        kinds/agents.md: asset-types/agents.md
+        kinds/pi-extensions.md: asset-types/pi-extensions.md
+        kinds/mcp.md: asset-types/mcp.md
 
 markdown_extensions:
   - abbr

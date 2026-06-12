@@ -21,6 +21,7 @@ dev = [
 ]
 docs = [
     "mkdocs-material>=9.5",
+    "mkdocs-redirects>=1.2.3",
     "mkdocstrings[python]>=0.25",
 ]
 
