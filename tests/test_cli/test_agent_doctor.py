@@ -551,7 +551,9 @@ def test_doctor_readd_sha_pinned_lands_on_pin(
 
     first_sha = git("rev-parse", "HEAD")
     (git_sandbox.clone / "EXTRA.md").write_text("second\n")
-    git("add", "-A"); git("commit", "-m", "second"); git("push", "origin", "main")
+    git("add", "-A")
+    git("commit", "-m", "second")
+    git("push", "origin", "main")
 
     # Project lock: store-owned agent pinned to first_sha; library lock EMPTY
     # (slug absent → #360 unlisted trigger). Library canonical missing.

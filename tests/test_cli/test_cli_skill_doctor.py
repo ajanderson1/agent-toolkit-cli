@@ -293,7 +293,9 @@ def test_skill_doctor_reclone_sha_pinned_lands_on_pin(
 
     first_sha = git("rev-parse", "HEAD")
     (git_sandbox.clone / "EXTRA.md").write_text("second\n")
-    git("add", "-A"); git("commit", "-m", "second"); git("push", "origin", "main")
+    git("add", "-A")
+    git("commit", "-m", "second")
+    git("push", "origin", "main")
 
     # Global library lock: store-owned skill pinned to first_sha, canonical MISSING.
     lock_path = library_lock_path()  # reads AGENT_TOOLKIT_SKILLS_ROOT

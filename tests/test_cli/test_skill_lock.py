@@ -1,11 +1,15 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from agent_toolkit_cli.skill_lock import (
     LockEntry,
     LockFile,
     add_entry,
     clone_url_from_entry,
+    is_sha_pinned,
+    looks_like_sha,
     read_lock,
     remove_entry,
     write_lock,
@@ -306,10 +310,6 @@ def test_clone_url_explicit_sourceurl_not_rewritten(tmp_path: Path, monkeypatch)
 
 
 # --- #345: SHA-pin discriminator -------------------------------------------
-
-import pytest
-
-from agent_toolkit_cli.skill_lock import is_sha_pinned, looks_like_sha
 
 _SHA = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"  # 40-hex
 

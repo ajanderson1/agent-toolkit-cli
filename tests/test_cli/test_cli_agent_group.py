@@ -1279,11 +1279,14 @@ def test_agent_add_sha_ref_lands_on_pin(
     (git_sandbox.clone / "demo-agent.md").write_text(
         "---\nname: demo-agent\ndescription: A test agent.\n---\nBody.\n"
     )
-    git("add", "-A"); git("commit", "-m", "add agent file")
+    git("add", "-A")
+    git("commit", "-m", "add agent file")
     first_sha = git("rev-parse", "HEAD")
     git("push", "origin", "main")
     (git_sandbox.clone / "EXTRA.md").write_text("second\n")
-    git("add", "-A"); git("commit", "-m", "second"); git("push", "origin", "main")
+    git("add", "-A")
+    git("commit", "-m", "second")
+    git("push", "origin", "main")
 
     r = CliRunner().invoke(
         main,

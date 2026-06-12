@@ -377,17 +377,10 @@ def _make_reclone_action(*, slug: str, entry: LockEntry, force: bool = False) ->
             # it so the clone below has a clean target.
             shutil.rmtree(canonical, ignore_errors=True)
         canonical.parent.mkdir(parents=True, exist_ok=True)
-        skill_git.clone(source, canonical, ref=clone_ref, env=None)
-        if pin_sha and skill_git.is_git_repo(canonical):
-            try:
-                skill_git.fetch_ref(canonical, ref=pin_sha, env=None)
-            except skill_git.GitError:
-                pass  # best-effort; checkout resolves locally
-            try:
-                skill_git.checkout(canonical, ref=pin_sha, env=None)
-            except skill_git.GitError:
-                shutil.rmtree(canonical, ignore_errors=True)
-                raise
+        # Shared SHA-aware clone (#345): clone-at-HEAD + checkout for a pin,
+        # `--branch` for a branch. Verbatim extraction of the dance this path
+        # used to inline; the three skill/agent reclone paths share it now.
+        skill_git.clone_pinned_or_branch(source, canonical, ref=ref, env=None)
 
     return FixAction(
         description=f"Re-clone {slug} from {source}",
