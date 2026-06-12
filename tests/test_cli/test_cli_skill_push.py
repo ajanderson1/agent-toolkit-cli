@@ -628,3 +628,76 @@ def test_push_monorepo_refused(monorepo_skill):
     result = runner.invoke(main, ["skill", "push", "mkdocs", "-g"])
     assert result.exit_code == 1
     assert "read-only" in result.output
+
+
+def _seed_lock(path: Path, slugs: list[str]) -> None:
+    """Write a minimal v1 lock with bare github entries for `slugs`."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({
+        "version": 1,
+        "skills": {
+            s: {"source": "acme/skills", "sourceType": "github"} for s in slugs
+        },
+    }))
+
+
+def test_push_project_scope_hints_global_lock(tmp_path, monkeypatch):
+    """Slug only in the GLOBAL lock, resolved scope project → hint + exit 1 (#371)."""
+    library_root = tmp_path / "lib" / "skills"
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    project = tmp_path / "proj"
+    project.mkdir()
+    _seed_lock(tmp_path / "lib" / "skills-lock.json", ["demo"])
+    _seed_lock(project / "skills-lock.json", [])
+    result = CliRunner().invoke(
+        main, ["--project", str(project), "skill", "push", "demo"],
+    )
+    assert result.exit_code == 1, result.output
+    assert "demo: not in the project lock" in result.output
+    assert "found in the global lock — re-run with -g" in result.output
+
+
+def test_push_global_scope_hints_project_lock(tmp_path, monkeypatch):
+    """Slug only in the PROJECT lock, -g forces global → inverse hint + exit 1."""
+    library_root = tmp_path / "lib" / "skills"
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    project = tmp_path / "proj"
+    project.mkdir()
+    _seed_lock(tmp_path / "lib" / "skills-lock.json", [])
+    _seed_lock(project / "skills-lock.json", ["demo"])
+    result = CliRunner().invoke(
+        main, ["--project", str(project), "skill", "push", "-g", "demo"],
+    )
+    assert result.exit_code == 1, result.output
+    assert "demo: not in the global lock" in result.output
+    assert "found in the project lock — re-run with -p" in result.output
+
+
+def test_push_slug_in_neither_lock_exits_nonzero(tmp_path, monkeypatch):
+    """Slug nowhere → scope-naming message, no hint, exit 1."""
+    library_root = tmp_path / "lib" / "skills"
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    project = tmp_path / "proj"
+    project.mkdir()
+    _seed_lock(tmp_path / "lib" / "skills-lock.json", [])
+    _seed_lock(project / "skills-lock.json", [])
+    result = CliRunner().invoke(
+        main, ["--project", str(project), "skill", "push", "ghost"],
+    )
+    assert result.exit_code == 1, result.output
+    assert "ghost: not in the project lock" in result.output
+    assert "found in" not in result.output
+
+
+def test_bare_push_empty_lock_unchanged(tmp_path, monkeypatch):
+    """Bare push takes targets from the lock — never hits the branch; exit 0."""
+    library_root = tmp_path / "lib" / "skills"
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    project = tmp_path / "proj"
+    project.mkdir()
+    _seed_lock(project / "skills-lock.json", [])
+    result = CliRunner().invoke(
+        main, ["--project", str(project), "skill", "push"],
+    )
+    assert result.exit_code == 0, result.output
+    assert "not in the" not in result.output
