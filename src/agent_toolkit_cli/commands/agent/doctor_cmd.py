@@ -302,6 +302,12 @@ def _diagnose(
         if library_base.is_dir():
             lock_slugs = set(lock.skills.keys())
             for child in sorted(library_base.iterdir()):
+                # `_parents/` is the shared monorepo (category-repo) clone cache,
+                # not an agent slug — it has no lock entry by design. Skip it, or
+                # the sweep would offer to `rm -rf` it and break every monorepo
+                # agent symlinked into it. Mirrors skill doctor's `_parents` skip.
+                if child.name == "_parents":
+                    continue
                 if not child.is_dir():
                     continue
                 if child.name not in lock_slugs:
