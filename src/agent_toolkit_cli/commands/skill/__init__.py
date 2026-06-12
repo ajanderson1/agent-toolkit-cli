@@ -507,8 +507,9 @@ Examples:
   agent-toolkit-cli skill install journal --agents claude-code -p
 """)
 @click.argument("slug", required=True)
-@click.option("--agents", "agents_str", required=True,
-              help="Comma-separated agent names, 'standard', or 'all'.")
+@click.option("--agents", "agents_str", default="standard", show_default=True,
+              help="Comma-separated agent names, 'standard', or 'all'. "
+                   "Defaults to the standard bundle.")
 @click.option("--scope", "scope", default="global",
               type=click.Choice(["global", "project"]),
               help="Scope: global (default) or project.")
@@ -611,8 +612,10 @@ Examples:
   agent-toolkit-cli skill uninstall journal --agents all
 """)
 @click.argument("slug", required=True)
-@click.option("--agents", "agents_str", required=True,
-              help="Comma-separated agent names, 'standard', or 'all'.")
+@click.option("--agents", "agents_str", default=None,
+              help="Comma-separated agent names, 'standard', or 'all'. "
+                   "Default (omitted): remove everywhere — the standard bundle "
+                   "plus every detected agent.")
 @click.option("--scope", "scope", default="global",
               type=click.Choice(["global", "project"]),
               help="Scope: global (default) or project.")
@@ -620,17 +623,29 @@ Examples:
               help="Shorthand for --scope project.")
 @click.pass_context
 def uninstall_cmd(
-    ctx: click.Context, slug: str, agents_str: str,
+    ctx: click.Context, slug: str, agents_str: str | None,
     scope: str, project_flag: bool,
 ) -> None:
     """Remove agent-visibility symlinks. Library/project canonical untouched."""
     if project_flag:
         scope = "project"
 
-    try:
-        target_agents = _resolve_agents(agents_str, scope)
-    except click.UsageError:
-        raise
+    if agents_str is None:
+        # Maximal default — deliberately asymmetric with install's `standard`.
+        # A bare uninstall must clean up EVERYWHERE the skill was projected, so we
+        # union the synthetic `standard` token (the only thing that removes the
+        # ~/.agents/skills/<slug> bundle symlink; `--agents all` excludes it
+        # because the standard AgentConfig has detect_installed=False) with every
+        # detected agent. Mirrors `agent uninstall`'s maximal resolver
+        # (commands/agent/uninstall_cmd.py:_resolve_harnesses_for_uninstall, which
+        # returns ("standard", *sorted(detected))). Computed here as a tuple rather
+        # than via a token because _resolve_agents("standard,all") would raise.
+        target_agents = ("standard", *detect_installed_agents())
+    else:
+        try:
+            target_agents = _resolve_agents(agents_str, scope)
+        except click.UsageError:
+            raise
 
     if not target_agents:
         click.echo(f"{slug}: no agents specified; nothing to do")

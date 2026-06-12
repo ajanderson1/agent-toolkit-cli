@@ -5,7 +5,6 @@ from agent locations to the library canonical.
 """
 from pathlib import Path
 
-import pytest
 from click.testing import CliRunner
 
 from agent_toolkit_cli.cli import main
@@ -260,10 +259,46 @@ def test_install_project_non_universal_auto_creates_agent_root(
     assert (project / ".windsurf").is_dir(), ".windsurf/ dir must be auto-created"
 
 
-def test_install_agents_required():
-    """skill install without --agents is an error."""
+def test_install_defaults_to_standard(git_sandbox, tmp_path, monkeypatch):
+    """skill install with no --agents projects to the standard bundle."""
+    library_root = tmp_path / "lib" / "skills"
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    monkeypatch.setenv("HOME", str(fake_home))
+
     runner = CliRunner()
+    r = runner.invoke(main, ["skill", "add", str(git_sandbox.upstream), "--slug", "demo"])
+    assert r.exit_code == 0, r.output
+
+    # No --agents — must default to 'standard', not error.
     result = runner.invoke(main, ["skill", "install", "demo"])
-    assert result.exit_code != 0
-    # click reports missing required option
-    assert "agents" in result.output.lower() or "missing" in result.output.lower()
+    assert result.exit_code == 0, result.output
+
+    bundle_link = fake_home / ".agents" / "skills" / "demo"
+    assert bundle_link.is_symlink(), "default install must create the standard bundle symlink"
+    assert bundle_link.resolve() == (library_root / "demo").resolve()
+
+
+def test_install_help_marks_agents_optional():
+    """The --agents option is no longer [required] on skill install.
+
+    Click renders `[required]` on a continuation line BELOW the option, so we
+    capture the whole --agents block (its line plus continuation lines, up to the
+    next `--option`) and assert `[required]` appears nowhere in it.
+    """
+    result = CliRunner().invoke(main, ["skill", "install", "--help"])
+    assert result.exit_code == 0
+    lines = result.output.splitlines()
+    start = next((i for i, ln in enumerate(lines) if ln.strip().startswith("--agents")), None)
+    assert start is not None, "--agents must appear in help"
+    block = [lines[start]]
+    for ln in lines[start + 1:]:
+        if ln.strip().startswith("--"):  # next option begins
+            break
+        block.append(ln)
+    assert not any("[required]" in ln for ln in block), (
+        f"--agents must no longer be required; block was:\n{chr(10).join(block)}"
+    )
