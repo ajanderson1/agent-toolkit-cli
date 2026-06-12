@@ -101,8 +101,8 @@ def test_default_fanout_project_scope_excludes_devin():
 
 def test_synthetic_tokens_rejected():
     """AC7 (review-corrected): ALL synthetic catalog names get an explicit
-    UsageError — previously a silent no-op. #350 aliases resolve first, so
-    general-skill is rejected the same way."""
+    UsageError — previously a silent no-op. general-skill (an old #350 spelling,
+    removed in #356) is now an unknown token and is rejected the same way."""
     import click
     from agent_toolkit_cli.commands.agent.install_cmd import _resolve_harnesses
     for tok in ("standard-agent", "standard-skill", "general-skill"):
