@@ -262,7 +262,15 @@ def apply(
             )
 
     # Clone canonical if needed (same pattern as skill_install.apply).
-    if plan.source is not None and not canonical.exists():
+    # For a monorepo (category-repo) agent the canonical is a SYMLINK into the
+    # shared parent clone, created by `agent add`. A symlink's `.exists()` is
+    # True (it resolves), so the guard below already skips re-cloning over it;
+    # `is_symlink()` is belt-and-braces against a dangling link. `install_cmd`
+    # builds plans with source=None for already-added agents, so in practice
+    # this clone path only fires for the (rare) install-with-source case.
+    if (plan.source is not None
+            and not canonical.exists()
+            and not canonical.is_symlink()):
         canonical.parent.mkdir(parents=True, exist_ok=True)
         skill_git.clone(plan.source.url, canonical, ref=plan.ref, env=env)
     elif plan.source is not None and existing_entry is not None:
@@ -565,8 +573,64 @@ def remove(
         return
 
     # 3. Global scope: drop the canonical library entry.
+    #
+    # A single-repo agent's canonical is a real directory (rmtree). A monorepo
+    # (category-repo) agent's canonical is a SYMLINK into the shared parent
+    # clone — rmtree on a symlink raises NotADirectoryError, so unlink it
+    # instead, then best-effort sweep the parent clone if no surviving lock
+    # entry still points into it. Mirrors `skill remove`'s symlink branch.
     canonical = canonical_agent_dir(
         slug, scope=scope, home=home, project=project,
     )
-    if canonical.exists():
+    if canonical.is_symlink():
+        target = canonical.readlink()
+        if not target.is_absolute():
+            target = (canonical.parent / target).resolve(strict=False)
+        canonical.unlink()
+        parent_clone = _enclosing_parent_clone(target)
+        if parent_clone is not None and parent_clone.exists():
+            _cleanup_agent_parent_clone_if_orphaned(parent_clone, lock)
+    elif canonical.exists():
         shutil.rmtree(canonical)
+
+
+def _enclosing_parent_clone(target: Path) -> Path | None:
+    """Return the `_parents/<owner>/<repo>[@<ref>]/` ancestor of `target`, or None.
+
+    Monorepo agent canonicals symlink into
+    ``<agent_library_root>/_parents/<owner>/<repo>[@<ref>]/<subpath>``. Climb
+    until we hit a directory whose own parent is named ``_parents`` — that is
+    the per-(owner, repo, ref) clone we may need to sweep. Returns None if
+    `target` is not under a `_parents/` tree (defensive — never sweep a path we
+    cannot positively identify as a parent clone). Mirrors the skill helper.
+    """
+    for ancestor in target.parents:
+        if ancestor.parent.name == "_parents":
+            return ancestor
+    return None
+
+
+def _cleanup_agent_parent_clone_if_orphaned(parent_clone: Path, lock) -> bool:
+    """Remove `parent_clone` if no surviving agent lock entry symlinks into it.
+
+    Walks the (already-mutated) lock's remaining entries, resolves each
+    canonical's symlink target, and leaves the clone intact if any sibling
+    still points in. Otherwise rmtree it. Returns True iff removed. The
+    agent-tree analogue of skill's `_cleanup_parent_clone_if_orphaned` — it
+    resolves siblings via `library_agent_path`, NOT `library_skill_path`.
+    """
+    from agent_toolkit_cli.agent_paths import library_agent_path
+
+    for sibling_slug in lock.skills:
+        sibling = library_agent_path(sibling_slug)
+        if not sibling.is_symlink():
+            continue
+        sibling_target = sibling.readlink()
+        if not sibling_target.is_absolute():
+            sibling_target = (sibling.parent / sibling_target).resolve(
+                strict=False,
+            )
+        if parent_clone in sibling_target.parents:
+            return False
+    shutil.rmtree(parent_clone)
+    return True

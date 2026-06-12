@@ -54,6 +54,7 @@ __all__ = [
     "AGENT_BINDING",
     "Scope",
     "SUPPORTED_HARNESSES",
+    "agent_parent_clone_path",
     "agent_projection_dir",
     "canonical_agent_dir",
     "harness_projection_dir",
@@ -80,6 +81,21 @@ def library_root(env: dict[str, str] | None = None) -> Path:
 def library_agent_path(slug: str, *, env: dict[str, str] | None = None) -> Path:
     """Return the canonical library path for a single agent slug."""
     return library_root(env) / slug
+
+
+def agent_parent_clone_path(
+    owner: str, repo: str, *, ref: str | None, env: dict[str, str] | None = None,
+) -> Path:
+    """Where a monorepo (category-repo) parent is cloned for AGENT slugs.
+
+    The bare `parent_clone_path` re-exported above resolves its base from the
+    SKILL library root (its default `root` is skill_paths.library_root). An
+    agent monorepo parent must cache under the AGENT tree
+    (`<agent_library_root>/_parents/<owner>/<repo>[@<ref>]/`) so it doesn't
+    pollute the skills library and so agent doctor/remove find it where they
+    look. Pass the agent `library_root` explicitly as `root`.
+    """
+    return parent_clone_path(owner, repo, ref=ref, root=library_root(env))
 
 
 def library_lock_path(env: dict[str, str] | None = None) -> Path:
