@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3.12, pytest, the `git_sandbox` conftest fixture (bare-repo source), `uv run pytest …` from the repo root.
 
-**Verified baseline (main @ 07a0a3f):** `add()`'s `canonical.exists()` block is `pi_extension_add.py:99-110`; the failed-checkout cleanup that creates half-dirs is `:133`. Doctor's `_check_slug` store-owned block is `pi_extension_doctor.py:120-153`; `_make_reclone_action` is `:339-384` with the `if canonical.exists(): return` guard at `:362-363`. The doctor CLI renders `f.finding_type` verbatim (`commands/pi_extension/doctor_cmd.py:62`), so a new finding type needs no label map.
+**Verified baseline (main @ 07a0a3f):** `add()`'s `canonical.exists()` block starts at `pi_extension_add.py:95`; the failed-checkout cleanup that creates half-dirs is `:133`. Doctor's `_check_slug` store-owned block is `pi_extension_doctor.py:120-153`; `_make_reclone_action` is `:339-383` with the `if canonical.exists(): return` guard at `:360-361`. The doctor CLI renders `f.finding_type` verbatim (`commands/pi_extension/doctor_cmd.py:62`), so a new finding type needs no label map.
 
 ---
 
@@ -17,16 +17,18 @@
 Do this first: the half_dir finding (Task 2) depends on it, and it is a pure addition (missing_canonical behavior is preserved by the `force=False` default).
 
 **Files:**
-- Modify: `src/agent_toolkit_cli/pi_extension_doctor.py:339-384` (`_make_reclone_action`)
+- Modify: `src/agent_toolkit_cli/pi_extension_doctor.py:339-383` (`_make_reclone_action`)
 - Test: `tests/test_cli/test_cli_pi_extension_lifecycle.py`
 
-- [ ] **Step 1: Write the failing test** (append to the lifecycle test file; it already imports `subprocess`, `pep`, `ped` is imported locally in sibling tests, `LockEntry`/`LockFile`/`write_lock` at module top, and provides `git_sandbox`):
+- [ ] **Step 1: Write the failing test** (append to the lifecycle test file; it already imports `subprocess`, `pep`, `ped` is imported locally in sibling tests, `LockEntry`/`LockFile`/`write_lock` at module top, and provides `git_sandbox`). NOTE the `git_sandbox.env` loop — `_make_reclone_action.apply()` clones, and `git_sandbox.env` carries the `GIT_AUTHOR_*`/`GIT_COMMITTER_*` identity the conftest scrubs from the ambient environment; without it the clone runs with no git identity:
 
 ```python
 def test_reclone_force_replaces_non_repo_dir(tmp_path, monkeypatch, git_sandbox):
     """#347: a forced reclone over a non-git-repo dir rmtrees it then clones
     (the un-forced _apply would no-op on canonical.exists())."""
     monkeypatch.setenv("HOME", str(tmp_path))
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
     from agent_toolkit_cli import pi_extension_doctor as ped
 
     # A non-repo half-dir squatting the canonical path.
