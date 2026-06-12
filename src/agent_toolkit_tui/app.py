@@ -915,7 +915,14 @@ class TUIApp(App):
                 try:
                     result = agent_install.apply(p, home=effective_home, project=project)
                     ok += len(result.created)
-                except (InstallError, ValueError) as exc:
+                except InstallError as exc:
+                    # #373: the facade seam already prefixed the slug — do not
+                    # double it ("my-agent: my-agent: ...").
+                    errors.append(str(exc))
+                    failed += len(adds)
+                except ValueError as exc:
+                    # A ValueError NOT routed through the seam (e.g. a bad
+                    # scope/home arg) carries no slug — prefix it ourselves.
                     errors.append(f"{slug}: {exc}")
                     failed += len(adds)
 
@@ -943,7 +950,12 @@ class TUIApp(App):
                             "differs) — left in place"
                         )
                     ok += len(removes)
-                except (InstallError, ValueError) as exc:
+                except InstallError as exc:
+                    # #373: seam already prefixed the slug — do not double it.
+                    errors.append(str(exc))
+                    failed += len(removes)
+                except ValueError as exc:
+                    # ValueError bypasses the seam — prefix the slug ourselves.
                     errors.append(f"{slug}: {exc}")
                     failed += len(removes)
 

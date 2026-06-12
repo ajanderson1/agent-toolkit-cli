@@ -406,3 +406,60 @@ def test_expansion_does_not_clobber_foreign_file(tmp_path, monkeypatch):
     with pytest.raises(AgentProjectionConflictError):
         agent_install.apply(p, home=home, project=None)
     assert dest.read_text() == "# the user's own cursor agent\n"
+
+
+def test_apply_install_error_names_slug(tmp_path, monkeypatch):
+    """#373 (gap 2): an adapter InstallError surfaces through apply() with
+    the slug prefixed exactly once."""
+    import pytest
+    from agent_toolkit_cli import agent_install
+    from agent_toolkit_cli._install_core import InstallError, InstallPlan
+    from agent_toolkit_cli.agent_paths import canonical_agent_dir
+    home = tmp_path / "home"
+    home.mkdir()
+    # canonical_agent_dir IGNORES home= at global scope (resolves via
+    # Path.home()) — without this the test writes to the REAL home dir.
+    monkeypatch.setenv("HOME", str(home))
+    canonical = canonical_agent_dir("my-agent", scope="global", home=home)
+    canonical.mkdir(parents=True)
+    # No description → the github-copilot emitter raises (the #370 path).
+    (canonical / "my-agent.md").write_text("Body only, no frontmatter.\n")
+    p = InstallPlan(
+        slug="my-agent", scope="global", source=None, ref=None,
+        add_agents=("github-copilot",), remove_agents=(),
+    )
+    with pytest.raises(InstallError, match=r"^my-agent: github-copilot"):
+        agent_install.apply(p, home=home, project=None)
+
+
+def test_apply_conflict_error_keeps_subtype_through_seam(tmp_path, monkeypatch):
+    """#373: the seam's slug enrichment must preserve
+    AgentProjectionConflictError (the #368 G5 pin asserts the subtype
+    through apply())."""
+    import pytest
+    from agent_toolkit_cli import agent_install
+    from agent_toolkit_cli._install_core import InstallPlan
+    from agent_toolkit_cli.agent_adapters import (
+        AgentProjectionConflictError, translate,
+    )
+    from agent_toolkit_cli.agent_paths import canonical_agent_dir
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    canonical = canonical_agent_dir("my-agent", scope="global", home=home)
+    canonical.mkdir(parents=True)
+    (canonical / "my-agent.md").write_text(
+        "---\nname: my-agent\ndescription: d\n---\nbody\n"
+    )
+    # Plant a divergent foreign file at the gemini-cli destination.
+    dest = translate.adapter_for("gemini-cli").destination(
+        "my-agent", scope="global", home=home,
+    )
+    dest.parent.mkdir(parents=True)
+    dest.write_text("# user-authored\n")
+    p = InstallPlan(
+        slug="my-agent", scope="global", source=None, ref=None,
+        add_agents=("gemini-cli",), remove_agents=(),
+    )
+    with pytest.raises(AgentProjectionConflictError, match=r"^my-agent: "):
+        agent_install.apply(p, home=home, project=None)

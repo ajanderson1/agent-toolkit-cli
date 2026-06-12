@@ -18,6 +18,7 @@ import shutil
 import textwrap
 from pathlib import Path
 
+from agent_toolkit_cli._install_core import InstallError
 from agent_toolkit_cli.agent_adapters import _guard_foreign, _sentinel_path
 from agent_toolkit_cli.skill_agents import UnknownAgentError
 
@@ -37,6 +38,24 @@ def _check_scope(scope: str, harness: str) -> None:
         raise ValueError(
             f"{harness}: scope must be 'global' or 'project', got {scope!r}"
         )
+
+
+def _read_canonical(harness: str, slug: str, content_path: Path) -> str:
+    """Read the canonical agent file, fail-louding as InstallError.
+
+    Missing file and unreadable/non-UTF8 content are data/environment-
+    dependent failures the CLI must surface cleanly (#373; translate F8
+    parity). The message names the harness; the facade seam prefixes the
+    slug."""
+    if not content_path.exists():
+        raise InstallError(
+            f"{harness}: canonical content file missing: "
+            f"{content_path} — re-run `agent add {slug}` to restore it"
+        )
+    try:
+        return content_path.read_text()
+    except (ValueError, OSError) as exc:
+        raise InstallError(f"{harness}: {exc}") from exc
 
 
 def _resolve_base(
@@ -78,11 +97,12 @@ class _AiderDeskAdapter:
     ) -> Path:
         _check_scope(scope, "aider-desk")
         base = _resolve_base("aider-desk", scope, home, project, ".aider-desk")
+        # Read first: a bad canonical aborts before any directory is created.
+        text = _read_canonical("aider-desk", slug, content_path)
         subdir = base / "agents" / slug
         cfg = subdir / "config.json"
         _guard_foreign(cfg, harness="aider-desk", overwrite=overwrite)
         subdir.mkdir(parents=True, exist_ok=True)
-        text = content_path.read_text()
         body = {
             "name": slug,
             "subagent": {"enabled": True},
@@ -143,6 +163,8 @@ class _DextoAdapter:
         if home is None:
             raise ValueError("dexto: scope='global' requires home= argument")
         base = home / ".dexto"
+        # Read first: a bad canonical aborts before any directory is created.
+        source_text = _read_canonical("dexto", slug, content_path)
         subdir = base / "agents" / slug
         yml = subdir / f"{slug}.yml"
         _guard_foreign(yml, harness="dexto", overwrite=overwrite)
@@ -152,7 +174,7 @@ class _DextoAdapter:
         # the prefix to every line, not just the first. Single-line content
         # would also work with naive interpolation, but real agent files are
         # multi-line.
-        source_block = textwrap.indent(content_path.read_text().strip(), "  ")
+        source_block = textwrap.indent(source_text.strip(), "  ")
         yml.write_text(
             f"name: {slug}\n"
             f"description: imported by agent-toolkit-cli\n"
@@ -208,6 +230,8 @@ class _FirebenderAdapter:
     ) -> Path:
         _check_scope(scope, "firebender")
         base = _resolve_base("firebender", scope, home, project, ".firebender")
+        # Read first: a bad canonical aborts before any directory is created.
+        text = _read_canonical("firebender", slug, content_path)
         md = base / "agents" / f"{slug}.md"
         # Guard only our per-slug .md — firebender.json is a shared registry
         # we intentionally append-merge (see below), never clobber.
@@ -216,7 +240,6 @@ class _FirebenderAdapter:
         # Inject callable: true into frontmatter. Spec requires this be true
         # for the agent to be spawnable, so an existing `callable: false` is
         # replaced (NOT preserved) — install always means "make it callable".
-        text = content_path.read_text()
         if text.startswith("---\n"):
             head, _, rest = text[4:].partition("\n---\n")
             # Strip any existing callable: <anything> line, then append true.
@@ -230,7 +253,10 @@ class _FirebenderAdapter:
         # Mutate firebender.json atomically.
         fb_json = base / "firebender.json"
         if fb_json.exists():
-            body = json.loads(fb_json.read_text())
+            try:
+                body = json.loads(fb_json.read_text())
+            except (ValueError, OSError) as exc:
+                raise InstallError(f"firebender: {fb_json}: {exc}") from exc
         else:
             body = {"agents": []}
         # Always store the path relative to `base` — absolute paths in
@@ -267,7 +293,10 @@ class _FirebenderAdapter:
         _sentinel_path(md).unlink(missing_ok=True)
         fb_json = base / "firebender.json"
         if fb_json.exists():
-            body = json.loads(fb_json.read_text())
+            try:
+                body = json.loads(fb_json.read_text())
+            except (ValueError, OSError) as exc:
+                raise InstallError(f"firebender: {fb_json}: {exc}") from exc
             if "agents" in body:
                 body["agents"] = [p for p in body["agents"] if f"{slug}.md" not in p]
             _atomic_write(fb_json, json.dumps(body, indent=2) + "\n")
@@ -307,6 +336,8 @@ class _CodexAdapter:
     ) -> Path:
         _check_scope(scope, "codex")
         base = _resolve_base("codex", scope, home, project, ".codex")
+        # Read first: a bad canonical aborts before any directory is created.
+        source_text = _read_canonical("codex", slug, content_path)
         agents_dir = base / "agents"
         toml_path = agents_dir / f"{slug}.toml"
         # Guard only our per-slug .toml — config.toml is a shared registry
@@ -314,7 +345,6 @@ class _CodexAdapter:
         _guard_foreign(toml_path, harness="codex", overwrite=overwrite)
         agents_dir.mkdir(parents=True, exist_ok=True)
         # Produce a minimal TOML with developer_instructions from content.
-        source_text = content_path.read_text()
         # Escape any triple-quoted strings by using single-quoted TOML multiline.
         escaped = source_text.replace("'''", "''\\''")
         toml_path.write_text(
@@ -324,7 +354,10 @@ class _CodexAdapter:
         # Mutate config.toml: add/update [agents.<slug>] section.
         config_toml = base / "config.toml"
         if config_toml.exists():
-            existing = config_toml.read_text()
+            try:
+                existing = config_toml.read_text()
+            except (ValueError, OSError) as exc:
+                raise InstallError(f"codex: {config_toml}: {exc}") from exc
         else:
             existing = ""
         section_header = f"[agents.{slug}]"
@@ -371,7 +404,10 @@ class _CodexAdapter:
         _sentinel_path(toml_path).unlink(missing_ok=True)
         config_toml = base / "config.toml"
         if config_toml.exists():
-            existing = config_toml.read_text()
+            try:
+                existing = config_toml.read_text()
+            except (ValueError, OSError) as exc:
+                raise InstallError(f"codex: {config_toml}: {exc}") from exc
             cleaned = re.sub(
                 rf"\[agents\.{re.escape(slug)}\][^\[]*",
                 "",

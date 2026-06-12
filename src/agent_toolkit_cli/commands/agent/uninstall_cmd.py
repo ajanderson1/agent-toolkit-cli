@@ -96,8 +96,13 @@ def uninstall_cmd(
     # Pass explicit home=Path.home() for global scope so adapters can resolve
     # {HOME} path templates (home=None causes ValueError in symlink._expand).
     effective_home = home if home is not None else (Path.home() if scope == "global" else None)
-    agent_install.uninstall(
-        slug=slug, scope=scope, home=effective_home, project=project,
-        harnesses=target_harnesses,
-    )
+    try:
+        agent_install.uninstall(
+            slug=slug, scope=scope, home=effective_home, project=project,
+            harnesses=target_harnesses,
+        )
+    except agent_install.InstallError as exc:
+        # #373: data-dependent failure (e.g. corrupt firebender.json) —
+        # clean one-line error, mirroring install_cmd's conversion.
+        raise click.ClickException(str(exc)) from exc
     click.echo(f"uninstalled {slug} [{scope}]")

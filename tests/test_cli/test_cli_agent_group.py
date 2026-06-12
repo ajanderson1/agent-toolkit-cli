@@ -1165,3 +1165,85 @@ def test_agent_bare_push_empty_lock_unchanged(tmp_path, monkeypatch):
     )
     assert result.exit_code == 0, result.output
     assert "not in the" not in result.output
+
+
+def test_install_error_output_names_slug(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#373 (gap 2): the clean CLI error names WHICH agent failed."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    canonical = _seed_global_canonical(tmp_path, slug="no-fm")
+    (canonical / "no-fm.md").write_text("Body only, no frontmatter.\n")
+    _write_global_lock(tmp_path, slug="no-fm")
+
+    r = CliRunner().invoke(main, ["agent", "install", "no-fm", "-g"])
+
+    assert r.exit_code != 0
+    assert "Traceback" not in r.output
+    # #373: pin the EXACT one-line shape "Error: <slug>: <harness>: <cause>"
+    # — slug named once, then the harness that failed (PM review F1: guards
+    # against a regression that doubles or drops the slug).
+    import re
+    assert re.search(
+        r"^Error: no-fm: github-copilot: .*description", r.output, re.MULTILINE
+    ), f"error line not in expected <slug>: <harness>: <cause> shape:\n{r.output}"
+    # Exactly once — not "no-fm: no-fm: ...".
+    assert r.output.count("no-fm") == 1, f"slug duplicated:\n{r.output}"
+
+
+def test_failed_fanout_retry_succeeds_after_fix(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#373 (gap 3, dissolved by #368): a fan-out that fails on one harness
+    leaves sentineled projections behind; fixing the canonical and re-running
+    must succeed — no AgentProjectionConflictError on our own leftovers."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    canonical = _seed_global_canonical(tmp_path, slug="retry-agent")
+    # gemini-cli succeeds without a description; github-copilot requires one
+    # and fails AFTER gemini-cli's file is already on disk.
+    (canonical / "retry-agent.md").write_text(
+        "---\nname: retry-agent\n---\nbody\n"
+    )
+    _write_global_lock(tmp_path, slug="retry-agent")
+
+    r1 = CliRunner().invoke(
+        main,
+        ["agent", "install", "retry-agent", "-g",
+         "--harnesses", "gemini-cli,github-copilot"],
+    )
+    assert r1.exit_code != 0
+    assert "description" in r1.output
+
+    # Fix the canonical, retry the same fan-out.
+    (canonical / "retry-agent.md").write_text(
+        "---\nname: retry-agent\ndescription: now valid\n---\nbody\n"
+    )
+    r2 = CliRunner().invoke(
+        main,
+        ["agent", "install", "retry-agent", "-g",
+         "--harnesses", "gemini-cli,github-copilot"],
+    )
+    assert r2.exit_code == 0, f"retry wedged:\n{r2.output}"
+
+
+def test_uninstall_install_error_clean_message(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#373 (AC6): uninstall converts InstallError to a clean ClickException
+    (the data-dependent path is only reachable via catalog-disabled
+    harnesses today, so simulate it at the facade seam)."""
+    from agent_toolkit_cli import agent_install
+    from agent_toolkit_cli._install_core import InstallError
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    def _boom(**kwargs):
+        raise InstallError("retry-agent: firebender: /x/firebender.json: bad")
+
+    monkeypatch.setattr(agent_install, "uninstall", _boom)
+    r = CliRunner().invoke(main, ["agent", "uninstall", "retry-agent", "-g"])
+
+    assert r.exit_code != 0
+    assert not isinstance(r.exception, InstallError), "raw InstallError escaped"
+    assert "firebender.json" in r.output
+    assert "Traceback" not in r.output

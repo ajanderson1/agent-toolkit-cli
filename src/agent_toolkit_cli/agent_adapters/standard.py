@@ -70,7 +70,7 @@ class _StandardAdapter:
         # as a clean ClickException.
         if not content_path.exists():
             raise InstallError(
-                f"standard: {slug}: canonical content file missing: "
+                f"standard: canonical content file missing: "
                 f"{content_path} — re-run `agent add {slug}` to restore it"
             )
         # Adopt-if-identical (#361): a pre-existing byte-identical file (e.g.

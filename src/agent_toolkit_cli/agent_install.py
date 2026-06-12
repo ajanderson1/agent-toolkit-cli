@@ -308,11 +308,16 @@ def apply(
         except UnsupportedMechanismError:
             skipped.append(name)
             continue
-        out = adapter.install(
-            plan.slug, content_path,
-            scope=plan.scope, home=home, project=project,
-            overwrite=overwrite,
-        )
+        try:
+            out = adapter.install(
+                plan.slug, content_path,
+                scope=plan.scope, home=home, project=project,
+                overwrite=overwrite,
+            )
+        except InstallError as exc:
+            # #373: name the failing slug exactly once, for every mechanism.
+            # type(exc) keeps AgentProjectionConflictError discriminable.
+            raise type(exc)(f"{plan.slug}: {exc}") from exc
         created.append(out)
 
     removed: list[Path] = []
@@ -333,11 +338,14 @@ def apply(
         # #368: every adapter takes canonical_content for ownership-guarded
         # detach (content-match authorizes removing pre-sentinel projections);
         # refusals print their own stderr notice inside the adapter.
-        adapter.uninstall(
-            plan.slug,
-            scope=plan.scope, home=home, project=project,
-            canonical_content=content_path,
-        )
+        try:
+            adapter.uninstall(
+                plan.slug,
+                scope=plan.scope, home=home, project=project,
+                canonical_content=content_path,
+            )
+        except InstallError as exc:
+            raise type(exc)(f"{plan.slug}: {exc}") from exc
 
     # Update lock — agent_path identifies which file was written.
     lock_action: Literal["added", "updated", "unchanged"] = "unchanged"
@@ -503,6 +511,11 @@ def uninstall(
             )
             if refused is not None:
                 refusals.append((name, refused))
+        except InstallError as exc:
+            # #373: slug-prefix the data-dependent failure (e.g. a corrupt
+            # firebender.json) — disjoint from the ValueError no-op below
+            # (InstallError is a RuntimeError).
+            raise type(exc)(f"{slug}: {exc}") from exc
         except ValueError:
             # Adapter can't resolve a destination for these args (e.g. a
             # {HOME}-template harness called with home=None, or dexto at

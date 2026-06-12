@@ -249,3 +249,79 @@ def test_cff_uninstall_accepts_canonical_content_kwarg(tmp_path, fake_content):
             canonical_content=fake_content,
         )
         assert result is None
+
+
+# ---------------------------------------------------------------------------
+# #373: guarded canonical reads — InstallError, never a raw traceback
+# ---------------------------------------------------------------------------
+
+CFF_HARNESSES = ["aider-desk", "codex", "dexto", "firebender"]
+
+
+@pytest.mark.parametrize("harness", CFF_HARNESSES)
+def test_install_missing_canonical_raises_install_error(harness, tmp_path):
+    """#373: missing canonical → InstallError (translate F8 parity), not
+    FileNotFoundError. firebender/codex are catalog-disabled, so construct
+    the adapter directly."""
+    from agent_toolkit_cli._install_core import InstallError
+    from agent_toolkit_cli.agent_adapters import config_file_folder
+    adapter = config_file_folder.adapter_for(harness)
+    missing = tmp_path / "canonical" / "test-agent.md"
+    with pytest.raises(InstallError, match="canonical content file missing"):
+        adapter.install("test-agent", missing, scope="global", home=tmp_path)
+
+
+@pytest.mark.parametrize("harness", CFF_HARNESSES)
+def test_install_non_utf8_canonical_raises_install_error(harness, tmp_path):
+    """#373: non-UTF8 canonical → InstallError, not UnicodeDecodeError."""
+    from agent_toolkit_cli._install_core import InstallError
+    from agent_toolkit_cli.agent_adapters import config_file_folder
+    adapter = config_file_folder.adapter_for(harness)
+    content = tmp_path / "canonical" / "test-agent.md"
+    content.parent.mkdir(parents=True)
+    content.write_bytes(b"\xff\xfe invalid utf8")
+    with pytest.raises(InstallError):
+        adapter.install("test-agent", content, scope="global", home=tmp_path)
+
+
+def test_firebender_install_corrupt_registry_raises_install_error(
+    tmp_path, fake_content
+):
+    """#373 (gap 4): corrupt firebender.json at install → InstallError,
+    not a raw JSONDecodeError traceback."""
+    from agent_toolkit_cli._install_core import InstallError
+    from agent_toolkit_cli.agent_adapters import config_file_folder
+    adapter = config_file_folder.adapter_for("firebender")
+    fb_dir = tmp_path / ".firebender"
+    fb_dir.mkdir()
+    (fb_dir / "firebender.json").write_text("{not json")
+    with pytest.raises(InstallError, match="firebender"):
+        adapter.install("test-agent", fake_content, scope="global", home=tmp_path)
+
+
+def test_firebender_uninstall_corrupt_registry_raises_install_error(
+    tmp_path, fake_content
+):
+    """#373 (gap 4): corrupt firebender.json at uninstall → InstallError."""
+    from agent_toolkit_cli._install_core import InstallError
+    from agent_toolkit_cli.agent_adapters import config_file_folder
+    adapter = config_file_folder.adapter_for("firebender")
+    adapter.install("test-agent", fake_content, scope="global", home=tmp_path)
+    (tmp_path / ".firebender" / "firebender.json").write_text("{not json")
+    with pytest.raises(InstallError, match="firebender"):
+        adapter.uninstall("test-agent", scope="global", home=tmp_path)
+
+
+def test_codex_uninstall_corrupt_config_raises_install_error(
+    tmp_path, fake_content
+):
+    """#373 (gap 4): unreadable config.toml at codex uninstall → InstallError
+    (mirrors the firebender uninstall coverage)."""
+    from agent_toolkit_cli._install_core import InstallError
+    from agent_toolkit_cli.agent_adapters import config_file_folder
+    adapter = config_file_folder.adapter_for("codex")
+    adapter.install("test-agent", fake_content, scope="global", home=tmp_path)
+    # Make the read raise: read_text on a non-UTF8 config.toml.
+    (tmp_path / ".codex" / "config.toml").write_bytes(b"\xff\xfe not utf8")
+    with pytest.raises(InstallError, match="codex"):
+        adapter.uninstall("test-agent", scope="global", home=tmp_path)

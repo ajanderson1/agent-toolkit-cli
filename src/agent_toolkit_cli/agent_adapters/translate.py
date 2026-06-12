@@ -395,17 +395,19 @@ class _TranslateAdapter:
         # parity) BEFORE read_text raises a raw OSError mid-fan-out.
         if not content_path.exists():
             raise InstallError(
-                f"{self.harness}: {slug}: canonical content file missing: "
+                f"{self.harness}: canonical content file missing: "
                 f"{content_path} — re-run `agent add {slug}` to restore it"
             )
-        raw = content_path.read_text()
         try:
+            raw = content_path.read_text()
             fm, body = _parse_frontmatter(raw)
             output = self._emitter(fm, body, slug)
-        except ValueError as exc:
-            # Data-dependent translation failure (missing/invalid frontmatter).
-            # Emitter messages already name the harness and key; InstallError
-            # is what the CLI layer converts to a clean ClickException.
+        except (ValueError, OSError) as exc:
+            # Data/environment-dependent translation failure (non-UTF8 or
+            # unreadable canonical, missing/invalid frontmatter). Emitter
+            # messages already name the harness and key; the facade seam
+            # prefixes the slug (#373); InstallError is what the CLI layer
+            # converts to a clean ClickException.
             raise InstallError(str(exc)) from exc
         # Adopt-if-identical (#368): "identical" for translate means the file
         # matches what the emitter would write NOW (emission-identical) — the
