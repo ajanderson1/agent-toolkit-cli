@@ -303,3 +303,38 @@ def test_clone_url_explicit_sourceurl_not_rewritten(tmp_path: Path, monkeypatch)
     )
     # Explicit sourceUrl wins verbatim — git rewrites natively at clone time.
     assert clone_url_from_entry(e) == "https://github.com/foo/bar.git"
+
+
+# --- #345: SHA-pin discriminator -------------------------------------------
+
+import pytest
+
+from agent_toolkit_cli.skill_lock import is_sha_pinned, looks_like_sha
+
+_SHA = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"  # 40-hex
+
+
+@pytest.mark.parametrize(
+    "source_type,ref,pinned,tracks_branch",
+    [
+        ("npm", _SHA, False, False),        # npm + hex ref: NOT a pin (#386 guard)
+        ("npm", "main", False, False),      # npm + branch: neither (no clone)
+        ("git", _SHA, True, False),         # store-owned + SHA: pinned
+        ("git", "main", False, True),       # store-owned + branch: tracks branch
+        ("git", None, False, True),         # store-owned + None: tracks default
+        ("github", "abc1234", True, False), # short SHA on a git entry: pinned
+    ],
+)
+def test_lockentry_pin_truth_table(source_type, ref, pinned, tracks_branch):
+    entry = LockEntry(source="o/r", source_type=source_type, ref=ref)
+    assert is_sha_pinned(entry) is pinned
+    assert entry.ref_looks_pinned is pinned
+    assert entry.ref_tracks_branch is tracks_branch
+
+
+def test_looks_like_sha_unchanged():
+    assert looks_like_sha(_SHA) is True
+    assert looks_like_sha("abc1234") is True
+    assert looks_like_sha("main") is False
+    assert looks_like_sha(None) is False
+    assert looks_like_sha("g" * 7) is False  # non-hex

@@ -20,12 +20,34 @@ from __future__ import annotations
 import datetime as _dt
 import json
 import os
+import re
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
 CURRENT_VERSION = 1
 SUPPORTED_VERSIONS: tuple[int, ...] = (1, 3)
+
+
+def looks_like_sha(ref: str | None) -> bool:
+    """True when `ref` can only sensibly be a commit SHA (lowercase hex,
+    7-40 chars — git's abbreviated-to-full range).
+
+    Why a heuristic is safe both ways: `git clone --branch` rejects a 40-hex
+    *branch name* anyway, so classifying one as a SHA is strictly more correct;
+    and a short all-hex *tag* classified as a SHA still resolves — fetch_ref +
+    checkout accept tag names too. (Moved verbatim from pi_extension_add, #345.)
+    """
+    return bool(ref) and re.fullmatch(r"[0-9a-f]{7,40}", ref) is not None
+
+
+def is_sha_pinned(entry: "LockEntry") -> bool:
+    """True when the entry's `ref` is a user SHA-pin: a SHA-shaped ref on a
+    store-owned (git-cloned) entry. An npm entry carrying a hex `ref`
+    (hand-edited / future-schema) is NOT a pin — gating on source_type
+    preserves the #386 phantom-pin fix. `upstream_sha` is NEVER consulted:
+    it is the observed tip at add time, not a pin (#330 review)."""
+    return entry.source_type != "npm" and looks_like_sha(entry.ref)
 
 
 @dataclass
@@ -41,6 +63,20 @@ class LockEntry:
     parent_url: str | None = None
     read_only: bool = False
     extras: dict[str, object] = field(default_factory=dict)
+
+    @property
+    def ref_looks_pinned(self) -> bool:
+        """Derived: does `ref` read as a user SHA-pin? Never a persisted
+        field — the lock format is the vercel-labs/skills interop format and
+        we do not add fields to it (#345)."""
+        return is_sha_pinned(self)
+
+    @property
+    def ref_tracks_branch(self) -> bool:
+        """Derived: does this store-owned entry follow a moving branch/tag
+        (or the remote default when ref is None) rather than a fixed SHA?
+        npm entries track nothing here (no clone)."""
+        return self.source_type != "npm" and not looks_like_sha(self.ref)
 
 
 @dataclass
