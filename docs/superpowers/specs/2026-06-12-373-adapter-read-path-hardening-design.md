@@ -45,10 +45,13 @@ except to `(ValueError, OSError)`. `UnicodeDecodeError` and environment
 failures (`PermissionError`) both become `InstallError`. The emitter cannot
 raise `OSError`, so the widened catch stays data/environment-dependent.
 
-Drop the slug from translate's existing F8 missing-file message
+Drop the slug from the existing F8 missing-file messages
 (`{harness}: {slug}: canonical content file missing…` →
-`{harness}: canonical content file missing…`): the seam (§3) now adds the
-slug for every mechanism, and keeping it would double it.
+`{harness}: canonical content file missing…`) in **all three adapters that
+carry it**: `translate.py`, `standard.py:73`, and `symlink.py:150`. The seam
+(§3) now adds the slug for every mechanism, and keeping it would double it —
+on standard (the default fan-out's first adapter) the doubled form would be
+the most common error line in the system.
 
 ### 2. config_file_folder.py — uniform guard across all four adapters
 
@@ -59,11 +62,14 @@ For each adapter's `install()`:
   content file missing: {content_path} — re-run `agent add <slug>` to
   restore it")`.
 - **Wrap the data-dependent reads/parses** in
-  `except (ValueError, OSError) as exc: raise InstallError(f"{harness}:
-  {exc}") from exc`:
-  - `content_path.read_text()` (all four),
-  - firebender's `json.loads(fb_json.read_text())`,
-  - codex's `config_toml.read_text()`.
+  `except (ValueError, OSError) as exc: raise InstallError(...) from exc`:
+  - `content_path.read_text()` (all four) — message `f"{harness}: {exc}"`
+    (read errors already name the file themselves);
+  - firebender's `json.loads(fb_json.read_text())` and codex's
+    `config_toml.read_text()` — message `f"{harness}: {path}: {exc}"`,
+    **including the registry/config file path**: a `JSONDecodeError` says
+    nothing about which file is corrupt, and "which file do I fix" is
+    exactly what the user needs from this error.
 
 firebender's `uninstall()` registry read (`json.loads(fb_json.read_text())`)
 gets the same wrap — a corrupt `firebender.json` must not raw-traceback an
@@ -90,9 +96,11 @@ Catch **only `InstallError`** — unexpected exceptions still traceback
 current and future; adapters never format it themselves.
 
 `AgentProjectionConflictError` is an `InstallError` subclass — re-raising as
-plain `InstallError` would erase the subtype, which callers (e.g. the TUI
-and #368's adoption flow) discriminate on. Hence `type(exc)(...)`, not
-`InstallError(...)`.
+plain `InstallError` would erase the subtype, which is pinned as the public
+adapters API surface: the #368 G5 test
+(`test_expansion_does_not_clobber_foreign_file` in
+`tests/test_cli/test_agent_install.py`) asserts the subtype **through
+apply()**. Hence `type(exc)(...)`, not `InstallError(...)`.
 
 ### 4. Non-goals / out of scope
 
@@ -123,7 +131,8 @@ All RED-first (TDD):
 3. firebender (direct adapter test — catalog-disabled, so construct via
    `config_file_folder.adapter_for("firebender")`): corrupt
    `firebender.json` at install → `InstallError`; corrupt at uninstall →
-   `InstallError`.
+   `InstallError`. codex: unreadable `config.toml` at uninstall →
+   `InstallError` (mirrors the firebender uninstall coverage).
 4. Seam: multi-harness fan-out where one harness fails → error message names
    the slug; conflict errors keep their `AgentProjectionConflictError` type
    through the seam.

@@ -12,10 +12,12 @@
 
 ---
 
-### Task 1: translate — read inside the wrap, slug out of the F8 message
+### Task 1: translate — read inside the wrap, slug out of the F8 messages
 
 **Files:**
 - Modify: `src/agent_toolkit_cli/agent_adapters/translate.py:396-409` (install(): F8 guard + read + try block)
+- Modify: `src/agent_toolkit_cli/agent_adapters/standard.py:73` (F8 message slug-drop)
+- Modify: `src/agent_toolkit_cli/agent_adapters/symlink.py:150` (F8 message slug-drop)
 - Test: `tests/test_cli/test_agent_adapters/test_translate.py`
 
 - [ ] **Step 1: Write the failing test** (append near `test_install_missing_canonical_raises_install_error`):
@@ -82,16 +84,45 @@ read moved inside the try; except widened to catch `UnicodeDecodeError`
             raise InstallError(str(exc)) from exc
 ```
 
-- [ ] **Step 4: Run the translate test file**
+- [ ] **Step 4: Drop the slug from the standard + symlink F8 messages too.**
+The Task-4 seam prefixes the slug for EVERY mechanism; these two adapters
+carry the same `{slug}:`-embedding F8 message and would print it doubled
+(`my-agent: standard: my-agent: canonical…`) — and standard is the default
+fan-out's first adapter, so this is the most common path. The existing
+tests (`test_symlink.py`, `test_translate.py`) match only the
+`"canonical content file missing"` suffix, so this is test-safe.
 
-Run: `uv run pytest tests/test_cli/test_agent_adapters/test_translate.py -v`
-Expected: ALL PASS (the existing F8 test matches on `"canonical content file missing"`, which survives the message change).
+In `src/agent_toolkit_cli/agent_adapters/standard.py:73`, change:
 
-- [ ] **Step 5: Commit**
+```python
+                f"standard: {slug}: canonical content file missing: "
+```
+to:
+```python
+                f"standard: canonical content file missing: "
+```
+
+In `src/agent_toolkit_cli/agent_adapters/symlink.py:150`, change:
+
+```python
+                f"{self.harness}: {slug}: canonical content file missing: "
+```
+to:
+```python
+                f"{self.harness}: canonical content file missing: "
+```
+
+(Both keep the trailing ``re-run `agent add {slug}` to restore it`` hint.)
+
+- [ ] **Step 5: Run the adapter test files**
+
+Run: `uv run pytest tests/test_cli/test_agent_adapters/ -v`
+Expected: ALL PASS (the existing F8 tests match on `"canonical content file missing"`, which survives the message change).
+
+- [ ] **Step 6: Commit**
 
 ```bash
-git add tests/test_cli/test_agent_adapters/test_translate.py src/agent_toolkit_cli/agent_adapters/translate.py
-git commit --only tests/test_cli/test_agent_adapters/test_translate.py --only src/agent_toolkit_cli/agent_adapters/translate.py -m "fix(agent): translate canonical read inside the InstallError wrap (#373)"
+git commit --only tests/test_cli/test_agent_adapters/test_translate.py --only src/agent_toolkit_cli/agent_adapters/translate.py --only src/agent_toolkit_cli/agent_adapters/standard.py --only src/agent_toolkit_cli/agent_adapters/symlink.py -m "fix(agent): translate canonical read inside the InstallError wrap (#373)"
 ```
 
 ---
@@ -202,7 +233,7 @@ git commit --only tests/test_cli/test_agent_adapters/test_config_file_folder.py 
 ### Task 3: firebender registry + codex config.toml reads
 
 **Files:**
-- Modify: `src/agent_toolkit_cli/agent_adapters/config_file_folder.py` (firebender install ~:233, firebender uninstall ~:270, codex install ~:327)
+- Modify: `src/agent_toolkit_cli/agent_adapters/config_file_folder.py` (firebender install ~:233, firebender uninstall ~:270, codex install ~:327, codex uninstall ~:374)
 - Test: `tests/test_cli/test_agent_adapters/test_config_file_folder.py`
 
 - [ ] **Step 1: Write the failing tests:**
@@ -239,12 +270,26 @@ def test_firebender_uninstall_corrupt_registry_raises_install_error(tmp_path):
     (tmp_path / ".firebender" / "firebender.json").write_text("{not json")
     with pytest.raises(InstallError, match="firebender"):
         adapter.uninstall("test-agent", scope="global", home=tmp_path)
+
+
+def test_codex_uninstall_corrupt_config_raises_install_error(tmp_path):
+    """#373 (gap 4): corrupt config.toml at codex uninstall → InstallError
+    (mirrors the firebender uninstall coverage)."""
+    from agent_toolkit_cli._install_core import InstallError
+    from agent_toolkit_cli.agent_adapters import config_file_folder
+    adapter = config_file_folder.adapter_for("codex")
+    adapter.install("test-agent", _fb_content(tmp_path),
+                    scope="global", home=tmp_path)
+    # Make the read raise: read_text on a non-UTF8 config.toml.
+    (tmp_path / ".codex" / "config.toml").write_bytes(b"\xff\xfe not utf8")
+    with pytest.raises(InstallError, match="codex"):
+        adapter.uninstall("test-agent", scope="global", home=tmp_path)
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `uv run pytest tests/test_cli/test_agent_adapters/test_config_file_folder.py -k corrupt_registry -v`
-Expected: 2 FAIL with raw `json.decoder.JSONDecodeError`.
+Run: `uv run pytest tests/test_cli/test_agent_adapters/test_config_file_folder.py -k "corrupt_registry or corrupt_config" -v`
+Expected: 3 FAIL with raw `json.decoder.JSONDecodeError` / `UnicodeDecodeError`.
 
 - [ ] **Step 3: Implement.** In `config_file_folder.py`, wrap the three
 registry/config reads (JSONDecodeError is a ValueError subclass):
@@ -308,8 +353,22 @@ with:
             existing = ""
 ```
 
-(codex `uninstall()`'s `config_toml.read_text()` at ~:374 gets the identical
-wrap, same message shape — uninstall must not raw-traceback either.)
+codex `uninstall()` (~:374) — uninstall must not raw-traceback either; replace:
+
+```python
+        if config_toml.exists():
+            existing = config_toml.read_text()
+```
+
+with:
+
+```python
+        if config_toml.exists():
+            try:
+                existing = config_toml.read_text()
+            except (ValueError, OSError) as exc:
+                raise InstallError(f"codex: {config_toml}: {exc}") from exc
+```
 
 - [ ] **Step 4: Run the cff test file**
 
@@ -334,7 +393,9 @@ git commit --only tests/test_cli/test_agent_adapters/test_config_file_folder.py 
 - [ ] **Step 1: Write the failing seam tests** (append to `tests/test_cli/test_agent_install.py`; follow that file's existing fixture style for plan construction — it already builds `InstallPlan` objects and calls `agent_install.apply`):
 
 ```python
-def test_apply_install_error_names_slug(tmp_path):
+def test_apply_install_error_names_slug(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+):
     """#373 (gap 2): an adapter InstallError surfaces through apply() with
     the slug prefixed exactly once."""
     import pytest
@@ -342,6 +403,9 @@ def test_apply_install_error_names_slug(tmp_path):
     from agent_toolkit_cli._install_core import InstallError, InstallPlan
     from agent_toolkit_cli.agent_paths import canonical_agent_dir
 
+    # canonical_agent_dir IGNORES home= at global scope (resolves via
+    # Path.home()) — without this the test writes to the REAL home dir.
+    monkeypatch.setenv("HOME", str(tmp_path))
     canonical = canonical_agent_dir("my-agent", scope="global", home=tmp_path)
     canonical.mkdir(parents=True)
     # No description → the github-copilot emitter raises (the #370 path).
@@ -355,9 +419,12 @@ def test_apply_install_error_names_slug(tmp_path):
         agent_install.apply(plan, home=tmp_path, project=None)
 
 
-def test_apply_conflict_error_keeps_subtype_through_seam(tmp_path):
+def test_apply_conflict_error_keeps_subtype_through_seam(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+):
     """#373: the seam's slug enrichment must preserve
-    AgentProjectionConflictError (callers discriminate on the subtype)."""
+    AgentProjectionConflictError (the existing #368 G5 pin asserts the
+    subtype through apply())."""
     import pytest
     from agent_toolkit_cli import agent_install
     from agent_toolkit_cli._install_core import InstallPlan
@@ -366,6 +433,7 @@ def test_apply_conflict_error_keeps_subtype_through_seam(tmp_path):
     )
     from agent_toolkit_cli.agent_paths import canonical_agent_dir
 
+    monkeypatch.setenv("HOME", str(tmp_path))
     canonical = canonical_agent_dir("my-agent", scope="global", home=tmp_path)
     canonical.mkdir(parents=True)
     (canonical / "my-agent.md").write_text(
@@ -425,7 +493,12 @@ and the remove call (`:336`):
 ```
 
 In `agent_install.uninstall()` (the direct loop the CLI uses), apply the same
-wrap around its `adapter.uninstall(...)` call.
+wrap around its `adapter.uninstall(...)` call. NOTE: that loop already has
+exception handling around the adapter call (an existing
+`except ValueError: continue`) — INTEGRATE the new `except InstallError`
+clause into the existing try (InstallError is not a ValueError, so the
+clauses are disjoint; order them InstallError-first for clarity). Do not
+paste a nested try.
 
 In `commands/agent/uninstall_cmd.py`, import `InstallError` from
 `agent_toolkit_cli._install_core` and wrap the `agent_install.uninstall(...)`
@@ -444,7 +517,11 @@ call exactly as `install_cmd.py:162-164` does:
 (Adjust to the actual call shape in the file — only the try/except is new;
 keep whatever the result variable is currently named.)
 
-- [ ] **Step 4: Write the failing CLI test** (append to `tests/test_cli/test_cli_agent_group.py`, next to `test_default_fanout_missing_description_clean_error`, reusing its helpers):
+- [ ] **Step 4: Write the CLI regression test** (it was RED before Step 3 and
+passes on the Step-3 tree — do NOT expect to prove RED here; the seam tests
+in Steps 1–2 carried the RED proof). Append to
+`tests/test_cli/test_cli_agent_group.py`, next to
+`test_default_fanout_missing_description_clean_error`, reusing its helpers:
 
 ```python
 def test_install_error_output_names_slug(
