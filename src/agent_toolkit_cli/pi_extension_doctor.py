@@ -336,7 +336,7 @@ def _make_relink_action(*, link: Path, canonical: Path) -> FixAction:
     )
 
 
-def _make_reclone_action(*, slug: str, entry: object) -> FixAction:
+def _make_reclone_action(*, slug: str, entry: object, force: bool = False) -> FixAction:
     """Re-clone the store copy from the lock entry's source.
 
     Pin ONLY when the entry's `ref` is a SHA — NEVER from `upstream_sha`,
@@ -358,7 +358,11 @@ def _make_reclone_action(*, slug: str, entry: object) -> FixAction:
 
     def _apply() -> None:
         if canonical.exists():
-            return  # idempotent
+            if not force:
+                return  # idempotent (missing_canonical: a race re-created it)
+            # half_dir (#347): a non-repo dir is squatting the path — remove
+            # it so the clone below has a clean target.
+            shutil.rmtree(canonical, ignore_errors=True)
         canonical.parent.mkdir(parents=True, exist_ok=True)
         skill_git.clone(source, canonical, ref=clone_ref, env=None)
         if pin_sha and skill_git.is_git_repo(canonical):

@@ -721,3 +721,29 @@ def test_status_unpinned_has_empty_pin_field(tmp_path, monkeypatch, git_sandbox)
     assert len(fields) == 4
     assert fields[-1] == ""
     assert "pinned:" not in line
+
+
+def test_reclone_force_replaces_non_repo_dir(tmp_path, monkeypatch, git_sandbox):
+    """#347: a forced reclone over a non-git-repo dir rmtrees it then clones
+    (the un-forced _apply would no-op on canonical.exists())."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    from agent_toolkit_cli import pi_extension_doctor as ped
+
+    # A non-repo half-dir squatting the canonical path.
+    canonical = pep.library_pi_extension_path("demo", env={})
+    canonical.mkdir(parents=True)
+    (canonical / "JUNK.md").write_text("leftover\n")
+    assert not (canonical / ".git").exists()
+
+    entry = LockEntry(
+        source=str(git_sandbox.upstream), source_type="git",
+        ref=None, pi_extension_path="demo", upstream_sha=None,
+    )
+    action = ped._make_reclone_action(slug="demo", entry=entry, force=True)
+    action.apply()
+
+    # Now a real git repo, junk gone.
+    assert (canonical / ".git").exists()
+    assert not (canonical / "JUNK.md").exists()
