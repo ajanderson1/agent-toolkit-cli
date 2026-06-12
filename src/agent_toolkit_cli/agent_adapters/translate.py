@@ -12,11 +12,12 @@ from __future__ import annotations
 import json
 import os
 import re
+import sys
 from pathlib import Path
 from typing import Any, Callable
 
 from agent_toolkit_cli._install_core import InstallError
-from agent_toolkit_cli.agent_adapters import _guard_foreign
+from agent_toolkit_cli.agent_adapters import _guard_foreign, _sentinel_path
 from agent_toolkit_cli.skill_agents import UnknownAgentError
 
 
@@ -390,7 +391,13 @@ class _TranslateAdapter:
         overwrite: bool = False,
     ) -> Path:
         dest = self._resolve_dest(slug, scope=scope, home=home, project=project)
-        _guard_foreign(dest, harness=self.harness, overwrite=overwrite)
+        # Fail loud on a missing canonical content file (standard-adapter F8
+        # parity) BEFORE read_text raises a raw OSError mid-fan-out.
+        if not content_path.exists():
+            raise InstallError(
+                f"{self.harness}: {slug}: canonical content file missing: "
+                f"{content_path} — re-run `agent add {slug}` to restore it"
+            )
         raw = content_path.read_text()
         try:
             fm, body = _parse_frontmatter(raw)
@@ -400,9 +407,41 @@ class _TranslateAdapter:
             # Emitter messages already name the harness and key; InstallError
             # is what the CLI layer converts to a clean ClickException.
             raise InstallError(str(exc)) from exc
+        # Adopt-if-identical (#368): "identical" for translate means the file
+        # matches what the emitter would write NOW (emission-identical) — the
+        # destination never holds the canonical bytes. Compare BYTES, not
+        # decoded text: a foreign non-UTF8 file at the destination must route
+        # to the conflict branch below, not raise UnicodeDecodeError.
+        if dest.exists() and not dest.is_symlink() and dest.read_bytes() == output.encode():
+            _sentinel_path(dest).write_text("")
+            return dest
+        # Ownership = SENTINEL, not lock (#368, standard-adapter parity; G5).
+        _guard_foreign(dest, harness=self.harness, overwrite=False)
         dest.parent.mkdir(parents=True, exist_ok=True)
+        # Replace, never write through, a symlink at the slot (F6 parity).
+        if dest.is_symlink():
+            dest.unlink()
         dest.write_text(output)
+        _sentinel_path(dest).write_text("")
         return dest
+
+    def _emitted_or_none(
+        self, canonical_content: Path | None, slug: str,
+    ) -> str | None:
+        """Re-run the emitter over the canonical for content-match detach.
+        Any failure (absent file, unreadable, emitter ValueError) returns
+        None — uninstall must never crash computing ownership; the sidecar
+        alone then decides."""
+        if canonical_content is None or not canonical_content.exists():
+            return None
+        try:
+            fm, body = _parse_frontmatter(canonical_content.read_text())
+            return self._emitter(fm, body, slug)
+        except Exception:  # noqa: BLE001
+            # Ownership probe must never propagate — any emitter or I/O failure
+            # (ValueError, OSError, TypeError from unhashable frontmatter values,
+            # etc.) is treated as "cannot confirm ownership; fall back to sentinel."
+            return None
 
     def uninstall(
         self,
@@ -411,10 +450,39 @@ class _TranslateAdapter:
         scope: str,
         home: Path | None = None,
         project: Path | None = None,
-    ) -> None:
+        canonical_content: Path | None = None,
+    ) -> Path | None:
+        """Ownership-guarded detach (#368): unlink when the sentinel exists
+        OR the file matches what the emitter would write now (covers
+        pre-sentinel installs). Foreign files are left in place and returned
+        as a structured refusal. The sidecar is removed whenever the file is
+        gone (orphan hygiene — translate previously cleaned nothing)."""
         dest = self._resolve_dest(slug, scope=scope, home=home, project=project)
+        sentinel = _sentinel_path(dest)
+        refused: Path | None = None
         if dest.exists() or dest.is_symlink():
-            dest.unlink()
+            owned = sentinel.exists()
+            if not owned and not dest.is_symlink():
+                expected = self._emitted_or_none(canonical_content, slug)
+                # Bytes compare + OSError guard: a foreign non-UTF8 or
+                # unreadable file must refuse, never crash the detach.
+                try:
+                    owned = (expected is not None
+                             and dest.read_bytes() == expected.encode())
+                except OSError:
+                    owned = False
+            if owned:
+                dest.unlink()
+            else:
+                refused = dest
+                print(
+                    f"{self.harness}: {dest} not managed by this tool "
+                    f"(no sentinel, content differs) — left in place",
+                    file=sys.stderr,
+                )
+        if sentinel.exists() and not dest.exists():
+            sentinel.unlink()
+        return refused
 
 
 def adapter_for(harness: str) -> _TranslateAdapter:

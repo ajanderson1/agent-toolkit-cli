@@ -152,21 +152,20 @@ class AgentAdapter(Protocol):
         scope: str,
         home: Path | None = None,
         project: Path | None = None,
+        canonical_content: Path | None = None,
     ) -> Path | None:
         """Remove the projection. Idempotent.
 
-        Returns None normally. The standard adapter (#361) returns the
-        destination Path when it REFUSED to remove a non-owned slot file
-        (structured refusal, PM review F5) so callers can surface the
-        left-in-place file; other adapters always return None.
+        Ownership-guarded for the standard/symlink/translate mechanisms
+        (#361/#368): the projection is unlinked only when its `.attk`
+        sidecar exists OR the file matches what install would write from
+        `canonical_content` (content-match detach for pre-sentinel
+        installs). A foreign file is left in place and its path returned
+        as a structured refusal; None means removed or absent.
 
-        The standard adapter additionally accepts an optional
-        `canonical_content: Path | None` keyword beyond this Protocol: the
-        facade threads the scope's canonical `<slug>.md` so a sentinel-less
-        slot that still byte-matches the canonical (a pre-#361 claude-code
-        install) is recognised as tool-owned and detached. Other adapters do
-        not take the kwarg; the facade only passes it when dispatching to
-        the standard adapter.
+        config_file_folder adapters accept `canonical_content` for Protocol
+        uniformity but ignore it — their removal semantics (per-slug
+        subdir/registry cleanup) are unchanged and always return None.
         """
         ...
 

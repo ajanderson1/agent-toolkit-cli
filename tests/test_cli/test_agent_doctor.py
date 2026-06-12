@@ -365,18 +365,20 @@ def test_doctor_cursor_shadow_divergent_copy_report_only(
     assert f.slug == "demo-agent"
     assert f.path == cursor_dest
     assert "shadows" in f.detail, f.detail
-    # Accurate remediation guidance, no automatic fix.
-    assert "agent uninstall" in f.detail
-    assert "--harnesses cursor" in f.detail
+    # Accurate remediation guidance, no automatic fix. Manual removal is the
+    # ONLY honest suggestion (#368 review F4): the guarded uninstall refuses
+    # exactly this sentinel-less + divergent class.
+    assert "remove the file manually" in f.detail
+    assert "--harnesses cursor" not in f.detail  # the old dead-end suggestion
     assert f.fix_action is None
     assert cursor_dest.exists()
 
 
-def test_doctor_cursor_shadow_sentineled_no_longer_special(
+def test_doctor_cursor_shadow_with_sentinel_offers_removal_fix(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A hand-made sentinel next to the cursor copy changes nothing: the
-    finding is the same report-only shape (no removal fix)."""
+    """#368: the .attk sidecar proves the tool wrote the cursor copy — the
+    finding now carries a fix_action that removes file AND sidecar."""
     monkeypatch.setenv("HOME", str(tmp_path))
     _seed_locked_slug_with_matching_slot(tmp_path)
     cursor_dest = _write_cursor_file(tmp_path, _DIVERGED, sentinel=True)
@@ -384,16 +386,20 @@ def test_doctor_cursor_shadow_sentineled_no_longer_special(
     findings = _diagnose(slugs=None, scope="global", home=tmp_path, project=None)
     shadows = _by_type(findings, "cursor-shadow")
     assert len(shadows) == 1, [f.finding_type for f in findings]
-    assert shadows[0].fix_action is None
-    assert cursor_dest.exists()
+    f = shadows[0]
+    assert f.fix_action is not None
+    assert "tool-installed" in f.detail
+    f.fix_action.apply()
+    assert not cursor_dest.exists()
+    assert not _sentinel_path(cursor_dest).exists()
 
 
-def test_doctor_cursor_shadow_via_real_adapter_is_report_only(
+def test_doctor_cursor_shadow_via_real_adapter_offers_fix(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """F2 pin (PM adversarial review): exercise the shadow through the REAL
-    cursor adapter (which writes copy2 + NO sentinel) — the finding must fire
-    as report-only without any hand-manufactured sentinel."""
+    """#368 (was the F2 pin): exercise the shadow through the REAL cursor
+    adapter — it now writes the ownership sentinel, so the finding carries
+    the sentinel-gated removal fix; exit semantics stay informational."""
     from agent_toolkit_cli.agent_adapters import get_adapter
 
     monkeypatch.setenv("HOME", str(tmp_path))
@@ -404,8 +410,8 @@ def test_doctor_cursor_shadow_via_real_adapter_is_report_only(
         "demo-agent", canonical / "demo-agent.md",
         scope="global", home=tmp_path,
     )
-    assert not _sentinel_path(cursor_dest).exists(), (
-        "premise: the real cursor adapter writes no ownership sentinel"
+    assert _sentinel_path(cursor_dest).exists(), (
+        "premise (#368): the real cursor adapter writes the ownership sentinel"
     )
     # ...then the canonical moves on and the slot is re-seeded — the cursor
     # copy is now a stale shadow.
@@ -417,13 +423,44 @@ def test_doctor_cursor_shadow_via_real_adapter_is_report_only(
     assert len(shadows) == 1, [f.finding_type for f in findings]
     f = shadows[0]
     assert f.path == cursor_dest
-    assert f.fix_action is None
+    assert f.fix_action is not None
     assert cursor_dest.exists()
 
     # Informational: the shadow alone must not fail the doctor exit code.
     r = CliRunner().invoke(main, ["agent", "doctor", "-g", "--no-fix"])
     assert r.exit_code == 0, r.output
     assert "cursor-shadow" in r.output
+
+
+def test_doctor_cursor_shadow_fix_applies_on_y(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#368 end-to-end: answering y removes the shadowing file + sidecar,
+    and the run still exits 0 (informational, no actionable findings)."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _seed_locked_slug_with_matching_slot(tmp_path)
+    cursor_dest = _write_cursor_file(tmp_path, _DIVERGED, sentinel=True)
+
+    r = CliRunner().invoke(main, ["agent", "doctor", "-g"], input="y\n")
+    assert r.exit_code == 0, r.output
+    assert not cursor_dest.exists()
+    assert not _sentinel_path(cursor_dest).exists()
+
+
+def test_doctor_cursor_shadow_fix_decline_keeps_exit_zero(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#368 (F1 guard): declining the informational fix must NOT count as
+    'skipped' (which drives exit 1) — doctor exits 0 and prints the clean
+    verdict when no actionable findings exist."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _seed_locked_slug_with_matching_slot(tmp_path)
+    cursor_dest = _write_cursor_file(tmp_path, _DIVERGED, sentinel=True)
+
+    r = CliRunner().invoke(main, ["agent", "doctor", "-g"], input="N\n")
+    assert r.exit_code == 0, r.output
+    assert "all clean" in r.output
+    assert cursor_dest.exists()
 
 
 def test_doctor_cursor_shadow_identical_copy_is_clean(

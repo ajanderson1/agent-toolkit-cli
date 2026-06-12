@@ -330,19 +330,14 @@ def apply(
             adapter = agent_adapters.get_adapter(name)
         except UnsupportedMechanismError:
             continue
-        if name == "standard":
-            # Ownership-guarded detach: the canonical content authorizes
-            # removal of a sentinel-less pre-#361 slot (see adapter docstring).
-            adapter.uninstall(
-                plan.slug,
-                scope=plan.scope, home=home, project=project,
-                canonical_content=content_path,
-            )
-        else:
-            adapter.uninstall(
-                plan.slug,
-                scope=plan.scope, home=home, project=project,
-            )
+        # #368: every adapter takes canonical_content for ownership-guarded
+        # detach (content-match authorizes removing pre-sentinel projections);
+        # refusals print their own stderr notice inside the adapter.
+        adapter.uninstall(
+            plan.slug,
+            scope=plan.scope, home=home, project=project,
+            canonical_content=content_path,
+        )
 
     # Update lock — agent_path identifies which file was written.
     lock_action: Literal["added", "updated", "unchanged"] = "unchanged"
@@ -451,10 +446,11 @@ def uninstall(
     library."). The destructive path lives in `remove()`.
 
     Returns the refusals as (harness, dest) pairs (PM review F5): the
-    standard adapter REFUSES to unlink a sentinel-less, content-divergent
-    slot file (it is the user's) — a structured return lets callers like the
-    TUI surface the left-in-place file instead of silently counting it as
-    removed. Empty tuple = everything requested was removed or absent.
+    standard/symlink/translate adapters REFUSE to unlink a sentinel-less,
+    content-divergent destination file (it is the user's) — a structured
+    return lets callers like the TUI surface the left-in-place file instead
+    of silently counting it as removed. Empty tuple = everything requested
+    was removed or absent.
 
     The agent asset type cannot rely on the core's symlink-at-skill-path scan to
     discover projections: adapters write REAL FILES, so the scan returned ()
@@ -467,8 +463,9 @@ def uninstall(
     """
     from agent_toolkit_cli.agent_adapters import UnsupportedMechanismError
 
-    # #361: the standard adapter's detach is ownership-guarded — the scope's
-    # canonical <slug>.md authorizes removing a sentinel-less pre-#361 slot.
+    # #361/#368: every file-writing adapter's detach is ownership-guarded —
+    # the scope's canonical <slug>.md authorizes removing a sentinel-less
+    # pre-sentinel projection (content-match detach).
     canonical_content: Path | None
     try:
         canonical_content = canonical_agent_dir(
@@ -500,15 +497,12 @@ def uninstall(
         except (UnsupportedMechanismError, _UnknownAgentError):
             continue
         try:
-            if name == "standard":
-                refused = adapter.uninstall(
-                    slug, scope=scope, home=home, project=project,
-                    canonical_content=canonical_content,
-                )
-                if refused is not None:
-                    refusals.append((name, refused))
-            else:
-                adapter.uninstall(slug, scope=scope, home=home, project=project)
+            refused = adapter.uninstall(
+                slug, scope=scope, home=home, project=project,
+                canonical_content=canonical_content,
+            )
+            if refused is not None:
+                refusals.append((name, refused))
         except ValueError:
             # Adapter can't resolve a destination for these args (e.g. a
             # {HOME}-template harness called with home=None, or dexto at

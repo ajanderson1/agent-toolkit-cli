@@ -187,3 +187,65 @@ def test_firebender_project_scope_stores_relative_path_in_json(tmp_path, fake_co
         assert not p.startswith("/"), f"absolute path in firebender.json: {p}"
         assert str(project) not in p, f"project root leaked into entry: {p}"
         assert p.startswith("agents/"), f"expected 'agents/<slug>.md', got: {p}"
+
+
+# ── #368: codex/firebender sentinel write + cleanup ──────────────────────
+
+def test_codex_install_writes_sentinel_and_uninstall_cleans_it(tmp_path, fake_content):
+    """#368: codex's per-slug .toml gets the .attk sidecar; uninstall removes it."""
+    from agent_toolkit_cli.agent_adapters import _sentinel_path, config_file_folder
+    adapter = config_file_folder.adapter_for("codex")
+    dest = adapter.install("test-agent", fake_content, scope="global", home=tmp_path)
+    sidecar = _sentinel_path(dest)
+    assert sidecar.exists()
+    adapter.uninstall("test-agent", scope="global", home=tmp_path)
+    assert not dest.exists()
+    assert not sidecar.exists(), "orphaned .attk after codex uninstall"
+
+
+def test_codex_reinstall_self_authorizes_via_sentinel(tmp_path, fake_content):
+    """#368 (F3): a second install over our own .toml succeeds with
+    overwrite=False — the sidecar authorizes it."""
+    from agent_toolkit_cli.agent_adapters import config_file_folder
+    adapter = config_file_folder.adapter_for("codex")
+    adapter.install("test-agent", fake_content, scope="global", home=tmp_path)
+    # No lock, no overwrite flag — must not raise:
+    adapter.install("test-agent", fake_content, scope="global", home=tmp_path)
+
+
+def test_firebender_install_writes_sentinel_and_uninstall_cleans_it(tmp_path, fake_content):
+    """#368: firebender's per-slug .md gets the .attk sidecar; uninstall removes it."""
+    from agent_toolkit_cli.agent_adapters import _sentinel_path, config_file_folder
+    adapter = config_file_folder.adapter_for("firebender")
+    dest = adapter.install("test-agent", fake_content, scope="global", home=tmp_path)
+    sidecar = _sentinel_path(dest)
+    assert sidecar.exists()
+    adapter.uninstall("test-agent", scope="global", home=tmp_path)
+    assert not dest.exists()
+    assert not sidecar.exists(), "orphaned .attk after firebender uninstall"
+
+
+def test_codex_uninstall_cleans_orphan_sidecar(tmp_path, fake_content):
+    """#368 review F3: the per-slug file deleted out-of-band must not strand
+    its sidecar — an orphan .attk would authorize a future silent clobber."""
+    from agent_toolkit_cli.agent_adapters import _sentinel_path, config_file_folder
+    adapter = config_file_folder.adapter_for("codex")
+    dest = adapter.install("test-agent", fake_content, scope="global", home=tmp_path)
+    dest.unlink()  # user removes the projection by hand
+    assert _sentinel_path(dest).exists()
+    adapter.uninstall("test-agent", scope="global", home=tmp_path)
+    assert not _sentinel_path(dest).exists(), "orphan sidecar survived uninstall"
+
+
+def test_cff_uninstall_accepts_canonical_content_kwarg(tmp_path, fake_content):
+    """#368 Protocol uniformity: all four cff adapters tolerate the kwarg
+    (and ignore it — their removal semantics are out of scope)."""
+    from agent_toolkit_cli.agent_adapters import config_file_folder
+    for harness in ("aider-desk", "codex", "dexto", "firebender"):
+        adapter = config_file_folder.adapter_for(harness)
+        adapter.install("test-agent", fake_content, scope="global", home=tmp_path)
+        result = adapter.uninstall(
+            "test-agent", scope="global", home=tmp_path,
+            canonical_content=fake_content,
+        )
+        assert result is None

@@ -6,10 +6,13 @@ returns a Protocol-conforming object with install/uninstall.
 """
 from __future__ import annotations
 
+import filecmp
 import os
 import shutil
+import sys
 from pathlib import Path
 
+from agent_toolkit_cli._install_core import InstallError
 from agent_toolkit_cli.agent_adapters import _guard_foreign, _sentinel_path
 from agent_toolkit_cli.skill_agents import UnknownAgentError
 
@@ -140,9 +143,32 @@ class _SymlinkAdapter:
         overwrite: bool = False,
     ) -> Path:
         dest = self._resolve_dest(slug, scope=scope, home=home, project=project)
-        _guard_foreign(dest, harness=self.harness, overwrite=overwrite)
+        # Fail loud on a missing canonical content file (standard-adapter F8
+        # parity) BEFORE filecmp/copy2 raises a raw OSError mid-fan-out.
+        if not content_path.exists():
+            raise InstallError(
+                f"{self.harness}: {slug}: canonical content file missing: "
+                f"{content_path} — re-run `agent add {slug}` to restore it"
+            )
+        # Adopt-if-identical (#368): a pre-existing byte-identical file (e.g.
+        # a pre-sentinel install by this tool) becomes tool-owned.
+        if dest.exists() and not dest.is_symlink() and filecmp.cmp(
+            content_path, dest, shallow=False,
+        ):
+            _sentinel_path(dest).write_text("")
+            return dest
+        # Ownership = SENTINEL, not lock (#368, standard-adapter parity): the
+        # facade passes overwrite=True for any locked slug, but a lock entry
+        # is per-slug, not per-destination — it is not evidence we own THIS
+        # file (G5 harness-expansion clobber, waived from #362 to #368).
+        _guard_foreign(dest, harness=self.harness, overwrite=False)
         dest.parent.mkdir(parents=True, exist_ok=True)
+        # A symlink at the slot must be REPLACED, never written through —
+        # copy2 over a symlink would write into its target (F6 parity).
+        if dest.is_symlink():
+            dest.unlink()
         shutil.copy2(content_path, dest)
+        _sentinel_path(dest).write_text("")
         return dest
 
     def uninstall(
@@ -152,16 +178,43 @@ class _SymlinkAdapter:
         scope: str,
         home: Path | None = None,
         project: Path | None = None,
-    ) -> None:
+        canonical_content: Path | None = None,
+    ) -> Path | None:
+        """Ownership-guarded detach (#368, standard-adapter parity): unlink
+        only when the sentinel exists OR the file byte-matches
+        `canonical_content` (covers pre-sentinel installs). A sentinel-less,
+        content-divergent file is the user's — leave it, return its path as
+        a structured refusal. The sidecar is removed whenever the file is
+        gone (orphan hygiene, #361/#366)."""
         dest = self._resolve_dest(slug, scope=scope, home=home, project=project)
-        if dest.exists() or dest.is_symlink():
-            dest.unlink()
-        # Destination-generic sentinel cleanup (#361 review finding): an
-        # orphaned .attk left behind would later authorize a silent clobber
-        # via _guard_foreign of a file the user re-authored at this path.
         sentinel = _sentinel_path(dest)
-        if sentinel.exists():
+        refused: Path | None = None
+        if dest.exists() or dest.is_symlink():
+            # filecmp.cmp can raise PermissionError (OSError) if dest is
+            # unreadable (e.g. chmod 000).  Treat that as not-owned, mirroring
+            # translate's equivalent OSError guard.
+            try:
+                content_match = (
+                    canonical_content is not None
+                    and canonical_content.exists()
+                    and not dest.is_symlink()
+                    and filecmp.cmp(canonical_content, dest, shallow=False)
+                )
+            except OSError:
+                content_match = False
+            owned = sentinel.exists() or content_match
+            if owned:
+                dest.unlink()
+            else:
+                refused = dest
+                print(
+                    f"{self.harness}: {dest} not managed by this tool "
+                    f"(no sentinel, content differs) — left in place",
+                    file=sys.stderr,
+                )
+        if sentinel.exists() and not dest.exists():
             sentinel.unlink()
+        return refused
 
 
 def adapter_for(harness: str) -> _SymlinkAdapter:
