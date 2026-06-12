@@ -57,6 +57,30 @@ PI_EXTENSION_BINDING = AssetTypeBinding(
 )
 
 
+# The per-kind project-lock filenames that mark a directory as "a project".
+# Sourced from the bindings so it stays in step if a kind's lock filename changes.
+_PROJECT_LOCK_FILENAMES: tuple[str, ...] = (
+    SKILL_BINDING.lock_filename,
+    AGENT_BINDING.lock_filename,
+    PI_EXTENSION_BINDING.lock_filename,
+)
+
+
+def default_scope(cwd: Path) -> str:
+    """Toolkit no-flag scope default (F3): 'project' if `cwd` holds any per-kind
+    project lock (skills-/agents-/pi-extensions-lock.json), else 'global'.
+
+    This is the binding-neutral analogue of the per-kind `scope_and_roots`
+    detection; the per-kind verbs key on their own lock filename, while a bundle
+    spans kinds and so checks for any of them. instructions-lock.json is NOT
+    counted — instructions is not a bundle member type.
+    """
+    for filename in _PROJECT_LOCK_FILENAMES:
+        if (cwd / filename).is_file():
+            return "project"
+    return "global"
+
+
 def library_root_for_asset_type(
     binding: AssetTypeBinding, env: dict[str, str] | None = None
 ) -> Path:

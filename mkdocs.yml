@@ -197,6 +197,7 @@ nav:
   - Reference:
     - CLI reference: agent-toolkit/cli.md
     - Asset schema: agent-toolkit/schema.md
+    - Bundles: agent-toolkit/bundles.md
     - Skill lock management: agent-toolkit/skill-lock.md
     - Roadmap: agent-toolkit/roadmap.md
   - Glossary: glossary.md
