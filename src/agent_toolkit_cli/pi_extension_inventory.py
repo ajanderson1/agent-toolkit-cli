@@ -108,7 +108,15 @@ def build_inventory(
             continue
         for slug, entry in lock.skills.items():
             origin: Origin = "npm" if entry.source_type == "npm" else "store-owned"
-            pinned_sha = entry.ref if looks_like_sha(entry.ref) else None
+            # Only store-owned (git-cloned) entries can be SHA-pinned — an npm
+            # row carrying a hex `ref` (hand-edited / future-schema) is not a
+            # pin. Gate on origin so status never renders a phantom pin column
+            # for an npm entry (spec invariant: npm/untracked → pinned_sha=None).
+            pinned_sha = (
+                entry.ref
+                if origin == "store-owned" and looks_like_sha(entry.ref)
+                else None
+            )
             rec = by_slug.setdefault(
                 slug,
                 InventoryRecord(
