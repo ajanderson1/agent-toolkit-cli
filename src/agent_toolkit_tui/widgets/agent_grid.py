@@ -165,7 +165,9 @@ class AgentGrid(Vertical):
         coord = table.cursor_coordinate
         key = self._column_key_for_index(coord.column)
         if key is not None:
-            info = get_column_info(key, context=self._context_for(key=key))
+            info = get_column_info(
+                key, context=self._context_for(key=key, row_index=coord.row),
+            )
             if info is not None:
                 self.app.push_screen(ColumnInfoModal(info))
                 return
@@ -305,13 +307,17 @@ class AgentGrid(Vertical):
             return "standard"
         return None
 
-    def _context_for(self, *, key: str) -> dict | None:
+    def _context_for(self, *, key: str, row_index: int) -> dict | None:
         """Context for get_column_info(): the standard panel enumerates the
         native .claude/agents readers from the per-scope coverage SSOT (#361).
 
         At global scope the panel carries the devin note (devin reads the
         slot at project scope only, so it is absent from the global covered
         set); at project scope devin is simply covered and the note is gone.
+
+        Also surfaces whether the focused row is installed globally so the
+        modal can omit the 🌐 paragraph when it's not (#374) — mirrors
+        skill_grid._context_for.
         """
         if key == "standard":
             from agent_toolkit_cli.agent_adapters.standard import (
@@ -324,10 +330,15 @@ class AgentGrid(Vertical):
                 if self._scope == "global"
                 else []
             )
+            global_linked = False
+            if 0 <= row_index < len(self._rows):
+                global_cell = self._rows[row_index].cells.get(("standard", "global"))
+                global_linked = bool(global_cell and global_cell.linked)
             return {
                 "asset_type": "agents",
                 "names": tuple(covered),
                 "extra_lines": extra_lines,
+                "global_linked": global_linked,
             }
         return None
 

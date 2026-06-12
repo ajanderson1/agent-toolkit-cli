@@ -131,6 +131,51 @@ async def test_unlisted_row_shows_marker():
 
 
 @pytest.mark.asyncio
+async def test_context_for_reports_global_linked_true():
+    """#374: the standard-key context surfaces whether the focused row's
+    standard slot is linked globally, mirroring skill_grid._context_for."""
+    row = _row_with(
+        "alpha",
+        project_cells={_H0: AgentCell(linked=False)},
+        global_cells={_H0: AgentCell(linked=True)},
+    )
+
+    class _A(App):
+        def compose(self):
+            yield AgentGrid([row], id="g")
+
+    a = _A()
+    async with a.run_test() as pilot:
+        g = a.query_one("#g", AgentGrid)
+        g.set_scope("project")
+        await pilot.pause()
+        ctx = g._context_for(key="standard", row_index=0)  # type: ignore[attr-defined]
+        assert ctx is not None
+        assert ctx["global_linked"] is True
+        assert ctx["asset_type"] == "agents"
+
+
+@pytest.mark.asyncio
+async def test_context_for_reports_global_linked_false():
+    """No global cell (or out-of-range row) → global_linked False."""
+    row = _row_with("alpha", project_cells={_H0: AgentCell(linked=True)})
+
+    class _A(App):
+        def compose(self):
+            yield AgentGrid([row], id="g")
+
+    a = _A()
+    async with a.run_test() as pilot:
+        g = a.query_one("#g", AgentGrid)
+        g.set_scope("project")
+        await pilot.pause()
+        ctx = g._context_for(key="standard", row_index=0)  # type: ignore[attr-defined]
+        assert ctx is not None and ctx["global_linked"] is False
+        oob = g._context_for(key="standard", row_index=99)  # type: ignore[attr-defined]
+        assert oob is not None and oob["global_linked"] is False
+
+
+@pytest.mark.asyncio
 async def test_no_global_cells_no_marker_no_crash():
     """Rows without any (harness, 'global') cells (e.g. home=None callers)
     simply render no marker — no KeyError, no crash."""
