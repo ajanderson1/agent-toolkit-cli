@@ -435,6 +435,20 @@ def test_install_missing_canonical_raises_install_error(tmp_path):
         adapter.install("test-agent", missing, scope="global", home=tmp_path)
 
 
+def test_install_non_utf8_canonical_raises_install_error(tmp_path):
+    """#373 (gap 1): a non-UTF8 canonical must surface as InstallError,
+    not a raw UnicodeDecodeError traceback (the read used to sit one line
+    above the #370 wrap)."""
+    from agent_toolkit_cli._install_core import InstallError
+    from agent_toolkit_cli.agent_adapters import translate
+    adapter = translate.adapter_for("gemini-cli")
+    content = tmp_path / "canonical" / "test-agent.md"
+    content.parent.mkdir(parents=True)
+    content.write_bytes(b"---\nname: x\n---\n\xff\xfe invalid utf8")
+    with pytest.raises(InstallError):
+        adapter.install("test-agent", content, scope="global", home=tmp_path)
+
+
 # ── #368: guarded uninstall ──────────────────────────────────────────────
 
 def test_uninstall_with_sentinel_removes(tmp_path, fake_content):

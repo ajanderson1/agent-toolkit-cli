@@ -147,7 +147,7 @@ class _SymlinkAdapter:
         # parity) BEFORE filecmp/copy2 raises a raw OSError mid-fan-out.
         if not content_path.exists():
             raise InstallError(
-                f"{self.harness}: {slug}: canonical content file missing: "
+                f"{self.harness}: canonical content file missing: "
                 f"{content_path} — re-run `agent add {slug}` to restore it"
             )
         # Adopt-if-identical (#368): a pre-existing byte-identical file (e.g.
