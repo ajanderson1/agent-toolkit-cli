@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3.13, Click, pytest + CliRunner. Spec: `docs/superpowers/specs/2026-06-12-pi-extension-push-status-pinned-design.md`.
 
-**Verification baseline:** main @ e68244a. Run tests with `uv run pytest`. Two pre-existing environment failures are whitelisted (fail locally on any branch, HOME-isolation): `tests/test_cli/test_pi_extension_inventory.py::test_empty_machine_is_empty`, `tests/test_tui/test_instruction_state.py::test_build_instruction_rows_empty_lock_no_canonical`.
+**Verification baseline:** main @ 1338e35 (the spec + plan commits; line numbers cited below are HEAD-relative). Run tests with `uv run pytest`. Two pre-existing environment failures are whitelisted (fail locally on any branch, HOME-isolation): `tests/test_cli/test_pi_extension_inventory.py::test_empty_machine_is_empty`, `tests/test_tui/test_instruction_state.py::test_build_instruction_rows_empty_lock_no_canonical`.
 
 **Commit discipline:** at /aj-run time this lands in its own worktree (own git index). The `--only <file>...` discipline and leaving pre-existing `skills-lock.json`/`uv.lock` modifications untouched is good hygiene. If pre-commit fails ONLY on the 2 whitelisted tests, `--no-verify` is approved.
 
@@ -22,9 +22,9 @@
 | `src/agent_toolkit_cli/pi_extension_inventory.py` | import `looks_like_sha`; add `pinned_sha` field; populate in the lock pass |
 | `src/agent_toolkit_cli/commands/pi_extension/status_cmd.py` | append `pinned:<sha7>` 4th column |
 | `tests/test_cli/test_pi_extension_inventory.py` | unit test: `pinned_sha` populated for pinned, None otherwise |
-| `tests/test_cli/test_cli_pi_extension_lifecycle.py` | CLI tests: push-pinned skip + batch isolation; status-pinned column |
+| `tests/test_cli/test_cli_pi_extension_lifecycle.py` | CLI tests: push-pinned skip + batch isolation + dirty-pinned skip; status-pinned column + unpinned-empty-field |
 
-Facts the implementation relies on (verified on main @ e68244a):
+Facts the implementation relies on (verified on main @ 1338e35):
 
 - `looks_like_sha(ref)` lives in `pi_extension_add.py:36`; returns True for `[0-9a-f]{7,40}`. `update_cmd.py:71` and `reset_cmd.py:77` already import and use it with the message `f"{slug}: pinned to {entry.ref[:7]} — skipping (remove and re-add to change the pin)"`.
 - `push_cmd` loop: `not in lock` (l.63) → `npm row` sets `rejected` (l.70) → `copy-mode` (l.76) → `resolve_ref` (l.83). The pin skip goes after copy-mode, before `resolve_ref`.
@@ -71,20 +71,41 @@ def test_push_pinned_does_not_poison_batch(tmp_path, monkeypatch, git_sandbox):
     assert r.exit_code == 0, r.output
     assert "pinned to" in r.output.lower()
     assert sha[:7] in r.output
+
+
+def test_push_pinned_skips_even_when_dirty(tmp_path, monkeypatch, git_sandbox):
+    """The skip is unconditional w.r.t. working-tree state: a pinned checkout
+    with a local edit still skips (the edit is intentionally unreachable via
+    push — remove+re-add to publish) (#346)."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    sha = _seed_pinned_entry(tmp_path, git_sandbox)
+    canonical = pep.library_pi_extension_path("pinned", env={})
+    (canonical / "ext.ts").write_text("// local edit on a pinned checkout")
+
+    r = CliRunner().invoke(main, ["pi-extension", "push", "pinned", "-g"])
+    assert r.exit_code == 0, r.output
+    assert "pinned to" in r.output.lower()
+    assert "pushed" not in r.output.lower()  # the local edit was NOT pushed
 ```
+
+(`pep` is the module alias `import agent_toolkit_cli.pi_extension_paths as pep`, already imported at the top of this test file.)
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `uv run pytest tests/test_cli/test_cli_pi_extension_lifecycle.py -k "push_skips_pinned or push_pinned_does_not_poison" -v`
-Expected: both FAIL — today `resolve_ref` on the raw SHA / divergence against `origin/<sha>` errors or reports nonsense; the `pinned to` string is absent.
+Run: `uv run pytest tests/test_cli/test_cli_pi_extension_lifecycle.py -k "push_skips_pinned or push_pinned_does_not_poison or push_pinned_skips_even_when_dirty" -v`
+Expected: all three FAIL — today `resolve_ref` on the raw SHA / divergence against `origin/<sha>` errors or reports nonsense; the `pinned to` string is absent (and the dirty-pinned case would attempt a real commit/push instead of skipping).
 
 - [ ] **Step 3: Implement**
 
-In `src/agent_toolkit_cli/commands/pi_extension/push_cmd.py`, add the import (the module already imports from `pi_extension_add`'s sibling modules; add this line near the other `agent_toolkit_cli` imports, after line 19):
+In `src/agent_toolkit_cli/commands/pi_extension/push_cmd.py`, add the import in the `agent_toolkit_cli` import block. Place it between the `_common` import (`from agent_toolkit_cli.commands.pi_extension._common import scope_and_roots`, line 18) and the `pi_extension_lock` import (line 19) so the block stays alphabetically ordered — exactly mirroring `update_cmd.py:13` and `reset_cmd.py:13`:
 
 ```python
 from agent_toolkit_cli.pi_extension_add import looks_like_sha
 ```
+
+Do NOT insert it after the multi-line `pi_extension_paths` import (lines 20-23) — that would split that block and ruff/isort would reorder it.
 
 Then insert the skip in the loop, immediately after the copy-mode guard's closing `continue` (current line 81) and before `ref = skill_git.resolve_ref(...)` (current line 83):
 

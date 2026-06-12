@@ -12,7 +12,7 @@ and re-add to change the pin)` and continue. `push` and `status` were an
 explicitly documented out-of-scope limitation of #330; their behaviour on a
 pinned entry is undefined and untested.
 
-Verified on main @ e8b27eb:
+Verified on main @ 1338e35 (line numbers below are HEAD-relative):
 
 - **`push`** (`commands/pi_extension/push_cmd.py:81`) calls
   `skill_git.resolve_ref(entry.ref, canonical)` then `divergence(...,
@@ -42,7 +42,17 @@ a future schema field.
 3. **`status` shows the pin as a trailing 4th column** — `<slug>\t<origin>\t
    <loaded>\t<pin>`. Orthogonal to load-scope (a pinned extension can still be
    loaded), so the existing loaded-scopes column stays intact and scripts
-   parsing field 3 keep working.
+   parsing field 3 keep working. The column uses the compact `pinned:<sha7>`
+   token **deliberately** — a machine-parseable single field, intentionally
+   NOT the prose `pinned to <sha7> — skipping` message the action verbs
+   (push/update/reset) emit. The two surfaces describe the same state in two
+   registers (terse column vs. prose action-log) on purpose; do not unify
+   them. Blast-radius check: **no in-repo consumer parses `status` stdout**
+   (verified — the TUI calls `build_inventory` directly; no test, doctor, or
+   script tab-splits the output), so moving the field count from 3 to 4 is
+   internally safe. If the tab format is ever treated as a stable external
+   contract, the 3→4 change belongs in the CHANGELOG/README for downstream
+   parsers.
 
 ## Design
 
@@ -70,6 +80,15 @@ if looks_like_sha(entry.ref):
   and `reset_cmd` already import it from).
 - Placement is before `resolve_ref`, so the raw SHA never reaches the git
   divergence machinery.
+- **The skip is unconditional w.r.t. working-tree state.** It fires for every
+  pinned entry, including a pinned checkout the user has locally edited or
+  committed — those local changes are intentionally **unreachable via push**.
+  This is by design, not a regression: the existing `_push_via_pr` path is
+  already broken for a pinned entry (`gh pr create --base <raw-sha>` is
+  invalid), so no working capability is lost. To publish work made on a pinned
+  checkout, the user must `remove` and re-add (un-pinning to a branch) first —
+  the same escape hatch the skip message names. If #345 later gives pins a
+  tracked tip, a real publish path can be reconsidered (out of scope here).
 
 ### Unit 2 — `InventoryRecord.pinned_sha`
 
