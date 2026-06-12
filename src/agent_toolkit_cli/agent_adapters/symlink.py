@@ -190,12 +190,19 @@ class _SymlinkAdapter:
         sentinel = _sentinel_path(dest)
         refused: Path | None = None
         if dest.exists() or dest.is_symlink():
-            owned = sentinel.exists() or (
-                canonical_content is not None
-                and canonical_content.exists()
-                and not dest.is_symlink()
-                and filecmp.cmp(canonical_content, dest, shallow=False)
-            )
+            # filecmp.cmp can raise PermissionError (OSError) if dest is
+            # unreadable (e.g. chmod 000).  Treat that as not-owned, mirroring
+            # translate's equivalent OSError guard.
+            try:
+                content_match = (
+                    canonical_content is not None
+                    and canonical_content.exists()
+                    and not dest.is_symlink()
+                    and filecmp.cmp(canonical_content, dest, shallow=False)
+                )
+            except OSError:
+                content_match = False
+            owned = sentinel.exists() or content_match
             if owned:
                 dest.unlink()
             else:

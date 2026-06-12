@@ -437,7 +437,10 @@ class _TranslateAdapter:
         try:
             fm, body = _parse_frontmatter(canonical_content.read_text())
             return self._emitter(fm, body, slug)
-        except (ValueError, OSError):
+        except Exception:  # noqa: BLE001
+            # Ownership probe must never propagate — any emitter or I/O failure
+            # (ValueError, OSError, TypeError from unhashable frontmatter values,
+            # etc.) is treated as "cannot confirm ownership; fall back to sentinel."
             return None
 
     def uninstall(

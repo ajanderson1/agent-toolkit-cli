@@ -5,6 +5,7 @@ docs/superpowers/specs/2026-05-28-v3-pr2-agent-facade-and-adapters-design.md
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
@@ -320,5 +321,35 @@ def test_uninstall_without_canonical_content_still_guarded(tmp_path, fake_conten
     dest.parent.mkdir(parents=True)
     dest.write_text("# hand-authored\n")
     refused = adapter.uninstall("test-agent", scope="global", home=tmp_path)
+    assert refused == dest
+    assert dest.exists()
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root ignores file permission modes")
+def test_uninstall_unreadable_dest_refuses_not_raises(tmp_path, fake_content):
+    """F2 (#368 adversarial review): an unreadable dest (chmod 000) must NOT
+    raise PermissionError from filecmp.cmp — the adapter must catch OSError
+    and treat it as not-owned (structured refusal), mirroring translate's
+    equivalent guard.
+
+    The dest is written with the SAME content as the canonical so that
+    filecmp.cmp sees matching sizes and is forced into the deep (read-based)
+    comparison that raises PermissionError on an unreadable file."""
+    from agent_toolkit_cli.agent_adapters import symlink
+    adapter = symlink.adapter_for("cursor")
+    dest = adapter.destination("test-agent", scope="global", home=tmp_path)
+    dest.parent.mkdir(parents=True)
+    # Same bytes as canonical → filecmp.cmp must read both to decide; the
+    # 000-mode prevents the read and should raise PermissionError if unguarded.
+    dest.write_bytes(fake_content.read_bytes())
+    os.chmod(dest, 0o000)
+    try:
+        refused = adapter.uninstall(
+            "test-agent", scope="global", home=tmp_path,
+            canonical_content=fake_content,
+        )
+    finally:
+        # Restore mode so tmp_path cleanup doesn't fail
+        os.chmod(dest, 0o644)
     assert refused == dest
     assert dest.exists()

@@ -495,3 +495,35 @@ def test_uninstall_emitter_failure_treated_as_no_match(tmp_path):
     )
     assert refused == dest
     assert dest.exists()
+
+
+def test_uninstall_list_safety_emitter_TypeError_treated_as_no_match(tmp_path):
+    """F1 (#368 adversarial review): canonical with safety: as a YAML list
+    causes _emit_mistral_vibe_toml to attempt ``["safe"] not in frozenset``
+    which raises TypeError (unhashable type: 'list'). This must NOT propagate
+    from _emitted_or_none — the ownership probe must absorb any exception and
+    treat it as no-match. A sentinel-less divergent dest must be refused
+    cleanly, not raise TypeError."""
+    from agent_toolkit_cli.agent_adapters import translate
+    # Canonical with safety: as a YAML list — list value is unhashable
+    list_safety_canonical = tmp_path / "canonical" / "test-agent.md"
+    list_safety_canonical.parent.mkdir(parents=True)
+    list_safety_canonical.write_text(
+        "---\n"
+        "name: test-agent\n"
+        "description: A test agent.\n"
+        "safety:\n"
+        "  - safe\n"
+        "---\n\nBody.\n"
+    )
+    adapter = translate.adapter_for("mistral-vibe")
+    dest = adapter.destination("test-agent", scope="global", home=tmp_path)
+    dest.parent.mkdir(parents=True)
+    dest.write_text("# hand-authored — no sentinel\n")
+    # Must return structured refusal, NOT raise TypeError
+    refused = adapter.uninstall(
+        "test-agent", scope="global", home=tmp_path,
+        canonical_content=list_safety_canonical,
+    )
+    assert refused == dest
+    assert dest.exists()
