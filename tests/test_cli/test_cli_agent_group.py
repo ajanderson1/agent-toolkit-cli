@@ -1165,3 +1165,19 @@ def test_agent_bare_push_empty_lock_unchanged(tmp_path, monkeypatch):
     )
     assert result.exit_code == 0, result.output
     assert "not in the" not in result.output
+
+
+def test_install_error_output_names_slug(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#373 (gap 2): the clean CLI error names WHICH agent failed."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    canonical = _seed_global_canonical(tmp_path, slug="no-fm")
+    (canonical / "no-fm.md").write_text("Body only, no frontmatter.\n")
+    _write_global_lock(tmp_path, slug="no-fm")
+
+    r = CliRunner().invoke(main, ["agent", "install", "no-fm", "-g"])
+
+    assert r.exit_code != 0
+    assert "no-fm" in r.output, f"slug missing from error:\n{r.output}"
+    assert "Traceback" not in r.output
