@@ -17,6 +17,7 @@ HOME).
 """
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -515,3 +516,67 @@ def test_project_install_is_not_flagged_as_orphan(
         f"#362: doctor misclassifies its own install as orphan: "
         f"{[f.finding_type for f in findings]}"
     )
+
+
+# ---------------------------------------------------------------------------
+# #345: unlisted re-add honours SHA pins (git clone --branch <sha> is rejected)
+# ---------------------------------------------------------------------------
+
+
+def test_doctor_readd_sha_pinned_lands_on_pin(
+    git_sandbox, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An unlisted SHA-pinned project agent re-added by doctor must land on the
+    pin in the library canonical, not be rejected by `git clone --branch <sha>`
+    (#345). Trigger: project lock entry whose slug is absent from the library
+    lock (#360 `unlisted`)."""
+    from agent_toolkit_cli.agent_lock import (
+        LockEntry, LockFile, write_lock,
+    )
+    from agent_toolkit_cli.agent_paths import (
+        library_agent_path, lock_file_path,
+    )
+
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    project = tmp_path / "proj"
+    project.mkdir()
+
+    def git(*args):
+        return subprocess.run(
+            ["git", "-C", str(git_sandbox.clone), *args],
+            check=True, env=git_sandbox.env, capture_output=True, text=True,
+        ).stdout.strip()
+
+    first_sha = git("rev-parse", "HEAD")
+    (git_sandbox.clone / "EXTRA.md").write_text("second\n")
+    git("add", "-A"); git("commit", "-m", "second"); git("push", "origin", "main")
+
+    # Project lock: store-owned agent pinned to first_sha; library lock EMPTY
+    # (slug absent → #360 unlisted trigger). Library canonical missing.
+    proj_lock = lock_file_path(scope="project", project=project)
+    proj_lock.parent.mkdir(parents=True, exist_ok=True)
+    write_lock(proj_lock, LockFile(version=1, skills={
+        "demo-agent": LockEntry(
+            source=str(git_sandbox.upstream), source_type="git",
+            ref=first_sha, agent_path="demo-agent.md", upstream_sha=None,
+        ),
+    }))
+
+    findings = _diagnose(
+        slugs=None, scope="project", home=None, project=project,
+    )
+    readd = next(
+        f for f in findings
+        if f.fix_action is not None
+        and "agent add" in f.fix_action.shell_preview
+    )
+    readd.fix_action.apply()
+
+    canonical = library_agent_path("demo-agent")
+    head = subprocess.run(
+        ["git", "-C", str(canonical), "rev-parse", "HEAD"],
+        check=True, env=git_sandbox.env, capture_output=True, text=True,
+    ).stdout.strip()
+    assert head == first_sha

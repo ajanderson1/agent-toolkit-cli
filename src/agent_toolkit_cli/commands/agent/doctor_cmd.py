@@ -96,7 +96,8 @@ def _make_readd_library_action(*, slug: str, entry: LockEntry) -> FixAction:
     def _apply() -> None:
         if not canonical.exists():
             canonical.parent.mkdir(parents=True, exist_ok=True)
-            skill_git.clone(url, canonical, ref=entry.ref, env=None)
+            # A SHA ref must NOT go through `git clone --branch <sha>` (#345).
+            skill_git.clone_pinned_or_branch(url, canonical, ref=entry.ref, env=None)
         lib_path = library_lock_path()
         lib = read_lock(lib_path)
         if slug not in lib.skills:
