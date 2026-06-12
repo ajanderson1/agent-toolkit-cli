@@ -200,7 +200,7 @@ trails live in `docs/agent-toolkit/research/instructions-fragments/`. Tracked in
 
 ### Mechanisms (instructions asset type)
 
-> **Terminology:** *standard* — formerly "general" (v3), earlier "universal" (pre-v3). The old token spellings still work for one cycle with a deprecation warning and are removed in v4.
+> **Terminology:** *standard* — formerly "general" (v3), earlier "universal" (pre-v3). The old token spellings were removed in v4; they now raise an unknown-token error.
 
 This asset type has only **one action verdict**. The five-cell vocabulary is:
 
