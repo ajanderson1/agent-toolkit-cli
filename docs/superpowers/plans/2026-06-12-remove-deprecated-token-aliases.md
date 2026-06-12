@@ -22,7 +22,9 @@
 | `tests/test_token_aliases.py` | Delete entire file |
 | `tests/test_no_legacy_tokens.py` | Remove the `DEPRECATED_TOKEN_ALIASES` allowance; guard now enforces zero old spellings |
 | `tests/test_token_removal.py` | **Create** — pins the post-removal behaviour (old spellings raise) |
+| `tests/test_cli/test_agent_cli_standard.py` | Reword stale "#350 aliases resolve first" rationale (L104–105); tests stay green |
 | `docs/agent-toolkit/cli.md` | Update terminology note (L22) to past tense |
+| `docs/agent-toolkit/harness-matrix.md` | Update terminology note (L203, byte-identical to cli.md:22) to past tense |
 
 > All line numbers verified against `main` on 2026-06-12. If they have drifted, re-`grep -rn "resolve_agent_token\|DEPRECATED_TOKEN_ALIASES" src/` to relocate before editing — the *symbols* are the anchors, not the numbers.
 
@@ -40,9 +42,9 @@ This is the regression that proves the break. It must **fail today** (old spelli
 ```python
 """#356: deprecated token aliases are removed — old spellings now raise.
 
-Pins the v4 hard break. Before #356 these spellings warned on stderr and
-mapped to their 'standard' equivalents; after removal they are unknown tokens
-and hit each caller's existing unknown-token guard.
+Pins the hard break shipped as v4.0.0. Before #356 these spellings warned on
+stderr and mapped to their 'standard' equivalents; after removal they are
+unknown tokens and hit each caller's existing unknown-token guard.
 """
 import click
 import pytest
@@ -358,12 +360,34 @@ git add src/agent_toolkit_cli/skill_agents.py \
         src/agent_toolkit_cli/commands/skill/_common.py \
         src/agent_toolkit_cli/commands/skill/list_cmd.py \
         src/agent_toolkit_cli/commands/agent/_common.py
-git commit -m "fix(agents): remove deprecated universal/general-* token aliases (#356)
+git commit -m "fix(agents)!: remove deprecated universal/general-* token aliases (#356)
 
 Old spellings now raise UnknownAgentError/UsageError instead of warning +
-mapping. Completes the #350 deprecation cycle. Version bump to v4.0.0 is
-deferred to a separate release PR."
+mapping. Completes the #350 deprecation cycle.
+
+BREAKING CHANGE: 'universal', 'general-skill', 'general-agent' are no longer
+accepted as agent/harness tokens — use 'standard' / 'standard-skill' /
+'standard-agent'. This is the v4.0.0 trigger.
+
+Release-As: 4.0.0"
 ```
+
+> **Why `!` + `Release-As: 4.0.0` (critical-review finding, 2026-06-12):** a bare
+> `fix:` on this repo makes release-please open a *patch* (3.9.x) release PR — proven
+> by history (`7c74c0b fix:` cut 3.5.2). Merging that patch would ship the hard break
+> with no major-version signal. The `!` marks the breaking change and `Release-As:
+> 4.0.0` forces the major cut *with* the removal. The `BREAKING CHANGE:` footer feeds
+> release-please's CHANGELOG breaking-changes section (so no separate CHANGELOG edit is
+> needed — release-please generates it from this footer). **The `Release-As:` /
+> `BREAKING CHANGE:` footer must survive squash-merge** — this repo squash-merges, so
+> release-please reads the **PR title + squash body**, not intermediate commits (this is
+> the documented "flow PR titles skip release-please" trap). Concretely: the **PR title**
+> must be `fix(agents)!: remove deprecated …` (the `!` carries the major bump) and the
+> **squash-merge body** must contain both the `BREAKING CHANGE:` footer (release-please
+> generates the CHANGELOG breaking-changes section from it) and `Release-As: 4.0.0`.
+> Verified precedent on this repo: `09852da` pinned its version via `Release-As: 3.6.2`
+> in the squash body. `release-please-config.json` is `release-type: python`, which
+> honours `!` / `BREAKING CHANGE:` / `Release-As:`.
 
 ---
 
@@ -372,6 +396,7 @@ deferred to a separate release PR."
 **Files:**
 - Delete: `tests/test_token_aliases.py`
 - Modify: `tests/test_no_legacy_tokens.py`
+- Modify: `tests/test_cli/test_agent_cli_standard.py` (reword two now-false comments)
 
 - [ ] **Step 1: Delete the alias contract test**
 
@@ -410,16 +435,40 @@ def test_no_old_tokens_in_src():
     assert not offenders, "old token spellings in src/:\n" + "\n".join(offenders)
 ```
 
-- [ ] **Step 3: Run the guard**
+- [ ] **Step 3: Reword the now-false alias rationale in `test_agent_cli_standard.py`**
 
-Run: `uv run pytest tests/test_no_legacy_tokens.py -v`
-Expected: PASS. (If it fails, an old quoted spelling survived a Task-3 edit — grep the offender path:line it reports and remove the quoted token. Note: the `# universal→general rename` comment in `_install_core.py:117` and the `(universal, general-*)` docstring mentions are **unquoted** prose, so the regex — which requires surrounding quotes — does not match them. Only *quoted* `'universal'`/`"general-skill"` etc. trip it.)
+These two tests feed `general-skill`/`general-agent` through `parse_harness_tokens` (via `_resolve_harnesses` / `_resolve_harnesses_for_uninstall`) and assert `UsageError`. They **stay green** post-removal — the tokens now hit the *unknown-harness* guard instead of the synthetic guard, still `UsageError` (`pytest.raises` doesn't match on message). But their comments claim "#350 aliases resolve first," which is false once aliases are gone. Fix the wording — do NOT touch the assertions or the token list (the tests are correct as-is).
 
-- [ ] **Step 4: Commit**
+In `test_synthetic_tokens_rejected` (L102–105), change:
+
+```python
+def test_synthetic_tokens_rejected():
+    """AC7 (review-corrected): ALL synthetic catalog names get an explicit
+    UsageError — previously a silent no-op. #350 aliases resolve first, so
+    general-skill is rejected the same way."""
+```
+
+to:
+
+```python
+def test_synthetic_tokens_rejected():
+    """AC7 (review-corrected): ALL synthetic catalog names get an explicit
+    UsageError — previously a silent no-op. general-skill (an old #350 spelling,
+    removed in #356) is now an unknown token and is rejected the same way."""
+```
+
+The `test_uninstall_helper_rejects_synthetics` test (L118–125) has no alias-mentioning comment, so it needs no change — but verify its token tuple `("standard-agent", "standard-skill", "general-agent")` still all raise (they do: synthetics + one unknown old spelling).
+
+- [ ] **Step 4: Run the guard + the touched tests**
+
+Run: `uv run pytest tests/test_no_legacy_tokens.py tests/test_cli/test_agent_cli_standard.py -v`
+Expected: PASS. (If the guard fails, an old quoted spelling survived a Task-3 edit — grep the offender path:line it reports and remove the quoted token. Note: the `# universal→general rename` comment in `_install_core.py:117` and the `(universal, general-*)` docstring mentions are **unquoted** prose, so the regex — which requires surrounding quotes — does not match them. Only *quoted* `'universal'`/`"general-skill"` etc. trip it. The guard scans `src/` only, so the test-file edit above never affects it.)
+
+- [ ] **Step 5: Commit**
 
 ```bash
-git add tests/test_no_legacy_tokens.py
-git commit -m "test(token-aliases): retire alias tests, harden arch guard to zero old spellings (#356)"
+git add tests/test_no_legacy_tokens.py tests/test_cli/test_agent_cli_standard.py
+git commit -m "test(token-aliases): retire alias tests, harden arch guard, reword stale rationale (#356)"
 ```
 
 ---
@@ -428,26 +477,34 @@ git commit -m "test(token-aliases): retire alias tests, harden arch guard to zer
 
 **Files:**
 - Modify: `docs/agent-toolkit/cli.md:22`
+- Modify: `docs/agent-toolkit/harness-matrix.md:203` (byte-identical copy of the same note)
 
-- [ ] **Step 1: Update the terminology note**
+- [ ] **Step 1: Update both terminology notes**
 
-Line 22 currently reads:
+`cli.md:22` and `harness-matrix.md:203` are **byte-identical** (verified via diff 2026-06-12). Both currently read:
 
 ```markdown
 > **Terminology:** *standard* — formerly "general" (v3), earlier "universal" (pre-v3). The old token spellings still work for one cycle with a deprecation warning and are removed in v4.
 ```
 
-Change the second sentence to past tense:
+Change the second sentence to past tense **in both files** (the lines are identical, so the same Edit applies to each):
 
 ```markdown
 > **Terminology:** *standard* — formerly "general" (v3), earlier "universal" (pre-v3). The old token spellings were removed in v4; they now raise an unknown-token error.
 ```
 
-- [ ] **Step 2: Commit**
+> **Why both:** if only `cli.md` is fixed, `harness-matrix.md` keeps telling users the aliases "still work" — a now-false published-docs claim (critical-review finding, 2026-06-12). The arch guard does NOT cover docs, so nothing else catches this.
+
+- [ ] **Step 2: Verify no other copy survives**
+
+Run: `grep -rn "still work for one cycle" docs/`
+Expected: **no output** (both copies fixed). If a third copy appears, fix it the same way.
+
+- [ ] **Step 3: Commit**
 
 ```bash
-git add docs/agent-toolkit/cli.md
-git commit -m "docs(cli): mark universal/general-* token aliases as removed (#356)"
+git add docs/agent-toolkit/cli.md docs/agent-toolkit/harness-matrix.md
+git commit -m "docs: mark universal/general-* token aliases as removed (#356)"
 ```
 
 ---
@@ -489,7 +546,7 @@ Expected: green except the known pre-existing `test_empty_machine_is_empty` HOME
 
 ## Self-review notes (author, 2026-06-12)
 
-- **Spec coverage:** AC1→Task 2+6.1; AC2→Task 3+6.1; AC3→Task 1; AC4→Task 2.2+6.2/6.3; AC5→Task 4; AC6→Task 5; AC7→Task 6.4. All seven mapped.
+- **Spec coverage (9 ACs):** AC1→Task 2+6.1; AC2→Task 3+6.1; AC3→Task 1; AC4→Task 2.2+6.2/6.3; AC5→Task 4 (delete + guard); AC6→Task 5 (both docs); AC7→Task 3d (src comment) + Task 4 Step 3 (test comment); AC8 (Release-As 4.0.0 + CHANGELOG)→Task 3 Step 5 commit + PR-merge note (release-please generates CHANGELOG from the `BREAKING CHANGE:` footer); AC9 (suite green)→Task 6.4. All nine mapped.
 - **RED proof (verified live against `main`, 2026-06-12):** `universal` and `general-agent` map (no raise) via `_resolve_agents` today → genuine pass→raise flips. `general-skill` already raises today because it aliases to the synthetic `standard-skill` and hits the synthetic guard (raises before AND after; reason differs, outcome same). `test_resolver_symbols_are_gone` and `test_old_spelling_emits_no_deprecation_warning` are the unambiguous RED anchors. At least 4 of Task 1's assertions fail pre-removal — documented inline in the test's NOTE and in Step 2's expected output.
 - **Edit-not-sed:** all changes are Edit-tool string replacements; no BSD/GNU sed divergence.
 - **No placeholders:** every code step shows the exact before/after.

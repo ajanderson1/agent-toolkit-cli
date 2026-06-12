@@ -7,19 +7,30 @@
 
 #350 renamed the agent/harness terminology `general`/`universal` → `standard`
 and, to soften the break, added a **one-cycle deprecation alias layer**: old
-spellings (`universal`, `general-skill`, `general-agent`) still work at the CLI
-boundaries but print a stderr warning and map to their `standard` equivalents.
+spellings (`universal`, `general-skill`, `general-agent`) are accepted at the CLI
+boundaries, print a stderr warning, and map to their `standard` equivalents.
 That layer was always scoped as temporary — its own code comment, docstrings,
 the `cli.md` terminology note, and the parent AC all say it is **removed in v4**.
 
+> **Pre-removal nuance (verified live 2026-06-12):** `universal` and the
+> `general-agent` skill-path token currently *map* (no error). `general-skill`
+> *already raises today* — it aliases to the synthetic `standard-skill`, which the
+> synthetic-token guard rejects — so for it the alias-removal changes only the
+> *reason* it raises, not the outcome. This matters for the RED proof (see plan).
+
 #356 performs that removal. After this change the old spellings are no longer
 recognised: they fall through to each caller's existing unknown-token guard and
-raise `UnknownAgentError` / `click.UsageError` like any other typo.
+raise `UnknownAgentError` / `click.UsageError` like any other typo. **No rename
+hint is added** to the error — the deprecation cycle that pointed users at
+`standard` is over; old spellings become ordinary unknown tokens (decided by AJ
+2026-06-12; the soft-landing guidance was the deprecation layer's job, now retired).
 
-This is a deliberate hard break. Per AJ's decision (2026-06-12) the **code
-removal lands now** as an ordinary change; the **v4.0.0 version bump is deferred**
-to a separate later release PR and is explicitly out of scope here. So this PR
-carries no `feat!:` / `Release-As:` and cuts no major version.
+This is a deliberate hard break and **ships as v4.0.0**. Per AJ's decision
+(2026-06-12, revised after critical review found a release-mechanics hazard), the
+removal is the v4.0.0 trigger: the merge commit carries a **`Release-As: 4.0.0`**
+trailer so release-please cuts the major version *with* the break, rather than a
+bare `fix:` opening a phantom 3.9.x patch PR that could ship the break without a
+major-version signal. A CHANGELOG breaking-changes entry is included.
 
 ## What exists today (line-exact, verified 2026-06-12)
 
@@ -44,6 +55,7 @@ dedicated test files:
 
 **Docs**
 - `docs/agent-toolkit/cli.md:22` — terminology note currently reads "*The old token spellings still work for one cycle with a deprecation warning and are removed in v4.*" → must become past tense (removed).
+- `docs/agent-toolkit/harness-matrix.md:203` — a **byte-identical copy** of the same terminology note (verified via diff against `cli.md:22`). Must get the same past-tense fix, or published docs keep claiming the aliases "still work."
 
 ## Design
 
@@ -92,22 +104,32 @@ all real harness tokens behave exactly as before.
    guard; no resolver import remains anywhere in `src/`.
 3. Old spellings raise: `skill install --agents universal`, `agent install
    --harnesses general-agent`, and `skill list --agent universal` each exit
-   non-zero with an unknown-token error (no deprecation warning, no mapping).
+   non-zero with an unknown-token error (no deprecation warning, no mapping, no
+   rename hint). `general-skill` also raises (it did pre-removal too, via the
+   synthetic guard — outcome unchanged, reason now "unknown token").
 4. `import sys` removed from `skill_agents.py` (it had no other use); ruff/mypy
    report no new errors versus `main`.
 5. `tests/test_token_aliases.py` deleted; `tests/test_no_legacy_tokens.py`
    updated to drop the `DEPRECATED_TOKEN_ALIASES` allowance so it enforces zero
    old spellings in `src/` (and that guard passes).
-6. `docs/agent-toolkit/cli.md:22` terminology note updated to past tense ("removed
-   in v4" → reflects the alias no longer exists). The "*formerly general /
-   universal*" lineage sentence stays.
-7. Full suite green except the known pre-existing `test_empty_machine_is_empty`
+6. Both terminology notes updated to past tense — `docs/agent-toolkit/cli.md:22`
+   **and** the byte-identical `docs/agent-toolkit/harness-matrix.md:203`. The
+   "*formerly general / universal*" lineage sentence stays in both.
+7. Stale alias-rationale comments reworded where they now lie: the `#350 aliases
+   resolve first` comment in `agent/_common.py` (src, in scope already) **and** the
+   matching "#350 aliases resolve first, so general-skill is rejected the same way"
+   rationale in `tests/test_cli/test_agent_cli_standard.py` (those tests stay green
+   post-removal, but their comments become false).
+8. Merge commit carries `Release-As: 4.0.0`; a CHANGELOG breaking-changes entry
+   notes the removed token spellings.
+9. Full suite green except the known pre-existing `test_empty_machine_is_empty`
    HOME-isolation local failure (green on CI).
 
 ## Out of scope
 
-- The v4.0.0 version bump / `Release-As` / CHANGELOG breaking-changes entry —
-  deferred to a separate release PR (AJ decision 2026-06-12).
+- A rename hint in the post-removal error (e.g. "did you mean 'standard'?") —
+  deliberately declined (AJ decision 2026-06-12); old spellings are ordinary
+  unknown tokens now that the deprecation cycle is over.
 - Removing the dead `validate_agent_names` helper itself (only its alias
   dependency is touched; deleting the function is a separate cleanup).
 - The "*formerly general (v3), earlier universal (pre-v3)*" historical lineage
