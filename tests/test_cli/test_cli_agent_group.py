@@ -1088,3 +1088,80 @@ def test_project_install_without_global_entry_fails_before_seeding(
     ).exists(), "doomed install must not seed the project canonical"
     assert not (project / ".claude" / "agents" / "demo-agent.md").exists()
     assert not (project / "agents-lock.json").exists()
+
+
+def _seed_agent_lock(path, slugs):
+    """Minimal v1 agents lock with bare github entries for `slugs`."""
+    import json as _json
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(_json.dumps({
+        "version": 1,
+        "skills": {
+            s: {"source": "acme/agents", "sourceType": "github"} for s in slugs
+        },
+    }))
+
+
+def test_agent_push_project_scope_hints_global_lock(tmp_path, monkeypatch):
+    """Slug only in the GLOBAL agents lock, resolved scope project → hint + exit 1 (#371)."""
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    project = tmp_path / "proj"
+    project.mkdir()
+    _seed_agent_lock(home / ".agent-toolkit" / "agents-lock.json", ["my-agent"])
+    _seed_agent_lock(project / "agents-lock.json", [])
+    result = CliRunner().invoke(
+        main, ["--project", str(project), "agent", "push", "my-agent"],
+    )
+    assert result.exit_code == 1, result.output
+    assert "my-agent: not in the project lock" in result.output
+    assert "found in the global lock — re-run with -g" in result.output
+
+
+def test_agent_push_global_scope_hints_project_lock(tmp_path, monkeypatch):
+    """Slug only in the PROJECT agents lock, -g forces global → inverse hint + exit 1."""
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    project = tmp_path / "proj"
+    project.mkdir()
+    _seed_agent_lock(home / ".agent-toolkit" / "agents-lock.json", [])
+    _seed_agent_lock(project / "agents-lock.json", ["my-agent"])
+    result = CliRunner().invoke(
+        main, ["--project", str(project), "agent", "push", "-g", "my-agent"],
+    )
+    assert result.exit_code == 1, result.output
+    assert "my-agent: not in the global lock" in result.output
+    assert "found in the project lock — re-run with -p" in result.output
+
+
+def test_agent_push_slug_in_neither_lock_exits_nonzero(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    project = tmp_path / "proj"
+    project.mkdir()
+    _seed_agent_lock(home / ".agent-toolkit" / "agents-lock.json", [])
+    _seed_agent_lock(project / "agents-lock.json", [])
+    result = CliRunner().invoke(
+        main, ["--project", str(project), "agent", "push", "ghost"],
+    )
+    assert result.exit_code == 1, result.output
+    assert "ghost: not in the project lock" in result.output
+    assert "found in" not in result.output
+
+
+def test_agent_bare_push_empty_lock_unchanged(tmp_path, monkeypatch):
+    """Bare push takes targets from the lock — never hits the branch; exit 0."""
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    project = tmp_path / "proj"
+    project.mkdir()
+    _seed_agent_lock(project / "agents-lock.json", [])
+    result = CliRunner().invoke(
+        main, ["--project", str(project), "agent", "push"],
+    )
+    assert result.exit_code == 0, result.output
+    assert "not in the" not in result.output

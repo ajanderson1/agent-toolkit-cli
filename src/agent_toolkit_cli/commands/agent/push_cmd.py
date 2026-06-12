@@ -43,10 +43,11 @@ def push_cmd(
     direct: bool,
 ) -> None:
     """Publish self-improvements upstream. Opens a PR by default."""
+    ctx_project = ctx.obj.get("project_root") if ctx.obj else None
     scope, home, project_root = scope_and_roots(
         global_,
         project_flag,
-        ctx.obj.get("project_root") if ctx.obj else None,
+        ctx_project,
         read_only=True,
     )
     lock_path = lock_file_path(scope=scope, home=home, project=project_root)
@@ -61,7 +62,8 @@ def push_cmd(
 
     for slug in targets:
         if slug not in lock.skills:
-            click.echo(f"{slug}: not in lock")
+            click.echo(_missing_slug_message(slug, scope, ctx_project))
+            rejected = True
             continue
 
         canonical = library_agent_path(slug)
@@ -111,6 +113,33 @@ def push_cmd(
 
     if rejected:
         ctx.exit(1)
+
+
+def _missing_slug_message(
+    slug: str, scope: str, ctx_project: Path | None,
+) -> str:
+    """Message for an explicitly named slug missing from the resolved scope's
+    lock (#371). Probes the OTHER scope's lock so a slug that lives there gets
+    a re-run hint instead of a bare "not in lock". `read_lock` returns an
+    empty lock for a missing/corrupt file, so the probe never raises. The
+    project root is re-derived here because `scope_and_roots` returns
+    `project_root=None` at global scope even when the cwd is a project."""
+    if scope == "project":
+        other = read_lock(lock_file_path(scope="global", home=Path.home()))
+        if slug in other.skills:
+            return (
+                f"{slug}: not in the project lock "
+                f"(found in the global lock — re-run with -g)"
+            )
+        return f"{slug}: not in the project lock"
+    other_root = ctx_project or Path.cwd()
+    other = read_lock(lock_file_path(scope="project", project=other_root))
+    if slug in other.skills:
+        return (
+            f"{slug}: not in the global lock "
+            f"(found in the project lock — re-run with -p)"
+        )
+    return f"{slug}: not in the global lock"
 
 
 def _push_via_pr(canonical: Path, entry: object, slug: str, base_ref: str) -> None:
