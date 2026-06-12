@@ -22,9 +22,15 @@ inherits the `looks_like_sha` heuristic, and a verb that forgets it ships a
 latent SHA bug. Today the heuristic is duplicated across **six** call sites and
 is re-derived ad hoc (the inventory site, added in #386, also has to AND in an
 `origin == "store-owned"` gate so an npm entry with a hex `ref` is not read as a
-pin). Three **clone paths** forgot the heuristic entirely and have a live bug:
-they pass a SHA `ref` straight into `git clone --branch <ref>`, which git
-rejects.
+pin). Worse, **seven clone paths** forgot the heuristic entirely and have a live
+bug: they pass a SHA `ref` straight into `git clone --branch <ref>`, which git
+rejects. Only the pi-extension add/reclone paths (#330) and the two shallow
+`import` paths (#259) handle a SHA today; every other clone site —
+`agent add`/`skill add` (single + monorepo), `skill install`/`agent install`,
+`ensure_project_canonical` (the normal project-install path), and the skill +
+agent **doctor reclone** paths — is broken for SHA pins. `agent add --ref <sha>`
+is the most-used SHA-pin entry point and fails today with `fatal: Remote branch
+<sha> not found`.
 
 ## Decision: derived in-memory reader, no on-disk change
 
@@ -111,24 +117,50 @@ property** (which derives npm-ness from `source_type`). The `add.py:116`
 exception is legitimate: it has a `ParsedSource`, not a `LockEntry`, so it keeps
 calling the bare helper.
 
-### 3. Clone-path fix (three sites — the live bug)
+### 3. Clone-path fix (seven sites — the live bug) via a shared helper
 
 `skill_git.clone(url, dest, ref=ref, ...)` does `if ref: cmd += ["--branch",
 ref]` (`skill_git.py:111-112`). A SHA `ref` therefore becomes `--branch <sha>`,
 which git rejects. The correct strategy is the one pi-extension already uses
-(`pi_extension_doctor.py:355-357`): when SHA-pinned, clone at HEAD (`ref=None`),
+(`pi_extension_doctor.py:375-391`): when SHA-pinned, clone at HEAD (`ref=None`),
 best-effort `fetch_ref(sha)`, then `checkout(sha)` as the fail-loud authority;
 when branch-tracking, clone `--branch <ref>` (or `ref=None` → remote default,
 the #332 master-vs-main case).
 
-The three skill/agent clone sites that currently pass `ref=entry.ref`
-unconditionally:
+A shared helper **`skill_git.clone_pinned_or_branch(url, dest, *, ref, env)`**
+encapsulates that dance as a verbatim extraction of the working pi-extension
+code. It takes a raw `ref` (not a `LockEntry`) and re-derives the pin internally
+via `looks_like_sha` — clone sites never hold an npm entry (npm = no clone), so
+the bare `looks_like_sha` here is equivalent to `is_sha_pinned` at every site
+that calls it; the docstring records that invariant. All clone sites passing a
+user/lock `ref` straight into `--branch` route through it:
 
-| Site | Current | Fix |
+| Site | Current | In scope |
 |---|---|---|
-| `skill_doctor._make_reclone_action` (`skill_doctor.py:331,345`) | `ref = entry.ref` → `clone(..., ref=ref)` | `entry.ref_tracks_branch` → `--branch`; pinned → clone-at-HEAD + `fetch_ref` + `checkout` |
-| `skill_doctor._make_monorepo_reclone_action` (`skill_doctor.py:379`, `clone` of parent) | `ref=entry.ref` into parent clone | same branch-vs-pin split for the parent clone |
-| `agent doctor `_make_readd_library_action`` (`commands/agent/doctor_cmd.py:99`) | `clone(url, canonical, ref=entry.ref)` | same split |
+| `commands/agent/add_cmd.py:120` (`agent add`, single) | `clone(parsed.url, canonical, ref=parsed.ref)` | yes |
+| `commands/agent/add_cmd.py:199` (`agent add`, monorepo parent) | `clone(parsed.url, parent_dir, ref=parsed.ref)` | yes |
+| `commands/skill/__init__.py:314` (`skill add`, single) | `clone(parsed.url, library_dir, ref=parsed.ref)` | yes |
+| `commands/skill/__init__.py:357` (`skill add`, monorepo parent) | `clone(parsed.url, parent_dir, ref=parsed.ref)` | yes |
+| `skill_install.py:156` (skill library install) | `clone(plan.source.url, canonical, ref=plan.ref)` | yes |
+| `skill_install.py:444` (`ensure_project_canonical`, project install) | `clone(source_url, project_canonical, ref=entry.ref)` | yes |
+| `agent_install.py:275` (agent project install) | `clone(plan.source.url, canonical, ref=plan.ref)` | yes |
+| `skill_doctor._make_reclone_action` (`skill_doctor.py:345`) | `clone(url, canonical, ref=ref)` | yes |
+| `skill_doctor._make_monorepo_reclone_action` (`skill_doctor.py:387`) | `clone(entry.parent_url, parent_dir, ref=entry.ref)` | yes |
+| `agent doctor `_make_readd_library_action`` (`commands/agent/doctor_cmd.py:99`) | `clone(url, canonical, ref=entry.ref)` | yes |
+
+That is **ten** clone call sites (seven add/install + three doctor) — the spec's
+"seven clone paths" in the Problem section counts the add/install group; the
+three doctor paths were the originally-reported subset. All ten route through
+the one helper.
+
+> **Monorepo cache key is unchanged.** The two monorepo sites
+> (`skill_doctor.py:387`, `add_cmd.py:199`, `skill/__init__.py:357`) compute
+> their parent-clone cache dir via `parent_clone_path(..., ref=entry.ref)` which
+> keys the dir on the raw ref (`<repo>@<sha>` vs `<repo>@<branch>`,
+> `skill_paths.py:163`). That call stays exactly as-is — only the subsequent
+> `clone(...)` becomes `clone_pinned_or_branch(...)`. Collapsing the cache key to
+> `ref=None` would break pin isolation between two skills from the same monorepo
+> at different pins.
 
 > The misleading comment at `skill_doctor.py:327-330` ("Pass the pinned ref when
 > one exists; otherwise None") describes intended behaviour the code does not
@@ -136,21 +168,24 @@ unconditionally:
 > intent and corrects the comment.
 
 The pi-extension reclone path (`pi_extension_doctor._make_reclone_action`)
-already does this; it is only **refactored** to read `entry.ref_looks_pinned` /
-`entry.ref_tracks_branch` instead of its local `looks_like_sha(ref)`.
+already implements this dance inline; it is only **refactored** to delegate to
+`clone_pinned_or_branch`, so all paths converge on one implementation.
 
-A shared private helper for "clone honouring a possible SHA pin" should be
-extracted (candidate home: `skill_git`, e.g.
-`clone_at_ref_or_pin(url, dest, *, entry, env)`) so the three skill/agent sites
-and pi-extension converge on one implementation rather than three copies of the
-clone→fetch→checkout dance. The plan decides the exact extraction.
+**Explicitly out of scope** (they already handle SHAs correctly): the two
+shallow `import` clone paths `commands/agent/import_cmd.py:88` and
+`commands/pi_extension/import_cmd.py:115` (#259 depth-1 clone-then-`fetch_ref`),
+and `pi_extension_add.py` (#330, already clones-at-HEAD + checks out a pin).
 
 ## Blast radius
 
-**One schema.** `LockEntry` lives in `skill_lock.py`; `agent_lock` and
-`pi_extension_lock` are re-export facades over it; `instructions_lock` is a
-**separate** dataclass and is unaffected (it has no SHA-pin concept). No on-disk
-format change, no migration, no version bump.
+**One schema, one new git helper, ten clone call sites repointed.** `LockEntry`
+lives in `skill_lock.py`; `agent_lock` and `pi_extension_lock` are re-export
+facades over it; `instructions_lock` is a **separate** dataclass and is
+unaffected (it has no SHA-pin concept). No on-disk format change, no migration,
+no version bump. The only new public symbol is
+`skill_git.clone_pinned_or_branch`; the ten clone sites change one line each (the
+`clone(...)` call) and the monorepo sites keep their `parent_clone_path(ref=...)`
+cache call untouched.
 
 ## Error handling
 
@@ -185,3 +220,7 @@ format change, no migration, no version bump.
 - Touching the `looks_like_sha` regex.
 - `instructions_lock` (separate dataclass, no pin concept).
 - The npm/registry pin story (npm entries never carry a user SHA pin here).
+- The two shallow `import` clone paths (`agent/import_cmd.py:88`,
+  `pi_extension/import_cmd.py:115`) and `pi_extension_add.py` — they already
+  clone-then-checkout a SHA correctly (#259 / #330). Refactoring them onto the
+  shared helper is a tidy-up, not a fix, and is deferred to avoid scope creep.

@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Stop overloading `LockEntry.ref` by deciding "is this a user SHA-pin?" in one place — a derived in-memory reader — then repoint all six `looks_like_sha` call sites at it and fix the three skill/agent clone paths that reject SHA pins.
+**Goal:** Stop overloading `LockEntry.ref` by deciding "is this a user SHA-pin?" in one place — a derived in-memory reader — then repoint all six `looks_like_sha` read sites at it, and fix **every** clone path (ten sites: seven add/install + three doctor) that today rejects a SHA pin via `git clone --branch <sha>`.
 
-**Architecture:** Add `looks_like_sha` + `is_sha_pinned(entry)` to `skill_lock.py`, plus two pure read-only `LockEntry` properties (`ref_looks_pinned`, `ref_tracks_branch`). Extract the pi-extension clone→fetch→checkout dance into a shared `skill_git` helper so the three skill/agent reclone paths and pi-extension converge on one implementation. **No on-disk lock change** — the format stays byte-compatible with `vercel-labs/skills` (`npx skills`).
+**Architecture:** Add `looks_like_sha` + `is_sha_pinned(entry)` to `skill_lock.py`, plus two pure read-only `LockEntry` properties (`ref_looks_pinned`, `ref_tracks_branch`). Extract the pi-extension clone→fetch→checkout dance into a shared `skill_git.clone_pinned_or_branch` helper, then route all ten broken clone sites through it so add/install/doctor and pi-extension converge on one implementation. **No on-disk lock change** — the format stays byte-compatible with `vercel-labs/skills` (`npx skills`).
 
 **Tech Stack:** Python 3, `uv run pytest`, dataclasses, `git_sandbox` test fixture (hermetic `file://` upstream).
 
@@ -17,11 +17,12 @@
 - `src/agent_toolkit_cli/skill_lock.py` — gains `looks_like_sha`, `is_sha_pinned`, and the two `LockEntry` properties. The discriminator's home.
 - `src/agent_toolkit_cli/pi_extension_add.py` — `looks_like_sha` definition removed; re-imported from `skill_lock` so existing import paths still resolve.
 - `src/agent_toolkit_cli/skill_git.py` — gains `clone_pinned_or_branch(...)`, the shared clone→fetch→checkout helper.
-- `src/agent_toolkit_cli/skill_doctor.py` — `_make_reclone_action` + `_make_monorepo_reclone_action` use the shared helper.
-- `src/agent_toolkit_cli/commands/agent/doctor_cmd.py` — `_make_readd_library_action` uses the shared helper.
-- `src/agent_toolkit_cli/pi_extension_doctor.py` — reclone reads `entry.ref_looks_pinned`/`ref_tracks_branch`; clone body delegates to the shared helper.
+- `src/agent_toolkit_cli/skill_doctor.py` — `_make_reclone_action` (`:345`) + `_make_monorepo_reclone_action` (`:387`) use the shared helper.
+- `src/agent_toolkit_cli/commands/agent/doctor_cmd.py` — `_make_readd_library_action` (`:99`) uses the shared helper.
+- `src/agent_toolkit_cli/commands/agent/add_cmd.py` (`:120`, `:199`), `commands/skill/__init__.py` (`:314`, `:357`), `skill_install.py` (`:156`, `:444`), `agent_install.py` (`:275`) — the seven add/install clone sites, repointed to the shared helper (Task 8).
+- `src/agent_toolkit_cli/pi_extension_doctor.py` — reclone reads `entry.ref_looks_pinned`/`ref_tracks_branch` (param retyped `object → LockEntry`); clone body delegates to the shared helper.
 - `src/agent_toolkit_cli/pi_extension_inventory.py`, `commands/pi_extension/{push,reset,update}_cmd.py` — repoint to `entry.ref_looks_pinned`.
-- Tests: `tests/test_cli/test_skill_lock.py` (truth table), `tests/test_cli/test_cli_skill_doctor.py` + `tests/test_cli/test_agent_doctor.py` (clone red-green), `tests/test_cli/test_cli_pi_extension_lifecycle.py` (existing reclone tests stay green).
+- Tests: `tests/test_cli/test_skill_lock.py` (truth table), `tests/test_cli/test_skill_git_clone_pin.py` (helper unit), `tests/test_cli/test_cli_skill_doctor.py` + `tests/test_cli/test_agent_doctor.py` (clone red-green), `tests/test_cli/test_cli_pi_extension_lifecycle.py` (existing reclone tests stay green), plus add/install SHA tests in the skill/agent add+install test files (Task 8).
 
 ---
 
@@ -244,7 +245,9 @@ becomes (read from the entry directly):
     clone_ref = None if entry.ref_looks_pinned else ref
 ```
 
-Note `entry` is the `_make_reclone_action` param; `ref = getattr(entry, "ref", None)` a few lines above stays. Remove the `from ...pi_extension_add import looks_like_sha` import at `:31` if unused (the clone body in Task 5 may still reference it indirectly via the helper — verify before deleting).
+Note `entry` is the `_make_reclone_action` param; `ref = getattr(entry, "ref", None)` a few lines above stays. Remove the `from ...pi_extension_add import looks_like_sha` import at `:31` if unused.
+
+**Retype the param (mypy gate):** `_make_reclone_action` currently declares `entry: object` (`pi_extension_doctor.py:354`). Reading `entry.ref_looks_pinned` on an `object` is a NEW mypy error (`"object" has no attribute "ref_looks_pinned"`). Change the signature to `entry: LockEntry` and add `LockEntry` to the module's `from agent_toolkit_cli.skill_lock import (...)` (or `pi_extension_lock import`) block. With the param typed, `ref = getattr(entry, "ref", None)` can also become `ref = entry.ref` — but leaving the `getattr` is harmless; the retype is the load-bearing change. (Separately: the pre-existing `looks_like_sha` mypy note at `pi_extension_add.py:45` *relocates* to `skill_lock.py` when the function moves in Task 1 — net-neutral, expected, not a new error.)
 
 - [ ] **Step 4: Run the pi-extension suites**
 
@@ -338,7 +341,13 @@ def clone_pinned_or_branch(
     abbreviations, which checkout resolves locally), then checkout as the
     fail-loud authority. A branch/tag `ref` (or None → remote default) clones
     `--branch` directly. A failed checkout removes the partial clone and
-    re-raises — fail loud, no orphan dir (#313, #345)."""
+    re-raises — fail loud, no orphan dir (#313, #345).
+
+    Takes a raw `ref`, not a LockEntry, and derives the pin via bare
+    `looks_like_sha` (NOT is_sha_pinned): every clone site holds a store-owned
+    source — npm entries are never cloned — so the source_type gate is moot
+    here. This is the one place bare `looks_like_sha` is correct over the
+    origin-aware property."""
     pin = ref if looks_like_sha(ref) else None
     clone(url, dest, ref=None if pin else ref, env=env)
     if pin and is_git_repo(dest):
@@ -374,12 +383,12 @@ Device: $(hostname -s)"
 ## Task 5: Fix the skill-doctor reclone paths (single + monorepo)
 
 **Files:**
-- Modify: `src/agent_toolkit_cli/skill_doctor.py:331-345` (`_make_reclone_action`), `:379+` (`_make_monorepo_reclone_action`)
+- Modify: `src/agent_toolkit_cli/skill_doctor.py:345` (`_make_reclone_action`), `:387` (`_make_monorepo_reclone_action` parent clone)
 - Test: `tests/test_cli/test_cli_skill_doctor.py`
 
 - [ ] **Step 1: Write the failing red-green test**
 
-Add to `tests/test_cli/test_cli_skill_doctor.py` (model on the existing `_seed`/`git_sandbox` helpers already in the file; if the file lacks a direct `diagnose`+`fix_action.apply` test, follow the pi-extension lifecycle pattern):
+The global library is keyed off `$AGENT_TOOLKIT_SKILLS_ROOT`, **not** a `home=` argument — `library_lock_path(env=None)` has no `home` param, and `canonical_skill_dir(..., scope="global", home=...)` *ignores* `home` for global scope (`skill_paths.py` docstring). Seed via the env var exactly as the file's existing `_seed` helper (`tests/test_cli/test_cli_skill_doctor.py:13-19`) does. Add:
 
 ```python
 def test_skill_doctor_reclone_sha_pinned_lands_on_pin(
@@ -388,11 +397,21 @@ def test_skill_doctor_reclone_sha_pinned_lands_on_pin(
     """A SHA-pinned skill entry whose canonical is missing must reclone onto
     the pin — not be rejected by `git clone --branch <sha>` (#345)."""
     from agent_toolkit_cli import skill_doctor
-    from agent_toolkit_cli.skill_lock import LockEntry, LockFile, write_lock
+    from agent_toolkit_cli.skill_lock import (
+        LockEntry, LockFile, write_lock,
+    )
+    from agent_toolkit_cli.skill_paths import (
+        canonical_skill_dir, library_lock_path,
+    )
 
     for k, v in git_sandbox.env.items():
         monkeypatch.setenv(k, v)
-    monkeypatch.setenv("HOME", str(tmp_path))
+    library_root = tmp_path / "lib" / "skills"
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    monkeypatch.setenv("HOME", str(fake_home))
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: fake_home))
 
     def git(*args):
         return subprocess.run(
@@ -405,8 +424,7 @@ def test_skill_doctor_reclone_sha_pinned_lands_on_pin(
     git("add", "-A"); git("commit", "-m", "second"); git("push", "origin", "main")
 
     # Global library lock: store-owned skill pinned to first_sha, canonical MISSING.
-    from agent_toolkit_cli.skill_paths import library_lock_path
-    lock_path = library_lock_path(home=tmp_path)  # adjust to the real signature
+    lock_path = library_lock_path()  # reads AGENT_TOOLKIT_SKILLS_ROOT
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     write_lock(lock_path, LockFile(version=1, skills={
         "demo": LockEntry(
@@ -416,7 +434,7 @@ def test_skill_doctor_reclone_sha_pinned_lands_on_pin(
     }))
 
     findings = skill_doctor.diagnose(
-        slugs=None, scope="global", home=tmp_path, project=None,
+        slugs=None, scope="global", home=fake_home, project=None,
     )
     reclone = next(
         f for f in findings
@@ -424,8 +442,9 @@ def test_skill_doctor_reclone_sha_pinned_lands_on_pin(
     )
     reclone.fix_action.apply()
 
-    from agent_toolkit_cli.skill_paths import canonical_skill_dir
-    canonical = canonical_skill_dir("demo", scope="global", home=tmp_path, project=None)
+    canonical = canonical_skill_dir(
+        "demo", scope="global", home=fake_home, project=None,
+    )
     head = subprocess.run(
         ["git", "-C", str(canonical), "rev-parse", "HEAD"],
         check=True, env=git_sandbox.env, capture_output=True, text=True,
@@ -433,7 +452,7 @@ def test_skill_doctor_reclone_sha_pinned_lands_on_pin(
     assert head == first_sha
 ```
 
-> **Worker note:** confirm `library_lock_path` / `canonical_skill_dir` exact signatures and the `diagnose` parameter names against `skill_doctor.py:56` before running — the file's existing `_seed` helper is the canonical reference for how the global library is laid out in tests. Adjust the seeding to match (the existing drift tests in this file already seed a global library; reuse that machinery).
+> **Worker note:** verified signatures — `library_lock_path(env=None)` (no `home`), `canonical_skill_dir(slug, *, scope, home=None, project=None)` (home ignored for global), `skill_doctor.diagnose(*, slugs, scope, home, project, repair_foreign=False)`. `Path` is already imported at the top of this test file (used by `_seed`). The `FixAction.description` selector is correct here — skill-doctor's `FixAction` has a `description` field (`skill_doctor.py:40-43`), value `f"Re-clone {slug} from {url}"`.
 
 - [ ] **Step 2: Run to verify it fails**
 
@@ -470,7 +489,11 @@ Update the `shell_preview` to reflect the post-clone checkout when `ref` is a SH
 
 - [ ] **Step 4: Fix `_make_monorepo_reclone_action`**
 
-The monorepo path clones the **parent** repo into the `_parents/` cache. Locate its `skill_git.clone(parent_url, parent_dir, ref=...)` call (around `:379-400`) and the `ref` it passes. A monorepo skill's pin is still on `entry.ref`, so replace that `clone(...)` with `clone_pinned_or_branch(parent_url, parent_dir, ref=ref, env=None)`. Keep the subsequent symlink-to-subpath logic unchanged. (Read the full function body before editing — only the clone call changes.)
+The monorepo path clones the **parent** repo into the `_parents/` cache. The clone call is at `skill_doctor.py:387`: `skill_git.clone(entry.parent_url, parent_dir, ref=entry.ref, env=None)`. Replace **only** that call with `skill_git.clone_pinned_or_branch(entry.parent_url, parent_dir, ref=entry.ref, env=None)`.
+
+> **Do NOT touch the `parent_clone_path(...)` call** a few lines above (`skill_doctor.py:379`). It computes `parent_dir` by keying the cache leaf on the raw `ref` (`<repo>@<sha>` vs `<repo>@<branch>`, `skill_paths.py:163`). The helper internally clones the SHA case at HEAD and checks out the pin, but the cache dir must stay keyed on the SHA so two skills from the same monorepo pinned to *different* commits don't collide in one cache dir. Changing `parent_clone_path(ref=...)` to `ref=None` would break that pin isolation. Only the `clone(...)` line changes; the cache key stays `entry.ref`.
+
+Keep the subsequent symlink-to-subpath logic unchanged. (Read the full function body before editing.)
 
 - [ ] **Step 5: Run to verify it passes**
 
@@ -499,7 +522,13 @@ Device: $(hostname -s)"
 
 - [ ] **Step 1: Write the failing red-green test**
 
-Add to `tests/test_cli/test_agent_doctor.py` a test that seeds a SHA-pinned agent library entry with a missing canonical, runs the doctor's re-add fix action, and asserts the recloned canonical's `HEAD == pinned_sha`. Model it on the existing agent-doctor tests in that file (they already build a library + lock via the file's helpers) and on Task 5's structure. Selector: the re-add `FixAction` (its description mentions re-add / re-clone — confirm the exact string from `_make_readd_library_action` and match on it).
+**Critical: get the trigger right.** `_make_readd_library_action` is reached ONLY via the **`unlisted`** finding (`doctor_cmd.py:285-291`, #360) — a **project**-scope lock entry whose slug is **absent from the library lock**. The agent `missing-canonical` finding carries `fix_action=None` (`doctor_cmd.py:149-152`), so seeding a *library* entry with a missing canonical does NOT reach this clone path. The test must seed a **project** lock entry (SHA-pinned, `source_type="git"`) that is NOT in the library lock.
+
+Other verified facts for this test:
+- Entry point is `doctor_cmd._diagnose(...)`, **not** `diagnose` (the agent doctor's internal name).
+- Agent `FixAction` (`doctor_cmd.py:44-46`) has **only** `shell_preview` + `apply` — **no `description`**. Select on `shell_preview`. The re-add preview string is `agent-toolkit-cli agent add {entry.source}{ref_arg} --slug {slug}` (`doctor_cmd.py:110`), so match on `"agent add"` in `f.fix_action.shell_preview`.
+
+Model the project-lock + library-absent seeding on the existing #360 unlisted test already in `test_agent_doctor.py` (it builds exactly this state — reuse its helpers, then set `ref` to `first_sha` and assert the landed commit):
 
 ```python
 def test_agent_doctor_readd_sha_pinned_lands_on_pin(
@@ -507,13 +536,20 @@ def test_agent_doctor_readd_sha_pinned_lands_on_pin(
 ):
     """An unlisted SHA-pinned agent re-added by doctor must land on the pin,
     not be rejected by `git clone --branch <sha>` (#345)."""
-    # ... seed library lock with LockEntry(source=upstream, source_type="git",
-    #     ref=first_sha, agent_path=..., upstream_sha=None), canonical missing ...
-    # ... run doctor diagnose, find the re-add fix_action, apply it ...
-    # ... assert HEAD of the recloned canonical == first_sha ...
+    # Seed a PROJECT lock entry pinned to first_sha whose slug is ABSENT from
+    # the library lock (the #360 `unlisted` trigger — reuse this file's existing
+    # unlisted-case setup helper; set the entry's ref to first_sha,
+    # source_type="git", upstream_sha=None).
+    # findings = doctor_cmd._diagnose(slugs=None, scope="project", home=..., project=...)
+    # readd = next(f for f in findings
+    #              if f.fix_action is not None
+    #              and "agent add" in f.fix_action.shell_preview)
+    # readd.fix_action.apply()
+    # assert <library canonical>.HEAD == first_sha
+    ...
 ```
 
-> **Worker note:** fill in the seeding from the existing helpers in `test_agent_doctor.py` (it already exercises `_make_readd_library_action` for the #360 unlisted case — reuse that setup, just set `ref` to a SHA and assert the landed commit).
+> **Worker note:** the exact `_diagnose` kwargs and the library-canonical path helper (`library_agent_path(slug, *, env=None)`) are confirmed; lift the project+library lock seeding verbatim from the existing unlisted test in this file rather than re-deriving it.
 
 - [ ] **Step 2: Run to verify it fails**
 
@@ -554,7 +590,80 @@ Device: $(hostname -s)"
 
 ---
 
-## Task 7: Refactor pi-extension reclone onto the shared helper + full-suite green
+## Task 7: Route the seven add/install clone sites through the shared helper
+
+These are the live SHA bug on the *primary* entry points (`agent add --ref <sha>`, `skill add`, project install). The helper from Task 4 is drop-in for all of them: each is a one-line `clone(...)` → `clone_pinned_or_branch(...)` swap with the same args. The two monorepo sites keep their `parent_clone_path(ref=...)` cache call (same rule as Task 5 Step 4).
+
+**Files:**
+- Modify: `src/agent_toolkit_cli/commands/agent/add_cmd.py:120` (single), `:199` (monorepo parent)
+- Modify: `src/agent_toolkit_cli/commands/skill/__init__.py:314` (single), `:357` (monorepo parent)
+- Modify: `src/agent_toolkit_cli/skill_install.py:156` (library install), `:444` (`ensure_project_canonical`)
+- Modify: `src/agent_toolkit_cli/agent_install.py:275` (agent project install)
+- Test: `tests/test_cli/test_cli_agent_group.py` / `test_agent_add*.py` (agent add SHA), `tests/test_cli/test_cli_skill_*` (skill add/install SHA)
+
+- [ ] **Step 1: Write one failing red-green test for the primary path (`agent add --ref <sha>`)**
+
+This is the highest-value site (a user-facing command). Add a test that runs `agent add <upstream> --ref <first_sha> --slug demo` against `git_sandbox` and asserts the canonical lands on `first_sha`. Model on the existing `agent add` tests in the agent test files (they already drive `agent add` via the Click runner with `AGENT_TOOLKIT_*` env seeding). Skeleton:
+
+```python
+def test_agent_add_sha_ref_lands_on_pin(git_sandbox, tmp_path, monkeypatch):
+    """`agent add <src> --ref <sha>` must land on the pin, not be rejected by
+    `git clone --branch <sha>` (#345)."""
+    # ... env seed (AGENT_TOOLKIT_AGENTS_ROOT / HOME / Path.home) as the existing
+    #     agent-add tests do ...
+    # first_sha = <HEAD of git_sandbox.clone>; push a later commit so HEAD != pin
+    # r = runner.invoke(main, ["agent", "add", str(git_sandbox.upstream),
+    #                          "--ref", first_sha, "--slug", "demo"])
+    # assert r.exit_code == 0, r.output
+    # assert <library_agent_path("demo")>.HEAD == first_sha
+```
+
+> **Worker note:** confirm the exact env-var name for the agents library root and the `agent add` flag spelling (`--ref`, `--slug`) against `commands/agent/add_cmd.py:83` and the existing add tests before running. One representative red-green test for the primary `agent add` path is sufficient to prove the helper wiring; the remaining six sites are the identical mechanical swap covered by the existing add/install suites staying green.
+
+- [ ] **Step 2: Run to verify it fails**
+
+Run: `uv run pytest tests/test_cli/ -k "agent_add_sha_ref_lands_on_pin" -v`
+Expected: FAIL — `git clone --branch <first_sha>` rejected.
+
+- [ ] **Step 3: Swap all seven clone calls**
+
+In each site, replace `skill_git.clone(<url>, <dest>, ref=<ref>, env=<env>)` with `skill_git.clone_pinned_or_branch(<url>, <dest>, ref=<ref>, env=<env>)`, keeping every argument identical:
+
+- `commands/agent/add_cmd.py:120` — `ref=parsed.ref` (single)
+- `commands/agent/add_cmd.py:199` — `ref=parsed.ref` (monorepo parent; leave the `parent_clone_path(ref=parsed.ref)` cache call above it untouched)
+- `commands/skill/__init__.py:314` — `ref=parsed.ref` (single)
+- `commands/skill/__init__.py:357` — `ref=parsed.ref` (monorepo parent; cache call untouched)
+- `skill_install.py:156` — `ref=plan.ref, env=env`
+- `skill_install.py:444` — `ref=entry.ref, env=env` (`ensure_project_canonical`; check for a sibling monorepo branch in this function — if a second `clone(...)` exists at `:418`, swap it too with its cache call untouched)
+- `agent_install.py:275` — `ref=plan.ref, env=env`
+
+Read ±10 lines around each before editing to confirm the variable names (`parsed.ref` / `plan.ref` / `entry.ref`) and that no site already has a `looks_like_sha` guard (the two `import_cmd.py` depth-1 sites DO and are out of scope — do not touch them).
+
+- [ ] **Step 4: Run the agent-add SHA test + the full add/install suites**
+
+Run: `uv run pytest tests/test_cli/ -k "agent_add or skill_add or install" -v`
+Expected: PASS — new SHA test green, all existing add/install tests green (the swap is behaviour-preserving for branch refs: `clone_pinned_or_branch` with a non-SHA ref does exactly `clone(..., ref=ref)`).
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src/agent_toolkit_cli/commands/agent/add_cmd.py \
+        src/agent_toolkit_cli/commands/skill/__init__.py \
+        src/agent_toolkit_cli/skill_install.py \
+        src/agent_toolkit_cli/agent_install.py \
+        tests/test_cli/
+git commit -m "fix: add/install clone paths honour SHA pins (#345)
+
+agent add --ref <sha>, skill add, skill/agent install, and
+ensure_project_canonical all route through clone_pinned_or_branch so a
+SHA ref is checked out post-clone instead of rejected by --branch <sha>.
+
+Device: $(hostname -s)"
+```
+
+---
+
+## Task 8: Refactor pi-extension reclone onto the shared helper + full-suite green
 
 **Files:**
 - Modify: `src/agent_toolkit_cli/pi_extension_doctor.py:375-400` (the `_apply` clone dance)
@@ -600,9 +709,9 @@ Expected: no NEW errors vs base (the repo carries pre-existing mypy/ruff baselin
 git add src/agent_toolkit_cli/pi_extension_doctor.py
 git commit -m "refactor(pi-extension): reclone via shared clone_pinned_or_branch (#345)
 
-Three reclone paths (skill+agent+pi-extension) now share one SHA-aware
-clone implementation. No behaviour change here — the helper is a verbatim
-extraction of the pi-extension dance.
+All clone paths now share one SHA-aware clone implementation. No
+behaviour change here — the helper is a verbatim extraction of the
+pi-extension dance.
 
 Device: $(hostname -s)"
 ```
@@ -611,9 +720,18 @@ Device: $(hostname -s)"
 
 ## Self-Review notes (author)
 
-- **Spec coverage:** discriminator (Task 1), six-site collapse (Tasks 2-3, with `add.py` as the documented exception in Task 2), three clone-path fixes (Tasks 4-6), pi-extension convergence (Task 7), persisted-field-B rejection (recorded in spec, no task needed — it's a non-action). Truth-table npm+hex row → Task 1 Step 1. ✓
+- **Spec coverage:** discriminator (Task 1), six-site collapse (Tasks 2-3, with `add.py` as the documented exception in Task 2), shared helper (Task 4), three doctor clone-path fixes (Tasks 5-6), seven add/install clone-path fixes (Task 7), pi-extension convergence + full-suite green (Task 8), persisted-field-B rejection (recorded in spec, no task — a non-action). Truth-table npm+hex row → Task 1 Step 1. ✓
 - **Naming consistency:** `is_sha_pinned` (helper), `ref_looks_pinned` / `ref_tracks_branch` (properties), `clone_pinned_or_branch` (git helper) used identically across all tasks. ✓
 - **No regex change:** confirmed — `looks_like_sha` is moved verbatim, never edited. ✓
-- **Import-cycle risk** flagged in Task 4 Step 3 with a function-local fallback. ✓
-- **Whitelisted failures** named explicitly in Task 7 Step 3 so the worker does not chase them. ✓
-- **Open verification points** (test-helper signatures for skill/agent doctor seeding) are flagged inline as worker notes rather than guessed — the worker confirms against the existing tests in each file before running.
+- **Import-cycle risk** flagged in Task 4 Step 3 with a function-local fallback (verified acyclic in critical review). ✓
+- **Whitelisted failures** named explicitly in Task 8 Step 3 so the worker does not chase them. ✓
+
+### Critical-review fixes folded in (ce-doc-review, 2026-06-12)
+
+- **Clone-bug scope undercount (CRITICAL, feasibility + adversarial agreement):** spec Problem + Section 3 now enumerate all ten broken sites; Task 7 routes the seven add/install sites through the helper. Decision: WIDEN (PM-approved).
+- **`entry: object` mypy regression (feasibility):** Task 3 Step 3 now retypes the `_make_reclone_action` param to `LockEntry`.
+- **Task 5 test seeding used non-existent `home=` (feasibility):** rewritten to seed via `AGENT_TOOLKIT_SKILLS_ROOT` per the existing `_seed` helper; verified `library_lock_path`/`canonical_skill_dir`/`diagnose` signatures inline.
+- **Task 6 wrong trigger + wrong FixAction field (feasibility):** now seeds the `unlisted` (project-entry-absent-from-library) case, uses `_diagnose`, selects on `shell_preview` ("agent add") — agent `FixAction` has no `description`.
+- **Monorepo cache-key/clone-ref split (adversarial MAJOR):** Task 5 Step 4 + Task 7 Step 3 explicitly keep `parent_clone_path(ref=entry.ref)` while swapping only the `clone(...)` call.
+- **Helper double-derivation note (adversarial MINOR):** Task 4 helper docstring records why bare `looks_like_sha` is correct at clone sites (never holds an npm entry).
+- **Line-number corrections:** monorepo clone is `skill_doctor.py:387` (not `:379` — that's `parent_clone_path`).
