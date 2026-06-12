@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Literal
 
 from agent_toolkit_cli import _pi_settings
+from agent_toolkit_cli.pi_extension_add import looks_like_sha
 from agent_toolkit_cli.pi_extension_lock import read_lock
 from agent_toolkit_cli.pi_extension_paths import (
     Scope,
@@ -32,6 +33,7 @@ class InventoryRecord:
     source: str
     global_loaded: bool = False
     project_loaded: bool = False
+    pinned_sha: str | None = None
 
 
 def _extensions_root(*, scope: Scope, home: Path | None, project: Path | None) -> Path:
@@ -106,15 +108,28 @@ def build_inventory(
             continue
         for slug, entry in lock.skills.items():
             origin: Origin = "npm" if entry.source_type == "npm" else "store-owned"
+            # Only store-owned (git-cloned) entries can be SHA-pinned — an npm
+            # row carrying a hex `ref` (hand-edited / future-schema) is not a
+            # pin. Gate on origin so status never renders a phantom pin column
+            # for an npm entry (spec invariant: npm/untracked → pinned_sha=None).
+            pinned_sha = (
+                entry.ref
+                if origin == "store-owned" and looks_like_sha(entry.ref)
+                else None
+            )
             rec = by_slug.setdefault(
                 slug,
-                InventoryRecord(slug=slug, origin=origin, source=entry.source),
+                InventoryRecord(
+                    slug=slug, origin=origin, source=entry.source,
+                    pinned_sha=pinned_sha,
+                ),
             )
             # A slug that appears in both scopes: store-owned beats npm in the
             # global lock. Project lock rows refine the loaded flags only.
             if rec.origin != "store-owned" or origin == "store-owned":
                 rec.origin = origin
             rec.source = entry.source
+            rec.pinned_sha = pinned_sha
 
     # 2. Loose / untracked entries already in Pi's extensions/ dirs.
     for scope, _ in scopes:

@@ -218,6 +218,51 @@ def test_push_dirty_store_via_pr_or_direct(tmp_path, monkeypatch, git_sandbox):
     assert skill_git.status(canonical, env=None).value == "clean"
 
 
+def test_push_skips_pinned_entry(tmp_path, monkeypatch, git_sandbox):
+    """A SHA-pinned entry must not poison `push`: skip + exit 0 (#346)."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    sha = _seed_pinned_entry(tmp_path, git_sandbox)
+
+    r = CliRunner().invoke(main, ["pi-extension", "push", "pinned", "-g"])
+    assert r.exit_code == 0, r.output
+    assert "pinned to" in r.output.lower()
+    assert sha[:7] in r.output
+
+
+def test_push_pinned_does_not_poison_batch(tmp_path, monkeypatch, git_sandbox):
+    """A pinned entry alongside a clean store-owned entry: bare push over both
+    stays exit 0 — the pin is a benign skip, not a rejection (#346)."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    _add_store_owned(tmp_path, git_sandbox.env, git_sandbox.upstream)  # 'demo', unpinned
+    sha = _seed_pinned_entry(tmp_path, git_sandbox)                    # 'pinned'
+
+    r = CliRunner().invoke(main, ["pi-extension", "push", "-g"])
+    assert r.exit_code == 0, r.output
+    assert "pinned to" in r.output.lower()
+    assert sha[:7] in r.output
+
+
+def test_push_pinned_skips_even_when_dirty(tmp_path, monkeypatch, git_sandbox):
+    """The skip is unconditional w.r.t. working-tree state: a pinned checkout
+    with a local edit still skips (the edit is intentionally unreachable via
+    push — remove+re-add to publish) (#346)."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    _seed_pinned_entry(tmp_path, git_sandbox)
+    canonical = pep.library_pi_extension_path("pinned", env={})
+    (canonical / "ext.ts").write_text("// local edit on a pinned checkout")
+
+    r = CliRunner().invoke(main, ["pi-extension", "push", "pinned", "-g"])
+    assert r.exit_code == 0, r.output
+    assert "pinned to" in r.output.lower()
+    assert "pushed" not in r.output.lower()  # the local edit was NOT pushed
+
+
 # ---------------------------------------------------------------------------
 # Task B3: import
 # ---------------------------------------------------------------------------
@@ -644,3 +689,35 @@ def test_doctor_squatted_projection_reported(tmp_path, monkeypatch, git_sandbox)
         "doctor must not remove or modify the foreign dir (clobber-safety)."
     )
     assert (link / "index.ts").exists()
+
+
+def test_status_reports_pin_column(tmp_path, monkeypatch, git_sandbox):
+    """status over a pinned entry shows a trailing pinned:<sha7> column (#346)."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    sha = _seed_pinned_entry(tmp_path, git_sandbox)
+
+    r = CliRunner().invoke(main, ["pi-extension", "status", "-g"])
+    assert r.exit_code == 0, r.output
+    line = next(ln for ln in r.output.splitlines() if ln.startswith("pinned\t"))
+    fields = line.split("\t")
+    assert fields[-1] == f"pinned:{sha[:7]}"
+    # load-scope column preserved (4 fields: slug, origin, loaded, pin)
+    assert len(fields) == 4
+
+
+def test_status_unpinned_has_empty_pin_field(tmp_path, monkeypatch, git_sandbox):
+    """A non-pinned store-owned entry prints an empty 4th field (#346)."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    _add_store_owned(tmp_path, git_sandbox.env, git_sandbox.upstream)  # 'demo'
+
+    r = CliRunner().invoke(main, ["pi-extension", "status", "-g"])
+    assert r.exit_code == 0, r.output
+    line = next(ln for ln in r.output.splitlines() if ln.startswith("demo\t"))
+    fields = line.split("\t")
+    assert len(fields) == 4
+    assert fields[-1] == ""
+    assert "pinned:" not in line

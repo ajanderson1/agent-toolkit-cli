@@ -187,3 +187,58 @@ def test_store_owned_squatted_projection_not_loaded(tmp_path, monkeypatch):
 
     # Sanity: the foreign dir must still exist (never touched by inventory).
     assert proj_path.exists() and not proj_path.is_symlink()
+
+
+def test_pinned_entry_records_pinned_sha(tmp_path, monkeypatch):
+    """A store-owned lock entry whose ref is a SHA exposes pinned_sha (#346)."""
+    # The global lock resolves from $HOME (lock_file_path ignores the `home`
+    # arg at global scope — see test_store_owned_from_lock), so point HOME at
+    # tmp_path for the seeded lock to be discovered.
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / ".agent-toolkit").mkdir()
+    (tmp_path / ".agent-toolkit" / "pi-extensions-lock.json").write_text(
+        json.dumps({
+            "version": 1,
+            "skills": {
+                "pinned": {
+                    "source": "acme/ext",
+                    "sourceType": "github",
+                    "ref": "abc1234def5678",
+                },
+                "tracked": {
+                    "source": "acme/ext2",
+                    "sourceType": "github",
+                    "ref": "main",
+                },
+                "regfoo": {"source": "foo", "sourceType": "npm"},
+            },
+        }) + "\n"
+    )
+    records = {r.slug: r for r in build_inventory(home=tmp_path)}
+    assert records["pinned"].pinned_sha == "abc1234def5678"
+    assert records["tracked"].pinned_sha is None
+    assert records["regfoo"].pinned_sha is None
+
+
+def test_npm_entry_with_hex_ref_is_not_pinned(tmp_path, monkeypatch):
+    """An npm row carrying a hex `ref` (hand-edited / future-schema / migration)
+    must NOT be treated as a pin — pinned_sha stays None for non-store-owned
+    origins (#346). Guards the spec invariant 'npm and untracked rows leave
+    pinned_sha=None' against a SHA-shaped ref on an npm entry."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / ".agent-toolkit").mkdir()
+    (tmp_path / ".agent-toolkit" / "pi-extensions-lock.json").write_text(
+        json.dumps({
+            "version": 1,
+            "skills": {
+                "npm-hex": {
+                    "source": "foo",
+                    "sourceType": "npm",
+                    "ref": "abc1234",
+                },
+            },
+        }) + "\n"
+    )
+    records = {r.slug: r for r in build_inventory(home=tmp_path)}
+    assert records["npm-hex"].origin == "npm"
+    assert records["npm-hex"].pinned_sha is None
