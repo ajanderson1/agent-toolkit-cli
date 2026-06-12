@@ -35,70 +35,126 @@ member; three independent critical reviewers flagged it as a v1 blocker. A futur
    **standard** bundle (the `standard` token path: `~/.agents/skills/<slug>` at
    global scope, `<project>/.agents/skills/<slug>` at project scope).
 2. `skill uninstall <slug>` with **no** `--agents` flag succeeds and removes the
-   **maximal** set (the `all` token: every agent detected as installed at that
-   scope, plus the standard-bundle symlink).
+   **maximal** set — the `standard` bundle symlink **plus** every per-agent
+   projection detected as installed at that scope, so a bare uninstall leaves no
+   orphans. (See "The maximal-uninstall mechanism" below — this is **not** simply
+   `--agents all`, which provably excludes the `standard` token.)
 3. An explicit `--agents <value>` is honoured **unchanged** on both `install` and
    `uninstall` — the value still flows through `_resolve_agents` exactly as today.
-   Only the *omitted* case changes behaviour (from a `UsageError` to the default).
+   Only the *omitted* case changes behaviour (from a `UsageError` to a default).
 4. `skill install --help` and `skill uninstall --help` show the `--agents` option
-   as optional with its default, no longer as `[required]`.
-5. The change is confined to the two `@click.option("--agents", ...)` declarations
-   in `commands/skill/__init__.py`: drop `required=True`, add `default="standard"`
-   (install) / `default="all"` (uninstall). No change to `_resolve_agents`, the
-   `InstallPlan` / `engine_apply` path, the lock format, or any other module.
-6. Both behaviours hold at **global** and **project** scope.
+   as optional, no longer as `[required]`.
+5. **Install** is a one-line option change: drop `required=True`, add
+   `default="standard"` on `install_cmd`'s `--agents` (`commands/skill/__init__.py`
+   ~:507). **Uninstall** drops `required=True` and uses a sentinel default
+   (`default=None`); when `--agents` is omitted, `uninstall_cmd` computes the
+   maximal target itself as `("standard", *detect_installed_agents())` before
+   calling `_resolve_agents`/`engine_apply`. **`_resolve_agents`, the `InstallPlan`
+   / `engine_apply` path, the lock format, and the other skill verbs are
+   untouched** — the union is local to `uninstall_cmd`.
+6. Both behaviours hold at **global** and **project** scope (project-scope uninstall
+   removes `<project>/.agents/skills/<slug>` via the `standard` token plus the
+   project per-agent symlinks).
 
-## The deliberate install/uninstall asymmetry
+## The maximal-uninstall mechanism (corrected after critical review)
 
-`install` defaults **minimal** (`standard`) and `uninstall` defaults **maximal**
-(`all`). This mirrors the existing `agent uninstall` precedent
-(`commands/agent/uninstall_cmd.py:_resolve_harnesses_for_uninstall`), whose own
-code comment states the rationale: a default uninstall must clean up *everything*
-— including projections an earlier or narrower install wrote — so a bare "undo"
-never leaves orphaned symlinks behind. Mechanically, for skill: `--agents standard`
-removes only the standard-bundle symlink, while `--agents all` removes every
-per-agent symlink; defaulting uninstall to `all` ensures `skill uninstall <slug>`
-with no flag removes a skill *everywhere* it was projected, not just from the
-standard bundle.
+The naïve "default uninstall to `all`" does **not** work, and critical review
+caught it against the code:
 
-A short comment will be added on the skill `uninstall_cmd` `--agents` default
-pointing at the agent-uninstall rationale, so the asymmetry reads as deliberate
-rather than as an inconsistency.
+- `_resolve_agents("all")` returns `tuple(detect_installed_agents())`, and
+  `detect_installed_agents()` enumerates only real catalog agents
+  (`[n for n,c in AGENTS.items() if c.detect_installed()]`). The synthetic
+  `standard` token has `detect_installed=lambda: False`, so **`all` can never
+  include `standard`** — and only the `standard` token removes the
+  `~/.agents/skills/<slug>` bundle symlink. A `default="all"` would orphan it.
+- `_resolve_agents("standard,all")` would **raise** `UsageError("unknown agent(s):
+  all")`: the resolver only treats `"all"` specially when it is the *entire* string
+  (`if agents_str == "all"`), not inside a comma list.
+
+This is exactly why the cited precedent, `agent uninstall`
+(`commands/agent/uninstall_cmd.py:_resolve_harnesses_for_uninstall`), builds its
+maximal set as `("standard", *sorted(detected))` rather than relying on a token.
+**Skill mirrors that:** when `--agents` is omitted, `uninstall_cmd` computes
+`target_agents = ("standard", *detect_installed_agents())` directly and passes it
+to the existing `engine_apply` path. `_resolve_agents` is not changed and not
+called for the default path (it is still used for explicit `--agents` values).
+
+`install` stays **minimal** (`standard` — the single safest target, created
+directly by the add path, no detection needed) and `uninstall` is **maximal**
+(`standard` + all detected). The asymmetry is deliberate: a bare uninstall must
+clean up everywhere a skill was ever projected. A code comment on the uninstall
+default points at the agent-uninstall precedent so it reads as intentional.
+
+**User-facing consequence (documented, not a bug):** because bare uninstall is
+maximal, `skill install foo --agents claude-code` (narrow) followed by a bare
+`skill uninstall foo` removes `foo` from **every** detected agent, not only
+claude-code. This matches `agent uninstall`'s behaviour and is the correct
+"remove it everywhere" default, but it is broader than the typical install — a
+user wanting a narrow uninstall passes an explicit `--agents`.
+
+## Why the default belongs in the CLI (not only the #369 caller)
+
+Critical review noted #369 could instead pass an explicit `--agents standard` from
+its dispatch, needing no CLI change. The CLI default is chosen deliberately on its
+own merits, independent of #369:
+
+- **Human ergonomics.** `skill` is the lone asset kind that forces the user to
+  name a target on every install; the sibling kinds all default. `skill install
+  <slug>` Just Working removes a real, recurring friction for the primary user.
+- **One default, not N hard-codes.** Putting the default in the CLI means every
+  programmatic caller (the bundle, a future `bundle init`, config-file installers,
+  TUI bulk actions) inherits a sane target without each re-deciding and hard-coding
+  `standard`. The convention lives in one place.
+
+#369 is the *trigger* that surfaced the asymmetry, not the sole justification.
 
 ## Architecture
 
-A two-line behavioural change in one file. No new units, no data-flow change.
-
-- **Touched:** `src/agent_toolkit_cli/commands/skill/__init__.py` — the `--agents`
-  option declaration on `install_cmd` (~:507) and `uninstall_cmd` (~:611).
-- **Untouched (load-bearing):** `_resolve_agents` already accepts `"standard"` and
-  `"all"`; `install_cmd`/`uninstall_cmd` already guard `if not target_agents:
-  nothing to do`; the `InstallPlan` → `engine_apply` projection path is unchanged.
+- **Install** — a one-line option change on `install_cmd`'s `--agents`
+  (`commands/skill/__init__.py` ~:507): `required=True` → `default="standard"`.
+- **Uninstall** — `uninstall_cmd`'s `--agents` becomes `default=None`; a small
+  block at the top of the command computes `agents_str` / `target_agents` as the
+  maximal union when the flag is omitted (`("standard", *detect_installed_agents())`),
+  then proceeds through the unchanged `_resolve_agents`(for explicit values) →
+  `InstallPlan` → `engine_apply` path. `detect_installed_agents` is already
+  imported/available in this module (used by the `all` branch of `_resolve_agents`).
+- **Untouched (load-bearing):** `_resolve_agents`, the `InstallPlan` →
+  `engine_apply` projection path, the lock format, and the sibling kinds.
 
 ### Error handling
 
-No new error paths. `_resolve_agents` already raises `UsageError` for unknown
-tokens; that behaviour is unchanged for explicit values. The previously-required
-flag's `UsageError("Missing option '--agents'")` simply no longer fires — the
-default value is supplied instead.
+No new error paths. `_resolve_agents` still raises `UsageError` for unknown
+*explicit* tokens (unchanged). The previously-required flag's `UsageError("Missing
+option '--agents'")` no longer fires — the default (install) or computed union
+(uninstall) is supplied instead.
 
 ## Backward compatibility
 
-Fully backward-compatible. The only behavioural change is the *omitted-`--agents`*
-case: previously a hard `UsageError`, now the documented default. No existing
-invocation that passed `--agents` changes behaviour. No deprecation, no migration.
+Backward-compatible for every invocation that passed `--agents` — those are
+unaffected. The one behavioural change is the *omitted-`--agents`* case: previously
+a hard `UsageError`, now a default projection (install) / maximal uninstall. This
+inverts a **deliberately-tested** contract — `test_install_agents_required` and
+`test_uninstall_agents_required` currently assert the bare invocation errors; those
+tests are intentionally rewritten to assert the new default behaviour (the proof
+the error was deliberate, not incidental). No deprecation or migration; the risk a
+caller depended on the error-as-signal is negligible for this single-power-user
+tool, but the change is named here rather than claimed as a pure no-op.
 
 ## Test surface
 
 - `skill install <slug>` (no `--agents`, global) → standard-bundle symlink created.
 - `skill install <slug>` (no `--agents`, `-p`) → project standard symlink created.
-- `skill uninstall <slug>` (no `--agents`, global) → all symlinks for the slug
-  removed (seed an install to >1 agent, then bare-uninstall, assert all gone).
-- `skill uninstall <slug>` (no `--agents`, `-p`) → project symlinks removed.
+- `skill uninstall <slug>` (no `--agents`, global) → install to the standard bundle
+  **and** a real per-agent (e.g. claude-code), bare-uninstall, assert **both** gone
+  (proves the union default removes the standard bundle, which `all` alone does not).
+- `skill uninstall <slug>` (no `--agents`, `-p`) → install to project standard +
+  a project per-agent symlink, bare-uninstall, assert both project projections
+  removed and the external canonical preserved (project-scope coverage — a distinct
+  code path from global).
 - Regression: explicit `--agents claude-code` on install still projects only to
-  claude-code; explicit `--agents all` on uninstall unchanged.
+  claude-code; explicit `--agents standard` / `--agents all` unchanged on both verbs.
 - `skill install --help` / `skill uninstall --help` no longer mark `--agents`
-  required and show the default.
+  `[required]`.
 
 ## Skills / tools required
 
@@ -108,9 +164,12 @@ invocation that passed `--agents` changes behaviour. No deprecation, no migratio
 
 ## Trust-level recommendation (advisory)
 
-**L3 (conditional).** Tiny, well-scoped, backward-compatible default change with a
-clear codebase precedent (agent uninstall). Any divergence — e.g. touching
-`_resolve_agents` or the engine, or a different uninstall default — should raise.
+**L3 (conditional).** Well-scoped, backward-compatible default change with a clear
+codebase precedent (`agent uninstall`'s maximal union). Install is a one-line
+option flip; uninstall adds a small maximal-union block in `uninstall_cmd`. Any
+divergence — touching `_resolve_agents` or the engine, defaulting uninstall to bare
+`all` (which orphans the standard bundle — see the maximal-uninstall mechanism), or
+changing the lock format — should raise.
 
 ## Out of scope
 

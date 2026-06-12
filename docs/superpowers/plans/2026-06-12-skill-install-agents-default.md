@@ -16,7 +16,7 @@
 
 | File | Change |
 |---|---|
-| `src/agent_toolkit_cli/commands/skill/__init__.py` | `install_cmd` `--agents` (~:507): drop `required=True`, add `default="standard"`. `uninstall_cmd` `--agents` (~:611): drop `required=True`, add `default="all"` + a one-line rationale comment pointing at the agent-uninstall maximal precedent. |
+| `src/agent_toolkit_cli/commands/skill/__init__.py` | `install_cmd` `--agents` (~:507): drop `required=True`, add `default="standard"`. `uninstall_cmd` `--agents` (~:611): drop `required=True`, add `default=None`; when omitted, compute the maximal target `("standard", *detect_installed_agents())` in the command body (NOT via `_resolve_agents`, which can't parse `standard,all`) + a rationale comment pointing at the agent-uninstall maximal precedent. |
 | `tests/test_cli/test_cli_skill_install.py` | Invert `test_install_agents_required` (~:263) → `test_install_defaults_to_standard`. |
 | `tests/test_cli/test_cli_skill_uninstall.py` | Invert `test_uninstall_agents_required` (~:130) → `test_uninstall_defaults_to_all_removes_everywhere` (behavioural: install to >1 agent, bare-uninstall, assert all gone). |
 
@@ -95,21 +95,35 @@ Device: $(hostname -s)"
 
 ---
 
-## Task 2: Uninstall defaults to `all` (maximal)
+## Task 2: Uninstall defaults to the maximal set (`standard` + all detected)
 
 **Files:**
-- Modify: `src/agent_toolkit_cli/commands/skill/__init__.py` (`uninstall_cmd` `--agents` option, ~:611)
+- Modify: `src/agent_toolkit_cli/commands/skill/__init__.py` (`uninstall_cmd` `--agents` option ~:611 + its body ~:619-634)
 - Test: `tests/test_cli/test_cli_skill_uninstall.py` (replace `test_uninstall_agents_required`, ~:130)
+
+**Why this is NOT a one-line default** (verified against code in critical review):
+`_resolve_agents("all")` returns `tuple(detect_installed_agents())`, and the
+`standard` token has `detect_installed=lambda: False` (`skill_agents.py:499`) — so
+`all` can **never** include `standard`, and only the `standard` token removes the
+`~/.agents/skills/<slug>` bundle symlink. `default="all"` would orphan it.
+`_resolve_agents("standard,all")` would **raise** `unknown agent(s): all` (the `all`
+special-case only fires when it's the entire string, `:210`). So the maximal default
+is computed in `uninstall_cmd` itself as `("standard", *detect_installed_agents())`,
+mirroring `agent uninstall`'s `("standard", *sorted(detected))`. `detect_installed_agents`
+is already imported in this module (`:15`). `_resolve_agents` is untouched.
 
 - [ ] **Step 1: Invert the required-test into a maximal-default behavioural test**
 
-Replace `test_uninstall_agents_required` (lines ~130-135) with a test that installs the skill to TWO targets (the standard bundle + claude-code), then runs a bare `skill uninstall` and asserts BOTH are removed — proving the default is maximal (`all`), not `standard`:
+Replace `test_uninstall_agents_required` (lines ~130-135) with a test that installs
+the skill to TWO targets (the standard bundle + claude-code), then runs a bare
+`skill uninstall` and asserts BOTH are removed — proving the default removes the
+`standard` bundle (which `all` alone does not):
 
 ```python
-def test_uninstall_defaults_to_all_removes_everywhere(
+def test_uninstall_defaults_to_maximal_removes_everywhere(
     git_sandbox, tmp_path: Path, monkeypatch
 ):
-    """skill uninstall with no --agents removes the skill from ALL targets (maximal default)."""
+    """skill uninstall with no --agents removes standard bundle + every detected agent."""
     library_root = tmp_path / "lib" / "skills"
     fake_home = tmp_path / "home"
     fake_home.mkdir()
@@ -132,7 +146,8 @@ def test_uninstall_defaults_to_all_removes_everywhere(
     assert bundle_link.is_symlink()
     assert claude_link.is_symlink()
 
-    # Bare uninstall — must default to 'all' and remove BOTH, not just standard.
+    # Bare uninstall — maximal default must remove BOTH (the standard bundle proves
+    # the union, since `--agents all` alone would leave bundle_link orphaned).
     result = runner.invoke(main, ["skill", "uninstall", "demo"])
     assert result.exit_code == 0, result.output
     assert not bundle_link.exists(), "standard bundle symlink must be removed by default uninstall"
@@ -142,24 +157,12 @@ def test_uninstall_defaults_to_all_removes_everywhere(
     assert (library_root / "demo").exists(), "library must be untouched"
 ```
 
-> **Worker note:** `--agents all` resolves via `detect_installed_agents()` (the `all`
-> branch in `_resolve_agents`). For the bundle-bundle symlink (`standard`) to also be
-> removed by `all`, confirm `detect_installed_agents()` includes the standard bundle
-> when `~/.agents/skills/demo` exists. If `all` does NOT cover the standard token (it
-> may only enumerate per-agent dirs), the correct default is `"standard,all"` or a
-> dedicated maximal token — adjust the `default=` in Step 3 to whatever makes this
-> test's "both removed" assertion pass, and update the spec's AC2 wording to match.
-> Pin the exact default with THIS test; do not assume `all` ⊇ `standard` without the
-> green bar. (The agent-uninstall precedent resolves its maximal set as
-> `standard + ALL enabled harnesses` for exactly this reason — mirror that if `all`
-> alone is insufficient: `default="standard,all"`.)
-
 - [ ] **Step 2: Run it to verify it fails (RED)**
 
-Run: `uv run pytest tests/test_cli/test_cli_skill_uninstall.py::test_uninstall_defaults_to_all_removes_everywhere -q`
+Run: `uv run pytest tests/test_cli/test_cli_skill_uninstall.py::test_uninstall_defaults_to_maximal_removes_everywhere -q`
 Expected: FAIL — bare `skill uninstall demo` errors with `Missing option '--agents'` (exit 2), so the `exit_code == 0` assert fails.
 
-- [ ] **Step 3: Make `--agents` default to the maximal set**
+- [ ] **Step 3: Make `--agents` optional and compute the maximal union when omitted**
 
 In `src/agent_toolkit_cli/commands/skill/__init__.py`, the `uninstall_cmd` option (~:611):
 
@@ -168,32 +171,114 @@ In `src/agent_toolkit_cli/commands/skill/__init__.py`, the `uninstall_cmd` optio
 @click.option("--agents", "agents_str", required=True,
               help="Comma-separated agent names, 'standard', or 'all'.")
 # AFTER
-# Deliberately asymmetric with install's `standard` default: a bare uninstall
-# must clean up EVERYWHERE the skill was projected (standard bundle + every
-# per-agent symlink), never leaving orphans. Mirrors the maximal default of
-# `agent uninstall` (commands/agent/uninstall_cmd.py:_resolve_harnesses_for_uninstall).
-@click.option("--agents", "agents_str", default="all", show_default=True,
+@click.option("--agents", "agents_str", default=None,
               help="Comma-separated agent names, 'standard', or 'all'. "
-                   "Defaults to all (remove everywhere).")
+                   "Default (omitted): remove everywhere (standard bundle + all "
+                   "detected agents).")
 ```
 
-If the Step-1 worker note found `all` alone does not cover the standard bundle, use
-`default="standard,all"` instead and keep the comment.
+Then, in the `uninstall_cmd` body, replace the resolution block (currently
+`try: target_agents = _resolve_agents(agents_str, scope) except ...`, ~:627-630) with:
+
+```python
+    if agents_str is None:
+        # Maximal default — deliberately asymmetric with install's `standard`.
+        # A bare uninstall must clean up EVERYWHERE the skill was projected, so we
+        # union the synthetic `standard` token (the only thing that removes
+        # ~/.agents/skills/<slug>; `--agents all` excludes it because the standard
+        # AgentConfig has detect_installed=False) with every detected agent. This
+        # mirrors `agent uninstall`'s maximal resolver
+        # (commands/agent/uninstall_cmd.py:_resolve_harnesses_for_uninstall, which
+        # returns ("standard", *sorted(detected))). We compute the union here rather
+        # than via a token because _resolve_agents("standard,all") would raise.
+        target_agents = ("standard", *detect_installed_agents())
+    else:
+        target_agents = _resolve_agents(agents_str, scope)
+```
+
+(The subsequent `if not target_agents: ... nothing to do` guard and the
+global/project `InstallPlan` branches are unchanged.)
 
 - [ ] **Step 4: Run it to verify it passes (GREEN)**
 
 Run: `uv run pytest tests/test_cli/test_cli_skill_uninstall.py -q`
 Expected: PASS — the new test passes AND the existing explicit-`--agents` uninstall tests (standard, idempotent, project) still pass unchanged.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Add project-scope coverage for the maximal default**
+
+Project scope removes the bundle symlink via a different path
+(`<project>/.agents/skills/<slug>`) than global, so cover it explicitly. Append to
+`tests/test_cli/test_cli_skill_uninstall.py` (model on the existing
+`test_uninstall_project_preserves_canonical`, which shows the project install/
+uninstall + external-canonical-preserved idiom):
+
+```python
+def test_uninstall_project_defaults_to_maximal(
+    git_sandbox, tmp_path: Path, monkeypatch
+):
+    """Bare project-scope uninstall removes project standard + per-agent projections."""
+    from agent_toolkit_cli.skill_paths import project_store_root
+    library_root = tmp_path / "lib" / "skills"
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / ".claude").mkdir()
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+
+    runner = CliRunner()
+    r = runner.invoke(main, ["skill", "add", str(git_sandbox.upstream), "--slug", "demo"])
+    assert r.exit_code == 0, r.output
+    r = runner.invoke(main, [
+        "--project", str(project), "skill", "install", "demo",
+        "--scope", "project", "--agents", "standard,claude-code",
+    ])
+    assert r.exit_code == 0, r.output
+
+    proj_bundle = project / ".agents" / "skills" / "demo"
+    claude_link = project / ".claude" / "skills" / "demo"
+    external_canonical = project_store_root(project) / "demo"
+    assert proj_bundle.is_symlink() or proj_bundle.exists()
+    assert claude_link.is_symlink()
+
+    # Bare project uninstall — maximal default removes both projections.
+    result = runner.invoke(main, [
+        "--project", str(project), "skill", "uninstall", "demo", "--scope", "project",
+    ])
+    assert result.exit_code == 0, result.output
+    assert not claude_link.exists(), "project claude-code symlink must be removed"
+    assert not proj_bundle.exists(), "project standard bundle symlink must be removed"
+    # Non-destructive: external canonical survives.
+    assert external_canonical.is_dir(), "external canonical must survive uninstall"
+```
+
+> **Worker note:** confirm the project standard-bundle projection path is
+> `<project>/.agents/skills/<slug>` (the install engine's project-standard link —
+> `_project_standard_link`). If the real path differs, point `proj_bundle` at the
+> actual location; the assertion (both projections gone, canonical preserved) is the
+> invariant. `detect_installed_agents()` at project scope governs which per-agent
+> projections the union targets — claude-code is detected via the `.claude/` dir
+> seeded above.
+
+- [ ] **Step 6: Run the project test (GREEN)**
+
+Run: `uv run pytest tests/test_cli/test_cli_skill_uninstall.py -q`
+Expected: PASS (all uninstall tests, global + project).
+
+- [ ] **Step 7: Commit**
 
 ```bash
 git add src/agent_toolkit_cli/commands/skill/__init__.py tests/test_cli/test_cli_skill_uninstall.py
-git commit -m "feat(skill): default skill uninstall --agents to all (maximal)
+git commit -m "feat(skill): default skill uninstall to maximal (standard + detected)
+
+Computed as ('standard', *detect_installed_agents()) in uninstall_cmd
+when --agents is omitted, mirroring agent uninstall. '--agents all'
+alone excludes the standard bundle (detect_installed=False), so a bare
+'all' default would orphan ~/.agents/skills/<slug>.
 
 Refs #393
 
-Device: $(hostname -s)"
+Device: \$(hostname -s)"
 ```
 
 ---
@@ -209,19 +294,16 @@ Append to `tests/test_cli/test_cli_skill_install.py`:
 
 ```python
 def test_install_help_marks_agents_optional():
-    """--agents is no longer required and its default is shown."""
+    """The --agents option is no longer [required] on skill install."""
     result = CliRunner().invoke(main, ["skill", "install", "--help"])
     assert result.exit_code == 0
-    # Click renders the default for show_default=True options.
-    assert "[required]" not in result.output or "--agents" not in result.output.split("[required]")[0][-40:]
-    assert "standard" in result.output  # default surfaced in help
+    # Robust, layout-independent check: find the --agents line, assert no [required].
+    agents_line = next(
+        (ln for ln in result.output.splitlines() if "--agents" in ln), ""
+    )
+    assert agents_line, "--agents must appear in help"
+    assert "[required]" not in agents_line, "--agents must no longer be required"
 ```
-
-> **Worker note:** the `[required]` assertion above is deliberately loose because
-> Click's help layout varies. The robust check is: the `--agents` line no longer
-> carries `[required]`. If the loose assertion is awkward, replace it with a direct
-> scan: find the `--agents` line in `result.output` and assert `[required]` is not on
-> it. Keep `assert "standard" in result.output` (the shown default).
 
 - [ ] **Step 2: Run the install/uninstall test files**
 
@@ -255,10 +337,10 @@ git commit -m "test(skill): assert skill install --help marks --agents optional
 
 Refs #393
 
-Device: $(hostname -s)"
+Device: \$(hostname -s)"
 git push -u origin <branch>
 gh pr create --title "feat(skill): default skill install/uninstall --agents (#393)" \
-  --body "Closes #393. skill install defaults --agents to standard; skill uninstall defaults to all (maximal, mirrors agent uninstall). Backward-compatible: only the omitted-flag case changes. Unblocks #369. Spec + plan in docs/superpowers/."
+  --body "Closes #393. skill install defaults --agents to standard; skill uninstall defaults to the maximal set (standard + all detected agents, mirroring agent uninstall — a bare 'all' would orphan the standard bundle). Backward-compatible: only the omitted-flag case changes. Unblocks #369. Spec + plan in docs/superpowers/."
 ```
 
 ---
@@ -270,24 +352,29 @@ gh pr create --title "feat(skill): default skill install/uninstall --agents (#39
 | Spec AC | Task |
 |---|---|
 | AC1 install no-flag → standard | Task 1 |
-| AC2 uninstall no-flag → all (maximal) | Task 2 (+ worker note pins `all` vs `standard,all`) |
-| AC3 explicit `--agents` unchanged | Tasks 1/2 Step 4 (existing tests stay green) |
-| AC4 `--help` shows optional + default | Task 3 Step 1 |
-| AC5 change confined to two options, nothing else | Tasks 1/2 (no other file touched) |
-| AC6 global + project scope | Task 1 (global) + existing project tests stay green; Task 2 global behavioural |
+| AC2 uninstall no-flag → maximal (`standard` + detected) | Task 2 (union computed in `uninstall_cmd`) |
+| AC3 explicit `--agents` unchanged | Tasks 1/2 (existing explicit tests stay green) |
+| AC4 `--help` no longer `[required]` | Task 3 Step 1 |
+| AC5 install one-line; uninstall union local to `uninstall_cmd`, shared resolver untouched | Tasks 1/2 |
+| AC6 global + project scope | Task 1 (install global) + Task 2 global behavioural + Task 2 Step 5 project behavioural |
 
-**Placeholder scan:** Two worker notes (Task 2 Step 1, Task 3 Step 1) flag genuine
-unknowns — whether `all` covers the `standard` bundle, and Click's exact help
-layout. Both are pinned by a written test that must go green; neither is a
-behaviour placeholder. The `default=` value in Task 2 Step 3 is explicitly
-contingent on the Step-1 test (`all` or `standard,all`), with the agent-uninstall
-precedent naming the fallback — that is a resolved decision rule, not a TODO.
+**Placeholder scan:** No behaviour placeholders. The earlier "does `all` cover
+`standard`" unknown is now **resolved** (it does not — verified in the critical
+review against `skill_agents.py:499` `detect_installed=lambda: False`), so Task 2
+computes the union `("standard", *detect_installed_agents())` directly and the
+`default=None` sentinel is concrete, not contingent. The remaining worker note
+(Task 2 Step 5) flags only the project standard-link path name, pinned by the
+project behavioural test's invariant (both projections gone, canonical preserved).
 
-**Type consistency:** No new types/signatures — only Click option kwargs change
-(`required=True` → `default=...`, `show_default=True`). `agents_str` stays a
-`str`; `_resolve_agents(agents_str, scope)` is called unchanged in both commands.
+**Type consistency:** `install_cmd` `--agents`: `required=True` → `default="standard"`.
+`uninstall_cmd` `--agents`: `required=True` → `default=None`, with `agents_str: str
+| None` and a union branch producing `target_agents: tuple[str, ...]`.
+`_resolve_agents(agents_str, scope)` is still called for the explicit path in both
+commands (unchanged signature); `detect_installed_agents()` (already imported,
+`:15`) supplies the union. `mypy` note: `agents_str` param annotation on
+`uninstall_cmd` becomes `str | None` — update it from `str`.
 
-**Known reality risk (carried into execution):** whether `--agents all` removes the
-standard-bundle symlink. Task 2's behavioural test is the gate; if `all` is
-insufficient the default becomes `standard,all` (precedent-backed) and AC2's wording
-updates to match. This is the only non-mechanical unknown and it is test-pinned.
+**Resolved reality risks (from critical review, now baked in):** (1) `all` excludes
+`standard` → union in `uninstall_cmd`, not a token default. (2)
+`_resolve_agents("standard,all")` raises → never constructed; union is a tuple. (3)
+project-scope bundle-link removal is a distinct path → Task 2 Step 5 covers it.
