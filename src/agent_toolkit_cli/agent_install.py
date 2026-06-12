@@ -272,7 +272,9 @@ def apply(
             and not canonical.exists()
             and not canonical.is_symlink()):
         canonical.parent.mkdir(parents=True, exist_ok=True)
-        skill_git.clone(plan.source.url, canonical, ref=plan.ref, env=env)
+        skill_git.clone_pinned_or_branch(
+            plan.source.url, canonical, ref=plan.ref, env=env,
+        )
     elif plan.source is not None and existing_entry is not None:
         requested = plan.source.owner_repo or plan.source.url
         if existing_entry.source != requested:

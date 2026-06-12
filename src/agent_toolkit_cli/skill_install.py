@@ -153,7 +153,9 @@ def apply(
     # Clone canonical if needed.
     if plan.source is not None and not canonical.exists():
         canonical.parent.mkdir(parents=True, exist_ok=True)
-        skill_git.clone(plan.source.url, canonical, ref=plan.ref, env=env)
+        skill_git.clone_pinned_or_branch(
+            plan.source.url, canonical, ref=plan.ref, env=env,
+        )
     elif plan.source is not None and existing_entry is not None:
         requested = plan.source.owner_repo or plan.source.url
         if existing_entry.source != requested:
@@ -415,7 +417,9 @@ def ensure_project_canonical(
         )
         if not parent_dir.exists():
             parent_dir.parent.mkdir(parents=True, exist_ok=True)
-            skill_git.clone(
+            # Cache key (parent_clone_path above) stays on the raw ref; the
+            # clone honours a SHA pin via clone-at-HEAD + checkout (#345).
+            skill_git.clone_pinned_or_branch(
                 entry.parent_url, parent_dir, ref=entry.ref, env=env,
             )
         else:
@@ -441,7 +445,9 @@ def ensure_project_canonical(
         # Single-skill repo: clone the repo root flat into the canonical dir.
         project_canonical.parent.mkdir(parents=True, exist_ok=True)
         source_url = clone_url_from_entry(entry)
-        skill_git.clone(source_url, project_canonical, ref=entry.ref, env=env)
+        skill_git.clone_pinned_or_branch(
+            source_url, project_canonical, ref=entry.ref, env=env,
+        )
 
     project_lock_path = lock_file_path(scope="project", project=project)
     project_lock = read_lock(project_lock_path)
