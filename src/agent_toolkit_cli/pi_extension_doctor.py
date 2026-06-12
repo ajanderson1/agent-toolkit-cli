@@ -40,6 +40,7 @@ from agent_toolkit_cli.pi_extension_paths import (
 
 FindingType = Literal[
     "missing_canonical",
+    "half_dir",             # canonical exists but is not a git repo (#347)
     "drifted_symlink",
     "stray_symlink",
     "dirty_tree",
@@ -135,6 +136,20 @@ def _check_slug(
                 fix_action=_make_reclone_action(slug=slug, entry=entry),
             ))
             # Can't check projection if canonical is gone.
+            return findings
+
+        if not skill_git.is_git_repo(canonical):
+            # #347: exists but not a git repo — a half-written/failed clone.
+            findings.append(Finding(
+                finding_type="half_dir", slug=slug, scope=scope,
+                path=canonical,
+                detail=(
+                    f"store copy at {canonical} exists but is not a git repo "
+                    f"(partial/failed clone). Source: {getattr(entry, 'source', '?')}"
+                ),
+                fix_action=_make_reclone_action(slug=slug, entry=entry, force=True),
+            ))
+            # Can't check projection/dirty-tree over a broken store.
             return findings
 
         # Check dirty working tree (informational).
