@@ -147,3 +147,57 @@ def test_add_bad_sha_fails_loud_no_orphans(tmp_path, monkeypatch, git_sandbox):
 
     assert "ghost-pin" not in read_lock(pep.library_lock_path(env={})).skills
     assert not pep.library_pi_extension_path("ghost-pin", env={}).exists()
+
+
+def test_add_heals_half_dir(tmp_path, monkeypatch, git_sandbox):
+    """#347: a non-repo half-dir at the canonical path is rmtree'd and the
+    source re-cloned — idempotent success only over a VALID repo."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    canonical = pep.library_pi_extension_path("demo", env={})
+    canonical.mkdir(parents=True)
+    (canonical / "JUNK.md").write_text("leftover\n")
+    assert not (canonical / ".git").exists()
+
+    pea.add(source=str(git_sandbox.upstream), slug="demo", env=git_sandbox.env)
+
+    assert (canonical / ".git").exists()
+    assert not (canonical / "JUNK.md").exists()
+    lock = read_lock(pep.library_lock_path(env={}))
+    assert lock.skills["demo"].pi_extension_path == "demo"
+
+
+def test_add_heals_empty_dir(tmp_path, monkeypatch, git_sandbox):
+    """#347: an EMPTY canonical dir is also not-a-repo → healed, not trusted."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    canonical = pep.library_pi_extension_path("demo", env={})
+    canonical.mkdir(parents=True)
+
+    pea.add(source=str(git_sandbox.upstream), slug="demo", env=git_sandbox.env)
+
+    assert (canonical / ".git").exists()
+
+
+def test_add_idempotent_over_valid_repo(tmp_path, monkeypatch, git_sandbox):
+    """#347 regression: a second add over a VALID store copy is a no-op
+    success (does NOT rmtree the repo)."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    pea.add(source=str(git_sandbox.upstream), slug="demo", env=git_sandbox.env)
+    canonical = pep.library_pi_extension_path("demo", env={})
+    (canonical / "MARKER.md").write_text("survives\n")
+
+    pea.add(source=str(git_sandbox.upstream), slug="demo", env=git_sandbox.env)
+
+    assert (canonical / "MARKER.md").exists()
+
+
+def test_add_refuses_source_mismatch_over_valid_repo(tmp_path, monkeypatch, git_sandbox):
+    """#347 regression: a valid repo with a different source still REFUSES
+    (is NOT silently re-cloned), and is left intact."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    pea.add(source=str(git_sandbox.upstream), slug="demo", env=git_sandbox.env)
+    canonical = pep.library_pi_extension_path("demo", env={})
+    (canonical / "MARKER.md").write_text("survives\n")
+
+    with pytest.raises(pea.AddError, match="different source"):
+        pea.add(source="other/different-repo", slug="demo", env=git_sandbox.env)
+    assert (canonical / "MARKER.md").exists()

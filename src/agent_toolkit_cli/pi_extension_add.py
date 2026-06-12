@@ -93,16 +93,22 @@ def add(
 
     canonical = library_pi_extension_path(ext_slug, env={})
     if canonical.exists():
-        # Already present — verify source matches, else refuse (mirror skill add).
-        lock = read_lock(lock_path)
-        existing = lock.skills.get(ext_slug)
-        requested = parsed.owner_repo or parsed.url
-        if existing is not None and existing.source != requested:
-            raise AddError(
-                f"{ext_slug}: library already has a different source "
-                f"({existing.source!r}); run `pi-extension remove {ext_slug}` first"
-            )
-        return ext_slug
+        if skill_git.is_git_repo(canonical):
+            # Valid store copy — verify source matches, else refuse (mirror
+            # skill add). Idempotent success ONLY over a valid repo.
+            lock = read_lock(lock_path)
+            existing = lock.skills.get(ext_slug)
+            requested = parsed.owner_repo or parsed.url
+            if existing is not None and existing.source != requested:
+                raise AddError(
+                    f"{ext_slug}: library already has a different source "
+                    f"({existing.source!r}); run `pi-extension remove {ext_slug}` first"
+                )
+            return ext_slug
+        # #347: exists but NOT a git repo — a half-written/empty dir left by a
+        # partially-failed cleanup. Treat as not-present: remove it and fall
+        # through to the clone path below (which rewrites the lock entry).
+        shutil.rmtree(canonical, ignore_errors=True)
 
     canonical.parent.mkdir(parents=True, exist_ok=True)
     # `git clone --branch` accepts only branch/tag names — a raw SHA must be
