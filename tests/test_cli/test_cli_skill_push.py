@@ -701,3 +701,64 @@ def test_bare_push_empty_lock_unchanged(tmp_path, monkeypatch):
     )
     assert result.exit_code == 0, result.output
     assert "not in the" not in result.output
+
+
+def test_push_global_scope_cwd_fallback_hints_project_lock(tmp_path, monkeypatch):
+    """No --project flag: the probe derives the project root from Path.cwd()
+    (the `ctx_project or Path.cwd()` fallback arm of _missing_slug_message).
+    The global lock FILE is never created — the resolved-scope read tolerates
+    a missing lock too."""
+    library_root = tmp_path / "lib" / "skills"
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    project = tmp_path / "proj"
+    project.mkdir()
+    _seed_lock(project / "skills-lock.json", ["demo"])
+    monkeypatch.chdir(project)
+    result = CliRunner().invoke(main, ["skill", "push", "-g", "demo"])
+    assert result.exit_code == 1, result.output
+    assert "demo: not in the global lock" in result.output
+    assert "found in the project lock — re-run with -p" in result.output
+
+
+def test_push_neither_lock_missing_global_lock_file(tmp_path, monkeypatch):
+    """Probe against a MISSING other-scope lock file: read_lock returns an
+    empty lock, so the neither-case message lands without a crash."""
+    library_root = tmp_path / "lib" / "skills"
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    project = tmp_path / "proj"
+    project.mkdir()
+    _seed_lock(project / "skills-lock.json", [])  # pins project scope
+    # No global lock file is ever written under tmp_path/"lib".
+    result = CliRunner().invoke(
+        main, ["--project", str(project), "skill", "push", "ghost"],
+    )
+    assert result.exit_code == 1, result.output
+    assert "ghost: not in the project lock" in result.output
+    assert "found in" not in result.output
+
+
+def test_push_partial_batch_reports_each_and_exits_nonzero(tmp_path, monkeypatch):
+    """One read-only slug + one missing slug in a single push: BOTH messages
+    appear (the loop does not short-circuit on rejected) and exit is 1."""
+    library_root = tmp_path / "lib" / "skills"
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    project = tmp_path / "proj"
+    project.mkdir()
+    lock_path = project / "skills-lock.json"
+    lock_path.write_text(json.dumps({
+        "version": 1,
+        "skills": {
+            "ro-skill": {
+                "source": "acme/monorepo",
+                "sourceType": "github",
+                "parentUrl": "https://github.com/acme/monorepo",
+                "readOnly": True,
+            },
+        },
+    }))
+    result = CliRunner().invoke(
+        main, ["--project", str(project), "skill", "push", "ro-skill", "ghost"],
+    )
+    assert result.exit_code == 1, result.output
+    assert "ro-skill: read-only" in result.output
+    assert "ghost: not in the project lock" in result.output
