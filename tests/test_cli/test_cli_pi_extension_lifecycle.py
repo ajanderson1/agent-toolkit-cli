@@ -253,7 +253,7 @@ def test_push_pinned_skips_even_when_dirty(tmp_path, monkeypatch, git_sandbox):
     monkeypatch.setenv("HOME", str(tmp_path))
     for k, v in git_sandbox.env.items():
         monkeypatch.setenv(k, v)
-    sha = _seed_pinned_entry(tmp_path, git_sandbox)
+    _seed_pinned_entry(tmp_path, git_sandbox)
     canonical = pep.library_pi_extension_path("pinned", env={})
     (canonical / "ext.ts").write_text("// local edit on a pinned checkout")
 
