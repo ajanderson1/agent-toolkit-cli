@@ -40,6 +40,7 @@ from agent_toolkit_cli.pi_extension_paths import (
 
 FindingType = Literal[
     "missing_canonical",
+    "half_dir",             # canonical exists but is not a git repo (#347)
     "drifted_symlink",
     "stray_symlink",
     "dirty_tree",
@@ -135,6 +136,20 @@ def _check_slug(
                 fix_action=_make_reclone_action(slug=slug, entry=entry),
             ))
             # Can't check projection if canonical is gone.
+            return findings
+
+        if not skill_git.is_git_repo(canonical):
+            # #347: exists but not a git repo — a half-written/failed clone.
+            findings.append(Finding(
+                finding_type="half_dir", slug=slug, scope=scope,
+                path=canonical,
+                detail=(
+                    f"store copy at {canonical} exists but is not a git repo "
+                    f"(partial/failed clone). Source: {getattr(entry, 'source', '?')}"
+                ),
+                fix_action=_make_reclone_action(slug=slug, entry=entry, force=True),
+            ))
+            # Can't check projection/dirty-tree over a broken store.
             return findings
 
         # Check dirty working tree (informational).
@@ -336,7 +351,7 @@ def _make_relink_action(*, link: Path, canonical: Path) -> FixAction:
     )
 
 
-def _make_reclone_action(*, slug: str, entry: object) -> FixAction:
+def _make_reclone_action(*, slug: str, entry: object, force: bool = False) -> FixAction:
     """Re-clone the store copy from the lock entry's source.
 
     Pin ONLY when the entry's `ref` is a SHA — NEVER from `upstream_sha`,
@@ -358,7 +373,11 @@ def _make_reclone_action(*, slug: str, entry: object) -> FixAction:
 
     def _apply() -> None:
         if canonical.exists():
-            return  # idempotent
+            if not force:
+                return  # idempotent (missing_canonical: a race re-created it)
+            # half_dir (#347): a non-repo dir is squatting the path — remove
+            # it so the clone below has a clean target.
+            shutil.rmtree(canonical, ignore_errors=True)
         canonical.parent.mkdir(parents=True, exist_ok=True)
         skill_git.clone(source, canonical, ref=clone_ref, env=None)
         if pin_sha and skill_git.is_git_repo(canonical):

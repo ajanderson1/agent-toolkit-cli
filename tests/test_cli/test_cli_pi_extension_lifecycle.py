@@ -721,3 +721,103 @@ def test_status_unpinned_has_empty_pin_field(tmp_path, monkeypatch, git_sandbox)
     assert len(fields) == 4
     assert fields[-1] == ""
     assert "pinned:" not in line
+
+
+def test_reclone_force_replaces_non_repo_dir(tmp_path, monkeypatch, git_sandbox):
+    """#347: a forced reclone over a non-git-repo dir rmtrees it then clones
+    (the un-forced _apply would no-op on canonical.exists())."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    from agent_toolkit_cli import pi_extension_doctor as ped
+
+    # A non-repo half-dir squatting the canonical path.
+    canonical = pep.library_pi_extension_path("demo", env={})
+    canonical.mkdir(parents=True)
+    (canonical / "JUNK.md").write_text("leftover\n")
+    assert not (canonical / ".git").exists()
+
+    entry = LockEntry(
+        source=str(git_sandbox.upstream), source_type="git",
+        ref=None, pi_extension_path="demo", upstream_sha=None,
+    )
+    action = ped._make_reclone_action(slug="demo", entry=entry, force=True)
+    action.apply()
+
+    # Now a real git repo, junk gone.
+    assert (canonical / ".git").exists()
+    assert not (canonical / "JUNK.md").exists()
+
+
+def test_doctor_detects_half_dir(tmp_path, monkeypatch, git_sandbox):
+    """#347: a store-owned lock entry whose canonical exists but is NOT a
+    git repo yields a half_dir finding (not missing_canonical, not dirty)."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    _add_store_owned(tmp_path, git_sandbox.env, git_sandbox.upstream)
+
+    import shutil
+    canonical = pep.library_pi_extension_path("demo", env={})
+    shutil.rmtree(canonical)
+    canonical.mkdir(parents=True)
+    (canonical / "JUNK.md").write_text("leftover\n")
+
+    from agent_toolkit_cli import pi_extension_doctor as ped
+    findings = ped.diagnose(slugs=None, scope="global", home=tmp_path, project=None)
+    half = [f for f in findings if f.finding_type == "half_dir"]
+    assert len(half) == 1, [f.finding_type for f in findings]
+    assert half[0].slug == "demo"
+    assert not [f for f in findings if f.finding_type == "missing_canonical"]
+    assert not [f for f in findings if f.finding_type == "dirty_tree"]
+
+
+def test_doctor_half_dir_fix_repairs(tmp_path, monkeypatch, git_sandbox):
+    """#347: applying the half_dir fix_action turns the dir into a valid repo."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    _add_store_owned(tmp_path, git_sandbox.env, git_sandbox.upstream)
+    import shutil
+    canonical = pep.library_pi_extension_path("demo", env={})
+    shutil.rmtree(canonical)
+    canonical.mkdir(parents=True)
+    (canonical / "JUNK.md").write_text("leftover\n")
+
+    from agent_toolkit_cli import pi_extension_doctor as ped
+    findings = ped.diagnose(slugs=None, scope="global", home=tmp_path, project=None)
+    half = next(f for f in findings if f.finding_type == "half_dir")
+    assert half.fix_action is not None
+    half.fix_action.apply()
+    assert (canonical / ".git").exists()
+    assert not (canonical / "JUNK.md").exists()
+
+
+def test_doctor_missing_canonical_still_detected(tmp_path, monkeypatch, git_sandbox):
+    """#347 regression: an ABSENT canonical stays missing_canonical, not half_dir."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    _add_store_owned(tmp_path, git_sandbox.env, git_sandbox.upstream)
+    import shutil
+    shutil.rmtree(pep.library_pi_extension_path("demo", env={}))
+
+    from agent_toolkit_cli import pi_extension_doctor as ped
+    findings = ped.diagnose(slugs=None, scope="global", home=tmp_path, project=None)
+    assert [f for f in findings if f.finding_type == "missing_canonical"]
+    assert not [f for f in findings if f.finding_type == "half_dir"]
+
+
+def test_doctor_npm_row_no_half_dir(tmp_path, monkeypatch):
+    """#347: an npm (registry-tracked) row has no canonical, so it can never
+    yield a half_dir finding even if a same-named dir squats the store path."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    from agent_toolkit_cli import pi_extension_add as pea
+    pea.add(source="npm:@scope/widget", slug=None, env={})
+    canonical = pep.library_pi_extension_path("@scope/widget", env={})
+    canonical.mkdir(parents=True)
+    (canonical / "JUNK.md").write_text("leftover\n")
+
+    from agent_toolkit_cli import pi_extension_doctor as ped
+    findings = ped.diagnose(slugs=None, scope="global", home=tmp_path, project=None)
+    assert not [f for f in findings if f.finding_type == "half_dir"]

@@ -20,7 +20,7 @@ Do this first: the half_dir finding (Task 2) depends on it, and it is a pure add
 - Modify: `src/agent_toolkit_cli/pi_extension_doctor.py:339-383` (`_make_reclone_action`)
 - Test: `tests/test_cli/test_cli_pi_extension_lifecycle.py`
 
-- [ ] **Step 1: Write the failing test** (append to the lifecycle test file; it already imports `subprocess`, `pep`, `ped` is imported locally in sibling tests, `LockEntry`/`LockFile`/`write_lock` at module top, and provides `git_sandbox`). NOTE the `git_sandbox.env` loop — `_make_reclone_action.apply()` clones, and `git_sandbox.env` carries the `GIT_AUTHOR_*`/`GIT_COMMITTER_*` identity the conftest scrubs from the ambient environment; without it the clone runs with no git identity:
+- [x] **Step 1: Write the failing test** (append to the lifecycle test file; it already imports `subprocess`, `pep`, `ped` is imported locally in sibling tests, `LockEntry`/`LockFile`/`write_lock` at module top, and provides `git_sandbox`). NOTE the `git_sandbox.env` loop — `_make_reclone_action.apply()` clones, and `git_sandbox.env` carries the `GIT_AUTHOR_*`/`GIT_COMMITTER_*` identity the conftest scrubs from the ambient environment; without it the clone runs with no git identity:
 
 ```python
 def test_reclone_force_replaces_non_repo_dir(tmp_path, monkeypatch, git_sandbox):
@@ -49,12 +49,12 @@ def test_reclone_force_replaces_non_repo_dir(tmp_path, monkeypatch, git_sandbox)
     assert not (canonical / "JUNK.md").exists()
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest "tests/test_cli/test_cli_pi_extension_lifecycle.py::test_reclone_force_replaces_non_repo_dir" -v`
 Expected: FAIL — `_make_reclone_action() got an unexpected keyword argument 'force'`.
 
-- [ ] **Step 3: Implement.** In `pi_extension_doctor.py`, change the signature and the `_apply` guard:
+- [x] **Step 3: Implement.** In `pi_extension_doctor.py`, change the signature and the `_apply` guard:
 
 ```python
 def _make_reclone_action(*, slug: str, entry: object, force: bool = False) -> FixAction:
@@ -84,12 +84,12 @@ with:
 
 (`shutil` is already imported at the top of `pi_extension_doctor.py`.)
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `uv run pytest "tests/test_cli/test_cli_pi_extension_lifecycle.py::test_reclone_force_replaces_non_repo_dir" -v`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git commit --only tests/test_cli/test_cli_pi_extension_lifecycle.py --only src/agent_toolkit_cli/pi_extension_doctor.py -m "feat(pi-extension): _make_reclone_action force-replaces a non-repo dir (#347)"
@@ -103,7 +103,7 @@ git commit --only tests/test_cli/test_cli_pi_extension_lifecycle.py --only src/a
 - Modify: `src/agent_toolkit_cli/pi_extension_doctor.py:41-49` (FindingType literal), `:120-153` (`_check_slug` store-owned block)
 - Test: `tests/test_cli/test_cli_pi_extension_lifecycle.py`
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
 
 ```python
 def test_doctor_detects_half_dir(tmp_path, monkeypatch, git_sandbox):
@@ -182,12 +182,12 @@ def test_doctor_npm_row_no_half_dir(tmp_path, monkeypatch):
     assert not [f for f in findings if f.finding_type == "half_dir"]
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest "tests/test_cli/test_cli_pi_extension_lifecycle.py" -k "half_dir or missing_canonical_still or npm_row_no_half" -v`
 Expected: the two half_dir tests FAIL (no `half_dir` finding emitted — the non-repo dir falls through silently); `missing_canonical_still` and `npm_row_no_half_dir` PASS (already correct — npm rows skip the canonical check).
 
-- [ ] **Step 3: Implement.** In `pi_extension_doctor.py`, add `"half_dir"` to the `FindingType` literal:
+- [x] **Step 3: Implement.** In `pi_extension_doctor.py`, add `"half_dir"` to the `FindingType` literal:
 
 ```python
 FindingType = Literal[
@@ -236,12 +236,12 @@ Insert before `# Check dirty working tree`:
 
 (The existing `if skill_git.is_git_repo(canonical):` dirty-tree block stays as-is; it is now only reached for a valid repo.)
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest "tests/test_cli/test_cli_pi_extension_lifecycle.py" -k "half_dir or missing_canonical_still or npm_row_no_half" -v`
 Expected: all PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git commit --only tests/test_cli/test_cli_pi_extension_lifecycle.py --only src/agent_toolkit_cli/pi_extension_doctor.py -m "feat(pi-extension): doctor surfaces a half_dir non-repo canonical (#347)"
@@ -255,7 +255,7 @@ git commit --only tests/test_cli/test_cli_pi_extension_lifecycle.py --only src/a
 - Modify: `src/agent_toolkit_cli/pi_extension_add.py:99-110` (the `canonical.exists()` block)
 - Test: `tests/test_cli/test_pi_extension_add.py`
 
-- [ ] **Step 1: Write the failing tests** (append to `test_pi_extension_add.py`; it imports `pea`, `pep`, `read_lock`, `pytest`, and uses `git_sandbox`):
+- [x] **Step 1: Write the failing tests** (append to `test_pi_extension_add.py`; it imports `pea`, `pep`, `read_lock`, `pytest`, and uses `git_sandbox`):
 
 ```python
 def test_add_heals_half_dir(tmp_path, monkeypatch, git_sandbox):
@@ -316,12 +316,12 @@ def test_add_refuses_source_mismatch_over_valid_repo(tmp_path, monkeypatch, git_
     assert (canonical / "MARKER.md").exists()
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest "tests/test_cli/test_pi_extension_add.py" -k "heals or idempotent_over_valid or refuses_source_mismatch" -v`
 Expected: `test_add_heals_half_dir` and `test_add_heals_empty_dir` FAIL (the current early-return reports success without cloning, so `.git` is absent). `idempotent_over_valid` and `refuses_source_mismatch` PASS (existing behavior — they are regression guards).
 
-- [ ] **Step 3: Implement.** In `pi_extension_add.py`, replace the current block:
+- [x] **Step 3: Implement.** In `pi_extension_add.py`, replace the current block:
 
 ```python
     canonical = library_pi_extension_path(ext_slug, env={})
@@ -363,12 +363,12 @@ with:
 
 (`shutil` and `skill_git` are already imported at the top of `pi_extension_add.py`.)
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest "tests/test_cli/test_pi_extension_add.py" -k "heals or idempotent_over_valid or refuses_source_mismatch" -v`
 Expected: all PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git commit --only tests/test_cli/test_pi_extension_add.py --only src/agent_toolkit_cli/pi_extension_add.py -m "fix(pi-extension): add heals a non-repo half-dir instead of false success (#347)"
@@ -378,17 +378,17 @@ git commit --only tests/test_cli/test_pi_extension_add.py --only src/agent_toolk
 
 ### Task 4: full verification
 
-- [ ] **Step 1: Targeted suites**
+- [x] **Step 1: Targeted suites**
 
 Run: `uv run pytest tests/test_cli/test_pi_extension_add.py tests/test_cli/test_cli_pi_extension_lifecycle.py -q`
 Expected: all PASS.
 
-- [ ] **Step 2: Full suite**
+- [x] **Step 2: Full suite**
 
 Run: `uv run pytest -q`
 Expected: green except the 2 known HOME-isolation env failures (`test_empty_machine_is_empty`, `test_build_instruction_rows_empty_lock_no_canonical`) — pre-existing on main; reproduce on a clean checkout before whitelisting anything else.
 
-- [ ] **Step 3: Lint/type checks**
+- [x] **Step 3: Lint/type checks**
 
 Run: `uv run ruff check src tests && uv run mypy src`
 Expected: no NEW errors versus main (compare counts on the touched files if non-zero).
