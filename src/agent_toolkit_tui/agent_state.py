@@ -33,13 +33,13 @@ State = Literal["installed", "library", "unlisted"]
 # Rendered columns (#361): the standard slot first, then the non-covered
 # main harnesses (derived per scope; the two scopes yield the same set
 # today because devin is not a MAIN harness). Cells are still keyed by
-# (scope, harness). The long tail is CLI-only.
+# (harness, scope). The long tail is CLI-only.
 INTERACTIVE_HARNESSES: tuple[str, ...] = ("standard",) + agents_nonstandard_main("global")
 
 
 @dataclass(frozen=True)
 class AgentCell:
-    """Per-(scope, harness) install state for a single agent slug."""
+    """Per-(harness, scope) install state for a single agent slug."""
 
     linked: bool  # adapter destination exists on disk
 
@@ -52,7 +52,7 @@ class AgentRow:
     source: str
     ref: str
     state: State = "installed"
-    # Key: (scope, harness_name) → AgentCell
+    # Key: (harness_name, scope) → AgentCell
     cells: dict[tuple[str, str], AgentCell] = field(default_factory=dict)
 
 
@@ -123,6 +123,16 @@ def build_agent_rows(
             cell = _cell_for(slug, harness, scope=scope, home=home, project=project)
             if cell is not None:
                 cells[(harness, scope)] = cell
+        # In project scope, also probe global so the AgentGrid can render
+        # the globally-installed indicator (#374). Skipped when home is None
+        # (callers that don't care about the indicator). Runs for every row
+        # in the universe — the probe is a filesystem check, independent of
+        # lock membership — matching skill_state (#188).
+        if scope == "project" and home is not None:
+            for harness in INTERACTIVE_HARNESSES:
+                cell = _cell_for(slug, harness, scope="global", home=home, project=None)
+                if cell is not None:
+                    cells[(harness, "global")] = cell
         rows.append(AgentRow(
             slug=slug,
             source=entry.source,

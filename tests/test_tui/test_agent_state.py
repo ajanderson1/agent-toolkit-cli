@@ -73,3 +73,51 @@ def test_no_locks_no_rows(tmp_path: Path, monkeypatch):
     project.mkdir()
     rows = build_agent_rows(scope="project", home=tmp_path, project=project)
     assert rows == []
+
+
+def test_project_scope_probes_global_cells(tmp_path: Path, monkeypatch):
+    """#374: at project scope every row also carries (harness, 'global')
+    cells so the grid can render the globally-installed indicator."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    project = tmp_path / "proj"
+    project.mkdir()
+    _write_library({"reviewer": _entry("o/reviewer")})
+    # Simulate a global install in the standard .claude/agents slot.
+    slot = tmp_path / ".claude" / "agents"
+    slot.mkdir(parents=True)
+    (slot / "reviewer.md").write_text("# reviewer\n")
+
+    rows = build_agent_rows(scope="project", home=tmp_path, project=project)
+    cell = rows[0].cells.get(("standard", "global"))
+    assert cell is not None and cell.linked
+
+
+def test_project_scope_global_probe_runs_for_unlisted_rows(tmp_path: Path, monkeypatch):
+    """#374: the probe is a lock-independent filesystem check — unlisted
+    (project-lock-only) rows get global cells too, matching skill_state."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    project = tmp_path / "proj"
+    project.mkdir()
+    _write_library({})
+    proj_path = lock_file_path(scope="project", project=project)
+    write_lock(proj_path, LockFile(version=1, skills={"reviewer": _entry("o/reviewer")}))
+    slot = tmp_path / ".claude" / "agents"
+    slot.mkdir(parents=True)
+    (slot / "reviewer.md").write_text("# reviewer\n")
+
+    rows = build_agent_rows(scope="project", home=tmp_path, project=project)
+    assert rows[0].state == "unlisted"
+    cell = rows[0].cells.get(("standard", "global"))
+    assert cell is not None and cell.linked
+
+
+def test_project_scope_home_none_skips_global_probe(tmp_path: Path, monkeypatch):
+    """#374: callers that pass home=None don't care about the indicator —
+    no (harness, 'global') cells, mirroring skill_state's escape hatch."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    project = tmp_path / "proj"
+    project.mkdir()
+    _write_library({"reviewer": _entry("o/reviewer")})
+
+    rows = build_agent_rows(scope="project", home=None, project=project)
+    assert all(scope != "global" for (_, scope) in rows[0].cells)
