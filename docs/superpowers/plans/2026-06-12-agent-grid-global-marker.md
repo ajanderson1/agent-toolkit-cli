@@ -103,9 +103,9 @@ In `src/agent_toolkit_tui/agent_state.py`, replace the cell-probe block inside `
                     cells[(harness, "global")] = cell
 ```
 
-- [ ] **Step 4: Fix the two stale key-order comments in the same file**
+- [ ] **Step 4: Fix the three stale key-order comments in the same file**
 
-Both say `(scope, harness)` but the code keys `(harness, scope)`. Line 34-36 block comment — change the last sentence:
+All say `(scope, harness)` but the code keys `(harness, scope)`. Lines 33-36 block comment — replace in full:
 
 ```python
 # Rendered columns (#361): the standard slot first, then the non-covered
@@ -118,6 +118,12 @@ Line 55 field comment on `AgentRow.cells`:
 
 ```python
     # Key: (harness_name, scope) → AgentCell
+```
+
+Line 42 `AgentCell` docstring:
+
+```python
+    """Per-(harness, scope) install state for a single agent slug."""
 ```
 
 - [ ] **Step 5: Run the tests to verify they pass**
@@ -356,100 +362,13 @@ git commit --only src/agent_toolkit_tui/widgets/agent_grid.py --only tests/test_
 
 ---
 
-### Task 3: Info panel — widen the marker gate to agents
-
-**Files:**
-- Modify: `src/agent_toolkit_tui/column_info.py` (`_standard_info` lines 44-56; `get_column_info` docstring line 98)
-- Test: `tests/test_tui/test_column_info.py`
-
-- [ ] **Step 1: Write the failing tests**
-
-Append to `tests/test_tui/test_column_info.py`:
-
-```python
-def test_standard_info_agents_includes_marker_when_globally_linked():
-    """#374: the agents panel gets the 🌐 explainer, with presence-neutral
-    copy (no redundancy claim — per-harness precedence is not asserted)."""
-    info = get_column_info(
-        "standard", context={"asset_type": "agents", "global_linked": True},
-    )
-    joined = "\n".join(info.lines)
-    assert "🌐" in joined
-    assert "This agent is also installed globally." in joined
-    assert "may not need" not in joined
-
-
-def test_standard_info_agents_omits_marker_when_not_globally_linked():
-    info = get_column_info(
-        "standard", context={"asset_type": "agents", "global_linked": False},
-    )
-    assert "🌐" not in "\n".join(info.lines)
-
-
-def test_standard_info_instructions_never_shows_marker():
-    """Instructions is excluded by design: per-scope canonical AGENTS.md,
-    no cross-scope install concept — even a (bogus) global_linked=True
-    context must not render the block."""
-    info = get_column_info(
-        "standard", context={"asset_type": "instructions", "global_linked": True},
-    )
-    assert "🌐" not in "\n".join(info.lines)
-```
-
-- [ ] **Step 2: Run the tests to verify they fail**
-
-Run: `uv run pytest tests/test_tui/test_column_info.py -v`
-Expected: the first test FAILS (`asset_type == "skills"` gate suppresses the block); the other two PASS already (regression pins).
-
-- [ ] **Step 3: Implement the widened gate**
-
-In `src/agent_toolkit_tui/column_info.py`, replace lines 45-56 (the comment, `show_marker`, and `indicator_note`) with:
-
-```python
-    # The 🌐 marker block applies to the asset types whose grids render the
-    # marker: skills (#188) and agents (#374). Instructions is excluded by
-    # design — each scope has its own canonical AGENTS.md, so there is no
-    # cross-scope install concept. The block is also contextual: it only
-    # makes sense when the focused row IS installed globally, so omit it
-    # when the caller says otherwise.
-    show_marker = asset_type in ("skills", "agents") and (
-        context is None or bool(ctx.get("global_linked", True))
-    )
-    indicator_note: list[str] = []
-    if show_marker:
-        indicator_note = ["", "🌐 marker (project scope only):"]
-        if asset_type == "skills":
-            indicator_note += [
-                "  This skill is also installed globally,",
-                "  so you may not need it at project scope too.",
-            ]
-        else:
-            # Agents copy stays presence-neutral (#374): per-harness
-            # project-vs-global precedence is not asserted.
-            indicator_note += ["  This agent is also installed globally."]
-```
-
-In `get_column_info`'s docstring (line 98), change `global_linked` (skills-only 🌐 marker block)` to `global_linked` (skills/agents 🌐 marker block)`.
-
-- [ ] **Step 4: Run the tests to verify they pass**
-
-Run: `uv run pytest tests/test_tui/test_column_info.py tests/test_tui/test_column_info_modal.py -v`
-Expected: all PASS (including the pre-existing skills-copy tests — the skills wording is byte-identical).
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add src/agent_toolkit_tui/column_info.py tests/test_tui/test_column_info.py
-git commit --only src/agent_toolkit_tui/column_info.py --only tests/test_tui/test_column_info.py -m "feat(tui): extend column-info 🌐 explainer to agents asset type (#374)"
-```
-
----
-
-### Task 4: Wire `global_linked` from the agent grid's focused row
+### Task 3: Wire `global_linked` from the agent grid's focused row
 
 **Files:**
 - Modify: `src/agent_toolkit_tui/widgets/agent_grid.py` (`action_info` call site line 167; `_context_for` lines 307-331)
 - Test: `tests/test_tui/test_agent_grid_global_indicator.py`
+
+**Ordering note (review finding F1):** this task MUST land before Task 4's gate widening. If the gate widened first, the agents context would still lack `global_linked`, `ctx.get("global_linked", True)` would default the explainer ON for every agents modal, and the pre-existing `test_standard_modal_at_project_scope_lists_devin_without_note` (asserts `"project scope only" not in body`) would fail that task's full-suite pre-commit. With the wiring landed first, rows without global cells yield `global_linked: False` and every intermediate commit stays green.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -558,13 +477,115 @@ Update the call site in `action_info` (line 167):
 - [ ] **Step 4: Run the tests to verify they pass**
 
 Run: `uv run pytest tests/test_tui/test_agent_grid_global_indicator.py tests/test_tui/test_agent_grid.py tests/test_tui/test_agent_grid_standard.py -v`
-Expected: all PASS (the existing files cover `action_info` paths and prove the signature change is fully wired).
+Expected: all PASS (the existing files cover `action_info` paths and prove the signature change is fully wired; the column_info gate is still skills-only at this point, so no agents modal renders the explainer yet).
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add src/agent_toolkit_tui/widgets/agent_grid.py tests/test_tui/test_agent_grid_global_indicator.py
 git commit --only src/agent_toolkit_tui/widgets/agent_grid.py --only tests/test_tui/test_agent_grid_global_indicator.py -m "feat(tui): surface global_linked in agent grid column-info context (#374)"
+```
+
+---
+
+### Task 4: Info panel — widen the marker gate to agents
+
+**Files:**
+- Modify: `src/agent_toolkit_tui/column_info.py` (`_standard_info` lines 44-56; `get_column_info` docstring line 98)
+- Test: `tests/test_tui/test_column_info.py`
+
+- [ ] **Step 1: Write the failing tests**
+
+Append to `tests/test_tui/test_column_info.py`:
+
+```python
+def test_standard_info_agents_includes_marker_when_globally_linked():
+    """#374: the agents panel gets the 🌐 explainer, with presence-neutral
+    copy (no redundancy claim — per-harness precedence is not asserted)."""
+    info = get_column_info(
+        "standard", context={"asset_type": "agents", "global_linked": True},
+    )
+    joined = "\n".join(info.lines)
+    assert "🌐" in joined
+    assert "This agent is also installed globally." in joined
+    assert "may not need" not in joined
+
+
+def test_standard_info_agents_omits_marker_when_not_globally_linked():
+    info = get_column_info(
+        "standard", context={"asset_type": "agents", "global_linked": False},
+    )
+    assert "🌐" not in "\n".join(info.lines)
+
+
+def test_standard_info_instructions_never_shows_marker():
+    """Instructions is excluded by design: per-scope canonical AGENTS.md,
+    no cross-scope install concept — even a (bogus) global_linked=True
+    context must not render the block."""
+    info = get_column_info(
+        "standard", context={"asset_type": "instructions", "global_linked": True},
+    )
+    assert "🌐" not in "\n".join(info.lines)
+```
+
+In the same file, fix the comment this change falsifies (review finding A2): at line 126, inside `test_standard_info_is_asset_type_aware`, change
+
+```python
+    # The 🌐 marker block is skills-only.
+```
+
+to
+
+```python
+    # The 🌐 marker block applies to skills and agents; instructions is
+    # excluded by design.
+```
+
+- [ ] **Step 2: Run the tests to verify they fail**
+
+Run: `uv run pytest tests/test_tui/test_column_info.py -v`
+Expected: the first test FAILS (`asset_type == "skills"` gate suppresses the block); the other two PASS already (regression pins).
+
+- [ ] **Step 3: Implement the widened gate**
+
+In `src/agent_toolkit_tui/column_info.py`, replace lines 45-56 (the comment, `show_marker`, and `indicator_note`) with:
+
+```python
+    # The 🌐 marker block applies to the asset types whose grids render the
+    # marker: skills (#188) and agents (#374). Instructions is excluded by
+    # design — each scope has its own canonical AGENTS.md, so there is no
+    # cross-scope install concept. The block is also contextual: it only
+    # makes sense when the focused row IS installed globally, so omit it
+    # when the caller says otherwise.
+    show_marker = asset_type in ("skills", "agents") and (
+        context is None or bool(ctx.get("global_linked", True))
+    )
+    indicator_note: list[str] = []
+    if show_marker:
+        indicator_note = ["", "🌐 marker (project scope only):"]
+        if asset_type == "skills":
+            indicator_note += [
+                "  This skill is also installed globally,",
+                "  so you may not need it at project scope too.",
+            ]
+        else:
+            # Agents copy stays presence-neutral (#374): per-harness
+            # project-vs-global precedence is not asserted.
+            indicator_note += ["  This agent is also installed globally."]
+```
+
+In `get_column_info`'s docstring (line 98), change `global_linked` (skills-only 🌐 marker block)` to `global_linked` (skills/agents 🌐 marker block)`.
+
+- [ ] **Step 4: Run the tests to verify they pass**
+
+Run: `uv run pytest tests/test_tui/test_column_info.py tests/test_tui/test_column_info_modal.py -v`
+Expected: all PASS (including the pre-existing skills-copy tests — the skills wording is byte-identical).
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src/agent_toolkit_tui/column_info.py tests/test_tui/test_column_info.py
+git commit --only src/agent_toolkit_tui/column_info.py --only tests/test_tui/test_column_info.py -m "feat(tui): extend column-info 🌐 explainer to agents asset type (#374)"
 ```
 
 ---
