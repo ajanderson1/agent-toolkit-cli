@@ -342,12 +342,17 @@ def _make_reclone_action(
         if canonical.exists():
             return  # idempotent
         canonical.parent.mkdir(parents=True, exist_ok=True)
-        skill_git.clone(url, canonical, ref=ref, env=None)
+        # A SHA ref must NOT go through `git clone --branch <sha>` (git rejects
+        # it); clone_pinned_or_branch clones at HEAD then checks out the pin.
+        skill_git.clone_pinned_or_branch(url, canonical, ref=ref, env=None)
 
-    preview_ref = f" --branch {ref}" if ref else ""
+    if entry.ref_looks_pinned:
+        preview = f"git clone {url} {canonical} && git -C {canonical} checkout {ref}"
+    else:
+        preview = f"git clone{(' --branch ' + ref) if ref else ''} {url} {canonical}"
     return FixAction(
         description=f"Re-clone {slug} from {url}",
-        shell_preview=f"git clone{preview_ref} {url} {canonical}",
+        shell_preview=preview,
         apply=_apply,
     )
 
@@ -368,6 +373,9 @@ def _make_monorepo_reclone_action(
 
     if entry.skill_path is None:
         raise InstallError(f"{slug}: monorepo lock entry missing skillPath")
+    if entry.parent_url is None:
+        raise InstallError(f"{slug}: monorepo lock entry missing parentUrl")
+    parent_url = entry.parent_url
     parts = entry.source.split("/", 1)
     if len(parts) != 2:
         raise InstallError(
@@ -384,7 +392,12 @@ def _make_monorepo_reclone_action(
             return  # idempotent (symlink already resolves)
         if not parent_dir.exists():
             parent_dir.parent.mkdir(parents=True, exist_ok=True)
-            skill_git.clone(entry.parent_url, parent_dir, ref=entry.ref, env=None)
+            # parent_dir's cache key (above) stays keyed on the raw ref so two
+            # skills from the same monorepo at different pins don't collide;
+            # the clone honours a SHA pin via clone-at-HEAD + checkout (#345).
+            skill_git.clone_pinned_or_branch(
+                parent_url, parent_dir, ref=entry.ref, env=None,
+            )
         skill_root = parent_dir / skill_path
         if not (skill_root / "SKILL.md").exists():
             raise InstallError(

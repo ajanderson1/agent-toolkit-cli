@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import Literal
 
 from agent_toolkit_cli import _pi_settings
-from agent_toolkit_cli.pi_extension_add import looks_like_sha
 from agent_toolkit_cli.pi_extension_lock import read_lock
 from agent_toolkit_cli.pi_extension_paths import (
     Scope,
@@ -108,15 +107,10 @@ def build_inventory(
             continue
         for slug, entry in lock.skills.items():
             origin: Origin = "npm" if entry.source_type == "npm" else "store-owned"
-            # Only store-owned (git-cloned) entries can be SHA-pinned — an npm
-            # row carrying a hex `ref` (hand-edited / future-schema) is not a
-            # pin. Gate on origin so status never renders a phantom pin column
+            # `ref_looks_pinned` is origin-aware (an npm row carrying a hex
+            # `ref` is not a pin), so status never renders a phantom pin column
             # for an npm entry (spec invariant: npm/untracked → pinned_sha=None).
-            pinned_sha = (
-                entry.ref
-                if origin == "store-owned" and looks_like_sha(entry.ref)
-                else None
-            )
+            pinned_sha = entry.ref if entry.ref_looks_pinned else None
             rec = by_slug.setdefault(
                 slug,
                 InventoryRecord(

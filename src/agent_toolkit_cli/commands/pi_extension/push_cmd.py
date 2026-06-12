@@ -16,7 +16,6 @@ import click
 
 from agent_toolkit_cli import skill_git
 from agent_toolkit_cli.commands.pi_extension._common import scope_and_roots
-from agent_toolkit_cli.pi_extension_add import looks_like_sha
 from agent_toolkit_cli.pi_extension_lock import read_lock, write_lock
 from agent_toolkit_cli.pi_extension_paths import (
     library_pi_extension_path,
@@ -81,7 +80,7 @@ def push_cmd(
             )
             continue
 
-        if looks_like_sha(entry.ref):
+        if entry.ref_looks_pinned:
             click.echo(
                 f"{slug}: pinned to {entry.ref[:7]} — skipping "
                 f"(remove and re-add to change the pin)"

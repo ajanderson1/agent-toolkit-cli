@@ -9,9 +9,12 @@ from __future__ import annotations
 
 import enum
 import os
+import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+
+from agent_toolkit_cli.skill_lock import looks_like_sha
 
 
 class GitError(RuntimeError):
@@ -248,6 +251,39 @@ def checkout(repo: Path, *, ref: str, env: dict[str, str] | None) -> GitResult:
         ["git", "-C", str(repo), "checkout", ref], env=env,
     )
     return GitResult(stdout=proc.stdout, stderr=proc.stderr)
+
+
+def clone_pinned_or_branch(
+    url: str, dest: Path, *, ref: str | None, env: dict[str, str] | None,
+) -> None:
+    """Clone `url` into `dest`, honouring a possible SHA pin.
+
+    `git clone --branch <sha>` is rejected by git, so a SHA `ref` is applied
+    post-clone: clone at HEAD (ref=None), best-effort fetch_ref (rescues
+    full-SHA wants not reachable from advertised tips; always fails for
+    abbreviations, which checkout resolves locally), then checkout as the
+    fail-loud authority. A branch/tag `ref` (or None → remote default) clones
+    `--branch` directly. A failed checkout removes the partial clone and
+    re-raises — fail loud, no orphan dir (#313, #345).
+
+    Takes a raw `ref`, not a LockEntry, and derives the pin via bare
+    `looks_like_sha` (NOT is_sha_pinned): every clone site holds a store-owned
+    source — npm entries are never cloned — so the source_type gate is moot
+    here. This is the one place bare `looks_like_sha` is correct over the
+    origin-aware property.
+    """
+    pin = ref if looks_like_sha(ref) else None
+    clone(url, dest, ref=None if pin else ref, env=env)
+    if pin and is_git_repo(dest):
+        try:
+            fetch_ref(dest, ref=pin, env=env)
+        except GitError:
+            pass  # best-effort; checkout resolves locally
+        try:
+            checkout(dest, ref=pin, env=env)
+        except GitError:
+            shutil.rmtree(dest, ignore_errors=True)
+            raise
 
 
 def current_branch(repo: Path, *, env: dict[str, str] | None) -> str:

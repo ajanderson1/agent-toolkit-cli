@@ -1247,3 +1247,57 @@ def test_uninstall_install_error_clean_message(
     assert not isinstance(r.exception, InstallError), "raw InstallError escaped"
     assert "firebender.json" in r.output
     assert "Traceback" not in r.output
+
+
+# ---------------------------------------------------------------------------
+# #345: `agent add <src> --ref <sha>` must land on the pin, not be rejected
+# ---------------------------------------------------------------------------
+
+
+def test_agent_add_sha_ref_lands_on_pin(
+    git_sandbox, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`agent add <src> --ref <sha>` must check out the pinned commit instead
+    of being rejected by `git clone --branch <sha>` (#345)."""
+    import subprocess
+
+    from agent_toolkit_cli.agent_paths import library_agent_path
+
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    def git(*args):
+        return subprocess.run(
+            ["git", "-C", str(git_sandbox.clone), *args],
+            check=True, env=git_sandbox.env, capture_output=True, text=True,
+        ).stdout.strip()
+
+    # The pin commit carries the agent content file at the repo root (agent add
+    # validates <slug>.md exists post-clone). A LATER commit then advances the
+    # branch so landing on the pin is provably not just landing on HEAD.
+    (git_sandbox.clone / "demo-agent.md").write_text(
+        "---\nname: demo-agent\ndescription: A test agent.\n---\nBody.\n"
+    )
+    git("add", "-A")
+    git("commit", "-m", "add agent file")
+    first_sha = git("rev-parse", "HEAD")
+    git("push", "origin", "main")
+    (git_sandbox.clone / "EXTRA.md").write_text("second\n")
+    git("add", "-A")
+    git("commit", "-m", "second")
+    git("push", "origin", "main")
+
+    r = CliRunner().invoke(
+        main,
+        ["agent", "add", str(git_sandbox.upstream), "--ref", first_sha,
+         "--slug", "demo-agent"],
+    )
+    assert r.exit_code == 0, r.output
+
+    canonical = library_agent_path("demo-agent")
+    head = subprocess.run(
+        ["git", "-C", str(canonical), "rev-parse", "HEAD"],
+        check=True, env=git_sandbox.env, capture_output=True, text=True,
+    ).stdout.strip()
+    assert head == first_sha

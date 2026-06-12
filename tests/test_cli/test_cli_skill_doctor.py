@@ -263,3 +263,64 @@ def test_doctor_does_not_report_upstream_drift(git_sandbox, tmp_path: Path, monk
     assert "behind upstream" not in out
     assert "newer version" not in out
     assert "update available" not in out
+
+
+def test_skill_doctor_reclone_sha_pinned_lands_on_pin(
+    git_sandbox, tmp_path, monkeypatch,
+):
+    """A SHA-pinned skill entry whose canonical is missing must reclone onto
+    the pin — not be rejected by `git clone --branch <sha>` (#345)."""
+    from agent_toolkit_cli import skill_doctor
+    from agent_toolkit_cli.skill_lock import LockEntry, LockFile, write_lock
+    from agent_toolkit_cli.skill_paths import (
+        canonical_skill_dir, library_lock_path,
+    )
+
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    library_root = tmp_path / "lib" / "skills"
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    monkeypatch.setenv("HOME", str(fake_home))
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: fake_home))
+
+    def git(*args):
+        return subprocess.run(
+            ["git", "-C", str(git_sandbox.clone), *args],
+            check=True, env=git_sandbox.env, capture_output=True, text=True,
+        ).stdout.strip()
+
+    first_sha = git("rev-parse", "HEAD")
+    (git_sandbox.clone / "EXTRA.md").write_text("second\n")
+    git("add", "-A")
+    git("commit", "-m", "second")
+    git("push", "origin", "main")
+
+    # Global library lock: store-owned skill pinned to first_sha, canonical MISSING.
+    lock_path = library_lock_path()  # reads AGENT_TOOLKIT_SKILLS_ROOT
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    write_lock(lock_path, LockFile(version=1, skills={
+        "demo": LockEntry(
+            source=str(git_sandbox.upstream), source_type="git",
+            ref=first_sha, upstream_sha=None,
+        ),
+    }))
+
+    findings = skill_doctor.diagnose(
+        slugs=None, scope="global", home=fake_home, project=None,
+    )
+    reclone = next(
+        f for f in findings
+        if f.fix_action is not None and "Re-clone" in f.fix_action.description
+    )
+    reclone.fix_action.apply()
+
+    canonical = canonical_skill_dir(
+        "demo", scope="global", home=fake_home, project=None,
+    )
+    head = subprocess.run(
+        ["git", "-C", str(canonical), "rev-parse", "HEAD"],
+        check=True, env=git_sandbox.env, capture_output=True, text=True,
+    ).stdout.strip()
+    assert head == first_sha

@@ -28,8 +28,7 @@ from pathlib import Path
 from typing import Callable, Literal
 
 from agent_toolkit_cli import _pi_settings, skill_git
-from agent_toolkit_cli.pi_extension_add import looks_like_sha
-from agent_toolkit_cli.pi_extension_lock import LockFile, read_lock
+from agent_toolkit_cli.pi_extension_lock import LockEntry, LockFile, read_lock
 from agent_toolkit_cli.pi_extension_paths import (
     Scope,
     library_pi_extension_path,
@@ -119,11 +118,11 @@ def diagnose(
 
 def _check_slug(
     *, slug: str, scope: Scope, home: Path | None, project: Path | None,
-    entry: object, lock: LockFile,
+    entry: LockEntry, lock: LockFile,
 ) -> list[Finding]:
     findings: list[Finding] = []
     # All store-owned rows have a store copy in the global library.
-    if getattr(entry, "source_type", None) != "npm":
+    if entry.source_type != "npm":
         canonical = library_pi_extension_path(slug)
         if not canonical.exists():
             findings.append(Finding(
@@ -131,7 +130,7 @@ def _check_slug(
                 path=canonical,
                 detail=(
                     f"lock has '{slug}' but store copy is gone. "
-                    f"Source: {getattr(entry, 'source', '?')}"
+                    f"Source: {entry.source}"
                 ),
                 fix_action=_make_reclone_action(slug=slug, entry=entry),
             ))
@@ -145,7 +144,7 @@ def _check_slug(
                 path=canonical,
                 detail=(
                     f"store copy at {canonical} exists but is not a git repo "
-                    f"(partial/failed clone). Source: {getattr(entry, 'source', '?')}"
+                    f"(partial/failed clone). Source: {entry.source}"
                 ),
                 fix_action=_make_reclone_action(slug=slug, entry=entry, force=True),
             ))
@@ -351,7 +350,7 @@ def _make_relink_action(*, link: Path, canonical: Path) -> FixAction:
     )
 
 
-def _make_reclone_action(*, slug: str, entry: object, force: bool = False) -> FixAction:
+def _make_reclone_action(*, slug: str, entry: LockEntry, force: bool = False) -> FixAction:
     """Re-clone the store copy from the lock entry's source.
 
     Pin ONLY when the entry's `ref` is a SHA — NEVER from `upstream_sha`,
@@ -363,13 +362,12 @@ def _make_reclone_action(*, slug: str, entry: object, force: bool = False) -> Fi
     authority. A failed checkout removes the partial clone and re-raises —
     fail loud, no orphan dir (#313).
     """
-    source = getattr(entry, "source", "")
-    ref = getattr(entry, "ref", None)
+    source = entry.source
+    ref = entry.ref
     canonical = library_pi_extension_path(slug)
 
-    ref_is_sha = looks_like_sha(ref)
-    pin_sha = ref if ref_is_sha else None
-    clone_ref = None if ref_is_sha else ref
+    pin_sha = ref if entry.ref_looks_pinned else None
+    clone_ref = None if entry.ref_looks_pinned else ref
 
     def _apply() -> None:
         if canonical.exists():
@@ -379,17 +377,10 @@ def _make_reclone_action(*, slug: str, entry: object, force: bool = False) -> Fi
             # it so the clone below has a clean target.
             shutil.rmtree(canonical, ignore_errors=True)
         canonical.parent.mkdir(parents=True, exist_ok=True)
-        skill_git.clone(source, canonical, ref=clone_ref, env=None)
-        if pin_sha and skill_git.is_git_repo(canonical):
-            try:
-                skill_git.fetch_ref(canonical, ref=pin_sha, env=None)
-            except skill_git.GitError:
-                pass  # best-effort; checkout resolves locally
-            try:
-                skill_git.checkout(canonical, ref=pin_sha, env=None)
-            except skill_git.GitError:
-                shutil.rmtree(canonical, ignore_errors=True)
-                raise
+        # Shared SHA-aware clone (#345): clone-at-HEAD + checkout for a pin,
+        # `--branch` for a branch. Verbatim extraction of the dance this path
+        # used to inline; the three skill/agent reclone paths share it now.
+        skill_git.clone_pinned_or_branch(source, canonical, ref=ref, env=None)
 
     return FixAction(
         description=f"Re-clone {slug} from {source}",

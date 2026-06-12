@@ -9,7 +9,6 @@ Mirrors skill_add's global-only posture. Lock is written ONLY after a
 successful clone (store-owned) — never before (#283)."""
 from __future__ import annotations
 
-import re
 import shutil
 from pathlib import Path
 
@@ -21,7 +20,12 @@ from agent_toolkit_cli.pi_extension_lock import (
     write_lock,
 )
 from agent_toolkit_cli.pi_extension_paths import library_lock_path, library_pi_extension_path
+# `looks_like_sha` lives in skill_lock (#345); re-exported here so existing
+# `from pi_extension_add import looks_like_sha` importers still resolve.
+from agent_toolkit_cli.skill_lock import looks_like_sha
 from agent_toolkit_cli.skill_source import ParsedSource, SourceParseError, parse_source
+
+__all__ = ["AddError", "add", "looks_like_sha"]
 
 
 class AddError(RuntimeError):
@@ -31,18 +35,6 @@ class AddError(RuntimeError):
 def _npm_slug(spec: str) -> str:
     # "npm:@scope/name" -> "@scope/name"
     return spec.split(":", 1)[1]
-
-
-def looks_like_sha(ref: str | None) -> bool:
-    """True when `ref` can only sensibly be a commit SHA (lowercase hex,
-    7-40 chars — git's abbreviated-to-full range).
-
-    Why a heuristic is safe both ways: `git clone --branch` rejects a 40-hex
-    *branch name* anyway, so classifying one as a SHA is strictly more
-    correct than today; and a short all-hex *tag* (e.g. `abc1234`) classified
-    as a SHA still resolves — `fetch_ref` + `checkout` accept tag names too.
-    """
-    return bool(ref) and re.fullmatch(r"[0-9a-f]{7,40}", ref) is not None
 
 
 def _derive_slug(parsed: ParsedSource) -> str | None:

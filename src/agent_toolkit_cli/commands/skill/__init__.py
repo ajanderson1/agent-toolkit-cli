@@ -310,7 +310,9 @@ def _add_single(parsed: ParsedSource, slug: str | None) -> None:
     if not library_dir.exists():
         library_dir.parent.mkdir(parents=True, exist_ok=True)
         try:
-            skill_git.clone(parsed.url, library_dir, ref=parsed.ref, env=None)
+            skill_git.clone_pinned_or_branch(
+                parsed.url, library_dir, ref=parsed.ref, env=None,
+            )
         except Exception as exc:
             raise click.ClickException(f"clone failed: {exc}") from exc
 
@@ -353,7 +355,9 @@ def _add_monorepo(parsed: ParsedSource, slug: str | None, *, owned: bool = False
     if not parent_dir.exists():
         parent_dir.parent.mkdir(parents=True, exist_ok=True)
         try:
-            skill_git.clone(parsed.url, parent_dir, ref=parsed.ref, env=None)
+            skill_git.clone_pinned_or_branch(
+                parsed.url, parent_dir, ref=parsed.ref, env=None,
+            )
         except Exception as exc:
             raise click.ClickException(f"parent clone failed: {exc}") from exc
     else:
