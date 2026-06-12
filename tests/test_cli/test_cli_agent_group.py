@@ -1181,3 +1181,38 @@ def test_install_error_output_names_slug(
     assert r.exit_code != 0
     assert "no-fm" in r.output, f"slug missing from error:\n{r.output}"
     assert "Traceback" not in r.output
+
+
+def test_failed_fanout_retry_succeeds_after_fix(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#373 (gap 3, dissolved by #368): a fan-out that fails on one harness
+    leaves sentineled projections behind; fixing the canonical and re-running
+    must succeed — no AgentProjectionConflictError on our own leftovers."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    canonical = _seed_global_canonical(tmp_path, slug="retry-agent")
+    # gemini-cli succeeds without a description; github-copilot requires one
+    # and fails AFTER gemini-cli's file is already on disk.
+    (canonical / "retry-agent.md").write_text(
+        "---\nname: retry-agent\n---\nbody\n"
+    )
+    _write_global_lock(tmp_path, slug="retry-agent")
+
+    r1 = CliRunner().invoke(
+        main,
+        ["agent", "install", "retry-agent", "-g",
+         "--harnesses", "gemini-cli,github-copilot"],
+    )
+    assert r1.exit_code != 0
+    assert "description" in r1.output
+
+    # Fix the canonical, retry the same fan-out.
+    (canonical / "retry-agent.md").write_text(
+        "---\nname: retry-agent\ndescription: now valid\n---\nbody\n"
+    )
+    r2 = CliRunner().invoke(
+        main,
+        ["agent", "install", "retry-agent", "-g",
+         "--harnesses", "gemini-cli,github-copilot"],
+    )
+    assert r2.exit_code == 0, f"retry wedged:\n{r2.output}"
