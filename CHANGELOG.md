@@ -1,5 +1,32 @@
 # Changelog
 
+## [3.9.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v3.8.0...v3.9.0) (2026-06-12)
+
+
+### Features
+
+* **instructions:** doctor backup-then-symlink fix when canonical is populated ([#379](https://github.com/ajanderson1/agent-toolkit-cli/issues/379)) ([4724d3e](https://github.com/ajanderson1/agent-toolkit-cli/commit/4724d3e571c319ecd9c97c1478863c58dfc1646d))
+
+
+### Bug Fixes
+
+* **agent:** agent install -p writes no project lock entry — project list/TUI/doctor blind to installed agents ([#362](https://github.com/ajanderson1/agent-toolkit-cli/issues/362)) ([#378](https://github.com/ajanderson1/agent-toolkit-cli/issues/378)) ([429c184](https://github.com/ajanderson1/agent-toolkit-cli/commit/429c1846e6e8568f4b538e23af5ce8e65ad00026))
+* **agent:** per-adapter sentinel adoption — symlink/translate ownership sidecars ([#368](https://github.com/ajanderson1/agent-toolkit-cli/issues/368)) ([#380](https://github.com/ajanderson1/agent-toolkit-cli/issues/380)) ([7e39e71](https://github.com/ajanderson1/agent-toolkit-cli/commit/7e39e711f1c6a7da1fe40bd7f9cb93d145ca174f))
+
+
+### Documentation
+
+* **plan:** agent install -p project lock entry plan for [#362](https://github.com/ajanderson1/agent-toolkit-cli/issues/362) ([eb3d011](https://github.com/ajanderson1/agent-toolkit-cli/commit/eb3d01157d1175706a370425bfb0612280f8b7cc))
+* **plan:** backup-then-symlink doctor fix plan for [#375](https://github.com/ajanderson1/agent-toolkit-cli/issues/375) ([7e5cd44](https://github.com/ajanderson1/agent-toolkit-cli/commit/7e5cd449a40532c22abcef499fe1228d58d79108))
+* **plan:** per-adapter sentinel adoption implementation plan for [#368](https://github.com/ajanderson1/agent-toolkit-cli/issues/368) ([c184771](https://github.com/ajanderson1/agent-toolkit-cli/commit/c1847716d931f657601c2a9fd71a2fc422ce5bff))
+* **spec,plan:** light-tier spec+plan for [#365](https://github.com/ajanderson1/agent-toolkit-cli/issues/365) both-spellings architecture guard ([80c7565](https://github.com/ajanderson1/agent-toolkit-cli/commit/80c75658a912e85a283226f6d3df9b1ea4aa2401))
+* **spec,plan:** resolve critical-review findings for [#362](https://github.com/ajanderson1/agent-toolkit-cli/issues/362) ([62e0e46](https://github.com/ajanderson1/agent-toolkit-cli/commit/62e0e469ce5b96a2b7f0865186aa5b809b9e9849))
+* **spec,plan:** resolve critical-review findings for [#368](https://github.com/ajanderson1/agent-toolkit-cli/issues/368) ([2c905d0](https://github.com/ajanderson1/agent-toolkit-cli/commit/2c905d0ab7e342fcb2db337e0a56dadd5a5d909a))
+* **spec,plan:** resolve critical-review findings for [#375](https://github.com/ajanderson1/agent-toolkit-cli/issues/375) ([34da7e6](https://github.com/ajanderson1/agent-toolkit-cli/commit/34da7e6fcf3837a13b25b021e6d6ddf778951b2b))
+* **spec:** agent install -p project lock entry design for [#362](https://github.com/ajanderson1/agent-toolkit-cli/issues/362) ([6799298](https://github.com/ajanderson1/agent-toolkit-cli/commit/67992987b90caa9bf3fda7fb10ad5c8b1199a8dc))
+* **spec:** backup-then-symlink doctor fix design for [#375](https://github.com/ajanderson1/agent-toolkit-cli/issues/375) ([99305d8](https://github.com/ajanderson1/agent-toolkit-cli/commit/99305d835e8bae5f525607f3a0dc55c039a172e2))
+* **spec:** per-adapter sentinel adoption design for [#368](https://github.com/ajanderson1/agent-toolkit-cli/issues/368) ([4ebf315](https://github.com/ajanderson1/agent-toolkit-cli/commit/4ebf3152950e0c647be33087c85252966fa3e241))
+
 ## [3.8.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v3.7.0...v3.8.0) (2026-06-11)
 
 
