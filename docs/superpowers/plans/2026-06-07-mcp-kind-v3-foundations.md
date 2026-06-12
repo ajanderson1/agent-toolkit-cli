@@ -12,10 +12,10 @@
 
 **Sources + version transparency (decision 2026-06-10):** v1 supports `npx`, `uvx`, `docker`, `url` (remote HTTP), and `local` (existing directory on disk). Git-clone-and-build sources (where this tool would fetch and build a server repo) are deferred — note `uvx --from git+url@ref` already covers pinned Python git sources without any build machinery. Versioning is **transparency, not enforcement**: `add` best-effort RESOLVES the current version (`npm view <pkg> version`; PyPI JSON API; docker tag as given, digest recorded when cheap; git HEAD SHA for `--local` when the path is a repo) and writes it into the entry (`pkg@1.4.2` / `pkg==2.0.1`), so projected configs are effectively pinned underneath (sidestepping the npx/uvx sticky-stale caches) while the UX stays "floating with explicit update". If resolution fails (offline / tool absent), the entry is stored unpinned and `list`/`doctor` show it as `floating` — never block. The `update` verb advances the float explicitly: re-resolve, rewrite the entry, re-upsert every locked projection, print `old → new`.
 
-**Prior art (re-mapped, predates v3):**
-- Spec/brainstorm: `docs/superpowers/specs/2026-05-04-mcp-management-design.md` — the design these tasks implement (manage-by-name, round-trip, loud atomic writes, four harness strategy table, the empty-`{}` / absent-`.mcp.json` failure-mode notes added 2026-06-07).
-- Superseded plan: `docs/superpowers/plans/2026-05-04-mcp-foundations.md` — written against the deleted v1 walker/sidecar/`_allowlist.py` machinery; **do not follow it**; this plan replaces it.
-- Closed v1 issues for reference only: #55 (config_file adapters), #74 (codex HTTP transport), #125 (project-scope link absent-file bug), #141/#142 (list JSON MCP cells), #39 (TUI MCP sidebar — out of scope here).
+**Design spec (authoritative):**
+- `docs/superpowers/specs/2026-06-12-mcp-kind-v3-design.md` — the v3 library-model design these tasks implement (library substrate, `add` authors / `install` projects, config-injection by name, the four principles, the per-harness target table, the four-glyph + `[!] unmanaged` coexistence model). **Read this, not the retired v1 docs.**
+
+**Retired v1 docs (do NOT follow — kept for archaeology only):** the entire v1 MCP design generation (walker, allow-list authority, `link`/`unlink`/`diff`/`fix`/`new` verbs, plugin-folder strategy, `v1alpha2` schema bump) lives under `docs/superpowers/_deprecated/`. It describes the architecture deleted in the v2.3.0 refold (#160) and contradicts this build at the mechanism level. Closed v1 issues for reference only: #55, #74, #125, #141/#142, #39 (TUI — out of scope here).
 
 ---
 
@@ -31,9 +31,11 @@ Before writing any code, the engineer MUST read the agent kind as the working te
 - `src/agent_toolkit_cli/_install_core.py` — the shared core and `InstallError` hierarchy.
 - `src/agent_toolkit_cli/skill_agents.py` — `AGENTS` registry (the harness catalog). MCP adapter dispatch keys off harness name here.
 
-**Spec scope mapping — why this plan deviates from the design document:**
+**Spec ↔ plan relationship:**
 
-The spec (`2026-05-04-mcp-management-design.md`) was written against the **v1 architecture** (walker, allow-list authority, `link`/`unlink`/`diff`/`fix`/`new` verbs, `v1alpha2` schema bump). The v3 per-kind architecture (shipped for skill/agent/instructions/pi-extension) supersedes the walker model with per-kind facades and lock-driven tracking — the **lock replaces the allow-list as the authority on what we manage** (spec Rule 1 re-mapped); the spec's mechanism rules (manage-by-name, round-trip parsers, structural drift, loud atomic writes) carry over unchanged. Verb mapping: `link`→`install`, `unlink`→`uninstall`, `new`→`add`, `check`/`doctor`→`doctor`; spec acceptance #1–4, #6, #8 are implemented here; #5 (`diff`), #7 (`fix`), #9 (schema v1alpha2), #10 (TUI) are deferred per issue #329's out-of-scope list. The spec's `harness_adapters/` package name becomes `mcp_adapters/` per the v3 per-kind naming convention (`agent_adapters/` precedent); the empty `harness_adapters/` directory on disk is a v1 stub — do not write into it.
+The design spec (`2026-06-12-mcp-kind-v3-design.md`) and this plan describe **the same v3 library-model build** — the spec is the *what/why* (substrate, principles, verb surface, acceptance criteria), this plan is the *how* (task-by-task TDD). They do not deviate. (Historical note: an earlier v1-era spec was written against the deleted walker/allow-list/`link`-verb architecture and has been retired to `docs/superpowers/_deprecated/`; ignore it.)
+
+**One implementation-detail carryover worth flagging:** the adapter package is `mcp_adapters/` per the v3 per-kind naming convention (`agent_adapters/` precedent). An empty `harness_adapters/` directory may still exist on disk as a v1 stub — **do not write into it.**
 
 **Project-memory mandates (non-negotiable, enforced by tasks below):**
 1. **Install machinery has repeatedly shipped silently-broken global-scope / orphan paths with green CI.** Every install path MUST have an explicit `install → uninstall → assert-clean` round-trip test **at BOTH global and project scope** (Tasks 9, 10).
@@ -2000,7 +2002,7 @@ Use `superpowers:finishing-a-development-branch` to open the PR (target: PR awai
 
 ## Plan Self-Review
 
-**1. Spec coverage** (against `2026-05-04-mcp-management-design.md`, scoped to foundations):
+**1. Spec coverage** (against `2026-06-12-mcp-kind-v3-design.md`, scoped to foundations):
 - Manage-by-name, never file ownership → Tasks 4/5 (surgical upsert/remove). ✅
 - Round-trip parsers preserve other bytes → Tasks 4 (JSON), 5 (TOML byte-equality test). ✅
 - Loud atomic writes (`→ writing` / `✓ wrote`, temp+`os.replace`) → Task 3 `atomic_write_text` + Task 7 facade messages. ✅

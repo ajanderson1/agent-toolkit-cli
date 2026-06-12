@@ -77,7 +77,7 @@ The composite is the genuinely novel piece — nobody ships "one bundle projecte
 ## Related
 
 - Companion survey: `docs/solutions/tooling-decisions/cross-harness-plugin-bundle-landscape-2026-06-10.md`
-- MCP kind plan (step 1, live): `docs/superpowers/plans/2026-06-07-mcp-kind-v3-foundations.md` + spec `docs/superpowers/specs/2026-05-04-mcp-management-design.md`, issue #329 (open, v4.0.0 milestone)
+- MCP kind plan (step 1, live): `docs/superpowers/plans/2026-06-07-mcp-kind-v3-foundations.md` + spec `docs/superpowers/specs/2026-06-12-mcp-kind-v3-design.md`, issue #329 (open, v5.0.0 milestone)
 - Claude-plugin kind plan (step 2, needs v3 re-mapping): `docs/superpowers/plans/2026-05-20-claude-plugin-asset-kind.md` + spec `docs/superpowers/specs/2026-05-20-claude-plugin-asset-kind-design.md`, issue #149 (closed, v1-scoped)
 - Substrate origin: `docs/superpowers/specs/2026-05-27-v3-agents-refold-design.md` (v3 per-kind refold)
 - Per-harness SSOT: `docs/agent-toolkit/harness-matrix.md`
