@@ -38,7 +38,7 @@ def looks_like_sha(ref: str | None) -> bool:
     and a short all-hex *tag* classified as a SHA still resolves — fetch_ref +
     checkout accept tag names too. (Moved verbatim from pi_extension_add, #345.)
     """
-    return bool(ref) and re.fullmatch(r"[0-9a-f]{7,40}", ref) is not None
+    return ref is not None and re.fullmatch(r"[0-9a-f]{7,40}", ref) is not None
 
 
 def is_sha_pinned(entry: "LockEntry") -> bool:
