@@ -69,6 +69,14 @@ def run(
 
     installed: list[BundleMember] = []
     for member in manifest.members:
+        # Record the member as in-flight BEFORE calling install_member so that
+        # if `add` succeeds but `install` (projection) raises, the member's
+        # library entry is still included in the rollback set (BUG1 fix).
+        # A rollback of a member whose `add` never ran will call `remove --force`
+        # on an absent slug; _rollback catches DispatchError per-member and warns,
+        # so the worst case is a benign warning. That's acceptable for all-or-nothing
+        # correctness — documenting the trade-off here explicitly.
+        installed.append(member)
         try:
             outcome = install_member(member, scope=scope, project_root=project_root)
         except DispatchError as exc:
@@ -80,9 +88,9 @@ def run(
                     f"{', '.join(failed_rollbacks)} — manual cleanup may be needed."
                 )
             raise BundleInstallError(msg) from exc
-        # Only track members WE installed (not pre-existing no-ops) for rollback.
-        if outcome != "already_present":
-            installed.append(member)
+        # An already-present member was not installed by us — exclude from rollback.
+        if outcome == "already_present":
+            installed.pop()
 
     return report
 
