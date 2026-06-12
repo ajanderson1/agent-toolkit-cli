@@ -311,3 +311,81 @@ def test_npm_global_uninstall_malformed_settings_is_clean_error(tmp_path, monkey
     assert r.exit_code != 0
     # Clean Click error, not an unhandled traceback.
     assert r.exception is None or isinstance(r.exception, SystemExit)
+
+
+def _seed_pi_lock(path, slugs):
+    """Minimal v1 pi-extensions lock with bare github entries for `slugs`."""
+    import json as _json
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(_json.dumps({
+        "version": 1,
+        "skills": {
+            s: {"source": "acme/pi-extensions", "sourceType": "github"}
+            for s in slugs
+        },
+    }))
+
+
+def test_push_project_scope_hints_global_lock(tmp_path, monkeypatch):
+    """Slug only in the GLOBAL pi-extensions lock, resolved scope project → hint + exit 1 (#371)."""
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    project = tmp_path / "proj"
+    project.mkdir()
+    _seed_pi_lock(home / ".agent-toolkit" / "pi-extensions-lock.json", ["my-ext"])
+    _seed_pi_lock(project / "pi-extensions-lock.json", [])
+    result = CliRunner().invoke(
+        main, ["--project", str(project), "pi-extension", "push", "my-ext"],
+    )
+    assert result.exit_code == 1, result.output
+    assert "my-ext: not in the project lock" in result.output
+    assert "found in the global lock — re-run with -g" in result.output
+
+
+def test_push_global_scope_hints_project_lock(tmp_path, monkeypatch):
+    """Slug only in the PROJECT pi-extensions lock, -g forces global → inverse hint + exit 1."""
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    project = tmp_path / "proj"
+    project.mkdir()
+    _seed_pi_lock(home / ".agent-toolkit" / "pi-extensions-lock.json", [])
+    _seed_pi_lock(project / "pi-extensions-lock.json", ["my-ext"])
+    result = CliRunner().invoke(
+        main, ["--project", str(project), "pi-extension", "push", "-g", "my-ext"],
+    )
+    assert result.exit_code == 1, result.output
+    assert "my-ext: not in the global lock" in result.output
+    assert "found in the project lock — re-run with -p" in result.output
+
+
+def test_push_slug_in_neither_lock_exits_nonzero(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    project = tmp_path / "proj"
+    project.mkdir()
+    _seed_pi_lock(home / ".agent-toolkit" / "pi-extensions-lock.json", [])
+    _seed_pi_lock(project / "pi-extensions-lock.json", [])
+    result = CliRunner().invoke(
+        main, ["--project", str(project), "pi-extension", "push", "ghost"],
+    )
+    assert result.exit_code == 1, result.output
+    assert "ghost: not in the project lock" in result.output
+    assert "found in" not in result.output
+
+
+def test_bare_push_empty_lock_unchanged(tmp_path, monkeypatch):
+    """Bare push takes targets from the lock — never hits the branch; exit 0."""
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    project = tmp_path / "proj"
+    project.mkdir()
+    _seed_pi_lock(project / "pi-extensions-lock.json", [])
+    result = CliRunner().invoke(
+        main, ["--project", str(project), "pi-extension", "push"],
+    )
+    assert result.exit_code == 0, result.output
+    assert "not in the" not in result.output
