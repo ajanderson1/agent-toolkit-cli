@@ -36,6 +36,7 @@ _UNLINKED_GLYPH = "☐"
 _PENDING_LINK   = "[yellow]+[/]"
 _PENDING_UNLINK = "[yellow]-[/]"
 _INFO_GLYPH     = "ⓘ"
+_GLOBAL_GLYPH   = "🌐"
 
 # Row-state badges (#360). `installed` renders as an em-dash to keep the
 # common case quiet; `library` mirrors skill_grid's dim available state;
@@ -384,10 +385,22 @@ class AgentGrid(Vertical):
         cell = row.cells.get((harness, self._scope))
         if cell is None:
             # Not applicable at this scope (e.g. dexto at project scope).
-            return "[dim]—[/]"
-        pending = self._pending.get((self._scope, harness, row.slug))
-        if pending == "link":
-            return _PENDING_LINK
-        if pending == "unlink":
-            return _PENDING_UNLINK
-        return _LINKED_GLYPH if cell.linked else _UNLINKED_GLYPH
+            base = "[dim]—[/]"
+        else:
+            pending = self._pending.get((self._scope, harness, row.slug))
+            if pending == "link":
+                base = _PENDING_LINK
+            elif pending == "unlink":
+                base = _PENDING_UNLINK
+            else:
+                base = _LINKED_GLYPH if cell.linked else _UNLINKED_GLYPH
+        # In project scope, mark cells whose harness slot is also linked
+        # globally — same indicator as skill_grid (#188) / pi_grid (#349).
+        # AgentCell has no drift/stray/skipped states, so linked is the
+        # whole gate (#374). Appends to any base, including the
+        # not-applicable em-dash.
+        if self._scope == "project":
+            global_cell = row.cells.get((harness, "global"))
+            if global_cell is not None and global_cell.linked:
+                return f"{base} {_GLOBAL_GLYPH}"
+        return base
