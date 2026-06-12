@@ -253,7 +253,10 @@ class _FirebenderAdapter:
         # Mutate firebender.json atomically.
         fb_json = base / "firebender.json"
         if fb_json.exists():
-            body = json.loads(fb_json.read_text())
+            try:
+                body = json.loads(fb_json.read_text())
+            except (ValueError, OSError) as exc:
+                raise InstallError(f"firebender: {fb_json}: {exc}") from exc
         else:
             body = {"agents": []}
         # Always store the path relative to `base` — absolute paths in
@@ -290,7 +293,10 @@ class _FirebenderAdapter:
         _sentinel_path(md).unlink(missing_ok=True)
         fb_json = base / "firebender.json"
         if fb_json.exists():
-            body = json.loads(fb_json.read_text())
+            try:
+                body = json.loads(fb_json.read_text())
+            except (ValueError, OSError) as exc:
+                raise InstallError(f"firebender: {fb_json}: {exc}") from exc
             if "agents" in body:
                 body["agents"] = [p for p in body["agents"] if f"{slug}.md" not in p]
             _atomic_write(fb_json, json.dumps(body, indent=2) + "\n")
@@ -348,7 +354,10 @@ class _CodexAdapter:
         # Mutate config.toml: add/update [agents.<slug>] section.
         config_toml = base / "config.toml"
         if config_toml.exists():
-            existing = config_toml.read_text()
+            try:
+                existing = config_toml.read_text()
+            except (ValueError, OSError) as exc:
+                raise InstallError(f"codex: {config_toml}: {exc}") from exc
         else:
             existing = ""
         section_header = f"[agents.{slug}]"
@@ -395,7 +404,10 @@ class _CodexAdapter:
         _sentinel_path(toml_path).unlink(missing_ok=True)
         config_toml = base / "config.toml"
         if config_toml.exists():
-            existing = config_toml.read_text()
+            try:
+                existing = config_toml.read_text()
+            except (ValueError, OSError) as exc:
+                raise InstallError(f"codex: {config_toml}: {exc}") from exc
             cleaned = re.sub(
                 rf"\[agents\.{re.escape(slug)}\][^\[]*",
                 "",
