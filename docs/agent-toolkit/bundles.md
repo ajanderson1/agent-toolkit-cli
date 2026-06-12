@@ -141,9 +141,14 @@ paths, so each member lands in exactly the state a hand-install would produce.
 ### All-or-nothing rollback
 
 If any member fails to install, every member installed during this run is rolled
-back.  Rollback calls the kind-level `remove --force` (a full undo — drops the
-library lock entry, the canonical, and all projections), not just `uninstall`
-(which is projection-only).
+back — including the member that failed (its `add` may already have landed before
+its projection step failed).  At **global** scope, rollback calls the kind-level
+`remove --force` (a full undo — drops the library lock entry, the canonical, and
+all projections), not just `uninstall` (which is projection-only).  At **project**
+scope, rollback additionally tears down the project state: `<kind> uninstall -p`
+(project projection symlinks + project lock entry), then `remove --force`, then it
+removes the project canonical directory — so a failed `bundle install --project`
+leaves no project residue either.
 
 A member that was **already present** before the run (detected via a library-lock
 pre-check before the install call) is **not** rolled back — it was not installed
