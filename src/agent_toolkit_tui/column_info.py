@@ -42,18 +42,27 @@ def _standard_info(context: dict | None = None) -> ColumnInfo:
     # Caller-supplied trailing lines (#361): e.g. the agents panel's devin
     # project-scope-only note at global scope. Appended after the bullets.
     extra_lines = list(ctx.get("extra_lines") or [])
-    # The 🌐 marker block is contextual AND skills-only (instructions has no
-    # global-marker concept): it only makes sense when the focused row IS
-    # installed globally. Omit it when the caller says otherwise.
-    show_marker = asset_type == "skills" and (
+    # The 🌐 marker block applies to the asset types whose grids render the
+    # marker: skills (#188) and agents (#374). Instructions is excluded by
+    # design — each scope has its own canonical AGENTS.md, so there is no
+    # cross-scope install concept. The block is also contextual: it only
+    # makes sense when the focused row IS installed globally, so omit it
+    # when the caller says otherwise.
+    show_marker = asset_type in ("skills", "agents") and (
         context is None or bool(ctx.get("global_linked", True))
     )
-    indicator_note = [
-        "",
-        "🌐 marker (project scope only):",
-        "  This skill is also installed globally,",
-        "  so you may not need it at project scope too.",
-    ] if show_marker else []
+    indicator_note: list[str] = []
+    if show_marker:
+        indicator_note = ["", "🌐 marker (project scope only):"]
+        if asset_type == "skills":
+            indicator_note += [
+                "  This skill is also installed globally,",
+                "  so you may not need it at project scope too.",
+            ]
+        else:
+            # Agents copy stays presence-neutral (#374): per-harness
+            # project-vs-global precedence is not asserted.
+            indicator_note += ["  This agent is also installed globally."]
     return ColumnInfo(
         # v3.7 full rename (#350): key and title both say "standard". The
         # agents asset type is a single-file slot, not a bundle (#361).
@@ -95,7 +104,7 @@ def get_column_info(name: str, *, context: dict | None = None) -> ColumnInfo | N
     it: `asset_type` (skills/instructions/agents — adjusts title and copy),
     `names` (override the harness list, e.g. the per-scope covered set for
     agents), `extra_lines` (caller-supplied trailing lines, e.g. the agents
-    panel's devin note), and `global_linked` (skills-only 🌐 marker block).
+    panel's devin note), and `global_linked` (skills/agents 🌐 marker block).
     """
     factory = COLUMN_INFO.get(name)
     if factory is None:

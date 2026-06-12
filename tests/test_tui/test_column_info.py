@@ -123,6 +123,36 @@ def test_standard_info_is_asset_type_aware():
     text = " ".join(info.lines)
     assert "instructions" in text and "(2)" in text
     assert "alpha-harness" in text and "beta-harness" in text
-    # The 🌐 marker block is skills-only.
+    # The 🌐 marker block applies to skills and agents; instructions is
+    # excluded by design.
     assert "🌐" not in text
+
+
+def test_standard_info_agents_includes_marker_when_globally_linked():
+    """#374: the agents panel gets the 🌐 explainer, with presence-neutral
+    copy (no redundancy claim — per-harness precedence is not asserted)."""
+    info = get_column_info(
+        "standard", context={"asset_type": "agents", "global_linked": True},
+    )
+    joined = "\n".join(info.lines)
+    assert "🌐" in joined
+    assert "This agent is also installed globally." in joined
+    assert "may not need" not in joined
+
+
+def test_standard_info_agents_omits_marker_when_not_globally_linked():
+    info = get_column_info(
+        "standard", context={"asset_type": "agents", "global_linked": False},
+    )
+    assert "🌐" not in "\n".join(info.lines)
+
+
+def test_standard_info_instructions_never_shows_marker():
+    """Instructions is excluded by design: per-scope canonical AGENTS.md,
+    no cross-scope install concept — even a (bogus) global_linked=True
+    context must not render the block."""
+    info = get_column_info(
+        "standard", context={"asset_type": "instructions", "global_linked": True},
+    )
+    assert "🌐" not in "\n".join(info.lines)
 
