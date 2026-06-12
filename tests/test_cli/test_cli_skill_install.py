@@ -5,7 +5,6 @@ from agent locations to the library canonical.
 """
 from pathlib import Path
 
-import pytest
 from click.testing import CliRunner
 
 from agent_toolkit_cli.cli import main
@@ -281,3 +280,25 @@ def test_install_defaults_to_standard(git_sandbox, tmp_path, monkeypatch):
     bundle_link = fake_home / ".agents" / "skills" / "demo"
     assert bundle_link.is_symlink(), "default install must create the standard bundle symlink"
     assert bundle_link.resolve() == (library_root / "demo").resolve()
+
+
+def test_install_help_marks_agents_optional():
+    """The --agents option is no longer [required] on skill install.
+
+    Click renders `[required]` on a continuation line BELOW the option, so we
+    capture the whole --agents block (its line plus continuation lines, up to the
+    next `--option`) and assert `[required]` appears nowhere in it.
+    """
+    result = CliRunner().invoke(main, ["skill", "install", "--help"])
+    assert result.exit_code == 0
+    lines = result.output.splitlines()
+    start = next((i for i, ln in enumerate(lines) if ln.strip().startswith("--agents")), None)
+    assert start is not None, "--agents must appear in help"
+    block = [lines[start]]
+    for ln in lines[start + 1:]:
+        if ln.strip().startswith("--"):  # next option begins
+            break
+        block.append(ln)
+    assert not any("[required]" in ln for ln in block), (
+        f"--agents must no longer be required; block was:\n{chr(10).join(block)}"
+    )
