@@ -26,7 +26,7 @@ Decision pending: default `-g` to v3 entry shape, or stay on v1 and document the
 
 ## v3.x (the other six asset types)
 
-### Phase 2: revisit agent, command, hook, mcp, plugin, pi-extension
+### Phase 2: revisit agent, command, hook, plugin, pi-extension
 
 For each asset type, decide whether the lock-file model applies. Status as of 2026-06-10:
 
@@ -35,7 +35,7 @@ For each asset type, decide whether the lock-file model applies. Status as of 20
 | agent | Per-agent repo + lock — same shape as skills. | **Delivered** (v3.4.0, #252 SAFE slice) |
 | pi-extension | Per-extension repo + lock — same shape as skills. | **Delivered** (v3.3.0) |
 | instructions | Managed AGENTS.md/CLAUDE.md slots + lock. | **Delivered** (v3.5.x, #283/#305/#337) |
-| mcp | Catalog repo (`ajanderson1/mcps`) + config-injection adapters + `mcps-lock.json`. | **In prep** — #329 (agent-ready; spec + plan reviewed 2026-06-10) |
+| mcp | Local library at `~/.agent-toolkit/mcps/` (`add` authors from `--npx`/`--uvx`/`--docker`/`--url`/`--local`) + config-injection adapters across four harnesses + `mcps-lock.json`. | **Delivered** (foundations slice, #329 — `add`/`install`/`uninstall`/`remove`/`update`/`list`/`status`/read-only `doctor`; `fix`/`diff`/TUI/library-sync deferred) |
 | command | Per-command repo + lock — same shape as skills. | Pending |
 | plugin | Per-plugin repo; CLI drives `installed_plugins.json` / local-path marketplace. | Pending — see the bundle ADR (`docs/solutions/architecture-patterns/`, 2026-06-10) |
 | hook | Per-hook repo; CLI does the `settings.json` injection. | Pending |

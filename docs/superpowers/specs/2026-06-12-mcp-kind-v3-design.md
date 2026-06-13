@@ -122,18 +122,32 @@ wholesale; no fences, no sidecars, no provenance markers in the harness file.
 | Harness | Global (user) | Project | Format |
 |---|---|---|---|
 | **claude-code** | `~/.claude.json` | `<project>/.mcp.json` | JSON (`mcpServers.<name>`) |
-| **pi** | `~/.config/mcp/mcp.json` | `<project>/.pi/mcp.json` | JSON (`mcpServers.<name>`) |
+| **pi** | `~/.pi/agent/mcp.json` (honors `$PI_CODING_AGENT_DIR`) | `<project>/.mcp.json` (shared) | JSON (`mcpServers.<name>`) |
 | **opencode** | `~/.config/opencode/opencode.json` | `<project>/opencode.json` | JSON (`mcpServers.<name>`) |
 | **codex** | `~/.codex/config.toml` | `<project>/.codex/config.toml` | TOML (`[mcp_servers.<name>]`, via `tomlkit`) |
 
-> **Pi targets MUST be empirically verified before the CELLS values are trusted**
-> (carried open item, never closed). Live evidence suggests Pi imports Claude/Cursor
-> configs rather than reading a dedicated native file — so `.pi/mcp.json` /
-> `~/.config/mcp/mcp.json` may be unread. An unread target is the silent-green-breakage
-> class (install succeeds, doctor reports healthy, the MCP never loads). The plan's
-> Task 4 makes this a **blocking verification step**; if a path is not read, change the
-> cell and record the verified source in its comment. This is the run's most likely
-> raise point.
+> **Pi targets — VERIFIED EMPIRICALLY (2026-06-13), open item now CLOSED.** Pi has
+> **no native MCP**; MCP is provided by the **`pi-mcp-adapter` extension**
+> (`npm:pi-mcp-adapter`). The earlier assumed cells (`~/.config/mcp/mcp.json` /
+> `.pi/mcp.json`) were wrong at the mechanism level — empirical probes (`pi -p` with
+> each path present) returned `NO_MCP_SERVERS`. The adapter reads a precedence chain:
+> `~/.config/mcp/mcp.json` (shared, cross-host) → `~/.pi/agent/mcp.json` (Pi-global
+> override) → `.mcp.json` (shared project) → `.pi/mcp.json` (Pi project override).
+>
+> **Decision (AJ):** the Pi cell uses (user) `~/.pi/agent/mcp.json` — the Pi-owned
+> global override, honoring `$PI_CODING_AGENT_DIR/mcp.json` — and (project) the
+> **shared `.mcp.json`** (the "standard" cross-host file, the SAME file claude-code
+> targets at project scope). Consequences the adapters/facade MUST honor:
+> 1. **Pi project scope and claude-code project scope write the SAME file** (`.mcp.json`).
+>    The write is a name-keyed upsert into the shared `mcpServers` doc — installing for
+>    pi and claude-code at project scope touches `.mcp.json` once, idempotently; `doctor`
+>    and `list` MUST de-duplicate the shared file across the harnesses that read it
+>    (no double-count).
+> 2. **Pi MCP is adapter-gated.** Pi's "installed" sentinel checks for the
+>    `pi-mcp-adapter` extension (`~/.pi/agent/npm/node_modules/pi-mcp-adapter`), NOT
+>    merely `~/.pi/`. If the adapter is absent, skip the Pi user-scope write with
+>    `"pi-mcp-adapter not installed; skipping pi"` (no silent-green-breakage). (Project
+>    scope writes the shared `.mcp.json` regardless, since that file serves all hosts.)
 
 The **rejected** alternative was a shim/launcher model (a stable
 `agent-toolkit-cli mcp run <slug>` stub dereferencing the library at spawn) — rejected
