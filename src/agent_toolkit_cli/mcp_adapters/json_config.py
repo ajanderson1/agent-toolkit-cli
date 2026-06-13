@@ -76,6 +76,15 @@ def _opencode_translate(inner: dict) -> dict:
     return out
 
 
+def _no_global_standard(home: Path) -> Path:
+    """`standard` is a PROJECT-scope projection — there is no `~/.mcp.json`
+    reader, so a global standard target is a loud, structured failure."""
+    raise ValueError(
+        "standard: no global target — standard is a project-scope projection "
+        "(no client reads ~/.mcp.json)"
+    )
+
+
 CELLS: dict[str, _Cell] = {
     "claude-code": _Cell(
         name="claude-code",
@@ -90,6 +99,13 @@ CELLS: dict[str, _Cell] = {
         # Pi has no native MCP — pi-mcp-adapter reads ~/.pi/agent/mcp.json (user,
         # honors $PI_CODING_AGENT_DIR) and the shared .mcp.json (project).
         user_target=lambda home: home / ".pi" / "agent" / "mcp.json",
+        project_target=lambda proj: proj / ".mcp.json",
+        servers_key="mcpServers",
+        translate=_passthrough,
+    ),
+    "standard": _Cell(
+        name="standard",
+        user_target=_no_global_standard,
         project_target=lambda proj: proj / ".mcp.json",
         servers_key="mcpServers",
         translate=_passthrough,

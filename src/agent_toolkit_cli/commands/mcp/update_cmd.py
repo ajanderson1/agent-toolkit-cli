@@ -22,7 +22,7 @@ import yaml  # type: ignore[import-untyped]
 from agent_toolkit_cli import mcp_install
 from agent_toolkit_cli._install_core import InstallError
 from agent_toolkit_cli.commands.mcp import _resolve
-from agent_toolkit_cli.commands.mcp._common import _LOCK_FILENAME
+from agent_toolkit_cli.commands.mcp._common import _LOCK_FILENAME, normalize_harness_tokens
 from agent_toolkit_cli.mcp_adapters import UnsupportedMcpHarnessError
 from agent_toolkit_cli.mcp_library import library_root, load_mcp_asset
 from agent_toolkit_cli.mcp_lock import lock_path_for_scope, read_lock
@@ -177,6 +177,13 @@ def update_cmd(ctx: click.Context, slug: str) -> None:
         harnesses = [e.harness for e in lock.get(slug, [])]
         if not harnesses:
             continue
+        # #399: heal a LEGACY project lock — if its rows intersect the covered
+        # set {claude-code, pi}, normalize them to `standard` so this update's
+        # project apply() writes a standard row and collapse-on-install drops the
+        # legacy rows (update is a converging path, not a re-blesser). Global is
+        # left literal (claude-code/pi have separate global files).
+        if scope == "project":
+            harnesses = list(normalize_harness_tokens(tuple(harnesses), scope="project"))
         any_projection = True
         try:
             mcp_install.apply(

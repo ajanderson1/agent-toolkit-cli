@@ -314,3 +314,34 @@ def test_apply_returns_result_with_installed_skipped(tmp_path, monkeypatch):
     assert result.installed == ["claude-code"]
     assert "codex" in result.skipped
     assert result.collisions == []
+
+
+def test_apply_standard_collapses_legacy_claude_pi_rows(tmp_path):
+    """Writing a `standard` row drops pre-existing claude-code/pi rows for the
+    same slug (collapse-on-install), so the lock converges to one row."""
+    # Seed a library asset.
+    library = tmp_path / ".agent-toolkit" / "mcps"
+    d = library / "context7"
+    d.mkdir(parents=True)
+    (d / "config.json").write_text('{"type":"stdio","command":"npx","args":["-y","ctx7"]}\n')
+    (d / "README.md").write_text("# context7\n")
+    (library / "context7.toolkit.yaml").write_text(
+        "name: context7\ndescription: x.\ntransport: stdio\ninstall_method: npx\nresolved_version: 1.0.0\n"
+    )
+    project = tmp_path / "proj"
+    project.mkdir()
+    # Seed a legacy two-row project lock.
+    (project / "mcps-lock.json").write_text(json.dumps({
+        "version": 1, "mcps": {"context7": [
+            {"harness": "claude-code", "source": "npx", "pin": "1.0.0"},
+            {"harness": "pi", "source": "npx", "pin": "1.0.0"},
+        ]}}, indent=2) + "\n")
+
+    mcp_install.apply(
+        slug="context7", harnesses=["standard"], scope="project",
+        library_root=library, home=tmp_path, project=project,
+    )
+
+    lock = json.loads((project / "mcps-lock.json").read_text())
+    harnesses = [e["harness"] for e in lock["mcps"]["context7"]]
+    assert harnesses == ["standard"]  # claude-code + pi collapsed away

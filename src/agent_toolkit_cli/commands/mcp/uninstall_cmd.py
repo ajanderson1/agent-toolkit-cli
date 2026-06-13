@@ -13,7 +13,11 @@ import click
 
 from agent_toolkit_cli import mcp_install
 from agent_toolkit_cli._install_core import InstallError
-from agent_toolkit_cli.commands.mcp._common import _HARNESSES, scope_and_roots
+from agent_toolkit_cli.commands.mcp._common import (
+    _CHOICE_HARNESSES,
+    normalize_harness_tokens,
+    scope_and_roots,
+)
 from agent_toolkit_cli.mcp_adapters import UnsupportedMcpHarnessError
 from agent_toolkit_cli.mcp_install import RunningClaudeError
 from agent_toolkit_cli.mcp_library import library_root
@@ -32,7 +36,7 @@ Examples:
 @click.option("-p", "--project", "project_flag", is_flag=True)
 @click.option(
     "--harness", "harnesses", multiple=True,
-    type=click.Choice(_HARNESSES),
+    type=click.Choice(_CHOICE_HARNESSES),
     help="Harness to remove from (repeatable). Default: every harness in the lock.",
 )
 @click.option(
@@ -57,7 +61,7 @@ def uninstall_cmd(
     library = library_root(Path.home())
 
     if harnesses:
-        targets = list(harnesses)
+        targets = list(normalize_harness_tokens(tuple(harnesses), scope=scope))
     else:
         lock_path = lock_path_for_scope(scope, home=effective_home, project=project)
         lock = read_lock(lock_path)

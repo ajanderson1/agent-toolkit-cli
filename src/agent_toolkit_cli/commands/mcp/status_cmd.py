@@ -11,6 +11,7 @@ import click
 
 from agent_toolkit_cli.commands.mcp._common import scope_and_roots
 from agent_toolkit_cli.mcp_lock import lock_path_for_scope, read_lock
+from agent_toolkit_cli.mcp_standard import STANDARD_MCP_READERS, mcp_standard_covered
 
 
 @click.command("status")
@@ -43,15 +44,22 @@ def status_cmd(
             if not entries:
                 click.echo(f"{slug}\tnot found")
                 continue
-            _echo_slug(slug, entries)
+            _echo_slug(slug, entries, scope)
         return
 
     for slug in sorted(lock):
-        _echo_slug(slug, lock[slug])
+        _echo_slug(slug, lock[slug], scope)
 
 
-def _echo_slug(slug: str, entries: list) -> None:
-    """One line per (slug, harness): `<slug>\t<harness>\t<pin|floating>`."""
+def _echo_slug(slug: str, entries: list, scope: str) -> None:
+    """One line per (slug, harness): `<slug>\t<harness>\t<pin|floating>`. A
+    `standard` harness row is annotated with its covered set (#399), keyed off
+    the resolved scope (no global standard exists, so a global `standard` row —
+    which should never occur — degrades to no annotation rather than a wrong one)."""
     for entry in sorted(entries, key=lambda e: e.harness):
         pin = entry.pin if entry.pin else "floating"
-        click.echo(f"{slug}\t{entry.harness}\t{pin}")
+        line = f"{slug}\t{entry.harness}\t{pin}"
+        if entry.harness == "standard" and scope in STANDARD_MCP_READERS:
+            covered = ", ".join(sorted(mcp_standard_covered(scope)))
+            line += f"\t→ {covered}"
+        click.echo(line)

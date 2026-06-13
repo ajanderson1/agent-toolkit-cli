@@ -6,10 +6,14 @@ keys off mcp_lock.LOCK_FILENAME (mcps-lock.json), not agents-lock.json. The
 fork is required, not delegatable — the agent version hard-codes the wrong
 lockfile, which would default the MCP read-verb scope off the wrong file.
 
-parse_harness_tokens is deliberately NOT ported: that is agent-specific
-synthetic-harness logic with `standard` normalization. MCP harnesses are
-claude-code/codex/opencode/pi with no synthetic names; MCP harness-token
-parsing, if needed, belongs in the CLI (Task 8), not here.
+normalize_harness_tokens IS now ported (#399) but as a SCOPE-AWARE normalizer
+(NOT named parse_harness_tokens — MCP uses a repeatable --harness flag, so it
+takes an already-split tuple, not a comma string). At PROJECT scope `claude-code`
+and `pi` both normalize to `standard` (the shared <project>/.mcp.json IS the
+standard slot — see mcp_standard.py); at GLOBAL scope there is NO standard (no
+`~/.mcp.json` reader), so they pass through unchanged and a `standard` token is
+rejected. This reverses the prior "deliberately not ported" decision: the project
+`.mcp.json` genuinely is a standard slot, it is just project-scoped.
 """
 from __future__ import annotations
 
@@ -28,6 +32,48 @@ Scope = Literal["project", "global"]
 # write verb that fans out to "all harnesses" by default. SSOT for the
 # --harness click.Choice and the no-flag install default.
 _HARNESSES: tuple[str, ...] = ("claude-code", "codex", "opencode", "pi")
+
+# The --harness Choice universe: the four concrete harnesses + the synthetic
+# `standard` token. Validation is permissive here; normalize_harness_tokens and
+# the adapter enforce the scope rules (standard is project-only).
+_CHOICE_HARNESSES: tuple[str, ...] = (*_HARNESSES, "standard")
+
+
+def default_harnesses(scope: str) -> tuple[str, ...]:
+    """The no-flag install target set, scope-aware.
+
+    Project: `standard` (covers claude-code+pi via the shared .mcp.json) plus the
+    genuine outliers codex (TOML) and opencode (`mcp` key) — one .mcp.json write,
+    no double-write. Global: the concrete four (no standard exists globally)."""
+    if scope == "project":
+        return ("standard", "codex", "opencode")
+    return _HARNESSES
+
+
+def normalize_harness_tokens(tokens: tuple[str, ...], *, scope: str) -> tuple[str, ...]:
+    """Normalize explicit --harness tokens, scope-aware, order-preserving + deduped.
+
+    Project: claude-code → standard, pi → standard (the shared .mcp.json is the
+    standard slot). Global: no normalization; a `standard` token is rejected
+    (there is no global standard). Mirrors commands/agent/_common.py but on the
+    already-split tuple (MCP uses a repeatable --harness flag, not a comma string)
+    and with the project/global asymmetry the agent kind lacks."""
+    if scope == "project":
+        mapped = ["standard" if t in ("claude-code", "pi") else t for t in tokens]
+    else:
+        if "standard" in tokens:
+            raise click.UsageError(
+                "standard is a project-scope projection; it has no global target "
+                "(no client reads ~/.mcp.json). Use -p, or name a concrete harness."
+            )
+        mapped = list(tokens)
+    seen: set[str] = set()
+    out: list[str] = []
+    for t in mapped:
+        if t not in seen:
+            seen.add(t)
+            out.append(t)
+    return tuple(out)
 
 
 def scope_and_roots(

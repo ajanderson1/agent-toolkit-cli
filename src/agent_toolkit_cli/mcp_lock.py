@@ -11,6 +11,12 @@ ALIGNED for future composability: versioned envelope ({"version": 1, "mcps": ...
 and entries are plain objects so the bundle composite's grouping field
 (see docs/solutions/architecture-patterns/clone-and-project-substrate-for-
 bundle-plugin-capability-2026-06-10.md) can be added without a migration.
+
+The `harness` field is an OPEN value set (no enum). Adding a new value (e.g.
+`standard`, #399) needs no structural migration — read_lock/write_lock round-trip
+any string. The bound: a binary predating a value rejects that row at
+get_adapter() dispatch (UnsupportedMcpHarnessError), so the "no migration" freedom
+is forward-compatible ADDITIONS only, never a silent drop.
 """
 from __future__ import annotations
 
@@ -88,6 +94,23 @@ def remove_entry(lock: dict[str, list[McpLockEntry]], *, slug: str, harness: str
     out = {k: list(v) for k, v in lock.items()}
     if slug in out:
         out[slug] = [e for e in out[slug] if e.harness != harness]
+        if not out[slug]:
+            del out[slug]
+    return out
+
+
+def collapse_covered(
+    lock: dict[str, list[McpLockEntry]], slug: str, covered: frozenset[str],
+) -> dict[str, list[McpLockEntry]]:
+    """Drop every row for `slug` whose harness is in `covered` (#399).
+
+    Used when writing a `standard` row: the covered harnesses (claude-code, pi)
+    project the SAME .mcp.json that standard now owns, so their legacy rows must
+    not coexist with the standard row (3 rows / 1 file → partial-uninstall
+    corruption). Other slugs and non-covered harness rows are untouched."""
+    out = {k: list(v) for k, v in lock.items()}
+    if slug in out:
+        out[slug] = [e for e in out[slug] if e.harness not in covered]
         if not out[slug]:
             del out[slug]
     return out
