@@ -859,3 +859,16 @@ def test_mcp_list_standard_install_not_flagged_unmanaged(tmp_path, monkeypatch):
     result = CliRunner().invoke(main, ["mcp", "list", "-p"])
     assert result.exit_code == 0, result.output
     assert "unmanaged: context7" not in result.output
+
+
+def test_mcp_status_standard_row_annotated(tmp_path, monkeypatch):
+    _seed(tmp_path)
+    project = tmp_path / "proj"
+    project.mkdir()
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.chdir(project)
+    CliRunner().invoke(main, ["mcp", "install", "context7", "-p"])  # standard row
+    result = CliRunner().invoke(main, ["mcp", "status", "-p"])
+    assert result.exit_code == 0, result.output
+    assert "standard" in result.output
+    assert "claude-code" in result.output and "pi" in result.output
