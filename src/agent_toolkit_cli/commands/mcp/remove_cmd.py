@@ -15,6 +15,7 @@ from agent_toolkit_cli import mcp_install
 from agent_toolkit_cli._install_core import InstallError
 from agent_toolkit_cli.commands.mcp._common import scope_and_roots
 from agent_toolkit_cli.mcp_adapters import UnsupportedMcpHarnessError
+from agent_toolkit_cli.mcp_install import RunningClaudeError
 from agent_toolkit_cli.mcp_library import library_root
 from agent_toolkit_cli.mcp_lock import lock_path_for_scope, read_lock
 
@@ -29,12 +30,17 @@ Examples:
 @click.argument("slug")
 @click.option("-g", "--global", "global_", is_flag=True)
 @click.option("-p", "--project", "project_flag", is_flag=True)
+@click.option(
+    "--force", is_flag=True,
+    help="Bypass the running-claude guard for ~/.claude.json writes.",
+)
 @click.pass_context
 def remove_cmd(
     ctx: click.Context,
     slug: str,
     global_: bool,
     project_flag: bool,
+    force: bool,
 ) -> None:
     """Remove a MCP's projections from every harness recorded in the lock."""
     scope, home, project = scope_and_roots(
@@ -53,7 +59,10 @@ def remove_cmd(
         mcp_install.remove(
             slug=slug, scope=scope,
             library_root=library, home=effective_home, project=project,
+            force=force,
         )
+    except RunningClaudeError as exc:
+        raise click.ClickException(str(exc)) from exc
     except UnsupportedMcpHarnessError as exc:
         raise click.ClickException(str(exc)) from exc
     except InstallError as exc:

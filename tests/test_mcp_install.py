@@ -213,6 +213,93 @@ def test_remove_no_lock_entry_is_noop(tmp_path, capsys):
     assert "nothing to remove" in err.lower()
 
 
+def _seed_global_claude_projection(library: Path, tmp_path: Path, monkeypatch) -> None:
+    """Install context7 for claude-code at GLOBAL scope so a removal has something
+    to undo. The running-claude guard is patched off for the SETUP install only."""
+    (tmp_path / ".claude").mkdir(exist_ok=True)
+    monkeypatch.setattr(mcp_install, "_claude_is_running", lambda: False)
+    mcp_install.apply(
+        slug="context7", harnesses=["claude-code"], scope="global",
+        library_root=library, home=tmp_path, project=None, force=True,
+    )
+
+
+def test_uninstall_global_claude_refused_when_claude_running(tmp_path, monkeypatch):
+    """A global-scope claude-code uninstall is refused when a claude process is
+    detected (symmetric with apply()) — ~/.claude.json is live state."""
+    library = tmp_path / "library"
+    _seed_library(library)
+    _seed_global_claude_projection(library, tmp_path, monkeypatch)
+    # Now simulate a running claude and attempt the removal without --force.
+    monkeypatch.setattr(mcp_install, "_claude_is_running", lambda: True)
+    with pytest.raises(mcp_install.RunningClaudeError):
+        mcp_install.uninstall(
+            slug="context7", harnesses=["claude-code"], scope="global",
+            library_root=library, home=tmp_path, project=None, force=False,
+        )
+    # Refused BEFORE any write: the projection + lock entry are still present.
+    assert "context7" in json.loads((tmp_path / ".claude.json").read_text())["mcpServers"]
+    lock = read_lock(lock_path_for_scope("global", home=tmp_path, project=None))
+    assert "context7" in lock
+
+
+def test_uninstall_global_claude_force_bypasses_running_guard(tmp_path, monkeypatch):
+    """--force lets a global-scope claude-code uninstall proceed despite a
+    detected claude process."""
+    library = tmp_path / "library"
+    _seed_library(library)
+    _seed_global_claude_projection(library, tmp_path, monkeypatch)
+    monkeypatch.setattr(mcp_install, "_claude_is_running", lambda: True)
+    mcp_install.uninstall(
+        slug="context7", harnesses=["claude-code"], scope="global",
+        library_root=library, home=tmp_path, project=None, force=True,
+    )
+    assert "context7" not in json.loads((tmp_path / ".claude.json").read_text())["mcpServers"]
+    lock = read_lock(lock_path_for_scope("global", home=tmp_path, project=None))
+    assert "context7" not in lock
+
+
+def test_uninstall_project_scope_unaffected_by_running_claude(tmp_path, monkeypatch):
+    """The running-claude guard is GLOBAL-scope claude-code only: a project-scope
+    uninstall (.mcp.json, not ~/.claude.json) proceeds even with claude running."""
+    library = tmp_path / "library"
+    _seed_library(library)
+    project = tmp_path / "proj"
+    project.mkdir()
+    monkeypatch.setattr(mcp_install, "_claude_is_running", lambda: False)
+    mcp_install.apply(
+        slug="context7", harnesses=["claude-code"], scope="project",
+        library_root=library, home=tmp_path, project=project,
+    )
+    monkeypatch.setattr(mcp_install, "_claude_is_running", lambda: True)
+    mcp_install.uninstall(
+        slug="context7", harnesses=["claude-code"], scope="project",
+        library_root=library, home=tmp_path, project=project, force=False,
+    )
+    assert "context7" not in json.loads((project / ".mcp.json").read_text())["mcpServers"]
+
+
+def test_remove_global_claude_refused_when_claude_running(tmp_path, monkeypatch):
+    """remove() threads force through to uninstall(): a global-scope claude-code
+    removal is refused when claude is running, unless force=True."""
+    library = tmp_path / "library"
+    _seed_library(library)
+    _seed_global_claude_projection(library, tmp_path, monkeypatch)
+    monkeypatch.setattr(mcp_install, "_claude_is_running", lambda: True)
+    with pytest.raises(mcp_install.RunningClaudeError):
+        mcp_install.remove(
+            slug="context7", scope="global",
+            library_root=library, home=tmp_path, project=None, force=False,
+        )
+    assert "context7" in json.loads((tmp_path / ".claude.json").read_text())["mcpServers"]
+    # With --force it proceeds.
+    mcp_install.remove(
+        slug="context7", scope="global",
+        library_root=library, home=tmp_path, project=None, force=True,
+    )
+    assert "context7" not in json.loads((tmp_path / ".claude.json").read_text())["mcpServers"]
+
+
 def test_apply_returns_result_with_installed_skipped(tmp_path, monkeypatch):
     """apply() returns an ApplyResult naming installed + skipped harnesses."""
     library = tmp_path / "library"

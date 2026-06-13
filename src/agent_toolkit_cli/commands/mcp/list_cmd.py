@@ -119,13 +119,41 @@ def list_cmd(
             click.echo(f"  {mark} {harness}{note}")
 
     # Surface unmanaged entries: anything in a harness config NOT tracked by
-    # our lock for that harness. Visible, never touched.
+    # our lock. Visible, never touched.
+    #
+    # Shared-file de-dup (spec §"Pi project scope and claude-code project scope
+    # write the SAME file"): several harnesses can resolve to the SAME config
+    # file (pi + claude-code both target <project>/.mcp.json at project scope).
+    # An entry we manage there for claude-code is NOT unmanaged-for-pi just
+    # because it isn't tracked under pi's harness name. So an entry is "managed"
+    # for a file if it is tracked for ANY harness whose config_target resolves to
+    # that same file path — we group the lock's tracked slugs by resolved path and
+    # subtract the union, not just the per-harness set.
+    tracked_by_path: dict[Path, set[str]] = {}
     for harness in _HARNESSES:
-        present = _servers_in_config(harness, scope, effective_home, project_root)
-        tracked = {
+        adapter = get_adapter(harness)
+        try:
+            path = adapter.config_target(
+                scope=scope, home=effective_home, project=project_root
+            )
+        except ValueError:
+            continue
+        slugs_for_harness = {
             slug
             for slug, entries in lock.items()
             if any(e.harness == harness for e in entries)
         }
-        for name in sorted(present - tracked):
+        tracked_by_path.setdefault(path.resolve(), set()).update(slugs_for_harness)
+
+    for harness in _HARNESSES:
+        adapter = get_adapter(harness)
+        try:
+            path = adapter.config_target(
+                scope=scope, home=effective_home, project=project_root
+            )
+        except ValueError:
+            continue
+        present = _servers_in_config(harness, scope, effective_home, project_root)
+        managed = tracked_by_path.get(path.resolve(), set())
+        for name in sorted(present - managed):
             click.echo(f"[!] unmanaged: {name} ({harness})")

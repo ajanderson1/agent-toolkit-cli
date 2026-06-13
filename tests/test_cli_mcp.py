@@ -280,6 +280,43 @@ def test_mcp_list_surfaces_unmanaged(tmp_path, monkeypatch):
     assert "handrolled" in result.output
 
 
+def test_mcp_list_managed_shared_file_not_flagged_unmanaged(tmp_path, monkeypatch):
+    """A slug we manage for claude-code in the shared .mcp.json must NOT be
+    reported as `[!] unmanaged (pi)` — pi shares that file and the slug is
+    tracked for claude-code there (spec shared-file de-dup). A GENUINELY
+    unmanaged entry in the same file MUST still be surfaced (no over-correction).
+    """
+    _seed(tmp_path)
+    project = tmp_path / "proj"
+    project.mkdir()
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.chdir(project)
+
+    # Install context7 for claude-code ONLY at project scope. Pi shares the
+    # SAME .mcp.json file but is NOT in the lock for context7.
+    inst = CliRunner().invoke(
+        main, ["mcp", "install", "context7", "--harness", "claude-code", "-p"]
+    )
+    assert inst.exit_code == 0, inst.output
+
+    # Hand-write a genuinely-unmanaged entry directly into .mcp.json (not via our
+    # CLI, not in any lock). It shares the file but is managed by nobody.
+    target = project / ".mcp.json"
+    doc = json.loads(target.read_text())
+    doc["mcpServers"]["notmine"] = {"type": "stdio", "command": "x"}
+    target.write_text(json.dumps(doc, indent=2) + "\n")
+
+    result = CliRunner().invoke(main, ["mcp", "list", "-p"])
+    assert result.exit_code == 0, result.output
+
+    # Managed-shared half: context7 is NOT reported unmanaged for ANY harness
+    # (it is managed for claude-code in the shared file pi also reads).
+    assert "unmanaged: context7" not in result.output
+
+    # Genuine-unmanaged half: notmine IS still surfaced (de-dup didn't hide it).
+    assert "[!] unmanaged: notmine" in result.output
+
+
 def test_mcp_remove_fans_out(tmp_path, monkeypatch):
     _seed(tmp_path)
     project = tmp_path / "proj"
@@ -293,6 +330,64 @@ def test_mcp_remove_fans_out(tmp_path, monkeypatch):
     assert "context7" not in doc.get("mcpServers", {})
     # Library entry is KEPT (remove is fan-out uninstall, not library delete).
     assert (tmp_path / ".agent-toolkit" / "mcps" / "context7" / "config.json").is_file()
+
+
+def test_mcp_uninstall_global_claude_running_guard(tmp_path, monkeypatch):
+    """`mcp uninstall <slug> -g --harness claude-code` exits non-zero when a
+    claude process is detected, and succeeds with --force (symmetric with install)."""
+    _seed(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.chdir(tmp_path)
+    _seed_global_sentinels(tmp_path)
+
+    # Seed a global claude-code projection with the guard patched OFF.
+    monkeypatch.setattr("agent_toolkit_cli.mcp_install._claude_is_running", lambda: False)
+    inst = CliRunner().invoke(
+        main, ["mcp", "install", "context7", "--harness", "claude-code", "-g"]
+    )
+    assert inst.exit_code == 0, inst.output
+    assert "context7" in json.loads((tmp_path / ".claude.json").read_text())["mcpServers"]
+
+    # Now claude is "running": uninstall without --force must refuse (non-zero).
+    monkeypatch.setattr("agent_toolkit_cli.mcp_install._claude_is_running", lambda: True)
+    blocked = CliRunner().invoke(
+        main, ["mcp", "uninstall", "context7", "-g", "--harness", "claude-code"]
+    )
+    assert blocked.exit_code != 0
+    assert "claude process is running" in blocked.output
+    # Projection untouched.
+    assert "context7" in json.loads((tmp_path / ".claude.json").read_text())["mcpServers"]
+
+    # With --force it proceeds.
+    forced = CliRunner().invoke(
+        main, ["mcp", "uninstall", "context7", "-g", "--harness", "claude-code", "--force"]
+    )
+    assert forced.exit_code == 0, forced.output
+    assert "context7" not in json.loads((tmp_path / ".claude.json").read_text())["mcpServers"]
+
+
+def test_mcp_remove_global_claude_running_guard(tmp_path, monkeypatch):
+    """`mcp remove <slug> -g` (fan-out) honors the running-claude guard and --force."""
+    _seed(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.chdir(tmp_path)
+    _seed_global_sentinels(tmp_path)
+
+    monkeypatch.setattr("agent_toolkit_cli.mcp_install._claude_is_running", lambda: False)
+    inst = CliRunner().invoke(
+        main, ["mcp", "install", "context7", "--harness", "claude-code", "-g"]
+    )
+    assert inst.exit_code == 0, inst.output
+
+    monkeypatch.setattr("agent_toolkit_cli.mcp_install._claude_is_running", lambda: True)
+    blocked = CliRunner().invoke(main, ["mcp", "remove", "context7", "-g"])
+    assert blocked.exit_code != 0
+    assert "claude process is running" in blocked.output
+    assert "context7" in json.loads((tmp_path / ".claude.json").read_text())["mcpServers"]
+
+    forced = CliRunner().invoke(main, ["mcp", "remove", "context7", "-g", "--force"])
+    assert forced.exit_code == 0, forced.output
+    assert "context7" not in json.loads((tmp_path / ".claude.json").read_text())["mcpServers"]
 
 
 def test_mcp_update_repins_and_reprojects(tmp_path, monkeypatch):

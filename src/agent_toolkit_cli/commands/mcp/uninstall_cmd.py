@@ -15,6 +15,7 @@ from agent_toolkit_cli import mcp_install
 from agent_toolkit_cli._install_core import InstallError
 from agent_toolkit_cli.commands.mcp._common import _HARNESSES, scope_and_roots
 from agent_toolkit_cli.mcp_adapters import UnsupportedMcpHarnessError
+from agent_toolkit_cli.mcp_install import RunningClaudeError
 from agent_toolkit_cli.mcp_library import library_root
 from agent_toolkit_cli.mcp_lock import lock_path_for_scope, read_lock
 
@@ -34,6 +35,10 @@ Examples:
     type=click.Choice(_HARNESSES),
     help="Harness to remove from (repeatable). Default: every harness in the lock.",
 )
+@click.option(
+    "--force", is_flag=True,
+    help="Bypass the running-claude guard for ~/.claude.json writes.",
+)
 @click.pass_context
 def uninstall_cmd(
     ctx: click.Context,
@@ -41,6 +46,7 @@ def uninstall_cmd(
     global_: bool,
     project_flag: bool,
     harnesses: tuple[str, ...],
+    force: bool,
 ) -> None:
     """Remove a MCP's projections from the chosen scope."""
     scope, home, project = scope_and_roots(
@@ -63,7 +69,10 @@ def uninstall_cmd(
         mcp_install.uninstall(
             slug=slug, harnesses=targets, scope=scope,
             library_root=library, home=effective_home, project=project,
+            force=force,
         )
+    except RunningClaudeError as exc:
+        raise click.ClickException(str(exc)) from exc
     except UnsupportedMcpHarnessError as exc:
         raise click.ClickException(str(exc)) from exc
     except InstallError as exc:

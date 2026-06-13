@@ -193,12 +193,31 @@ def uninstall(
     library_root: Path,
     home: Path,
     project: Path | None = None,
+    force: bool = False,
 ) -> None:
     """Remove `slug`'s projection from each named harness. Non-destructive:
     the library and any other-scope lock are untouched.
 
+    Running-claude guard (symmetric with apply(); spec AC9 "before ANY
+    global-scope claude-code write"): rewriting ~/.claude.json while a claude
+    process is live is the same lost-update hazard whether we add or remove an
+    entry. If any global-scope claude-code uninstall would happen and a claude
+    process is detected, refuse BEFORE doing ANY of the uninstalls (mirrors
+    apply()'s pre-write guard) unless force=True.
+
     (library_root is accepted for facade-uniform call sites; uninstall/remove
     don't read it.)"""
+    if (
+        not force
+        and scope == "global"
+        and "claude-code" in harnesses
+        and _claude_is_running()
+    ):
+        raise RunningClaudeError(
+            "refusing to write ~/.claude.json while a claude process is running "
+            "(it rewrites this file continuously and a concurrent removal could be "
+            "lost). Quit claude or re-run with --force."
+        )
     lock_path = lock_path_for_scope(scope, home=home, project=project)
     lock = read_lock(lock_path)
     for harness in harnesses:
@@ -217,6 +236,7 @@ def remove(
     library_root: Path,
     home: Path,
     project: Path | None = None,
+    force: bool = False,
 ) -> None:
     """Destructive verb: uninstall `slug` from EVERY harness recorded in the lock.
 
@@ -224,6 +244,9 @@ def remove(
     library is the source of truth), so remove == full-fan-out uninstall. Kept as
     a distinct verb to preserve the kind-wide non-destructive(uninstall) /
     destructive(remove) contract. The library entry is NOT deleted here.
+
+    Delegates to uninstall(), threading `force` through so the running-claude
+    guard on a global-scope claude-code removal is symmetric with apply().
 
     (library_root is accepted for facade-uniform call sites; uninstall/remove
     don't read it.)
@@ -236,5 +259,5 @@ def remove(
         return
     uninstall(
         slug=slug, harnesses=harnesses, scope=scope,
-        library_root=library_root, home=home, project=project,
+        library_root=library_root, home=home, project=project, force=force,
     )
