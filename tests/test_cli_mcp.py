@@ -5,10 +5,28 @@ import json
 import subprocess
 from pathlib import Path
 
+import pytest
 import yaml
 from click.testing import CliRunner
 
 from agent_toolkit_cli.cli import main
+
+
+def _seed_global_sentinels(home: Path) -> None:
+    """Create the per-harness global-scope sentinel dirs so an install isn't skipped.
+
+    At global scope the facade refuses to mkdir-p a harness into existence: a
+    harness whose sentinel dir is absent is warned-and-skipped. These four dirs
+    mark all four harnesses as "installed on this machine" so the install fans
+    out to every adapter. (At PROJECT scope no sentinel is needed — the config
+    file is project-rooted.)
+    """
+    (home / ".claude").mkdir(parents=True, exist_ok=True)
+    (home / ".codex").mkdir(parents=True, exist_ok=True)
+    (home / ".config" / "opencode").mkdir(parents=True, exist_ok=True)
+    (home / ".pi" / "agent" / "npm" / "node_modules" / "pi-mcp-adapter").mkdir(
+        parents=True, exist_ok=True
+    )
 
 
 def _git(directory: Path, *args: str) -> None:
@@ -384,3 +402,242 @@ def test_mcp_update_local_without_source_dir_is_honest(tmp_path, monkeypatch):
     assert result.exit_code == 0, result.output
     assert "no recorded source_dir" in result.output
     assert "up to date" not in result.output
+
+
+# ---------------------------------------------------------------------------
+# Task 9 — both-scope install→uninstall round-trip guards (the project-memory
+# mandate). v3 install machinery has repeatedly shipped silently-broken
+# global-scope / orphan paths with green CI because tests covered only ONE
+# scope or only the happy install. These guards make that impossible for MCP:
+# they exercise BOTH scopes and the FULL install→uninstall round-trip.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("scope_flag, scope_name", [("-g", "global"), ("-p", "project")])
+def test_install_uninstall_round_trip_both_scopes(tmp_path, monkeypatch, scope_flag, scope_name):
+    """install → uninstall leaves the harness config with NO managed entry, at BOTH scopes."""
+    _seed(tmp_path)
+    project = tmp_path / "proj"
+    project.mkdir()
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.chdir(project)
+    if scope_name == "global":
+        # Global claude-code writes ~/.claude.json (live state): the running-claude
+        # guard refuses unless we patch it off, and the sentinel must exist.
+        _seed_global_sentinels(tmp_path)
+        monkeypatch.setattr(
+            "agent_toolkit_cli.mcp_install._claude_is_running", lambda: False
+        )
+    runner = CliRunner()
+
+    r1 = runner.invoke(main, ["mcp", "install", "context7", "--harness", "claude-code", scope_flag])
+    assert r1.exit_code == 0, r1.output
+
+    target = (tmp_path / ".claude.json") if scope_name == "global" else (project / ".mcp.json")
+    assert "context7" in json.loads(target.read_text())["mcpServers"]
+
+    r2 = runner.invoke(main, ["mcp", "uninstall", "context7", "--harness", "claude-code", scope_flag])
+    assert r2.exit_code == 0, r2.output
+    assert "context7" not in json.loads(target.read_text())["mcpServers"]
+
+
+@pytest.mark.parametrize("scope_flag, scope_name", [("-g", "global"), ("-p", "project")])
+def test_install_all_four_harnesses_round_trip(tmp_path, monkeypatch, scope_flag, scope_name):
+    """All four adapters install AND fully uninstall at both scopes (no orphan projections)."""
+    _seed(tmp_path)
+    project = tmp_path / "proj"
+    project.mkdir()
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.chdir(project)
+    if scope_name == "global":
+        _seed_global_sentinels(tmp_path)
+        monkeypatch.setattr(
+            "agent_toolkit_cli.mcp_install._claude_is_running", lambda: False
+        )
+    runner = CliRunner()
+
+    r1 = runner.invoke(main, ["mcp", "install", "context7", scope_flag])  # default = all four
+    assert r1.exit_code == 0, r1.output
+
+    r2 = runner.invoke(main, ["mcp", "uninstall", "context7", scope_flag])
+    assert r2.exit_code == 0, r2.output
+
+    from agent_toolkit_cli.mcp_adapters import get_adapter
+    home = tmp_path
+    proj = None if scope_name == "global" else project
+    for h in ("claude-code", "codex", "opencode", "pi"):
+        assert not get_adapter(h).is_installed(
+            "context7", scope=scope_name, home=home, project=proj,
+        ), f"{h} left an orphan projection at {scope_name} scope"
+
+    from agent_toolkit_cli.mcp_lock import lock_path_for_scope, read_lock
+    lock = read_lock(lock_path_for_scope(scope_name, home=home, project=proj))
+    assert "context7" not in lock
+
+
+@pytest.mark.parametrize("scope_flag, scope_name", [("-g", "global"), ("-p", "project")])
+def test_uninstall_preserves_hand_rolled_neighbour(tmp_path, monkeypatch, scope_flag, scope_name):
+    """A hand-rolled MCP in the same file survives our install+uninstall."""
+    _seed(tmp_path)
+    project = tmp_path / "proj"
+    project.mkdir()
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.chdir(project)
+    if scope_name == "global":
+        _seed_global_sentinels(tmp_path)
+        monkeypatch.setattr(
+            "agent_toolkit_cli.mcp_install._claude_is_running", lambda: False
+        )
+
+    target = (tmp_path / ".claude.json") if scope_name == "global" else (project / ".mcp.json")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps({"mcpServers": {"handrolled": {"command": "x"}}}, indent=2) + "\n")
+
+    runner = CliRunner()
+    runner.invoke(main, ["mcp", "install", "context7", "--harness", "claude-code", scope_flag])
+    runner.invoke(main, ["mcp", "uninstall", "context7", "--harness", "claude-code", scope_flag])
+
+    doc = json.loads(target.read_text())
+    assert doc["mcpServers"]["handrolled"] == {"command": "x"}
+    assert "context7" not in doc["mcpServers"]
+
+
+def test_mcp_update_bump_rewrites_library_sidecar_lock_and_reports(tmp_path, monkeypatch):
+    """update with a moved version: library config.json args + sidecar
+    resolved_version rewritten, the locked harness shows the new version, the
+    lock pin is refreshed, and output carries the `old → new` transparency."""
+    _seed(tmp_path)
+    project = tmp_path / "proj"
+    project.mkdir()
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.chdir(project)
+    CliRunner().invoke(main, ["mcp", "install", "context7", "--harness", "claude-code", "-p"])
+
+    monkeypatch.setattr(
+        "agent_toolkit_cli.commands.mcp._resolve.resolve_npm_version",
+        lambda pkg: "10.0.0",
+    )
+    result = CliRunner().invoke(main, ["mcp", "update", "context7"])
+    assert result.exit_code == 0, result.output
+
+    # Library config.json args re-pinned.
+    cfg = json.loads((tmp_path / ".agent-toolkit" / "mcps" / "context7" / "config.json").read_text())
+    assert cfg["args"] == ["-y", "ctx7@10.0.0"]
+    # Library sidecar resolved_version rewritten.
+    sidecar = yaml.safe_load(
+        (tmp_path / ".agent-toolkit" / "mcps" / "context7.toolkit.yaml").read_text()
+    )
+    assert sidecar["resolved_version"] == "10.0.0"
+    # The locked harness's installed entry shows the new version.
+    doc = json.loads((project / ".mcp.json").read_text())
+    assert doc["mcpServers"]["context7"]["args"] == ["-y", "ctx7@10.0.0"]
+    # Lock pin refreshed.
+    lock = json.loads((project / "mcps-lock.json").read_text())
+    assert lock["mcps"]["context7"][0]["pin"] == "10.0.0"
+    # Transparency: old → new in the output.
+    assert "9.9.9 → 10.0.0" in result.output
+
+
+def test_mcp_update_up_to_date_no_false_bump(tmp_path, monkeypatch):
+    """update when the resolver returns the SAME version: no false bump, says `up to date`."""
+    _seed(tmp_path)
+    project = tmp_path / "proj"
+    project.mkdir()
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.chdir(project)
+    CliRunner().invoke(main, ["mcp", "install", "context7", "--harness", "claude-code", "-p"])
+
+    monkeypatch.setattr(
+        "agent_toolkit_cli.commands.mcp._resolve.resolve_npm_version",
+        lambda pkg: "9.9.9",  # unchanged
+    )
+    result = CliRunner().invoke(main, ["mcp", "update", "context7"])
+    assert result.exit_code == 0, result.output
+    assert "up to date" in result.output
+    # No version-bump line (`<old> → <new>`); the bare `→ writing` facade
+    # progress line is fine and expected (re-projection is idempotent).
+    assert "9.9.9 →" not in result.output
+    # Library + projection unchanged.
+    cfg = json.loads((tmp_path / ".agent-toolkit" / "mcps" / "context7" / "config.json").read_text())
+    assert cfg["args"] == ["-y", "ctx7@9.9.9"]
+
+
+def test_mcp_update_greedy_cross_scope_refreshes_both(tmp_path, monkeypatch):
+    """One flagless `mcp update` from inside a project re-projects + re-pins BOTH
+    the global and the current-project projections (greedy cross-scope)."""
+    _seed(tmp_path)
+    project = tmp_path / "proj"
+    project.mkdir()
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _seed_global_sentinels(tmp_path)
+    monkeypatch.setattr("agent_toolkit_cli.mcp_install._claude_is_running", lambda: False)
+
+    # Install at GLOBAL and at PROJECT scope, both with the old pin (9.9.9).
+    monkeypatch.chdir(project)
+    g = CliRunner().invoke(main, ["mcp", "install", "context7", "--harness", "claude-code", "-g"])
+    assert g.exit_code == 0, g.output
+    p = CliRunner().invoke(main, ["mcp", "install", "context7", "--harness", "claude-code", "-p"])
+    assert p.exit_code == 0, p.output
+
+    # Resolver moves the version; ONE flagless update from inside the project.
+    monkeypatch.setattr(
+        "agent_toolkit_cli.commands.mcp._resolve.resolve_npm_version",
+        lambda pkg: "11.0.0",
+    )
+    result = CliRunner().invoke(main, ["mcp", "update", "context7"])
+    assert result.exit_code == 0, result.output
+
+    # Library rewritten once.
+    cfg = json.loads((tmp_path / ".agent-toolkit" / "mcps" / "context7" / "config.json").read_text())
+    assert cfg["args"] == ["-y", "ctx7@11.0.0"]
+
+    # GLOBAL projection + lock pin advanced.
+    g_doc = json.loads((tmp_path / ".claude.json").read_text())
+    assert g_doc["mcpServers"]["context7"]["args"] == ["-y", "ctx7@11.0.0"]
+    g_lock = json.loads((tmp_path / ".agent-toolkit" / "mcps-lock.json").read_text())
+    assert g_lock["mcps"]["context7"][0]["pin"] == "11.0.0"
+
+    # PROJECT projection + lock pin advanced.
+    p_doc = json.loads((project / ".mcp.json").read_text())
+    assert p_doc["mcpServers"]["context7"]["args"] == ["-y", "ctx7@11.0.0"]
+    p_lock = json.loads((project / "mcps-lock.json").read_text())
+    assert p_lock["mcps"]["context7"][0]["pin"] == "11.0.0"
+
+    # Both scopes reported with the old→new transparency.
+    assert "9.9.9 → 11.0.0" in result.output
+    assert "[global]" in result.output
+    assert "[project]" in result.output
+
+
+def test_mcp_unmanaged_sibling_survives_managed_update(tmp_path, monkeypatch):
+    """A hand-rolled (unmanaged) entry stays listed and intact through an update
+    of a managed sibling in the same harness config."""
+    _seed(tmp_path)
+    project = tmp_path / "proj"
+    project.mkdir()
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.chdir(project)
+    CliRunner().invoke(main, ["mcp", "install", "context7", "--harness", "claude-code", "-p"])
+
+    # Hand-roll a foreign neighbour into the same .mcp.json (NOT in our lock).
+    target = project / ".mcp.json"
+    doc = json.loads(target.read_text())
+    doc["mcpServers"]["handrolled"] = {"type": "stdio", "command": "x"}
+    target.write_text(json.dumps(doc, indent=2) + "\n")
+
+    # Update the managed sibling; the unmanaged neighbour must be untouched.
+    monkeypatch.setattr(
+        "agent_toolkit_cli.commands.mcp._resolve.resolve_npm_version",
+        lambda pkg: "12.0.0",
+    )
+    upd = CliRunner().invoke(main, ["mcp", "update", "context7"])
+    assert upd.exit_code == 0, upd.output
+
+    after = json.loads(target.read_text())
+    assert after["mcpServers"]["handrolled"] == {"type": "stdio", "command": "x"}
+    assert after["mcpServers"]["context7"]["args"] == ["-y", "ctx7@12.0.0"]
+
+    # And `list` still surfaces it as unmanaged.
+    lst = CliRunner().invoke(main, ["mcp", "list", "-p"])
+    assert "unmanaged" in lst.output
+    assert "handrolled" in lst.output
