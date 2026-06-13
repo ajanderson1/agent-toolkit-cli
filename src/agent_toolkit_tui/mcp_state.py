@@ -87,3 +87,71 @@ def _cell_for(
     except (InstallError, ValueError):
         return None
     return McpCell(linked=linked)
+
+
+def build_mcp_rows(
+    *,
+    scope: Scope,
+    home: Path | None,
+    project: Path | None,
+) -> list[McpRow]:
+    """Build McpRow list from union(library DIRECTORY, scope lock) + filesystem.
+
+    The MCP library is a DIRECTORY (~/.agent-toolkit/mcps/<slug>/), not a lock —
+    `mcp add` writes config.json there without touching mcps-lock.json. The
+    library half of the universe therefore comes from list_library() (review F1),
+    matching `mcp list` (list_cmd.py:86). Source/pin for library/installed rows
+    come from the library asset; unlisted rows (lock-only) read the lock entry.
+
+    States: library = in the library dir, not the scope lock; installed = in both;
+    unlisted = in the scope lock, not the library dir (warning)."""
+    from agent_toolkit_cli.mcp_library import (
+        library_root, list_library, load_mcp_asset,
+    )
+    from agent_toolkit_cli.mcp_lock import lock_path_for_scope, read_lock
+
+    if home is None:
+        return []
+
+    library = library_root(home)
+    lib_slugs = set(list_library(library))
+    scope_lock = (
+        read_lock(lock_path_for_scope(scope, home=home, project=project))
+        if (scope == "global" or project is not None) else {}
+    )
+    universe = sorted(lib_slugs | set(scope_lock))
+
+    harnesses = mcp_interactive_harnesses(scope)
+    rows: list[McpRow] = []
+    for slug in universe:
+        in_lib = slug in lib_slugs
+        in_lock = slug in scope_lock
+        if in_lib and in_lock:
+            state: State = "installed"
+        elif in_lib:
+            state = "library"
+        else:
+            state = "unlisted"
+
+        # Source/pin: prefer the library asset; fall back to the lock entry for
+        # unlisted slugs (no library asset to read).
+        source = "unknown"
+        pin: str | None = None
+        if in_lib:
+            try:
+                asset = load_mcp_asset(library, slug)
+                source = asset.install_method or "unknown"
+                pin = asset.resolved_version
+            except (FileNotFoundError, ValueError):
+                pass
+        elif scope_lock.get(slug):
+            first = scope_lock[slug][0]
+            source, pin = first.source, first.pin
+
+        cells: dict[tuple[str, str], McpCell] = {}
+        for harness in harnesses:
+            cell = _cell_for(slug, harness, scope=scope, home=home, project=project)
+            if cell is not None:
+                cells[(harness, scope)] = cell
+        rows.append(McpRow(slug=slug, source=source, pin=pin, state=state, cells=cells))
+    return rows
