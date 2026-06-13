@@ -109,3 +109,19 @@ def test_column_info_mcps_title_not_bundle():
     assert info is not None
     assert info.title == "Standard projection (.mcp.json)"
     assert "bundle" not in info.title.lower()
+
+
+@pytest.mark.asyncio
+async def test_app_shows_mcp_grid_on_select():
+    from agent_toolkit_tui.app import TUIApp
+    from agent_toolkit_tui.widgets.mcp_grid import McpGrid
+
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        app.action_asset_type("mcp")
+        await pilot.pause()
+        grid = app.query_one("#mcp-grid", McpGrid)
+        assert grid.display is True
+        # The other grids are hidden.
+        from agent_toolkit_tui.widgets import AgentGrid
+        assert app.query_one("#agent-grid", AgentGrid).display is False
