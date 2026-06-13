@@ -736,3 +736,60 @@ def test_mcp_unmanaged_sibling_survives_managed_update(tmp_path, monkeypatch):
     lst = CliRunner().invoke(main, ["mcp", "list", "-p"])
     assert "unmanaged" in lst.output
     assert "handrolled" in lst.output
+
+
+def test_mcp_install_project_default_is_standard_not_double_write(tmp_path, monkeypatch):
+    """No --harness at project scope → one `standard` lock row for .mcp.json,
+    NOT separate claude-code + pi rows (the de-dup #399 delivers)."""
+    _seed(tmp_path)
+    project = tmp_path / "proj"
+    project.mkdir()
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.chdir(project)
+    result = CliRunner().invoke(main, ["mcp", "install", "context7", "-p"])
+    assert result.exit_code == 0, result.output
+    doc = json.loads((project / ".mcp.json").read_text())
+    assert "context7" in doc["mcpServers"]
+    lock = json.loads((project / "mcps-lock.json").read_text())
+    harnesses = {e["harness"] for e in lock["mcps"]["context7"]}
+    assert "standard" in harnesses
+    assert "claude-code" not in harnesses
+    assert "pi" not in harnesses
+
+
+def test_mcp_install_claude_and_pi_collapse_to_standard(tmp_path, monkeypatch):
+    """Explicit --harness claude-code --harness pi at project scope → one write,
+    one standard row."""
+    _seed(tmp_path)
+    project = tmp_path / "proj"
+    project.mkdir()
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.chdir(project)
+    result = CliRunner().invoke(
+        main,
+        ["mcp", "install", "context7", "--harness", "claude-code", "--harness", "pi", "-p"],
+    )
+    assert result.exit_code == 0, result.output
+    lock = json.loads((project / "mcps-lock.json").read_text())
+    harnesses = [e["harness"] for e in lock["mcps"]["context7"]]
+    assert harnesses == ["standard"]
+
+
+def test_mcp_install_collapses_preexisting_legacy_lock(tmp_path, monkeypatch):
+    """A pre-existing legacy claude-code+pi lock is COLLAPSED by `install -p`
+    (the doctor remediation genuinely converges, not a no-op)."""
+    _seed(tmp_path)
+    project = tmp_path / "proj"
+    project.mkdir()
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.chdir(project)
+    (project / "mcps-lock.json").write_text(json.dumps({
+        "version": 1, "mcps": {"context7": [
+            {"harness": "claude-code", "source": "npx", "pin": "9.9.9"},
+            {"harness": "pi", "source": "npx", "pin": "9.9.9"},
+        ]}}, indent=2) + "\n")
+    result = CliRunner().invoke(main, ["mcp", "install", "context7", "-p"])
+    assert result.exit_code == 0, result.output
+    lock = json.loads((project / "mcps-lock.json").read_text())
+    harnesses = sorted(e["harness"] for e in lock["mcps"]["context7"])
+    assert harnesses == ["codex", "opencode", "standard"]  # legacy rows gone

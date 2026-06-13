@@ -1,7 +1,9 @@
 """`mcp install <slug> [--harness ...] [-g/-p] [--force]` — project to harnesses.
 
 Injects the library MCP entry into each requested harness's native config via
-the per-harness adapter, writing mcps-lock.json. Default harnesses = all four.
+the per-harness adapter, writing mcps-lock.json. Default harnesses are
+scope-aware (#399): project → standard + codex + opencode (one .mcp.json write,
+no claude-code/pi double-write); global → the concrete four.
 Write verb: defaults to project scope when a project lock is present.
 """
 from __future__ import annotations
@@ -11,7 +13,12 @@ from pathlib import Path
 import click
 
 from agent_toolkit_cli import mcp_install
-from agent_toolkit_cli.commands.mcp._common import _HARNESSES, scope_and_roots
+from agent_toolkit_cli.commands.mcp._common import (
+    _CHOICE_HARNESSES,
+    default_harnesses,
+    normalize_harness_tokens,
+    scope_and_roots,
+)
 from agent_toolkit_cli.mcp_adapters import UnsupportedMcpHarnessError
 from agent_toolkit_cli.mcp_install import RunningClaudeError
 from agent_toolkit_cli.mcp_library import library_root
@@ -30,8 +37,8 @@ Examples:
 @click.option("-p", "--project", "project_flag", is_flag=True)
 @click.option(
     "--harness", "harnesses", multiple=True,
-    type=click.Choice(_HARNESSES),
-    help="Harness to install into (repeatable). Default: all four.",
+    type=click.Choice(_CHOICE_HARNESSES),
+    help="Harness to install into (repeatable). Default: standard + codex + opencode (project).",
 )
 @click.option(
     "--force", is_flag=True,
@@ -54,7 +61,10 @@ def install_cmd(
     # Path.home() is read at RUNTIME (honors a test's monkeypatched HOME).
     effective_home = home if home is not None else Path.home()
     library = library_root(Path.home())
-    targets = list(harnesses) or list(_HARNESSES)
+    if harnesses:
+        targets = list(normalize_harness_tokens(tuple(harnesses), scope=scope))
+    else:
+        targets = list(default_harnesses(scope))
 
     try:
         result = mcp_install.apply(
