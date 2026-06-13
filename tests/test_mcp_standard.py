@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 
+import click
 import pytest
 
 
@@ -79,3 +80,42 @@ def test_collapse_covered_is_noop_when_no_covered_rows():
     lock = {"context7": [McpLockEntry("context7", "standard", "npx", None)]}
     out = collapse_covered(lock, "context7", frozenset({"claude-code", "pi"}))
     assert [e.harness for e in out["context7"]] == ["standard"]
+
+
+def test_normalize_project_collapses_claude_and_pi():
+    from agent_toolkit_cli.commands.mcp._common import normalize_harness_tokens
+    out = normalize_harness_tokens(("claude-code", "pi"), scope="project")
+    assert out == ("standard",)  # both → standard, deduped
+
+
+def test_normalize_project_keeps_outliers_and_order():
+    from agent_toolkit_cli.commands.mcp._common import normalize_harness_tokens
+    out = normalize_harness_tokens(("claude-code", "codex", "opencode"), scope="project")
+    assert out == ("standard", "codex", "opencode")
+
+
+def test_normalize_project_standard_token_passes_through():
+    from agent_toolkit_cli.commands.mcp._common import normalize_harness_tokens
+    assert normalize_harness_tokens(("standard",), scope="project") == ("standard",)
+
+
+def test_normalize_global_does_not_normalize_claude_or_pi():
+    from agent_toolkit_cli.commands.mcp._common import normalize_harness_tokens
+    out = normalize_harness_tokens(("claude-code", "pi"), scope="global")
+    assert out == ("claude-code", "pi")  # NO normalization at global scope
+
+
+def test_normalize_global_rejects_standard_token():
+    from agent_toolkit_cli.commands.mcp._common import normalize_harness_tokens
+    with pytest.raises(click.UsageError, match="standard.*project"):
+        normalize_harness_tokens(("standard",), scope="global")
+
+
+def test_default_harnesses_project_is_standard_codex_opencode():
+    from agent_toolkit_cli.commands.mcp._common import default_harnesses
+    assert default_harnesses("project") == ("standard", "codex", "opencode")
+
+
+def test_default_harnesses_global_is_the_concrete_four():
+    from agent_toolkit_cli.commands.mcp._common import default_harnesses
+    assert default_harnesses("global") == ("claude-code", "codex", "opencode", "pi")
