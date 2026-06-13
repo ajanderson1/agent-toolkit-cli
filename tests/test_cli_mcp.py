@@ -872,3 +872,62 @@ def test_mcp_status_standard_row_annotated(tmp_path, monkeypatch):
     assert result.exit_code == 0, result.output
     assert "standard" in result.output
     assert "claude-code" in result.output and "pi" in result.output
+
+
+def test_mcp_doctor_flags_legacy_standard_dedup(tmp_path, monkeypatch):
+    """A project lock with claude-code + pi rows is flagged for collapse. Read-only."""
+    _seed(tmp_path)
+    project = tmp_path / "proj"
+    project.mkdir()
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.chdir(project)
+    (project / ".mcp.json").write_text(
+        json.dumps({"mcpServers": {"context7": {"type": "stdio", "command": "npx",
+         "args": ["-y", "ctx7@9.9.9"]}}}, indent=2) + "\n"
+    )
+    (project / "mcps-lock.json").write_text(json.dumps({
+        "version": 1, "mcps": {"context7": [
+            {"harness": "claude-code", "source": "npx", "pin": "9.9.9"},
+            {"harness": "pi", "source": "npx", "pin": "9.9.9"},
+        ]}}, indent=2) + "\n")
+    before = (project / "mcps-lock.json").read_text()
+    result = CliRunner().invoke(main, ["mcp", "doctor", "-p"])
+    assert "legacy-standard-dedup" in result.output
+    assert "context7" in result.output
+    assert (project / "mcps-lock.json").read_text() == before  # read-only
+    assert result.exit_code == 1
+
+
+def test_mcp_doctor_flags_partially_collapsed_standard_plus_pi(tmp_path, monkeypatch):
+    """The orphan-row shape {standard, pi} also fires the finding (so an orphan
+    pi row left by a non-normalized uninstall is surfaced, not hidden)."""
+    _seed(tmp_path)
+    project = tmp_path / "proj"
+    project.mkdir()
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.chdir(project)
+    (project / ".mcp.json").write_text(
+        json.dumps({"mcpServers": {"context7": {"type": "stdio", "command": "npx",
+         "args": ["-y", "ctx7@9.9.9"]}}}, indent=2) + "\n"
+    )
+    (project / "mcps-lock.json").write_text(json.dumps({
+        "version": 1, "mcps": {"context7": [
+            {"harness": "standard", "source": "npx", "pin": "9.9.9"},
+            {"harness": "pi", "source": "npx", "pin": "9.9.9"},
+        ]}}, indent=2) + "\n")
+    result = CliRunner().invoke(main, ["mcp", "doctor", "-p"])
+    assert "legacy-standard-dedup" in result.output
+
+
+def test_mcp_doctor_clean_on_standard_install(tmp_path, monkeypatch):
+    """A clean standard install passes doctor — no missing/drifted on the standard row."""
+    _seed(tmp_path)
+    project = tmp_path / "proj"
+    project.mkdir()
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.chdir(project)
+    CliRunner().invoke(main, ["mcp", "install", "context7", "-p"])  # one standard row
+    result = CliRunner().invoke(main, ["mcp", "doctor", "-p"])
+    assert result.exit_code == 0, result.output
+    assert "all clean" in result.output
+    assert "legacy-standard-dedup" not in result.output

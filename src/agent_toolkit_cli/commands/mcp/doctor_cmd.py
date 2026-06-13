@@ -28,6 +28,7 @@ from agent_toolkit_cli.mcp_library import (
     load_mcp_asset,
 )
 from agent_toolkit_cli.mcp_lock import lock_path_for_scope, read_lock
+from agent_toolkit_cli.mcp_standard import mcp_standard_covered
 
 
 @dataclass
@@ -115,6 +116,27 @@ def _diagnose(
 
     for slug in sorted(lock):
         entries = lock[slug]
+
+        # #399: legacy/partially-collapsed standard de-dup. At project scope, if a
+        # slug's rows intersect the covered set {claude-code, pi}, those rows
+        # project the same .mcp.json the `standard` row owns (or should own) and
+        # must collapse to one `standard` row. Fires on the pure 2-row legacy
+        # shape AND the partially-collapsed {standard, pi}/{standard, claude-code}
+        # shape (so an orphan covered row is surfaced, not hidden). Read-only:
+        # remediation is `mcp install <slug> -p` (collapse-on-install converges it).
+        if scope == "project":
+            row_harnesses = {e.harness for e in entries}
+            if row_harnesses & mcp_standard_covered("project"):
+                findings.append(Finding(
+                    slug=slug, harness="standard",
+                    finding_type="legacy-standard-dedup",
+                    detail=(
+                        "project lock has claude-code/pi rows for the shared "
+                        f".mcp.json; collapse to one `standard` row with "
+                        f"`mcp install {slug} -p`"
+                    ),
+                ))
+
         try:
             asset: McpAsset | None = load_mcp_asset(library, slug)
         except (FileNotFoundError, ValueError):
@@ -129,6 +151,11 @@ def _diagnose(
 
         for entry in sorted(entries, key=lambda e: e.harness):
             harness = entry.harness
+            if harness == "standard" and scope != "project":
+                # A `standard` row at global scope is structurally invalid (no
+                # global standard target); skip the per-entry checks rather than
+                # emit a misleading `missing` when config_target raises.
+                continue
             adapter = get_adapter(harness)
             try:
                 installed = adapter.is_installed(
