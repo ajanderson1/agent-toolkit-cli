@@ -1,5 +1,68 @@
 # Changelog
 
+## [4.0.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v3.9.0...v4.0.0) (2026-06-13)
+
+
+### ⚠ BREAKING CHANGES
+
+* **agents:** 'universal', 'general-skill', 'general-agent' are no longer accepted as agent/harness tokens — use 'standard' / 'standard-skill' / 'standard-agent'. This is the v4.0.0 trigger.
+
+### Features
+
+* **agent:** agent add supports category-repo subpaths (monorepo agents) ([#391](https://github.com/ajanderson1/agent-toolkit-cli/issues/391)) ([060622e](https://github.com/ajanderson1/agent-toolkit-cli/commit/060622ec8b273e6828b062e031cf2cf658f0686d))
+* **bundle:** toolkit-native bundle manifest + install/validate ([#369](https://github.com/ajanderson1/agent-toolkit-cli/issues/369)) ([#395](https://github.com/ajanderson1/agent-toolkit-cli/issues/395)) ([2406951](https://github.com/ajanderson1/agent-toolkit-cli/commit/2406951d4b33ad10cdfd4dc5c3f19d2d243c45eb))
+* **lock:** distinguish user SHA-pin from observed upstream tip ([#392](https://github.com/ajanderson1/agent-toolkit-cli/issues/392)) ([40fee83](https://github.com/ajanderson1/agent-toolkit-cli/commit/40fee835daa094257232117f6a6b4d51c449f9a6))
+* **mcp:** re-port the MCP asset kind into the v3 per-kind architecture ([#329](https://github.com/ajanderson1/agent-toolkit-cli/issues/329)) ([#397](https://github.com/ajanderson1/agent-toolkit-cli/issues/397)) ([a2d376f](https://github.com/ajanderson1/agent-toolkit-cli/commit/a2d376f5fbfde04d72a9223e9c112b6ce07493ba))
+* **skill:** default skill install/uninstall --agents ([#393](https://github.com/ajanderson1/agent-toolkit-cli/issues/393)) ([#394](https://github.com/ajanderson1/agent-toolkit-cli/issues/394)) ([186b952](https://github.com/ajanderson1/agent-toolkit-cli/commit/186b95263689d9aaf400ac2321b725ffdc6f1af3))
+
+
+### Bug Fixes
+
+* **agent:** adapter read-path failures surface as InstallError with slug ([#373](https://github.com/ajanderson1/agent-toolkit-cli/issues/373)) ([#384](https://github.com/ajanderson1/agent-toolkit-cli/issues/384)) ([09b7c24](https://github.com/ajanderson1/agent-toolkit-cli/commit/09b7c246c29d4d4e8979fd69da4927972d5db906))
+* **agents:** remove deprecated universal/general-* token aliases ([#356](https://github.com/ajanderson1/agent-toolkit-cli/issues/356)) ([#390](https://github.com/ajanderson1/agent-toolkit-cli/issues/390)) ([16c234e](https://github.com/ajanderson1/agent-toolkit-cli/commit/16c234e03e9c647642c8543f6d578aa3d0742304))
+* pi-extension push/status define behaviour on SHA-pinned entries ([#386](https://github.com/ajanderson1/agent-toolkit-cli/issues/386)) ([1abdef4](https://github.com/ajanderson1/agent-toolkit-cli/commit/1abdef4fbb5d800896840346dede2ed5cd7afb1c))
+* **pi-extension:** add heals a non-repo store dir; doctor surfaces it as half_dir ([#347](https://github.com/ajanderson1/agent-toolkit-cli/issues/347)) ([#387](https://github.com/ajanderson1/agent-toolkit-cli/issues/387)) ([52f7372](https://github.com/ajanderson1/agent-toolkit-cli/commit/52f7372e8e0389499ca9ea7c3d4bbe8154bbe583))
+* push not-in-lock hints the other scope's lock and exits 1 ([#383](https://github.com/ajanderson1/agent-toolkit-cli/issues/383)) ([70bb897](https://github.com/ajanderson1/agent-toolkit-cli/commit/70bb8971560fcc46a3e071aca3a9c02841e80b0c))
+* **tui:** agent grid missing 🌐 global marker at project scope ([#385](https://github.com/ajanderson1/agent-toolkit-cli/issues/385)) ([e8b27eb](https://github.com/ajanderson1/agent-toolkit-cli/commit/e8b27eb59c732faf4cd19eaef2e772a381df78df))
+
+
+### Documentation
+
+* add mkdocs-redirects mapping for kinds→asset-types page moves ([#389](https://github.com/ajanderson1/agent-toolkit-cli/issues/389)) ([6f7bc48](https://github.com/ajanderson1/agent-toolkit-cli/commit/6f7bc486935d5142a29d4f74fc78d75453e9c742)), closes [#364](https://github.com/ajanderson1/agent-toolkit-cli/issues/364)
+* **mcp:** clean-start v3 spec for [#329](https://github.com/ajanderson1/agent-toolkit-cli/issues/329); retire v1 MCP design generation ([dd5e61b](https://github.com/ajanderson1/agent-toolkit-cli/commit/dd5e61b760b799584c17147b44de7f3ea5ffc572))
+* **plan:** agent grid 🌐 global marker implementation plan for [#374](https://github.com/ajanderson1/agent-toolkit-cli/issues/374) ([3e2e740](https://github.com/ajanderson1/agent-toolkit-cli/commit/3e2e740699bff2a9066f71c1748ac08413466c20))
+* **plan:** bundle manifest v1 implementation plan for [#369](https://github.com/ajanderson1/agent-toolkit-cli/issues/369) ([a6ab17c](https://github.com/ajanderson1/agent-toolkit-cli/commit/a6ab17cc3a508bf0556fbcd178a1fc9282b4aaed))
+* **plan:** default skill install --agents implementation plan for [#393](https://github.com/ajanderson1/agent-toolkit-cli/issues/393) ([ccac9cb](https://github.com/ajanderson1/agent-toolkit-cli/commit/ccac9cbc1d403c9604e6d5ac47f9c798f4675aea))
+* **plan:** fix F2 lock-precheck key shape (re-review) for [#369](https://github.com/ajanderson1/agent-toolkit-cli/issues/369) ([2f151c6](https://github.com/ajanderson1/agent-toolkit-cli/commit/2f151c66bd9154dd8c1fd771c545d40673a17b49))
+* **plan:** lock pin-vs-observed-tip implementation plan for [#345](https://github.com/ajanderson1/agent-toolkit-cli/issues/345) ([0cdb01d](https://github.com/ajanderson1/agent-toolkit-cli/commit/0cdb01d6c706f78d5dc113a303b20f743f2446a1))
+* **plan:** mkdocs-redirects kinds→asset-types spec+plan for [#364](https://github.com/ajanderson1/agent-toolkit-cli/issues/364) ([0f4a8d9](https://github.com/ajanderson1/agent-toolkit-cli/commit/0f4a8d9c680ea536da67ba072e6e305f6825d0a5))
+* **plan:** pi-extension half-dir heal+doctor implementation plan for [#347](https://github.com/ajanderson1/agent-toolkit-cli/issues/347) ([6f1906f](https://github.com/ajanderson1/agent-toolkit-cli/commit/6f1906f9237e96caffba87c5145af4c2b779ef01))
+* **plan:** pi-extension push/status SHA-pinned implementation plan for [#346](https://github.com/ajanderson1/agent-toolkit-cli/issues/346) ([1338e35](https://github.com/ajanderson1/agent-toolkit-cli/commit/1338e355895636726852c97565683557c3a3b2c8))
+* **plan:** push not-in-lock cross-scope hint implementation plan for [#371](https://github.com/ajanderson1/agent-toolkit-cli/issues/371) ([a870e0a](https://github.com/ajanderson1/agent-toolkit-cli/commit/a870e0ad4f2ede7141b8fe16a318bf7424d53ee1))
+* **plan:** resolve critical-review findings for [#347](https://github.com/ajanderson1/agent-toolkit-cli/issues/347) (line numbers, Task-1 git env loop) ([3791bcc](https://github.com/ajanderson1/agent-toolkit-cli/commit/3791bcc7475116425dc4c7be16c397cb6aa80518))
+* **plan:** resolve critical-review findings for [#374](https://github.com/ajanderson1/agent-toolkit-cli/issues/374) (task reorder F1, comment sweeps F2/A2) ([63a19e3](https://github.com/ajanderson1/agent-toolkit-cli/commit/63a19e33bfd278c121f90c7eac6b619a0e059d1d))
+* **spec,plan:** adapter read-path hardening for [#373](https://github.com/ajanderson1/agent-toolkit-cli/issues/373) ([adad5b3](https://github.com/ajanderson1/agent-toolkit-cli/commit/adad5b3d1d0403a1fd1d9e8383d7b32db8a4d198))
+* **spec,plan:** resolve critical-review findings for [#346](https://github.com/ajanderson1/agent-toolkit-cli/issues/346) ([05d71ea](https://github.com/ajanderson1/agent-toolkit-cli/commit/05d71ead6c321502f44c86cb1d4985db73d03807))
+* **spec,plan:** resolve critical-review findings for [#371](https://github.com/ajanderson1/agent-toolkit-cli/issues/371) ([2561624](https://github.com/ajanderson1/agent-toolkit-cli/commit/256162407e290ad68be7da5849d9a109f9f062a1))
+* **spec,plan:** resolve critical-review findings for [#373](https://github.com/ajanderson1/agent-toolkit-cli/issues/373) ([8b92435](https://github.com/ajanderson1/agent-toolkit-cli/commit/8b924359ff5f8a1fb2b60b6e6e1d70c937ad523f))
+* **spec+plan:** remove deprecated token aliases for [#356](https://github.com/ajanderson1/agent-toolkit-cli/issues/356) ([f9e7ae6](https://github.com/ajanderson1/agent-toolkit-cli/commit/f9e7ae61a2715306523defc70e0d956024d8ba4e))
+* **spec+plan:** resolve critical-review findings for [#345](https://github.com/ajanderson1/agent-toolkit-cli/issues/345) ([493a14b](https://github.com/ajanderson1/agent-toolkit-cli/commit/493a14b28382f2e83e1a8ec8229ba914e3721214))
+* **spec+plan:** resolve critical-review findings for [#356](https://github.com/ajanderson1/agent-toolkit-cli/issues/356) ([0c25bc9](https://github.com/ajanderson1/agent-toolkit-cli/commit/0c25bc901867975fbf51983eac0d13ea4f870df3))
+* **spec+plan:** resolve critical-review findings for [#369](https://github.com/ajanderson1/agent-toolkit-cli/issues/369) ([645e6ad](https://github.com/ajanderson1/agent-toolkit-cli/commit/645e6ad89ebbb1c560e360874306822fe8c566f9))
+* **spec+plan:** resolve critical-review findings for [#393](https://github.com/ajanderson1/agent-toolkit-cli/issues/393) ([b671d14](https://github.com/ajanderson1/agent-toolkit-cli/commit/b671d14c2a9f86bd0f234c0ea14cfd92fce0253e))
+* **spec:** agent grid 🌐 global marker design for [#374](https://github.com/ajanderson1/agent-toolkit-cli/issues/374) ([90332dd](https://github.com/ajanderson1/agent-toolkit-cli/commit/90332dde95deab8886fc01d067b1abb5ad3bbdaf))
+* **spec:** bundle manifest v1 design for [#369](https://github.com/ajanderson1/agent-toolkit-cli/issues/369) ([48d8a0f](https://github.com/ajanderson1/agent-toolkit-cli/commit/48d8a0fba90bda14c225f8b9dd4d797678bdb781))
+* **spec:** default skill install --agents to standard for [#393](https://github.com/ajanderson1/agent-toolkit-cli/issues/393) ([99cb679](https://github.com/ajanderson1/agent-toolkit-cli/commit/99cb6794b2f1b1fe3f544a4e2c3e064c7eea81b2))
+* **spec:** lock pin-vs-observed-tip derived-reader design for [#345](https://github.com/ajanderson1/agent-toolkit-cli/issues/345) ([25114eb](https://github.com/ajanderson1/agent-toolkit-cli/commit/25114eb9a2199eca95285f3338da3f0922933bf5))
+* **spec:** pi-extension half-dir heal+doctor design for [#347](https://github.com/ajanderson1/agent-toolkit-cli/issues/347) ([07a0a3f](https://github.com/ajanderson1/agent-toolkit-cli/commit/07a0a3f72f5bfa38b3be8c98d7ccf5d2e368d305))
+* **spec:** pi-extension push/status SHA-pinned behaviour design for [#346](https://github.com/ajanderson1/agent-toolkit-cli/issues/346) ([e68244a](https://github.com/ajanderson1/agent-toolkit-cli/commit/e68244a9045f0b634b57d790ad2a82151306ba56))
+* **spec:** push not-in-lock cross-scope hint + exit 1 design for [#371](https://github.com/ajanderson1/agent-toolkit-cli/issues/371) ([ced519e](https://github.com/ajanderson1/agent-toolkit-cli/commit/ced519e847a317c345589c1ff77df32d76970327))
+
+
+### CI
+
+* **release-please:** bump release-please-action v4 -&gt; v5 (Node 24 runtime) ([#396](https://github.com/ajanderson1/agent-toolkit-cli/issues/396)) ([8ae27af](https://github.com/ajanderson1/agent-toolkit-cli/commit/8ae27af53db4d661563fda26bb7ff3d6ea2dd3d0))
+
 ## [3.9.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v3.8.0...v3.9.0) (2026-06-12)
 
 
