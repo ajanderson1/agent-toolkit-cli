@@ -44,3 +44,27 @@ def agents_nonstandard_main(scope: str) -> tuple[str, ...]:
         h for h in MAIN_HARNESSES
         if AGENTS[h].subagent_mechanism != "none" and h not in covered
     )
+
+
+# The four real MCP harnesses (commands/mcp/_common.py _HARNESSES), in
+# canonical render order. Distinct from MAIN_HARNESSES: MCP has no gemini-cli
+# or cursor adapter, so the MCP grid derives its columns from this set, not
+# MAIN_HARNESSES.
+_MCP_HARNESSES: tuple[str, ...] = ("claude-code", "codex", "opencode", "pi")
+
+
+def mcp_nonstandard_main(scope: str) -> tuple[str, ...]:
+    """Main MCP harnesses that need their own column at `scope`: the four real
+    MCP harnesses minus those covered by the standard project .mcp.json
+    projection (#399).
+
+    Scope asymmetry (load-bearing): STANDARD_MCP_READERS has ONLY a 'project'
+    key, so mcp_standard_covered('global') raises KeyError. At global scope the
+    covered set is empty and all four harnesses render their own column."""
+    from agent_toolkit_cli.mcp_standard import mcp_standard_covered
+
+    try:
+        covered = mcp_standard_covered(scope)
+    except KeyError:
+        covered = frozenset()
+    return tuple(h for h in _MCP_HARNESSES if h not in covered)
