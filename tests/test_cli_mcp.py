@@ -793,3 +793,42 @@ def test_mcp_install_collapses_preexisting_legacy_lock(tmp_path, monkeypatch):
     lock = json.loads((project / "mcps-lock.json").read_text())
     harnesses = sorted(e["harness"] for e in lock["mcps"]["context7"])
     assert harnesses == ["codex", "opencode", "standard"]  # legacy rows gone
+
+
+def test_mcp_uninstall_standard_removes_only_named_entry(tmp_path, monkeypatch):
+    _seed(tmp_path)
+    project = tmp_path / "proj"
+    project.mkdir()
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.chdir(project)
+    CliRunner().invoke(main, ["mcp", "install", "context7", "-p"])
+    doc = json.loads((project / ".mcp.json").read_text())
+    doc["mcpServers"]["sibling"] = {"command": "z"}
+    (project / ".mcp.json").write_text(json.dumps(doc, indent=2) + "\n")
+    result = CliRunner().invoke(
+        main, ["mcp", "uninstall", "context7", "--harness", "standard", "-p"],
+    )
+    assert result.exit_code == 0, result.output
+    doc2 = json.loads((project / ".mcp.json").read_text())
+    assert "context7" not in doc2["mcpServers"]
+    assert doc2["mcpServers"]["sibling"] == {"command": "z"}
+
+
+def test_mcp_uninstall_claude_normalizes_to_standard(tmp_path, monkeypatch):
+    _seed(tmp_path)
+    project = tmp_path / "proj"
+    project.mkdir()
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.chdir(project)
+    CliRunner().invoke(main, ["mcp", "install", "context7", "-p"])  # standard row
+    result = CliRunner().invoke(
+        main, ["mcp", "uninstall", "context7", "--harness", "claude-code", "-p"],
+    )
+    assert result.exit_code == 0, result.output
+    doc = json.loads((project / ".mcp.json").read_text())
+    assert "context7" not in doc["mcpServers"]
+    lock = json.loads((project / "mcps-lock.json").read_text())
+    # claude-code normalized to standard; the standard row is gone (the no-flag
+    # `install -p` also wrote codex + opencode rows, which are untouched here).
+    harnesses = {e["harness"] for e in lock["mcps"].get("context7", [])}
+    assert "standard" not in harnesses  # standard row removed
