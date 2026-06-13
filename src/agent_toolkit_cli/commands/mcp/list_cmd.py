@@ -18,6 +18,7 @@ from agent_toolkit_cli.commands.mcp._common import _HARNESSES, scope_and_roots
 from agent_toolkit_cli.mcp_adapters import get_adapter
 from agent_toolkit_cli.mcp_library import library_root, list_library, load_mcp_asset
 from agent_toolkit_cli.mcp_lock import lock_path_for_scope, read_lock
+from agent_toolkit_cli.mcp_standard import STANDARD_MCP_READERS, mcp_standard_covered
 
 
 def _servers_in_config(harness: str, scope: str, home: Path, project: Path | None) -> set[str]:
@@ -117,6 +118,9 @@ def list_cmd(
             ):
                 note = f"  {entry.pin} (library: {asset.resolved_version} — stale)"
             click.echo(f"  {mark} {harness}{note}")
+        if "standard" in locked and scope in STANDARD_MCP_READERS:
+            covered = ", ".join(sorted(mcp_standard_covered(scope)))
+            click.echo(f"  ✔ standard → {covered}")
 
     # Surface unmanaged entries: anything in a harness config NOT tracked by
     # our lock. Visible, never touched.
@@ -144,6 +148,24 @@ def list_cmd(
             if any(e.harness == harness for e in entries)
         }
         tracked_by_path.setdefault(path.resolve(), set()).update(slugs_for_harness)
+
+    # #399: credit `standard` lock rows toward the shared .mcp.json path, so a
+    # standard-managed entry is not falsely re-surfaced as [!] unmanaged. The
+    # standard adapter's project target IS <project>/.mcp.json.
+    if scope in STANDARD_MCP_READERS:
+        std_adapter = get_adapter("standard")
+        try:
+            std_path = std_adapter.config_target(
+                scope=scope, home=effective_home, project=project_root
+            ).resolve()
+        except ValueError:
+            std_path = None
+        if std_path is not None:
+            std_slugs = {
+                slug for slug, entries in lock.items()
+                if any(e.harness == "standard" for e in entries)
+            }
+            tracked_by_path.setdefault(std_path, set()).update(std_slugs)
 
     for harness in _HARNESSES:
         adapter = get_adapter(harness)
