@@ -28,12 +28,14 @@ from agent_toolkit_cli.mcp_adapters import get_adapter
 from agent_toolkit_cli.mcp_library import load_mcp_asset
 from agent_toolkit_cli.mcp_lock import (
     McpLockEntry,
+    collapse_covered,
     lock_path_for_scope,
     read_lock,
     remove_entry,
     upsert_entry,
     write_lock,
 )
+from agent_toolkit_cli.mcp_standard import mcp_standard_covered
 
 
 class RunningClaudeError(InstallError):
@@ -158,6 +160,11 @@ def apply(
                 source=asset.install_method or "unknown",
                 pin=asset.resolved_version,
             ))
+            # #399 collapse-on-install: writing `standard` drops the covered
+            # legacy rows (claude-code/pi) for this slug, folded into the SAME
+            # lock object written once below — so the 3-row state never persists.
+            if harness == "standard" and scope == "project":
+                lock = collapse_covered(lock, slug, mcp_standard_covered("project"))
             done.append(harness)
         write_lock(lock_path, lock)
     except BaseException:
