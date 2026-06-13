@@ -55,3 +55,27 @@ def test_standard_adapter_global_target_raises(tmp_path):
     from agent_toolkit_cli.mcp_adapters import get_adapter
     with pytest.raises(ValueError, match="no global target"):
         get_adapter("standard").config_target(scope="global", home=tmp_path, project=None)
+
+
+def test_collapse_covered_drops_covered_rows_for_slug():
+    from agent_toolkit_cli.mcp_lock import McpLockEntry, collapse_covered
+    lock = {
+        "context7": [
+            McpLockEntry("context7", "standard", "npx", "9.9.9"),
+            McpLockEntry("context7", "claude-code", "npx", "9.9.9"),
+            McpLockEntry("context7", "pi", "npx", "9.9.9"),
+            McpLockEntry("context7", "codex", "npx", "9.9.9"),
+        ],
+        "other": [McpLockEntry("other", "claude-code", "npx", None)],
+    }
+    out = collapse_covered(lock, "context7", frozenset({"claude-code", "pi"}))
+    harnesses = sorted(e.harness for e in out["context7"])
+    assert harnesses == ["codex", "standard"]          # claude-code + pi dropped
+    assert {e.harness for e in out["other"]} == {"claude-code"}  # other slug untouched
+
+
+def test_collapse_covered_is_noop_when_no_covered_rows():
+    from agent_toolkit_cli.mcp_lock import McpLockEntry, collapse_covered
+    lock = {"context7": [McpLockEntry("context7", "standard", "npx", None)]}
+    out = collapse_covered(lock, "context7", frozenset({"claude-code", "pi"}))
+    assert [e.harness for e in out["context7"]] == ["standard"]
