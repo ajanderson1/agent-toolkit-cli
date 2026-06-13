@@ -547,6 +547,8 @@ class TUIApp(App):
             self._apply_skill_pending()
         elif self._active_asset_type == "pi-extension":
             self._apply_pi_pending()
+        elif self._active_asset_type == "mcp":
+            self._apply_mcp_pending()
         else:
             self._apply_agent_pending()
 
@@ -1023,6 +1025,98 @@ class TUIApp(App):
                 severity="warning",
                 timeout=12,
             )
+        if errors:
+            first = " ".join(errors[0].split())
+            extra = f" (+{len(errors) - 1} more)" if len(errors) > 1 else ""
+            self.query_one("#footer-pending", Static).update(
+                f"[red]apply failed[/] — {first}{extra}{tag}"
+            )
+            self.notify(
+                "\n\n".join(errors),
+                title=f"Apply: {ok} ok, {failed} failed",
+                severity="error",
+                timeout=12,
+            )
+        else:
+            self.query_one("#footer-pending", Static).update(
+                f"applied: {ok} ok, {failed} failed{tag}"
+            )
+
+    def _apply_mcp_pending(self) -> None:
+        from agent_toolkit_cli import mcp_install
+        from agent_toolkit_cli._install_core import InstallError
+        from agent_toolkit_cli.mcp_library import library_root
+
+        try:
+            grid = self.query_one("#mcp-grid", McpGrid)
+        except NoMatches:
+            return
+        pending = grid.pending_entries()
+        if not pending:
+            return
+        tag = _scope_tag(pending)
+
+        # Group by (scope, slug) → (adds set, removes set) of harnesses.
+        by_slug: dict[tuple[str, str], tuple[set[str], set[str]]] = defaultdict(
+            lambda: (set(), set())
+        )
+        for (scope, harness, slug), op in pending.items():
+            adds, removes = by_slug[(scope, slug)]
+            (adds if op == "link" else removes).add(harness)
+
+        ok = failed = 0
+        errors: list[str] = []
+        # Derive roots from the SSOT the grid was built against (review F-cwd) —
+        # NOT a fresh Path.cwd()/Path.home(), so the apply target is guaranteed
+        # identical to the displayed grid (the project .mcp.json / project lock
+        # are repo-root files; a cwd drift would mutate the wrong project).
+        active_scope, home, active_project = self._scope_to_roots()
+        # _scope_to_roots always returns Path.home() for home (both scopes); the
+        # MCP adapters need a real home for sentinel checks even at project scope.
+        # Fail loud rather than silently passing None into the facade.
+        assert home is not None
+
+        for (scope, slug), (adds, removes) in by_slug.items():
+            # The pending key's scope wins per-entry, but home/project come from
+            # the active roots; project is None at global, the active project root
+            # otherwise. (Pending only ever carries the active scope today.)
+            project = None if scope == "global" else active_project
+            lib_root = library_root(home)
+            if adds:
+                try:
+                    result = mcp_install.apply(
+                        slug=slug, harnesses=sorted(adds), scope=scope,
+                        library_root=lib_root, home=home, project=project,
+                    )
+                    ok += len(result.installed)
+                except InstallError as exc:
+                    errors.append(f"{slug}: {exc}")
+                    failed += len(adds)
+                except ValueError as exc:
+                    errors.append(f"{slug}: {exc}")
+                    failed += len(adds)
+            if removes:
+                try:
+                    mcp_install.uninstall(
+                        slug=slug, harnesses=sorted(removes), scope=scope,
+                        library_root=lib_root, home=home, project=project,
+                    )
+                    ok += len(removes)
+                except InstallError as exc:
+                    errors.append(f"{slug}: {exc}")
+                    failed += len(removes)
+                except ValueError as exc:
+                    errors.append(f"{slug}: {exc}")
+                    failed += len(removes)
+
+        saved = grid.pending_entries() if failed else {}
+        if failed == 0:
+            grid.clear_pending()
+        self._refresh_mcp_view()
+        if saved:
+            grid.restore_pending(saved)
+        self._refresh_pending_label()
+        self._refresh_status_bar()
         if errors:
             first = " ".join(errors[0].split())
             extra = f" (+{len(errors) - 1} more)" if len(errors) > 1 else ""
