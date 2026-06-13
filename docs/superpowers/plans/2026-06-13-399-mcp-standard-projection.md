@@ -1060,12 +1060,49 @@ git commit -m "feat(mcp): doctor flags legacy/partial standard dedup + covers st
 
 ---
 
-## Task 11: `update` / `remove` regression coverage
+## Task 11: `update` heal-on-legacy + `update`/`remove` regression coverage
+
+`update` replays the literal lock harnesses (`update_cmd.py:177`). A clean
+post-#399 project lock replays `standard` fine. But a **legacy** project lock
+(`{claude-code, pi}`, user never reinstalled) replays those literal rows — collapse
+never fires — so `update` re-pins the two-row shape with no nudge (deep-review
+round-2 HIGH). Fix: heal a project lock that intersects the covered set by
+normalizing its harness list to `standard` before `apply()`.
 
 **Files:**
-- Test only: `tests/test_cli_mcp.py` (verifies existing `update_cmd`/`remove_cmd` behave on a `standard` lock)
+- Modify: `src/agent_toolkit_cli/commands/mcp/update_cmd.py:177` (heal-on-legacy)
+- Test: `tests/test_cli_mcp.py`
 
-- [ ] **Step 1: Write the tests**
+- [ ] **Step 1: Write the failing test (heal-on-legacy) + regression tests**
+
+```python
+# tests/test_cli_mcp.py — append
+def test_mcp_update_heals_legacy_project_lock(tmp_path, monkeypatch):
+    """`mcp update` on a LEGACY {claude-code, pi} project lock heals it to one
+    `standard` row (update is a converging path, not a re-blesser)."""
+    _seed(tmp_path)
+    project = tmp_path / "proj"
+    project.mkdir()
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.chdir(project)
+    (project / ".mcp.json").write_text(
+        json.dumps({"mcpServers": {"context7": {"type": "stdio", "command": "npx",
+         "args": ["-y", "ctx7@9.9.9"]}}}, indent=2) + "\n"
+    )
+    (project / "mcps-lock.json").write_text(json.dumps({
+        "version": 1, "mcps": {"context7": [
+            {"harness": "claude-code", "source": "npx", "pin": "9.9.9"},
+            {"harness": "pi", "source": "npx", "pin": "9.9.9"},
+        ]}}, indent=2) + "\n")
+    result = CliRunner().invoke(main, ["mcp", "update", "context7"])
+    assert result.exit_code == 0, result.output
+    lock = json.loads((project / "mcps-lock.json").read_text())
+    harnesses = [e["harness"] for e in lock["mcps"]["context7"]]
+    assert harnesses == ["standard"]  # legacy rows healed away
+```
+
+(Also add the `test_mcp_remove_standard_fully_clears` and
+`test_mcp_update_standard_reprojects` regression tests below.)
 
 ```python
 # tests/test_cli_mcp.py — append
@@ -1105,16 +1142,53 @@ def test_mcp_update_standard_reprojects(tmp_path, monkeypatch):
     assert "context7" in doc["mcpServers"]
 ```
 
-- [ ] **Step 2: Run the tests**
+- [ ] **Step 2: Run the tests to see the heal failure (others pass without code change)**
 
-Run: `uv run pytest tests/test_cli_mcp.py -k "remove_standard_fully or update_standard_reprojects" -v`
-Expected: PASS without code changes — `remove` fans the lock's `standard` row → `get_adapter("standard")` removes the entry; `update` (which has NO scope flag and re-projects every reachable locked projection — `update_cmd.py:1,7-9`) replays the `standard` row → re-projects `.mcp.json`. If either FAILS, that's a real uncovered bug — fix in `update_cmd.py`/`remove_cmd.py` and re-run.
+Run: `uv run pytest tests/test_cli_mcp.py -k "remove_standard_fully or update_standard_reprojects or update_heals_legacy" -v`
+Expected:
+- `remove_standard_fully` — PASS without code changes: `remove` fans the lock's `standard` row → `get_adapter("standard")` removes the entry.
+- `update_standard_reprojects` — PASS without code changes: `update` (NO scope flag; re-projects every reachable locked projection — `update_cmd.py:1,7-9`) replays the `standard` row → re-projects `.mcp.json`.
+- `update_heals_legacy` — **FAIL**: a legacy `{claude-code, pi}` lock replays those literal rows, no collapse fires, lock stays two rows.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 3: Implement heal-on-legacy in `update_cmd`**
+
+In `src/agent_toolkit_cli/commands/mcp/update_cmd.py`, add the import (top):
+
+```python
+from agent_toolkit_cli.commands.mcp._common import _LOCK_FILENAME, normalize_harness_tokens
+```
+
+(merge with the existing `from ... _common import _LOCK_FILENAME` line — don't duplicate it.)
+
+Then at the per-scope replay (line 177), heal a project lock that intersects the covered set, BEFORE `apply()`:
+
+```python
+        harnesses = [e.harness for e in lock.get(slug, [])]
+        if not harnesses:
+            continue
+        # #399: heal a LEGACY project lock — if its rows intersect the covered
+        # set {claude-code, pi}, normalize them to `standard` so this update's
+        # project apply() writes a standard row and collapse-on-install drops the
+        # legacy rows (update is a converging path, not a re-blesser). Global is
+        # left literal (claude-code/pi have separate global files).
+        if scope == "project":
+            harnesses = list(normalize_harness_tokens(tuple(harnesses), scope="project"))
+        any_projection = True
+```
+
+(The `any_projection = True` line already follows; place the heal between the
+`if not harnesses: continue` guard and it.)
+
+- [ ] **Step 4: Run the tests to verify GREEN**
+
+Run: `uv run pytest tests/test_cli_mcp.py -k "remove_standard_fully or update_standard_reprojects or update_heals_legacy" -v`
+Expected: PASS (3 passed). The heal test now collapses to `["standard"]`; the report line shows `[project] standard`.
+
+- [ ] **Step 5: Commit**
 
 ```bash
-git add tests/test_cli_mcp.py
-git commit -m "test(mcp): update/remove regression coverage for standard rows (#399)"
+git add src/agent_toolkit_cli/commands/mcp/update_cmd.py tests/test_cli_mcp.py
+git commit -m "feat(mcp): update heals legacy project lock to standard + update/remove coverage (#399)"
 ```
 
 ---

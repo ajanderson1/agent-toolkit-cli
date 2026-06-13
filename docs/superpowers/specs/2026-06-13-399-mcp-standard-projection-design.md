@@ -235,25 +235,6 @@ scope), print a `standard → claude-code, pi` summary line sourced from
 off the **resolved scope** (not a hardcoded `"project"`), so a stray global
 `standard` row degrades loudly rather than silently mis-annotating.
 
-### `list` / `status` — expand `standard` to its covered set
-
-`list_cmd` iterates the concrete `_HARNESSES` to print an installed/absent mark
-per harness (`list_cmd.py:101-119`) and separately groups lock-tracked slugs by
-**resolved config path** to dedupe the shared `.mcp.json` when surfacing
-unmanaged entries (`list_cmd.py:121-159`). Both of those mechanics stay — the
-per-harness marks still correctly show claude-code ✔ / pi ✔ against the shared
-`.mcp.json`, and the path-grouping de-dup still guards codex/opencode.
-
-What's **added**: when a slug has a `standard` lock row (project scope), print a
-`standard → claude-code, pi` summary line sourced from
-`mcp_standard_covered("project")`, so the user sees that the `standard` row
-covers both. This is additive output, not a rewrite of the per-harness loop —
-the loop already handles the concrete harnesses correctly.
-
-`status` (the locked-projection summary, `status_cmd.py`) renders each locked
-slug's harnesses from the lock; a `standard` harness row gains the same
-`→ claude-code, pi` covered-set annotation.
-
 ### `doctor` — legacy-lock reconciliation finding + `standard`-row coverage
 
 **The reconciliation finding.** `doctor` gains a read-only finding
@@ -294,7 +275,7 @@ for `standard` **raises** `ValueError` (caught at `doctor_cmd.py:137` →
 | `mcp_adapters/__init__.py` `_MECHANISM` | `standard → json` dispatch | — |
 | `mcp_standard.py` (new) `STANDARD_MCP_READERS`, `mcp_standard_covered(scope)` | Covered-set SSOT (mirrors `agent_adapters/standard.py:25-38`) | — |
 | `mcp_lock.py` `collapse_covered(lock, slug, covered)` (new) | Drop covered legacy rows when writing `standard` | — |
-| `commands/mcp/_common.py` `normalize_harness_tokens(scope)` + `default_harnesses(scope)` + `_CHOICE_HARNESSES` (all new) | Project normalization, default set, Choice universe | `STANDARD_MCP_READERS` |
+| `commands/mcp/_common.py` `normalize_harness_tokens(tokens, *, scope)` + `default_harnesses(scope)` + `_CHOICE_HARNESSES` (all new) | Project normalization, default set, Choice universe | `STANDARD_MCP_READERS` |
 | `mcp_install.py` `apply()` | Collapse-on-install (the ONE facade change) | `mcp_lock.collapse_covered` |
 | `commands/mcp/install_cmd.py` | Wire scope-aware default + `standard` Choice + normalize | `_common`, `mcp_install` |
 | `commands/mcp/uninstall_cmd.py` | `standard` Choice + normalize | `_common`, `mcp_install` |
@@ -318,13 +299,22 @@ verified against a `standard` row, not just install/uninstall:
   idempotent repeated deletes. **Add a `remove` regression test** asserting a
   `standard` install fully removes (entry gone, lock row gone).
 - **`update`** — `update_cmd.py:174` replays `[e.harness for e in lock...]` per
-  scope. For a clean project lock it re-projects the single `standard` row
-  correctly (one `.mcp.json` write). **Add an `update` regression test**: a
-  post-#399 project lock updates to a single standard write, and the per-scope
-  report shows `[project] standard` (vs `[global] claude-code, pi` if a global
-  lock exists — the by-design scope divergence, made explicit so it is not a
-  surprise). `update` does NOT need to normalize (it replays persisted rows, and
-  collapse-on-install already converged them); but the test pins the expectation.
+  scope (no scope flag; iterates global then project). For a clean project lock
+  it re-projects the single `standard` row correctly. **But a LEGACY project lock**
+  (`{claude-code, pi}`, user never reinstalled) replays those literal rows —
+  neither `standard` is in the list, so collapse-on-install never fires and
+  `update` **re-pins and re-blesses the legacy two-row shape with no nudge**
+  (deep-review round-2, new HIGH). Fix: `update` must **heal** a project lock
+  that intersects the covered set. After building `harnesses` from a **project**
+  lock, if it intersects `{claude-code, pi}`, swap those tokens for `standard`
+  (via `normalize_harness_tokens(tuple(harnesses), scope="project")`) **before**
+  the `apply()` call — so the project `apply` writes a `standard` row and
+  collapse-on-install drops the legacy rows. Global scope is left untouched
+  (replays `claude-code`/`pi` literally — they have separate global files). Tests:
+  (a) a clean post-#399 project lock updates to a single standard write; (b) a
+  legacy `{claude-code, pi}` project lock is HEALED to one `standard` row by
+  `update`; (c) the per-scope report shows `[project] standard` (vs
+  `[global] claude-code, pi` if a global lock exists — the by-design divergence).
 - **`list`** — `tracked_by_path` fix (covered above).
 - **`doctor`** — `legacy-standard-dedup` + existing-check coverage (covered above).
 
