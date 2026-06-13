@@ -112,10 +112,10 @@ def get_adapter(harness_name: str) -> McpAdapter:
             f"{', '.join(sorted(_MECHANISM))}."
         )
     if mech == "json":
-        from agent_toolkit_cli.mcp_adapters import json_config
+        import agent_toolkit_cli.mcp_adapters.json_config as json_config
         return json_config.adapter_for(harness_name)
     if mech == "toml":
-        from agent_toolkit_cli.mcp_adapters import toml_config
+        import agent_toolkit_cli.mcp_adapters.toml_config as toml_config
         return toml_config.adapter_for(harness_name)
     raise RuntimeError(f"unreachable: unknown mechanism {mech!r}")
 
