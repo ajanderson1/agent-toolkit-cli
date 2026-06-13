@@ -58,6 +58,21 @@ agent-toolkit-cli pi-extension status [<slug>...] [-g|-p]
 
 A Pi-only command group for Pi extensions. PR1 ships the read-only verbs `list` (alias `ls`) and `status`, which surface a unified inventory of every extension Pi could load — **store-owned** (owned git repos in the library), **untracked** (loose entries already in `~/.pi/agent/extensions/` or `<project>/.pi/extensions/`), and **npm** (`packages[]` in Pi's `settings.json`). Origin is a column, not a gate. Write verbs (`add`/`install`/`import`/…) and the TUI grid arrive in later releases.
 
+### MCP servers — library-driven, four harnesses (foundations)
+
+```text
+agent-toolkit-cli mcp add <slug>  --npx|--uvx|--docker|--url|--local <source>   # author into the library
+agent-toolkit-cli mcp install <slug>   [--harness <name>]... [-g|-p] [--force]
+agent-toolkit-cli mcp uninstall <slug> [--harness <name>]... [-g|-p]
+agent-toolkit-cli mcp remove <slug>    [-g|-p]
+agent-toolkit-cli mcp update <slug>                                              # re-resolve the version + re-project
+agent-toolkit-cli mcp list   [-g|-p]
+agent-toolkit-cli mcp status [-g|-p]
+agent-toolkit-cli mcp doctor [-g|-p]
+```
+
+`mcp add` authors a library entry at `~/.agent-toolkit/mcps/<slug>/` from a package, image, URL, or local path, best-effort resolving the current version so projected configs are effectively pinned (transparency, not enforcement; resolution failure stores the entry `floating`). `mcp install` projects it into **Claude Code, Codex, OpenCode, and Pi** by surgically editing each harness's native config **by name** (`mcpServers.<name>` JSON / `[mcp_servers.<name>]` TOML) — never by file ownership, so hand-rolled neighbours and unmanaged entries survive untouched (the latter shown as `[!] unmanaged` in `list`). Writes are loud and atomic; a cross-harness install rolls back on a later-adapter failure; global-scope `~/.claude.json` writes are guarded by a running-`claude` check (`--force` bypasses). `update` is greedy and flagless (re-resolves the version, re-projects the global + current-project locks). Read-only `doctor` reports orphans, structural drift, and missing env vars **by name only**. Drift `fix`, dry-run `diff`, git-clone-and-build sources, cross-machine library sync, and the TUI MCPs section land in follow-ups.
+
 ### TUI
 
 ```text
