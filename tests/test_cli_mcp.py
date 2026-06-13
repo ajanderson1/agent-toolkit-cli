@@ -551,8 +551,14 @@ def test_install_all_four_harnesses_round_trip(tmp_path, monkeypatch, scope_flag
         )
     runner = CliRunner()
 
-    r1 = runner.invoke(main, ["mcp", "install", "context7", scope_flag])  # default = all four
+    r1 = runner.invoke(main, ["mcp", "install", "context7", scope_flag])  # global: four; project: standard+codex+opencode
     assert r1.exit_code == 0, r1.output
+
+    if scope_name == "project":
+        from agent_toolkit_cli.mcp_lock import lock_path_for_scope as _lp, read_lock as _rl
+        _lk = _rl(_lp("project", home=tmp_path, project=project))
+        _hs = {e.harness for e in _lk["context7"]}
+        assert "standard" in _hs and "claude-code" not in _hs and "pi" not in _hs
 
     r2 = runner.invoke(main, ["mcp", "uninstall", "context7", scope_flag])
     assert r2.exit_code == 0, r2.output
