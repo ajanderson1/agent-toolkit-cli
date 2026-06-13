@@ -65,8 +65,13 @@ def _standard_info(context: dict | None = None) -> ColumnInfo:
             indicator_note += ["  This agent is also installed globally."]
     return ColumnInfo(
         # v3.7 full rename (#350): key and title both say "standard". The
-        # agents asset type is a single-file slot, not a bundle (#361).
-        title="Standard slot (agents)" if asset_type == "agents" else "Standard bundle",
+        # agents asset type is a single-file slot, not a bundle (#361); the
+        # mcps asset type is a shared .mcp.json projection, not a bundle (#398).
+        title=(
+            "Standard slot (agents)" if asset_type == "agents"
+            else "Standard projection (.mcp.json)" if asset_type == "mcps"
+            else "Standard bundle"
+        ),
         lines=description + bullets + extra_lines + indicator_note,
     )
 
