@@ -22,6 +22,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
+from agent_toolkit_cli._install_core import InstallError
+from agent_toolkit_cli.mcp_adapters import get_adapter
 from agent_toolkit_tui.composition import mcp_nonstandard_main
 
 Scope = Literal["global", "project"]
@@ -55,3 +57,33 @@ class McpRow:
     pin: str | None = None
     state: State = "installed"
     cells: dict[tuple[str, str], McpCell] = field(default_factory=dict)
+
+
+def _cell_for(
+    slug: str,
+    harness_name: str,
+    *,
+    scope: Scope,
+    home: Path,
+    project: Path | None,
+) -> McpCell | None:
+    """Return McpCell for a (slug, harness, scope) triple, or None if the
+    harness has no adapter / is not installable at this scope.
+
+    Returns None when:
+    - get_adapter() raises (unknown harness → UnsupportedMcpHarnessError, an
+      InstallError).
+    - the adapter's is_installed() raises (scope mismatch, e.g. the standard
+      adapter at global scope — there is no global .mcp.json target — raises
+      InstallError; a ValueError is also tolerated).
+
+    Otherwise McpCell(linked=is_installed(...))."""
+    try:
+        adapter = get_adapter(harness_name)
+    except (InstallError, ValueError):
+        return None
+    try:
+        linked = adapter.is_installed(slug, scope=scope, home=home, project=project)
+    except (InstallError, ValueError):
+        return None
+    return McpCell(linked=linked)
