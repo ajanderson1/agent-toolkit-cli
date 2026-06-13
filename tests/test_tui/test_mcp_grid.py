@@ -1,6 +1,6 @@
 import pytest
 
-from agent_toolkit_tui.mcp_state import McpRow
+from agent_toolkit_tui.mcp_state import McpCell, McpRow
 from agent_toolkit_tui.widgets.mcp_grid import McpGrid
 
 
@@ -51,3 +51,61 @@ async def test_columns_global_no_standard(monkeypatch):
         assert not any("Standard" in s for s in labels)
         assert any("claude-code" in s for s in labels)
         assert any("pi" in s for s in labels)
+
+
+@pytest.mark.asyncio
+async def test_standard_cell_toggles_pending():
+    from textual.app import App
+    from textual.coordinate import Coordinate
+
+    class _A(App):
+        def compose(self):
+            yield McpGrid([_row()], id="g")
+
+    # Seed the standard cell so it is toggleable: a row with no
+    # ("standard", "project") cell is "not applicable at this scope" and the
+    # toggle correctly no-ops (same contract as agent_grid). The standard
+    # cell IS a real installable destination at project scope, so seed it.
+    seeded = McpRow(slug="ctx7", source="npx", pin=None, state="installed",
+                    cells={("standard", "project"): McpCell(linked=False)})
+
+    app = _A()
+    async with app.run_test() as pilot:
+        grid = app.query_one("#g", McpGrid)
+        grid.set_scope("project")
+        grid.set_rows([seeded])
+        await pilot.pause()
+        from textual.widgets import DataTable
+        table = app.query_one(DataTable)
+        table.cursor_coordinate = Coordinate(0, 1)  # col 1 == standard
+        grid.action_toggle_cell()
+        await pilot.pause()
+        pend = grid.pending_entries()
+        assert ("project", "standard", "ctx7") in pend
+
+
+def test_context_for_standard_is_mcps():
+    grid = McpGrid([_row()])
+    grid.set_scope("project")
+    grid.set_rows([_row()])
+    ctx = grid._context_for(key="standard", row_index=0)
+    assert ctx is not None
+    assert ctx["asset_type"] == "mcps"
+    assert set(ctx["names"]) == {"claude-code", "pi"}
+    assert ctx["global_linked"] is False
+    # F9: the modal spells out the fold (one cell = N harnesses, project-only).
+    joined = "\n".join(ctx["extra_lines"])
+    assert "installs into all 2" in joined
+    assert "Project scope only" in joined
+
+
+def test_column_info_mcps_title_not_bundle():
+    # F5: the Standard column-info title for mcps must NOT be "Standard bundle".
+    from agent_toolkit_tui.column_info import get_column_info
+    info = get_column_info("standard", context={
+        "asset_type": "mcps", "names": ("claude-code", "pi"),
+        "extra_lines": [], "global_linked": False,
+    })
+    assert info is not None
+    assert info.title == "Standard projection (.mcp.json)"
+    assert "bundle" not in info.title.lower()
