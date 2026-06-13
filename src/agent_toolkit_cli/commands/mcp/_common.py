@@ -24,6 +24,11 @@ _LOCK_FILENAME = mcp_lock.LOCK_FILENAME
 
 Scope = Literal["project", "global"]
 
+# The four MCP-capable harnesses, in adapter-registry order. Shared by every
+# write verb that fans out to "all harnesses" by default. SSOT for the
+# --harness click.Choice and the no-flag install default.
+_HARNESSES: tuple[str, ...] = ("claude-code", "codex", "opencode", "pi")
+
 
 def scope_and_roots(
     global_: bool,
