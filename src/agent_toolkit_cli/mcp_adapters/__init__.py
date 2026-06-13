@@ -29,6 +29,7 @@ class UnsupportedMcpHarnessError(InstallError):
 _MECHANISM: dict[str, Literal["json", "toml"]] = {
     "claude-code": "json",
     "pi": "json",
+    "standard": "json",
     "opencode": "json",
     "codex": "toml",
 }
