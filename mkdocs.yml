@@ -1,4 +1,4 @@
-# Requires the `docs` dependency group: uv sync (mkdocs-material + mkdocstrings)
+# Requires the `docs` dependency group: uv sync (mkdocs-material)
 site_name: agent-toolkit-cli
 site_description: Python CLI and Textual TUI for managing AI-agent skills across harnesses
 site_url: https://ajanderson1.github.io/agent-toolkit-cli/
@@ -61,14 +61,6 @@ theme:
 
 plugins:
   - search
-  - mkdocstrings:
-      enabled: !ENV [ENABLE_MKDOCSTRINGS, true]
-      handlers:
-        python:
-          paths: [src]
-          options:
-            show_source: true
-            show_root_heading: true
   # Preserve inbound links after the #355 kind→asset-type page rename (#364):
   # docs/kinds/* was git-mv'd to docs/asset-types/* with no redirect mapping.
   - redirects:
@@ -203,5 +195,4 @@ nav:
     - Skill lock (deep dive): agent-toolkit/skill-lock.md
     - Roadmap: agent-toolkit/roadmap.md
   - Glossary: glossary.md
-  - API Reference: api/index.md
   - Changelog: changelog.md
