@@ -52,7 +52,7 @@ Once all seven asset types are lock-file-driven, the `AGENT_TOOLKIT_TUI_LEGACY=1
 
 ### Verb remap: `enable`/`disable` for projection { #verb-remap-enable-disable-for-projection }
 
-**Status: idea, not committed.** The lifecycle verbs split across [two axes](../glossary.md): `add`/`remove` change [library](../glossary.md#library) membership (destructive), while `install`/`uninstall` change [projection](../glossary.md#projection) into a harness/scope (non-destructive). The friction is that all four read as generic "put / take away" words, so nothing in the verb tells you which axis you're on — the glossary has to spell it out.
+**Status: idea, not committed.** The lifecycle verbs split across [two axes](../glossary.md#verb-model): `add`/`remove` change [library](../glossary.md#library) membership (destructive), while `install`/`uninstall` change [projection](../glossary.md#projection) into a harness/scope (non-destructive). The friction is that all four read as generic "put / take away" words, so nothing in the verb tells you which axis you're on — the glossary has to spell it out.
 
 Proposal: rename the Axis-2 pair from `install`/`uninstall` to **`enable`/`disable`**, keeping `add`/`remove` for Axis 1. This makes the two axes use *different verb families* — the legible pattern every clean two-axis tool follows (`systemctl enable`/`start`; VS Code `install`/`enable`; Claude Code `plugin install`/`enable`). It also matches the harness we live closest to: the Claude Code plugin flow is `marketplace add` → `plugin install` → `plugin enable`/`disable`, where `enable`/`disable` is exactly the per-context activation axis we call `install`/`uninstall`.
 
