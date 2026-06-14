@@ -289,3 +289,50 @@ def test_build_instruction_rows_conflict_cell(tmp_path: Path, monkeypatch):
 def test_interactive_harnesses_are_correct():
     """INTERACTIVE_HARNESSES must be exactly the 2 pinned harnesses."""
     assert INTERACTIVE_HARNESSES == ("claude-code", "gemini-cli")
+
+
+def test_project_scope_probes_global_shadow_cell(tmp_path: Path, monkeypatch):
+    """At project scope, build_instruction_rows probes (harness, 'global') for
+    each row when home is set, mirroring agent_state (#374). The global pointer
+    being linked surfaces as a (harness, 'global') cell with linked=True."""
+    from agent_toolkit_cli import instructions_paths
+
+    home = tmp_path / "home"
+    home.mkdir()
+    project = tmp_path / "proj"
+    project.mkdir()
+
+    # Isolate the global canonical under tmp_path (mirrors the existing
+    # test_build_instruction_rows_* tests). The global canonical is then
+    # <agent_toolkit_dir>/AGENTS.md.
+    agent_toolkit_dir = home / ".agent-toolkit"
+    agent_toolkit_dir.mkdir(parents=True)
+    monkeypatch.setattr(
+        "agent_toolkit_cli.instructions_paths.library_root",
+        lambda: agent_toolkit_dir / "instructions",
+    )
+    glob_canonical = agent_toolkit_dir / "AGENTS.md"
+    glob_canonical.write_text("# global AGENTS\n")
+
+    # Project canonical so the locked row's project cells resolve.
+    proj_canonical = instructions_paths.project_canonical_agents_md(project)
+    proj_canonical.write_text("# project AGENTS\n")
+
+    # Project lock entry → locked-entry branch.
+    lock_file = instructions_paths.project_lock_path(project)
+    lock_file.write_text(
+        '{"version": 1, "instructions": {"AGENTS.md": '
+        '{"scope": "project", "source": "AGENTS.md", "harnesses": ["claude-code"]}}}\n'
+    )
+
+    # Install the GLOBAL claude-code pointer (~/.claude/CLAUDE.md → global canonical).
+    from agent_toolkit_cli.instructions_adapters.symlink import _pointer_path
+    glob_pointer = _pointer_path("claude-code", "global", None, home)
+    glob_pointer.parent.mkdir(parents=True, exist_ok=True)
+    glob_pointer.symlink_to(glob_canonical)
+
+    rows = build_instruction_rows(scope="project", home=home, project=project)
+    assert rows, "expected one AGENTS.md row"
+    global_cell = rows[0].cells.get(("claude-code", "global"))
+    assert global_cell is not None
+    assert global_cell.linked is True
