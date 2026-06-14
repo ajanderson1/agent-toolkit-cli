@@ -336,3 +336,38 @@ def test_project_scope_probes_global_shadow_cell(tmp_path: Path, monkeypatch):
     global_cell = rows[0].cells.get(("claude-code", "global"))
     assert global_cell is not None
     assert global_cell.linked is True
+
+
+def test_empty_lock_fresh_user_row_probes_global_shadow_cell(tmp_path: Path, monkeypatch):
+    """The empty-lock fresh-user row (canonical exists, no lock entries) also
+    gets the (harness, 'global') shadow cell at project scope (#388)."""
+    from agent_toolkit_cli import instructions_paths
+
+    home = tmp_path / "home"
+    home.mkdir()
+    project = tmp_path / "proj"
+    project.mkdir()
+
+    agent_toolkit_dir = home / ".agent-toolkit"
+    agent_toolkit_dir.mkdir(parents=True)
+    monkeypatch.setattr(
+        "agent_toolkit_cli.instructions_paths.library_root",
+        lambda: agent_toolkit_dir / "instructions",
+    )
+    glob_canonical = agent_toolkit_dir / "AGENTS.md"
+    glob_canonical.write_text("# global AGENTS\n")
+
+    # Project canonical exists but NO project lock entries → fresh-user branch.
+    proj_canonical = instructions_paths.project_canonical_agents_md(project)
+    proj_canonical.write_text("# project AGENTS\n")
+
+    # Global claude-code pointer linked.
+    from agent_toolkit_cli.instructions_adapters.symlink import _pointer_path
+    glob_pointer = _pointer_path("claude-code", "global", None, home)
+    glob_pointer.parent.mkdir(parents=True, exist_ok=True)
+    glob_pointer.symlink_to(glob_canonical)
+
+    rows = build_instruction_rows(scope="project", home=home, project=project)
+    assert rows and rows[0].slug == "AGENTS.md"
+    gcell = rows[0].cells.get(("claude-code", "global"))
+    assert gcell is not None and gcell.linked is True
