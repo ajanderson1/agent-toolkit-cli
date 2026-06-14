@@ -471,3 +471,16 @@ def test_push_finds_legacy_bare_named_parent(tmp_path, monkeypatch):
     r = CliRunner().invoke(cli, ["skill", "push", "--direct", "mkdocs", "-g"])
     assert r.exit_code == 0, r.output
     assert "missing" not in r.output.lower()
+
+
+def test_fresh_add_materialises_suffixed_clone(tmp_path, monkeypatch):
+    from agent_toolkit_cli.skill_paths import parent_clone_path
+    parent_url, _ = _setup_parent(tmp_path, monkeypatch)
+    _add_owned_ref(parent_url, "mkdocs")
+    entry = _lock()["skills"]["mkdocs"]
+    assert entry.get("ref") == "main"
+    owner, repo = entry["source"].split("/", 1)
+    suffixed = parent_clone_path(owner, repo, ref=entry["ref"], env=None)
+    bare = parent_clone_path(owner, repo, ref=None, env=None)
+    assert suffixed.exists() and suffixed.name == f"{repo}@{entry['ref']}"
+    assert not bare.exists()  # fresh add never used the bare name
