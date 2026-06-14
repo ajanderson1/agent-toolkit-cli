@@ -1,6 +1,6 @@
 ---
 name: agent-toolkit
-last_updated: 2026-05-27
+last_updated: 2026-06-14
 ---
 
 # agent-toolkit Strategy
@@ -25,60 +25,75 @@ is a glance-and-click, not a CLI incantation.
 
 ## Who it's for
 
-**Primary:** AJ Anderson — a multi-harness agent power-user managing a personal library
-of skills across many projects. He's hiring agent-toolkit to decide exactly which skills
-are active in a given project before turning an agent loose, and to safely keep his own
-edits to upstream third-party skills — without hand-managing symlinks or risking
-cross-project contamination.
+**Primary:** A multi-harness agent power-user managing a personal library of assets
+(skills, agents, instructions, pi-extensions, MCP servers) across many projects. They're
+hiring agent-toolkit to decide exactly which assets are active in a given project before
+turning an agent loose, and to safely keep their own edits to upstream third-party skills
+— without hand-managing symlinks or risking cross-project contamination.
 
-**Secondary:** A small team adopting the same library and workflow later. Named, but
-not yet a design driver.
+**Secondary:** A small team adopting the same library and workflow. Now a real driver, not
+a deferred one — the bundle manifest makes a curated, reproducible asset set shippable to
+someone who isn't the author, which is the bridge from one-machine dogfooding to public
+adoption.
 
 ## Key metrics
 
 - **Local edits survived an update** - `skill update` runs that merge local commits
   cleanly vs. clobber them or leave a mid-merge conflict. Regresses when git-native
-  ownership leaks. Observed via `skill update` outcome; qualitative today, could be
-  surfaced through `skill status` later.
-- **Contamination incidents** - times an agent in a project picked up a skill that
+  ownership leaks. Observed via `skill update` outcome; qualitative today.
+- **Contamination incidents** - times an agent in a project picked up an asset that
   shouldn't have been active there. Target zero; any nonzero is a scoping failure.
   Qualitative, observed during agent runs.
-- **Time-to-scope** - how long it takes to get a project to exactly the intended skill
+- **Time-to-scope** - how long it takes to get a project to exactly the intended asset
   set (TUI glance-and-click vs. fighting symlinks). Qualitative / felt today.
+- **Asset-kind × harness parity** - how many of the six asset kinds (skill, agent,
+  instructions, pi-extension, mcp, bundle) have full verb support across each supported
+  harness. Measurable from the projection/adapter matrix; regresses when a new kind or
+  harness ships with partial coverage.
 
 ## Tracks
 
 ### Git-native ownership
 
 Every skill is a real owned repo: merge-aware `update`, `push`-back-upstream, monorepo
-parent clones, and the lockfile that acts as single source of truth driving projection
-to disk.
+parent clones, SHA-pin-vs-observed-tip in the lockfile, and the lock as single source of
+truth driving projection to disk.
 
 _Why it serves the approach:_ It **is** the bet — durable local edits and granular
-control both fall out of treating skills as owned repos. Still fickle and being
-hardened through active dogfooding; `doctor` / projection reconciliation is the
-least-invested corner and the likely next area of work.
+control both fall out of treating skills as owned repos.
 
 ### TUI control surface
 
-The visual skill grid that makes scoping and toggling skills instant across harnesses.
+The visual asset grid that makes scoping and toggling instant across harnesses — one tab
+per asset kind (skills, agents, instructions, pi-extensions, MCP).
 
 _Why it serves the approach:_ Granular control is only valuable if it's a
 glance-and-click — the TUI is the access half of the approach.
 
-### Cross-machine / cross-harness reach
+### Robustness & projection integrity
 
-`skill import`, cross-machine library sync, and breadth of supported harnesses.
+`doctor` across every kind, projection/lock reconciliation, and no-surprise defaults so a
+stranger's machine survives the edge cases the author's never hits. The least-invested
+corner historically, and the load-bearing work standing between today and a public release.
 
-_Why it serves the approach:_ Makes the owned library portable and consistent
-everywhere you run agents, so control and ownership don't stop at one machine.
+_Why it serves the approach:_ Ownership and scoping are only trustworthy if the
+projection on disk provably matches the lock — robustness is what makes the bet safe to
+hand to someone else.
+
+### Cross-harness reach
+
+Breadth of supported asset kinds and harnesses, `skill import`, cross-machine library
+sync, and bundles as a shareable, reproducible asset set.
+
+_Why it serves the approach:_ Makes the owned library portable and consistent everywhere
+you run agents — and bundles are the bridge that lets the control and ownership model
+reach a second person, not just a second machine.
 
 ## Milestones
 
-- **v3.0.0 refold** - reintroduce the subagent `agent` kind, managed the same
-  git-native, scoped way as skills. No fixed date.
-- **v3.2.0** - pi-extension kind (read-only inventory: list/status), instructions
-  asset kind (link AGENTS.md/CLAUDE.md across harnesses), and agent facade with
-  28 projection adapters.
-- **MCP support (potential)** - extend the same ownership and scope model to MCP
-  servers. Exploratory; not committed.
+- **v4.0.0 (2026-06-13)** - MCP asset kind (config-injection across claude/codex/opencode/pi),
+  toolkit-native bundle manifest (install/validate), and the kinds→asset-types rename.
+- **v4.1.0 (2026-06-14)** - MCP "standard" projection (canonical `.mcp.json`/`mcpServers`)
+  and the MCP tab in the TUI asset-types sidebar.
+- **Public release** - PyPI distribution + docs so someone who isn't the author can adopt
+  it. Gated on the Robustness & projection integrity track, not a calendar date.
