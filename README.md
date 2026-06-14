@@ -18,6 +18,8 @@ uv tool install --from git+https://github.com/ajanderson1/agent-toolkit-cli agen
 
 ## Commands
 
+Two verb axes run through every asset type below: **`add`/`remove`** manage library membership (destructive — `remove` forgets the source), while **`install`/`uninstall`** manage projection into a harness/scope (non-destructive — the library copy survives). The [verb model](https://ajanderson1.github.io/agent-toolkit-cli/glossary/#verb-model) in the glossary is the single source of truth for what each verb means; the sections here describe only the per-asset-type specifics.
+
 ### Skills — lock-file driven, agent-aware
 
 ```text
