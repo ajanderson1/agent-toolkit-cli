@@ -915,3 +915,40 @@ def test_unlisted_not_fired_for_targeted_doctor(git_sandbox, tmp_path, monkeypat
     from agent_toolkit_cli.skill_doctor import diagnose
     findings = diagnose(slugs=("demo",), scope="project", home=None, project=project)
     assert not [f for f in findings if f.finding_type == "unlisted"]
+
+
+# --- #412: doctor reuses legacy bare-named parent clone ---
+
+def test_doctor_reclone_reuses_legacy_bare_parent(tmp_path, monkeypatch):
+    from tests.test_cli.test_skill_owned_monorepo import (
+        _setup_parent, _add_owned_ref, _lock, _make_legacy_bare,
+    )
+    from agent_toolkit_cli import skill_doctor
+    from agent_toolkit_cli.skill_paths import (
+        canonical_skill_dir, parent_clone_path,
+    )
+
+    parent_url, _ = _setup_parent(tmp_path, monkeypatch)
+    _add_owned_ref(parent_url, "mkdocs")
+    entry = _lock()["skills"]["mkdocs"]
+    bare = _make_legacy_bare(entry)
+
+    # Break the canonical so the reclone fix-action fires.
+    canonical = canonical_skill_dir(
+        "mkdocs", scope="global", home=None, project=None,
+    )
+    if canonical.is_symlink() or canonical.exists():
+        canonical.unlink()
+
+    findings = skill_doctor.diagnose(
+        slugs=("mkdocs",), scope="global", home=None, project=None,
+    )
+    fix = next(f.fix_action for f in findings if f.fix_action)
+    fix.apply()
+
+    # It re-linked against the EXISTING bare clone, not a new suffixed clone.
+    owner, repo = entry["source"].split("/", 1)
+    suffixed = parent_clone_path(owner, repo, ref=entry["ref"], env=None)
+    assert bare.exists()
+    assert not suffixed.exists()  # no divergent re-clone
+    assert canonical.exists()

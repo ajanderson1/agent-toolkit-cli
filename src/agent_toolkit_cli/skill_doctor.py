@@ -367,7 +367,7 @@ def _make_monorepo_reclone_action(
     depth-agnostic: `skill_path` may be a multi-segment path.
     """
     from agent_toolkit_cli.skill_paths import (
-        parent_clone_path, project_parents_root,
+        project_parents_root, resolve_existing_parent_clone,
     )
 
     if entry.skill_path is None:
@@ -383,7 +383,11 @@ def _make_monorepo_reclone_action(
         )
     owner, repo = parts
     parents_root = None if scope == "global" else project_parents_root(project)
-    parent_dir = parent_clone_path(owner, repo, ref=entry.ref, root=parents_root)
+    # #412: reuse an existing legacy bare-named clone instead of re-cloning to
+    # a divergent suffixed path. Mirrors update/status/push/reset resolution.
+    parent_dir = resolve_existing_parent_clone(
+        owner, repo, ref=entry.ref, parent_url=parent_url, root=parents_root,
+    )
     skill_path = entry.skill_path
 
     def _apply() -> None:
