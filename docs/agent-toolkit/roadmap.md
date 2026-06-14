@@ -50,6 +50,27 @@ Once all seven asset types are lock-file-driven, the `AGENT_TOOLKIT_TUI_LEGACY=1
 
 `AGENT_TOOLKIT_TUI_LEGACY` is removed at that point. The current default-mode behaviour (skills only) is itself a transitional state.
 
+### Verb remap: `enable`/`disable` for projection { #verb-remap-enable-disable-for-projection }
+
+**Status: idea, not committed.** The lifecycle verbs split across [two axes](../glossary.md): `add`/`remove` change [library](../glossary.md#library) membership (destructive), while `install`/`uninstall` change [projection](../glossary.md#projection) into a harness/scope (non-destructive). The friction is that all four read as generic "put / take away" words, so nothing in the verb tells you which axis you're on — the glossary has to spell it out.
+
+Proposal: rename the Axis-2 pair from `install`/`uninstall` to **`enable`/`disable`**, keeping `add`/`remove` for Axis 1. This makes the two axes use *different verb families* — the legible pattern every clean two-axis tool follows (`systemctl enable`/`start`; VS Code `install`/`enable`; Claude Code `plugin install`/`enable`). It also matches the harness we live closest to: the Claude Code plugin flow is `marketplace add` → `plugin install` → `plugin enable`/`disable`, where `enable`/`disable` is exactly the per-context activation axis we call `install`/`uninstall`.
+
+Resulting surface, per asset type and scope (project / global):
+
+| Today | Proposed | Axis |
+|---|---|---|
+| `add` / `remove` | `add` / `remove` (unchanged) | 1 — library membership |
+| `install` / `uninstall` | `enable` / `disable` | 2 — projection into a harness/scope |
+
+Open questions before this is worth committing:
+
+- **Breaking-change cost.** `install`/`uninstall` are load-bearing across every asset-type CLI namespace, the TUI, tests, skills, docs, and lock-adjacent tooling. A remap is a major-version surface change; likely shipped with `install`/`uninstall` kept as hidden aliases for one or more releases.
+- **`enable` vs `disable` connotations.** `enable` could read as "toggle on in place" rather than "render into this scope"; verify it doesn't blur into a config-flag mental model. Alternatives considered: `apply`/`unapply` (chezmoi-style), `link`/`unlink` (Homebrew-style, but inaccurate for non-symlink mechanisms).
+- **Interop.** The skills lock format is byte-compatible with `vercel-labs/skills`; confirm the verb rename touches only our CLI surface, not the persisted lock shape, so interop is unaffected.
+
+If adopted, the glossary's two-axis callout and every asset-type page's verb table update in the same change.
+
 ### Walker + sidecar retirement — delivered in v2.3.0 (#160)
 
 The `walker.py` module, `*.toolkit.yaml` sidecar discovery, the `agent-frontmatter.v1alpha2.json` schema's sidecar branch, the `--toolkit-repo` flag, and the `link` / `unlink` / `check` / `fix` / `doctor` / `inventory` / `new` / `migrate-skills` / `diff` / `list` / `pi` legacy commands were deleted in #160. The frozen v1 surface lives at the `v1.0.0` tag for anyone still needing it.
