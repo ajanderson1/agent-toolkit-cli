@@ -21,7 +21,11 @@ from agent_toolkit_cli.agent_lock import (
     read_lock,
     write_lock,
 )
-from agent_toolkit_cli.agent_paths import library_agent_path, library_lock_path
+from agent_toolkit_cli.agent_paths import (
+    library_agent_path,
+    library_lock_path,
+    lock_file_path,
+)
 from agent_toolkit_cli.cli import main
 
 
@@ -192,3 +196,42 @@ def test_agent_update_non_git_canonical_reports_error(tmp_path, monkeypatch):
     r = CliRunner().invoke(main, ["agent", "update", "plain", "-g"])
     assert r.exit_code != 0
     assert "no .git" in r.output
+
+
+def test_agent_update_project_scope(tmp_path, monkeypatch, git_sandbox):
+    """`agent update <slug> -p` reads the PROJECT lock and writes the bumped SHA
+    back to it (#423 / AC3).
+
+    Agents use the shared-store model: the canonical lives in the global library
+    (update_cmd resolves `library_agent_path(slug)` regardless of scope) but the
+    lock is per-scope. So a project-scope update advances the shared canonical
+    and records the new SHA in the PROJECT lock, not the global one.
+    """
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("HOME", str(tmp_path / "fake-home"))
+    (tmp_path / "fake-home").mkdir(parents=True, exist_ok=True)
+
+    upstream = _make_agent_upstream(tmp_path, git_sandbox.env)
+    r = CliRunner().invoke(main, ["agent", "add", str(upstream), "--slug", "demo"])
+    assert r.exit_code == 0, r.output
+
+    # Seed a project lock from the global one so the demo entry exists at project scope.
+    project = tmp_path / "proj"
+    project.mkdir()
+    proj_lock_path = lock_file_path(scope="project", home=None, project=project)
+    write_lock(proj_lock_path, read_lock(library_lock_path()))
+
+    canonical = library_agent_path("demo")
+    _advance_remote(upstream, git_sandbox.env)
+    sha_before = _head(canonical)
+
+    monkeypatch.chdir(project)  # project scope resolves from cwd
+    r = CliRunner().invoke(main, ["agent", "update", "demo", "-p"])
+    assert r.exit_code == 0, r.output
+    assert "demo: updated" in r.output
+
+    sha_after = _head(canonical)
+    assert sha_before != sha_after, "project-scope update should advance the shared canonical"
+    proj_lock = read_lock(proj_lock_path)
+    assert proj_lock.skills["demo"].local_sha == sha_after, "project lock must record the bump"
