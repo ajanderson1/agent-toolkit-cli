@@ -4,6 +4,36 @@ The shared vocabulary of the [compatibility matrix](matrix.md), the
 per-harness pages, and the asset-type pages — grouped for skimming, highest-level
 terms first.
 
+!!! abstract "The two-axis verb model — read this first"
+
+    Every lifecycle verb in the toolkit moves an asset along **one of two
+    independent axes**. The single most common point of confusion is treating
+    all four verbs as interchangeable "put it there / take it away" words. They
+    are not — each verb belongs to exactly one axis, and the axes are
+    orthogonal.
+
+    | Axis | Question it answers | Add it | Take it away | Reversible? |
+    |---|---|---|---|---|
+    | **1 — Library membership** | Is this asset in my [library](#library) at all? | `add` | `remove` | **Destructive.** `remove` deletes the canonical clone + [lock](#lock-file) entry — a full undo of `add`. |
+    | **2 — Projection into a harness** | Is a library asset rendered into *this* harness/[scope](#scope)? | `install` | `uninstall` | **Non-destructive.** `uninstall` drops only the [projection](#projection); the library copy stays. Re-`install` rebuilds it. |
+
+    Read it as a sequence: **`add` once** to register a source in the library,
+    then **`install` per harness/scope** to project it where you want it.
+    `uninstall` retracts a projection but leaves the asset available to
+    re-install; `remove` is the only verb that truly forgets the asset.
+
+    Mnemonic: *`add`/`remove` change what you **have**; `install`/`uninstall`
+    change where it's **rendered**.* This split mirrors the Claude Code plugin
+    ecosystem (`marketplace add` → `plugin install`). A future
+    [roadmap](agent-toolkit/roadmap.md#verb-remap-enable-disable-for-projection)
+    item proposes renaming the Axis-2 pair to `enable`/`disable` so the word
+    itself tells you which axis you're on.
+
+    Supporting verbs: `update` (re-fetch the source, re-project),
+    `push` (send local canonical edits back upstream),
+    `status` / `doctor` (inspect, reconcile), `reset` (rebuild projections
+    from the lock).
+
 ## Core model
 
 **Harness** { #harness }
