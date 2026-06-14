@@ -371,3 +371,37 @@ def test_empty_lock_fresh_user_row_probes_global_shadow_cell(tmp_path: Path, mon
     assert rows and rows[0].slug == "AGENTS.md"
     gcell = rows[0].cells.get(("claude-code", "global"))
     assert gcell is not None and gcell.linked is True
+
+
+def test_project_scope_home_none_skips_global_probe(tmp_path: Path, monkeypatch):
+    """#388: callers that pass home=None don't care about the indicator — the
+    `home is not None` gate fires the negative way, so NO (harness, 'global')
+    cells appear. Mirrors test_agent_state.py and exercises BOTH build branches
+    (empty-lock fresh-user row and locked-entry row)."""
+    from agent_toolkit_cli import instructions_paths
+
+    project = tmp_path / "proj"
+    project.mkdir()
+    agent_toolkit_dir = tmp_path / ".agent-toolkit"
+    agent_toolkit_dir.mkdir(parents=True)
+    monkeypatch.setattr(
+        "agent_toolkit_cli.instructions_paths.library_root",
+        lambda: agent_toolkit_dir / "instructions",
+    )
+    proj_canonical = instructions_paths.project_canonical_agents_md(project)
+    proj_canonical.write_text("# project AGENTS\n")
+
+    # Empty-lock fresh-user branch (canonical exists, no project lock).
+    rows = build_instruction_rows(scope="project", home=None, project=project)
+    assert rows and rows[0].slug == "AGENTS.md"
+    assert all(scope != "global" for (_, scope) in rows[0].cells)
+
+    # Locked-entry branch (seed a project lock entry).
+    lock_file = instructions_paths.project_lock_path(project)
+    lock_file.write_text(
+        '{"version": 1, "instructions": {"AGENTS.md": '
+        '{"scope": "project", "source": "AGENTS.md", "harnesses": ["claude-code"]}}}\n'
+    )
+    rows = build_instruction_rows(scope="project", home=None, project=project)
+    assert rows
+    assert all(scope != "global" for (_, scope) in rows[0].cells)
