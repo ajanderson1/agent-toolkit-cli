@@ -47,7 +47,17 @@ In `skill_doctor.py`, replace the function definition (and the now-unused regexe
 from agent_toolkit_cli.skill_git import normalise_git_url as _normalise_git_url
 ```
 
-(Grep `skill_doctor.py` for `_normalise_git_url` / the regex names first; only delete a regex if no other doctor code uses it.)
+(Grep `skill_doctor.py` for `_normalise_git_url` / the regex names first; only delete a regex if no other doctor code uses it. Note `_normalise_git_url` is also used at `skill_doctor.py:765` for `lock_source_mismatch` — the re-export keeps it working.)
+
+> **Promote the function UNCHANGED** (decision 2026-06-14). The body lowercases
+> the whole URL, so `host/Foo/Bar` and `host/foo/bar` collide — a latent
+> wrong-repo risk on *case-sensitive self-hosted* Git hosts (GitLab self-managed,
+> Gitea, Bitbucket DC). It cannot misfire for github.com (case-insensitive) or
+> `file://` parents, which is all this machine uses. Do NOT change the lowercase
+> semantics here — that would also alter doctor's existing `lock_source_mismatch`
+> behaviour for a case we don't hit. **PR body must carry this caveat**: "Shared
+> `normalise_git_url` case-folds the whole URL; revisit if a case-sensitive
+> self-hosted parent is ever added."
 
 - [ ] **Step 4: Run tests to verify they pass**
 
@@ -142,6 +152,22 @@ def test_resolve_returns_suffixed_when_neither_exists(tmp_path):
         "o", "r", ref="main", parent_url="https://github.com/o/r", env=env,
     )
     assert got == suffixed
+
+
+def test_resolve_ref_none_collapses_to_bare(tmp_path):
+    """With ref=None the suffixed and bare paths are identical, so the probe
+    collapses to the single existing path (spec AC1 'ref is None collapse')."""
+    from agent_toolkit_cli.skill_paths import (
+        parent_clone_path, resolve_existing_parent_clone,
+    )
+    env = {"AGENT_TOOLKIT_SKILLS_ROOT": str(tmp_path / "skills")}
+    bare = parent_clone_path("o", "r", ref=None, env=env)
+    _init_repo_with_remote(bare, "https://github.com/o/r")
+    got = resolve_existing_parent_clone(
+        "o", "r", ref=None, parent_url="https://github.com/o/r", env=env,
+    )
+    assert got == bare
+    assert got == parent_clone_path("o", "r", ref=None, env=env)
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -194,6 +220,40 @@ def resolve_existing_parent_clone(
 
 `skill_paths.py` has no `__all__` (public symbols are plain module-level defs) and does NOT import `skill_git` at module level — keep the `from agent_toolkit_cli import skill_git` imports lazy inside these two functions (as written above) to avoid a circular import with the low-level git module. No facade-parity change is required: `test_skill_facade_parity.py` is a subset check (asserts no names are *lost*), so adding a new name is free; optionally add `"resolve_existing_parent_clone"` to `SKILL_PATHS_PUBLIC` for hygiene, but it is not load-bearing.
 
+**Slash-containing refs (e.g. `feat/x`) — handled safely, no extra code.** For a
+slash-ref, `parent_clone_path(repo, ref="feat/x")` is `<owner>/<repo>@feat/x`
+(the slash nests it below `<owner>/`), while the bare probe computes the flat
+`<owner>/<repo>`. These are different paths, so for a slash-ref the resolver's
+bare-fallback simply won't find the nested clone at the flat bare path and falls
+through to the suffixed path — identical to the fresh-clone case, never a wrong
+adoption (the remote-match guard would also reject any unrelated flat dir). The
+legacy bare/suffixed split is, by construction, a *flat-ref* phenomenon: a
+slash-ref clone is always created at its nested path and never had a flat bare
+form. Phase 2's `bare != suffixed` guard skips slash-refs for the same reason.
+Add a resolver test pinning this:
+
+```python
+def test_resolve_slash_ref_falls_through_to_suffixed(tmp_path):
+    from agent_toolkit_cli.skill_paths import (
+        parent_clone_path, resolve_existing_parent_clone,
+    )
+    env = {"AGENT_TOOLKIT_SKILLS_ROOT": str(tmp_path / "skills")}
+    # A flat bare <repo> exists with a matching remote, but ref has a slash —
+    # the nested suffixed path is what a slash-ref clone uses, so the flat bare
+    # must NOT be adopted.
+    bare = parent_clone_path("o", "r", ref=None, env=env)
+    _init_repo_with_remote(bare, "https://github.com/o/r")
+    suffixed = parent_clone_path("o", "r", ref="feat/x", env=env)
+    got = resolve_existing_parent_clone(
+        "o", "r", ref="feat/x", parent_url="https://github.com/o/r", env=env,
+    )
+    assert got == suffixed
+    assert got != bare
+```
+
+(Confirm with `bare.is_dir()` that the flat bare exists yet is not adopted — the
+slash-ref's real clone would live at the nested `r@feat/x`, not the flat `r`.)
+
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/test_cli/test_skill_paths.py -k resolve -v`
@@ -212,20 +272,46 @@ git commit -m "feat(skill): add resolve_existing_parent_clone probe-both resolve
 
 **Files:**
 - Modify: `src/agent_toolkit_cli/commands/skill/update_cmd.py:82-85`
-- Test: `tests/test_cli/test_skill_owned_monorepo.py` (new test; reuses `_setup_parent`/`_add_owned`)
+- Test: `tests/test_cli/test_skill_owned_monorepo.py` (new test; reuses `_setup_parent` + the new `_add_owned_ref`)
+
+> **Do NOT touch the create-path `parent_clone_path` calls.** A `grep
+> parent_clone_path` sweep will also surface the *add* create-sites
+> (`commands/skill/__init__.py:101` and `:354`) and `skill_install.py:414`.
+> These are create-time clone targets that MUST stay on `parent_clone_path` so a
+> fresh clone lands at the canonical `<repo>@<ref>` name (AC5). Only the five
+> read/locate sites in the spec's table convert to the resolver.
 
 - [ ] **Step 1: Write the failing test**
 
-Add to `tests/test_cli/test_skill_owned_monorepo.py`:
+Add to `tests/test_cli/test_skill_owned_monorepo.py`.
+
+> **CRITICAL fixture note (feasibility review):** the existing `_add_owned`
+> (`skill add file://{parent} --skill mkdocs --owned`) records **`ref=None`**
+> — `_add_monorepo` sets the lock ref to `parsed.ref`, which is `None` for a
+> bare `file://` URL. With `ref=None`, `parent_clone_path(..., ref=None)` ==
+> the bare path, so there is no suffixed clone to rename and the whole
+> legacy-bare reproduction collapses. To get a non-None ref, add via the
+> `file://{parent}/tree/<ref>/<subpath>` form, which the source parser
+> (`skill_source.py`) honours and which records `ref="main"`. Use this
+> ref-bearing helper for all #412 tests:
 
 ```python
+def _add_owned_ref(parent_url: str, skill: str = "mkdocs", ref: str = "main") -> None:
+    """Like _add_owned but records a non-None ref via the /tree/<ref>/ form,
+    so a suffixed <repo>@<ref> clone is materialised (#412 needs this)."""
+    src = f"{parent_url}/tree/{ref}/{skill}"
+    r = CliRunner().invoke(cli, ["skill", "add", src, "--owned"])
+    assert r.exit_code == 0, r.output
+
+
 def _make_legacy_bare(entry: dict) -> Path:
     """Rename the suffixed parent clone to the legacy bare `<repo>` name,
     reproducing the pre-ref-backfill on-disk layout (#412)."""
     from agent_toolkit_cli.skill_paths import parent_clone_path
+    ref = entry["ref"]
     owner, repo = entry["source"].split("/", 1)
-    suffixed = parent_clone_path(owner, repo, ref=entry.get("ref"), env=None)
-    assert suffixed.name.endswith(f"@{entry['ref']}"), suffixed
+    suffixed = parent_clone_path(owner, repo, ref=ref, env=None)
+    assert suffixed.name == f"{repo}@{ref}", suffixed
     bare = parent_clone_path(owner, repo, ref=None, env=None)
     suffixed.rename(bare)
     return bare
@@ -233,9 +319,9 @@ def _make_legacy_bare(entry: dict) -> Path:
 
 def test_update_finds_legacy_bare_named_parent(tmp_path, monkeypatch):
     parent_url, _ = _setup_parent(tmp_path, monkeypatch)
-    _add_owned(parent_url, "mkdocs")
+    _add_owned_ref(parent_url, "mkdocs")
     entry = _lock()["skills"]["mkdocs"]
-    assert entry.get("ref"), "fixture add should record a ref"
+    assert entry.get("ref") == "main", entry  # /tree/main/ form records a ref
     bare = _make_legacy_bare(entry)
     assert bare.exists()
 
@@ -243,6 +329,11 @@ def test_update_finds_legacy_bare_named_parent(tmp_path, monkeypatch):
     assert r.exit_code == 0, r.output
     assert "parent clone missing" not in r.output
 ```
+
+(Verify the `/tree/<ref>/<subpath>` add records `ref="main"` and a suffixed
+clone before writing the dependent tests — a quick `_lock()` print confirms it.
+If the `--owned` flag rejects the `/tree/` form, drop `--owned`: the tests below
+don't depend on ownership, only on a materialised suffixed clone.)
 
 - [ ] **Step 2: Run test to verify it fails**
 
@@ -294,7 +385,7 @@ Add to `tests/test_cli/test_skill_owned_monorepo.py`:
 ```python
 def test_status_finds_legacy_bare_named_parent(tmp_path, monkeypatch):
     parent_url, _ = _setup_parent(tmp_path, monkeypatch)
-    _add_owned(parent_url, "mkdocs")
+    _add_owned_ref(parent_url, "mkdocs")
     entry = _lock()["skills"]["mkdocs"]
     _make_legacy_bare(entry)
     r = CliRunner().invoke(cli, ["skill", "status", "mkdocs", "-g"])
@@ -304,7 +395,7 @@ def test_status_finds_legacy_bare_named_parent(tmp_path, monkeypatch):
 
 def test_reset_finds_legacy_bare_named_parent(tmp_path, monkeypatch):
     parent_url, _ = _setup_parent(tmp_path, monkeypatch)
-    _add_owned(parent_url, "mkdocs")
+    _add_owned_ref(parent_url, "mkdocs")
     entry = _lock()["skills"]["mkdocs"]
     _make_legacy_bare(entry)
     r = CliRunner().invoke(cli, ["skill", "reset", "mkdocs", "-g"])
@@ -314,7 +405,7 @@ def test_reset_finds_legacy_bare_named_parent(tmp_path, monkeypatch):
 
 def test_push_finds_legacy_bare_named_parent(tmp_path, monkeypatch):
     parent_url, _ = _setup_parent(tmp_path, monkeypatch)
-    _add_owned(parent_url, "mkdocs")
+    _add_owned_ref(parent_url, "mkdocs")
     entry = _lock()["skills"]["mkdocs"]
     _make_legacy_bare(entry)
     r = CliRunner().invoke(cli, ["skill", "push", "--direct", "mkdocs", "-g"])
@@ -362,7 +453,7 @@ Add to `tests/test_cli/test_skill_doctor.py` (model the parent setup on the file
 ```python
 def test_doctor_reclone_reuses_legacy_bare_parent(tmp_path, monkeypatch):
     from tests.test_cli.test_skill_owned_monorepo import (
-        _setup_parent, _add_owned, _lock, _make_legacy_bare,
+        _setup_parent, _add_owned_ref, _lock, _make_legacy_bare,
     )
     from agent_toolkit_cli import skill_doctor
     from agent_toolkit_cli.skill_paths import (
@@ -370,7 +461,7 @@ def test_doctor_reclone_reuses_legacy_bare_parent(tmp_path, monkeypatch):
     )
 
     parent_url, _ = _setup_parent(tmp_path, monkeypatch)
-    _add_owned(parent_url, "mkdocs")
+    _add_owned_ref(parent_url, "mkdocs")
     entry = _lock()["skills"]["mkdocs"]
     bare = _make_legacy_bare(entry)
 
@@ -417,7 +508,11 @@ with:
     )
 ```
 
-(`parent_url` is already bound earlier in the function. The `_apply` inner closure clones to `parent_dir` only when it doesn't exist, so an existing bare dir is reused.)
+(`parent_url` is already bound earlier in the function. The doctor site passes
+`root=parents_root` and **no** `env` — mirroring its current `parent_clone_path`
+call exactly; the resolver defaults `env=None`, so this is correct. Do not add a
+spurious `env=` here. The `_apply` inner closure clones to `parent_dir` only when
+it doesn't exist, so an existing bare dir is reused.)
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -446,13 +541,13 @@ Lock in that a *fresh* add still materialises at `<repo>@<ref>`, so the resolver
 def test_fresh_add_materialises_suffixed_clone(tmp_path, monkeypatch):
     from agent_toolkit_cli.skill_paths import parent_clone_path
     parent_url, _ = _setup_parent(tmp_path, monkeypatch)
-    _add_owned(parent_url, "mkdocs")
+    _add_owned_ref(parent_url, "mkdocs")
     entry = _lock()["skills"]["mkdocs"]
-    assert entry.get("ref")
+    assert entry.get("ref") == "main"
     owner, repo = entry["source"].split("/", 1)
     suffixed = parent_clone_path(owner, repo, ref=entry["ref"], env=None)
     bare = parent_clone_path(owner, repo, ref=None, env=None)
-    assert suffixed.exists() and suffixed.name.endswith(f"@{entry['ref']}")
+    assert suffixed.exists() and suffixed.name == f"{repo}@{entry['ref']}"
     assert not bare.exists()  # fresh add never used the bare name
 ```
 
@@ -483,11 +578,11 @@ A non-destructive cleanup: when a bare-named parent exists (remote matches) and 
 ```python
 def test_doctor_flags_legacy_bare_parent(tmp_path, monkeypatch):
     from tests.test_cli.test_skill_owned_monorepo import (
-        _setup_parent, _add_owned, _lock, _make_legacy_bare,
+        _setup_parent, _add_owned_ref, _lock, _make_legacy_bare,
     )
     from agent_toolkit_cli import skill_doctor
     parent_url, _ = _setup_parent(tmp_path, monkeypatch)
-    _add_owned(parent_url, "mkdocs")
+    _add_owned_ref(parent_url, "mkdocs")
     entry = _lock()["skills"]["mkdocs"]
     _make_legacy_bare(entry)
     findings = skill_doctor.diagnose(
@@ -499,12 +594,12 @@ def test_doctor_flags_legacy_bare_parent(tmp_path, monkeypatch):
 
 def test_doctor_legacy_bare_fix_creates_alias_symlink(tmp_path, monkeypatch):
     from tests.test_cli.test_skill_owned_monorepo import (
-        _setup_parent, _add_owned, _lock, _make_legacy_bare,
+        _setup_parent, _add_owned_ref, _lock, _make_legacy_bare,
     )
     from agent_toolkit_cli import skill_doctor
     from agent_toolkit_cli.skill_paths import parent_clone_path
     parent_url, _ = _setup_parent(tmp_path, monkeypatch)
-    _add_owned(parent_url, "mkdocs")
+    _add_owned_ref(parent_url, "mkdocs")
     entry = _lock()["skills"]["mkdocs"]
     bare = _make_legacy_bare(entry)
     owner, repo = entry["source"].split("/", 1)
@@ -520,15 +615,42 @@ def test_doctor_legacy_bare_fix_creates_alias_symlink(tmp_path, monkeypatch):
     fix.apply()
     assert suffixed.is_symlink()
     assert suffixed.resolve() == bare.resolve()
+    # idempotent: re-applying with the alias present is a no-op, no raise.
+    fix.apply()
 
 
 def test_doctor_no_legacy_finding_when_suffixed_present(tmp_path, monkeypatch):
     from tests.test_cli.test_skill_owned_monorepo import (
-        _setup_parent, _add_owned, _lock,
+        _setup_parent, _add_owned_ref, _lock,
     )
     from agent_toolkit_cli import skill_doctor
     parent_url, _ = _setup_parent(tmp_path, monkeypatch)
-    _add_owned(parent_url, "mkdocs")  # leaves the suffixed clone in place
+    _add_owned_ref(parent_url, "mkdocs")  # leaves the suffixed clone in place
+    findings = skill_doctor.diagnose(
+        slugs=("mkdocs",), scope="global", home=None, project=None,
+    )
+    assert not [f for f in findings if f.finding_type == "legacy_bare_parent"]
+
+
+def test_doctor_no_legacy_finding_when_remote_mismatch(tmp_path, monkeypatch):
+    """A bare dir whose origin does NOT match parentUrl must not be flagged —
+    exercises the _remote_matches GitError/mismatch guard."""
+    import subprocess
+    from tests.test_cli.test_skill_owned_monorepo import (
+        _setup_parent, _add_owned_ref, _lock, _make_legacy_bare,
+    )
+    from tests.conftest import scrub_git_env
+    from agent_toolkit_cli import skill_doctor
+    parent_url, _ = _setup_parent(tmp_path, monkeypatch)
+    _add_owned_ref(parent_url, "mkdocs")
+    entry = _lock()["skills"]["mkdocs"]
+    bare = _make_legacy_bare(entry)
+    # Repoint origin to an unrelated URL so the remote-match guard rejects it.
+    subprocess.run(
+        ["git", "-C", str(bare), "remote", "set-url", "origin",
+         "https://github.com/someone/else"],
+        check=True, env=scrub_git_env(),
+    )
     findings = skill_doctor.diagnose(
         slugs=("mkdocs",), scope="global", home=None, project=None,
     )
@@ -538,7 +660,7 @@ def test_doctor_no_legacy_finding_when_suffixed_present(tmp_path, monkeypatch):
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_cli/test_skill_doctor.py -k legacy_bare -v`
-Expected: the two positive tests FAIL (no `legacy_bare_parent` finding yet); the negative test PASSES.
+Expected: the two positive tests FAIL (no `legacy_bare_parent` finding yet); the two negative tests PASS.
 
 - [ ] **Step 3: Add the finding type + emission + fix-action**
 
@@ -546,11 +668,17 @@ In `skill_doctor.py`:
 
 1. Add `"legacy_bare_parent"` to the `FindingType` `Literal` union (line ~31).
 
-2. In `_check_slug`, after the existing per-slug checks, for a monorepo entry add:
+2. In `_check_slug`, after the existing per-slug checks, for a monorepo entry add.
+   **Reuse `_remote_matches`** from Task 2 rather than inlining the URL compare —
+   it carries the `try/except GitError: return False` guard, so a corrupt bare
+   clone yields no-finding instead of crashing the doctor sweep (scope-guardian
+   + coherence flagged the inlined version as missing this guard):
 
 ```python
     if entry.parent_url is not None and entry.ref is not None:
-        from agent_toolkit_cli.skill_paths import parent_clone_path
+        from agent_toolkit_cli.skill_paths import (
+            parent_clone_path, project_parents_root, _remote_matches,
+        )
         from agent_toolkit_cli import skill_git
         owner_repo = entry.source.split("/", 1)
         if len(owner_repo) == 2:
@@ -563,11 +691,11 @@ In `skill_doctor.py`:
             )
             bare = parent_clone_path(owner, repo, ref=None, root=parents_root)
             if (
-                not suffixed.exists()
+                bare != suffixed              # slash-ref / ref=None: no flat bare
+                and not suffixed.exists()
                 and skill_git.is_git_repo(bare)
-                and skill_git.normalise_git_url(
-                    skill_git.remote_url(bare, env=None)
-                ) == skill_git.normalise_git_url(entry.parent_url)
+                and _remote_matches(bare, entry.parent_url, None)
+                and _bare_ref_matches(bare, entry.ref)   # multi-ref safety (see below)
             ):
                 findings.append(Finding(
                     finding_type="legacy_bare_parent", slug=slug, scope=scope,
@@ -580,9 +708,31 @@ In `skill_doctor.py`:
                 ))
 ```
 
-3. Add the fix-action factory near the other `_make_*_action` helpers:
+The `bare != suffixed` guard makes the block a no-op for `ref=None` and for
+slash-containing refs (where `<repo>@feat/x` nests below `<owner>/` and has no
+flat-`<repo>` sibling) — see Task 2's slash-ref note. `_bare_ref_matches` is the
+multi-ref safety guard added below.
+
+3. Add the multi-ref safety guard + the fix-action factory near the other
+   `_make_*_action` helpers:
 
 ```python
+def _bare_ref_matches(bare: Path, ref: str) -> bool:
+    """True if the bare clone's current branch is `ref`.
+
+    Multi-ref safety (#412 adversarial review): when several skills share one
+    monorepo at DIFFERENT refs, a single bare clone is checked out at exactly
+    one ref. Aliasing `<repo>@<other-ref> -> <repo>` would lie about that other
+    skill's ref and a later `update` could flip the shared tree. Only alias when
+    the bare clone is actually on `ref`, so the alias never misrepresents it.
+    """
+    from agent_toolkit_cli import skill_git
+    try:
+        return skill_git.current_branch(bare, env=None) == ref
+    except skill_git.GitError:
+        return False
+
+
 def _make_legacy_bare_alias_action(suffixed: Path, bare: Path) -> FixAction:
     def _apply() -> None:
         if suffixed.exists() or suffixed.is_symlink():
@@ -596,7 +746,13 @@ def _make_legacy_bare_alias_action(suffixed: Path, bare: Path) -> FixAction:
     )
 ```
 
-Note: `_check_slug`'s signature has `project` available (it's a parameter). If `project_parents_root` isn't imported in `skill_doctor.py`, it already is (used by `_make_monorepo_reclone_action`) — reuse that import.
+(`skill_git.current_branch(repo, *, env)` exists — `skill_git.py:289`.)
+
+Note: `_check_slug`'s signature has `project` and `scope` available (parameters).
+`project_parents_root` is NOT yet imported in `_check_slug`'s namespace
+(`_make_monorepo_reclone_action`'s import is function-local to that helper), so
+add `project_parents_root` to the `from agent_toolkit_cli.skill_paths import ...`
+line in the new block.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
@@ -641,17 +797,21 @@ git add -A && git commit -m "chore(skill): suite + lint green for parent-clone r
 ## Self-Review
 
 **Spec coverage:**
-- AC1 (resolver prefers suffixed / falls back / default) → Task 2 (4 tests). ✓
+- AC1 (resolver prefers suffixed / falls back / default / `ref=None` collapse / slash-ref) → Task 2 (6 tests, incl. `test_resolve_ref_none_collapses_to_bare`, `test_resolve_slash_ref_falls_through_to_suffixed`). ✓
 - AC2 (remote-mismatch rejects bare) → Task 2 `test_resolve_rejects_bare_on_remote_mismatch`. ✓
 - AC3 (`update` succeeds on legacy bare) → Task 3. ✓
 - AC4 (status/push/reset) → Task 4. ✓
 - AC5 (fresh clones stay suffixed) → Task 6. ✓
-- AC6 (`_normalise_git_url` promoted + shared) → Task 1. ✓
-- AC7 (doctor `legacy_bare_parent` + alias + idempotent + mismatch-no-finding) → Task 7 (3 tests; idempotency covered by the `suffixed.exists()` early-return + the negative test). ✓
+- AC6 (`normalise_git_url` promoted + shared, semantics unchanged) → Task 1. ✓
+- AC7 (doctor `legacy_bare_parent` + alias + idempotent + mismatch-no-finding + multi-ref guard) → Task 7 (4 tests: flag, alias-creates+idempotent re-apply, suffixed-present-no-finding, remote-mismatch-no-finding; `_bare_ref_matches` guards the multi-ref case). ✓
 - AC8 (suite + lint/mypy net-0) → Task 8. ✓
 
 **Placeholder scan:** No TBD/TODO; every code step shows code; every test shows assertions. ✓
 
-**Type consistency:** `resolve_existing_parent_clone(owner, repo, *, ref, parent_url, env=None, root=None)` used identically in Tasks 2–5. `_make_legacy_bare(entry)` and `_make_legacy_bare_alias_action(suffixed, bare)` named consistently. `normalise_git_url` (public) used in Tasks 1, 2, 7. ✓
+**Type consistency:** `resolve_existing_parent_clone(owner, repo, *, ref, parent_url, env=None, root=None)` used identically in Tasks 2–5. `_remote_matches(repo, parent_url, env)` defined in Task 2 and reused (not re-inlined) in Task 7. `_make_legacy_bare(entry)`, `_add_owned_ref(parent_url, skill, ref)`, `_bare_ref_matches(bare, ref)`, and `_make_legacy_bare_alias_action(suffixed, bare)` named consistently. `normalise_git_url` (public) used in Tasks 1, 2 (via `_remote_matches`), 7 (via `_remote_matches`). ✓
+
+**Critical-review fixes folded in (2026-06-14):** fixture `ref=None` blocker → `_add_owned_ref` via `/tree/<ref>/`; Task 7 inline remote-match missing `GitError` guard → reuse `_remote_matches`; slash-ref symmetry → skip+document+test; Phase 2 multi-ref lie → `_bare_ref_matches` guard; normaliser case-fold → leave-as-is + PR-body caveat; AC1 `ref=None` + AC7 mismatch now tested.
 
 **Note for the executor:** Tasks 3–7 each swap a call site; before each commit, run `git diff --cached --name-only` to confirm only the intended files are staged (this repo's shared-main checkout has been a source of cross-session leakage — see project memory). Doctor's `_check_slug` adds the new check at the END of the per-slug block so it doesn't reorder existing findings.
+
+**Suggested follow-up (do NOT file as part of this issue):** the adversarial review found `~/.agent-toolkit/skills/_parents/ajanderson1/skills-workflow` (bare) and `skills-workflow@main` exist as TWO independent clones (not an alias) — the canonical symlink points into `@main`, leaving the bare dir as orphaned dead disk that Phase 2 never cleans (it only fires when suffixed is *absent*). A future doctor `orphan_bare_parent` finding could detect a bare dir whose suffixed sibling is already a real clone and offer to remove it. Out of scope for #412.

@@ -138,15 +138,24 @@ scope for why their read paths can't diverge.)
 ### Phase 2 — doctor alias-symlink cleanup (optional tidiness)
 
 A new `FindingType` `legacy_bare_parent`. During the doctor sweep, for each
-monorepo lock entry whose `ref is not None`, if the **bare** `<repo>` dir is a
-git repo whose remote matches `parent_url` AND the **suffixed** `<repo>@<ref>`
-path does not yet exist, doctor emits a `legacy_bare_parent` finding. Its
-fix-action creates a `<repo>@<ref> → <repo>` **alias symlink** (relative, in the
-same `<owner>/` dir), mirroring the manual 2026-06-14 workaround:
+monorepo lock entry whose `ref is not None`, doctor emits a `legacy_bare_parent`
+finding when ALL hold: the **bare** `<repo>` path differs from the suffixed path
+(`bare != suffixed` — excludes `ref=None` and slash-containing refs, which have
+no flat bare form); the **suffixed** `<repo>@<ref>` path does not yet exist; the
+bare dir is a git repo; its remote matches `parent_url`; **and** the bare clone
+is currently checked out at `ref` (the multi-ref safety guard). Its fix-action
+creates a `<repo>@<ref> → <repo>` **alias symlink** (relative, in the same
+`<owner>/` dir), mirroring the manual 2026-06-14 workaround:
 
 - Non-destructive: the bare dir stays the real git repo; nothing re-clones.
 - Reversible: `rm` the symlink.
-- Idempotent: if the suffixed path already exists (alias or real), no finding.
+- Idempotent: if the suffixed path already exists (alias or real), no finding;
+  re-applying the fix with the alias present is a no-op.
+- **Multi-ref safe:** when several skills share one monorepo at different refs,
+  a single bare clone is checked out at ONE ref. The `_bare_ref_matches` guard
+  emits the alias only when the bare clone is on `entry.ref`, so an alias never
+  misrepresents a sibling skill's ref (a later `update` could otherwise flip the
+  shared tree under a lying alias).
 - Low priority: ordered after the existing functional findings.
 
 On a machine where the 15 manual aliases already exist, doctor reports nothing
@@ -158,7 +167,11 @@ only normalises the on-disk layout for tidiness.
 1. `resolve_existing_parent_clone` returns the **suffixed** path when it exists;
    the **bare** path when only the bare dir exists *and* its remote matches
    `parent_url`; and the **suffixed** path (as the fresh-clone target) when
-   neither exists. RED-proven against the current single-path behaviour.
+   neither exists. With `ref=None` the suffixed and bare paths coincide so the
+   probe collapses to the single path. For a **slash-containing ref** the flat
+   bare is a different path from the nested `<repo>@<ref>`, so the resolver falls
+   through to the suffixed path (never a wrong adoption). RED-proven against the
+   current single-path behaviour.
 2. The remote-match guard rejects a bare dir whose `origin` does **not** match
    `parent_url` (returns the suffixed path instead) — proven with a colliding
    unrelated repo at the bare path.
@@ -168,27 +181,34 @@ only normalises the on-disk layout for tidiness.
    identically (no "missing" / no divergent path).
 5. Fresh clones still materialise at `<repo>@<ref>` — `skill_install` create
    path is unchanged; a new monorepo skill add lands in the suffixed scheme.
-6. `_normalise_git_url` is promoted to a shared module and re-exported so
-   doctor's existing callers are unbroken; resolver and doctor compare URLs via
-   the same function (no second normaliser).
+6. `normalise_git_url` is promoted to `skill_git` and re-exported from
+   `skill_doctor` (semantics **unchanged**) so doctor's existing callers are
+   unbroken; resolver and doctor compare URLs via the same function. (Known
+   latent caveat — whole-URL case-fold collides paths on case-sensitive
+   self-hosted hosts; not fixed, carried in the PR body. github.com/`file://`
+   usage is unaffected.)
 7. (Phase 2) doctor emits `legacy_bare_parent` for a bare-named parent with a
-   matching remote and no suffixed path; its fix-action creates a
-   `<repo>@<ref> → <repo>` alias symlink; idempotent when the alias/suffixed
-   path already exists; no finding when remote does not match.
+   matching remote, no suffixed path, and the bare clone checked out at `ref`;
+   its fix-action creates a `<repo>@<ref> → <repo>` alias symlink; idempotent
+   when the alias/suffixed path already exists (re-apply is a no-op); no finding
+   when the remote does not match. The `_bare_ref_matches` guard prevents an
+   alias from misrepresenting a sibling skill's ref in a multi-ref monorepo.
 8. Full suite green (the 2 known whitelisted HOME-isolation env fails excepted);
-   ruff net-0-new, mypy net-0-new.
+   ruff net-0-new (base 17), mypy net-0-new (base 53).
 
 ## Test surface
 
 - `tests/test_cli/test_skill_paths.py` — `resolve_existing_parent_clone`: suffixed-wins,
   bare-fallback-on-match, bare-rejected-on-mismatch, neither-exists-returns-suffixed,
-  `ref is None` collapse. Hermetic temp `_parents/` git repos (init bare dir, set
-  `origin` remote to match / mismatch `parent_url`).
+  `ref=None` collapse, slash-ref falls-through-to-suffixed. Hermetic temp `_parents/`
+  git repos (init bare dir, set `origin` remote to match / mismatch `parent_url`).
 - `tests/test_cli/` update/status/push/reset — legacy-bare repro resolves and the
-  command succeeds (extend existing monorepo command tests; `test_skill_owned_monorepo.py`
-  has the parent-clone fixtures to model from).
+  command succeeds. The repro needs a **non-None ref**: the existing `_add_owned`
+  records `ref=None` (so suffixed == bare and there is nothing to rename), so the
+  tests use a ref-bearing add (`file://{parent}/tree/main/<skill>`) that records
+  `ref="main"`, then rename the suffixed clone to the bare name.
 - doctor test — `legacy_bare_parent` finding emitted + alias-symlink fix applied +
-  idempotency + remote-mismatch no-finding.
+  idempotent re-apply + suffixed-present no-finding + remote-mismatch no-finding.
 - A focused test asserting `skill_install` create path still targets the suffixed
   name (guards AC5 against regression).
 
@@ -212,3 +232,45 @@ only normalises the on-disk layout for tidiness.
   `-g`/`-p` flag is given) — separate open enhancement, not this bug.
 - Removing the manual alias symlinks already on AJ's machine — they are
   forward-compatible with the resolver and Phase 2 (idempotent).
+- **Orphaned bare duplicate cleanup.** The adversarial review found
+  `skills-workflow` (bare) and `skills-workflow@main` exist as TWO independent
+  clones on this machine — the bare one is orphaned dead disk that Phase 2 never
+  cleans (it only fires when the suffixed path is *absent*). A future doctor
+  `orphan_bare_parent` finding could remove a bare dir whose suffixed sibling is
+  already a real clone. Suggested follow-up, not part of #412.
+
+## Critical review (ce-doc-review, 2026-06-14)
+
+5 personas (coherence, feasibility, adversarial, security-lens, scope-guardian)
+over spec + plan. All actionable findings resolved or waived.
+
+- ✓ **Fixture records `ref=None`** (feasibility, conf 100 — BLOCKER). `_add_owned`
+  records no ref, so suffixed == bare and the legacy-bare repro is impossible.
+  Resolved: tests use a ref-bearing `_add_owned_ref` via `/tree/main/<skill>`.
+- ✓ **Slash-containing refs break flat bare/suffixed symmetry** (adversarial,
+  conf 75 — live `rws` skill). Resolved per AJ: skip + document + test — slash-refs
+  never have a flat bare form, resolver falls through to suffixed, Phase 2 guards
+  `bare != suffixed`; `test_resolve_slash_ref_falls_through_to_suffixed` pins it.
+- ✓ **Phase 2 alias lies under multi-ref monorepo** (adversarial, conf 75).
+  Resolved per AJ: keep the `_bare_ref_matches` guard — alias only when the bare
+  clone is on `entry.ref`.
+- ✓ **Task 7 inlined remote-match omits `GitError` guard** (scope-guardian conf 75,
+  coherence conf 75). Resolved: `_check_slug` reuses `_remote_matches` (which
+  carries `try/except GitError: return False`) instead of re-inlining.
+- ⊘ **`normalise_git_url` whole-URL case-fold collides paths** (security, conf 75).
+  Waived per AJ: leave semantics unchanged (changing it would alter doctor's
+  existing `lock_source_mismatch`); only bites case-sensitive self-hosted hosts,
+  which AJ doesn't use. PR body carries the caveat.
+- ✓ **Task 5 `env` omission / Task 3 `env=None` inconsistency** (coherence, conf
+  100). Resolved: each site mirrors the args it currently passes; doctor site is
+  `root`-only (correct), update/status pass `env=None`; noted explicitly.
+- ✓ **AC1 `ref=None` collapse untested** (scope-guardian, conf 50). Resolved:
+  `test_resolve_ref_none_collapses_to_bare` added.
+- ✓ **Grep sweep may wrongly convert create-path add sites** (adversarial, conf 75
+  FYI). Resolved: Task 3 carries an explicit "do NOT touch `__init__.py:101/:354`
+  or `skill_install.py:414`" note.
+- ⊘ **Orphaned `skills-workflow` bare duplicate** (adversarial, FYI). Waived to a
+  suggested follow-up (see Out of scope).
+- (FYI, no action) Cache-collapse and no-origin attacks were **refuted** by the
+  reviewer against live code: the resolver is per-ref keyed and every clone path
+  sets `origin`.
