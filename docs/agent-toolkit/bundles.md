@@ -72,10 +72,9 @@ Manifests are JSON files.  The conventional extension is `.bundle.json` (any
 ### `mcp` and `instructions` member types
 
 `mcp` is a valid `asset_type` value in the schema (reserved for forward
-compatibility), but the installer hard-fails loudly on any `mcp` member — the MCP
-asset kind is not built yet (tracked in [#329](https://github.com/ajanderson1/agent-toolkit-cli/issues/329)).
-The failure happens in the resolve pass, before any install, so there is nothing to
-roll back.
+compatibility), but the installer hard-fails loudly on any `mcp` member — `mcp`
+is a reserved member type not yet wired into the bundle installer. The failure
+happens in the resolve pass, before any install, so there is nothing to roll back.
 
 `instructions` is not a valid bundle member type.  Unlike skills and agents, an
 `instructions` asset has no shareable git source — it is a per-project pointer
@@ -190,5 +189,4 @@ spec:
 
 - [`cli.md`](cli.md) — full CLI reference for `skill`, `agent`, `instructions`,
   and `pi-extension`.
-- [`schema.md`](schema.md) — asset frontmatter schema.
 - [`skill-lock.md`](skill-lock.md) — skill lock-file format.

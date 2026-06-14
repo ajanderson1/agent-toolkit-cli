@@ -4,7 +4,7 @@
 
 The `skill` subgroup manages skills using a **per-skill upstream git repo + lock file** model, mirroring the on-disk layout and lock-file schema of [`vercel-labs/skills`](https://github.com/vercel-labs/skills). Lock files written by this CLI are readable by `npx skills`, and skills installed by either tool live in the same canonical directory.
 
-Unlike the legacy walker-driven path used for the other six asset types (agent, command, mcp, hook, plugin, pi-extension), the skill path keeps no metadata in the monorepo. Each skill is a standalone git repository; the lock file is the SSOT for installation state.
+The skill path keeps no metadata in the monorepo: each skill is a standalone git repository and the lock file is the SSOT for installation state. The other first-class asset types — agent, mcp, pi-extension, instructions — each have their own built install machinery and lock file (`agents-lock.json`, `mcps-lock.json`, etc.); see the [CLI reference](cli.md).
 
 The defining behaviour: **`update` is a merge-aware operation.** Local edits to a skill (the "self-improvement" case) survive a pull from upstream when there is no overlap, and surface as real `git` merge conflicts when there is.
 
@@ -13,26 +13,35 @@ The defining behaviour: **`update` is a merge-aware operation.** Local edits to 
 ### Global scope (`-g` / `--global`)
 
 ```
-~/.agents/skills/<slug>/             ← canonical: a real `git clone` of upstream
+~/.agent-toolkit/skills/<slug>/      ← canonical: a real `git clone` of upstream
   .git/
   SKILL.md
   ...
-~/.agents/.skill-lock.json           ← global lock
+~/.agent-toolkit/skills-lock.json    ← global lock
 
-~/.claude/skills/<slug>              → symlink → ~/.agents/skills/<slug>
+~/.claude/skills/<slug>              → symlink → ~/.agent-toolkit/skills/<slug>
 ~/.codex/skills/<slug>               → symlink
 ~/.config/opencode/skills/<slug>     → symlink
 ~/.gemini/skills/<slug>              → symlink
 ~/.pi/skills/<slug>                  → symlink
 ```
 
+The library root is `~/.agent-toolkit/skills/` by default, overridable via
+`$AGENT_TOOLKIT_SKILLS_ROOT`; the global lock sits one level up from the library
+root at `<library_root>.parent/skills-lock.json` (`skill_paths.py:6,64-69`,
+`_paths_core.py:103-115`).
+
 ### Project scope (`-p` / `--project`, default)
 
-```
-<project>/.agents/skills/<slug>/     ← canonical clone
-<project>/skills-lock.json           ← project lock (commit this to git)
+The project canonical clone lives **outside** the project tree, in a per-project
+store under `~/.agent-toolkit/` (`project_store_root` →
+`<library_root>.parent/projects/<id>/skills/<slug>/`, `skill_paths.py:87-93,136-145`),
+so removing a skill never touches project files. Only the project lock and the
+harness symlinks live inside the project:
 
-<project>/.claude/skills/<slug>      → symlink → .agents/skills/<slug>
+```
+<project>/skills-lock.json           ← project lock (commit this to git)
+<project>/.claude/skills/<slug>      → symlink → the project canonical clone
 ...
 ```
 
@@ -40,7 +49,7 @@ The per-harness directories are **projections** — editing the canonical update
 
 ## Command reference
 
-All `skill` verbs accept `-g` (global) or `-p` (project, default), and `--harness <name>` (repeatable; defaults to all supported).
+Most scope-aware `skill` verbs (`list`, `status`, `update`, `push`, `remove`) accept `-g` (global) or `-p` (project); global is the default. `skill add` clones into the library only and takes no scope. `skill install`/`uninstall` select target agents with `--agents <names>` (a comma-separated list, the `standard` token, or `all`), not `--harness`.
 
 | Command | Purpose |
 |---|---|
@@ -71,7 +80,7 @@ agent-toolkit-cli skill add ajanderson1/journal -g --harness claude
 agent-toolkit-cli skill list -g
 
 # Edit in place (the "self-improvement" use case)
-$EDITOR ~/.agents/skills/journal/SKILL.md
+$EDITOR ~/.agent-toolkit/skills/journal/SKILL.md
 agent-toolkit-cli skill status -g       # → journal  dirty
 agent-toolkit-cli skill push journal -g # commits + pushes upstream
 agent-toolkit-cli skill status -g       # → journal  clean
@@ -96,7 +105,7 @@ Conflict resolution is whatever your usual git tooling supports (`git mergetool`
 
 ## Lock-file format
 
-The lock file is JSON, schema-compatible with `vercel-labs/skills`'s `skills-lock.json`. Project lock is at `<project>/skills-lock.json`; global lock is at `~/.agents/.skill-lock.json`.
+The lock file is JSON, schema-compatible with `vercel-labs/skills`'s `skills-lock.json`. Project lock is at `<project>/skills-lock.json`; global lock is at `~/.agent-toolkit/skills-lock.json`.
 
 ```json
 {
@@ -160,12 +169,12 @@ After re-adding, the canonical at `~/.agent-toolkit/skills/<slug>/` is a symlink
 
 A lock file written by `agent-toolkit-cli skill add` is parseable by `npx skills@latest ls`. We have a smoke test that confirms this (`tests/test_cli/test_skill_interop.py`); it runs whenever `npx` is available on `$PATH`.
 
-The reverse also holds: a skill installed via `npx skills add owner/repo` lands in `~/.agents/skills/<slug>/` and `~/.agents/.skill-lock.json`, where our `skill list` / `skill status` will pick it up.
+The reverse also holds: a skill installed via `npx skills add owner/repo` lands in `~/.agent-toolkit/skills/<slug>/` and `~/.agent-toolkit/skills-lock.json`, where our `skill list` / `skill status` will pick it up.
 
 ## What this design intentionally does **not** do
 
 - **Auto-push** of self-improvements. There is no session-end hook that pushes for you. Run `skill push` manually (or wire it into your own workflow). A follow-on design will revisit auto-push once the manual flow is proven.
-- **The other six asset types.** Agent, command, mcp, hook, plugin, and pi-extension were managed by the pre-v2 CLI commands removed in #160; the frozen surface lives at the `v1.0.0` tag. v2-native replacements (if any) land per-command — see the [#160 tracker issue](https://github.com/ajanderson1/agent-toolkit-cli/issues/163) for status.
+- **Other asset types in this lock.** This page covers skills only. Agent, mcp, pi-extension, and instructions are first-class built asset types now, each with its own install machinery and lock file (`agents-lock.json`, `mcps-lock.json`, …) — see the [CLI reference](cli.md). They are not recorded in `skills-lock.json`.
 - **Submitting to the public skills.sh catalogue.** Your repos can be private; we use the same lock format and addressing scheme without depending on the catalogue.
 
 ## Where to look next

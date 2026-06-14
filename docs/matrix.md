@@ -19,11 +19,11 @@ N/A — the harness has no such concept ·
 <tr markdown><th markdown>Harness</th><th markdown>[Instructions](asset-types/instructions.md)</th><th markdown>[Skills](asset-types/skills.md)</th><th markdown>[Agents](asset-types/agents.md)</th><th markdown>[MCP](asset-types/mcp.md)</th><th markdown>[Pi extensions](asset-types/pi-extensions.md)</th></tr>
 </thead>
 <tbody markdown>
-<tr markdown><td markdown>[Claude Code](harnesses/claude-code.md)</td><td markdown>[✅](harnesses/claude-code.md#instructions)</td><td markdown>[✅](harnesses/claude-code.md#skills)</td><td markdown>[✅](harnesses/claude-code.md#agents)</td><td markdown>—</td><td markdown>N/A</td></tr>
-<tr markdown><td markdown>[Pi](harnesses/pi.md)</td><td markdown>[✅](harnesses/pi.md#instructions)</td><td markdown>[✅](harnesses/pi.md#skills)</td><td markdown>[✅](harnesses/pi.md#agents)</td><td markdown>—</td><td markdown>[✅](harnesses/pi.md#pi-extensions)</td></tr>
-<tr markdown><td markdown>[Codex](harnesses/codex.md)</td><td markdown>[✅](harnesses/codex.md#instructions)</td><td markdown>[✅](harnesses/codex.md#skills)</td><td markdown>[✅](harnesses/codex.md#agents)</td><td markdown>—</td><td markdown>N/A</td></tr>
+<tr markdown><td markdown>[Claude Code](harnesses/claude-code.md)</td><td markdown>[✅](harnesses/claude-code.md#instructions)</td><td markdown>[✅](harnesses/claude-code.md#skills)</td><td markdown>[✅](harnesses/claude-code.md#agents)</td><td markdown>[✅](harnesses/claude-code.md#mcp-servers)</td><td markdown>N/A</td></tr>
+<tr markdown><td markdown>[Pi](harnesses/pi.md)</td><td markdown>[✅](harnesses/pi.md#instructions)</td><td markdown>[✅](harnesses/pi.md#skills)</td><td markdown>[✅](harnesses/pi.md#agents)</td><td markdown>[✅](harnesses/pi.md#mcp-servers)</td><td markdown>[✅](harnesses/pi.md#pi-extensions)</td></tr>
+<tr markdown><td markdown>[Codex](harnesses/codex.md)</td><td markdown>[✅](harnesses/codex.md#instructions)</td><td markdown>[✅](harnesses/codex.md#skills)</td><td markdown>[✅](harnesses/codex.md#agents)</td><td markdown>[✅](harnesses/codex.md#mcp-servers)</td><td markdown>N/A</td></tr>
 <tr markdown><td markdown>[Gemini CLI](harnesses/gemini-cli.md)</td><td markdown>[✅](harnesses/gemini-cli.md#instructions)</td><td markdown>[✅](harnesses/gemini-cli.md#skills)</td><td markdown>[✅](harnesses/gemini-cli.md#agents)</td><td markdown>—</td><td markdown>N/A</td></tr>
-<tr markdown><td markdown>[OpenCode](harnesses/opencode.md)</td><td markdown>[✅](harnesses/opencode.md#instructions)</td><td markdown>[✅](harnesses/opencode.md#skills)</td><td markdown>[✅](harnesses/opencode.md#agents)</td><td markdown>—</td><td markdown>N/A</td></tr>
+<tr markdown><td markdown>[OpenCode](harnesses/opencode.md)</td><td markdown>[✅](harnesses/opencode.md#instructions)</td><td markdown>[✅](harnesses/opencode.md#skills)</td><td markdown>[✅](harnesses/opencode.md#agents)</td><td markdown>[✅](harnesses/opencode.md#mcp-servers)</td><td markdown>N/A</td></tr>
 </tbody>
 <tbody class="matrix-toggle">
 <tr><td colspan="6"><button type="button" data-show="Show 49 more harnesses (A–Z) ▸" data-hide="Show fewer ▴">Show 49 more harnesses (A–Z) ▸</button></td></tr>
@@ -90,5 +90,7 @@ N/A — the harness has no such concept ·
   harness's skills directory.
 - **[Agents (subagents)](asset-types/agents.md)** — subagent definitions projected
   per-harness (symlink, translate, or registry mechanisms).
-- **[MCP servers](asset-types/mcp.md)** — placeholder; not yet a managed asset type.
+- **[MCP servers](asset-types/mcp.md)** — MCP servers projected into a harness's
+  own config by name (config-injection); supported for claude-code, codex,
+  opencode, and pi.
 - **[Pi extensions](asset-types/pi-extensions.md)** — Pi-only extension packages.

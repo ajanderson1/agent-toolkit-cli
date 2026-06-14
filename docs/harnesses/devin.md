@@ -7,7 +7,7 @@
 | [Instructions](../asset-types/instructions.md) | [✅](#instructions) | native `AGENTS.md` reader |
 | [Skills](../asset-types/skills.md) | [✅](#skills) | `.devin/skills` |
 | [Agents (subagents)](../asset-types/agents.md) | [✅](#agents) | translate |
-| [MCP servers](../asset-types/mcp.md) | — | planned asset type |
+| [MCP servers](../asset-types/mcp.md) | — | no toolkit adapter yet |
 | [Pi extensions](../asset-types/pi-extensions.md) | N/A | Pi-only asset type |
 
 ## Instructions { #instructions }
@@ -34,7 +34,7 @@ Supported — every harness in the catalog has a skills directory the [skills as
 Supported via the **translate** mechanism — see the [agents asset type](../asset-types/agents.md) for what each mechanism means.
 
 - **Mechanism:** translate
-- **User / project path:** `~/.config/devin/agents/{profile}/AGENT.md` / `.devin/agents/{profile}/AGENT.md`
-- **Format:** markdown+frontmatter; req `name`,`description`; per-profile-dir `AGENT.md`; also reads `.claude/agents/*.md`
+- **User / project path:** `~/.config/devin/agents/{profile}/AGENT.md` / `.devin/agents/{profile}/AGENT.md` (also `.agents/agents/{profile}/AGENT.md`)
+- **Format:** markdown+frontmatter; req `name`,`description`; per-profile-dir `AGENT.md`; also imports project-relative `.claude/agents/*.md` (project scope only)
 - **Toolkit adapter:** enabled (translate)
-- **Source:** [cli.devin.ai/docs/subagents](https://cli.devin.ai/docs/subagents)
+- **Source:** [docs.devin.ai/cli/subagents](https://docs.devin.ai/cli/subagents) (cli.devin.ai/docs/subagents now 301s here; re-verified 2026-06-10)

@@ -7,7 +7,7 @@
 | [Instructions](../asset-types/instructions.md) | [✅](#instructions) | native `AGENTS.md` reader |
 | [Skills](../asset-types/skills.md) | [✅](#skills) | `.agents/skills` |
 | [Agents (subagents)](../asset-types/agents.md) | [✅](#agents) | translate |
-| [MCP servers](../asset-types/mcp.md) | — | planned asset type |
+| [MCP servers](../asset-types/mcp.md) | [✅](#mcp-servers) | config-injection by name |
 | [Pi extensions](../asset-types/pi-extensions.md) | N/A | Pi-only asset type |
 
 ## Instructions { #instructions }
@@ -38,3 +38,12 @@ Supported via the **translate** mechanism — see the [agents asset type](../ass
 - **Format:** markdown+frontmatter; inject `mode: subagent`; name from filename; glob singular+plural
 - **Toolkit adapter:** enabled (translate)
 - **Source:** [`packages/opencode/src/config/agent.ts`](https://github.com/sst/opencode/blob/dev/packages/opencode/src/config/agent.ts) load(); [`agent/agent.ts:32`](https://github.com/sst/opencode/blob/dev/packages/opencode/src/agent/agent.ts)
+
+## MCP servers { #mcp-servers }
+
+Supported — the [MCP asset type](../asset-types/mcp.md) projects a library
+MCP server into this harness's own config by name (config-injection). `opencode`
+is one of the four harnesses with a config-injection adapter.
+
+- **Mechanism:** config-injection by name (no symlink/copy)
+- **Source:** [`mcp_install.py`](https://github.com/ajanderson1/agent-toolkit-cli/blob/main/src/agent_toolkit_cli/mcp_install.py) — the adapter target-config detection

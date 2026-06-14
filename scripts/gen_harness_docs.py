@@ -5,6 +5,8 @@ Sources (never edited by this script):
     parity tests). Parsed for the `agent` and `instructions` verdict tables.
   - src/agent_toolkit_cli/skill_agents.py — the skills catalog (skill dirs,
     display names, live adapter status).
+  - MCP_ADAPTERS (below) — the hand-maintained set of harnesses with an MCP
+    config-injection adapter, kept in lockstep with mcp_install.py.
 
 Outputs (fully owned by this script — regenerate, never hand-edit):
   - docs/matrix.md
@@ -31,6 +33,14 @@ HARNESS_DIR = DOCS / "harnesses"
 MKDOCS_YML = ROOT / "mkdocs.yml"
 
 SYNTHETIC = {"standard", "standard-skill", "standard-agent"}
+
+# Harnesses the toolkit can project an MCP server into, via a config-injection
+# adapter (src/agent_toolkit_cli/mcp_install.py — target-config detection at
+# :77-83). This is the hand-maintained MCP support source until per-harness MCP
+# data lands in the machine-read SSOT (harness-matrix.md). Keep it in lockstep
+# with mcp_install.py: ✅ only for slugs here, `—` (toolkit gap) for the rest.
+# `standard` is a projection token, NOT a harness, so it is not listed.
+MCP_ADAPTERS = {"claude-code", "codex", "opencode", "pi"}
 
 # Headline harnesses: pinned to the top of the matrix (in this order) and
 # listed first + bolded in the nav; everything else folds into the expandable
@@ -223,7 +233,7 @@ def matrix_cells(slug: str, agents: dict[str, AgentRow], instrs: dict[str, Instr
         f"[{instr_s}]({page}#instructions)" if instr_s != "N/A" else "N/A",
         f"[✅]({page}#skills)",
         f"[{agent_s}]({page}#agents)" if agent_s != "N/A" else "N/A",
-        "—",
+        f"[✅]({page}#mcp-servers)" if slug in MCP_ADAPTERS else "—",
         f"[✅]({page}#pi-extensions)" if slug == "pi" else "N/A",
     ]
 
@@ -294,7 +304,9 @@ N/A — the harness has no such concept ·
   harness's skills directory.
 - **[Agents (subagents)](asset-types/agents.md)** — subagent definitions projected
   per-harness (symlink, translate, or registry mechanisms).
-- **[MCP servers](asset-types/mcp.md)** — placeholder; not yet a managed asset type.
+- **[MCP servers](asset-types/mcp.md)** — MCP servers projected into a harness's
+  own config by name (config-injection); supported for claude-code, codex,
+  opencode, and pi.
 - **[Pi extensions](asset-types/pi-extensions.md)** — Pi-only extension packages.
 """
     (DOCS / "matrix.md").write_text(out)
@@ -391,6 +403,23 @@ def agent_section(slug: str, row: AgentRow) -> str:
     return "\n".join(lines)
 
 
+def mcp_section(slug: str) -> str:
+    if slug not in MCP_ADAPTERS:
+        return ""
+    return "\n".join([
+        "## MCP servers { #mcp-servers }",
+        "",
+        "Supported — the [MCP asset type](../asset-types/mcp.md) projects a library",
+        f"MCP server into this harness's own config by name (config-injection). `{slug}`",
+        "is one of the four harnesses with a config-injection adapter.",
+        "",
+        "- **Mechanism:** config-injection by name (no symlink/copy)",
+        "- **Source:** [`mcp_install.py`]"
+        "(https://github.com/ajanderson1/agent-toolkit-cli/blob/main/src/agent_toolkit_cli/mcp_install.py)"
+        " — the adapter target-config detection",
+    ])
+
+
 def pi_ext_section(slug: str) -> str:
     if slug != "pi":
         return ""
@@ -423,6 +452,11 @@ def write_harness_page(slug: str, agents: dict[str, AgentRow], instrs: dict[str,
         "✅": a.verdict, "—": "no file-drop convention",
         "N/A": "no subagent concept", "?": "no public evidence",
     }[agent_s]
+    mcp_row = (
+        "| [MCP servers](../asset-types/mcp.md) | [✅](#mcp-servers) | config-injection by name |"
+        if slug in MCP_ADAPTERS
+        else "| [MCP servers](../asset-types/mcp.md) | — | no toolkit adapter yet |"
+    )
     pi_row = (
         "| [Pi extensions](../asset-types/pi-extensions.md) | [✅](#pi-extensions) | symlink |"
         if slug == "pi"
@@ -435,6 +469,9 @@ def write_harness_page(slug: str, agents: dict[str, AgentRow], instrs: dict[str,
         skills_section(slug),
         agent_section(slug, a),
     ]
+    mcp_sec = mcp_section(slug)
+    if mcp_sec:
+        sections.append(mcp_sec)
     pi_sec = pi_ext_section(slug)
     if pi_sec:
         sections.append(pi_sec)
@@ -455,7 +492,7 @@ def write_harness_page(slug: str, agents: dict[str, AgentRow], instrs: dict[str,
 | [Instructions](../asset-types/instructions.md) | {instr_cell} | {instr_how} |
 | [Skills](../asset-types/skills.md) | [✅](#skills) | `{cfg.skills_dir}` |
 | [Agents (subagents)](../asset-types/agents.md) | {agent_cell} | {agent_how} |
-| [MCP servers](../asset-types/mcp.md) | — | planned asset type |
+{mcp_row}
 {pi_row}
 
 {body}

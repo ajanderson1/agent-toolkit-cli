@@ -134,7 +134,7 @@ nav:
       - Skills: asset-types/skills.md
       - Agents (subagents): asset-types/agents.md
       - Pi extensions: asset-types/pi-extensions.md
-      - MCP servers (planned): asset-types/mcp.md
+      - MCP servers: asset-types/mcp.md
     - Harnesses:
       # BEGIN GENERATED HARNESS NAV (scripts/gen_harness_docs.py)
       - Claude Code: harnesses/claude-code.md
@@ -196,7 +196,6 @@ nav:
     - SSOT (machine-read): agent-toolkit/harness-matrix.md
   - Reference:
     - CLI reference: agent-toolkit/cli.md
-    - Asset schema: agent-toolkit/schema.md
     - Bundles: agent-toolkit/bundles.md
     - Skill lock management: agent-toolkit/skill-lock.md
     - Roadmap: agent-toolkit/roadmap.md

@@ -7,7 +7,7 @@
 | [Instructions](../asset-types/instructions.md) | [✅](#instructions) | native `AGENTS.md` reader |
 | [Skills](../asset-types/skills.md) | [✅](#skills) | `.agents/skills` |
 | [Agents (subagents)](../asset-types/agents.md) | [✅](#agents) | symlink |
-| [MCP servers](../asset-types/mcp.md) | — | planned asset type |
+| [MCP servers](../asset-types/mcp.md) | — | no toolkit adapter yet |
 | [Pi extensions](../asset-types/pi-extensions.md) | N/A | Pi-only asset type |
 
 ## Instructions { #instructions }
@@ -34,7 +34,7 @@ Supported — every harness in the catalog has a skills directory the [skills as
 Supported via the **symlink** mechanism — see the [agents asset type](../asset-types/agents.md) for what each mechanism means.
 
 - **Mechanism:** symlink
-- **User / project path:** `~/.cursor/agents/<slug>.md` / `.cursor/agents/<slug>.md`
+- **User / project path:** `~/.cursor/agents/<slug>.md` (also `~/.claude/agents/`, `~/.codex/agents/`) / `.cursor/agents/<slug>.md` (also `.claude/agents/`, `.codex/agents/`)
 - **Format:** markdown+frontmatter; required `name`,`description`; optional `model`,`readonly`,`is_background`
 - **Toolkit adapter:** enabled (symlink)
-- **Source:** [cursor.com/docs/subagents](https://cursor.com/docs/subagents)
+- **Source:** [cursor.com/docs/subagents](https://cursor.com/docs/subagents) (re-verified 2026-06-10: `.claude/agents/` + `~/.claude/agents/` are default discovery locations)
