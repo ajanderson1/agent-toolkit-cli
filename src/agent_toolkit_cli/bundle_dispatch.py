@@ -4,8 +4,9 @@ The kinds are heterogeneous (skill uses `--scope` (--agents defaults to standard
 use `-g/-p`; pi-extension's `add` has no `--ref`). Rather than duplicate any
 installer logic, dispatch builds the same argv a human would type, per kind, and
 invokes the CLI in-process via Click's programmatic mode (`standalone_mode=False`),
-reusing every kind's validation, clone, projection, and lock-write. `mcp` is
-reserved but hard-fails until the mcp kind ships (#329).
+reusing every kind's validation, clone, projection, and lock-write. `mcp` is a
+reserved member type that hard-fails: the mcp asset type ships (v4.0.0, #329) but
+is not yet wired into the bundle installer.
 
 Three hardening rules (resolved critical-review findings):
 - F2 `already_present`: install_member reads the kind's library lock for the slug
@@ -27,9 +28,9 @@ from agent_toolkit_cli.bundle_manifest import BundleMember
 INSTALLABLE_KINDS: tuple[str, ...] = ("skill", "agent", "pi-extension")
 
 _MCP_NOT_READY = (
-    "member {slug!r}: 'mcp' members require the mcp asset type, which is not "
-    "yet available (tracked in #329). Remove the mcp member or wait for the "
-    "mcp kind to ship."
+    "member {slug!r}: 'mcp' is a reserved member type that is not yet wired "
+    "into the bundle installer. Remove the mcp member, or install it directly "
+    "with `agent-toolkit-cli mcp install`."
 )
 
 

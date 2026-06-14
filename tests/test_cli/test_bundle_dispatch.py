@@ -16,11 +16,11 @@ def test_installable_kinds_are_the_three_source_backed():
     assert INSTALLABLE_KINDS == ("skill", "agent", "pi-extension")
 
 
-def test_mcp_member_hard_fails_with_329(monkeypatch):
+def test_mcp_member_hard_fails_not_wired(monkeypatch):
     member = BundleMember(asset_type="mcp", source="o/r/ctx7", slug="context7")
-    with pytest.raises(DispatchError, match="#329"):
+    with pytest.raises(DispatchError, match="not yet wired into the bundle installer"):
         resolve_member(member)
-    with pytest.raises(DispatchError, match="#329"):
+    with pytest.raises(DispatchError, match="not yet wired into the bundle installer"):
         install_member(member, scope="global")
 
 

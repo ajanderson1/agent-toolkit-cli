@@ -30,13 +30,13 @@ def test_install_and_validate_help_exit_zero():
         assert res.exit_code == 0
 
 
-def test_validate_rejects_mcp_member_with_329(tmp_path):
+def test_validate_rejects_mcp_member(tmp_path):
     p = _write_manifest(tmp_path, [
         {"asset_type": "mcp", "source": "o/r/ctx7", "slug": "context7"},
     ])
     res = CliRunner().invoke(main, ["bundle", "validate", str(p)])
     assert res.exit_code != 0
-    assert "#329" in res.output
+    assert "not yet wired into the bundle installer" in res.output
 
 
 def test_validate_rejects_instructions_member(tmp_path):
@@ -60,7 +60,7 @@ def test_install_mcp_member_hard_fails(tmp_path):
     ])
     res = CliRunner().invoke(main, ["bundle", "install", str(p)])
     assert res.exit_code != 0
-    assert "#329" in res.output
+    assert "not yet wired into the bundle installer" in res.output
 
 
 def test_install_threads_project_root_to_run(tmp_path, monkeypatch):
