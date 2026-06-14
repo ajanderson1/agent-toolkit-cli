@@ -296,3 +296,33 @@ def test_reset_multi_slug(git_sandbox, tmp_path: Path, monkeypatch):
     for slug in ("demo", "demo2"):
         entry = lock_data["skills"][slug]
         assert entry["localSha"] == entry["upstreamSha"]
+
+
+def test_reset_monorepo_refusal_explains_global(tmp_path, monkeypatch):
+    """reset's monorepo-at-project refusal gets the same #413 clarifying clause
+    as update — -g switches to a different set, not a re-scope of this entry."""
+    from tests.test_cli.test_skill_update_monorepo import _init_parent
+
+    library_root = tmp_path / "lib" / "skills"
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    parent = _init_parent(tmp_path)
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / ".claude").mkdir()
+
+    runner = CliRunner()
+    assert runner.invoke(main, [
+        "skill", "add", f"file://{parent}", "--skill", "mkdocs",
+    ]).exit_code == 0
+    assert runner.invoke(main, [
+        "--project", str(project), "skill", "install", "mkdocs",
+        "--scope", "project", "--agents", "claude-code",
+    ]).exit_code == 0
+
+    result = runner.invoke(main, [
+        "--project", str(project), "skill", "reset", "mkdocs", "-p",
+    ])
+    assert result.exit_code == 1, result.output
+    out = result.output.lower()
+    assert "global scope" in out
+    assert "different set" in out
