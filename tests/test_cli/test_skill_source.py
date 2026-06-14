@@ -192,3 +192,24 @@ def test_github_shorthand_ref_head_with_tilde_accepted():
     s = parse_source("o/r@HEAD~1")
     assert s.ref == "HEAD~1"
     assert s.subpath is None
+
+
+def test_https_tree_ref_option_injection_rejected():
+    """A dash-prefixed ref in a `/tree/` URL must be rejected. Otherwise it
+    reaches `git clone --branch <ref>` / `git fetch origin <ref>` as a
+    positional and git interprets `--upload-pack=<cmd>` as an option,
+    executing <cmd> over file://, ssh:// transports (security: #424)."""
+    with pytest.raises(SourceParseError, match="must not start with '-'"):
+        parse_source("https://github.com/o/r/tree/--upload-pack=evil")
+
+
+def test_https_tree_ref_double_dot_rejected():
+    with pytest.raises(SourceParseError, match=r"'\.\.'"):
+        parse_source("https://github.com/o/r/tree/feat..main/skills/foo")
+
+
+def test_file_url_tree_ref_option_injection_rejected():
+    """Same option-injection guard for the file:// `/tree/<ref>` parser, which
+    is the transport where `--upload-pack` is actually executed (#424)."""
+    with pytest.raises(SourceParseError, match="must not start with '-'"):
+        parse_source("file:///tmp/parent-src/tree/--upload-pack=evil")

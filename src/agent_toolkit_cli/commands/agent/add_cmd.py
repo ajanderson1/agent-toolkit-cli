@@ -38,7 +38,12 @@ from agent_toolkit_cli.agent_paths import (
     library_agent_path,
     library_lock_path,
 )
-from agent_toolkit_cli.skill_source import ParsedSource, SourceParseError, parse_source
+from agent_toolkit_cli.skill_source import (
+    ParsedSource,
+    SourceParseError,
+    parse_source,
+    sanitize_ref,
+)
 
 
 class AddError(RuntimeError):
@@ -80,6 +85,10 @@ def add_cmd(source: str, slug: str | None, ref: str | None) -> None:
         raise click.ClickException(str(exc)) from exc
 
     if ref is not None:
+        try:
+            ref = sanitize_ref(ref)
+        except SourceParseError as exc:
+            raise click.ClickException(str(exc)) from exc
         parsed = dataclasses.replace(parsed, ref=ref)
 
     if parsed.subpath:

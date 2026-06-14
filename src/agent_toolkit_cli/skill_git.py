@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from agent_toolkit_cli.skill_lock import looks_like_sha
+from agent_toolkit_cli.skill_source import SourceParseError, sanitize_ref
 
 
 class GitError(RuntimeError):
@@ -30,6 +31,41 @@ class GitError(RuntimeError):
         self.returncode = result.returncode
         self.stdout = result.stdout
         self.stderr = result.stderr
+
+
+class UnsafeRefError(GitError):
+    """A ref was rejected before reaching git because it could be misread as a
+    command-line option (security: #424). Subclasses GitError so the sinks'
+    existing `except GitError` handlers and callers cover it unchanged."""
+
+    def __init__(self, ref: str, reason: str) -> None:
+        # Bypass GitError.__init__ (which needs a CompletedProcess); set the
+        # same public attributes so callers that read .stderr / .returncode
+        # still work.
+        RuntimeError.__init__(self, f"Unsafe git ref {ref!r}: {reason}")
+        self.cmd = ["git", "<ref-guard>", ref]
+        self.returncode = -1
+        self.stdout = ""
+        self.stderr = reason
+
+
+def _guard_ref(ref: str) -> str:
+    """Reject a ref that git could misread as an *option* before it reaches a
+    subprocess argument (security: #424).
+
+    The sink layer is the chokepoint every ref passes through regardless of
+    which parser produced it — the `/tree/<ref>` URL parser, the `--ref` CLI
+    flag, or a hostile lock file. A dash-prefixed ref like `--upload-pack=<cmd>`
+    handed to `git clone --branch <ref>` / `git fetch origin <ref>` as a
+    positional is executed by git over `file://` and `ssh://` transports. We
+    reuse `skill_source.sanitize_ref` (one source of truth for the rules) and
+    re-raise its `SourceParseError` as `UnsafeRefError`, a `GitError` subclass
+    this layer's callers already handle.
+    """
+    try:
+        return sanitize_ref(ref)
+    except SourceParseError as exc:
+        raise UnsafeRefError(ref, str(exc)) from exc
 
 
 class GitWorkingTreeStatus(enum.Enum):
@@ -112,7 +148,7 @@ def clone(
     if depth is not None:
         cmd += ["--depth", str(depth)]
     if ref:
-        cmd += ["--branch", ref]
+        cmd += ["--branch", _guard_ref(ref)]
     cmd += [url, str(dest)]
     clone_env = dict(env) if env is not None else os.environ.copy()
     clone_env["GIT_TERMINAL_PROMPT"] = "0"
@@ -145,7 +181,7 @@ def fetch_ref(
     cmd = ["git", "-C", str(repo), "fetch"]
     if depth is not None:
         cmd += ["--depth", str(depth)]
-    cmd += ["origin", ref]
+    cmd += ["origin", _guard_ref(ref)]
     proc = _run(cmd, env=env)
     return GitResult(stdout=proc.stdout, stderr=proc.stderr)
 
@@ -169,7 +205,7 @@ def merge(repo: Path, *, ref: str, env: dict[str, str] | None) -> GitResult:
     """
     proc = _run(
         ["git", "-C", str(repo), *_DEFAULT_IDENTITY,
-         "merge", "--no-edit", f"origin/{ref}"],
+         "merge", "--no-edit", f"origin/{_guard_ref(ref)}"],
         env=env,
     )
     return GitResult(stdout=proc.stdout, stderr=proc.stderr)
@@ -186,7 +222,7 @@ def reset_hard(
     would otherwise redirect the operation into the parent repo).
     """
     proc = _run(
-        ["git", "-C", str(repo), "reset", "--hard", f"origin/{ref}"],
+        ["git", "-C", str(repo), "reset", "--hard", f"origin/{_guard_ref(ref)}"],
         env=env,
     )
     return GitResult(stdout=proc.stdout, stderr=proc.stderr)
@@ -202,7 +238,7 @@ def pull_ff_only(
     caller surfaces that as a conflict to the user.
     """
     proc = _run(
-        ["git", "-C", str(repo), "pull", "--ff-only", "origin", ref],
+        ["git", "-C", str(repo), "pull", "--ff-only", "origin", _guard_ref(ref)],
         env=env,
     )
     return GitResult(stdout=proc.stdout, stderr=proc.stderr)
@@ -231,7 +267,9 @@ def status(repo: Path, *, env: dict[str, str] | None) -> GitWorkingTreeStatus:
 
 
 def push(repo: Path, *, ref: str, env: dict[str, str] | None) -> GitResult:
-    proc = _run(["git", "-C", str(repo), "push", "origin", ref], env=env)
+    proc = _run(
+        ["git", "-C", str(repo), "push", "origin", _guard_ref(ref)], env=env,
+    )
     return GitResult(stdout=proc.stdout, stderr=proc.stderr)
 
 
@@ -249,7 +287,7 @@ def checkout(repo: Path, *, ref: str, env: dict[str, str] | None) -> GitResult:
     """`git checkout <ref>`. Caller owns ensuring the working tree is in a
     state that can accept the switch (e.g. has just committed)."""
     proc = _run(
-        ["git", "-C", str(repo), "checkout", ref], env=env,
+        ["git", "-C", str(repo), "checkout", _guard_ref(ref)], env=env,
     )
     return GitResult(stdout=proc.stdout, stderr=proc.stderr)
 

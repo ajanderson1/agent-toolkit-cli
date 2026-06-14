@@ -73,6 +73,12 @@ def _sanitize_ref(ref: str) -> str:
     return ref
 
 
+# Public alias: the same ref-safety guard is reused at the `--ref` CLI flag
+# boundary and at the git sink layer (skill_git._guard_ref), not just inside
+# the shorthand parser. Keeps one source of truth for the rules (#424).
+sanitize_ref = _sanitize_ref
+
+
 def _parse_https(url: str) -> ParsedSource:
     parsed = urlparse(url)
     if parsed.hostname is None:
@@ -105,7 +111,7 @@ def _parse_https(url: str) -> ParsedSource:
     if "/tree/" in path:
         head, _, rest = path.partition("/tree/")
         parts = rest.split("/", 1)
-        ref = parts[0] or None
+        ref = _sanitize_ref(parts[0]) if parts[0] else None
         if len(parts) == 2 and parts[1]:
             subpath = _sanitize_subpath(parts[1])
         path = head
@@ -148,7 +154,7 @@ def _parse_file_url(url: str) -> ParsedSource:
     if "/tree/" in body:
         head, _, rest = body.partition("/tree/")
         parts = rest.split("/", 1)
-        ref = parts[0] or None
+        ref = _sanitize_ref(parts[0]) if parts[0] else None
         if len(parts) == 2 and parts[1]:
             subpath = _sanitize_subpath(parts[1])
         body = head
