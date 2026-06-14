@@ -244,6 +244,40 @@ def _init_repo_with_remote(path, remote_url):
     )
 
 
+def _init_repo_on_branch(path, remote_url, branch):
+    """A repo with one real commit on `branch` and an origin remote.
+
+    Unlike `_init_repo_with_remote`, this checks out a named branch and makes a
+    commit, so `current_branch`/`head_sha` return real values — needed to
+    exercise the multi-ref and SHA-pin guards. Returns the commit SHA.
+    """
+    import subprocess
+
+    from tests.conftest import scrub_git_env
+    path.mkdir(parents=True)
+    env = scrub_git_env()
+    subprocess.run(["git", "init", "-q", str(path)], check=True, env=env)
+    subprocess.run(
+        ["git", "-C", str(path), "remote", "add", "origin", remote_url],
+        check=True, env=env,
+    )
+    subprocess.run(
+        ["git", "-C", str(path), "checkout", "-q", "-b", branch],
+        check=True, env=env,
+    )
+    (path / "f").write_text("x")
+    subprocess.run(["git", "-C", str(path), "add", "f"], check=True, env=env)
+    subprocess.run(
+        ["git", "-C", str(path), "commit", "-q", "-m", "c"],
+        check=True, env=env,
+    )
+    sha = subprocess.run(
+        ["git", "-C", str(path), "rev-parse", "HEAD"],
+        check=True, env=env, capture_output=True, text=True,
+    ).stdout.strip()
+    return sha
+
+
 def test_resolve_prefers_suffixed_when_present(tmp_path):
     from agent_toolkit_cli.skill_paths import (
         parent_clone_path, resolve_existing_parent_clone,
@@ -265,7 +299,8 @@ def test_resolve_falls_back_to_bare_on_remote_match(tmp_path):
     env = {"AGENT_TOOLKIT_SKILLS_ROOT": str(tmp_path / "skills")}
     url = "https://github.com/o/r"
     bare = parent_clone_path("o", "r", ref=None, env=env)  # legacy layout
-    _init_repo_with_remote(bare, url + ".git")  # different form, same repo
+    # A real legacy clone has a commit on its branch; the ref-guard reads it.
+    _init_repo_on_branch(bare, url + ".git", "main")  # diff URL form, same repo
     got = resolve_existing_parent_clone(
         "o", "r", ref="main", parent_url=url, env=env,
     )
@@ -325,6 +360,94 @@ def test_resolve_slash_ref_falls_through_to_suffixed(tmp_path):
     suffixed = parent_clone_path("o", "r", ref="feat/x", env=env)
     got = resolve_existing_parent_clone(
         "o", "r", ref="feat/x", parent_url="https://github.com/o/r", env=env,
+    )
+    assert got == suffixed
+    assert got != bare
+
+
+def test_resolve_rejects_bare_checked_out_at_different_ref(tmp_path):
+    """#412 multi-ref safety: two skills share one monorepo at different
+    FLAT refs (the real P1 — both bare and suffixed share a parent dir).
+
+    The legacy bare clone is checked out on `main`. A second skill from the same
+    monorepo pins `dev` (also flat, so `bare.parent == suffixed.parent` and the
+    slash-ref guard does NOT save us). The resolver must NOT hand the `dev` skill
+    the `main` clone — adopting it would let `update`/`reset` mutate or discard
+    the tree the `main` skill depends on. It falls through to the suffixed path.
+    """
+    from agent_toolkit_cli.skill_paths import (
+        parent_clone_path, resolve_existing_parent_clone,
+    )
+    env = {"AGENT_TOOLKIT_SKILLS_ROOT": str(tmp_path / "skills")}
+    url = "https://github.com/o/r"
+    bare = parent_clone_path("o", "r", ref=None, env=env)
+    _init_repo_on_branch(bare, url, "main")  # bare lives on main
+    suffixed = parent_clone_path("o", "r", ref="dev", env=env)
+    assert bare.parent == suffixed.parent  # flat refs => slash-guard inert
+    got = resolve_existing_parent_clone(
+        "o", "r", ref="dev", parent_url=url, env=env,
+    )
+    assert got == suffixed  # off-ref bare must NOT be adopted
+    assert got != bare
+
+
+def test_resolve_adopts_bare_checked_out_at_matching_branch(tmp_path):
+    """The flip side: when the bare clone IS on the requested branch ref, it is
+    the right clone and gets adopted (the legitimate #412 repair case)."""
+    from agent_toolkit_cli.skill_paths import (
+        parent_clone_path, resolve_existing_parent_clone,
+    )
+    env = {"AGENT_TOOLKIT_SKILLS_ROOT": str(tmp_path / "skills")}
+    url = "https://github.com/o/r"
+    bare = parent_clone_path("o", "r", ref=None, env=env)
+    _init_repo_on_branch(bare, url, "main")
+    got = resolve_existing_parent_clone(
+        "o", "r", ref="main", parent_url=url, env=env,
+    )
+    assert got == bare
+
+
+def test_resolve_adopts_bare_pinned_to_matching_sha(tmp_path):
+    """SHA-pin case: the bare clone is detached at the pinned commit.
+
+    `current_branch` returns "HEAD" on a detached clone, so a naive branch
+    check would wrongly reject it. The guard must compare HEAD sha to the pin
+    and adopt when they match — otherwise SHA-pin resolution regresses.
+    """
+    import subprocess
+
+    from tests.conftest import scrub_git_env
+    from agent_toolkit_cli.skill_paths import (
+        parent_clone_path, resolve_existing_parent_clone,
+    )
+    env = {"AGENT_TOOLKIT_SKILLS_ROOT": str(tmp_path / "skills")}
+    url = "https://github.com/o/r"
+    bare = parent_clone_path("o", "r", ref=None, env=env)
+    sha = _init_repo_on_branch(bare, url, "main")
+    # Detach HEAD at the commit, mimicking a SHA-pinned clone.
+    subprocess.run(
+        ["git", "-C", str(bare), "checkout", "-q", sha],
+        check=True, env=scrub_git_env(),
+    )
+    got = resolve_existing_parent_clone(
+        "o", "r", ref=sha, parent_url=url, env=env,
+    )
+    assert got == bare
+
+
+def test_resolve_rejects_bare_pinned_to_different_sha(tmp_path):
+    """A SHA pin that does not match the bare clone's HEAD must not adopt it."""
+    from agent_toolkit_cli.skill_paths import (
+        parent_clone_path, resolve_existing_parent_clone,
+    )
+    env = {"AGENT_TOOLKIT_SKILLS_ROOT": str(tmp_path / "skills")}
+    url = "https://github.com/o/r"
+    bare = parent_clone_path("o", "r", ref=None, env=env)
+    _init_repo_on_branch(bare, url, "main")
+    other_sha = "0" * 40  # a SHA the bare clone is definitely not on
+    suffixed = parent_clone_path("o", "r", ref=other_sha, env=env)
+    got = resolve_existing_parent_clone(
+        "o", "r", ref=other_sha, parent_url=url, env=env,
     )
     assert got == suffixed
     assert got != bare

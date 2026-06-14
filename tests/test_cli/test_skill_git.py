@@ -592,3 +592,67 @@ def test_normalise_git_url_collapses_forms():
     b = normalise_git_url("git@github.com:foo/bar.git")
     c = normalise_git_url("https://github.com/foo/bar")
     assert a == b == c == "github.com/foo/bar"
+
+
+# --- legacy_bare_clone_for predicate (#412, shared by resolver + doctor) ---
+
+def _bare_repo_on(path: Path, remote: str, branch: str) -> None:
+    from tests.conftest import scrub_git_env
+    path.mkdir(parents=True)
+    env = scrub_git_env()
+    subprocess.run(["git", "init", "-q", str(path)], check=True, env=env)
+    subprocess.run(
+        ["git", "-C", str(path), "remote", "add", "origin", remote],
+        check=True, env=env,
+    )
+    subprocess.run(
+        ["git", "-C", str(path), "checkout", "-q", "-b", branch],
+        check=True, env=env,
+    )
+    (path / "f").write_text("x")
+    subprocess.run(["git", "-C", str(path), "add", "f"], check=True, env=env)
+    subprocess.run(
+        ["git", "-C", str(path), "commit", "-q", "-m", "c"],
+        check=True, env=env,
+    )
+
+
+def test_legacy_bare_clone_for_none_ref_returns_none(tmp_path):
+    from agent_toolkit_cli.skill_git import legacy_bare_clone_for
+    bare = tmp_path / "_parents" / "o" / "r"
+    suffixed = tmp_path / "_parents" / "o" / "r"
+    assert legacy_bare_clone_for(
+        suffixed, bare, ref=None, parent_url="https://github.com/o/r", env=None,
+    ) is None
+
+
+def test_legacy_bare_clone_for_non_git_bare_returns_none(tmp_path):
+    from agent_toolkit_cli.skill_git import legacy_bare_clone_for
+    bare = tmp_path / "_parents" / "o" / "r"
+    bare.mkdir(parents=True)  # exists but is NOT a git repo
+    suffixed = tmp_path / "_parents" / "o" / "r@main"
+    assert legacy_bare_clone_for(
+        suffixed, bare, ref="main", parent_url="https://github.com/o/r", env=None,
+    ) is None
+
+
+def test_legacy_bare_clone_for_matching_branch_adopts(tmp_path):
+    from agent_toolkit_cli.skill_git import legacy_bare_clone_for
+    url = "https://github.com/o/r"
+    bare = tmp_path / "_parents" / "o" / "r"
+    _bare_repo_on(bare, url, "main")
+    suffixed = tmp_path / "_parents" / "o" / "r@main"
+    assert legacy_bare_clone_for(
+        suffixed, bare, ref="main", parent_url=url, env=None,
+    ) == bare
+
+
+def test_legacy_bare_clone_for_off_branch_returns_none(tmp_path):
+    from agent_toolkit_cli.skill_git import legacy_bare_clone_for
+    url = "https://github.com/o/r"
+    bare = tmp_path / "_parents" / "o" / "r"
+    _bare_repo_on(bare, url, "main")  # on main…
+    suffixed = tmp_path / "_parents" / "o" / "r@dev"  # …but ref is dev
+    assert legacy_bare_clone_for(
+        suffixed, bare, ref="dev", parent_url=url, env=None,
+    ) is None

@@ -1032,3 +1032,30 @@ def test_doctor_no_legacy_finding_when_remote_mismatch(tmp_path, monkeypatch):
         slugs=("mkdocs",), scope="global", home=None, project=None,
     )
     assert not [f for f in findings if f.finding_type == "legacy_bare_parent"]
+
+
+def test_doctor_no_legacy_finding_when_bare_on_different_ref(tmp_path, monkeypatch):
+    """Multi-ref safety (#412): the bare clone is checked out on a DIFFERENT ref
+    than the lock entry records (the shared-monorepo P1 scenario). Doctor must
+    NOT offer to alias `<repo>@main -> <repo>` — that would misrepresent the bare
+    clone (which is on `other`) and let a later update flip the shared tree.
+    The read-path resolver and doctor share `legacy_bare_clone_for`, so this
+    refusal is the doctor-side mirror of the resolver's off-ref rejection.
+    """
+    from tests.test_cli.test_skill_owned_monorepo import (
+        _setup_parent, _add_owned_ref, _lock, _make_legacy_bare,
+    )
+    from tests.conftest import scrub_git_env
+    from agent_toolkit_cli import skill_doctor
+    parent_url, _ = _setup_parent(tmp_path, monkeypatch)
+    _add_owned_ref(parent_url, "mkdocs")  # lock records ref=main
+    entry = _lock()["skills"]["mkdocs"]
+    bare = _make_legacy_bare(entry)  # bare materialised on main, then…
+    subprocess.run(  # …flipped to a different branch
+        ["git", "-C", str(bare), "checkout", "-q", "-b", "other"],
+        check=True, env=scrub_git_env(),
+    )
+    findings = skill_doctor.diagnose(
+        slugs=("mkdocs",), scope="global", home=None, project=None,
+    )
+    assert not [f for f in findings if f.finding_type == "legacy_bare_parent"]

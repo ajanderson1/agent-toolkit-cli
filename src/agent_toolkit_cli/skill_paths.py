@@ -164,20 +164,6 @@ def parent_clone_path(
     return base / "_parents" / owner / leaf
 
 
-def _remote_matches(
-    repo: Path, parent_url: str, env: dict[str, str] | None,
-) -> bool:
-    """True if `repo`'s origin remote names the same repo as `parent_url`."""
-    from agent_toolkit_cli import skill_git
-    try:
-        actual = skill_git.remote_url(repo, env=env)
-    except skill_git.GitError:
-        return False
-    return skill_git.normalise_git_url(actual) == skill_git.normalise_git_url(
-        parent_url
-    )
-
-
 def resolve_existing_parent_clone(
     owner: str, repo: str, *, ref: str | None, parent_url: str,
     env: dict[str, str] | None = None,
@@ -186,33 +172,23 @@ def resolve_existing_parent_clone(
     """Locate an existing monorepo parent clone, tolerating the legacy
     bare-named layout (#412).
 
-    Prefers the canonical suffixed path (`<repo>@<ref>`). Falls back to the
-    bare `<repo>` path ONLY when the suffixed path is absent AND the bare dir
-    is a git repo whose origin remote matches `parent_url`. When neither
-    exists, returns the suffixed path so a fresh clone still lands in the
-    canonical scheme.
-
-    Slash-containing refs nest the suffixed path below `<owner>/`, so the flat
-    bare probe simply won't find them and the resolver falls through to the
-    suffixed path — never a wrong adoption.
+    Prefers the canonical suffixed path (`<repo>@<ref>`). Falls back to the bare
+    `<repo>` path ONLY when the suffixed path is absent AND the bare dir is the
+    legacy clone for THIS skill — see `skill_git.legacy_bare_clone_for`, which
+    requires a matching origin remote AND that the bare clone is checked out at
+    `ref` (the multi-ref safety guard, shared with doctor so the two cannot
+    diverge). When neither exists, returns the suffixed path so a fresh clone
+    still lands in the canonical scheme.
     """
     from agent_toolkit_cli import skill_git
     suffixed = parent_clone_path(owner, repo, ref=ref, env=env, root=root)
     if skill_git.is_git_repo(suffixed):
         return suffixed
-    if ref is not None:
-        bare = parent_clone_path(owner, repo, ref=None, env=env, root=root)
-        # The legacy bare layout is a FLAT-ref phenomenon: bare `<repo>` is a
-        # sibling of `<repo>@<ref>` only when the ref has no slash. A slash-ref
-        # nests `<repo>@feat/x` below `<owner>/`, so a flat bare `<repo>` is a
-        # different skill's clone, never this one's — guard on shared parent dir.
-        if (
-            bare.parent == suffixed.parent
-            and skill_git.is_git_repo(bare)
-            and _remote_matches(bare, parent_url, env)
-        ):
-            return bare
-    return suffixed
+    bare = parent_clone_path(owner, repo, ref=None, env=env, root=root)
+    adopted = skill_git.legacy_bare_clone_for(
+        suffixed, bare, ref=ref, parent_url=parent_url, env=env,
+    )
+    return adopted if adopted is not None else suffixed
 
 
 def project_parents_root(project: Path) -> Path:

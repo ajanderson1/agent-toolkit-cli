@@ -450,7 +450,11 @@ def test_status_finds_legacy_bare_named_parent(tmp_path, monkeypatch):
     _make_legacy_bare(entry)
     r = CliRunner().invoke(cli, ["skill", "status", "mkdocs", "-g"])
     assert r.exit_code == 0, r.output
-    assert "missing" not in r.output.lower()
+    # `(owned)` only prints when the parent clone resolved to a real git repo
+    # (status_cmd line ~116). A failed resolve falls to the `copy` branch, which
+    # also exits 0 — so a bare "no 'missing'" check would pass on regression.
+    assert "(owned)" in r.output, r.output
+    assert "copy" not in r.output, r.output
 
 
 def test_reset_finds_legacy_bare_named_parent(tmp_path, monkeypatch):
@@ -460,7 +464,11 @@ def test_reset_finds_legacy_bare_named_parent(tmp_path, monkeypatch):
     _make_legacy_bare(entry)
     r = CliRunner().invoke(cli, ["skill", "reset", "mkdocs", "-g"])
     assert r.exit_code == 0, r.output
-    assert "missing" not in r.output.lower()
+    # A failed resolve prints "parent clone missing or not a git repo at …";
+    # a successful one reaches the reset/clean path. Assert the failure message
+    # is absent AND a positive reset outcome is present.
+    assert "parent clone missing" not in r.output.lower(), r.output
+    assert "mkdocs: reset" in r.output, r.output
 
 
 def test_push_finds_legacy_bare_named_parent(tmp_path, monkeypatch):
@@ -470,7 +478,10 @@ def test_push_finds_legacy_bare_named_parent(tmp_path, monkeypatch):
     _make_legacy_bare(entry)
     r = CliRunner().invoke(cli, ["skill", "push", "--direct", "mkdocs", "-g"])
     assert r.exit_code == 0, r.output
-    assert "missing" not in r.output.lower()
+    # Same as reset: the failure path emits "parent clone missing …". A resolved
+    # clean clone reaches the "nothing to push" outcome.
+    assert "parent clone missing" not in r.output.lower(), r.output
+    assert "nothing to push" in r.output, r.output
 
 
 def test_fresh_add_materialises_suffixed_clone(tmp_path, monkeypatch):
