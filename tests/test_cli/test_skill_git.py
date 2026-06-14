@@ -611,8 +611,12 @@ def _bare_repo_on(path: Path, remote: str, branch: str) -> None:
     )
     (path / "f").write_text("x")
     subprocess.run(["git", "-C", str(path), "add", "f"], check=True, env=env)
+    # Pin identity via -c so the commit works on a runner with no global git
+    # config (scrub_git_env strips inherited GIT_AUTHOR_*/GIT_COMMITTER_*).
     subprocess.run(
-        ["git", "-C", str(path), "commit", "-q", "-m", "c"],
+        ["git", "-C", str(path),
+         "-c", "user.name=t", "-c", "user.email=t@t.invalid",
+         "commit", "-q", "-m", "c"],
         check=True, env=env,
     )
 
