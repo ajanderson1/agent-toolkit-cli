@@ -7,7 +7,7 @@
 | [Instructions](../asset-types/instructions.md) | [✅](#instructions) | native `AGENTS.md` reader |
 | [Skills](../asset-types/skills.md) | [✅](#skills) | `.pi/skills` |
 | [Agents (subagents)](../asset-types/agents.md) | [✅](#agents) | dual-symlink |
-| [MCP servers](../asset-types/mcp.md) | — | planned asset type |
+| [MCP servers](../asset-types/mcp.md) | [✅](#mcp-servers) | config-injection by name |
 | [Pi extensions](../asset-types/pi-extensions.md) | [✅](#pi-extensions) | symlink |
 
 ## Instructions { #instructions }
@@ -38,6 +38,15 @@ Supported via the **dual-symlink** mechanism — see the [agents asset type](../
 - **Format:** markdown+frontmatter (all optional); read by 3rd-party `@tintinweb/pi-subagents` ext
 - **Toolkit adapter:** enabled (symlink)
 - **Source:** [github.com/tintinweb/pi-subagents](https://github.com/tintinweb/pi-subagents) ; [pi.dev/packages/pi-subagents](https://pi.dev/packages/pi-subagents)
+
+## MCP servers { #mcp-servers }
+
+Supported — the [MCP asset type](../asset-types/mcp.md) projects a library
+MCP server into this harness's own config by name (config-injection). `pi`
+is one of the four harnesses with a config-injection adapter.
+
+- **Mechanism:** config-injection by name (no symlink/copy)
+- **Source:** [`mcp_install.py`](https://github.com/ajanderson1/agent-toolkit-cli/blob/main/src/agent_toolkit_cli/mcp_install.py) — the adapter target-config detection
 
 ## Pi extensions { #pi-extensions }
 

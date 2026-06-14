@@ -7,7 +7,7 @@
 | [Instructions](../asset-types/instructions.md) | [✅](#instructions) | native `AGENTS.md` reader |
 | [Skills](../asset-types/skills.md) | [✅](#skills) | `.agents/skills` |
 | [Agents (subagents)](../asset-types/agents.md) | [✅](#agents) | config_file+folder |
-| [MCP servers](../asset-types/mcp.md) | — | planned asset type |
+| [MCP servers](../asset-types/mcp.md) | [✅](#mcp-servers) | config-injection by name |
 | [Pi extensions](../asset-types/pi-extensions.md) | N/A | Pi-only asset type |
 
 ## Instructions { #instructions }
@@ -38,3 +38,12 @@ Supported via the **config_file+folder** mechanism — see the [agents asset typ
 - **Format:** TOML; role decl req `description`; file req `developer_instructions`; registered via `config_file=`
 - **Toolkit adapter:** currently disabled — registry-gated shared config.toml — no safe escape hatch; pending AJ decision (PR5a)
 - **Source:** [developers.openai.com/codex/subagents](https://developers.openai.com/codex/subagents) + [`codex-rs/config/src/config_toml.rs:649-691`](https://github.com/openai/codex/blob/main/codex-rs/config/src/config_toml.rs)
+
+## MCP servers { #mcp-servers }
+
+Supported — the [MCP asset type](../asset-types/mcp.md) projects a library
+MCP server into this harness's own config by name (config-injection). `codex`
+is one of the four harnesses with a config-injection adapter.
+
+- **Mechanism:** config-injection by name (no symlink/copy)
+- **Source:** [`mcp_install.py`](https://github.com/ajanderson1/agent-toolkit-cli/blob/main/src/agent_toolkit_cli/mcp_install.py) — the adapter target-config detection

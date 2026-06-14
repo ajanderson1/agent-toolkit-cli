@@ -7,7 +7,7 @@
 | [Instructions](../asset-types/instructions.md) | [✅](#instructions) | pointer symlink (`CLAUDE.md` (with `AGENTS.md` as documented fallback) → `AGENTS.md`) |
 | [Skills](../asset-types/skills.md) | [✅](#skills) | `.augment/skills` |
 | [Agents (subagents)](../asset-types/agents.md) | [✅](#agents) | symlink |
-| [MCP servers](../asset-types/mcp.md) | — | planned asset type |
+| [MCP servers](../asset-types/mcp.md) | — | no toolkit adapter yet |
 | [Pi extensions](../asset-types/pi-extensions.md) | N/A | Pi-only asset type |
 
 ## Instructions { #instructions }
