@@ -49,6 +49,17 @@ instructions exactly as it does for skills/agents. The #374 note and its
 `show_marker` gate are corrected as part of this work, not left to contradict
 the new behaviour.
 
+### Residual risk (premise is version-dependent)
+
+The BUILD decision rests on the *current* documented behaviour of two external
+products: Claude Code merges memory files across scopes, Gemini CLI concatenates
+the `GEMINI.md` hierarchy. If either harness later switches to a
+project-shadows-global model for its memory file, the marker would flip from
+true-signal to misleading — the exact wontfix trigger the issue named. This is
+true today and could expire; the toolkit does not control it. No in-repo
+evidence anchor is added as part of this work (a follow-up could capture the two
+precedence quotes into `docs/harnesses/claude-code.md` / `gemini-cli.md`).
+
 ## Scope
 
 Display-only. **No** change to instruction install / uninstall behaviour, to

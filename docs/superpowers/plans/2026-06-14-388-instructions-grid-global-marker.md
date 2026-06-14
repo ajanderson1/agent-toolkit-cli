@@ -40,8 +40,12 @@
   tests mirroring the agents-tab indicator tests.
 - **Modify** `tests/test_tui/test_instruction_state.py` — add shadow-cell probe
   tests.
-- **Modify** `tests/test_tui/test_column_info.py` (if present; else add cases to
-  the instructions-grid test) — assert the instructions marker block renders.
+- **Modify** `tests/test_tui/test_column_info.py` — **invert** the two existing
+  tests that codify the old #374 instructions-exclusion
+  (`test_standard_info_is_asset_type_aware`,
+  `test_standard_info_instructions_never_shows_marker`); they assert no marker
+  for instructions and the gate change makes them fail (Task 4 step 3d). This is
+  the one place the parity-port touches pre-existing tests rather than adding.
 
 ---
 
@@ -610,11 +614,14 @@ the comment (L41-66):
                 "  so you may not need it at project scope too.",
             ]
         elif asset_type == "instructions":
-            # Both claude-code and gemini-cli merge global + project memory
-            # files, so the global AGENTS.md is also loaded (#388).
+            # Instructions copy actively RETRACTS the skills "you may not need
+            # it" redundancy reading: claude-code and gemini-cli MERGE the
+            # global + project memory files, so the global AGENTS.md is added
+            # to (not replaced by) the project one — the project pointer is
+            # never redundant (#388, adversarial-review finding).
             indicator_note += [
-                "  This harness also points at a global AGENTS.md,",
-                "  which it loads alongside the project one.",
+                "  This harness also loads a global AGENTS.md,",
+                "  merged with (not replaced by) the project one.",
             ]
         else:
             # Agents copy stays presence-neutral (#374): per-harness
@@ -632,6 +639,17 @@ standard column for instructions is a canonical-status column, not a bundle:
             else "Standard canonical (AGENTS.md)" if asset_type == "instructions"
             else "Standard bundle"
         ),
+```
+
+Finally, fix the `get_column_info` **docstring** (currently L109-112) — it lists
+`global_linked (skills/agents 🌐 marker block)`. Left stale, a future developer
+reads "skills/agents" and re-gates instructions out, repeating the #374 mistake
+this work corrects (design-lens finding). Change that line to:
+
+```python
+    `extra_lines` (caller-supplied trailing lines, e.g. the agents
+    panel's devin note), and `global_linked` (skills/agents/instructions 🌐
+    marker block).
 ```
 
 **3b.** In `instruction_grid.py`, make `_context_for` row-aware (mirror
@@ -681,15 +699,70 @@ the focused row index:
                 return
 ```
 
+**3d. Invert the two pre-existing tests that codify the OLD #374 exclusion**
+(coherence + feasibility finding, anchor 100 — without this Task 5 breaks). Two
+tests in `tests/test_tui/test_column_info.py` assert the marker is excluded for
+instructions; the gate change at 3a makes both fail. Update them:
+
+`test_standard_info_is_asset_type_aware` (L116-128) passes
+`{asset_type: "instructions", names: (...)}` with NO `global_linked`, so the new
+gate's `ctx.get("global_linked", True)` default fires the block. Add
+`global_linked=False` to keep this test's intent (it checks names/title, not the
+marker) and keep its no-marker assertion valid:
+
+```python
+def test_standard_info_is_asset_type_aware():
+    """The factory takes the names (and asset type) from context so the instruction
+    grid can reuse the same registry key (#351)."""
+    info = get_column_info(
+        "standard",
+        context={
+            "asset_type": "instructions",
+            "names": ("alpha-harness", "beta-harness"),
+            "global_linked": False,
+        },
+    )
+    text = " ".join(info.lines)
+    assert "instructions" in text and "(2)" in text
+    assert "alpha-harness" in text and "beta-harness" in text
+    # Marker omitted here because this row is NOT globally linked (#388).
+    assert "🌐" not in text
+```
+
+`test_standard_info_instructions_never_shows_marker` (L150-157) asserts the OLD
+"excluded by design" behavior and is now wrong. Replace it with an
+instructions-shows-marker test mirroring the agents one:
+
+```python
+def test_standard_info_instructions_shows_marker_when_globally_linked():
+    """#388: instructions now gets the 🌐 explainer when the focused row IS
+    globally linked, with merge-accurate copy (reverses the #374 exclusion)."""
+    info = get_column_info(
+        "standard", context={"asset_type": "instructions", "global_linked": True},
+    )
+    joined = "\n".join(info.lines)
+    assert "🌐" in joined
+    assert "merged with (not replaced by)" in joined
+
+
+def test_standard_info_instructions_omits_marker_when_not_globally_linked():
+    """No marker when the instructions row is not globally linked."""
+    info = get_column_info(
+        "standard", context={"asset_type": "instructions", "global_linked": False},
+    )
+    assert "🌐" not in "\n".join(info.lines)
+```
+
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `uv run pytest tests/test_tui/test_instruction_grid_global_indicator.py -k "context_for or marker_block" -v`
-Expected: PASS (all four).
+Run: `uv run pytest tests/test_tui/test_instruction_grid_global_indicator.py -k "context_for or marker_block" tests/test_tui/test_column_info.py -v`
+Expected: PASS — including the two updated `test_column_info.py` tests. If
+either updated test still fails, the gate or copy is wrong.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/agent_toolkit_tui/column_info.py src/agent_toolkit_tui/widgets/instruction_grid.py tests/test_tui/test_instruction_grid_global_indicator.py
+git add src/agent_toolkit_tui/column_info.py src/agent_toolkit_tui/widgets/instruction_grid.py tests/test_tui/test_instruction_grid_global_indicator.py tests/test_tui/test_column_info.py
 git commit -m "feat(tui): surface global-linked state in instruction column-info panel (#388)"
 ```
 
@@ -701,11 +774,14 @@ git commit -m "feat(tui): surface global-linked state in instruction column-info
 
 - [ ] **Step 1: Run the full TUI + column-info test surface**
 
-Run: `uv run pytest tests/test_tui/ tests/test_tui/test_column_info.py -q`
-Expected: all pass (the two known HOME-isolation env failures —
-`test_empty_machine_is_empty`, `test_build_instruction_rows_empty_lock_no_canonical`
-— are pre-existing and unrelated; confirm they were already failing on the base
-before claiming green).
+Run: `uv run pytest tests/test_tui/ -q`
+Expected: all pass — INCLUDING the two `test_column_info.py` tests inverted in
+Task 4 step 3d. If `test_standard_info_is_asset_type_aware` or the old
+`test_standard_info_instructions_never_shows_marker` is still red, step 3d was
+not applied. The two known HOME-isolation env failures
+(`test_empty_machine_is_empty`,
+`test_build_instruction_rows_empty_lock_no_canonical`) are pre-existing and
+unrelated; confirm they were already failing on the base before claiming green.
 
 - [ ] **Step 2: Run the full suite**
 
@@ -736,17 +812,29 @@ git commit -m "test(tui): regression sweep for instructions 🌐 marker (#388)"
   `test_global_scope_view_does_not_show_marker`. ✓
 - AC2 (shadow cell in BOTH branches, gated on home) → Tasks 1 + 2. ✓
 - AC3 (panel surfaces global-linked) → Task 4 `_context_for` + column-info tests. ✓
-- AC4 (`show_marker` includes instructions + comment corrected) → Task 4 step 3a. ✓
+- AC4 (`show_marker` includes instructions + comment corrected) → Task 4 step 3a
+  (gate + comment + docstring) and step 3d (invert the two pre-existing
+  exclusion tests). ✓
 - AC5 (global scope unchanged, existing tests green) → Task 3
   `test_global_scope_view_does_not_show_marker` + Task 5 sweep. ✓
 
-**2. Placeholder scan:** The Task 1 test has a `type(...)`-based placeholder for
-the lock entry that is immediately replaced with the real `InstructionEntry(...)`
-constructor — the worker MUST delete the placeholder line and confirm the real
-constructor signature from `instructions_lock.py`. Flagged inline. No other
-placeholders.
+**2. Placeholder scan:** The Task 1/2 state tests use a raw JSON lock-file write
+(no entry-constructor placeholder) and the real `library_root` monkeypatch seam
+— verified against the existing `test_build_instruction_rows_*` tests. No
+placeholders remain.
 
 **3. Type consistency:** `InstructionCell(linked=..., conflict=...)` used
 consistently (two fields, both required). `_context_for(key=..., row_index=...)`
-signature matches the call-site change in Task 4 step 3c. `InstructionRow`
+signature matches the call-site change in Task 4 step 3c (`row_index` is
+optional here, vs required in `agent_grid._context_for` — a deliberate
+divergence so the single call site is the only one that must change; the lock
+entry class is `InstructionsLockEntry`, not `InstructionEntry`). `InstructionRow`
 constructor (`slug`, `source`, `canonical_exists`, `cells`) matches usage.
+
+**4. Critical-review findings (ce-doc-review, M):** the must-fix
+break-of-existing-tests finding is resolved by Task 4 step 3d; the stale-docstring
+and 🌐-redundancy-connotation findings are resolved in step 3a (docstring update
++ "merged with, not replaced by" copy). Two advisory findings waived: the
+premise's version-dependence on external harness behavior (noted as a spec
+residual risk) and the harness-cell CellInfoScreen omitting global state (explicit
+parity with agents — out of scope, follow-up if desired).
