@@ -23,7 +23,7 @@ docs: ## Serve MkDocs documentation locally (restarts if already running)
 	echo ""; \
 	echo "  ➜  http://localhost:$$PORT"; \
 	echo ""; \
-	uv run mkdocs serve
+	uv run mkdocs serve -a localhost:$$PORT
 
 docs-build: ## Build static documentation site
 	uv run mkdocs build --strict

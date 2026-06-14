@@ -92,6 +92,33 @@ terms first.
 :   The store of canonical sources at `~/.agent-toolkit/` (e.g.
     `~/.agent-toolkit/skills/<slug>`, a git clone of the skill repo).
 
+**Monorepo skill** { #monorepo-skill }
+:   A skill whose source is *one subpath inside a larger repo* rather than a
+    repo whose root is the skill. Added by naming the subpath
+    (`owner/repo/<path>`), passing `--skill <name>` (matched against each
+    `SKILL.md`'s frontmatter `name:`), or an explicit subpath. The shared
+    parent is cloned once into the [`_parents/` cache](#parents-cache); the
+    library [canonical](#canonical) is then a **symlink** into
+    `parent/<subpath>` (not a standalone clone). The lock entry records
+    `parentUrl`, the `skillPath` subpath, and the parent's HEAD as
+    `upstreamSha` — a monorepo skill pins to **parent HEAD**, not a SHA.
+
+**`_parents/` cache** { #parents-cache }
+:   Where [monorepo](#monorepo-skill) parent repos are cloned, shared across
+    every skill drawn from the same parent so siblings never re-clone it:
+    `~/.agent-toolkit/_parents/<owner>/<repo>[@<ref>]/` (global) or
+    `<store>/projects/<id>/skills/_parents/...` (project). Cloned **shallow**
+    — only one subpath's tree is symlinked, so the parent's full history is
+    pure waste.
+
+**Owned / read-only (monorepo)** { #owned }
+:   Whether a [monorepo skill](#monorepo-skill)'s parent is writable. A parent
+    is *owned* when its owner is a known owned owner or you pass `--owned` to
+    `skill add`; otherwise the lock entry is marked **`readOnly`**. `skill
+    push` opens a PR against the parent for an owned skill (committing only
+    that skill's subpath, isolating dirty siblings in the shared clone) and
+    **refuses** for a read-only one.
+
 **Scope** { #scope }
 :   Where an asset is installed: **project** (committed paths inside one
     repo) or **global** (per-user, under `~`). Most verbs take `-p`/`-g`.
