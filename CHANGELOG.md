@@ -1,5 +1,24 @@
 # Changelog
 
+## [4.1.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v4.0.0...v4.1.0) (2026-06-14)
+
+
+### Features
+
+* **mcp:** add a "standard" projection — the canonical .mcp.json/mcpServers file ([#401](https://github.com/ajanderson1/agent-toolkit-cli/issues/401)) ([145baec](https://github.com/ajanderson1/agent-toolkit-cli/commit/145baecf8090384d13a44638e8243956d0a12330))
+* **tui:** add mcp tab to the asset-types sidebar ([#402](https://github.com/ajanderson1/agent-toolkit-cli/issues/402)) ([2282135](https://github.com/ajanderson1/agent-toolkit-cli/commit/2282135e4d8347c29b57efe8c15eb4bb34cadea2))
+
+
+### Documentation
+
+* **plan:** MCP standard projection implementation plan ([#399](https://github.com/ajanderson1/agent-toolkit-cli/issues/399)) ([286c0af](https://github.com/ajanderson1/agent-toolkit-cli/commit/286c0af08d2ca5fdf1ecd479a3fb57b5660ab0b6))
+* **plan:** MCP TUI tab implementation plan ([#398](https://github.com/ajanderson1/agent-toolkit-cli/issues/398)) ([33d9b23](https://github.com/ajanderson1/agent-toolkit-cli/commit/33d9b239ff69a502dd75486687adadec57f6682c))
+* **spec,plan:** fold critical-review findings into [#398](https://github.com/ajanderson1/agent-toolkit-cli/issues/398) design ([2686baf](https://github.com/ajanderson1/agent-toolkit-cli/commit/2686bafba95f009485ec4a3491124ad4f3f1b2bc))
+* **spec,plan:** fold deep-review findings into [#399](https://github.com/ajanderson1/agent-toolkit-cli/issues/399) design ([a4ac6b7](https://github.com/ajanderson1/agent-toolkit-cli/commit/a4ac6b7c45a583467562f4d5ccdd6484aff00679))
+* **spec,plan:** round-2 review fixes for [#399](https://github.com/ajanderson1/agent-toolkit-cli/issues/399) ([f7abd00](https://github.com/ajanderson1/agent-toolkit-cli/commit/f7abd000aa660ce21cd818db3951b4abf7715155))
+* **spec:** MCP standard projection design ([#399](https://github.com/ajanderson1/agent-toolkit-cli/issues/399)) ([6960200](https://github.com/ajanderson1/agent-toolkit-cli/commit/6960200d8244590206f99970aa3e79d61aee5da6))
+* **spec:** MCP TUI tab design ([#398](https://github.com/ajanderson1/agent-toolkit-cli/issues/398)) ([b5c65c5](https://github.com/ajanderson1/agent-toolkit-cli/commit/b5c65c5ae3eecf9717c03bc624efba7e9ac4baeb))
+
 ## [4.0.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v3.9.0...v4.0.0) (2026-06-13)
 
 
