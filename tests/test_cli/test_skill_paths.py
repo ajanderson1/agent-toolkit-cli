@@ -229,3 +229,102 @@ def test_project_parents_root_uses_store(tmp_path, monkeypatch):
     project = tmp_path / "proj"
     project.mkdir()
     assert project_parents_root(project) == project_store_root(project)
+
+
+def _init_repo_with_remote(path, remote_url):
+    import subprocess
+
+    from tests.conftest import scrub_git_env
+    path.mkdir(parents=True)
+    env = scrub_git_env()
+    subprocess.run(["git", "init", "-q", str(path)], check=True, env=env)
+    subprocess.run(
+        ["git", "-C", str(path), "remote", "add", "origin", remote_url],
+        check=True, env=env,
+    )
+
+
+def test_resolve_prefers_suffixed_when_present(tmp_path):
+    from agent_toolkit_cli.skill_paths import (
+        parent_clone_path, resolve_existing_parent_clone,
+    )
+    env = {"AGENT_TOOLKIT_SKILLS_ROOT": str(tmp_path / "skills")}
+    url = "https://github.com/o/r"
+    suffixed = parent_clone_path("o", "r", ref="main", env=env)
+    _init_repo_with_remote(suffixed, url)
+    got = resolve_existing_parent_clone(
+        "o", "r", ref="main", parent_url=url, env=env,
+    )
+    assert got == suffixed
+
+
+def test_resolve_falls_back_to_bare_on_remote_match(tmp_path):
+    from agent_toolkit_cli.skill_paths import (
+        parent_clone_path, resolve_existing_parent_clone,
+    )
+    env = {"AGENT_TOOLKIT_SKILLS_ROOT": str(tmp_path / "skills")}
+    url = "https://github.com/o/r"
+    bare = parent_clone_path("o", "r", ref=None, env=env)  # legacy layout
+    _init_repo_with_remote(bare, url + ".git")  # different form, same repo
+    got = resolve_existing_parent_clone(
+        "o", "r", ref="main", parent_url=url, env=env,
+    )
+    assert got == bare
+
+
+def test_resolve_rejects_bare_on_remote_mismatch(tmp_path):
+    from agent_toolkit_cli.skill_paths import (
+        parent_clone_path, resolve_existing_parent_clone,
+    )
+    env = {"AGENT_TOOLKIT_SKILLS_ROOT": str(tmp_path / "skills")}
+    bare = parent_clone_path("o", "r", ref=None, env=env)
+    _init_repo_with_remote(bare, "https://github.com/someone/else")
+    suffixed = parent_clone_path("o", "r", ref="main", env=env)
+    got = resolve_existing_parent_clone(
+        "o", "r", ref="main", parent_url="https://github.com/o/r", env=env,
+    )
+    assert got == suffixed  # mismatch => do NOT adopt bare
+
+
+def test_resolve_returns_suffixed_when_neither_exists(tmp_path):
+    from agent_toolkit_cli.skill_paths import (
+        parent_clone_path, resolve_existing_parent_clone,
+    )
+    env = {"AGENT_TOOLKIT_SKILLS_ROOT": str(tmp_path / "skills")}
+    suffixed = parent_clone_path("o", "r", ref="main", env=env)
+    got = resolve_existing_parent_clone(
+        "o", "r", ref="main", parent_url="https://github.com/o/r", env=env,
+    )
+    assert got == suffixed
+
+
+def test_resolve_ref_none_collapses_to_bare(tmp_path):
+    from agent_toolkit_cli.skill_paths import (
+        parent_clone_path, resolve_existing_parent_clone,
+    )
+    env = {"AGENT_TOOLKIT_SKILLS_ROOT": str(tmp_path / "skills")}
+    bare = parent_clone_path("o", "r", ref=None, env=env)
+    _init_repo_with_remote(bare, "https://github.com/o/r")
+    got = resolve_existing_parent_clone(
+        "o", "r", ref=None, parent_url="https://github.com/o/r", env=env,
+    )
+    assert got == bare
+    assert got == parent_clone_path("o", "r", ref=None, env=env)
+
+
+def test_resolve_slash_ref_falls_through_to_suffixed(tmp_path):
+    from agent_toolkit_cli.skill_paths import (
+        parent_clone_path, resolve_existing_parent_clone,
+    )
+    env = {"AGENT_TOOLKIT_SKILLS_ROOT": str(tmp_path / "skills")}
+    # A flat bare <repo> exists with a matching remote, but ref has a slash —
+    # the nested suffixed path is what a slash-ref clone uses, so the flat bare
+    # must NOT be adopted.
+    bare = parent_clone_path("o", "r", ref=None, env=env)
+    _init_repo_with_remote(bare, "https://github.com/o/r")
+    suffixed = parent_clone_path("o", "r", ref="feat/x", env=env)
+    got = resolve_existing_parent_clone(
+        "o", "r", ref="feat/x", parent_url="https://github.com/o/r", env=env,
+    )
+    assert got == suffixed
+    assert got != bare
