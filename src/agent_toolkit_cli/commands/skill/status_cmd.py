@@ -10,8 +10,8 @@ from agent_toolkit_cli.skill_lock import read_lock
 from agent_toolkit_cli.skill_paths import (
     canonical_skill_dir,
     lock_file_path,
-    parent_clone_path,
     project_parents_root,
+    resolve_existing_parent_clone,
 )
 
 from ._common import scope_and_roots
@@ -87,8 +87,9 @@ def status_cmd(
             # Monorepo skill — status lives in the parent clone, not the
             # symlinked subpath (which has no `.git/` of its own).
             owner, repo = entry.source.split("/", 1)
-            parent_dir = parent_clone_path(
-                owner, repo, ref=entry.ref, env=None,
+            parent_dir = resolve_existing_parent_clone(
+                owner, repo, ref=entry.ref, parent_url=entry.parent_url,
+                env=None,
                 root=project_parents_root(project_root) if scope == "project" else None,
             )
             if not skill_git.is_git_repo(parent_dir):

@@ -404,15 +404,29 @@ def _add_owned_ref(parent_url: str, skill: str = "mkdocs", ref: str = "main") ->
 
 
 def _make_legacy_bare(entry: dict) -> Path:
-    """Rename the suffixed parent clone to the legacy bare `<repo>` name,
-    reproducing the pre-ref-backfill on-disk layout (#412)."""
-    from agent_toolkit_cli.skill_paths import parent_clone_path
+    """Rename the suffixed parent clone to the legacy bare `<repo>` name and
+    re-point the canonical symlink into it, reproducing the pre-ref-backfill
+    on-disk layout (#412): the symlink points into the bare clone, the lock's
+    `ref` was backfilled afterwards, so reads recompute the suffixed path and
+    miss the on-disk clone."""
+    from agent_toolkit_cli.skill_paths import (
+        canonical_skill_dir, parent_clone_path,
+    )
     ref = entry["ref"]
     owner, repo = entry["source"].split("/", 1)
     suffixed = parent_clone_path(owner, repo, ref=ref, env=None)
     assert suffixed.name == f"{repo}@{ref}", suffixed
     bare = parent_clone_path(owner, repo, ref=None, env=None)
     suffixed.rename(bare)
+    # Re-point the canonical symlink (was → suffixed/<skill_path>) at the bare
+    # clone, matching the real legacy state where the symlink lives in bare.
+    slug = entry["skillPath"].rsplit("/", 1)[-1]
+    canonical = canonical_skill_dir(
+        slug, scope="global", home=None, project=None,
+    )
+    if canonical.is_symlink():
+        canonical.unlink()
+        canonical.symlink_to(bare / entry["skillPath"])
     return bare
 
 
@@ -427,3 +441,33 @@ def test_update_finds_legacy_bare_named_parent(tmp_path, monkeypatch):
     r = CliRunner().invoke(cli, ["skill", "update", "mkdocs", "-g"])
     assert r.exit_code == 0, r.output
     assert "parent clone missing" not in r.output
+
+
+def test_status_finds_legacy_bare_named_parent(tmp_path, monkeypatch):
+    parent_url, _ = _setup_parent(tmp_path, monkeypatch)
+    _add_owned_ref(parent_url, "mkdocs")
+    entry = _lock()["skills"]["mkdocs"]
+    _make_legacy_bare(entry)
+    r = CliRunner().invoke(cli, ["skill", "status", "mkdocs", "-g"])
+    assert r.exit_code == 0, r.output
+    assert "missing" not in r.output.lower()
+
+
+def test_reset_finds_legacy_bare_named_parent(tmp_path, monkeypatch):
+    parent_url, _ = _setup_parent(tmp_path, monkeypatch)
+    _add_owned_ref(parent_url, "mkdocs")
+    entry = _lock()["skills"]["mkdocs"]
+    _make_legacy_bare(entry)
+    r = CliRunner().invoke(cli, ["skill", "reset", "mkdocs", "-g"])
+    assert r.exit_code == 0, r.output
+    assert "missing" not in r.output.lower()
+
+
+def test_push_finds_legacy_bare_named_parent(tmp_path, monkeypatch):
+    parent_url, _ = _setup_parent(tmp_path, monkeypatch)
+    _add_owned_ref(parent_url, "mkdocs")
+    entry = _lock()["skills"]["mkdocs"]
+    _make_legacy_bare(entry)
+    r = CliRunner().invoke(cli, ["skill", "push", "--direct", "mkdocs", "-g"])
+    assert r.exit_code == 0, r.output
+    assert "missing" not in r.output.lower()
