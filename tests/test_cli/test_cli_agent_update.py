@@ -181,3 +181,62 @@ def test_agent_update_non_git_canonical_reports_error(tmp_path, monkeypatch):
     r = CliRunner().invoke(main, ["agent", "update", "plain", "-g"])
     assert r.exit_code != 0
     assert "no .git" in r.output
+
+
+# ---------------------------------------------------------------------------
+# Project-scope variants (G3 / AC3)
+# ---------------------------------------------------------------------------
+
+
+def test_agent_update_project_scope_pulls_upstream(tmp_path, monkeypatch, git_sandbox):
+    """agent update -p fetches + merges at project scope."""
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("HOME", str(tmp_path / "fake-home"))
+    (tmp_path / "fake-home").mkdir(parents=True, exist_ok=True)
+
+    project = tmp_path / "proj"
+    project.mkdir()
+
+    upstream = _make_agent_upstream(tmp_path, git_sandbox.env)
+
+    # `agent add` is global-only; add globally then install into project scope.
+    r = CliRunner().invoke(main, ["agent", "add", str(upstream), "--slug", "demo"])
+    assert r.exit_code == 0, r.output
+
+    # Install into project scope to populate the project lock.
+    r = CliRunner().invoke(
+        main, ["--project", str(project),
+               "agent", "install", "demo", "-p", "--harnesses", "claude-code"],
+    )
+    assert r.exit_code == 0, r.output
+
+    # Advance the upstream so there's something to pull.
+    _advance_remote(upstream, git_sandbox.env)
+
+    r = CliRunner().invoke(
+        main, ["--project", str(project), "agent", "update", "demo", "-p"],
+    )
+    assert r.exit_code == 0, r.output
+    assert "demo: updated" in r.output
+
+
+def test_agent_reset_project_scope_unknown_slug(tmp_path, monkeypatch, git_sandbox):
+    """agent reset -p with unknown slug => 'not in lock' error."""
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("HOME", str(tmp_path / "fake-home"))
+    (tmp_path / "fake-home").mkdir(parents=True, exist_ok=True)
+
+    project = tmp_path / "proj"
+    project.mkdir()
+    monkeypatch.chdir(project)
+
+    upstream = _make_agent_upstream(tmp_path, git_sandbox.env)
+
+    # Add + install into project so the project lock exists.
+    CliRunner().invoke(main, ["--project", str(project), "agent", "add", str(upstream), "--slug", "demo"])
+
+    r = CliRunner().invoke(main, ["--project", str(project), "agent", "reset", "ghost", "-p"])
+    assert r.exit_code != 0
+    assert "ghost: not in lock" in r.output
