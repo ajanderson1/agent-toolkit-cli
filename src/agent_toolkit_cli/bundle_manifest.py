@@ -5,8 +5,9 @@ A bundle is a STATELESS shortcut: a JSON list of asset pointers that
 data — it never touches the library, locks, or harness dirs.
 
 `instructions` is NOT a member type (no shareable source). `mcp` is a valid
-member type for forward-compat, but the INSTALLER hard-fails on it until the
-mcp kind ships (#329) — that check lives in bundle_dispatch, not here.
+member type for forward-compat, but the INSTALLER hard-fails on it: the mcp
+asset type ships (v4.0.0) but is not yet wired into the bundle installer — that
+check lives in bundle_dispatch, not here.
 
 Two parse-time guards (resolved critical-review findings):
 - F5: any `source`/`slug`/`ref` value starting with '-' is rejected (an
