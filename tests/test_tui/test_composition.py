@@ -8,7 +8,9 @@ own column — on every asset type it supports.
 from agent_toolkit_cli.skill_agents import AGENTS
 from agent_toolkit_tui.composition import (
     MAIN_HARNESSES,
+    _MCP_HARNESSES,
     instructions_nonstandard_main,
+    mcp_nonstandard_main,
     skills_nonstandard_main,
 )
 
@@ -87,9 +89,6 @@ def test_agents_coverage_guard():
             assert h in covered or h in rendered, (
                 f"{h} is neither standard-covered nor rendered on the agents tab ({scope})"
             )
-
-
-from agent_toolkit_tui.composition import _MCP_HARNESSES, mcp_nonstandard_main
 
 
 def test_mcp_harnesses_members():
