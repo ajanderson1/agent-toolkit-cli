@@ -43,12 +43,14 @@ def _standard_info(context: dict | None = None) -> ColumnInfo:
     # project-scope-only note at global scope. Appended after the bullets.
     extra_lines = list(ctx.get("extra_lines") or [])
     # The 🌐 marker block applies to the asset types whose grids render the
-    # marker: skills (#188) and agents (#374). Instructions is excluded by
-    # design — each scope has its own canonical AGENTS.md, so there is no
-    # cross-scope install concept. The block is also contextual: it only
-    # makes sense when the focused row IS installed globally, so omit it
-    # when the caller says otherwise.
-    show_marker = asset_type in ("skills", "agents") and (
+    # marker: skills (#188), agents (#374), and instructions (#388). It is
+    # contextual — it only makes sense when the focused row IS linked at global
+    # scope, so omit it when the caller says otherwise. (Earlier the block was
+    # gated to skills/agents because instructions were thought to have no
+    # cross-scope signal; in fact claude-code and gemini-cli both MERGE the
+    # global and project instruction files, so "also linked globally" is a true
+    # signal here too — see the #388 spec.)
+    show_marker = asset_type in ("skills", "agents", "instructions") and (
         context is None or bool(ctx.get("global_linked", True))
     )
     indicator_note: list[str] = []
@@ -58,6 +60,16 @@ def _standard_info(context: dict | None = None) -> ColumnInfo:
             indicator_note += [
                 "  This skill is also installed globally,",
                 "  so you may not need it at project scope too.",
+            ]
+        elif asset_type == "instructions":
+            # Instructions copy actively RETRACTS the skills "you may not need
+            # it" redundancy reading: claude-code and gemini-cli MERGE the
+            # global + project memory files, so the global AGENTS.md is added
+            # to (not replaced by) the project one — the project pointer is
+            # never redundant (#388, adversarial-review finding).
+            indicator_note += [
+                "  This harness also loads a global AGENTS.md,",
+                "  merged with (not replaced by) the project one.",
             ]
         else:
             # Agents copy stays presence-neutral (#374): per-harness
@@ -70,6 +82,7 @@ def _standard_info(context: dict | None = None) -> ColumnInfo:
         title=(
             "Standard slot (agents)" if asset_type == "agents"
             else "Standard projection (.mcp.json)" if asset_type == "mcps"
+            else "Standard canonical (AGENTS.md)" if asset_type == "instructions"
             else "Standard bundle"
         ),
         lines=description + bullets + extra_lines + indicator_note,
@@ -109,7 +122,8 @@ def get_column_info(name: str, *, context: dict | None = None) -> ColumnInfo | N
     it: `asset_type` (skills/instructions/agents — adjusts title and copy),
     `names` (override the harness list, e.g. the per-scope covered set for
     agents), `extra_lines` (caller-supplied trailing lines, e.g. the agents
-    panel's devin note), and `global_linked` (skills/agents 🌐 marker block).
+    panel's devin note), and `global_linked` (skills/agents/instructions 🌐
+    marker block).
     """
     factory = COLUMN_INFO.get(name)
     if factory is None:

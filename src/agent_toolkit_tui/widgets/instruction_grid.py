@@ -169,7 +169,9 @@ class InstructionGrid(Vertical):
         coord = table.cursor_coordinate
         key = self._column_key_for_index(coord.column)
         if key is not None:
-            info = get_column_info(key, context=self._context_for(key=key))
+            info = get_column_info(
+                key, context=self._context_for(key=key, row_index=coord.row)
+            )
             if info is not None:
                 self.app.push_screen(ColumnInfoModal(info))
                 return
@@ -339,9 +341,11 @@ class InstructionGrid(Vertical):
             return "standard"
         return None
 
-    def _context_for(self, *, key: str) -> dict | None:
-        """Context for get_column_info(): the standard panel enumerates the
-        native AGENTS.md readers from the harness-matrix SSOT (#351)."""
+    def _context_for(self, *, key: str, row_index: int | None = None) -> dict | None:
+        """Context for get_column_info(). The standard panel enumerates the
+        native AGENTS.md readers from the harness-matrix SSOT (#351) and, when
+        a row is focused, reports whether that row's slot is linked globally so
+        the 🌐 marker block renders (#388, mirrors agent_grid._context_for)."""
         if key == "standard":
             from agent_toolkit_cli.instructions_matrix import instructions_matrix_rows
 
@@ -349,7 +353,19 @@ class InstructionGrid(Vertical):
                 r["harness"] for r in instructions_matrix_rows()
                 if r["verdict"] == "native"
             )
-            return {"asset_type": "instructions", "names": native}
+            global_linked = False
+            if row_index is not None and 0 <= row_index < len(self._rows):
+                row = self._rows[row_index]
+                global_linked = any(
+                    cell.linked
+                    for (harness, scope), cell in row.cells.items()
+                    if scope == "global"
+                )
+            return {
+                "asset_type": "instructions",
+                "names": native,
+                "global_linked": global_linked,
+            }
         return None
 
     def _rebuild(self, table: DataTable) -> None:

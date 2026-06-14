@@ -148,3 +148,74 @@ async def test_no_global_cells_no_marker_no_crash():
         await pilot.pause()
         for harness in INTERACTIVE_HARNESSES:
             assert "🌐" not in await _rendered_plain(a, pilot, harness)
+
+
+@pytest.mark.asyncio
+async def test_context_for_standard_reports_global_linked_true():
+    """The standard-key context surfaces whether the focused row's slot is
+    linked globally, mirroring agent_grid._context_for (#388)."""
+    row = _row_with(
+        project_cells={_H0: InstructionCell(linked=False, conflict=False)},
+        global_cells={_H0: InstructionCell(linked=True, conflict=False)},
+    )
+
+    class _A(App):
+        def compose(self):
+            yield InstructionGrid([row], id="g")
+
+    a = _A()
+    async with a.run_test() as pilot:
+        g = a.query_one("#g", InstructionGrid)
+        g.set_scope("project")
+        await pilot.pause()
+        ctx = g._context_for(key="standard", row_index=0)  # type: ignore[attr-defined]
+        assert ctx is not None
+        assert ctx["asset_type"] == "instructions"
+        assert ctx["global_linked"] is True
+
+
+@pytest.mark.asyncio
+async def test_context_for_standard_reports_global_linked_false():
+    """No global cell (or out-of-range row) → global_linked False, no crash."""
+    row = _row_with(
+        project_cells={_H0: InstructionCell(linked=True, conflict=False)},
+    )
+
+    class _A(App):
+        def compose(self):
+            yield InstructionGrid([row], id="g")
+
+    a = _A()
+    async with a.run_test() as pilot:
+        g = a.query_one("#g", InstructionGrid)
+        g.set_scope("project")
+        await pilot.pause()
+        ctx = g._context_for(key="standard", row_index=0)  # type: ignore[attr-defined]
+        assert ctx is not None and ctx["global_linked"] is False
+        oob = g._context_for(key="standard", row_index=99)  # type: ignore[attr-defined]
+        assert oob is not None and oob["global_linked"] is False
+
+
+def test_column_info_instructions_marker_block_present():
+    """column_info renders the 🌐 marker block for instructions when the focused
+    row is globally linked (#388)."""
+    from agent_toolkit_tui.column_info import get_column_info
+
+    info = get_column_info(
+        "standard",
+        context={"asset_type": "instructions", "names": (), "global_linked": True},
+    )
+    assert info is not None
+    assert any("🌐 marker" in line for line in info.lines)
+
+
+def test_column_info_instructions_marker_block_omitted_when_not_global():
+    """Block omitted when the focused row is not globally linked."""
+    from agent_toolkit_tui.column_info import get_column_info
+
+    info = get_column_info(
+        "standard",
+        context={"asset_type": "instructions", "names": (), "global_linked": False},
+    )
+    assert info is not None
+    assert not any("🌐 marker" in line for line in info.lines)
