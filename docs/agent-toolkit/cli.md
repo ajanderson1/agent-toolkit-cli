@@ -1,4 +1,4 @@
-# agent-toolkit CLI reference
+# CLI reference
 
 `agent-toolkit-cli` is a per-asset-type CLI for managing AI-agent assets. The top-level commands are the asset-type groups — `skill` (alias `skills`), `agent`, `instructions`, `pi-extension`, `mcp` (alias `mcps`) — plus `bundle` for installing several assets together. The frozen pre-v2 surface (`check`, `link`, `doctor`, `fix`, etc.) is pinned at the `v1.0.0` tag — see the [README](../index.md) for the install command.
 
@@ -81,11 +81,11 @@ agent-toolkit-cli bundle validate <manifest>                          # check re
 ### `tui` (separate binary)
 
 ```text
-agent-toolkit-tui                              # interactive skill grid (claude-code + pi)
-AGENT_TOOLKIT_TUI_LEGACY=1 agent-toolkit-tui   # restore the legacy multi-tab layout
+agent-toolkit-tui   # interactive cockpit over the same surface
 ```
 
-Installed alongside the CLI via the same `uv tool install` command.
+Installed alongside the CLI via the same `uv tool install` command. See the
+[TUI reference](tui.md) for the layout, key bindings, and edit flow.
 
 ## Pre-v2 surface
 

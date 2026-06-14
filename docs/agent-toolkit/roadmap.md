@@ -44,12 +44,6 @@ The structural-shape constraint (folder-with-markdown vs. config-injection) is t
 
 Each asset type will land in its own spec + plan, not a single bulk PR.
 
-### TUI: collapse legacy mode
-
-Once all seven asset types are lock-file-driven, the `AGENT_TOOLKIT_TUI_LEGACY=1` flag becomes redundant. The default TUI gets a real asset-types sidebar populated from lock entries, not from the walker. The seven tabs converge on the SkillGrid's shape (slug · source · ref · state).
-
-`AGENT_TOOLKIT_TUI_LEGACY` is removed at that point. The current default-mode behaviour (skills only) is itself a transitional state.
-
 ### Verb remap: `enable`/`disable` for projection { #verb-remap-enable-disable-for-projection }
 
 **Status: idea, not committed.** The lifecycle verbs split across [two axes](../glossary.md#verb-model): `add`/`remove` change [library](../glossary.md#library) membership (destructive), while `install`/`uninstall` change [projection](../glossary.md#projection) into a harness/scope (non-destructive). The friction is that all four read as generic "put / take away" words, so nothing in the verb tells you which axis you're on — the glossary has to spell it out.
@@ -70,12 +64,6 @@ Open questions before this is worth committing:
 - **Interop.** The skills lock format is byte-compatible with `vercel-labs/skills`; confirm the verb rename touches only our CLI surface, not the persisted lock shape, so interop is unaffected.
 
 If adopted, the glossary's two-axis callout and every asset-type page's verb table update in the same change.
-
-### Walker + sidecar retirement — delivered in v2.3.0 (#160)
-
-The `walker.py` module, `*.toolkit.yaml` sidecar discovery, the `agent-frontmatter.v1alpha2.json` schema's sidecar branch, the `--toolkit-repo` flag, and the `link` / `unlink` / `check` / `fix` / `doctor` / `inventory` / `new` / `migrate-skills` / `diff` / `list` / `pi` legacy commands were deleted in #160. The frozen v1 surface lives at the `v1.0.0` tag for anyone still needing it.
-
-This was a one-shot cleanup commit, not a gradual deprecation. It is the structural finish line for the v1 → v3 transition that started with v2.0.0.
 
 ## Not on the roadmap (explicit non-goals)
 
