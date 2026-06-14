@@ -4,6 +4,7 @@ The --help smoke already exists in test_cli_agent_group.py; this file adds a
 happy-path behavioral assertion: `agent reset <slug>` fetches upstream and
 force-syncs the canonical, updating the lock SHA.
 """
+
 from __future__ import annotations
 
 import subprocess
@@ -21,13 +22,17 @@ def _make_agent_upstream(tmp_path: Path, env: dict, slug: str = "demo") -> Path:
     upstream = tmp_path / f"{slug}-upstream.git"
     subprocess.run(
         ["git", "init", "--bare", "--initial-branch=main", str(upstream)],
-        check=True, env=env, capture_output=True,
+        check=True,
+        env=env,
+        capture_output=True,
     )
     seed = tmp_path / f"{slug}-seed"
     seed.mkdir()
     subprocess.run(
         ["git", "init", "--initial-branch=main", str(seed)],
-        check=True, env=env, capture_output=True,
+        check=True,
+        env=env,
+        capture_output=True,
     )
     (seed / f"{slug}.md").write_text(
         f"---\nname: {slug}\ndescription: A test agent.\n---\n\nBody.\n"
@@ -40,20 +45,26 @@ def _make_agent_upstream(tmp_path: Path, env: dict, slug: str = "demo") -> Path:
     ):
         subprocess.run(
             ["git", "-C", str(seed), *args],
-            check=True, env=env, capture_output=True,
+            check=True,
+            env=env,
+            capture_output=True,
         )
     return upstream
 
 
-def _advance_remote(upstream: Path, env: dict, *, slug: str = "demo",
-                    body: str = "reset-body\n") -> None:
+def _advance_remote(
+    upstream: Path, env: dict, *, slug: str = "demo", body: str = "reset-body\n"
+) -> None:
     """Push a new commit to upstream so reset has something to sync to."""
     import tempfile
+
     with tempfile.TemporaryDirectory() as td:
         work = Path(td) / "work"
         subprocess.run(
             ["git", "clone", str(upstream), str(work)],
-            check=True, capture_output=True, env=env,
+            check=True,
+            capture_output=True,
+            env=env,
         )
         (work / f"{slug}.md").write_text(body)
         for args in (
@@ -63,14 +74,18 @@ def _advance_remote(upstream: Path, env: dict, *, slug: str = "demo",
         ):
             subprocess.run(
                 ["git", "-C", str(work), *args],
-                check=True, capture_output=True, env=env,
+                check=True,
+                capture_output=True,
+                env=env,
             )
 
 
 def _head(path: Path) -> str:
     return subprocess.run(
         ["git", "-C", str(path), "rev-parse", "HEAD"],
-        capture_output=True, text=True, check=True,
+        capture_output=True,
+        text=True,
+        check=True,
     ).stdout.strip()
 
 
@@ -91,11 +106,15 @@ def test_agent_reset_force_syncs_to_upstream(tmp_path, monkeypatch, git_sandbox)
     (canonical / "demo.md").write_text("local edit\n")
     subprocess.run(
         ["git", "-C", str(canonical), "add", "-A"],
-        check=True, env=git_sandbox.env, capture_output=True,
+        check=True,
+        env=git_sandbox.env,
+        capture_output=True,
     )
     subprocess.run(
         ["git", "-C", str(canonical), "commit", "-m", "local diverge"],
-        check=True, env=git_sandbox.env, capture_output=True,
+        check=True,
+        env=git_sandbox.env,
+        capture_output=True,
     )
 
     # Also advance remote so reset --hard has something to sync.

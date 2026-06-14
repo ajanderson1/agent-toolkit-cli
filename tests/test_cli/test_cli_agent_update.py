@@ -7,6 +7,7 @@ The shared git_sandbox seeds SKILL.md upstream, but `agent add --slug demo`
 needs a demo.md content file in the source, so these tests build a dedicated
 upstream seeded with demo.md.
 """
+
 from __future__ import annotations
 
 import subprocess
@@ -29,13 +30,17 @@ def _make_agent_upstream(tmp_path: Path, env: dict, slug: str = "demo") -> Path:
     upstream = tmp_path / f"{slug}-upstream.git"
     subprocess.run(
         ["git", "init", "--bare", "--initial-branch=main", str(upstream)],
-        check=True, env=env, capture_output=True,
+        check=True,
+        env=env,
+        capture_output=True,
     )
     seed = tmp_path / f"{slug}-seed"
     seed.mkdir()
     subprocess.run(
         ["git", "init", "--initial-branch=main", str(seed)],
-        check=True, env=env, capture_output=True,
+        check=True,
+        env=env,
+        capture_output=True,
     )
     (seed / f"{slug}.md").write_text(
         f"---\nname: {slug}\ndescription: A test agent.\n---\n\nBody.\n"
@@ -48,20 +53,26 @@ def _make_agent_upstream(tmp_path: Path, env: dict, slug: str = "demo") -> Path:
     ):
         subprocess.run(
             ["git", "-C", str(seed), *args],
-            check=True, env=env, capture_output=True,
+            check=True,
+            env=env,
+            capture_output=True,
         )
     return upstream
 
 
-def _advance_remote(upstream: Path, env: dict, *, slug: str = "demo",
-                    body: str = "updated\n") -> None:
+def _advance_remote(
+    upstream: Path, env: dict, *, slug: str = "demo", body: str = "updated\n"
+) -> None:
     """Push a new commit to the upstream bare repo."""
     import tempfile
+
     with tempfile.TemporaryDirectory() as td:
         work = Path(td) / "work"
         subprocess.run(
             ["git", "clone", str(upstream), str(work)],
-            check=True, capture_output=True, env=env,
+            check=True,
+            capture_output=True,
+            env=env,
         )
         (work / f"{slug}.md").write_text(body)
         for args in (
@@ -71,14 +82,18 @@ def _advance_remote(upstream: Path, env: dict, *, slug: str = "demo",
         ):
             subprocess.run(
                 ["git", "-C", str(work), *args],
-                check=True, capture_output=True, env=env,
+                check=True,
+                capture_output=True,
+                env=env,
             )
 
 
 def _head(path: Path) -> str:
     return subprocess.run(
         ["git", "-C", str(path), "rev-parse", "HEAD"],
-        capture_output=True, text=True, check=True,
+        capture_output=True,
+        text=True,
+        check=True,
     ).stdout.strip()
 
 
@@ -171,11 +186,15 @@ def test_agent_update_non_git_canonical_reports_error(tmp_path, monkeypatch):
     lock = read_lock(lock_path)
     write_lock(
         lock_path,
-        add_entry(lock, "plain", LockEntry(
-            source="https://github.com/test/plain",
-            source_type="github",
-            agent_path="plain.md",
-        )),
+        add_entry(
+            lock,
+            "plain",
+            LockEntry(
+                source="https://github.com/test/plain",
+                source_type="github",
+                agent_path="plain.md",
+            ),
+        ),
     )
 
     r = CliRunner().invoke(main, ["agent", "update", "plain", "-g"])
@@ -206,8 +225,17 @@ def test_agent_update_project_scope_pulls_upstream(tmp_path, monkeypatch, git_sa
 
     # Install into project scope to populate the project lock.
     r = CliRunner().invoke(
-        main, ["--project", str(project),
-               "agent", "install", "demo", "-p", "--harnesses", "claude-code"],
+        main,
+        [
+            "--project",
+            str(project),
+            "agent",
+            "install",
+            "demo",
+            "-p",
+            "--harnesses",
+            "claude-code",
+        ],
     )
     assert r.exit_code == 0, r.output
 
@@ -215,7 +243,8 @@ def test_agent_update_project_scope_pulls_upstream(tmp_path, monkeypatch, git_sa
     _advance_remote(upstream, git_sandbox.env)
 
     r = CliRunner().invoke(
-        main, ["--project", str(project), "agent", "update", "demo", "-p"],
+        main,
+        ["--project", str(project), "agent", "update", "demo", "-p"],
     )
     assert r.exit_code == 0, r.output
     assert "demo: updated" in r.output
@@ -235,8 +264,13 @@ def test_agent_reset_project_scope_unknown_slug(tmp_path, monkeypatch, git_sandb
     upstream = _make_agent_upstream(tmp_path, git_sandbox.env)
 
     # Add + install into project so the project lock exists.
-    CliRunner().invoke(main, ["--project", str(project), "agent", "add", str(upstream), "--slug", "demo"])
+    CliRunner().invoke(
+        main,
+        ["--project", str(project), "agent", "add", str(upstream), "--slug", "demo"],
+    )
 
-    r = CliRunner().invoke(main, ["--project", str(project), "agent", "reset", "ghost", "-p"])
+    r = CliRunner().invoke(
+        main, ["--project", str(project), "agent", "reset", "ghost", "-p"]
+    )
     assert r.exit_code != 0
     assert "ghost: not in lock" in r.output

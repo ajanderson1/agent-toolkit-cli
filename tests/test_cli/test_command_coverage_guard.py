@@ -13,6 +13,7 @@ verbs and aliases are caught automatically), de-alias group names (skills/mcps) 
 verb names (ls/rm), then scan the comment-stripped test corpus for any of the
 alias spellings of the de-aliased cell.
 """
+
 from __future__ import annotations
 
 import io
@@ -58,7 +59,6 @@ def _registered_cells() -> set[tuple[str, str]]:
     *_cmd.py, with zero filesystem assumptions. De-aliases group and verb names
     so `skills`/`mcps`/`ls`/`rm` don't create duplicate cells.
     """
-    canonical = set(_GROUP_ALIASES)
     cells: set[tuple[str, str]] = set()
     for gname, gcmd in main.commands.items():
         # Resolve group alias to canonical name
@@ -110,16 +110,16 @@ def _invocation_pattern(group: str, verb: str) -> re.Pattern[str]:
     OR ["skills", "list"] OR ["skills", "ls"].
     """
     group_spellings = _GROUP_ALIASES[group]
-    verb_spellings = ([verb] if verb not in _VERB_ALIAS_CANONICAL
-                      else [verb, _VERB_ALIAS_CANONICAL[verb]])
     # If verb IS a canonical (e.g. "list"), also accept its alias ("ls")
     # Find the alias for this canonical verb
     aliases_for = [k for k, v in _VERB_ALIAS_CANONICAL.items() if v == verb]
     all_verb_spellings = {verb} | set(aliases_for)
     return re.compile(
         r"""["'](?:%s)["']\s*,\s*["'](?:%s)["']"""
-        % ("|".join(re.escape(a) for a in group_spellings),
-           "|".join(re.escape(v) for v in all_verb_spellings))
+        % (
+            "|".join(re.escape(a) for a in group_spellings),
+            "|".join(re.escape(v) for v in all_verb_spellings),
+        )
     )
 
 

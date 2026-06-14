@@ -3,6 +3,7 @@
 v2.2: `skill install <slug> --agents AGENTS [--scope SCOPE]` creates symlinks
 from agent locations to the library canonical.
 """
+
 from pathlib import Path
 
 import pytest
@@ -14,9 +15,16 @@ from agent_toolkit_cli.skill_paths import canonical_skill_dir
 
 def _add_demo(runner, upstream_path, library_root):
     """Add demo skill to library, returning the invocation result."""
-    return runner.invoke(main, [
-        "skill", "add", str(upstream_path), "--slug", "demo",
-    ])
+    return runner.invoke(
+        main,
+        [
+            "skill",
+            "add",
+            str(upstream_path),
+            "--slug",
+            "demo",
+        ],
+    )
 
 
 # ── global scope ──────────────────────────────────────────────────────────
@@ -38,9 +46,16 @@ def test_install_global_universal_creates_agents_skills_symlink(
     r = _add_demo(runner, git_sandbox.upstream, library_root)
     assert r.exit_code == 0, r.output
 
-    result = runner.invoke(main, [
-        "skill", "install", "demo", "--agents", "standard",
-    ])
+    result = runner.invoke(
+        main,
+        [
+            "skill",
+            "install",
+            "demo",
+            "--agents",
+            "standard",
+        ],
+    )
     assert result.exit_code == 0, result.output
 
     bundle_link = fake_home / ".agents" / "skills" / "demo"
@@ -63,15 +78,23 @@ def test_install_global_claude_code_creates_claude_symlink(
     monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(fake_home / ".claude"))
 
     from agent_toolkit_cli.skill_agents import AGENTS
+
     claude_agent = AGENTS["claude-code"]
 
     runner = CliRunner()
     r = _add_demo(runner, git_sandbox.upstream, library_root)
     assert r.exit_code == 0, r.output
 
-    result = runner.invoke(main, [
-        "skill", "install", "demo", "--agents", "claude-code",
-    ])
+    result = runner.invoke(
+        main,
+        [
+            "skill",
+            "install",
+            "demo",
+            "--agents",
+            "claude-code",
+        ],
+    )
     assert result.exit_code == 0, result.output
 
     claude_link = claude_agent.global_skills_dir / "demo"
@@ -94,15 +117,23 @@ def test_install_global_universal_and_claude_does_both(
     monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(fake_home / ".claude"))
 
     from agent_toolkit_cli.skill_agents import AGENTS
+
     claude_agent = AGENTS["claude-code"]
 
     runner = CliRunner()
     r = _add_demo(runner, git_sandbox.upstream, library_root)
     assert r.exit_code == 0, r.output
 
-    result = runner.invoke(main, [
-        "skill", "install", "demo", "--agents", "standard,claude-code",
-    ])
+    result = runner.invoke(
+        main,
+        [
+            "skill",
+            "install",
+            "demo",
+            "--agents",
+            "standard,claude-code",
+        ],
+    )
     assert result.exit_code == 0, result.output
 
     bundle_link = fake_home / ".agents" / "skills" / "demo"
@@ -128,15 +159,20 @@ def test_install_global_requires_library_entry(
     monkeypatch.setenv("HOME", str(fake_home))
 
     runner = CliRunner()
-    result = runner.invoke(main, [
-        "skill", "install", "nonexistent", "--agents", "standard",
-    ])
+    result = runner.invoke(
+        main,
+        [
+            "skill",
+            "install",
+            "nonexistent",
+            "--agents",
+            "standard",
+        ],
+    )
     assert result.exit_code != 0
 
 
-def test_install_global_idempotent(
-    git_sandbox, tmp_path: Path, monkeypatch
-):
+def test_install_global_idempotent(git_sandbox, tmp_path: Path, monkeypatch):
     """Calling install twice for the same agent is idempotent."""
     library_root = tmp_path / "lib" / "skills"
     fake_home = tmp_path / "home"
@@ -150,13 +186,27 @@ def test_install_global_idempotent(
     r = _add_demo(runner, git_sandbox.upstream, library_root)
     assert r.exit_code == 0, r.output
 
-    r1 = runner.invoke(main, [
-        "skill", "install", "demo", "--agents", "standard",
-    ])
+    r1 = runner.invoke(
+        main,
+        [
+            "skill",
+            "install",
+            "demo",
+            "--agents",
+            "standard",
+        ],
+    )
     assert r1.exit_code == 0, r1.output
-    r2 = runner.invoke(main, [
-        "skill", "install", "demo", "--agents", "standard",
-    ])
+    r2 = runner.invoke(
+        main,
+        [
+            "skill",
+            "install",
+            "demo",
+            "--agents",
+            "standard",
+        ],
+    )
     assert r2.exit_code == 0, r2.output
 
     bundle_link = fake_home / ".agents" / "skills" / "demo"
@@ -182,11 +232,20 @@ def test_install_project_universal_clones_project_canonical(
     r = _add_demo(runner, git_sandbox.upstream, library_root)
     assert r.exit_code == 0, r.output
 
-    result = runner.invoke(main, [
-        "--project", str(project),
-        "skill", "install", "demo", "--scope", "project",
-        "--agents", "standard",
-    ])
+    result = runner.invoke(
+        main,
+        [
+            "--project",
+            str(project),
+            "skill",
+            "install",
+            "demo",
+            "--scope",
+            "project",
+            "--agents",
+            "standard",
+        ],
+    )
     assert result.exit_code == 0, result.output
 
     # Under the new model the real canonical lives in the external store, NOT
@@ -214,11 +273,20 @@ def test_install_project_non_universal_creates_symlink_when_dir_exists(
     r = _add_demo(runner, git_sandbox.upstream, library_root)
     assert r.exit_code == 0, r.output
 
-    result = runner.invoke(main, [
-        "--project", str(project),
-        "skill", "install", "demo", "--scope", "project",
-        "--agents", "claude-code",
-    ])
+    result = runner.invoke(
+        main,
+        [
+            "--project",
+            str(project),
+            "skill",
+            "install",
+            "demo",
+            "--scope",
+            "project",
+            "--agents",
+            "claude-code",
+        ],
+    )
     assert result.exit_code == 0, result.output
 
     # Real canonical in external store.
@@ -248,11 +316,20 @@ def test_install_project_non_universal_auto_creates_agent_root(
     r = _add_demo(runner, git_sandbox.upstream, library_root)
     assert r.exit_code == 0, r.output
 
-    result = runner.invoke(main, [
-        "--project", str(project),
-        "skill", "install", "demo", "--scope", "project",
-        "--agents", "windsurf",
-    ])
+    result = runner.invoke(
+        main,
+        [
+            "--project",
+            str(project),
+            "skill",
+            "install",
+            "demo",
+            "--scope",
+            "project",
+            "--agents",
+            "windsurf",
+        ],
+    )
     assert result.exit_code == 0, result.output
 
     windsurf_link = project / ".windsurf" / "skills" / "demo"
@@ -271,7 +348,9 @@ def test_install_defaults_to_standard(git_sandbox, tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(fake_home))
 
     runner = CliRunner()
-    r = runner.invoke(main, ["skill", "add", str(git_sandbox.upstream), "--slug", "demo"])
+    r = runner.invoke(
+        main, ["skill", "add", str(git_sandbox.upstream), "--slug", "demo"]
+    )
     assert r.exit_code == 0, r.output
 
     # No --agents — must default to 'standard', not error.
@@ -279,22 +358,28 @@ def test_install_defaults_to_standard(git_sandbox, tmp_path, monkeypatch):
     assert result.exit_code == 0, result.output
 
     bundle_link = fake_home / ".agents" / "skills" / "demo"
-    assert bundle_link.is_symlink(), "default install must create the standard bundle symlink"
+    assert bundle_link.is_symlink(), (
+        "default install must create the standard bundle symlink"
+    )
     assert bundle_link.resolve() == (library_root / "demo").resolve()
 
 
 # ── AC2: harness-dimension parametrization (#423) ───────────────────────────
 
 _SKILL_INSTALL_REPS = [
-    ("claude-code", "symlink"),        # symlink mechanism
-    ("gemini-cli", "translate"),      # translate mechanism
+    ("claude-code", "symlink"),  # symlink mechanism
+    ("gemini-cli", "translate"),  # translate mechanism
     ("aider-desk", "config_file_folder"),  # config_file_folder mechanism
 ]
 
 
 @pytest.mark.parametrize("harness, mechanism", _SKILL_INSTALL_REPS)
 def test_skill_install_projects_into_each_mechanism(
-    git_sandbox, tmp_path, monkeypatch, harness, mechanism,
+    git_sandbox,
+    tmp_path,
+    monkeypatch,
+    harness,
+    mechanism,
 ):
     """Each adapter mechanism (symlink / translate / config_file_folder) creates
     a projection at global scope. One representative per mechanism covers the
@@ -311,8 +396,9 @@ def test_skill_install_projects_into_each_mechanism(
     # which was built from real HOME at import time.  AgentConfig is frozen
     # so monkeypatch.setattr won't work — swap the dict entry with a
     # rewritten one pointing at fake_home.
-    from agent_toolkit_cli.skill_agents import AGENTS, AgentConfig
+    from agent_toolkit_cli.skill_agents import AGENTS
     import dataclasses
+
     agent_cfg = AGENTS[harness]
     fake_global_dir = fake_home / agent_cfg.skills_dir.lstrip("/")
     fake_cfg = dataclasses.replace(agent_cfg, global_skills_dir=fake_global_dir)
@@ -322,9 +408,18 @@ def test_skill_install_projects_into_each_mechanism(
     r = _add_demo(runner, git_sandbox.upstream, library_root)
     assert r.exit_code == 0, r.output
 
-    r = runner.invoke(main, [
-        "skill", "install", "demo", "--agents", harness, "--scope", "global",
-    ])
+    r = runner.invoke(
+        main,
+        [
+            "skill",
+            "install",
+            "demo",
+            "--agents",
+            harness,
+            "--scope",
+            "global",
+        ],
+    )
     assert r.exit_code == 0, r.output
 
     # Verify the projection exists at the agent's declared destination.
@@ -348,10 +443,12 @@ def test_install_help_marks_agents_optional():
     result = CliRunner().invoke(main, ["skill", "install", "--help"])
     assert result.exit_code == 0
     lines = result.output.splitlines()
-    start = next((i for i, ln in enumerate(lines) if ln.strip().startswith("--agents")), None)
+    start = next(
+        (i for i, ln in enumerate(lines) if ln.strip().startswith("--agents")), None
+    )
     assert start is not None, "--agents must appear in help"
     block = [lines[start]]
-    for ln in lines[start + 1:]:
+    for ln in lines[start + 1 :]:
         if ln.strip().startswith("--"):  # next option begins
             break
         block.append(ln)
