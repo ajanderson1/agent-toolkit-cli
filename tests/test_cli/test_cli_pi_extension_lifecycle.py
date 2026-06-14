@@ -114,7 +114,8 @@ def test_update_npm_is_noop(tmp_path, monkeypatch):
 def test_update_unknown_slug_reports_error(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     r = CliRunner().invoke(main, ["pi-extension", "update", "nope", "-g"])
-    assert r.exit_code != 0 or "not in" in r.output
+    assert r.exit_code != 0
+    assert "nope: not in lock" in r.output
 
 
 def test_update_no_args_updates_all(tmp_path, monkeypatch, git_sandbox):
@@ -821,3 +822,17 @@ def test_doctor_npm_row_no_half_dir(tmp_path, monkeypatch):
     from agent_toolkit_cli import pi_extension_doctor as ped
     findings = ped.diagnose(slugs=None, scope="global", home=tmp_path, project=None)
     assert not [f for f in findings if f.finding_type == "half_dir"]
+
+
+# ---------------------------------------------------------------------------
+# G4 / AC4: pi-extension push not-in-lock (specific-message assertion)
+# ---------------------------------------------------------------------------
+
+
+def test_push_unknown_slug_not_in_lock(tmp_path, monkeypatch):
+    """pi-extension push <unknown> -g => specific 'not in the global lock' message + exit 1."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / ".agent-toolkit").mkdir(parents=True, exist_ok=True)
+    r = CliRunner().invoke(main, ["pi-extension", "push", "ghost", "-g"])
+    assert r.exit_code != 0
+    assert "ghost: not in the global lock" in r.output
