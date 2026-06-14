@@ -192,3 +192,35 @@ def test_update_copymode_refuses(copymode_skill):
     result = runner.invoke(main, ["skill", "update", "copydemo", "-g"])
     assert result.exit_code == 1
     assert "copy-mode" in result.output
+
+
+def test_update_monorepo_refusal_explains_global(tmp_path, monkeypatch):
+    """Project-scope monorepo update is refused with a message that explains -g
+    switches to the global *set*, not a re-scope of this entry (#413)."""
+    from tests.test_cli.test_skill_update_monorepo import _init_parent
+
+    library_root = tmp_path / "lib" / "skills"
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    parent = _init_parent(tmp_path)
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / ".claude").mkdir()
+
+    runner = CliRunner()
+    # Add the monorepo sub-skill to the global library:
+    assert runner.invoke(main, [
+        "skill", "add", f"file://{parent}", "--skill", "mkdocs",
+    ]).exit_code == 0
+    # Install at project scope → project lock entry carries parent_url:
+    assert runner.invoke(main, [
+        "--project", str(project), "skill", "install", "mkdocs",
+        "--scope", "project", "--agents", "claude-code",
+    ]).exit_code == 0
+
+    result = runner.invoke(main, [
+        "--project", str(project), "skill", "update", "-p",
+    ])
+    assert result.exit_code == 1, result.output
+    out = result.output.lower()
+    assert "global scope" in out
+    assert "different set" in out  # the new clarifying clause

@@ -177,3 +177,32 @@ def test_status_explicit_project_no_banner(git_sandbox, tmp_path, monkeypatch):
     result = runner.invoke(main, ["--project", str(project), "skill", "status", "-p"])
     assert result.exit_code == 0, result.stderr
     assert "project scope" not in result.stdout  # explicit -p → no reminder
+
+
+def test_update_implicit_project_banner_on_stdout(git_sandbox, tmp_path, monkeypatch):
+    runner = CliRunner()
+    project = _seed_project_lock(runner, tmp_path, monkeypatch, git_sandbox)
+    result = runner.invoke(main, ["--project", str(project), "skill", "update"])
+    # Exit code may be 0 (clean) — we only assert the banner is on stdout.
+    assert "project scope" in result.stdout
+
+
+def test_reset_implicit_project_banner_on_stdout(git_sandbox, tmp_path, monkeypatch):
+    runner = CliRunner()
+    project = _seed_project_lock(runner, tmp_path, monkeypatch, git_sandbox)
+    result = runner.invoke(main, ["--project", str(project), "skill", "reset", "demo"])
+    assert "project scope" in result.stdout
+
+
+def test_push_implicit_project_banner_on_stdout(git_sandbox, tmp_path, monkeypatch):
+    runner = CliRunner()
+    project = _seed_project_lock(runner, tmp_path, monkeypatch, git_sandbox)
+    result = runner.invoke(main, ["--project", str(project), "skill", "push", "demo"])
+    assert "project scope" in result.stdout
+
+
+def test_doctor_implicit_project_banner_on_stdout(git_sandbox, tmp_path, monkeypatch):
+    runner = CliRunner()
+    project = _seed_project_lock(runner, tmp_path, monkeypatch, git_sandbox)
+    result = runner.invoke(main, ["--project", str(project), "skill", "doctor"])
+    assert "project scope" in result.stdout
