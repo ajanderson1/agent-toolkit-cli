@@ -584,3 +584,11 @@ def test_divergence_parses_left_right_count(monkeypatch):
     for out, expected in cases.items():
         monkeypatch.setattr(g, "_run", lambda *a, _o=out, **k: _Fake(_o))
         assert g.divergence(Path("/x"), ref="main", env=None) == expected
+
+
+def test_normalise_git_url_collapses_forms():
+    from agent_toolkit_cli.skill_git import normalise_git_url
+    a = normalise_git_url("https://github.com/foo/bar.git")
+    b = normalise_git_url("git@github.com:foo/bar.git")
+    c = normalise_git_url("https://github.com/foo/bar")
+    assert a == b == c == "github.com/foo/bar"

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import enum
 import os
+import re
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -299,6 +300,33 @@ def remote_url(repo: Path, *, env: dict[str, str] | None) -> str:
         ["git", "-C", str(repo), "remote", "get-url", "origin"], env=env,
     )
     return proc.stdout.strip()
+
+
+_SSH_GIT_URL_RE = re.compile(r"^git@([^:]+):(.+?)(?:\.git)?/?$")
+_HTTPS_GIT_URL_RE = re.compile(r"^https?://([^/]+)/(.+?)(?:\.git)?/?$")
+_SSH_URL_RE = re.compile(r"^ssh://(?:[^@]+@)?([^/]+)/(.+?)(?:\.git)?/?$")
+
+
+def normalise_git_url(url: str) -> str:
+    """Reduce SSH and HTTPS forms to ``host/path`` for equality comparison.
+
+    `git@github.com:foo/bar.git` and `https://github.com/foo/bar.git` both
+    collapse to `github.com/foo/bar`. Trailing slashes and the `ssh://` URL
+    form are also folded in. Anything that doesn't match any pattern falls
+    back to lowercase + trailing-`.git` strip + trailing-slash strip, so
+    local paths and unfamiliar URL forms still round-trip sensibly.
+    """
+    u = url.strip().lower()
+    if (m := _SSH_GIT_URL_RE.match(u)):
+        return f"{m.group(1)}/{m.group(2)}"
+    if (m := _HTTPS_GIT_URL_RE.match(u)):
+        return f"{m.group(1)}/{m.group(2)}"
+    if (m := _SSH_URL_RE.match(u)):
+        return f"{m.group(1)}/{m.group(2)}"
+    u = u.rstrip("/")
+    if u.endswith(".git"):
+        u = u[:-4]
+    return u
 
 
 def default_branch(repo: Path, *, env: dict[str, str] | None) -> str | None:
