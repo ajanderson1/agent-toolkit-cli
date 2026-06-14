@@ -161,3 +161,19 @@ def test_list_explicit_global_no_banner(git_sandbox, tmp_path, monkeypatch):
     assert result.exit_code == 0, result.stderr
     assert "project scope" not in result.stdout
     assert "project scope" not in result.stderr
+
+
+def test_status_implicit_project_banner_on_stdout(git_sandbox, tmp_path, monkeypatch):
+    runner = CliRunner()
+    project = _seed_project_lock(runner, tmp_path, monkeypatch, git_sandbox)
+    result = runner.invoke(main, ["--project", str(project), "skill", "status"])
+    assert result.exit_code == 0, result.stderr
+    assert "project scope" in result.stdout
+
+
+def test_status_explicit_project_no_banner(git_sandbox, tmp_path, monkeypatch):
+    runner = CliRunner()
+    project = _seed_project_lock(runner, tmp_path, monkeypatch, git_sandbox)
+    result = runner.invoke(main, ["--project", str(project), "skill", "status", "-p"])
+    assert result.exit_code == 0, result.stderr
+    assert "project scope" not in result.stdout  # explicit -p → no reminder
