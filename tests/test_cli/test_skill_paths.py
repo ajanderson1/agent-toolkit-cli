@@ -451,3 +451,22 @@ def test_resolve_rejects_bare_pinned_to_different_sha(tmp_path):
     )
     assert got == suffixed
     assert got != bare
+
+
+def test_resolve_project_scope_adopts_bare_via_root(tmp_path):
+    """The project-scope wiring path: resolver is given an explicit `root`
+    (project_parents_root) rather than the global library root. The legacy bare
+    layout must resolve identically there — status/push pass this root through.
+    """
+    from agent_toolkit_cli.skill_paths import (
+        parent_clone_path, resolve_existing_parent_clone,
+    )
+    root = tmp_path / "store"
+    url = "https://github.com/o/r"
+    bare = parent_clone_path("o", "r", ref=None, root=root)
+    assert bare.parent == (root / "_parents" / "o")  # under the given root
+    _init_repo_on_branch(bare, url, "main")
+    got = resolve_existing_parent_clone(
+        "o", "r", ref="main", parent_url=url, root=root,
+    )
+    assert got == bare

@@ -656,3 +656,22 @@ def test_legacy_bare_clone_for_off_branch_returns_none(tmp_path):
     assert legacy_bare_clone_for(
         suffixed, bare, ref="dev", parent_url=url, env=None,
     ) is None
+
+
+def test_legacy_bare_clone_for_none_parent_url_returns_none(tmp_path):
+    """A None parent_url fails safe rather than crashing in normalise_git_url
+    — guards a future caller that forgets the entry.parent_url gate."""
+    from agent_toolkit_cli.skill_git import legacy_bare_clone_for
+    bare = tmp_path / "_parents" / "o" / "r"
+    _bare_repo_on(bare, "https://github.com/o/r", "main")
+    suffixed = tmp_path / "_parents" / "o" / "r@main"
+    assert legacy_bare_clone_for(
+        suffixed, bare, ref="main", parent_url=None, env=None,
+    ) is None
+
+
+def test_remote_matches_none_parent_url_is_false(tmp_path):
+    from agent_toolkit_cli.skill_git import remote_matches
+    bare = tmp_path / "r"
+    _bare_repo_on(bare, "https://github.com/o/r", "main")
+    assert remote_matches(bare, None, None) is False

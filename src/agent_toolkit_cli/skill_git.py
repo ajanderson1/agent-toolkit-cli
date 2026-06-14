@@ -329,13 +329,21 @@ def normalise_git_url(url: str) -> str:
     return u
 
 
-def remote_matches(repo: Path, parent_url: str, env: dict[str, str] | None) -> bool:
+def remote_matches(
+    repo: Path, parent_url: str | None, env: dict[str, str] | None,
+) -> bool:
     """True if `repo`'s origin remote names the same repo as `parent_url`.
 
     Compares normalised (SSH/HTTPS-folded) forms so `git@…:o/r.git` and
     `https://…/o/r` are treated as equal. A repo with no origin (or any git
-    error reading it) is treated as a non-match.
+    error reading it) is treated as a non-match. A `parent_url` of None is also
+    a non-match: with no expected URL there is nothing to match against, so the
+    predicate fails safe rather than crashing in `normalise_git_url(None)`
+    (every current caller already gates on a non-None parent_url, but this keeps
+    a future caller that forgets the gate from raising mid-resolve).
     """
+    if parent_url is None:
+        return False
     try:
         actual = remote_url(repo, env=env)
     except GitError:
@@ -367,7 +375,7 @@ def _checked_out_at_ref(bare: Path, ref: str, env: dict[str, str] | None) -> boo
 
 
 def legacy_bare_clone_for(
-    suffixed: Path, bare: Path, *, ref: str | None, parent_url: str,
+    suffixed: Path, bare: Path, *, ref: str | None, parent_url: str | None,
     env: dict[str, str] | None,
 ) -> Path | None:
     """Return `bare` iff it is the legacy bare-named clone for this skill (#412).
