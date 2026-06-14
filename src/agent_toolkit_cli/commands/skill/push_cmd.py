@@ -17,8 +17,8 @@ from agent_toolkit_cli.skill_ownership import is_owned_owner
 from agent_toolkit_cli.skill_paths import (
     canonical_skill_dir,
     lock_file_path,
-    parent_clone_path,
     project_parents_root,
+    resolve_existing_parent_clone,
 )
 
 from ._common import scope_and_roots, scope_banner
@@ -255,8 +255,8 @@ def _push_committed_via_pr(canonical: Path, entry, slug: str, base_ref: str) -> 
 
 def _monorepo_parent_dir(entry, scope: str, project_root) -> Path:
     owner, repo = entry.source.split("/", 1)
-    return parent_clone_path(
-        owner, repo, ref=entry.ref, env=None,
+    return resolve_existing_parent_clone(
+        owner, repo, ref=entry.ref, parent_url=entry.parent_url, env=None,
         root=project_parents_root(project_root) if scope == "project" else None,
     )
 

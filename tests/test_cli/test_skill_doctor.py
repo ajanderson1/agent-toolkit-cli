@@ -915,3 +915,147 @@ def test_unlisted_not_fired_for_targeted_doctor(git_sandbox, tmp_path, monkeypat
     from agent_toolkit_cli.skill_doctor import diagnose
     findings = diagnose(slugs=("demo",), scope="project", home=None, project=project)
     assert not [f for f in findings if f.finding_type == "unlisted"]
+
+
+# --- #412: doctor reuses legacy bare-named parent clone ---
+
+def test_doctor_reclone_reuses_legacy_bare_parent(tmp_path, monkeypatch):
+    from tests.test_cli.test_skill_owned_monorepo import (
+        _setup_parent, _add_owned_ref, _lock, _make_legacy_bare,
+    )
+    from agent_toolkit_cli import skill_doctor
+    from agent_toolkit_cli.skill_paths import (
+        canonical_skill_dir, parent_clone_path,
+    )
+
+    parent_url, _ = _setup_parent(tmp_path, monkeypatch)
+    _add_owned_ref(parent_url, "mkdocs")
+    entry = _lock()["skills"]["mkdocs"]
+    bare = _make_legacy_bare(entry)
+
+    # Break the canonical so the reclone fix-action fires.
+    canonical = canonical_skill_dir(
+        "mkdocs", scope="global", home=None, project=None,
+    )
+    if canonical.is_symlink() or canonical.exists():
+        canonical.unlink()
+
+    findings = skill_doctor.diagnose(
+        slugs=("mkdocs",), scope="global", home=None, project=None,
+    )
+    fix = next(f.fix_action for f in findings if f.fix_action)
+    fix.apply()
+
+    # It re-linked against the EXISTING bare clone, not a new suffixed clone.
+    owner, repo = entry["source"].split("/", 1)
+    suffixed = parent_clone_path(owner, repo, ref=entry["ref"], env=None)
+    assert bare.exists()
+    assert not suffixed.exists()  # no divergent re-clone
+    assert canonical.exists()
+
+
+# --- #412 Phase 2: doctor legacy_bare_parent finding + alias fix ---
+
+def test_doctor_flags_legacy_bare_parent(tmp_path, monkeypatch):
+    from tests.test_cli.test_skill_owned_monorepo import (
+        _setup_parent, _add_owned_ref, _lock, _make_legacy_bare,
+    )
+    from agent_toolkit_cli import skill_doctor
+    parent_url, _ = _setup_parent(tmp_path, monkeypatch)
+    _add_owned_ref(parent_url, "mkdocs")
+    entry = _lock()["skills"]["mkdocs"]
+    _make_legacy_bare(entry)
+    findings = skill_doctor.diagnose(
+        slugs=("mkdocs",), scope="global", home=None, project=None,
+    )
+    legacy = [f for f in findings if f.finding_type == "legacy_bare_parent"]
+    assert legacy, [f.finding_type for f in findings]
+
+
+def test_doctor_legacy_bare_fix_creates_alias_symlink(tmp_path, monkeypatch):
+    from tests.test_cli.test_skill_owned_monorepo import (
+        _setup_parent, _add_owned_ref, _lock, _make_legacy_bare,
+    )
+    from agent_toolkit_cli import skill_doctor
+    from agent_toolkit_cli.skill_paths import parent_clone_path
+    parent_url, _ = _setup_parent(tmp_path, monkeypatch)
+    _add_owned_ref(parent_url, "mkdocs")
+    entry = _lock()["skills"]["mkdocs"]
+    bare = _make_legacy_bare(entry)
+    owner, repo = entry["source"].split("/", 1)
+    suffixed = parent_clone_path(owner, repo, ref=entry["ref"], env=None)
+
+    findings = skill_doctor.diagnose(
+        slugs=("mkdocs",), scope="global", home=None, project=None,
+    )
+    fix = next(
+        f.fix_action for f in findings
+        if f.finding_type == "legacy_bare_parent" and f.fix_action
+    )
+    fix.apply()
+    assert suffixed.is_symlink()
+    assert suffixed.resolve() == bare.resolve()
+    # idempotent: re-applying with the alias present is a no-op, no raise.
+    fix.apply()
+
+
+def test_doctor_no_legacy_finding_when_suffixed_present(tmp_path, monkeypatch):
+    from tests.test_cli.test_skill_owned_monorepo import (
+        _setup_parent, _add_owned_ref,
+    )
+    from agent_toolkit_cli import skill_doctor
+    parent_url, _ = _setup_parent(tmp_path, monkeypatch)
+    _add_owned_ref(parent_url, "mkdocs")  # leaves the suffixed clone in place
+    findings = skill_doctor.diagnose(
+        slugs=("mkdocs",), scope="global", home=None, project=None,
+    )
+    assert not [f for f in findings if f.finding_type == "legacy_bare_parent"]
+
+
+def test_doctor_no_legacy_finding_when_remote_mismatch(tmp_path, monkeypatch):
+    """A bare dir whose origin does NOT match parentUrl must not be flagged."""
+    from tests.test_cli.test_skill_owned_monorepo import (
+        _setup_parent, _add_owned_ref, _lock, _make_legacy_bare,
+    )
+    from tests.conftest import scrub_git_env
+    from agent_toolkit_cli import skill_doctor
+    parent_url, _ = _setup_parent(tmp_path, monkeypatch)
+    _add_owned_ref(parent_url, "mkdocs")
+    entry = _lock()["skills"]["mkdocs"]
+    bare = _make_legacy_bare(entry)
+    subprocess.run(
+        ["git", "-C", str(bare), "remote", "set-url", "origin",
+         "https://github.com/someone/else"],
+        check=True, env=scrub_git_env(),
+    )
+    findings = skill_doctor.diagnose(
+        slugs=("mkdocs",), scope="global", home=None, project=None,
+    )
+    assert not [f for f in findings if f.finding_type == "legacy_bare_parent"]
+
+
+def test_doctor_no_legacy_finding_when_bare_on_different_ref(tmp_path, monkeypatch):
+    """Multi-ref safety (#412): the bare clone is checked out on a DIFFERENT ref
+    than the lock entry records (the shared-monorepo P1 scenario). Doctor must
+    NOT offer to alias `<repo>@main -> <repo>` — that would misrepresent the bare
+    clone (which is on `other`) and let a later update flip the shared tree.
+    The read-path resolver and doctor share `legacy_bare_clone_for`, so this
+    refusal is the doctor-side mirror of the resolver's off-ref rejection.
+    """
+    from tests.test_cli.test_skill_owned_monorepo import (
+        _setup_parent, _add_owned_ref, _lock, _make_legacy_bare,
+    )
+    from tests.conftest import scrub_git_env
+    from agent_toolkit_cli import skill_doctor
+    parent_url, _ = _setup_parent(tmp_path, monkeypatch)
+    _add_owned_ref(parent_url, "mkdocs")  # lock records ref=main
+    entry = _lock()["skills"]["mkdocs"]
+    bare = _make_legacy_bare(entry)  # bare materialised on main, then…
+    subprocess.run(  # …flipped to a different branch
+        ["git", "-C", str(bare), "checkout", "-q", "-b", "other"],
+        check=True, env=scrub_git_env(),
+    )
+    findings = skill_doctor.diagnose(
+        slugs=("mkdocs",), scope="global", home=None, project=None,
+    )
+    assert not [f for f in findings if f.finding_type == "legacy_bare_parent"]

@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import dataclasses
 import datetime as _dt
-import re
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
@@ -33,6 +32,7 @@ FindingType = Literal[
     "wrong_type_bundle", "orphan_symlink", "foreign_symlink",
     "dirty_tree", "lock_source_mismatch", "stray_symlink",
     "orphan_canonical", "stray_bundle_dir", "unlisted",
+    "legacy_bare_parent",
 ]
 
 
@@ -307,6 +307,21 @@ def _make_rmtree_action(*, path: Path) -> FixAction:
     )
 
 
+def _make_legacy_bare_alias_action(suffixed: Path, bare: Path) -> FixAction:
+    """Alias the canonical `<repo>@<ref>` path to the legacy bare `<repo>`
+    clone (#412 Phase 2) — non-destructive, reversible, idempotent."""
+    def _apply() -> None:
+        if suffixed.exists() or suffixed.is_symlink():
+            return  # idempotent
+        suffixed.parent.mkdir(parents=True, exist_ok=True)
+        suffixed.symlink_to(bare.name)  # relative alias within <owner>/
+    return FixAction(
+        description=f"Alias {suffixed.name} -> {bare.name} (legacy parent clone)",
+        shell_preview=f"ln -s {bare.name} {suffixed}",
+        apply=_apply,
+    )
+
+
 def _make_reclone_action(
     *, slug: str, scope: Scope, home: Path | None, project: Path | None,
     entry: LockEntry,
@@ -368,7 +383,7 @@ def _make_monorepo_reclone_action(
     depth-agnostic: `skill_path` may be a multi-segment path.
     """
     from agent_toolkit_cli.skill_paths import (
-        parent_clone_path, project_parents_root,
+        project_parents_root, resolve_existing_parent_clone,
     )
 
     if entry.skill_path is None:
@@ -384,7 +399,11 @@ def _make_monorepo_reclone_action(
         )
     owner, repo = parts
     parents_root = None if scope == "global" else project_parents_root(project)
-    parent_dir = parent_clone_path(owner, repo, ref=entry.ref, root=parents_root)
+    # #412: reuse an existing legacy bare-named clone instead of re-cloning to
+    # a divergent suffixed path. Mirrors update/status/push/reset resolution.
+    parent_dir = resolve_existing_parent_clone(
+        owner, repo, ref=entry.ref, parent_url=parent_url, root=parents_root,
+    )
     skill_path = entry.skill_path
 
     def _apply() -> None:
@@ -631,31 +650,12 @@ def _remote_origin_url(canonical: Path) -> str | None:
     return proc.stdout.strip() or None
 
 
-_SSH_GIT_URL_RE = re.compile(r"^git@([^:]+):(.+?)(?:\.git)?/?$")
-_HTTPS_GIT_URL_RE = re.compile(r"^https?://([^/]+)/(.+?)(?:\.git)?/?$")
-_SSH_URL_RE = re.compile(r"^ssh://(?:[^@]+@)?([^/]+)/(.+?)(?:\.git)?/?$")
-
-
-def _normalise_git_url(url: str) -> str:
-    """Reduce SSH and HTTPS forms to ``host/path`` for equality comparison.
-
-    `git@github.com:foo/bar.git` and `https://github.com/foo/bar.git` both
-    collapse to `github.com/foo/bar`. Trailing slashes and the `ssh://` URL
-    form are also folded in. Anything that doesn't match any pattern falls
-    back to lowercase + trailing-`.git` strip + trailing-slash strip, so
-    local paths and unfamiliar URL forms still round-trip sensibly.
-    """
-    u = url.strip().lower()
-    if (m := _SSH_GIT_URL_RE.match(u)):
-        return f"{m.group(1)}/{m.group(2)}"
-    if (m := _HTTPS_GIT_URL_RE.match(u)):
-        return f"{m.group(1)}/{m.group(2)}"
-    if (m := _SSH_URL_RE.match(u)):
-        return f"{m.group(1)}/{m.group(2)}"
-    u = u.rstrip("/")
-    if u.endswith(".git"):
-        u = u[:-4]
-    return u
+# normalise_git_url lives in skill_git now (shared by the #412 parent-clone
+# resolver and doctor's lock_source_mismatch check). Re-exported under the
+# legacy private name so existing call sites in this module keep working.
+from agent_toolkit_cli.skill_git import (  # noqa: E402
+    normalise_git_url as _normalise_git_url,
+)
 
 
 def _check_slug(
@@ -772,4 +772,41 @@ def _check_slug(
                 ),
                 fix_action=None,
             ))
+    # #412 Phase 2: a monorepo parent cloned under the legacy bare <repo> name
+    # (ref was None at clone time, later backfilled) still resolves at read
+    # time via the probe-both resolver, but the on-disk layout is non-canonical.
+    # Offer a non-destructive alias <repo>@<ref> -> <repo> to normalise it.
+    if entry.parent_url is not None and entry.ref is not None:
+        from agent_toolkit_cli.skill_paths import (
+            parent_clone_path, project_parents_root,
+        )
+        owner_repo = entry.source.split("/", 1)
+        if len(owner_repo) == 2:
+            owner, repo = owner_repo
+            if scope == "global":
+                parents_root = None
+            elif project is None:
+                raise ValueError("project scope requires a project path")
+            else:
+                parents_root = project_parents_root(project)
+            suffixed = parent_clone_path(
+                owner, repo, ref=entry.ref, root=parents_root,
+            )
+            bare = parent_clone_path(owner, repo, ref=None, root=parents_root)
+            # Same shared predicate the read-path resolver uses, so doctor and
+            # update can never disagree about which bare clone is ours (#412).
+            adopt = skill_git.legacy_bare_clone_for(
+                suffixed, bare, ref=entry.ref,
+                parent_url=entry.parent_url, env=None,
+            )
+            if adopt is not None and not suffixed.exists():
+                findings.append(Finding(
+                    finding_type="legacy_bare_parent", slug=slug, scope=scope,
+                    path=bare,
+                    detail=(
+                        f"parent clone uses legacy bare name {bare.name}; "
+                        f"alias to {suffixed.name} for canonical resolution"
+                    ),
+                    fix_action=_make_legacy_bare_alias_action(suffixed, bare),
+                ))
     return findings

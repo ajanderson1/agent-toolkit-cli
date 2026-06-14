@@ -11,7 +11,7 @@ from agent_toolkit_cli.skill_paths import (
     canonical_skill_dir,
     library_skill_path,
     lock_file_path,
-    parent_clone_path,
+    resolve_existing_parent_clone,
 )
 
 from ._common import scope_and_roots, scope_banner
@@ -83,8 +83,9 @@ def update_cmd(
                 had_conflict = True
                 continue
             owner, repo = entry.source.split("/", 1)
-            parent_dir = parent_clone_path(
-                owner, repo, ref=entry.ref, env=None,
+            parent_dir = resolve_existing_parent_clone(
+                owner, repo, ref=entry.ref, parent_url=entry.parent_url,
+                env=None,
             )
             if not skill_git.is_git_repo(parent_dir):
                 click.echo(

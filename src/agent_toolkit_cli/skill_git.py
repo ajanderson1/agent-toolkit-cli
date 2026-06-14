@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import enum
 import os
+import re
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -299,6 +300,117 @@ def remote_url(repo: Path, *, env: dict[str, str] | None) -> str:
         ["git", "-C", str(repo), "remote", "get-url", "origin"], env=env,
     )
     return proc.stdout.strip()
+
+
+_SSH_GIT_URL_RE = re.compile(r"^git@([^:]+):(.+?)(?:\.git)?/?$")
+_HTTPS_GIT_URL_RE = re.compile(r"^https?://([^/]+)/(.+?)(?:\.git)?/?$")
+_SSH_URL_RE = re.compile(r"^ssh://(?:[^@]+@)?([^/]+)/(.+?)(?:\.git)?/?$")
+
+
+def normalise_git_url(url: str) -> str:
+    """Reduce SSH and HTTPS forms to ``host/path`` for equality comparison.
+
+    `git@github.com:foo/bar.git` and `https://github.com/foo/bar.git` both
+    collapse to `github.com/foo/bar`. Trailing slashes and the `ssh://` URL
+    form are also folded in. Anything that doesn't match any pattern falls
+    back to lowercase + trailing-`.git` strip + trailing-slash strip, so
+    local paths and unfamiliar URL forms still round-trip sensibly.
+    """
+    u = url.strip().lower()
+    if (m := _SSH_GIT_URL_RE.match(u)):
+        return f"{m.group(1)}/{m.group(2)}"
+    if (m := _HTTPS_GIT_URL_RE.match(u)):
+        return f"{m.group(1)}/{m.group(2)}"
+    if (m := _SSH_URL_RE.match(u)):
+        return f"{m.group(1)}/{m.group(2)}"
+    u = u.rstrip("/")
+    if u.endswith(".git"):
+        u = u[:-4]
+    return u
+
+
+def remote_matches(
+    repo: Path, parent_url: str | None, env: dict[str, str] | None,
+) -> bool:
+    """True if `repo`'s origin remote names the same repo as `parent_url`.
+
+    Compares normalised (SSH/HTTPS-folded) forms so `git@…:o/r.git` and
+    `https://…/o/r` are treated as equal. A repo with no origin (or any git
+    error reading it) is treated as a non-match. A `parent_url` of None is also
+    a non-match: with no expected URL there is nothing to match against, so the
+    predicate fails safe rather than crashing in `normalise_git_url(None)`
+    (every current caller already gates on a non-None parent_url, but this keeps
+    a future caller that forgets the gate from raising mid-resolve).
+    """
+    if parent_url is None:
+        return False
+    try:
+        actual = remote_url(repo, env=env)
+    except GitError:
+        return False
+    return normalise_git_url(actual) == normalise_git_url(parent_url)
+
+
+def _checked_out_at_ref(bare: Path, ref: str, env: dict[str, str] | None) -> bool:
+    """True if the bare clone is actually at `ref`.
+
+    Multi-ref safety (#412): several skills can share one monorepo at DIFFERENT
+    refs, but a single clone is checked out at exactly ONE ref. Adopting a bare
+    clone for a skill whose ref it is NOT on would let `update`/`reset` mutate or
+    discard the tree the other skill depends on. So the ref must match:
+
+    - SHA pin (`looks_like_sha`): the clone is detached at a commit, so
+      `current_branch` returns ``"HEAD"`` — compare HEAD's sha instead, honouring
+      abbreviated pins via prefix match.
+    - Branch ref: require the checked-out branch to equal `ref`.
+
+    Any git error reading the clone is treated as "does not match" (fail safe).
+    """
+    try:
+        if looks_like_sha(ref):
+            return head_sha(bare, env=env).startswith(ref)
+        return current_branch(bare, env=env) == ref
+    except GitError:
+        return False
+
+
+def legacy_bare_clone_for(
+    suffixed: Path, bare: Path, *, ref: str | None, parent_url: str | None,
+    env: dict[str, str] | None,
+) -> Path | None:
+    """Return `bare` iff it is the legacy bare-named clone for this skill (#412).
+
+    A monorepo parent cloned before its lock `ref` was backfilled (None -> main)
+    lives at the flat `<repo>` path instead of the canonical `<repo>@<ref>`.
+    Both the read-path resolver (`skill_paths.resolve_existing_parent_clone`) and
+    doctor's `legacy_bare_parent` finding need the SAME test for "is this bare
+    dir ours?", so it lives here once and both consume it — they cannot drift.
+
+    All of the following must hold to adopt the bare clone:
+
+    - `ref` is set (a None ref already lives at the bare path — nothing to alias).
+    - `bare.parent == suffixed.parent` — the bare/suffixed pair are siblings only
+      for a FLAT ref. A slash ref makes `<repo>@feat/x` a two-component path, so
+      `Path.parent` is `…/<repo>@feat` (not `…/<owner>/`), differing from bare
+      `<repo>`'s parent `…/<owner>/`. The equality therefore holds ONLY for flat
+      refs; a flat bare `<repo>` is then a DIFFERENT skill's clone and is
+      excluded. (This is `Path` component parsing, not physical dir nesting.)
+    - `bare` is a git repo whose origin remote matches `parent_url`.
+    - `bare` is actually checked out at `ref` (see `_checked_out_at_ref`).
+
+    Returns None when any condition fails, so callers fall back to the canonical
+    suffixed path.
+    """
+    if ref is None:
+        return None
+    if (
+        bare.parent == suffixed.parent
+        and is_git_repo(bare)
+        and remote_matches(bare, parent_url, env)
+        and _checked_out_at_ref(bare, ref, env)
+    ):
+        return bare
+    return None
 
 
 def default_branch(repo: Path, *, env: dict[str, str] | None) -> str | None:

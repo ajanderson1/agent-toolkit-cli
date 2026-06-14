@@ -391,3 +391,107 @@ def test_owned_update_merges_not_resets_local_edits(tmp_path, monkeypatch):
     assert r.exit_code == 0, r.output
     # The local edit survived the update (merge, not reset).
     assert marker.exists(), "skill update discarded a local owned edit"
+
+
+# --- #412: legacy bare-named parent clone resolution ---
+
+def _add_owned_ref(parent_url: str, skill: str = "mkdocs", ref: str = "main") -> None:
+    """Like _add_owned but records a non-None ref via the /tree/<ref>/ form,
+    so a suffixed <repo>@<ref> clone is materialised (#412 needs this)."""
+    src = f"{parent_url}/tree/{ref}/{skill}"
+    r = CliRunner().invoke(cli, ["skill", "add", src, "--owned"])
+    assert r.exit_code == 0, r.output
+
+
+def _make_legacy_bare(entry: dict) -> Path:
+    """Rename the suffixed parent clone to the legacy bare `<repo>` name and
+    re-point the canonical symlink into it, reproducing the pre-ref-backfill
+    on-disk layout (#412): the symlink points into the bare clone, the lock's
+    `ref` was backfilled afterwards, so reads recompute the suffixed path and
+    miss the on-disk clone."""
+    from agent_toolkit_cli.skill_paths import (
+        canonical_skill_dir, parent_clone_path,
+    )
+    ref = entry["ref"]
+    owner, repo = entry["source"].split("/", 1)
+    suffixed = parent_clone_path(owner, repo, ref=ref, env=None)
+    assert suffixed.name == f"{repo}@{ref}", suffixed
+    bare = parent_clone_path(owner, repo, ref=None, env=None)
+    suffixed.rename(bare)
+    # Re-point the canonical symlink (was → suffixed/<skill_path>) at the bare
+    # clone, matching the real legacy state where the symlink lives in bare.
+    slug = entry["skillPath"].rsplit("/", 1)[-1]
+    canonical = canonical_skill_dir(
+        slug, scope="global", home=None, project=None,
+    )
+    if canonical.is_symlink():
+        canonical.unlink()
+        canonical.symlink_to(bare / entry["skillPath"])
+    return bare
+
+
+def test_update_finds_legacy_bare_named_parent(tmp_path, monkeypatch):
+    parent_url, _ = _setup_parent(tmp_path, monkeypatch)
+    _add_owned_ref(parent_url, "mkdocs")
+    entry = _lock()["skills"]["mkdocs"]
+    assert entry.get("ref") == "main", entry  # /tree/main/ form records a ref
+    bare = _make_legacy_bare(entry)
+    assert bare.exists()
+
+    r = CliRunner().invoke(cli, ["skill", "update", "mkdocs", "-g"])
+    assert r.exit_code == 0, r.output
+    assert "parent clone missing" not in r.output
+
+
+def test_status_finds_legacy_bare_named_parent(tmp_path, monkeypatch):
+    parent_url, _ = _setup_parent(tmp_path, monkeypatch)
+    _add_owned_ref(parent_url, "mkdocs")
+    entry = _lock()["skills"]["mkdocs"]
+    _make_legacy_bare(entry)
+    r = CliRunner().invoke(cli, ["skill", "status", "mkdocs", "-g"])
+    assert r.exit_code == 0, r.output
+    # `(owned)` only prints when the parent clone resolved to a real git repo
+    # (status_cmd line ~116). A failed resolve falls to the `copy` branch, which
+    # also exits 0 — so a bare "no 'missing'" check would pass on regression.
+    assert "(owned)" in r.output, r.output
+    assert "copy" not in r.output, r.output
+
+
+def test_reset_finds_legacy_bare_named_parent(tmp_path, monkeypatch):
+    parent_url, _ = _setup_parent(tmp_path, monkeypatch)
+    _add_owned_ref(parent_url, "mkdocs")
+    entry = _lock()["skills"]["mkdocs"]
+    _make_legacy_bare(entry)
+    r = CliRunner().invoke(cli, ["skill", "reset", "mkdocs", "-g"])
+    assert r.exit_code == 0, r.output
+    # A failed resolve prints "parent clone missing or not a git repo at …";
+    # a successful one reaches the reset/clean path. Assert the failure message
+    # is absent AND a positive reset outcome is present.
+    assert "parent clone missing" not in r.output.lower(), r.output
+    assert "mkdocs: reset" in r.output, r.output
+
+
+def test_push_finds_legacy_bare_named_parent(tmp_path, monkeypatch):
+    parent_url, _ = _setup_parent(tmp_path, monkeypatch)
+    _add_owned_ref(parent_url, "mkdocs")
+    entry = _lock()["skills"]["mkdocs"]
+    _make_legacy_bare(entry)
+    r = CliRunner().invoke(cli, ["skill", "push", "--direct", "mkdocs", "-g"])
+    assert r.exit_code == 0, r.output
+    # Same as reset: the failure path emits "parent clone missing …". A resolved
+    # clean clone reaches the "nothing to push" outcome.
+    assert "parent clone missing" not in r.output.lower(), r.output
+    assert "nothing to push" in r.output, r.output
+
+
+def test_fresh_add_materialises_suffixed_clone(tmp_path, monkeypatch):
+    from agent_toolkit_cli.skill_paths import parent_clone_path
+    parent_url, _ = _setup_parent(tmp_path, monkeypatch)
+    _add_owned_ref(parent_url, "mkdocs")
+    entry = _lock()["skills"]["mkdocs"]
+    assert entry.get("ref") == "main"
+    owner, repo = entry["source"].split("/", 1)
+    suffixed = parent_clone_path(owner, repo, ref=entry["ref"], env=None)
+    bare = parent_clone_path(owner, repo, ref=None, env=None)
+    assert suffixed.exists() and suffixed.name == f"{repo}@{entry['ref']}"
+    assert not bare.exists()  # fresh add never used the bare name

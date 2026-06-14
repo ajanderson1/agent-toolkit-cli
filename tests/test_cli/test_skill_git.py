@@ -584,3 +584,98 @@ def test_divergence_parses_left_right_count(monkeypatch):
     for out, expected in cases.items():
         monkeypatch.setattr(g, "_run", lambda *a, _o=out, **k: _Fake(_o))
         assert g.divergence(Path("/x"), ref="main", env=None) == expected
+
+
+def test_normalise_git_url_collapses_forms():
+    from agent_toolkit_cli.skill_git import normalise_git_url
+    a = normalise_git_url("https://github.com/foo/bar.git")
+    b = normalise_git_url("git@github.com:foo/bar.git")
+    c = normalise_git_url("https://github.com/foo/bar")
+    assert a == b == c == "github.com/foo/bar"
+
+
+# --- legacy_bare_clone_for predicate (#412, shared by resolver + doctor) ---
+
+def _bare_repo_on(path: Path, remote: str, branch: str) -> None:
+    from tests.conftest import scrub_git_env
+    path.mkdir(parents=True)
+    env = scrub_git_env()
+    subprocess.run(["git", "init", "-q", str(path)], check=True, env=env)
+    subprocess.run(
+        ["git", "-C", str(path), "remote", "add", "origin", remote],
+        check=True, env=env,
+    )
+    subprocess.run(
+        ["git", "-C", str(path), "checkout", "-q", "-b", branch],
+        check=True, env=env,
+    )
+    (path / "f").write_text("x")
+    subprocess.run(["git", "-C", str(path), "add", "f"], check=True, env=env)
+    # Pin identity via -c so the commit works on a runner with no global git
+    # config (scrub_git_env strips inherited GIT_AUTHOR_*/GIT_COMMITTER_*).
+    subprocess.run(
+        ["git", "-C", str(path),
+         "-c", "user.name=t", "-c", "user.email=t@t.invalid",
+         "commit", "-q", "-m", "c"],
+        check=True, env=env,
+    )
+
+
+def test_legacy_bare_clone_for_none_ref_returns_none(tmp_path):
+    from agent_toolkit_cli.skill_git import legacy_bare_clone_for
+    bare = tmp_path / "_parents" / "o" / "r"
+    suffixed = tmp_path / "_parents" / "o" / "r"
+    assert legacy_bare_clone_for(
+        suffixed, bare, ref=None, parent_url="https://github.com/o/r", env=None,
+    ) is None
+
+
+def test_legacy_bare_clone_for_non_git_bare_returns_none(tmp_path):
+    from agent_toolkit_cli.skill_git import legacy_bare_clone_for
+    bare = tmp_path / "_parents" / "o" / "r"
+    bare.mkdir(parents=True)  # exists but is NOT a git repo
+    suffixed = tmp_path / "_parents" / "o" / "r@main"
+    assert legacy_bare_clone_for(
+        suffixed, bare, ref="main", parent_url="https://github.com/o/r", env=None,
+    ) is None
+
+
+def test_legacy_bare_clone_for_matching_branch_adopts(tmp_path):
+    from agent_toolkit_cli.skill_git import legacy_bare_clone_for
+    url = "https://github.com/o/r"
+    bare = tmp_path / "_parents" / "o" / "r"
+    _bare_repo_on(bare, url, "main")
+    suffixed = tmp_path / "_parents" / "o" / "r@main"
+    assert legacy_bare_clone_for(
+        suffixed, bare, ref="main", parent_url=url, env=None,
+    ) == bare
+
+
+def test_legacy_bare_clone_for_off_branch_returns_none(tmp_path):
+    from agent_toolkit_cli.skill_git import legacy_bare_clone_for
+    url = "https://github.com/o/r"
+    bare = tmp_path / "_parents" / "o" / "r"
+    _bare_repo_on(bare, url, "main")  # on main…
+    suffixed = tmp_path / "_parents" / "o" / "r@dev"  # …but ref is dev
+    assert legacy_bare_clone_for(
+        suffixed, bare, ref="dev", parent_url=url, env=None,
+    ) is None
+
+
+def test_legacy_bare_clone_for_none_parent_url_returns_none(tmp_path):
+    """A None parent_url fails safe rather than crashing in normalise_git_url
+    — guards a future caller that forgets the entry.parent_url gate."""
+    from agent_toolkit_cli.skill_git import legacy_bare_clone_for
+    bare = tmp_path / "_parents" / "o" / "r"
+    _bare_repo_on(bare, "https://github.com/o/r", "main")
+    suffixed = tmp_path / "_parents" / "o" / "r@main"
+    assert legacy_bare_clone_for(
+        suffixed, bare, ref="main", parent_url=None, env=None,
+    ) is None
+
+
+def test_remote_matches_none_parent_url_is_false(tmp_path):
+    from agent_toolkit_cli.skill_git import remote_matches
+    bare = tmp_path / "r"
+    _bare_repo_on(bare, "https://github.com/o/r", "main")
+    assert remote_matches(bare, None, None) is False
