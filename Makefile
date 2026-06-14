@@ -7,7 +7,7 @@ help: ## Show this help
 
 ## Documentation -------------------------------------------------------
 
-.PHONY: docs docs-build docs-fast
+.PHONY: docs docs-build
 
 docs: ## Serve MkDocs documentation locally + on the meshnet (restarts if running)
 	@PORT=$$(grep -E '^dev_addr:' mkdocs.yml 2>/dev/null | sed 's/.*://;s/[^0-9]//g'); \
@@ -34,6 +34,3 @@ docs: ## Serve MkDocs documentation locally + on the meshnet (restarts if runnin
 
 docs-build: ## Build static documentation site
 	uv run mkdocs build --strict
-
-docs-fast: ## Serve docs without mkdocstrings (faster reload)
-	ENABLE_MKDOCSTRINGS=false uv run mkdocs serve
