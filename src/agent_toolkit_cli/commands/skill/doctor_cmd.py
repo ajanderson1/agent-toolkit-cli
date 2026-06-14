@@ -4,8 +4,10 @@ from __future__ import annotations
 import click
 
 from agent_toolkit_cli.skill_doctor import diagnose
+from agent_toolkit_cli.skill_lock import read_lock
+from agent_toolkit_cli.skill_paths import lock_file_path
 
-from ._common import scope_and_roots
+from ._common import scope_and_roots, scope_banner
 
 
 @click.command("doctor")
@@ -23,10 +25,15 @@ def doctor_cmd(
     no_fix: bool, repair_foreign: bool,
 ) -> None:
     """Diagnose and (optionally) repair skill-installation drift."""
-    scope, home, project_root = scope_and_roots(
+    scope, home, project_root, implicit = scope_and_roots(
         global_, project_flag,
         ctx.obj.get("project_root") if ctx.obj else None,
         read_only=True,
+    )
+    lock_path = lock_file_path(scope=scope, home=home, project=project_root)
+    scope_banner(
+        scope, implicit=implicit, lock_path=lock_path,
+        count=len(read_lock(lock_path).skills),
     )
     findings = diagnose(
         slugs=slugs or None,
