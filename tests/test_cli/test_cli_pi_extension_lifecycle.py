@@ -477,6 +477,25 @@ def test_reset_requires_at_least_one_slug(tmp_path, monkeypatch):
     assert r.exit_code != 0
 
 
+def test_reset_slug_not_in_lock_reports_specific_error(
+    tmp_path, monkeypatch, git_sandbox
+):
+    """`pi-extension reset <absent-slug>` => '{slug}: not in lock' + exit 1 (#423 / AC4).
+
+    Seed ONE real entry so the lock is non-empty (not the empty-lock no-op path),
+    then query a different, absent slug and assert the EXACT production message.
+    """
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _add_store_owned(tmp_path, git_sandbox.env, git_sandbox.upstream)  # seeds "demo"
+
+    r = CliRunner().invoke(main, ["pi-extension", "reset", "ghost", "-g"])
+    assert r.exit_code != 0
+    assert "ghost: not in lock" in r.output
+
+
 # ---------------------------------------------------------------------------
 # Task B5: doctor
 # ---------------------------------------------------------------------------

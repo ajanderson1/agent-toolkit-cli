@@ -235,3 +235,36 @@ def test_agent_update_project_scope(tmp_path, monkeypatch, git_sandbox):
     assert sha_before != sha_after, "project-scope update should advance the shared canonical"
     proj_lock = read_lock(proj_lock_path)
     assert proj_lock.skills["demo"].local_sha == sha_after, "project lock must record the bump"
+
+
+def test_agent_reset_refuses_dirty_canonical_without_force(
+    tmp_path, monkeypatch, git_sandbox
+):
+    """`agent reset <slug>` on a dirty canonical refuses with its specific
+    message; `--force` discards and cleans (#423 / AC4).
+
+    Exercises the real dirty-canonical guard (reset_cmd.py:74) — asserts the
+    EXACT production string, not a bare non-zero exit.
+    """
+    from agent_toolkit_cli import skill_git
+
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("HOME", str(tmp_path / "fake-home"))
+
+    upstream = _make_agent_upstream(tmp_path, git_sandbox.env)
+    r = CliRunner().invoke(main, ["agent", "add", str(upstream), "--slug", "demo"])
+    assert r.exit_code == 0, r.output
+
+    canonical = library_agent_path("demo")
+    (canonical / "demo.md").write_text("dirty edit\n")
+    assert skill_git.status(canonical, env=None).value == "dirty"
+
+    r = CliRunner().invoke(main, ["agent", "reset", "demo", "-g"])
+    assert r.exit_code != 0
+    assert "demo: dirty — commit, push, or use --force to discard" in r.output
+
+    # --force discards the dirt and leaves the tree clean.
+    r = CliRunner().invoke(main, ["agent", "reset", "demo", "-g", "--force"])
+    assert r.exit_code == 0, r.output
+    assert skill_git.status(canonical, env=None).value == "clean"
