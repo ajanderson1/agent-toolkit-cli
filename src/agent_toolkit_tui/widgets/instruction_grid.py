@@ -37,6 +37,7 @@ _PENDING_LINK    = "[yellow]+[/]"
 _PENDING_UNLINK  = "[yellow]-[/]"
 _INFO_GLYPH      = "ⓘ"
 _NOT_AVAIL_GLYPH = "[dim]—[/]"
+_GLOBAL_GLYPH    = "🌐"
 
 # Column index offsets:
 #   0 = slug (INSTRUCTION)
@@ -410,12 +411,23 @@ class InstructionGrid(Vertical):
         """Return the display glyph for a harness cell. Never named _render_*."""
         cell = row.cells.get((harness, self._scope))
         if cell is None:
-            return _NOT_AVAIL_GLYPH
-        if cell.conflict:
-            return _CONFLICT_GLYPH
-        pending = self._pending.get((self._scope, harness, row.slug))
-        if pending == "link":
-            return _PENDING_LINK
-        if pending == "unlink":
-            return _PENDING_UNLINK
-        return _LINKED_GLYPH if cell.linked else _UNLINKED_GLYPH
+            base = _NOT_AVAIL_GLYPH
+        elif cell.conflict:
+            base = _CONFLICT_GLYPH
+        else:
+            pending = self._pending.get((self._scope, harness, row.slug))
+            if pending == "link":
+                base = _PENDING_LINK
+            elif pending == "unlink":
+                base = _PENDING_UNLINK
+            else:
+                base = _LINKED_GLYPH if cell.linked else _UNLINKED_GLYPH
+        # In project scope, mark cells whose harness slot is also linked
+        # globally — same indicator as skills/agents/pi (#388). InstructionCell
+        # has no drift/stray/skipped, so linked is the whole gate. Appends to
+        # any base, including the not-applicable em-dash and the conflict glyph.
+        if self._scope == "project":
+            global_cell = row.cells.get((harness, "global"))
+            if global_cell is not None and global_cell.linked:
+                return f"{base} {_GLOBAL_GLYPH}"
+        return base
