@@ -102,3 +102,62 @@ def test_banner_silent_on_explicit_project():
         lock_path="/x/skills-lock.json", count=6,
     )
     assert stdout == "" and stderr == ""
+
+
+# ── per-verb wiring (CLI level) ─────────────────────────────────────────────
+
+import json  # noqa: E402
+
+from agent_toolkit_cli.cli import main  # noqa: E402
+
+
+def _seed_project_lock(runner, tmp_path, monkeypatch, git_sandbox, slug="demo"):
+    """Add a skill to the library and install it into a project, so the
+    project gets a non-empty skills-lock.json. Returns the project path."""
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / ".claude").mkdir()
+    assert runner.invoke(main, [
+        "skill", "add", str(git_sandbox.upstream), "--slug", slug,
+    ]).exit_code == 0
+    assert runner.invoke(main, [
+        "--project", str(project), "skill", "install", slug,
+        "--scope", "project", "--agents", "claude-code",
+    ]).exit_code == 0
+    return project
+
+
+def test_list_json_banner_on_stderr_stdout_clean(
+    git_sandbox, tmp_path, monkeypatch,
+):
+    runner = CliRunner()
+    project = _seed_project_lock(runner, tmp_path, monkeypatch, git_sandbox)
+    # No -g/-p: implicit project (project root has skills-lock.json).
+    result = runner.invoke(main, [
+        "--project", str(project), "skill", "list", "--json",
+    ])
+    assert result.exit_code == 0, result.stderr
+    # stdout is pristine JSON; banner is on stderr (the --json exception).
+    assert json.loads(result.stdout)
+    assert "project scope" in result.stderr
+
+
+def test_list_table_banner_on_stdout(git_sandbox, tmp_path, monkeypatch):
+    runner = CliRunner()
+    project = _seed_project_lock(runner, tmp_path, monkeypatch, git_sandbox)
+    result = runner.invoke(main, ["--project", str(project), "skill", "list"])
+    assert result.exit_code == 0, result.stderr
+    assert "project scope" in result.stdout   # human path → stdout
+
+
+def test_list_explicit_global_no_banner(git_sandbox, tmp_path, monkeypatch):
+    runner = CliRunner()
+    _seed_project_lock(runner, tmp_path, monkeypatch, git_sandbox)
+    result = runner.invoke(main, ["skill", "list", "-g"])
+    assert result.exit_code == 0, result.stderr
+    assert "project scope" not in result.stdout
+    assert "project scope" not in result.stderr

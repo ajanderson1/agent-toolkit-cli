@@ -11,7 +11,7 @@ from agent_toolkit_cli.skill_install import _current_linked_agents
 from agent_toolkit_cli.skill_lock import LockFile, read_lock
 from agent_toolkit_cli.skill_paths import lock_file_path
 
-from ._common import scope_and_roots
+from ._common import scope_and_roots, scope_banner
 
 
 @click.command("list", epilog="""\
@@ -43,7 +43,7 @@ def list_cmd(
     as_json: bool,
 ) -> None:
     """List installed skills from the lock file."""
-    scope, home, project_root = scope_and_roots(
+    scope, home, project_root, implicit = scope_and_roots(
         global_,
         project_flag,
         ctx.obj.get("project_root") if ctx.obj else None,
@@ -57,7 +57,12 @@ def list_cmd(
             "standard-skill is a synthetic catalog entry, not a usable agent token"
         )
 
-    lock = read_lock(lock_file_path(scope=scope, home=home, project=project_root))
+    lock_path = lock_file_path(scope=scope, home=home, project=project_root)
+    lock = read_lock(lock_path)
+    scope_banner(
+        scope, implicit=implicit, lock_path=lock_path,
+        count=len(lock.skills), err=as_json,
+    )
 
     slugs = sorted(lock.skills)
     if agent is not None:
