@@ -9,7 +9,7 @@ from pathlib import Path
 
 import click
 
-from agent_toolkit_cli.commands.mcp._common import scope_and_roots
+from agent_toolkit_cli.commands.mcp._common import scope_and_roots, scope_banner
 from agent_toolkit_cli.mcp_lock import lock_path_for_scope, read_lock
 from agent_toolkit_cli.mcp_standard import STANDARD_MCP_READERS, mcp_standard_covered
 
@@ -26,13 +26,15 @@ def status_cmd(
     project_flag: bool,
 ) -> None:
     """Show locked MCP projection state for each slug."""
-    scope, home, project_root = scope_and_roots(
+    scope, home, project_root, implicit = scope_and_roots(
         global_, project_flag,
         ctx.obj.get("project_root") if ctx.obj else None,
         read_only=True,
     )
     effective_home = home if home is not None else Path.home()
-    lock = read_lock(lock_path_for_scope(scope, home=effective_home, project=project_root))
+    lock_path = lock_path_for_scope(scope, home=effective_home, project=project_root)
+    lock = read_lock(lock_path)
+    scope_banner(scope, implicit=implicit, lock_path=lock_path, count=len(lock))
 
     if not lock:
         click.echo(f"no MCP servers in the {scope} lock")
