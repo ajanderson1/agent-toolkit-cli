@@ -14,13 +14,14 @@
 
 ## File structure
 
-- `tests/test_cli/test_command_coverage_guard.py` — **new** (G0/AC0). The invariant.
+- `tests/test_cli/test_command_coverage_guard.py` — **new** (G0/AC0). The invariant, via **Click introspection** (not glob) + **comment-stripped** scan. Honest docstring: invocation-presence, NOT behavior.
 - `tests/test_cli/test_cli_agent_update.py` — **new** (G1/AC1). Clones the pi-extension update template.
+- per-asset test files — **modify** (G0b/AC0b). Behavior assertions for cells the thin-cell audit flags.
 - `tests/test_cli/test_cli_skill_install.py` — **modify** (G2/AC2). Add per-mechanism parametrization.
 - `tests/test_cli_mcp.py` — **modify** (G2/AC2). Add 4-harness parametrization.
-- `tests/test_cli/test_cli_agent_update.py` + existing instructions/mcp/pi-ext test files — **modify** (G3/AC3, G4/AC4). Scope + error-path cases.
+- `tests/test_cli/test_cli_agent_update.py` + existing instructions/mcp/pi-ext test files — **modify** (G3/AC3, G4/AC4). Scope (excl. `mcp update`) + error-path cases.
 
-> **Ordering note:** Task 1 (G1) lands BEFORE Task 2 (G0). The guard goes red until `agent update` is tested, so write the agent-update tests first, then add the guard that codifies "all cells covered". This keeps every commit green.
+> **Ordering note:** Task 1 (G1) lands BEFORE Task 2 (G0). The guard goes red until `agent update` is tested, so write the agent-update tests first, then add the guard that codifies "every cell invoked". This keeps every commit green.
 
 ---
 
@@ -126,20 +127,36 @@ Expected: PASS. (If it FAILS, the test setup is wrong — fix the test, not the 
 - [ ] **Step 3: Add the error-branch + no-op tests**
 
 ```python
-def test_agent_update_unknown_slug_reports_error(tmp_path, monkeypatch):
+def test_agent_update_unknown_slug_reports_error(tmp_path, monkeypatch, git_sandbox):
+    """A named slug not in the lock => '{slug}: not in lock' + exit 1.
+
+    NOTE: this needs a lock that EXISTS but lacks the slug. With NO lock at all,
+    read_lock returns an empty lock (it swallows FileNotFoundError, see
+    skill_lock.read_lock) and `targets = slugs` => the loop hits 'not in lock'
+    and exits 1 — but to make the lock-exists path explicit, seed one entry first.
+    """
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
     monkeypatch.setenv("HOME", str(tmp_path / "fake-home"))
-    (tmp_path / "fake-home").mkdir(parents=True, exist_ok=True)
+    upstream = _make_agent_upstream(tmp_path, git_sandbox.env)
+    CliRunner().invoke(main, ["agent", "add", str(upstream), "--slug", "demo"])
+
     r = CliRunner().invoke(main, ["agent", "update", "nope", "-g"])
-    # update_cmd: "no agents lock found" (no lock) OR "nope: not in lock" + exit 1
-    assert r.exit_code != 0 or "not in lock" in r.output or "no agents lock" in r.output
+    assert r.exit_code != 0
+    assert "nope: not in lock" in r.output
 
 
-def test_agent_update_no_lock_is_clean(tmp_path, monkeypatch):
+def test_agent_update_no_lock_is_silent_noop(tmp_path, monkeypatch):
+    """REVIEW FIX: read_lock swallows FileNotFoundError and returns an EMPTY lock,
+    so `agent update -g` with no lock takes targets=() => the loop runs zero times
+    => exit 0 with EMPTY output. The 'no agents lock found' branch in update_cmd.py
+    is dead code (read_lock never raises). Assert the REAL behavior, not the message.
+    """
     monkeypatch.setenv("HOME", str(tmp_path / "fake-home"))
     (tmp_path / "fake-home").mkdir(parents=True, exist_ok=True)
     r = CliRunner().invoke(main, ["agent", "update", "-g"])
     assert r.exit_code == 0, r.output
-    assert "no agents lock" in r.output.lower()
+    assert r.output.strip() == "", f"expected empty output, got: {r.output!r}"
 
 
 def test_agent_update_no_args_updates_all(tmp_path, monkeypatch, git_sandbox):
@@ -158,15 +175,20 @@ def test_agent_update_no_args_updates_all(tmp_path, monkeypatch, git_sandbox):
 
 ```python
 def test_agent_update_non_git_canonical_reports_error(tmp_path, monkeypatch):
-    """A lock entry whose canonical has no .git/ cannot update: message + exit 1."""
+    """A lock entry whose canonical has no .git/ cannot update: message + exit 1.
+
+    Seed directly at library_agent_path("plain") — the EXACT path update_cmd reads
+    (update_cmd.py: `canonical = library_agent_path(slug)`). Review confirmed
+    canonical_agent_dir("plain", scope="global") == library_agent_path("plain") at
+    global scope, so either resolves the same dir; we use library_agent_path to make
+    the intent unambiguous.
+    """
     monkeypatch.setenv("HOME", str(tmp_path / "fake-home"))
     (tmp_path / "fake-home").mkdir(parents=True, exist_ok=True)
     from agent_toolkit_cli.agent_lock import LockEntry, add_entry, read_lock, write_lock
-    from agent_toolkit_cli.agent_paths import (
-        canonical_agent_dir, library_lock_path,
-    )
-    # Seed a non-git canonical + a lock entry pointing at it.
-    canonical = canonical_agent_dir("plain", scope="global")
+    from agent_toolkit_cli.agent_paths import library_agent_path, library_lock_path
+    # Seed a NON-git canonical at the path the command reads + a lock entry for it.
+    canonical = library_agent_path("plain")
     canonical.mkdir(parents=True, exist_ok=True)
     (canonical / "plain.md").write_text("---\nname: plain\ndescription: x\n---\nB\n")
     lock_path = library_lock_path()
@@ -180,7 +202,7 @@ def test_agent_update_non_git_canonical_reports_error(tmp_path, monkeypatch):
     assert "no .git" in r.output
 ```
 
-> **Verify branch reachability first:** `agent update` calls `library_agent_path(slug)` for the canonical, not `canonical_agent_dir`. Before relying on the seeding above, confirm with `readlink`/inspection that `library_agent_path("plain")` resolves to the same dir the lock entry implies. If `agent add` is the only way to populate `library_agent_path`, seed via a non-git path the command actually reads — adjust the test to match the real canonical location rather than forcing it. The assertion (`"no .git"`, exit 1) is the contract; the seeding is whatever makes `library_agent_path(slug)` a non-git dir.
+> Review verified (by running the command): seeding a non-git dir at `library_agent_path("plain")` reaches the `no .git` branch (`exit 1`, message `"plain: no .git/ in canonical — cannot update; ..."`). No reachability hedge needed — `canonical_agent_dir(global) == library_agent_path`.
 
 - [ ] **Step 5: Run the whole new file, verify green**
 
@@ -198,104 +220,198 @@ git commit -m "test(agent): cover \`agent update\` — happy path, no-lock, unkn
 
 ## Task 2: command-coverage guard meta-test (G0 / AC0)
 
-Enumerate every registered `commands/<at>/*_cmd.py` cell plus skill's off-dir verbs, and assert each is invoked by at least one test. After Task 1 this passes; a future untested cell makes it fail.
+Enumerate every registered CLI command cell **via Click introspection** (not a filesystem glob — review finding: the glob missed `skill remove`/`skill uninstall`, which are inline `@skill.command()` in `commands/skill/__init__.py`), and assert each is *named* by ≥1 live test invocation. Scan the test corpus **with comments stripped** so a commented-out/dead invocation cannot satisfy the guard (review finding). After Task 1 this passes; a future un-invoked cell fails it.
+
+**Honest-framing requirement (review):** the guard's docstring MUST state it asserts *invocation presence*, NOT behavioral coverage — it guarantees "no cell ships completely untested", not "every cell is effectively tested" (that is G0b's job).
 
 **Files:**
 - Create: `tests/test_cli/test_command_coverage_guard.py`
 
-- [ ] **Step 1: Write the guard test**
+- [ ] **Step 1: Write the guard test (Click-introspection enumeration)**
 
 ```python
-"""Coverage guard (#423 / AC0): every registered CLI command cell must be
-invoked by at least one test.
+"""Coverage guard (#423 / AC0): every registered CLI command cell must be NAMED
+by at least one live test invocation.
 
-Turns the one-off 2026-06-14 audit into a permanent invariant: a newly-added
-(asset_type, verb) command that ships without a test fails this test.
+WHAT THIS GUARANTEES (and what it does NOT):
+- Guarantees: no (group, verb) command ships *completely un-invoked* by any test.
+  This is a regression FLOOR — the lowest bar worth enforcing.
+- Does NOT guarantee the command's behavior is effectively asserted. A --help or
+  bare exit-code smoke satisfies this guard. Assertion DEPTH is a reviewer / G0b
+  concern, NOT enforced here. Do not read a green guard as "comprehensive coverage".
 
-Mechanism: enumerate command cells from the source tree, then scan all test
-sources for a CliRunner invocation list whose first two string tokens are
-(group-or-alias, verb).
+Mechanism: enumerate cells from Click's own command tree (so inline @group.command()
+verbs and aliases are caught automatically), then scan the comment-stripped test
+corpus for a literal ["<group-or-alias>", "<verb>"] invocation.
 """
 from __future__ import annotations
 
+import io
 import re
+import tokenize
 from pathlib import Path
 
 import pytest
 
-_SRC = Path(__file__).resolve().parents[2] / "src/agent_toolkit_cli/commands"
+from agent_toolkit_cli.cli import main
+
 _TESTS = Path(__file__).resolve().parents[1]
 
-# First-token aliases each command group may appear under in invoke lists.
+# Click registers each group under its canonical name AND any aliases (skills,
+# mcps). Map canonical group-name -> all first-token spellings tests may use.
 _GROUP_ALIASES = {
     "skill": ("skill", "skills"),
     "agent": ("agent", "agents"),
     "instructions": ("instructions",),
     "mcp": ("mcp", "mcps"),
-    "pi_extension": ("pi-extension", "pi_extension"),
+    "pi-extension": ("pi-extension", "pi_extension"),
     "bundle": ("bundle",),
 }
 
-# Skill's install/add live outside commands/skill/ (skill_install.py + wizard);
-# they are heavily tested but won't be discovered from the commands dir.
-_OFF_DIR_CELLS = {("skill", "install"), ("skill", "add")}
-
 
 def _registered_cells() -> set[tuple[str, str]]:
+    """(group, verb) for every command Click actually exposes.
+
+    Walk main.commands; for each sub-group, walk its .commands. This catches
+    verbs defined inline in __init__.py (skill remove/uninstall) AND those in
+    *_cmd.py, with zero filesystem assumptions. De-aliases group names so
+    `skills`/`mcps` don't double-count.
+    """
+    canonical = set(_GROUP_ALIASES)
     cells: set[tuple[str, str]] = set()
-    for at_dir in _SRC.iterdir():
-        if not at_dir.is_dir() or at_dir.name.startswith("__"):
-            continue
-        for cmd in at_dir.glob("*_cmd.py"):
-            cells.add((at_dir.name, cmd.name[: -len("_cmd.py")]))
-    cells |= _OFF_DIR_CELLS
+    for gname, gcmd in main.commands.items():
+        if gname not in canonical:
+            continue  # skip the alias registrations (skills, mcps)
+        subcmds = getattr(gcmd, "commands", {})
+        for vname in subcmds:
+            cells.add((gname, vname))
     return cells
 
 
-def _all_test_source() -> str:
-    return "\n".join(
-        p.read_text(encoding="utf-8", errors="ignore")
-        for p in _TESTS.rglob("*.py")
-        if p.name != Path(__file__).name  # don't let this file self-satisfy
-    )
+def _strip_comments(src: str) -> str:
+    """Remove Python comments so a commented-out invocation can't satisfy the guard."""
+    out = []
+    try:
+        for tok in tokenize.generate_tokens(io.StringIO(src).readline):
+            if tok.type == tokenize.COMMENT:
+                continue
+            out.append(tok)
+        return tokenize.untokenize(out)
+    except (tokenize.TokenError, IndentationError):
+        # Fall back to a regex strip if a file won't tokenize cleanly.
+        return re.sub(r"#.*", "", src)
+
+
+def _scannable_test_source() -> str:
+    parts = []
+    for p in _TESTS.rglob("*.py"):
+        if p.name == Path(__file__).name:
+            continue  # don't let this guard self-satisfy
+        parts.append(_strip_comments(p.read_text(encoding="utf-8", errors="ignore")))
+    return "\n".join(parts)
 
 
 @pytest.fixture(scope="module")
 def test_src() -> str:
-    return _all_test_source()
+    return _scannable_test_source()
 
 
-@pytest.mark.parametrize("asset_type, verb", sorted(_registered_cells()))
-def test_command_cell_is_invoked_by_a_test(asset_type, verb, test_src):
-    groups = _GROUP_ALIASES[asset_type]
-    # Match an invoke list opening:  ["agent", "update"  or  ('agents', 'update'
+@pytest.mark.parametrize("group, verb", sorted(_registered_cells()))
+def test_command_cell_is_invoked_by_a_test(group, verb, test_src):
+    aliases = _GROUP_ALIASES[group]
+    # Match an invoke list opening: ["agent", "update"  or  ('agents', 'update'
     pattern = re.compile(
         r"""["'](?:%s)["']\s*,\s*["']%s["']"""
-        % ("|".join(re.escape(g) for g in groups), re.escape(verb))
+        % ("|".join(re.escape(a) for a in aliases), re.escape(verb))
     )
     assert pattern.search(test_src), (
-        f"command cell ({asset_type} {verb}) has no test invoking it. "
-        f"Add a test that calls CliRunner().invoke(main, [\"{groups[0]}\", \"{verb}\", ...])."
+        f"command cell ({group} {verb}) is named by no test. Add a test that "
+        f'invokes CliRunner().invoke(main, ["{aliases[0]}", "{verb}", ...]) and '
+        f"asserts its behavior (not just exit_code == 0)."
     )
 ```
 
-- [ ] **Step 2: Run it, verify all parametrizations pass**
+- [ ] **Step 2: Sanity-check the enumeration matches reality**
+
+Run a throwaway probe to confirm Click introspection finds exactly the expected cells (skill should now include `remove` and `uninstall`):
+
+Run: `uv run python -c "from tests.test_cli.test_command_coverage_guard import _registered_cells; import pprint; pprint.pprint(sorted(_registered_cells()))"`
+Expected: includes `('skill', 'remove')`, `('skill', 'uninstall')`, `('skill', 'install')`, `('skill', 'add')`, `('agent', 'update')`, and NO `skills`/`mcps` alias duplicates.
+
+- [ ] **Step 3: Run the guard, verify all parametrizations pass**
 
 Run: `uv run pytest tests/test_cli/test_command_coverage_guard.py -v`
-Expected: every parametrized cell PASS (Task 1 closed the lone gap). If any cell FAILS that isn't expected, either it's a genuine gap (add a test) or an alias/off-dir miss (extend `_GROUP_ALIASES` / `_OFF_DIR_CELLS`).
+Expected: every cell PASS (Task 1 closed `agent update`; comment-stripping must not have removed a real invocation). If a cell fails that you believe IS tested, check whether its only invocation was inside a comment (correct fail) or whether an alias spelling is missing from `_GROUP_ALIASES` (extend it).
 
-- [ ] **Step 3: Prove the guard actually guards (temporary negative check)**
+- [ ] **Step 4: Prove the guard guards — three negative checks**
 
-Temporarily add a fake cell file `src/agent_toolkit_cli/commands/bundle/zzz_cmd.py` (empty), re-run the guard, confirm it FAILS for `(bundle, zzz)`, then delete the fake file and confirm green again. Do NOT commit the fake file.
+(a) **Un-invoked new cell** — temporarily add `src/agent_toolkit_cli/commands/bundle/zzz_cmd.py` registering a `zzz` command on the bundle group (an empty file is NOT enough now — the guard reads Click, so the command must actually register). Simplest: append a trivial `@bundle.command("zzz")` in `commands/bundle/__init__.py`, run the guard, confirm `(bundle, zzz)` FAILS, then revert. Do NOT commit.
 
-Run: `touch src/agent_toolkit_cli/commands/bundle/zzz_cmd.py && uv run pytest tests/test_cli/test_command_coverage_guard.py -k zzz ; rm src/agent_toolkit_cli/commands/bundle/zzz_cmd.py`
-Expected: the `zzz` parametrization FAILS, then the file is removed.
+(b) **Comment-only invocation does NOT satisfy** — in a scratch test file add only `# CliRunner().invoke(main, ["bundle", "validate"])` as a comment and TEMPORARILY remove the real `bundle validate` test, confirm the guard FAILS for `(bundle, validate)`, then restore. (Confirms comment-stripping works.) Revert; do NOT commit.
 
-- [ ] **Step 4: Commit**
+Run (a): edit `commands/bundle/__init__.py` to add a `zzz` command, then `uv run pytest tests/test_cli/test_command_coverage_guard.py -k zzz`; then `git checkout src/agent_toolkit_cli/commands/bundle/__init__.py`
+Expected: `zzz` FAILS, then is reverted.
+
+- [ ] **Step 5: Commit**
 
 ```bash
 git add tests/test_cli/test_command_coverage_guard.py
-git commit -m "test: guard that every registered CLI command cell is invoked by a test (#423)"
+git commit -m "test: guard that every CLI command cell is named by a live test (Click-introspection, comment-stripped) (#423)"
+```
+
+---
+
+## Task 2b: thin-cell assertion audit (G0b / AC0b) — addresses "effective"
+
+The guard (Task 2) proves *invocation*, not *behavior*. This task answers the user's **"effective"** ask: find cells whose ONLY coverage is a `--help` invocation or a behaviorless `assert exit_code == 0` smoke, and add a real behavior-asserting test where one is genuinely missing. **Bounded:** only cells the audit flags thin — not a blanket rewrite.
+
+**Files:**
+- Create (audit output, temporary): a scratch list in the PR description — NOT a committed file.
+- Modify: per-asset test files, adding behavior assertions only where flagged.
+
+- [ ] **Step 1: Run the thin-cell audit**
+
+For each registered cell (reuse `_registered_cells()` from Task 2), find the tests that invoke it and classify each invocation:
+- **help-only:** the invoke list contains `"--help"` and the test asserts only help text.
+- **smoke-only:** the only assertion on the result is `exit_code == 0` (or `!= 0`) with no check of output, files, or lock state.
+- **behavioral:** asserts a message string, a created/removed file, a lock change, or projection path.
+
+A cell is THIN if ALL its invocations are help-only or smoke-only. Produce the list:
+
+```bash
+# Starting point — list every test invocation per cell, then read the flagged ones:
+uv run python - <<'PY'
+import re, pathlib
+from tests.test_cli.test_command_coverage_guard import _registered_cells, _GROUP_ALIASES
+tests = pathlib.Path("tests")
+src = {p: p.read_text() for p in tests.rglob("*.py")}
+for group, verb in sorted(_registered_cells()):
+    aliases = _GROUP_ALIASES[group]
+    pat = re.compile(r'["\'](?:%s)["\']\s*,\s*["\']%s["\']' %
+                     ("|".join(map(re.escape, aliases)), re.escape(verb)))
+    hits = [p.name for p, t in src.items() if pat.search(t)]
+    print(f"{group} {verb}: {hits}")
+PY
+```
+
+Then READ each flagged cell's test(s) and decide thin-or-not by eye (the script locates; the judgment is human/agent).
+
+- [ ] **Step 2: For each genuinely-thin cell, add ONE behavior-asserting test**
+
+Reuse the asset's existing fixtures. Assert something real: the specific output message, a projected file's existence, or a lock-state change. Do NOT add a test for a cell that already has a behavioral assertion elsewhere.
+
+- [ ] **Step 3: Record the audit result in the PR description**
+
+List every cell audited, its verdict (behavioral / was-thin-now-fixed), so the reviewer can see *effectiveness* was checked, not just invocation. This is the artifact that answers "comprehensive AND effective".
+
+- [ ] **Step 4: Run new behavior tests + commit**
+
+Run: `uv run pytest tests/ -k "behavior or effective" -v` (or the specific new test names)
+Expected: all PASS.
+
+```bash
+git add tests/
+git commit -m "test: deepen thin cells flagged by the assertion audit (#423)"
 ```
 
 ---
@@ -393,7 +509,10 @@ Add `-p` (project) scope variants for install/uninstall/status/update where e2e 
 
 For each of agent/instructions/mcp/pi-extension and verbs install/uninstall/status/update, grep the test files for a `-p` / `--project` invocation. List the missing ones. (Expect a handful, not all.)
 
+> **EXCLUDE `mcp update` (review finding):** `mcp update` is **global-only by design — it has NO `-p` flag** (`commands/mcp/update_cmd.py` docstring: "NO scope flag"; `test_cli_mcp.py` confirms `["mcp","update",...]` with no `-p`). Do NOT write a project-scope test for it — it would fail on an unknown option. Skip it when listing gaps.
+
 Run: `grep -rn '"-p"\|"--project"' tests/ | grep -iE "install|uninstall|status|update"`
+Then for each candidate, confirm the verb actually HAS a `-p` option before writing the test: `uv run agent-toolkit-cli <asset> <verb> --help | grep -- '-p'`
 
 - [ ] **Step 2: For each missing cell, clone its global test and switch to project scope**
 
@@ -429,45 +548,58 @@ git commit -m "test: add project-scope variants for install/uninstall/status/upd
 
 ---
 
-## Task 5: error-path tests (G4 / AC4)
+## Task 5: error-path tests (G4 / AC4) — BOUNDED, specific-message assertions
 
-Add error-condition tests for mutating verbs: dirty canonical, lock mismatch, missing canonical, not-in-lock, invalid slug. Assert the `InstallError`-family behavior (non-zero exit + the specific message). Use the `make_dirty` / `make_diverged` fixtures where a git state is needed.
+Add **bounded** error-condition tests for mutating verbs. **Review finding:** production has ~95 raise sites — this task is NOT "cover them all". It covers two cheap-and-high-value categories (not-in-lock, invalid-slug) across the four core asset types, plus dirty-canonical ONLY where a real guard exists. **Every assertion checks the SPECIFIC production message** — no permissive `exit≠0 OR "no" in output` disjunctions (that is the "green checkmark without substance" failure mode).
 
 **Files:**
 - Modify: the relevant per-asset test files (skill / agent / mcp / pi-extension), adding focused error cases.
 
-- [ ] **Step 1: Enumerate the error branches actually reachable per verb**
+- [ ] **Step 1: Enumerate the EXACT error strings per verb (so tests assert real text)**
 
-Grep production code for the error messages so tests assert real strings, not invented ones.
+Grep production for the literal messages. Record the exact string each verb prints for not-in-lock / invalid-slug so the test asserts THAT string, not a guess.
 
-Run: `grep -rn "InstallError\|not in lock\|no .git\|raise \|ctx.exit(1)\|DirtyCanonical\|LockMismatch" src/agent_toolkit_cli/ | grep -iE "install|update|reset|push|uninstall"`
+Run: `grep -rn "not in lock\|no .git\|InstallError\|raise \|ctx.exit(1)\|DirtyCanonical\|LockMismatch\|UsageError" src/agent_toolkit_cli/ | grep -iE "install|update|reset|push|uninstall"`
 
-- [ ] **Step 2: Add not-in-lock + invalid-slug cases (cheapest, highest coverage)**
+Produce a small table: `(asset, verb) → exact not-in-lock message`. (e.g. agent update prints `"{slug}: not in lock"`.)
 
-For each asset with `update`/`push`/`reset`/`uninstall`, add:
+- [ ] **Step 2: Add not-in-lock cases asserting the SPECIFIC message**
+
+For each asset with `update`/`push`/`reset`/`uninstall`, seed a lock that EXISTS but lacks the queried slug (so the not-in-lock branch — not the empty-lock no-op — fires), then assert the exact recorded string:
 
 ```python
-def test_<asset>_<verb>_not_in_lock_reports_error(tmp_path, monkeypatch):
+def test_<asset>_<verb>_not_in_lock_reports_specific_error(tmp_path, monkeypatch, git_sandbox):
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
     monkeypatch.setenv("HOME", str(tmp_path / "fake-home"))
-    (tmp_path / "fake-home").mkdir(parents=True, exist_ok=True)
+    # Seed ONE real entry so the lock is non-empty (mirror the asset's add helper),
+    # then query a different, absent slug.
+    ... seed "demo" via the asset's `add` ...
     r = CliRunner().invoke(main, ["<asset>", "<verb>", "ghost", "-g"])
-    assert r.exit_code != 0 or "not in lock" in r.output or "no " in r.output.lower()
+    assert r.exit_code != 0
+    assert "ghost: not in lock" in r.output   # EXACT string from Step 1, not a disjunction
 ```
 
-- [ ] **Step 3: Add a dirty-canonical case for a verb that refuses on dirt**
+> Per-asset the message differs — use the string recorded in Step 1 for that asset. If an asset's verb has no "not in lock" concept (check Step 1), skip it rather than forcing a generic assertion.
 
-Use the `make_dirty` fixture (uncommitted edit in the clone). Assert the verb refuses (non-zero / explicit message) rather than silently proceeding. Only add this for verbs whose production code actually guards on a dirty tree — confirm from Step 1's grep; do not assert a guard that doesn't exist.
+- [ ] **Step 3: Add invalid-slug cases (UsageError / refusal) asserting the specific message**
 
-- [ ] **Step 4: Run all new error-path tests, verify green**
+For verbs that validate slug shape (path traversal, empty, dots), assert the exact rejection message recorded in Step 1. Skip verbs that have no slug validation.
+
+- [ ] **Step 4: Add a dirty-canonical case ONLY where a real guard exists**
+
+Use the `make_dirty` fixture (uncommitted edit in the clone). Assert the verb refuses with its specific message. **Confirm the guard exists first** (Step 1 grep) — e.g. `agent update` has NO dirty-tree guard, so do NOT write one for it. If no mutating verb in scope guards on dirt, SKIP this step and note "no dirty-canonical guard in scope" in the PR — do not invent a guard or a test for a branch that can't fire.
+
+- [ ] **Step 5: Run all new error-path tests, verify green**
 
 Run: `uv run pytest tests/ -k "not_in_lock or invalid_slug or dirty or missing_canonical or lock_mismatch" -v`
-Expected: all PASS.
+Expected: all PASS, each asserting a SPECIFIC message.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add tests/
-git commit -m "test: error-path coverage for mutating verbs (not-in-lock, dirty, bad slug) (#423)"
+git commit -m "test: bounded error-path coverage with specific-message assertions (#423)"
 ```
 
 ---
@@ -477,7 +609,7 @@ git commit -m "test: error-path coverage for mutating verbs (not-in-lock, dirty,
 - [ ] **Step 1: Run the complete suite**
 
 Run: `uv run pytest -q 2>&1 | tail -20`
-Expected: all pass (baseline ~1,316 + ~45–65 new + guard cells). Note any pre-existing whitelisted env failures from project memory and confirm they're unchanged, not newly introduced.
+Expected: all pass (baseline ~1,527 `def test_` functions as of 2026-06-14, + ~45–65 new + guard cells). Note any pre-existing whitelisted env failures from project memory and confirm they're unchanged, not newly introduced.
 
 - [ ] **Step 2: Confirm the guard sees zero gaps**
 
@@ -493,8 +625,9 @@ Expected: clean. (Note: per project memory the repo does NOT enforce mypy in pre
 
 ## Self-review
 
-- **Spec coverage:** AC0→Task 2, AC1→Task 1, AC2→Task 3, AC3→Task 4, AC4→Task 5, AC5→Task 6. All five ACs mapped.
+- **Spec coverage:** AC0→Task 2, AC0b→Task 2b, AC1→Task 1, AC2→Task 3, AC3→Task 4, AC4→Task 5. **Five acceptance criteria mapped; Task 6 is verification, not an AC** (coherence-review fix: an earlier draft falsely claimed an "AC5"). ✓
 - **Ordering:** Task 1 before Task 2 so the guard is never committed red. ✓
-- **Placeholders:** Tasks 3–5 intentionally say "use the existing test's helper/assertion" rather than inventing path logic — this is a deliberate instruction to reuse, not a TBD. The contract (exit code + message) is concrete in every case. The one genuinely open item (exact projection-path helper for skill install) is flagged to be lifted verbatim from the existing single-harness test, not guessed.
-- **Type consistency:** lock fields used (`local_sha`, `upstream_sha`, `ref`) match `update_cmd.py`'s usage; `library_agent_path` / `library_lock_path` / `canonical_agent_dir` match `agent_paths.py`.
-- **Trap coverage:** SKILL.md-vs-`<slug>.md` seeding trap (Task 1), `$HOME`-read-at-project-scope trap (Task 4), assert-real-message (Task 5 Step 1), don't-add-mypy-churn (Task 6) all carried from project memory.
+- **Placeholders:** Tasks 3–5 intentionally say "use the existing test's helper/assertion" rather than inventing path logic — a deliberate reuse instruction, not a TBD. Task 5 now mandates the SPECIFIC production message (recorded in its Step 1), removing the permissive disjunction the product-review flagged.
+- **Type consistency:** lock fields used (`local_sha`, `upstream_sha`, `ref`) match `update_cmd.py`; `library_agent_path` / `library_lock_path` / `canonical_agent_dir` match `agent_paths.py`. The guard enumerates via `main.commands[...].commands` (Click), de-aliasing `skills`/`mcps`.
+- **Trap coverage:** SKILL.md-vs-`<slug>.md` seeding trap (Task 1); read_lock-swallows-FileNotFoundError dead-code trap (Task 1 no-lock test — feasibility-review fix); guard-misses-inline-verbs trap solved by Click introspection (scope-guardian fix); guard-passes-on-dead-code solved by comment-stripping (adversarial fix); `mcp update` has no `-p` (Task 4 — scope-guardian fix); `$HOME`-read-at-project-scope trap (Task 4); specific-message assertions (Task 5 — product-review fix); don't-add-mypy-churn (Task 6). All carried from project memory or critical review.
+- **Critical-review findings:** all 10 resolved inline (see the spec's "Critical review" section for the ledger).
