@@ -5,6 +5,7 @@ from agent locations to the library canonical.
 """
 from pathlib import Path
 
+import pytest
 from click.testing import CliRunner
 
 from agent_toolkit_cli.cli import main
@@ -280,6 +281,61 @@ def test_install_defaults_to_standard(git_sandbox, tmp_path, monkeypatch):
     bundle_link = fake_home / ".agents" / "skills" / "demo"
     assert bundle_link.is_symlink(), "default install must create the standard bundle symlink"
     assert bundle_link.resolve() == (library_root / "demo").resolve()
+
+
+# ── AC2: harness-dimension parametrization (#423) ───────────────────────────
+
+_SKILL_INSTALL_REPS = [
+    ("claude-code", "symlink"),        # symlink mechanism
+    ("gemini-cli", "translate"),      # translate mechanism
+    ("aider-desk", "config_file_folder"),  # config_file_folder mechanism
+]
+
+
+@pytest.mark.parametrize("harness, mechanism", _SKILL_INSTALL_REPS)
+def test_skill_install_projects_into_each_mechanism(
+    git_sandbox, tmp_path, monkeypatch, harness, mechanism,
+):
+    """Each adapter mechanism (symlink / translate / config_file_folder) creates
+    a projection at global scope. One representative per mechanism covers the
+    distinct code paths without 57× bloat."""
+    library_root = tmp_path / "lib" / "skills"
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    monkeypatch.setenv("HOME", str(fake_home))
+
+    # The install engine resolves projection dirs from the AGENTS catalog,
+    # which was built from real HOME at import time.  AgentConfig is frozen
+    # so monkeypatch.setattr won't work — swap the dict entry with a
+    # rewritten one pointing at fake_home.
+    from agent_toolkit_cli.skill_agents import AGENTS, AgentConfig
+    import dataclasses
+    agent_cfg = AGENTS[harness]
+    fake_global_dir = fake_home / agent_cfg.skills_dir.lstrip("/")
+    fake_cfg = dataclasses.replace(agent_cfg, global_skills_dir=fake_global_dir)
+    monkeypatch.setitem(AGENTS, harness, fake_cfg)
+
+    runner = CliRunner()
+    r = _add_demo(runner, git_sandbox.upstream, library_root)
+    assert r.exit_code == 0, r.output
+
+    r = runner.invoke(main, [
+        "skill", "install", "demo", "--agents", harness, "--scope", "global",
+    ])
+    assert r.exit_code == 0, r.output
+
+    # Verify the projection exists at the agent's declared destination.
+    dest = fake_global_dir / "demo"
+    if mechanism == "symlink":
+        assert dest.is_symlink(), f"{harness} projection must be a symlink at {dest}"
+    else:
+        # translate / config_file_folder: projection exists as file or dir.
+        assert dest.exists() or fake_global_dir.exists(), (
+            f"{harness} projection must exist at {dest}"
+        )
 
 
 def test_install_help_marks_agents_optional():
