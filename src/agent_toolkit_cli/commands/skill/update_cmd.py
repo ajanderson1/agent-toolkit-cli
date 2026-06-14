@@ -14,7 +14,7 @@ from agent_toolkit_cli.skill_paths import (
     parent_clone_path,
 )
 
-from ._common import scope_and_roots
+from ._common import scope_and_roots, scope_banner
 
 
 def _summary(repo, *, before: str, after: str) -> str:
@@ -54,7 +54,7 @@ def update_cmd(
     project_flag: bool,
 ) -> None:
     """Fetch + merge upstream for each skill. Surfaces real git conflicts."""
-    scope, home, project_root = scope_and_roots(
+    scope, home, project_root, implicit = scope_and_roots(
         global_,
         project_flag,
         ctx.obj.get("project_root") if ctx.obj else None,
@@ -62,6 +62,7 @@ def update_cmd(
     )
     lock_path = lock_file_path(scope=scope, home=home, project=project_root)
     lock = read_lock(lock_path)
+    scope_banner(scope, implicit=implicit, lock_path=lock_path, count=len(lock.skills))
     targets = slugs or tuple(sorted(lock.skills))
     had_conflict = False
     for slug in targets:
@@ -75,7 +76,9 @@ def update_cmd(
         if entry.parent_url is not None:
             if scope != "global":
                 click.echo(
-                    f"{slug}: monorepo update only supported at global scope"
+                    f"{slug}: monorepo skill — update it at global scope. "
+                    f"Note: -g switches to the global library (a different "
+                    f"set), it does not update this project entry."
                 )
                 had_conflict = True
                 continue

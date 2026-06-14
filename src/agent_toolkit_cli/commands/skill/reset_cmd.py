@@ -14,7 +14,7 @@ from agent_toolkit_cli.skill_paths import (
     parent_clone_path,
 )
 
-from ._common import scope_and_roots
+from ._common import scope_and_roots, scope_banner
 
 
 @click.command("reset")
@@ -48,7 +48,7 @@ def reset_cmd(
             "Run `skill list` to see installed skills."
         )
 
-    scope, home, project_root = scope_and_roots(
+    scope, home, project_root, implicit = scope_and_roots(
         global_,
         project_flag,
         ctx.obj.get("project_root") if ctx.obj else None,
@@ -56,6 +56,7 @@ def reset_cmd(
     )
     lock_path = lock_file_path(scope=scope, home=home, project=project_root)
     lock = read_lock(lock_path)
+    scope_banner(scope, implicit=implicit, lock_path=lock_path, count=len(lock.skills))
 
     had_error = False
     for slug in slugs:
@@ -69,7 +70,9 @@ def reset_cmd(
         if entry.parent_url is not None:
             if scope != "global":
                 click.echo(
-                    f"{slug}: monorepo reset only supported at global scope"
+                    f"{slug}: monorepo skill — reset it at global scope. "
+                    f"Note: -g switches to the global library (a different "
+                    f"set), it does not reset this project entry."
                 )
                 had_error = True
                 continue

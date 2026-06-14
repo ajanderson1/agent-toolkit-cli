@@ -21,7 +21,7 @@ from agent_toolkit_cli.skill_paths import (
     project_parents_root,
 )
 
-from ._common import scope_and_roots
+from ._common import scope_and_roots, scope_banner
 
 
 @click.command("push", epilog="""\
@@ -52,7 +52,7 @@ def push_cmd(
     # batch `skill push` doesn't spawn `gh auth status` per slug.
     _gh_available.cache_clear()
     ctx_project = ctx.obj.get("project_root") if ctx.obj else None
-    scope, home, project_root = scope_and_roots(
+    scope, home, project_root, implicit = scope_and_roots(
         global_,
         project_flag,
         ctx_project,
@@ -60,6 +60,7 @@ def push_cmd(
     )
     lock_path = lock_file_path(scope=scope, home=home, project=project_root)
     lock = read_lock(lock_path)
+    scope_banner(scope, implicit=implicit, lock_path=lock_path, count=len(lock.skills))
     targets = slugs or tuple(sorted(lock.skills))
     rejected = False
     for slug in targets:

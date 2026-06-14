@@ -14,7 +14,7 @@ from agent_toolkit_cli.skill_paths import (
     project_parents_root,
 )
 
-from ._common import scope_and_roots
+from ._common import scope_and_roots, scope_banner
 
 
 def _divergence_suffix(parent_dir: Path, ref: str) -> str:
@@ -58,13 +58,15 @@ def status_cmd(
     project_flag: bool,
 ) -> None:
     """Show per-skill working-tree status (clean/dirty/missing)."""
-    scope, home, project_root = scope_and_roots(
+    scope, home, project_root, implicit = scope_and_roots(
         global_,
         project_flag,
         ctx.obj.get("project_root") if ctx.obj else None,
         read_only=True,
     )
-    lock = read_lock(lock_file_path(scope=scope, home=home, project=project_root))
+    lock_path = lock_file_path(scope=scope, home=home, project=project_root)
+    lock = read_lock(lock_path)
+    scope_banner(scope, implicit=implicit, lock_path=lock_path, count=len(lock.skills))
     if not lock.skills and project_flag and scope == "project":
         click.echo(
             '(no project skills here. Run "skill status -g" for the global '
