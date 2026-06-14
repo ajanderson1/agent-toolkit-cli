@@ -63,7 +63,10 @@ def test_store_owned_from_lock(tmp_path, monkeypatch):
     assert rec.source == "github.com/o/status-bar"
 
 
-def test_empty_machine_is_empty(tmp_path):
+def test_empty_machine_is_empty(tmp_path, monkeypatch):
+    # The global lock path resolves from $HOME (see test_store_owned_from_lock),
+    # so isolate HOME or the real machine's pi-extensions-lock.json leaks in.
+    monkeypatch.setenv("HOME", str(tmp_path))
     assert build_inventory(home=tmp_path) == []
 
 

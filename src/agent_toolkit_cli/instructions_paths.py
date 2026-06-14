@@ -23,7 +23,6 @@ from typing import Literal
 
 from agent_toolkit_cli._paths_core import (
     INSTRUCTIONS_BINDING,
-    library_lock_path_for_asset_type,
     library_root_for_asset_type,
 )
 
@@ -40,8 +39,15 @@ def library_root() -> Path:
 
 
 def library_lock_path() -> Path:
-    """Global lock at ~/.agent-toolkit/instructions-lock.json."""
-    return library_lock_path_for_asset_type(INSTRUCTIONS_BINDING)
+    """Global lock at ~/.agent-toolkit/instructions-lock.json.
+
+    Routes through this module's `library_root()` (rather than the shared
+    `library_lock_path_for_asset_type` helper) so that tests monkeypatching
+    `instructions_paths.library_root` isolate the lock too — mirroring
+    `global_canonical_agents_md()` below. Byte-identical on a real machine:
+    both resolve to ~/.agent-toolkit/instructions-lock.json.
+    """
+    return library_root().parent / INSTRUCTIONS_BINDING.lock_filename
 
 
 def project_lock_path(project_root: Path) -> Path:
