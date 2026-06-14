@@ -23,6 +23,7 @@ exclude_docs: |
   solutions/
   audit/
   agent-toolkit/research/
+  assets/screenshots/README.md
 
 theme:
   name: material
@@ -196,6 +197,7 @@ nav:
     - SSOT (machine-read): agent-toolkit/harness-matrix.md
   - Reference:
     - CLI reference: agent-toolkit/cli.md
+    - TUI reference: agent-toolkit/tui.md
     - Bundles: agent-toolkit/bundles.md
     - Skill lock management: agent-toolkit/skill-lock.md
     - Roadmap: agent-toolkit/roadmap.md

@@ -1,5 +1,9 @@
 # `skill` subcommand — lock-file-driven skill management
 
+> For the schema of **all five** lock files at a glance — and how the agent,
+> mcp, pi-extension, and instructions locks differ from this one — see
+> [Lock files](lock-files.md). This page is the skills-specific deep dive.
+
 ## Overview
 
 The `skill` subgroup manages skills using a **per-skill upstream git repo + lock file** model, mirroring the on-disk layout and lock-file schema of [`vercel-labs/skills`](https://github.com/vercel-labs/skills). Lock files written by this CLI are readable by `npx skills`, and skills installed by either tool live in the same canonical directory.
