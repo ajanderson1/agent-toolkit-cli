@@ -5,9 +5,11 @@ from agent locations to the library canonical.
 """
 from pathlib import Path
 
+import pytest
 from click.testing import CliRunner
 
 from agent_toolkit_cli.cli import main
+from agent_toolkit_cli.skill_install import agent_projection_dir
 from agent_toolkit_cli.skill_paths import canonical_skill_dir
 
 
@@ -301,4 +303,56 @@ def test_install_help_marks_agents_optional():
         block.append(ln)
     assert not any("[required]" in ln for ln in block), (
         f"--agents must no longer be required; block was:\n{chr(10).join(block)}"
+    )
+
+
+# ── harness-mechanism parametrization (#423 / AC2) ──────────────────────────
+# One representative per adapter mechanism — covers every distinct projection
+# code path without 57x bloat (the other harnesses are config-table rows, not
+# code). Run at PROJECT scope: the per-harness destination resolves from the
+# runtime project root, so all three isolate cleanly under tmp. (At global
+# scope each harness's global_skills_dir is a frozen import-time constant bound
+# to the real ~/.gemini, ~/.aider-desk, … — see #423 spec, accepted residual.)
+_SKILL_INSTALL_MECHANISM_REPS = [
+    "claude-code",   # symlink
+    "gemini-cli",    # translate
+    "aider-desk",    # config_file_folder
+]
+
+
+@pytest.mark.parametrize("harness", _SKILL_INSTALL_MECHANISM_REPS)
+def test_skill_install_projects_into_each_mechanism_project_scope(
+    git_sandbox, harness, tmp_path: Path, monkeypatch
+):
+    """skill install --agents <harness> -p projects for every adapter mechanism.
+
+    Asserts the projection symlink lands at the harness's project-scope
+    destination and resolves to the project canonical. The destination differs
+    per mechanism (.claude/skills vs .agents/skills vs .aider-desk/skills) but
+    the projection algorithm is shared — this proves each rep's path is wired.
+    """
+    library_root = tmp_path / "lib" / "skills"
+    project = tmp_path / "proj"
+    project.mkdir()
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+
+    runner = CliRunner()
+    r = _add_demo(runner, git_sandbox.upstream, library_root)
+    assert r.exit_code == 0, r.output
+
+    result = runner.invoke(main, [
+        "--project", str(project),
+        "skill", "install", "demo", "--scope", "project",
+        "--agents", harness,
+    ])
+    assert result.exit_code == 0, result.output
+
+    dest = agent_projection_dir(
+        harness, "demo", scope="project", home=None, project=project,
+    )
+    assert dest.is_symlink(), f"{harness}: project-scope projection must be a symlink"
+    assert str(dest).startswith(str(project)), (
+        f"{harness}: projection must be isolated under the project root, got {dest}"
     )
