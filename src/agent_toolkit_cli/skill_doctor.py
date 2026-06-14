@@ -32,6 +32,7 @@ FindingType = Literal[
     "wrong_type_bundle", "orphan_symlink", "foreign_symlink",
     "dirty_tree", "lock_source_mismatch", "stray_symlink",
     "orphan_canonical", "stray_bundle_dir", "unlisted",
+    "legacy_bare_parent",
 ]
 
 
@@ -302,6 +303,36 @@ def _make_rmtree_action(*, path: Path) -> FixAction:
     return FixAction(
         description=f"Remove {path}",
         shell_preview=f"rm -rf {path}",
+        apply=_apply,
+    )
+
+
+def _bare_ref_matches(bare: Path, ref: str) -> bool:
+    """True if the bare clone's current branch is `ref`.
+
+    Multi-ref safety (#412): when several skills share one monorepo at
+    DIFFERENT refs, a single bare clone is checked out at exactly one ref.
+    Aliasing `<repo>@<other-ref> -> <repo>` would lie about that other skill's
+    ref and a later `update` could flip the shared tree. Only alias when the
+    bare clone is actually on `ref`, so the alias never misrepresents it.
+    """
+    try:
+        return skill_git.current_branch(bare, env=None) == ref
+    except skill_git.GitError:
+        return False
+
+
+def _make_legacy_bare_alias_action(suffixed: Path, bare: Path) -> FixAction:
+    """Alias the canonical `<repo>@<ref>` path to the legacy bare `<repo>`
+    clone (#412 Phase 2) — non-destructive, reversible, idempotent."""
+    def _apply() -> None:
+        if suffixed.exists() or suffixed.is_symlink():
+            return  # idempotent
+        suffixed.parent.mkdir(parents=True, exist_ok=True)
+        suffixed.symlink_to(bare.name)  # relative alias within <owner>/
+    return FixAction(
+        description=f"Alias {suffixed.name} -> {bare.name} (legacy parent clone)",
+        shell_preview=f"ln -s {bare.name} {suffixed}",
         apply=_apply,
     )
 
@@ -756,4 +787,40 @@ def _check_slug(
                 ),
                 fix_action=None,
             ))
+    # #412 Phase 2: a monorepo parent cloned under the legacy bare <repo> name
+    # (ref was None at clone time, later backfilled) still resolves at read
+    # time via the probe-both resolver, but the on-disk layout is non-canonical.
+    # Offer a non-destructive alias <repo>@<ref> -> <repo> to normalise it.
+    if entry.parent_url is not None and entry.ref is not None:
+        from agent_toolkit_cli.skill_paths import (
+            _remote_matches, parent_clone_path, project_parents_root,
+        )
+        owner_repo = entry.source.split("/", 1)
+        if len(owner_repo) == 2:
+            owner, repo = owner_repo
+            if scope == "global":
+                parents_root = None
+            else:
+                assert project is not None  # project scope always has a project
+                parents_root = project_parents_root(project)
+            suffixed = parent_clone_path(
+                owner, repo, ref=entry.ref, root=parents_root,
+            )
+            bare = parent_clone_path(owner, repo, ref=None, root=parents_root)
+            if (
+                bare.parent == suffixed.parent  # flat-ref only (skip slash/None)
+                and not suffixed.exists()
+                and skill_git.is_git_repo(bare)
+                and _remote_matches(bare, entry.parent_url, None)
+                and _bare_ref_matches(bare, entry.ref)  # multi-ref safety
+            ):
+                findings.append(Finding(
+                    finding_type="legacy_bare_parent", slug=slug, scope=scope,
+                    path=bare,
+                    detail=(
+                        f"parent clone uses legacy bare name {bare.name}; "
+                        f"alias to {suffixed.name} for canonical resolution"
+                    ),
+                    fix_action=_make_legacy_bare_alias_action(suffixed, bare),
+                ))
     return findings
