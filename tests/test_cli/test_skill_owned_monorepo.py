@@ -391,3 +391,39 @@ def test_owned_update_merges_not_resets_local_edits(tmp_path, monkeypatch):
     assert r.exit_code == 0, r.output
     # The local edit survived the update (merge, not reset).
     assert marker.exists(), "skill update discarded a local owned edit"
+
+
+# --- #412: legacy bare-named parent clone resolution ---
+
+def _add_owned_ref(parent_url: str, skill: str = "mkdocs", ref: str = "main") -> None:
+    """Like _add_owned but records a non-None ref via the /tree/<ref>/ form,
+    so a suffixed <repo>@<ref> clone is materialised (#412 needs this)."""
+    src = f"{parent_url}/tree/{ref}/{skill}"
+    r = CliRunner().invoke(cli, ["skill", "add", src, "--owned"])
+    assert r.exit_code == 0, r.output
+
+
+def _make_legacy_bare(entry: dict) -> Path:
+    """Rename the suffixed parent clone to the legacy bare `<repo>` name,
+    reproducing the pre-ref-backfill on-disk layout (#412)."""
+    from agent_toolkit_cli.skill_paths import parent_clone_path
+    ref = entry["ref"]
+    owner, repo = entry["source"].split("/", 1)
+    suffixed = parent_clone_path(owner, repo, ref=ref, env=None)
+    assert suffixed.name == f"{repo}@{ref}", suffixed
+    bare = parent_clone_path(owner, repo, ref=None, env=None)
+    suffixed.rename(bare)
+    return bare
+
+
+def test_update_finds_legacy_bare_named_parent(tmp_path, monkeypatch):
+    parent_url, _ = _setup_parent(tmp_path, monkeypatch)
+    _add_owned_ref(parent_url, "mkdocs")
+    entry = _lock()["skills"]["mkdocs"]
+    assert entry.get("ref") == "main", entry  # /tree/main/ form records a ref
+    bare = _make_legacy_bare(entry)
+    assert bare.exists()
+
+    r = CliRunner().invoke(cli, ["skill", "update", "mkdocs", "-g"])
+    assert r.exit_code == 0, r.output
+    assert "parent clone missing" not in r.output
