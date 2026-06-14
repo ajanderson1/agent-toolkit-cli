@@ -163,6 +163,15 @@ def build_instruction_rows(
             )
             if cell is not None:
                 row.cells[(harness, scope)] = cell
+        # Project-scope global shadow probe for the 🌐 marker (#388).
+        if scope == "project" and home is not None:
+            for harness in INTERACTIVE_HARNESSES:
+                gcell = _cell_for(
+                    "AGENTS.md", harness,
+                    scope="global", home=home, project=None,
+                )
+                if gcell is not None:
+                    row.cells[(harness, "global")] = gcell
         return [row]
 
     # Lock has entries — build one row per slug.
@@ -178,6 +187,19 @@ def build_instruction_rows(
             )
             if cell is not None:
                 cells[(harness, scope)] = cell
+        # In project scope, also probe global so the grid can render the
+        # globally-linked 🌐 indicator (#388, mirrors agent_state.py:131-135).
+        # Skipped when home is None. The global probe resolves the GLOBAL
+        # canonical itself (scope="global"), so do NOT pass the project
+        # _canonical override here.
+        if scope == "project" and home is not None:
+            for harness in INTERACTIVE_HARNESSES:
+                gcell = _cell_for(
+                    slug, harness,
+                    scope="global", home=home, project=None,
+                )
+                if gcell is not None:
+                    cells[(harness, "global")] = gcell
         rows.append(InstructionRow(
             slug=slug,
             source=entry.source,

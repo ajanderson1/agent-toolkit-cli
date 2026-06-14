@@ -118,13 +118,16 @@ def test_standard_info_is_asset_type_aware():
     grid can reuse the same registry key (#351)."""
     info = get_column_info(
         "standard",
-        context={"asset_type": "instructions", "names": ("alpha-harness", "beta-harness")},
+        context={
+            "asset_type": "instructions",
+            "names": ("alpha-harness", "beta-harness"),
+            "global_linked": False,
+        },
     )
     text = " ".join(info.lines)
     assert "instructions" in text and "(2)" in text
     assert "alpha-harness" in text and "beta-harness" in text
-    # The 🌐 marker block applies to skills and agents; instructions is
-    # excluded by design.
+    # Marker omitted here because this row is NOT globally linked (#388).
     assert "🌐" not in text
 
 
@@ -147,12 +150,21 @@ def test_standard_info_agents_omits_marker_when_not_globally_linked():
     assert "🌐" not in "\n".join(info.lines)
 
 
-def test_standard_info_instructions_never_shows_marker():
-    """Instructions is excluded by design: per-scope canonical AGENTS.md,
-    no cross-scope install concept — even a (bogus) global_linked=True
-    context must not render the block."""
+def test_standard_info_instructions_shows_marker_when_globally_linked():
+    """#388: instructions now gets the 🌐 explainer when the focused row IS
+    globally linked, with merge-accurate copy (reverses the #374 exclusion)."""
     info = get_column_info(
         "standard", context={"asset_type": "instructions", "global_linked": True},
+    )
+    joined = "\n".join(info.lines)
+    assert "🌐" in joined
+    assert "merged with (not replaced by)" in joined
+
+
+def test_standard_info_instructions_omits_marker_when_not_globally_linked():
+    """No marker when the instructions row is not globally linked."""
+    info = get_column_info(
+        "standard", context={"asset_type": "instructions", "global_linked": False},
     )
     assert "🌐" not in "\n".join(info.lines)
 

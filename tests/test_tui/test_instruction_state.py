@@ -289,3 +289,119 @@ def test_build_instruction_rows_conflict_cell(tmp_path: Path, monkeypatch):
 def test_interactive_harnesses_are_correct():
     """INTERACTIVE_HARNESSES must be exactly the 2 pinned harnesses."""
     assert INTERACTIVE_HARNESSES == ("claude-code", "gemini-cli")
+
+
+def test_project_scope_probes_global_shadow_cell(tmp_path: Path, monkeypatch):
+    """At project scope, build_instruction_rows probes (harness, 'global') for
+    each row when home is set, mirroring agent_state (#374). The global pointer
+    being linked surfaces as a (harness, 'global') cell with linked=True."""
+    from agent_toolkit_cli import instructions_paths
+
+    home = tmp_path / "home"
+    home.mkdir()
+    project = tmp_path / "proj"
+    project.mkdir()
+
+    # Isolate the global canonical under tmp_path (mirrors the existing
+    # test_build_instruction_rows_* tests). The global canonical is then
+    # <agent_toolkit_dir>/AGENTS.md.
+    agent_toolkit_dir = home / ".agent-toolkit"
+    agent_toolkit_dir.mkdir(parents=True)
+    monkeypatch.setattr(
+        "agent_toolkit_cli.instructions_paths.library_root",
+        lambda: agent_toolkit_dir / "instructions",
+    )
+    glob_canonical = agent_toolkit_dir / "AGENTS.md"
+    glob_canonical.write_text("# global AGENTS\n")
+
+    # Project canonical so the locked row's project cells resolve.
+    proj_canonical = instructions_paths.project_canonical_agents_md(project)
+    proj_canonical.write_text("# project AGENTS\n")
+
+    # Project lock entry → locked-entry branch.
+    lock_file = instructions_paths.project_lock_path(project)
+    lock_file.write_text(
+        '{"version": 1, "instructions": {"AGENTS.md": '
+        '{"scope": "project", "source": "AGENTS.md", "harnesses": ["claude-code"]}}}\n'
+    )
+
+    # Install the GLOBAL claude-code pointer (~/.claude/CLAUDE.md → global canonical).
+    from agent_toolkit_cli.instructions_adapters.symlink import _pointer_path
+    glob_pointer = _pointer_path("claude-code", "global", None, home)
+    glob_pointer.parent.mkdir(parents=True, exist_ok=True)
+    glob_pointer.symlink_to(glob_canonical)
+
+    rows = build_instruction_rows(scope="project", home=home, project=project)
+    assert rows, "expected one AGENTS.md row"
+    global_cell = rows[0].cells.get(("claude-code", "global"))
+    assert global_cell is not None
+    assert global_cell.linked is True
+
+
+def test_empty_lock_fresh_user_row_probes_global_shadow_cell(tmp_path: Path, monkeypatch):
+    """The empty-lock fresh-user row (canonical exists, no lock entries) also
+    gets the (harness, 'global') shadow cell at project scope (#388)."""
+    from agent_toolkit_cli import instructions_paths
+
+    home = tmp_path / "home"
+    home.mkdir()
+    project = tmp_path / "proj"
+    project.mkdir()
+
+    agent_toolkit_dir = home / ".agent-toolkit"
+    agent_toolkit_dir.mkdir(parents=True)
+    monkeypatch.setattr(
+        "agent_toolkit_cli.instructions_paths.library_root",
+        lambda: agent_toolkit_dir / "instructions",
+    )
+    glob_canonical = agent_toolkit_dir / "AGENTS.md"
+    glob_canonical.write_text("# global AGENTS\n")
+
+    # Project canonical exists but NO project lock entries → fresh-user branch.
+    proj_canonical = instructions_paths.project_canonical_agents_md(project)
+    proj_canonical.write_text("# project AGENTS\n")
+
+    # Global claude-code pointer linked.
+    from agent_toolkit_cli.instructions_adapters.symlink import _pointer_path
+    glob_pointer = _pointer_path("claude-code", "global", None, home)
+    glob_pointer.parent.mkdir(parents=True, exist_ok=True)
+    glob_pointer.symlink_to(glob_canonical)
+
+    rows = build_instruction_rows(scope="project", home=home, project=project)
+    assert rows and rows[0].slug == "AGENTS.md"
+    gcell = rows[0].cells.get(("claude-code", "global"))
+    assert gcell is not None and gcell.linked is True
+
+
+def test_project_scope_home_none_skips_global_probe(tmp_path: Path, monkeypatch):
+    """#388: callers that pass home=None don't care about the indicator — the
+    `home is not None` gate fires the negative way, so NO (harness, 'global')
+    cells appear. Mirrors test_agent_state.py and exercises BOTH build branches
+    (empty-lock fresh-user row and locked-entry row)."""
+    from agent_toolkit_cli import instructions_paths
+
+    project = tmp_path / "proj"
+    project.mkdir()
+    agent_toolkit_dir = tmp_path / ".agent-toolkit"
+    agent_toolkit_dir.mkdir(parents=True)
+    monkeypatch.setattr(
+        "agent_toolkit_cli.instructions_paths.library_root",
+        lambda: agent_toolkit_dir / "instructions",
+    )
+    proj_canonical = instructions_paths.project_canonical_agents_md(project)
+    proj_canonical.write_text("# project AGENTS\n")
+
+    # Empty-lock fresh-user branch (canonical exists, no project lock).
+    rows = build_instruction_rows(scope="project", home=None, project=project)
+    assert rows and rows[0].slug == "AGENTS.md"
+    assert all(scope != "global" for (_, scope) in rows[0].cells)
+
+    # Locked-entry branch (seed a project lock entry).
+    lock_file = instructions_paths.project_lock_path(project)
+    lock_file.write_text(
+        '{"version": 1, "instructions": {"AGENTS.md": '
+        '{"scope": "project", "source": "AGENTS.md", "harnesses": ["claude-code"]}}}\n'
+    )
+    rows = build_instruction_rows(scope="project", home=None, project=project)
+    assert rows
+    assert all(scope != "global" for (_, scope) in rows[0].cells)
