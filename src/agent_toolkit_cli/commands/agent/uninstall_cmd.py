@@ -75,7 +75,7 @@ def uninstall_cmd(
     harnesses: str | None,
 ) -> None:
     """Remove an agent's projections from the chosen scope."""
-    scope, home, project = scope_and_roots(
+    scope, home, project, _implicit = scope_and_roots(
         global_, project_flag,
         ctx.obj.get("project_root") if ctx.obj else None,
     )

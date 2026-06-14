@@ -16,7 +16,7 @@ import click
 from agent_toolkit_cli import skill_git
 from agent_toolkit_cli.agent_lock import read_lock, write_lock
 from agent_toolkit_cli.agent_paths import library_agent_path, lock_file_path
-from agent_toolkit_cli.commands.agent._common import scope_and_roots
+from agent_toolkit_cli.commands.agent._common import scope_and_roots, scope_banner
 
 
 @click.command("push", epilog="""\
@@ -44,7 +44,7 @@ def push_cmd(
 ) -> None:
     """Publish self-improvements upstream. Opens a PR by default."""
     ctx_project = ctx.obj.get("project_root") if ctx.obj else None
-    scope, home, project_root = scope_and_roots(
+    scope, home, project_root, implicit = scope_and_roots(
         global_,
         project_flag,
         ctx_project,
@@ -56,6 +56,8 @@ def push_cmd(
     except FileNotFoundError:
         click.echo("no agents lock found")
         return
+
+    scope_banner(scope, implicit=implicit, lock_path=lock_path, count=len(lock.skills))
 
     targets = slugs or tuple(sorted(lock.skills))
     rejected = False
