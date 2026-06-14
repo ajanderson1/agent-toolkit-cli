@@ -37,3 +37,8 @@ audit/.*.log
 
 # MkDocs build output
 site/
+
+# Internal planning corpus (specs/plans/brainstorms) — kept local, not shipped
+# in the public repo. Already excluded from the published MkDocs site via
+# mkdocs.yml exclude_docs; this also keeps it out of the repo source.
+docs/superpowers/
