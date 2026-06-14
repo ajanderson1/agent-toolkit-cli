@@ -125,3 +125,58 @@ async def test_app_shows_mcp_grid_on_select():
         # The other grids are hidden.
         from agent_toolkit_tui.widgets import AgentGrid
         assert app.query_one("#agent-grid", AgentGrid).display is False
+
+
+@pytest.mark.asyncio
+async def test_scope_toggle_rebuilds_mcp_columns():
+    from textual.widgets import DataTable
+    from agent_toolkit_tui.app import TUIApp
+
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        app.action_asset_type("mcp")
+        await pilot.pause()
+        # Default scope (project): Standard column present.
+        def labels():
+            return [str(c.label) for c in
+                    app.query_one("#mcp-grid DataTable", DataTable).columns.values()]
+        if app._scope != "project":
+            app.action_scope_toggle()
+            await pilot.pause()
+        assert any("Standard" in s for s in labels())
+        app.action_scope_toggle()  # → global
+        await pilot.pause()
+        assert not any("Standard" in s for s in labels())
+        assert any("claude-code" in s for s in labels())
+
+
+@pytest.mark.asyncio
+async def test_mcp_tab_header_and_pending_label_parity():
+    # Parity with the agent tab (AC4): while MCP is active, the content header
+    # counts the MCP grid's rows (not the agent grid's), and the footer pending
+    # label includes MCP pending entries. Both are app-level rollups that must
+    # treat #mcp-grid like every other grid.
+    from agent_toolkit_tui.app import TUIApp
+    from textual.widgets import Static
+
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        app.action_asset_type("mcp")
+        await pilot.pause()
+        grid = app.query_one("#mcp-grid", McpGrid)
+        grid.set_scope("project")
+        grid.set_rows([_row("a"), _row("b")])
+        # The header refreshes on switch/scope-toggle (same as every grid), so
+        # trigger a refresh after seeding rows.
+        app._refresh_content_header()
+        await pilot.pause()
+        # Header reflects the MCP grid's row count (2), labelled MCP.
+        header = str(app.query_one("#content-header", Static).render())
+        assert "MCP" in header
+        assert "2 items" in header
+        # Pending label counts MCP pending entries.
+        grid.restore_pending({("project", "codex", "a"): "link"})
+        app._refresh_pending_label()
+        await pilot.pause()
+        footer = str(app.query_one("#footer-pending", Static).render())
+        assert "Pending: 1" in footer

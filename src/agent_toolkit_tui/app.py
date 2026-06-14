@@ -1153,6 +1153,11 @@ class TUIApp(App):
                 n = self.query_one("#pi-grid", PiGrid).row_count
             except (NoMatches, Exception):
                 n = 0
+        elif self._active_asset_type == "mcp":
+            try:
+                n = self.query_one("#mcp-grid", McpGrid).row_count
+            except (NoMatches, Exception):
+                n = 0
         else:
             try:
                 n = self.query_one("#agent-grid", AgentGrid).row_count
@@ -1170,7 +1175,7 @@ class TUIApp(App):
 
     def _refresh_pending_label(self) -> None:
         keys: list[tuple[str, ...]] = []
-        for selector in ("#instruction-grid", "#skill-grid", "#pi-grid", "#agent-grid"):
+        for selector in ("#instruction-grid", "#skill-grid", "#pi-grid", "#agent-grid", "#mcp-grid"):
             try:
                 keys.extend(self.query_one(selector).pending_entries().keys())  # type: ignore[attr-defined]
             except Exception:
@@ -1255,6 +1260,27 @@ class TUIApp(App):
                 pending = 0
             text = (
                 f"  [b green]{loaded}[/] loaded   "
+                f"[b yellow]{pending}[/] pending"
+            )
+        elif active == "mcp":
+            linked = 0
+            try:
+                grid_mcp = self.query_one("#mcp-grid", McpGrid)
+            except (NoMatches, Exception):
+                grid_mcp = None
+            if grid_mcp is not None:
+                scope = self._scope_to_roots()[0]
+                for mcp_row in grid_mcp._rows:
+                    for (harness, sc), mcell in mcp_row.cells.items():
+                        if sc != scope:
+                            continue
+                        if mcell.linked:
+                            linked += 1
+                pending = len(grid_mcp.pending_entries())
+            else:
+                pending = 0
+            text = (
+                f"  [b green]{linked}[/] linked   "
                 f"[b yellow]{pending}[/] pending"
             )
         else:  # "agent"
