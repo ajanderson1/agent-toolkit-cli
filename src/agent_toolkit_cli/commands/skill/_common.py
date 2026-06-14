@@ -39,6 +39,26 @@ def scope_and_roots(
     return "project", None, project_root, True
 
 
+def scope_banner(scope, *, implicit, lock_path, count, err=False) -> None:
+    """Print a one-line scope reminder on implicit-project resolution.
+
+    Best-effort and informational: never raises, never affects exit codes.
+    Silent unless scope was resolved implicitly (no -g/-p) AND landed on
+    project — the one case (#413) where the user got no signal about which
+    lock was picked. Goes to stdout by default (so a human sees it inline with
+    the verb output); callers emitting a machine stream pass ``err=True`` to
+    route it to stderr instead (today only ``list --json``).
+    """
+    if not (implicit and scope == "project"):
+        return
+    noun = "skill" if count == 1 else "skills"
+    click.echo(
+        f"Operating on project scope — {lock_path} ({count} {noun}). "
+        f"Pass -g for the global library.",
+        err=err,
+    )
+
+
 def validate_agent_names(names: tuple[str, ...]) -> tuple[str, ...]:
     """Raise UsageError on names not in the catalog."""
     for n in names:
