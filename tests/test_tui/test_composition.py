@@ -8,7 +8,9 @@ own column — on every asset type it supports.
 from agent_toolkit_cli.skill_agents import AGENTS
 from agent_toolkit_tui.composition import (
     MAIN_HARNESSES,
+    _MCP_HARNESSES,
     instructions_nonstandard_main,
+    mcp_nonstandard_main,
     skills_nonstandard_main,
 )
 
@@ -86,4 +88,40 @@ def test_agents_coverage_guard():
                 continue  # e.g. codex: unsupported by design — exempt
             assert h in covered or h in rendered, (
                 f"{h} is neither standard-covered nor rendered on the agents tab ({scope})"
+            )
+
+
+def test_mcp_harnesses_members():
+    # The four real MCP harnesses (commands/mcp/_common.py _HARNESSES), in
+    # canonical render order. NOT MAIN_HARNESSES (no gemini-cli / cursor).
+    assert _MCP_HARNESSES == ("claude-code", "codex", "opencode", "pi")
+
+
+def test_mcp_nonstandard_main_project():
+    # claude-code + pi fold into the project standard (.mcp.json) → only the
+    # two non-covered harnesses get their own column.
+    assert mcp_nonstandard_main("project") == ("codex", "opencode")
+
+
+def test_mcp_nonstandard_main_global():
+    # Global has no standard (STANDARD_MCP_READERS lacks a 'global' key);
+    # mcp_standard_covered('global') raises KeyError → empty covered set →
+    # all four harnesses render their own column.
+    assert mcp_nonstandard_main("global") == (
+        "claude-code", "codex", "opencode", "pi",
+    )
+
+
+def test_mcp_coverage_guard():
+    """Every MCP harness is standard-covered (project) or has its own column."""
+    from agent_toolkit_cli.mcp_standard import mcp_standard_covered
+    for scope in ("global", "project"):
+        try:
+            covered = set(mcp_standard_covered(scope))
+        except KeyError:
+            covered = set()
+        rendered = set(mcp_nonstandard_main(scope))
+        for h in _MCP_HARNESSES:
+            assert h in covered or h in rendered, (
+                f"{h} is neither standard-covered nor a rendered MCP column at {scope}"
             )
