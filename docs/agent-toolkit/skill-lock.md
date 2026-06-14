@@ -183,6 +183,4 @@ The reverse also holds: a skill installed via `npx skills add owner/repo` lands 
 
 ## Where to look next
 
-- Spec: `docs/superpowers/specs/2026-05-21-agent-toolkit-lock-file-migration-design.md`
-- Plan (TDD task breakdown): `docs/superpowers/plans/2026-05-21-skill-lock-file-migration.md`
 - Upstream `vercel-labs/skills` source: <https://github.com/vercel-labs/skills>

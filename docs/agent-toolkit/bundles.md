@@ -181,10 +181,6 @@ The following are explicitly out of scope for v1 and deferred to v2:
   member's lock entry.  This is the bundle ADR's "step 3" and replaces v1's
   N-independent-clones install mechanism.
 
-The full design, including the grouping-lock composite architecture, lives in the
-spec:
-`docs/superpowers/specs/2026-06-12-bundle-manifest-design.md`.
-
 ## See also
 
 - [`cli.md`](cli.md) — full CLI reference for `skill`, `agent`, `instructions`,
