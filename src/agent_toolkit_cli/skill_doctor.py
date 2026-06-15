@@ -309,10 +309,28 @@ def _make_rmtree_action(*, path: Path) -> FixAction:
 
 def _make_legacy_bare_alias_action(suffixed: Path, bare: Path) -> FixAction:
     """Alias the canonical `<repo>@<ref>` path to the legacy bare `<repo>`
-    clone (#412 Phase 2) — non-destructive, reversible, idempotent."""
+    clone (#412 Phase 2) — non-destructive, reversible, idempotent.
+
+    When `suffixed` is a symlink or a real git repo the action is a no-op
+    (already aliased / already canonical). When `suffixed` exists as a
+    partial/aborted clone (a dir that is NOT a git repo — the case #422 fix 2
+    added to the emission gate), the alias cannot be created over it, so the
+    fix would never converge. In that case move the partial dir aside to a
+    `.attk-partial` sibling (reversible, no data loss — the read path already
+    ignores a non-repo suffixed dir and uses the bare clone) and then alias."""
     def _apply() -> None:
-        if suffixed.exists() or suffixed.is_symlink():
-            return  # idempotent
+        if suffixed.is_symlink():
+            return  # already aliased — idempotent
+        if suffixed.exists():
+            if skill_git.is_git_repo(suffixed):
+                return  # a real canonical clone is in place — nothing to do
+            # Partial/aborted non-repo clone occupying the canonical path:
+            # move it aside (reversible) so the alias can be created and the
+            # finding converges. The bare clone holds the real tree.
+            aside = suffixed.with_name(suffixed.name + ".attk-partial")
+            if aside.exists():
+                shutil.rmtree(aside)
+            suffixed.rename(aside)
         suffixed.parent.mkdir(parents=True, exist_ok=True)
         suffixed.symlink_to(bare.name)  # relative alias within <owner>/
     return FixAction(

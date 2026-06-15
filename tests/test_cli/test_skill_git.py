@@ -726,6 +726,24 @@ def test_legacy_bare_clone_for_true_sha_pin_adopts(tmp_path):
     ) == bare
 
 
+def test_legacy_bare_clone_for_sha_pin_not_adopted_by_hex_branch_clone(tmp_path):
+    """#422 fix 1 SYMMETRIC safety — the dual-check must NOT let a SHA-pinned
+    skill adopt a clone that is sitting on a hex-NAMED branch whose name does not
+    equal the pin. The clone is on branch 'dead123'; the skill pins a real
+    (different) commit SHA. The SHA arm fails (head != pin), and the branch arm
+    fails (current_branch 'dead123' != the pin SHA) → refused. Proves the
+    widening doesn't cross-adopt between a SHA pin and a hex-named branch."""
+    from agent_toolkit_cli.skill_git import legacy_bare_clone_for
+    url = "https://github.com/o/r"
+    bare = tmp_path / "_parents" / "o" / "r"
+    _bare_repo_on(bare, url, "dead123")  # clone on a hex-NAMED branch
+    pin = "abc1234"  # a different SHA-shaped ref (not this clone's HEAD or branch)
+    suffixed = tmp_path / "_parents" / "o" / f"r@{pin}"
+    assert legacy_bare_clone_for(
+        suffixed, bare, ref=pin, parent_url=url, env=None,
+    ) is None
+
+
 def test_remote_matches_none_parent_url_is_false(tmp_path):
     from agent_toolkit_cli.skill_git import remote_matches
     bare = tmp_path / "r"
