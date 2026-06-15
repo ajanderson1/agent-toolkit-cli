@@ -1,0 +1,179 @@
+/* agent-toolkit-tui — gruvbox-friendly.
+   Layout: Header → Vertical(content-header-row + SkillGrid)
+           → status-bar → footer-pending → Footer.
+*/
+
+Screen {
+    background: $surface;
+}
+
+/* Main row — sidebar + content side-by-side, full remaining height. */
+#main {
+    layout: horizontal;
+    height: 1fr;
+}
+
+/* Left rail. */
+#asset-types-sidebar {
+    width: 24;
+    min-width: 20;
+    max-width: 30;
+    background: $panel;
+    border-right: tall $primary-darken-2;
+}
+
+#asset-types-sidebar .rail-header {
+    text-style: bold;
+    color: $accent;
+    padding: 1 2 1 2;
+    background: $panel;
+    border-bottom: tall $primary-darken-2;
+}
+
+#asset-types-list {
+    background: $panel;
+    border: none;
+    padding: 1 0;
+    scrollbar-size-vertical: 1;
+    scrollbar-background: $panel-darken-1;
+    scrollbar-color: $primary-darken-2;
+    scrollbar-color-hover: $primary;
+}
+
+#asset-types-list > .option-list--option {
+    padding: 0 2;
+}
+#asset-types-list > .option-list--option-highlighted {
+    background: $primary;
+    color: $text;
+    text-style: bold;
+}
+#asset-types-list > .option-list--option-hover {
+    background: $boost;
+}
+
+/* Content pane (right side). */
+#content {
+    width: 1fr;
+    background: $surface;
+    padding: 1 3;
+}
+
+#content-header {
+    height: auto;
+    color: $text;
+    padding: 0 0 1 0;
+    border-bottom: tall $primary-darken-2;
+    margin: 0 0 1 0;
+}
+
+/* AssetGrid lives inside #content; its own DEFAULT_CSS handles border + filter. */
+#asset-grid {
+    height: 1fr;
+}
+
+/* Fuzzy-filter search box at the top of the grid (#249). Compact top bar
+   above the DataTable; focused on open so typing narrows the list. */
+SkillGrid Input#skill-filter {
+    height: 3;
+    border: round $primary 30%;
+    margin: 0 1 1 1;
+}
+
+/* Pi-extension grid — mirrors SkillGrid styling. */
+PiGrid {
+    height: 1fr;
+}
+PiGrid DataTable {
+    height: 1fr;
+}
+
+/* Instruction grid — mirrors AgentGrid styling. */
+InstructionGrid {
+    height: 1fr;
+}
+InstructionGrid DataTable {
+    height: 1fr;
+}
+
+/* Agent grid — mirrors SkillGrid styling. */
+AgentGrid {
+    height: 1fr;
+}
+AgentGrid DataTable {
+    height: 1fr;
+}
+
+/* DataTable header + cursor — kept consistent with the V3 styling but
+   palette-neutral so gruvbox lights up correctly. */
+DataTable > .datatable--header {
+    background: $panel;
+    color: $accent;
+    text-style: bold;
+}
+
+DataTable > .datatable--cursor {
+    background: $primary;
+    color: $text;
+}
+
+/* Status bar — full-width row above the footer. */
+#status-bar {
+    height: 1;
+    color: $text-muted;
+    background: $panel;
+    padding: 0 2;
+    border-top: tall $primary-darken-2;
+}
+
+#footer-pending {
+    height: 1;
+    color: $accent;
+    background: $panel;
+    padding: 0 2;
+}
+
+/* Scope toggle — paired toggle between project and user, replaces old
+   Rich [@click=...] chip markup. Both options share padding + border;
+   only background/foreground distinguishes active from inactive. */
+ScopeToggle {
+    height: 1;
+    width: auto;
+    margin: 0 0 0 2;
+}
+
+ScopeToggle Label.scope-toggle-label {
+    color: $text-muted;
+    margin: 0 1 0 0;
+}
+
+ScopeToggle Label.scope-option {
+    padding: 0 1;
+    margin: 0;
+    background: $surface;
+    color: $text;
+    border-left: vkey $primary-darken-2;
+}
+
+ScopeToggle Label.scope-option.-active {
+    background: $accent;
+    color: $background;
+    text-style: bold;
+}
+
+ScopeToggle Label.scope-option.-inactive {
+    background: $surface;
+    color: $text;
+    text-style: none;
+}
+
+#content-header-row {
+    height: auto;
+    width: 100%;
+    layout: horizontal;
+    align: left middle;
+}
+
+#content-header-row #content-header {
+    width: 1fr;
+}

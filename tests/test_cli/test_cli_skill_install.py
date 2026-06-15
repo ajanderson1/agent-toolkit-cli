@@ -1,0 +1,358 @@
+"""Tests for `skill install` — agent-visibility symlinks from library.
+
+v2.2: `skill install <slug> --agents AGENTS [--scope SCOPE]` creates symlinks
+from agent locations to the library canonical.
+"""
+from pathlib import Path
+
+import pytest
+from click.testing import CliRunner
+
+from agent_toolkit_cli.cli import main
+from agent_toolkit_cli.skill_install import agent_projection_dir
+from agent_toolkit_cli.skill_paths import canonical_skill_dir
+
+
+def _add_demo(runner, upstream_path, library_root):
+    """Add demo skill to library, returning the invocation result."""
+    return runner.invoke(main, [
+        "skill", "add", str(upstream_path), "--slug", "demo",
+    ])
+
+
+# ── global scope ──────────────────────────────────────────────────────────
+
+
+def test_install_global_universal_creates_agents_skills_symlink(
+    git_sandbox, tmp_path: Path, monkeypatch
+):
+    """skill install --agents universal at global scope creates ~/.agents/skills/<slug>."""
+    library_root = tmp_path / "lib" / "skills"
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    monkeypatch.setenv("HOME", str(fake_home))
+
+    runner = CliRunner()
+    r = _add_demo(runner, git_sandbox.upstream, library_root)
+    assert r.exit_code == 0, r.output
+
+    result = runner.invoke(main, [
+        "skill", "install", "demo", "--agents", "standard",
+    ])
+    assert result.exit_code == 0, result.output
+
+    bundle_link = fake_home / ".agents" / "skills" / "demo"
+    assert bundle_link.is_symlink(), "universal bundle symlink must be created"
+    assert bundle_link.resolve() == (library_root / "demo").resolve()
+
+
+def test_install_global_claude_code_creates_claude_symlink(
+    git_sandbox, tmp_path: Path, monkeypatch
+):
+    """skill install --agents claude-code at global scope creates ~/.claude/skills/<slug>."""
+    library_root = tmp_path / "lib" / "skills"
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    monkeypatch.setenv("HOME", str(fake_home))
+    # Patch CLAUDE_HOME so the projection uses fake_home.
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(fake_home / ".claude"))
+
+    from agent_toolkit_cli.skill_agents import AGENTS
+    claude_agent = AGENTS["claude-code"]
+
+    runner = CliRunner()
+    r = _add_demo(runner, git_sandbox.upstream, library_root)
+    assert r.exit_code == 0, r.output
+
+    result = runner.invoke(main, [
+        "skill", "install", "demo", "--agents", "claude-code",
+    ])
+    assert result.exit_code == 0, result.output
+
+    claude_link = claude_agent.global_skills_dir / "demo"
+    assert claude_link.is_symlink(), "claude-code symlink must be created"
+    assert claude_link.resolve() == (library_root / "demo").resolve()
+    claude_link.unlink()  # cleanup
+
+
+def test_install_global_universal_and_claude_does_both(
+    git_sandbox, tmp_path: Path, monkeypatch
+):
+    """skill install --agents standard,claude-code creates both symlinks."""
+    library_root = tmp_path / "lib" / "skills"
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    monkeypatch.setenv("HOME", str(fake_home))
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(fake_home / ".claude"))
+
+    from agent_toolkit_cli.skill_agents import AGENTS
+    claude_agent = AGENTS["claude-code"]
+
+    runner = CliRunner()
+    r = _add_demo(runner, git_sandbox.upstream, library_root)
+    assert r.exit_code == 0, r.output
+
+    result = runner.invoke(main, [
+        "skill", "install", "demo", "--agents", "standard,claude-code",
+    ])
+    assert result.exit_code == 0, result.output
+
+    bundle_link = fake_home / ".agents" / "skills" / "demo"
+    assert bundle_link.is_symlink()
+    assert bundle_link.resolve() == (library_root / "demo").resolve()
+
+    claude_link = claude_agent.global_skills_dir / "demo"
+    assert claude_link.is_symlink()
+    assert claude_link.resolve() == (library_root / "demo").resolve()
+    claude_link.unlink()
+
+
+def test_install_global_requires_library_entry(
+    git_sandbox, tmp_path: Path, monkeypatch
+):
+    """skill install fails if slug is not in the library."""
+    library_root = tmp_path / "lib" / "skills"
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    monkeypatch.setenv("HOME", str(fake_home))
+
+    runner = CliRunner()
+    result = runner.invoke(main, [
+        "skill", "install", "nonexistent", "--agents", "standard",
+    ])
+    assert result.exit_code != 0
+
+
+def test_install_global_idempotent(
+    git_sandbox, tmp_path: Path, monkeypatch
+):
+    """Calling install twice for the same agent is idempotent."""
+    library_root = tmp_path / "lib" / "skills"
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    monkeypatch.setenv("HOME", str(fake_home))
+
+    runner = CliRunner()
+    r = _add_demo(runner, git_sandbox.upstream, library_root)
+    assert r.exit_code == 0, r.output
+
+    r1 = runner.invoke(main, [
+        "skill", "install", "demo", "--agents", "standard",
+    ])
+    assert r1.exit_code == 0, r1.output
+    r2 = runner.invoke(main, [
+        "skill", "install", "demo", "--agents", "standard",
+    ])
+    assert r2.exit_code == 0, r2.output
+
+    bundle_link = fake_home / ".agents" / "skills" / "demo"
+    assert bundle_link.is_symlink()
+
+
+# ── project scope ─────────────────────────────────────────────────────────
+
+
+def test_install_project_universal_clones_project_canonical(
+    git_sandbox, tmp_path: Path, monkeypatch
+):
+    """skill install --scope project --agents universal: real clone in store,
+    no in-tree symlink (the store canonical IS the install for the universal token)."""
+    library_root = tmp_path / "lib" / "skills"
+    project = tmp_path / "proj"
+    project.mkdir()
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+
+    runner = CliRunner()
+    r = _add_demo(runner, git_sandbox.upstream, library_root)
+    assert r.exit_code == 0, r.output
+
+    result = runner.invoke(main, [
+        "--project", str(project),
+        "skill", "install", "demo", "--scope", "project",
+        "--agents", "standard",
+    ])
+    assert result.exit_code == 0, result.output
+
+    # Under the new model the real canonical lives in the external store, NOT
+    # in the project tree.  When --agents universal is used at project scope
+    # the CLI records the store clone as the install; no in-tree symlink is
+    # created (the store canonical IS the install).
+    store_canonical = canonical_skill_dir("demo", scope="project", project=project)
+    assert store_canonical.is_dir() and not store_canonical.is_symlink()
+    assert (store_canonical / "SKILL.md").exists()
+
+
+def test_install_project_non_universal_creates_symlink_when_dir_exists(
+    git_sandbox, tmp_path: Path, monkeypatch
+):
+    """Project install + claude-code + .claude/ present → symlink created."""
+    library_root = tmp_path / "lib" / "skills"
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / ".claude").mkdir()
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+
+    runner = CliRunner()
+    r = _add_demo(runner, git_sandbox.upstream, library_root)
+    assert r.exit_code == 0, r.output
+
+    result = runner.invoke(main, [
+        "--project", str(project),
+        "skill", "install", "demo", "--scope", "project",
+        "--agents", "claude-code",
+    ])
+    assert result.exit_code == 0, result.output
+
+    # Real canonical in external store.
+    store_canonical = canonical_skill_dir("demo", scope="project", project=project)
+    assert store_canonical.is_dir()
+    # Claude-code gets a projection symlink → store canonical.
+    claude_link = project / ".claude" / "skills" / "demo"
+    assert claude_link.is_symlink()
+    assert claude_link.resolve() == store_canonical.resolve()
+
+
+def test_install_project_non_universal_auto_creates_agent_root(
+    git_sandbox, tmp_path: Path, monkeypatch
+):
+    """Project install + windsurf + no .windsurf/ → agent root and symlink auto-created.
+
+    v2.2: explicit --agents consent is sufficient; the directory is created on demand.
+    """
+    library_root = tmp_path / "lib" / "skills"
+    project = tmp_path / "proj"
+    project.mkdir()
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+
+    runner = CliRunner()
+    r = _add_demo(runner, git_sandbox.upstream, library_root)
+    assert r.exit_code == 0, r.output
+
+    result = runner.invoke(main, [
+        "--project", str(project),
+        "skill", "install", "demo", "--scope", "project",
+        "--agents", "windsurf",
+    ])
+    assert result.exit_code == 0, result.output
+
+    windsurf_link = project / ".windsurf" / "skills" / "demo"
+    assert windsurf_link.is_symlink(), ".windsurf/skills/demo symlink must be created"
+    assert (project / ".windsurf").is_dir(), ".windsurf/ dir must be auto-created"
+
+
+def test_install_defaults_to_standard(git_sandbox, tmp_path, monkeypatch):
+    """skill install with no --agents projects to the standard bundle."""
+    library_root = tmp_path / "lib" / "skills"
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    monkeypatch.setenv("HOME", str(fake_home))
+
+    runner = CliRunner()
+    r = runner.invoke(main, ["skill", "add", str(git_sandbox.upstream), "--slug", "demo"])
+    assert r.exit_code == 0, r.output
+
+    # No --agents — must default to 'standard', not error.
+    result = runner.invoke(main, ["skill", "install", "demo"])
+    assert result.exit_code == 0, result.output
+
+    bundle_link = fake_home / ".agents" / "skills" / "demo"
+    assert bundle_link.is_symlink(), "default install must create the standard bundle symlink"
+    assert bundle_link.resolve() == (library_root / "demo").resolve()
+
+
+def test_install_help_marks_agents_optional():
+    """The --agents option is no longer [required] on skill install.
+
+    Click renders `[required]` on a continuation line BELOW the option, so we
+    capture the whole --agents block (its line plus continuation lines, up to the
+    next `--option`) and assert `[required]` appears nowhere in it.
+    """
+    result = CliRunner().invoke(main, ["skill", "install", "--help"])
+    assert result.exit_code == 0
+    lines = result.output.splitlines()
+    start = next((i for i, ln in enumerate(lines) if ln.strip().startswith("--agents")), None)
+    assert start is not None, "--agents must appear in help"
+    block = [lines[start]]
+    for ln in lines[start + 1:]:
+        if ln.strip().startswith("--"):  # next option begins
+            break
+        block.append(ln)
+    assert not any("[required]" in ln for ln in block), (
+        f"--agents must no longer be required; block was:\n{chr(10).join(block)}"
+    )
+
+
+# ── harness-mechanism parametrization (#423 / AC2) ──────────────────────────
+# One representative per adapter mechanism — covers every distinct projection
+# code path without 57x bloat (the other harnesses are config-table rows, not
+# code). Run at PROJECT scope: the per-harness destination resolves from the
+# runtime project root, so all three isolate cleanly under tmp. (At global
+# scope each harness's global_skills_dir is a frozen import-time constant bound
+# to the real ~/.gemini, ~/.aider-desk, … — see #423 spec, accepted residual.)
+_SKILL_INSTALL_MECHANISM_REPS = [
+    "claude-code",   # symlink
+    "gemini-cli",    # translate
+    "aider-desk",    # config_file_folder
+]
+
+
+@pytest.mark.parametrize("harness", _SKILL_INSTALL_MECHANISM_REPS)
+def test_skill_install_projects_into_each_mechanism_project_scope(
+    git_sandbox, harness, tmp_path: Path, monkeypatch
+):
+    """skill install --agents <harness> -p projects for every adapter mechanism.
+
+    Asserts the projection symlink lands at the harness's project-scope
+    destination and resolves to the project canonical. The destination differs
+    per mechanism (.claude/skills vs .agents/skills vs .aider-desk/skills) but
+    the projection algorithm is shared — this proves each rep's path is wired.
+    """
+    library_root = tmp_path / "lib" / "skills"
+    project = tmp_path / "proj"
+    project.mkdir()
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+
+    runner = CliRunner()
+    r = _add_demo(runner, git_sandbox.upstream, library_root)
+    assert r.exit_code == 0, r.output
+
+    result = runner.invoke(main, [
+        "--project", str(project),
+        "skill", "install", "demo", "--scope", "project",
+        "--agents", harness,
+    ])
+    assert result.exit_code == 0, result.output
+
+    dest = agent_projection_dir(
+        harness, "demo", scope="project", home=None, project=project,
+    )
+    assert dest.is_symlink(), f"{harness}: project-scope projection must be a symlink"
+    assert str(dest).startswith(str(project)), (
+        f"{harness}: projection must be isolated under the project root, got {dest}"
+    )

@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+.python-version
+dist/
+build/
+*.egg-info/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+
+# Worktrees
+.worktrees/
+
+# Flow verification artifacts
+assets/verification/
+
+# uv
+.uv-cache/
+.claude/
+.mcp.json
+
+# Audit run artifacts
+audit/.last-run.tsv
+audit/.*.log
+
+# Per-harness skill projection layer (symlinks + embedded clones into ~/.agent-toolkit)
+.agents/
+.pi/
+
+# cmux-pm overseer runtime state
+.cmux-pm/
+
+# aj-pm foreman runtime state
+.aj-pm/
+
+# MkDocs build output
+site/
+
+# Internal planning corpus (specs/plans/brainstorms) — kept local, not shipped
+# in the public repo. Already excluded from the published MkDocs site via
+# mkdocs.yml exclude_docs; this also keeps it out of the repo source.
+docs/superpowers/

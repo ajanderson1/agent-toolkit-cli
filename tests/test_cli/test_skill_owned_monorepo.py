@@ -1,0 +1,497 @@
+"""Owned monorepo: add records writable (no readOnly); --owned forces it."""
+import json
+import subprocess
+from pathlib import Path
+
+from click.testing import CliRunner
+
+from agent_toolkit_cli.cli import main as cli
+from agent_toolkit_cli.skill_paths import library_lock_path
+
+from tests.conftest import scrub_git_env
+
+FIXTURE = Path(__file__).parent.parent / "fixtures" / "monorepo_skills"
+
+
+def _setup_parent(tmp_path, monkeypatch) -> tuple[str, Path]:
+    parent = tmp_path / "parent"
+    subprocess.run(["cp", "-R", str(FIXTURE), str(parent)], check=True)
+    env = scrub_git_env()
+    for cmd in (
+        ["git", "init", "-q", "-b", "main"],
+        ["git", "-c", "user.email=t@t", "-c", "user.name=t", "add", "."],
+        ["git", "-c", "user.email=t@t", "-c", "user.name=t",
+         "commit", "-q", "-m", "init"],
+        # Accept pushes to the checked-out branch — the parent is a non-bare
+        # file:// repo, so a --direct push to its `main` would otherwise hit
+        # `denyCurrentBranch`. updateInstead keeps the worktree consistent.
+        ["git", "config", "receive.denyCurrentBranch", "updateInstead"],
+    ):
+        subprocess.run(cmd, cwd=parent, check=True, env=env)
+    library = tmp_path / "library"
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library / "skills"))
+    return f"file://{parent}", parent
+
+
+def _lock() -> dict:
+    return json.loads(library_lock_path().read_text())
+
+
+def _add_owned(parent_url: str, skill: str = "mkdocs") -> None:
+    r = CliRunner().invoke(
+        cli, ["skill", "add", parent_url, "--skill", skill, "--owned"],
+    )
+    assert r.exit_code == 0, r.output
+
+
+def test_add_owned_writes_entry_without_readonly(tmp_path, monkeypatch):
+    parent_url, _ = _setup_parent(tmp_path, monkeypatch)
+    r = CliRunner().invoke(
+        cli, ["skill", "add", parent_url, "--skill", "mkdocs", "--owned"],
+    )
+    assert r.exit_code == 0, r.output
+    entry = _lock()["skills"]["mkdocs"]
+    assert "readOnly" not in entry  # writers omit readOnly when False
+    assert entry["parentUrl"] == parent_url
+
+
+def test_add_unowned_monorepo_keeps_readonly(tmp_path, monkeypatch):
+    parent_url, _ = _setup_parent(tmp_path, monkeypatch)
+    r = CliRunner().invoke(cli, ["skill", "add", parent_url, "--skill", "mkdocs"])
+    assert r.exit_code == 0, r.output
+    entry = _lock()["skills"]["mkdocs"]
+    assert entry.get("readOnly") is True  # local owner is not owned
+
+
+def test_owned_flag_on_single_skill_add_is_error(tmp_path, monkeypatch):
+    _setup_parent(tmp_path, monkeypatch)
+    # A single-skill add (no subpath/--skill) with --owned must fail loud.
+    r = CliRunner().invoke(
+        cli, ["skill", "add", "ajanderson1/journal-skill", "--owned"],
+    )
+    assert r.exit_code != 0
+    assert "owned" in r.output.lower()
+
+
+def test_owned_push_direct_commits_subpath_only(tmp_path, monkeypatch):
+    """--direct push of an owned-monorepo skill commits ONLY that skill's
+    subpath in the parent clone, even when a sibling subpath is dirty."""
+    from agent_toolkit_cli.skill_paths import parent_clone_path
+
+    parent_url, parent = _setup_parent(tmp_path, monkeypatch)
+    _add_owned(parent_url, "mkdocs")
+    entry = _lock()["skills"]["mkdocs"]
+    sub = entry["skillPath"]  # e.g. "mkdocs"
+    owner, repo = entry["source"].split("/", 1)
+    clone = parent_clone_path(owner, repo, ref=entry.get("ref"), env=None)
+
+    # Dirty the pushed skill's subpath AND a sibling file in the clone.
+    (clone / sub / "SKILL.md").write_text("edited mkdocs\n")
+    sibling = next(
+        p for p in clone.iterdir()
+        if p.is_dir() and p.name not in (".git", sub)
+    )
+    (sibling / "SKILL.md").write_text("edited sibling\n")
+
+    r = CliRunner().invoke(cli, ["skill", "push", "--direct", "mkdocs", "-g"])
+    assert r.exit_code == 0, r.output
+
+    show = subprocess.run(
+        ["git", "-C", str(clone), "show", "--name-only", "--format=", "HEAD"],
+        capture_output=True, text=True, env=scrub_git_env(), check=True,
+    )
+    changed = [ln for ln in show.stdout.splitlines() if ln.strip()]
+    assert changed, "expected a commit touching the mkdocs subpath"
+    assert all(p.startswith(f"{sub}/") for p in changed), changed
+
+
+def test_owned_push_clean_subpath_reports_nothing(tmp_path, monkeypatch):
+    parent_url, _ = _setup_parent(tmp_path, monkeypatch)
+    _add_owned(parent_url, "mkdocs")
+    r = CliRunner().invoke(cli, ["skill", "push", "--direct", "mkdocs", "-g"])
+    assert r.exit_code == 0, r.output
+    assert "nothing to push" in r.output.lower()
+
+
+def _commit_subpath(clone: Path, sub: str, body: str) -> None:
+    """Commit an edit to `clone/sub` so the clone is clean but 1 ahead of
+    origin (the committed-but-unpushed state #280 fixes)."""
+    (clone / sub / "SKILL.md").write_text(body)
+    env = scrub_git_env()
+    for cmd in (
+        ["git", "-C", str(clone), "add", "--", sub],
+        ["git", "-C", str(clone), "-c", "user.email=t@t", "-c", "user.name=t",
+         "commit", "-q", "-m", "local committed edit"],
+    ):
+        subprocess.run(cmd, check=True, env=env)
+
+
+def _clone_for_mkdocs(clone_lookup_entry) -> Path:
+    from agent_toolkit_cli.skill_paths import parent_clone_path
+    owner, repo = clone_lookup_entry["source"].split("/", 1)
+    return parent_clone_path(owner, repo, ref=clone_lookup_entry.get("ref"), env=None)
+
+
+def test_owned_push_committed_ahead_direct_pushes(tmp_path, monkeypatch):
+    """#280: an owned-monorepo clone with a committed-but-unpushed subpath edit
+    (clean tree, ahead of origin) must NOT report 'nothing to push' under
+    --direct — it publishes the committed work to the remote."""
+    parent_url, _ = _setup_parent(tmp_path, monkeypatch)
+    _add_owned(parent_url, "mkdocs")
+    entry = _lock()["skills"]["mkdocs"]
+    sub = entry["skillPath"]
+    clone = _clone_for_mkdocs(entry)
+
+    _commit_subpath(clone, sub, "committed but unpushed\n")
+
+    r = CliRunner().invoke(cli, ["skill", "push", "--direct", "mkdocs", "-g"])
+    assert r.exit_code == 0, r.output
+    assert "nothing to push" not in r.output.lower()
+    assert "pushed" in r.output.lower()
+
+    # The committed work reached origin (parent is updateInstead, so main moved).
+    env = scrub_git_env()
+    head = subprocess.run(
+        ["git", "-C", str(clone), "rev-parse", "HEAD"],
+        capture_output=True, text=True, env=env, check=True,
+    ).stdout.strip()
+    origin = subprocess.run(
+        ["git", "-C", str(clone), "rev-parse", "origin/main"],
+        capture_output=True, text=True, env=env, check=True,
+    ).stdout.strip()
+    assert head == origin, "committed-but-unpushed work did not reach origin"
+
+
+def test_owned_push_committed_ahead_default_opens_pr(tmp_path, monkeypatch):
+    """#280: same committed-ahead state in default (PR) mode pushes a
+    `skill/self-improvement-*` branch carrying the commit and restores the
+    shared clone to base, rather than reporting 'nothing to push'."""
+    parent_url, _ = _setup_parent(tmp_path, monkeypatch)
+    _add_owned(parent_url, "mkdocs")
+    entry = _lock()["skills"]["mkdocs"]
+    sub = entry["skillPath"]
+    clone = _clone_for_mkdocs(entry)
+
+    _commit_subpath(clone, sub, "committed but unpushed\n")
+
+    _hide_gh(monkeypatch, tmp_path)
+    r = CliRunner().invoke(cli, ["skill", "push", "mkdocs", "-g"])
+    assert r.exit_code == 0, r.output
+    assert "nothing to push" not in r.output.lower()
+    assert "pushed branch skill/self-improvement-" in r.output
+
+    env = scrub_git_env()
+    # Clone restored to base, not stranded on the PR branch.
+    branch = subprocess.run(
+        ["git", "-C", str(clone), "rev-parse", "--abbrev-ref", "HEAD"],
+        capture_output=True, text=True, env=env, check=True,
+    ).stdout.strip()
+    assert branch == "main", f"shared clone stranded on {branch!r}"
+
+    # The PR branch carries the committed work.
+    pr_branch = next(
+        ln.split("pushed branch ", 1)[1].strip()
+        for ln in r.output.splitlines() if "pushed branch " in ln
+    )
+    show = subprocess.run(
+        ["git", "-C", str(clone), "show", "--name-only", "--format=", pr_branch],
+        capture_output=True, text=True, env=env, check=True,
+    )
+    changed = [ln for ln in show.stdout.splitlines() if ln.strip()]
+    assert changed and all(p.startswith(f"{sub}/") for p in changed), changed
+
+
+def _hide_gh(monkeypatch, tmp_path):
+    """Build a PATH that retains git (and its git-* sub-helpers) but excludes
+    `gh`, so `shutil.which('gh')` returns None and _open_pr returns None — the
+    PR path then prints the pushed branch instead of opening a PR. Mirrors
+    test_cli_skill_push.py::_hide_gh_from_path. Call AFTER setup (needs `cp`)."""
+    import os
+    import shutil
+
+    bin_dir = tmp_path / "no-gh-bin"
+    bin_dir.mkdir(exist_ok=True)
+    git_path = shutil.which("git")
+    if git_path is None:
+        raise RuntimeError("git not on PATH; cannot run this test")
+    git_dir = Path(git_path).parent
+    for entry in git_dir.iterdir():
+        if entry.name.startswith("git") and entry.name != "gh":
+            target = bin_dir / entry.name
+            if not target.exists():
+                os.symlink(entry, target)
+    monkeypatch.setenv("PATH", str(bin_dir))
+
+
+def test_owned_push_pr_path_commits_subpath_and_preserves_sibling(
+    tmp_path, monkeypatch
+):
+    """The PR-branch path (no --direct): commits only the subpath onto a new
+    branch, pushes it, restores the shared clone to base afterward, AND leaves
+    a dirty sibling subpath's uncommitted edit intact (a plain checkout-back
+    carries it across; a `-f` restore would silently destroy in-progress work
+    on the exact multi-skill-in-one-monorepo workflow this feature targets)."""
+    from agent_toolkit_cli.skill_paths import parent_clone_path
+
+    parent_url, _ = _setup_parent(tmp_path, monkeypatch)
+    _add_owned(parent_url, "mkdocs")
+    entry = _lock()["skills"]["mkdocs"]
+    sub = entry["skillPath"]
+    owner, repo = entry["source"].split("/", 1)
+    clone = parent_clone_path(owner, repo, ref=entry.get("ref"), env=None)
+
+    # Dirty the target subpath AND a sibling subpath in the shared clone.
+    (clone / sub / "SKILL.md").write_text("edited mkdocs\n")
+    sibling = next(
+        p for p in clone.iterdir()
+        if p.is_dir() and p.name not in (".git", sub)
+    )
+    sibling_file = sibling / "SKILL.md"
+    sibling_file.write_text("edited sibling\n")
+
+    # Hide gh only now — after setup/clone are done (which need cp/git on PATH).
+    # git is invoked via the scrubbed env in skill_git, which keeps the real
+    # PATH; the command-layer _gh_available() probe is what we want to fail.
+    _hide_gh(monkeypatch, tmp_path)
+    r = CliRunner().invoke(cli, ["skill", "push", "mkdocs", "-g"])
+    assert r.exit_code == 0, r.output
+    assert "pushed branch skill/self-improvement-" in r.output
+
+    # The clone is restored to the base branch (main), not stranded on the PR
+    # branch — so the next sibling push starts clean from base.
+    branch = subprocess.run(
+        ["git", "-C", str(clone), "rev-parse", "--abbrev-ref", "HEAD"],
+        capture_output=True, text=True, env=scrub_git_env(), check=True,
+    ).stdout.strip()
+    assert branch == "main", f"shared clone stranded on {branch!r}"
+
+    # The PR branch holds a commit that touched ONLY the mkdocs subpath.
+    pr_branch = next(
+        ln.split("pushed branch ", 1)[1].strip()
+        for ln in r.output.splitlines() if "pushed branch " in ln
+    )
+    show = subprocess.run(
+        ["git", "-C", str(clone), "show", "--name-only", "--format=",
+         pr_branch],
+        capture_output=True, text=True, env=scrub_git_env(), check=True,
+    )
+    changed = [ln for ln in show.stdout.splitlines() if ln.strip()]
+    assert changed and all(p.startswith(f"{sub}/") for p in changed), changed
+
+    # CRITICAL: the sibling's uncommitted edit must survive the push. A `-f`
+    # restore would silently wipe it; a plain checkout-back preserves it.
+    assert sibling_file.read_text() == "edited sibling\n", (
+        "push destroyed an unpushed sibling subpath's in-progress edit"
+    )
+
+
+def test_owned_push_refuses_when_skillpath_missing(tmp_path, monkeypatch):
+    """A writable monorepo entry with no skillPath must NOT push the whole
+    monorepo (subpath='.' would sweep every sibling)."""
+    import json
+
+    from agent_toolkit_cli.skill_paths import library_lock_path
+
+    parent_url, _ = _setup_parent(tmp_path, monkeypatch)
+    _add_owned(parent_url, "mkdocs")
+    # Corrupt the entry: drop skillPath (simulating a malformed/migrated lock).
+    lock_path = library_lock_path()
+    data = json.loads(lock_path.read_text())
+    data["skills"]["mkdocs"].pop("skillPath", None)
+    lock_path.write_text(json.dumps(data))
+
+    r = CliRunner().invoke(cli, ["skill", "push", "--direct", "mkdocs", "-g"])
+    assert "no skillpath" in r.output.lower()
+
+
+def test_owned_direct_push_updates_local_sha(tmp_path, monkeypatch):
+    """--direct owned push records the new parent-clone HEAD in localSha so the
+    lock doesn't drift from the pushed remote (spec requirement)."""
+    parent_url, _ = _setup_parent(tmp_path, monkeypatch)
+    _add_owned(parent_url, "mkdocs")
+    before = _lock()["skills"]["mkdocs"].get("localSha")
+
+    entry = _lock()["skills"]["mkdocs"]
+    from agent_toolkit_cli.skill_paths import parent_clone_path
+    owner, repo = entry["source"].split("/", 1)
+    clone = parent_clone_path(owner, repo, ref=entry.get("ref"), env=None)
+    (clone / entry["skillPath"] / "SKILL.md").write_text("edited\n")
+
+    r = CliRunner().invoke(cli, ["skill", "push", "--direct", "mkdocs", "-g"])
+    assert r.exit_code == 0, r.output
+    after = _lock()["skills"]["mkdocs"].get("localSha")
+    assert after and after != before, (before, after)
+
+
+def test_owned_status_subpath_scoped_and_marked(tmp_path, monkeypatch):
+    from agent_toolkit_cli.skill_paths import parent_clone_path
+
+    parent_url, _ = _setup_parent(tmp_path, monkeypatch)
+    _add_owned(parent_url, "mkdocs")
+    entry = _lock()["skills"]["mkdocs"]
+    sub = entry["skillPath"]
+    owner, repo = entry["source"].split("/", 1)
+    clone = parent_clone_path(owner, repo, ref=entry.get("ref"), env=None)
+
+    # Clean to start, and marked (owned).
+    r = CliRunner().invoke(cli, ["skill", "status", "mkdocs", "-g"])
+    assert r.exit_code == 0, r.output
+    assert "clean" in r.output
+    assert "(owned)" in r.output
+
+    # Dirty a SIBLING subpath only → mkdocs must still read clean.
+    sibling = next(
+        p for p in clone.iterdir()
+        if p.is_dir() and p.name not in (".git", sub)
+    )
+    (sibling / "SKILL.md").write_text("edited sibling\n")
+    r2 = CliRunner().invoke(cli, ["skill", "status", "mkdocs", "-g"])
+    assert "clean" in r2.output and "dirty" not in r2.output
+
+    # Dirty mkdocs' own subpath → now dirty.
+    (clone / sub / "SKILL.md").write_text("edited mkdocs\n")
+    r3 = CliRunner().invoke(cli, ["skill", "status", "mkdocs", "-g"])
+    assert "dirty" in r3.output
+
+
+def test_owned_update_merges_not_resets_local_edits(tmp_path, monkeypatch):
+    """skill update on an owned monorepo must NOT discard a local committed
+    edit in the parent clone — it fetches + merges, never resets."""
+    from agent_toolkit_cli.skill_paths import parent_clone_path
+
+    parent_url, parent = _setup_parent(tmp_path, monkeypatch)
+    _add_owned(parent_url, "mkdocs")
+    entry = _lock()["skills"]["mkdocs"]
+    sub = entry["skillPath"]
+    owner, repo = entry["source"].split("/", 1)
+    clone = parent_clone_path(owner, repo, ref=entry.get("ref"), env=None)
+
+    # Commit a local edit in the clone (a self-improvement not yet pushed).
+    marker = clone / sub / "LOCAL_EDIT.md"
+    marker.write_text("local self-improvement\n")
+    env = scrub_git_env()
+    for cmd in (
+        ["git", "-C", str(clone), "add", "--", sub],
+        ["git", "-C", str(clone), "-c", "user.email=t@t", "-c", "user.name=t",
+         "commit", "-q", "-m", "local edit"],
+    ):
+        subprocess.run(cmd, check=True, env=env)
+
+    # Advance the upstream parent with an unrelated commit so update has
+    # something to merge.
+    (parent / "TOPLEVEL.md").write_text("upstream change\n")
+    for cmd in (
+        ["git", "-C", str(parent), "add", "."],
+        ["git", "-C", str(parent), "-c", "user.email=t@t", "-c", "user.name=t",
+         "commit", "-q", "-m", "upstream"],
+    ):
+        subprocess.run(cmd, check=True, env=env)
+
+    r = CliRunner().invoke(cli, ["skill", "update", "mkdocs", "-g"])
+    assert r.exit_code == 0, r.output
+    # The local edit survived the update (merge, not reset).
+    assert marker.exists(), "skill update discarded a local owned edit"
+
+
+# --- #412: legacy bare-named parent clone resolution ---
+
+def _add_owned_ref(parent_url: str, skill: str = "mkdocs", ref: str = "main") -> None:
+    """Like _add_owned but records a non-None ref via the /tree/<ref>/ form,
+    so a suffixed <repo>@<ref> clone is materialised (#412 needs this)."""
+    src = f"{parent_url}/tree/{ref}/{skill}"
+    r = CliRunner().invoke(cli, ["skill", "add", src, "--owned"])
+    assert r.exit_code == 0, r.output
+
+
+def _make_legacy_bare(entry: dict) -> Path:
+    """Rename the suffixed parent clone to the legacy bare `<repo>` name and
+    re-point the canonical symlink into it, reproducing the pre-ref-backfill
+    on-disk layout (#412): the symlink points into the bare clone, the lock's
+    `ref` was backfilled afterwards, so reads recompute the suffixed path and
+    miss the on-disk clone."""
+    from agent_toolkit_cli.skill_paths import (
+        canonical_skill_dir, parent_clone_path,
+    )
+    ref = entry["ref"]
+    owner, repo = entry["source"].split("/", 1)
+    suffixed = parent_clone_path(owner, repo, ref=ref, env=None)
+    assert suffixed.name == f"{repo}@{ref}", suffixed
+    bare = parent_clone_path(owner, repo, ref=None, env=None)
+    suffixed.rename(bare)
+    # Re-point the canonical symlink (was → suffixed/<skill_path>) at the bare
+    # clone, matching the real legacy state where the symlink lives in bare.
+    slug = entry["skillPath"].rsplit("/", 1)[-1]
+    canonical = canonical_skill_dir(
+        slug, scope="global", home=None, project=None,
+    )
+    if canonical.is_symlink():
+        canonical.unlink()
+        canonical.symlink_to(bare / entry["skillPath"])
+    return bare
+
+
+def test_update_finds_legacy_bare_named_parent(tmp_path, monkeypatch):
+    parent_url, _ = _setup_parent(tmp_path, monkeypatch)
+    _add_owned_ref(parent_url, "mkdocs")
+    entry = _lock()["skills"]["mkdocs"]
+    assert entry.get("ref") == "main", entry  # /tree/main/ form records a ref
+    bare = _make_legacy_bare(entry)
+    assert bare.exists()
+
+    r = CliRunner().invoke(cli, ["skill", "update", "mkdocs", "-g"])
+    assert r.exit_code == 0, r.output
+    assert "parent clone missing" not in r.output
+
+
+def test_status_finds_legacy_bare_named_parent(tmp_path, monkeypatch):
+    parent_url, _ = _setup_parent(tmp_path, monkeypatch)
+    _add_owned_ref(parent_url, "mkdocs")
+    entry = _lock()["skills"]["mkdocs"]
+    _make_legacy_bare(entry)
+    r = CliRunner().invoke(cli, ["skill", "status", "mkdocs", "-g"])
+    assert r.exit_code == 0, r.output
+    # `(owned)` only prints when the parent clone resolved to a real git repo
+    # (status_cmd line ~116). A failed resolve falls to the `copy` branch, which
+    # also exits 0 — so a bare "no 'missing'" check would pass on regression.
+    assert "(owned)" in r.output, r.output
+    assert "copy" not in r.output, r.output
+
+
+def test_reset_finds_legacy_bare_named_parent(tmp_path, monkeypatch):
+    parent_url, _ = _setup_parent(tmp_path, monkeypatch)
+    _add_owned_ref(parent_url, "mkdocs")
+    entry = _lock()["skills"]["mkdocs"]
+    _make_legacy_bare(entry)
+    r = CliRunner().invoke(cli, ["skill", "reset", "mkdocs", "-g"])
+    assert r.exit_code == 0, r.output
+    # A failed resolve prints "parent clone missing or not a git repo at …";
+    # a successful one reaches the reset/clean path. Assert the failure message
+    # is absent AND a positive reset outcome is present.
+    assert "parent clone missing" not in r.output.lower(), r.output
+    assert "mkdocs: reset" in r.output, r.output
+
+
+def test_push_finds_legacy_bare_named_parent(tmp_path, monkeypatch):
+    parent_url, _ = _setup_parent(tmp_path, monkeypatch)
+    _add_owned_ref(parent_url, "mkdocs")
+    entry = _lock()["skills"]["mkdocs"]
+    _make_legacy_bare(entry)
+    r = CliRunner().invoke(cli, ["skill", "push", "--direct", "mkdocs", "-g"])
+    assert r.exit_code == 0, r.output
+    # Same as reset: the failure path emits "parent clone missing …". A resolved
+    # clean clone reaches the "nothing to push" outcome.
+    assert "parent clone missing" not in r.output.lower(), r.output
+    assert "nothing to push" in r.output, r.output
+
+
+def test_fresh_add_materialises_suffixed_clone(tmp_path, monkeypatch):
+    from agent_toolkit_cli.skill_paths import parent_clone_path
+    parent_url, _ = _setup_parent(tmp_path, monkeypatch)
+    _add_owned_ref(parent_url, "mkdocs")
+    entry = _lock()["skills"]["mkdocs"]
+    assert entry.get("ref") == "main"
+    owner, repo = entry["source"].split("/", 1)
+    suffixed = parent_clone_path(owner, repo, ref=entry["ref"], env=None)
+    bare = parent_clone_path(owner, repo, ref=None, env=None)
+    assert suffixed.exists() and suffixed.name == f"{repo}@{entry['ref']}"
+    assert not bare.exists()  # fresh add never used the bare name

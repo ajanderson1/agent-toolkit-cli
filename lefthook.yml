@@ -1,0 +1,6 @@
+pre-commit:
+  parallel: true
+  commands:
+    pytest:
+      run: uv run pytest -q
+      stage_fixed: false

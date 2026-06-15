@@ -1,0 +1,296 @@
+"""Relocated project canonical: external store + uniform projection symlinks."""
+import json
+import subprocess
+from pathlib import Path
+
+import pytest
+from click.testing import CliRunner
+
+from agent_toolkit_cli import skill_doctor, skill_install
+from agent_toolkit_cli.cli import main as cli
+from agent_toolkit_cli.skill_lock import LockEntry, add_entry, read_lock, write_lock
+from agent_toolkit_cli.skill_paths import (
+    canonical_skill_dir, library_lock_path, project_store_root,
+)
+
+from tests.conftest import scrub_git_env
+
+FIXTURE = Path(__file__).parent.parent / "fixtures" / "monorepo_skills"
+
+
+def _make_parent_repo(tmp_path: Path) -> str:
+    parent_src = tmp_path / "parent-src"
+    subprocess.run(["cp", "-R", str(FIXTURE), str(parent_src)], check=True)
+    env = scrub_git_env()
+    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=parent_src, check=True, env=env)
+    subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t", "add", "."],
+                   cwd=parent_src, check=True, env=env)
+    subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t",
+                    "commit", "-q", "-m", "init"], cwd=parent_src, check=True, env=env)
+    return f"file://{parent_src}"
+
+
+@pytest.fixture
+def isolated_library(tmp_path, monkeypatch):
+    library = tmp_path / "library"
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library / "skills"))
+    return library
+
+
+def _seed_global_monorepo_entry(parent_url: str, slug: str, subpath: str) -> None:
+    lock_path = library_lock_path()
+    lock = read_lock(lock_path)
+    entry = LockEntry(
+        source="vercel-labs/agent-browser", source_type="github", ref=None,
+        skill_path=subpath, upstream_sha=None, local_sha=None,
+        parent_url=parent_url, read_only=True,
+    )
+    write_lock(lock_path, add_entry(lock, slug, entry))
+
+
+def test_project_universal_gets_symlink_into_external_store(
+    tmp_path, isolated_library, monkeypatch,
+):
+    parent_url = _make_parent_repo(tmp_path)
+    _seed_global_monorepo_entry(parent_url, "mkdocs", "mkdocs")
+    project = tmp_path / "proj"
+    project.mkdir()
+    monkeypatch.chdir(project)
+
+    # codex is a universal agent (skills_dir == ".agents/skills"). Under the
+    # inverted skip rule it must now get a real projection symlink there, since
+    # the canonical no longer lives in the tree for it to read directly.
+    runner = CliRunner(env=scrub_git_env())
+    result = runner.invoke(cli, ["skill", "install", "mkdocs",
+                                 "--agents", "codex", "-p"])
+    assert result.exit_code == 0, result.output
+
+    canonical = canonical_skill_dir("mkdocs", scope="project", project=project)
+    assert canonical == project_store_root(project) / "mkdocs"
+    assert (canonical / "SKILL.md").exists()
+
+    uni = project / ".agents" / "skills" / "mkdocs"
+    assert uni.is_symlink(), "project-universal must now get a projection symlink"
+    assert (uni / "SKILL.md").exists()
+
+    # The _parents cache lives in the external store, never in the project tree.
+    assert not (project / ".agents" / "skills" / "_parents").exists()
+
+
+def test_ensure_project_canonical_writes_to_external_store(
+    tmp_path, isolated_library,
+):
+    parent_url = _make_parent_repo(tmp_path)
+    _seed_global_monorepo_entry(parent_url, "mkdocs", "mkdocs")
+    project = tmp_path / "proj"
+    project.mkdir()
+
+    canonical = skill_install.ensure_project_canonical(
+        slug="mkdocs", project=project,
+        global_lock_path=library_lock_path(), env=scrub_git_env(),
+    )
+    assert canonical == project_store_root(project) / "mkdocs"
+    assert canonical.is_symlink()  # monorepo → symlink into store _parents
+    assert (canonical / "SKILL.md").exists()
+    assert (project_store_root(project) / "_parents").exists()
+    assert not (project / ".agents" / "skills" / "_parents").exists()
+    e = json.loads((project / "skills-lock.json").read_text())["skills"]["mkdocs"]
+    assert e["parentUrl"].endswith("/parent-src")
+
+
+def _make_intree_clone(project: Path, slug: str, marker: str) -> Path:
+    """Simulate an old-layout in-tree single-skill clone with a marker file."""
+    old = project / ".agents" / "skills" / slug
+    old.mkdir(parents=True)
+    (old / "SKILL.md").write_text(f"---\nname: {slug}\n---\n")
+    (old / "MARKER.txt").write_text(marker)
+    env = scrub_git_env()
+    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=old, check=True, env=env)
+    subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t",
+                    "add", "."], cwd=old, check=True, env=env)
+    subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t",
+                    "commit", "-q", "-m", "x"], cwd=old, check=True, env=env)
+    return old
+
+
+def test_migrate_moves_intree_clone_to_store(tmp_path, isolated_library):
+    project = tmp_path / "proj"
+    project.mkdir()
+    _make_intree_clone(project, "solo", "keepme")
+
+    skill_install.migrate_project_canonical(project=project, slug="solo")
+
+    dest = project_store_root(project) / "solo"
+    assert dest.is_dir() and not dest.is_symlink()
+    assert (dest / "MARKER.txt").read_text() == "keepme"  # dirty work preserved
+    assert (dest / ".git").exists()  # git history travels
+    old = project / ".agents" / "skills" / "solo"
+    assert old.is_symlink()
+    assert old.resolve() == dest.resolve()
+
+
+def test_migrate_is_idempotent(tmp_path, isolated_library):
+    project = tmp_path / "proj"
+    project.mkdir()
+    _make_intree_clone(project, "solo", "v1")
+    skill_install.migrate_project_canonical(project=project, slug="solo")
+    skill_install.migrate_project_canonical(project=project, slug="solo")
+    dest = project_store_root(project) / "solo"
+    assert (dest / "MARKER.txt").read_text() == "v1"
+    assert not list((project_store_root(project)).glob("solo.bak-*"))
+
+
+def test_migrate_backs_up_destination_collision(tmp_path, isolated_library):
+    project = tmp_path / "proj"
+    project.mkdir()
+    dest = project_store_root(project) / "solo"
+    dest.mkdir(parents=True)
+    (dest / "OLD.txt").write_text("old-dest")
+    _make_intree_clone(project, "solo", "new-intree")
+
+    skill_install.migrate_project_canonical(project=project, slug="solo")
+
+    assert (dest / "MARKER.txt").read_text() == "new-intree"
+    baks = list(project_store_root(project).glob("solo.bak-*"))
+    assert len(baks) == 1
+    assert (baks[0] / "OLD.txt").read_text() == "old-dest"
+
+
+def test_migrate_intree_symlink_is_removed(tmp_path, isolated_library):
+    """v2.9.0 monorepo layout: in-tree path is a symlink (holds no work)."""
+    project = tmp_path / "proj"
+    project.mkdir()
+    target = tmp_path / "somewhere"
+    target.mkdir()
+    old = project / ".agents" / "skills" / "mono"
+    old.parent.mkdir(parents=True)
+    old.symlink_to(target)
+
+    skill_install.migrate_project_canonical(project=project, slug="mono")
+
+    assert not old.exists() and not old.is_symlink()
+
+
+def test_project_uninstall_preserves_external_canonical(
+    tmp_path, isolated_library, monkeypatch,
+):
+    parent_url = _make_parent_repo(tmp_path)
+    _seed_global_monorepo_entry(parent_url, "mkdocs", "mkdocs")
+    project = tmp_path / "proj"
+    project.mkdir()
+    monkeypatch.chdir(project)
+    runner = CliRunner(env=scrub_git_env())
+    assert runner.invoke(cli, ["skill", "install", "mkdocs",
+                               "--agents", "codex", "-p"]).exit_code == 0
+
+    canonical = canonical_skill_dir("mkdocs", scope="project", project=project)
+    assert (canonical / "SKILL.md").exists()
+
+    result = runner.invoke(cli, ["skill", "uninstall", "mkdocs",
+                                 "--agents", "codex", "-p"])
+    assert result.exit_code == 0, result.output
+
+    # Projection symlink gone; lock entry gone.
+    assert not (project / ".agents" / "skills" / "mkdocs").exists()
+    proj_lock = json.loads((project / "skills-lock.json").read_text())
+    assert "mkdocs" not in proj_lock.get("skills", {})
+    # External canonical PRESERVED (the whole point).
+    assert (canonical / "SKILL.md").exists(), "external canonical must survive uninstall"
+
+
+def test_doctor_orphan_sweep_detects_unreferenced_canonical(
+    tmp_path, isolated_library,
+):
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / "skills-lock.json").write_text('{"version": 1, "skills": {}}')
+    store = project_store_root(project)
+    orphan = store / "ghost"
+    orphan.mkdir(parents=True)
+    (orphan / "SKILL.md").write_text("---\nname: ghost\n---\n")
+    bak = store / "solo.bak-20260101T000000Z"
+    bak.mkdir()
+
+    findings = skill_doctor.diagnose(
+        slugs=None, scope="project", home=None, project=project,
+    )
+    finding_types = {(f.finding_type, f.slug) for f in findings}
+    assert ("orphan_canonical", "ghost") in finding_types
+    assert any(f.finding_type == "orphan_canonical" and "bak-" in str(f.path) for f in findings)
+
+    for f in findings:
+        if f.finding_type == "orphan_canonical":
+            f.fix_action.apply()
+    assert not orphan.exists()
+    assert not bak.exists()
+
+
+def test_status_p_monorepo_not_mislabeled_copy(
+    tmp_path, isolated_library, monkeypatch,
+):
+    parent_url = _make_parent_repo(tmp_path)
+    _seed_global_monorepo_entry(parent_url, "mkdocs", "mkdocs")
+    project = tmp_path / "proj"
+    project.mkdir()
+    monkeypatch.chdir(project)
+    runner = CliRunner(env=scrub_git_env())
+    assert runner.invoke(cli, ["skill", "install", "mkdocs",
+                               "--agents", "codex", "-p"]).exit_code == 0
+
+    result = runner.invoke(cli, ["skill", "status", "-p"])
+    assert result.exit_code == 0, result.output
+    line = next(ln for ln in result.output.splitlines() if ln.startswith("mkdocs"))
+    assert "\tcopy" not in line, f"monorepo skill mislabeled as copy: {line!r}"
+    assert "\tclean" in line or "\tdirty" in line
+
+
+def test_install_universal_token_project_creates_shared_symlink(
+    tmp_path, isolated_library, monkeypatch,
+):
+    """The synthetic `universal` token at project scope must create the shared
+    <project>/.agents/skills/<slug> symlink → external store (the dir all
+    universal agents read through), not be a no-op."""
+    parent_url = _make_parent_repo(tmp_path)
+    _seed_global_monorepo_entry(parent_url, "mkdocs", "mkdocs")
+    project = tmp_path / "proj"
+    project.mkdir()
+    monkeypatch.chdir(project)
+    runner = CliRunner(env=scrub_git_env())
+    result = runner.invoke(cli, ["skill", "install", "mkdocs",
+                                 "--agents", "standard", "-p"])
+    assert result.exit_code == 0, result.output
+
+    shared = project / ".agents" / "skills" / "mkdocs"
+    assert shared.is_symlink(), (
+        "universal token at project scope must create the shared .agents/skills symlink"
+    )
+    canonical = canonical_skill_dir("mkdocs", scope="project", project=project)
+    assert shared.resolve() == canonical.resolve()
+    assert (shared / "SKILL.md").exists()
+
+
+def test_uninstall_universal_token_project_removes_shared_symlink(
+    tmp_path, isolated_library, monkeypatch,
+):
+    """Unchecking universal (the bug from the screenshot): the shared
+    <project>/.agents/skills/<slug> symlink must be removed; canonical preserved."""
+    parent_url = _make_parent_repo(tmp_path)
+    _seed_global_monorepo_entry(parent_url, "mkdocs", "mkdocs")
+    project = tmp_path / "proj"
+    project.mkdir()
+    monkeypatch.chdir(project)
+    runner = CliRunner(env=scrub_git_env())
+    assert runner.invoke(cli, ["skill", "install", "mkdocs",
+                               "--agents", "standard", "-p"]).exit_code == 0
+    shared = project / ".agents" / "skills" / "mkdocs"
+    assert shared.is_symlink()
+
+    result = runner.invoke(cli, ["skill", "uninstall", "mkdocs",
+                                 "--agents", "standard", "-p"])
+    assert result.exit_code == 0, result.output
+    assert not shared.exists() and not shared.is_symlink(), (
+        "unchecking universal must remove the shared .agents/skills symlink"
+    )
+    # Canonical in the external store is preserved.
+    canonical = canonical_skill_dir("mkdocs", scope="project", project=project)
+    assert (canonical / "SKILL.md").exists()
