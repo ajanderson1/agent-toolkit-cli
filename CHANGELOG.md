@@ -1,5 +1,17 @@
 # Changelog
 
+## [4.2.1](https://github.com/ajanderson1/agent-toolkit-cli/compare/v4.2.0...v4.2.1) (2026-06-15)
+
+
+### Bug Fixes
+
+* **skill:** parent-clone ref-guard edge cases — hex-named branch + doctor gate ([#422](https://github.com/ajanderson1/agent-toolkit-cli/issues/422)) ([#439](https://github.com/ajanderson1/agent-toolkit-cli/issues/439)) ([0122040](https://github.com/ajanderson1/agent-toolkit-cli/commit/0122040d715ebccea2d289c0a58f14799cd467c1))
+
+
+### Documentation
+
+* **cli:** document import / cross-machine sync and the no-export design ([#428](https://github.com/ajanderson1/agent-toolkit-cli/issues/428)) ([#435](https://github.com/ajanderson1/agent-toolkit-cli/issues/435)) ([de8f738](https://github.com/ajanderson1/agent-toolkit-cli/commit/de8f73835d93b8e1bed2d9c48b4b0a5d393be0c6))
+
 ## [4.2.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v4.1.0...v4.2.0) (2026-06-15)
 
 
