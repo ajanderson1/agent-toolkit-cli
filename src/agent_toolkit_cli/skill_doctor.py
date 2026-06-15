@@ -309,10 +309,28 @@ def _make_rmtree_action(*, path: Path) -> FixAction:
 
 def _make_legacy_bare_alias_action(suffixed: Path, bare: Path) -> FixAction:
     """Alias the canonical `<repo>@<ref>` path to the legacy bare `<repo>`
-    clone (#412 Phase 2) — non-destructive, reversible, idempotent."""
+    clone (#412 Phase 2) — non-destructive, reversible, idempotent.
+
+    When `suffixed` is a symlink or a real git repo the action is a no-op
+    (already aliased / already canonical). When `suffixed` exists as a
+    partial/aborted clone (a dir that is NOT a git repo — the case #422 fix 2
+    added to the emission gate), the alias cannot be created over it, so the
+    fix would never converge. In that case move the partial dir aside to a
+    `.attk-partial` sibling (reversible, no data loss — the read path already
+    ignores a non-repo suffixed dir and uses the bare clone) and then alias."""
     def _apply() -> None:
-        if suffixed.exists() or suffixed.is_symlink():
-            return  # idempotent
+        if suffixed.is_symlink():
+            return  # already aliased — idempotent
+        if suffixed.exists():
+            if skill_git.is_git_repo(suffixed):
+                return  # a real canonical clone is in place — nothing to do
+            # Partial/aborted non-repo clone occupying the canonical path:
+            # move it aside (reversible) so the alias can be created and the
+            # finding converges. The bare clone holds the real tree.
+            aside = suffixed.with_name(suffixed.name + ".attk-partial")
+            if aside.exists():
+                shutil.rmtree(aside)
+            suffixed.rename(aside)
         suffixed.parent.mkdir(parents=True, exist_ok=True)
         suffixed.symlink_to(bare.name)  # relative alias within <owner>/
     return FixAction(
@@ -799,7 +817,14 @@ def _check_slug(
                 suffixed, bare, ref=entry.ref,
                 parent_url=entry.parent_url, env=None,
             )
-            if adopt is not None and not suffixed.exists():
+            # Match the read-path resolver's adoption gate exactly: it falls
+            # back to the bare clone whenever the suffixed path is NOT a git
+            # repo (covers both "absent" and "exists but partial/aborted clone")
+            # — so doctor must surface the same situations, not just the
+            # absent-entirely case the old `not suffixed.exists()` gate caught
+            # (#422 fix 2). `legacy_bare_clone_for` (`adopt`) already confirmed
+            # the bare is genuinely ours.
+            if adopt is not None and not skill_git.is_git_repo(suffixed):
                 findings.append(Finding(
                     finding_type="legacy_bare_parent", slug=slug, scope=scope,
                     path=bare,
