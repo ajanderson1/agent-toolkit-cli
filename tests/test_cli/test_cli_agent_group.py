@@ -842,9 +842,14 @@ def test_install_without_library_entry_errors(
 def test_reset_requires_at_least_one_slug(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # #423 AC0b (thin-cell audit): this cell was smoke-only (exit_code != 0 with
+    # no message check). Assert the SPECIFIC UsageError so the refusal behavior —
+    # not just a non-zero exit — is what the test pins.
     monkeypatch.setenv("HOME", str(tmp_path))
     r = CliRunner().invoke(main, ["agent", "reset", "-g"])
     assert r.exit_code != 0
+    assert "at least one slug required" in r.output
+    assert "agent list" in r.output
 
 
 # ---------------------------------------------------------------------------

@@ -145,6 +145,25 @@ def test_mcp_uninstall_round_trip(tmp_path, monkeypatch):
     assert "context7" not in doc.get("mcpServers", {})
 
 
+def test_mcp_uninstall_not_installed_reports_specific_error(tmp_path, monkeypatch):
+    """`mcp uninstall <slug> -p` for a slug never installed at this scope =>
+    '{slug} is not installed at {scope} scope' + exit 1 (#423 / AC4).
+
+    The slug is seeded in the library but never installed, so the lock has no
+    target harnesses for it — the not-installed branch fires with its specific
+    message (not a bare non-zero exit).
+    """
+    _seed(tmp_path)
+    project = tmp_path / "proj"
+    project.mkdir()
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.chdir(project)
+
+    result = CliRunner().invoke(main, ["mcp", "uninstall", "context7", "-p"])
+    assert result.exit_code != 0
+    assert "context7 is not installed at project scope" in result.output
+
+
 def test_mcp_add_url_authors_entry(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.chdir(tmp_path)
@@ -997,3 +1016,40 @@ def test_mcp_update_standard_reprojects(tmp_path, monkeypatch):
     assert "claude-code" not in harnesses and "pi" not in harnesses
     doc = json.loads((project / ".mcp.json").read_text())
     assert "context7" in doc["mcpServers"]
+
+
+# ── MCP-harness parametrization (#423 / AC2) ────────────────────────────────
+# All four MCP harnesses, covering both config mechanisms (JSON config:
+# claude-code/opencode/pi; TOML config: codex). Project scope so each config
+# target is project-rooted and isolated under tmp. Each harness writes the
+# server into its own config file; asserting the server name appears in that
+# file proves the per-harness projection path is wired (the structural key
+# differs per harness — mcpServers / mcp_servers / mcp — but the install must
+# land the named server in every case).
+_MCP_HARNESS_CONFIG = {
+    "claude-code": ".mcp.json",
+    "codex": ".codex/config.toml",
+    "opencode": "opencode.json",
+    "pi": ".mcp.json",
+}
+
+
+@pytest.mark.parametrize("harness", sorted(_MCP_HARNESS_CONFIG))
+def test_mcp_install_writes_config_for_each_harness(harness, tmp_path, monkeypatch):
+    """mcp install --harness <h> -p writes the server into that harness's config."""
+    _seed(tmp_path)
+    project = tmp_path / "proj"
+    project.mkdir()
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.chdir(project)
+
+    result = CliRunner().invoke(
+        main, ["mcp", "install", "context7", "--harness", harness, "-p"],
+    )
+    assert result.exit_code == 0, result.output
+
+    config = project / _MCP_HARNESS_CONFIG[harness]
+    assert config.exists(), f"{harness}: expected config at {config}"
+    assert "context7" in config.read_text(), (
+        f"{harness}: installed server must appear in {config}"
+    )
