@@ -15,9 +15,12 @@ agent-toolkit-cli skill status [<slug>...] [-g|-p]
 agent-toolkit-cli skill update [<slug>...] [-g|-p]      # merge-aware
 agent-toolkit-cli skill push   [<slug>...] [-g|-p] [--direct]   # PR-branch by default
 agent-toolkit-cli skill remove <slug>... [-g|-p] [--force]          # alias: rm
+agent-toolkit-cli skill import <file> [--latest]   # cross-machine sync — see "Moving to a new machine"
 ```
 
 `<source>` accepts `owner/repo`, a full HTTPS URL, an SSH URL, or a local path. `-g/--global` and `-p/--project` select scope; default is global. `skill list --json` emits a JSON array (`slug`, `source`, `ref`, `upstream_sha`, `local_sha`, `scope`) for scripting; `-a/--agent <name>` filters to skills currently symlinked into that agent (or the `standard` token).
+
+`skill import <file>` rebuilds the global library from another machine's `skills-lock.json` — an additive, skip-if-exists merge that clones each absent skill at the lock's recorded SHA (or `--latest` for each ref's current HEAD); per-skill clone failures are non-fatal (exit 1 if any failed). See [Moving to a new machine](#moving-to-a-new-machine-cross-machine-sync).
 
 > **Terminology:** *standard* — formerly "general" (v3), earlier "universal" (pre-v3). The old token spellings were removed in v4; they now raise an unknown-token error.
 
@@ -33,6 +36,7 @@ agent-toolkit-cli agent install <slug> [-g|-p] [--harnesses <h>[,<h>...]]
 agent-toolkit-cli agent uninstall <slug> [-g|-p] [--harnesses <h>[,<h>...]]   # non-destructive
 agent-toolkit-cli agent remove <slug> [--force]                               # destructive
 agent-toolkit-cli agent list / status / doctor [-g|-p]
+agent-toolkit-cli agent import <file> [--latest]   # cross-machine sync — see "Moving to a new machine"
 
 agent-toolkit-cli agent install my-agent -g --harnesses standard
 agent-toolkit-cli agent install my-agent -g                       # covered-aware fan-out
@@ -43,6 +47,7 @@ agent-toolkit-cli agent uninstall my-agent -g                     # maximal swee
 - `--harnesses claude-code` is normalized to `standard`: claude-code's destination IS the standard slot, so one file under one token — every scan dedupes by destination and reports it as `standard`.
 - `agent install` with no `--harnesses` defaults covered-aware: the standard slot plus every enabled harness the slot does **not** cover at that scope (no redundant own-dir copies for the covered readers). `agent uninstall` with no `--harnesses` deliberately stays **maximal** — the standard slot plus *all* enabled harnesses — so it also cleans own-dir files left by pre-#361 installs.
 - Synthetic catalog names (`standard-skill`, `standard-agent`) are rejected with an explicit error telling you to use `standard`, instead of the previous silent no-op.
+- `agent import <file>` rebuilds the global library from another machine's `agents-lock.json` (additive, skip-if-exists; `--latest` clones at each ref's current HEAD; per-slug failures non-fatal). See [Moving to a new machine](#moving-to-a-new-machine-cross-machine-sync).
 
 `agent doctor` also checks the standard slot (#361 finding families): `standard-slot-drift` (slot differs from the scope's canonical; fix re-seeds it), `cursor-shadow` (a divergent pre-existing `.cursor/agents/<slug>.md` file — cursor's own dir **wins** name conflicts, so it shadows the slot; when the file carries the tool's `.attk` ownership sidecar the doctor offers to remove it, otherwise it is report-only — a sentinel-less divergent file may equally be hand-authored, and `agent uninstall` refuses exactly that class, so remove it manually if the shadowing is unintended), `standard-slot-orphan` (tool-written slot file with no lock entry), `standard-slot-unmanaged` (hand-authored files in `.claude/agents/` — **never** auto-removed), and `standard-slot-dangling-sidecar` (stale `.attk` ownership sidecar without its slot file). `cursor-shadow` and `standard-slot-unmanaged` are **informational**: they stay visible in the output but never fail the doctor exit code or suppress the clean verdict.
 
@@ -65,6 +70,17 @@ agent-toolkit-cli mcp doctor [-g|-p]
 - `mcp install` projects a library MCP into the chosen scope's harnesses; `--harness` (repeatable) selects from `claude-code`, `codex`, `opencode`, `pi`, or `standard`. `--force` bypasses the running-claude guard for `~/.claude.json` writes.
 - `mcp uninstall` removes a MCP's projections from the chosen scope (default: every harness in the lock). `mcp remove` removes them from **every** harness recorded in the lock — full undo, no `--harness`.
 - `mcp update` re-resolves a library MCP and re-projects every reachable locked harness. `mcp doctor` diagnoses projection drift read-only — it never writes.
+- There is **no `mcp import`** — MCP cross-machine sync is tracked separately ([#429](https://github.com/ajanderson1/agent-toolkit-cli/issues/429)). (The `instructions` asset type likewise has no `import`: it has no per-machine library to reconstruct.)
+
+### `pi-extension`
+
+Manage Pi extensions (the `pi-extension` [asset type](../asset-types/pi-extensions.md)). Its full verb set is documented on the asset-type page; the cross-machine-sync verb is:
+
+```text
+agent-toolkit-cli pi-extension import <file> [--latest]   # cross-machine sync — see "Moving to a new machine"
+```
+
+`pi-extension import <file>` rebuilds the global library from another machine's `pi-extensions-lock.json` (additive, skip-if-exists; `--latest` clones at each ref's current HEAD; per-slug failures non-fatal). See [Moving to a new machine](#moving-to-a-new-machine-cross-machine-sync).
 
 ### `bundle`
 
@@ -129,6 +145,37 @@ The parent repo is cloned once under `$AGENT_TOOLKIT_SKILLS_ROOT/_parents/<owner
 By default `skill push <slug>` creates a `skill/self-improvement-<timestamp>` branch in the canonical skill repo, pushes it, and opens a PR against the tracked ref via `gh pr create` (printing the PR URL). When `gh` is not installed or not authenticated the branch is still pushed and the command prints a hint with the branch's web URL so you can open the PR by hand.
 
 `--direct` opts into the pre-#221 behaviour: commit + push straight to the tracked ref and update `local_sha` in the lockfile. Use it for solo first-party skills where opening a PR for every self-improvement would be ceremony. The default path leaves `local_sha` alone — the next `skill update` picks up the merged change normally.
+
+---
+
+## Moving to a new machine (cross-machine sync)
+
+**The lock file is the export artifact** — there is no `export` command. Each asset kind's global library is fully described by its per-scope lock file, so reconstructing your library on a second machine is just: copy the lock file across, then `import` it.
+
+1. On the **source** machine, locate the global lock(s) you want to carry: `skills-lock.json`, `agents-lock.json`, and/or `pi-extensions-lock.json` (in the toolkit's global config dir).
+2. Copy the lock file(s) to the **new** machine (any path — e.g. `~/sync/`).
+3. On the new machine, run the matching `import` per kind:
+
+   ```bash
+   agent-toolkit-cli skill        import ~/sync/skills-lock.json
+   agent-toolkit-cli agent        import ~/sync/agents-lock.json
+   agent-toolkit-cli pi-extension import ~/sync/pi-extensions-lock.json
+   ```
+
+**Shared import semantic.** Import is an **additive, skip-if-exists merge**: only slugs absent locally are added, so re-running is safe. By default each new asset is cloned at the **recorded SHA** from the lock — so local commits or uncommitted changes that lived only on the source machine are **NOT** carried across. Pass `--latest` to clone each new asset at its ref's current HEAD instead. Per-slug clone failures are non-fatal (the command still imports the rest and exits 1 if any failed).
+
+**Caveats** (these are what each `import` command prints in its own `Notes:`):
+
+- **Added, not installed.** Imported assets land in the global *library* but are not projected into any harness/agent/scope. Make them visible with the per-kind install command:
+  - `skill install <slug> --agents <name>`
+  - `agent install <slug> -g`
+  - `pi-extension install <slug> -g`
+- **Global-library only.** Only the global library is reconstructed. **Project-scoped** assets (recorded in a per-project lock file) must be re-installed by hand in each project.
+- **Pinned to upstream.** (skill surfaces this caveat explicitly; it is the recorded-SHA semantic above — true for all three kinds.) Imports take the lock's recorded upstream commit, so anything local-only on the source machine is left behind; use `--latest` if you want current HEADs.
+
+**Why no `export` command (by design).** A separate export step would be redundant: the lock file already *is* a complete, portable description of the library. Copying it and running `import` on the far side is the whole sync. `import`'s skill docstring states this directly — *"The export artifact is just another machine's global skills-lock.json — there is no `export` command."*
+
+`mcp` has no `import` yet (cross-machine sync for MCP servers is tracked: [#429](https://github.com/ajanderson1/agent-toolkit-cli/issues/429)); `instructions` has no per-machine library to sync.
 
 ---
 
