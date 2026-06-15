@@ -1,4 +1,4 @@
-"""Security: git argument-injection via a dash-prefixed ref (#424).
+"""Security: git argument-injection via a dash-prefixed ref (#434).
 
 A ref like `--upload-pack=<cmd>` reaching a git sink as a bare positional
 argument is interpreted by git as an *option*, and over local (`file://`) and

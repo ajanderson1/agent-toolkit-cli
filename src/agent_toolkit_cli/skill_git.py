@@ -35,7 +35,7 @@ class GitError(RuntimeError):
 
 class UnsafeRefError(GitError):
     """A ref was rejected before reaching git because it could be misread as a
-    command-line option (security: #424). Subclasses GitError so the sinks'
+    command-line option (security: #434). Subclasses GitError so the sinks'
     existing `except GitError` handlers and callers cover it unchanged."""
 
     def __init__(self, ref: str, reason: str) -> None:
@@ -51,7 +51,7 @@ class UnsafeRefError(GitError):
 
 def _guard_ref(ref: str) -> str:
     """Reject a ref that git could misread as an *option* before it reaches a
-    subprocess argument (security: #424).
+    subprocess argument (security: #434).
 
     The sink layer is the chokepoint every ref passes through regardless of
     which parser produced it — the `/tree/<ref>` URL parser, the `--ref` CLI

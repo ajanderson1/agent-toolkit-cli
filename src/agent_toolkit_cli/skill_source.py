@@ -75,7 +75,7 @@ def _sanitize_ref(ref: str) -> str:
 
 # Public alias: the same ref-safety guard is reused at the `--ref` CLI flag
 # boundary and at the git sink layer (skill_git._guard_ref), not just inside
-# the shorthand parser. Keeps one source of truth for the rules (#424).
+# the shorthand parser. Keeps one source of truth for the rules (#434).
 sanitize_ref = _sanitize_ref
 
 
