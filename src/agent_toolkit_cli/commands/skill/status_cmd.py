@@ -89,10 +89,17 @@ def status_cmd(
             # Monorepo skill — status lives in the parent clone, not the
             # symlinked subpath (which has no `.git/` of its own).
             owner, repo = entry.source.split("/", 1)
+            if scope == "project":
+                # project scope always carries a project_root (scope_and_roots
+                # only returns scope=="project" with a non-None project_root).
+                assert project_root is not None
+                parents_root = project_parents_root(project_root)
+            else:
+                parents_root = None
             parent_dir = resolve_existing_parent_clone(
                 owner, repo, ref=entry.ref, parent_url=entry.parent_url,
                 env=None,
-                root=project_parents_root(project_root) if scope == "project" else None,
+                root=parents_root,
             )
             if not skill_git.is_git_repo(parent_dir):
                 click.echo(f"{slug}\tcopy")

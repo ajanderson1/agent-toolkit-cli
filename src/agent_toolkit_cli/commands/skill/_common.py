@@ -2,10 +2,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal
 
 import click
 
 from agent_toolkit_cli.skill_agents import AGENTS
+
+Scope = Literal["project", "global"]
 
 
 def scope_and_roots(
@@ -14,7 +17,7 @@ def scope_and_roots(
     ctx_project: Path | None,
     *,
     read_only: bool = False,
-):
+) -> tuple[Scope, Path | None, Path | None, bool]:
     """Resolve (scope, home, project_root, implicit) from flags + context.
 
     ``implicit`` is True iff neither ``-g`` nor ``-p`` was passed — i.e. the
@@ -56,6 +59,21 @@ def scope_banner(scope, *, implicit, lock_path, count, err=False) -> None:
         f"Operating on project scope — {lock_path} ({count} {noun}). "
         f"Pass -g for the global library.",
         err=err,
+    )
+
+
+def monorepo_wrong_scope_msg(slug: str, verb: str) -> str:
+    """The monorepo-at-project-scope refusal message, single-sourced (#421).
+
+    A monorepo skill is a global-library entry; `update`/`reset` at project
+    scope is refused because `-g` would switch to the global library (a
+    different set), not re-scope this project entry. `update_cmd` and
+    `reset_cmd` share the wording verbatim except the verb — see #413.
+    """
+    return (
+        f"{slug}: monorepo skill — {verb} it at global scope. "
+        f"Note: -g switches to the global library (a different "
+        f"set), it does not {verb} this project entry."
     )
 
 

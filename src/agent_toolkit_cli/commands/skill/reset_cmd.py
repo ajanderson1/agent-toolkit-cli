@@ -14,7 +14,7 @@ from agent_toolkit_cli.skill_paths import (
     resolve_existing_parent_clone,
 )
 
-from ._common import scope_and_roots, scope_banner
+from ._common import monorepo_wrong_scope_msg, scope_and_roots, scope_banner
 
 
 @click.command("reset")
@@ -69,11 +69,7 @@ def reset_cmd(
 
         if entry.parent_url is not None:
             if scope != "global":
-                click.echo(
-                    f"{slug}: monorepo skill — reset it at global scope. "
-                    f"Note: -g switches to the global library (a different "
-                    f"set), it does not reset this project entry."
-                )
+                click.echo(monorepo_wrong_scope_msg(slug, "reset"))
                 had_error = True
                 continue
             owner, repo = entry.source.split("/", 1)

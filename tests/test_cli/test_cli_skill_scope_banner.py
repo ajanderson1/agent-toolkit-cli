@@ -1,9 +1,14 @@
 """Tests for #413 — implicit-scope reminder banner + 4-tuple resolution."""
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
-from agent_toolkit_cli.commands.skill._common import scope_and_roots
+import click
+from click.testing import CliRunner
+
+from agent_toolkit_cli.cli import main
+from agent_toolkit_cli.commands.skill._common import scope_and_roots, scope_banner
 
 
 def test_scope_and_roots_explicit_flags_are_not_implicit(tmp_path: Path):
@@ -29,11 +34,6 @@ def test_scope_and_roots_implicit_global_when_no_cwd_lock(tmp_path: Path):
 
 
 # ── scope_banner helper ─────────────────────────────────────────────────────
-
-import click  # noqa: E402
-from click.testing import CliRunner  # noqa: E402
-
-from agent_toolkit_cli.commands.skill._common import scope_banner  # noqa: E402
 
 
 def _run_banner(**kwargs) -> tuple[str, str]:
@@ -106,10 +106,6 @@ def test_banner_silent_on_explicit_project():
 
 # ── per-verb wiring (CLI level) ─────────────────────────────────────────────
 
-import json  # noqa: E402
-
-from agent_toolkit_cli.cli import main  # noqa: E402
-
 
 def _seed_project_lock(runner, tmp_path, monkeypatch, git_sandbox, slug="demo"):
     """Add a skill to the library and install it into a project, so the
@@ -158,6 +154,31 @@ def test_list_explicit_global_no_banner(git_sandbox, tmp_path, monkeypatch):
     runner = CliRunner()
     _seed_project_lock(runner, tmp_path, monkeypatch, git_sandbox)
     result = runner.invoke(main, ["skill", "list", "-g"])
+    assert result.exit_code == 0, result.stderr
+    assert "project scope" not in result.stdout
+    assert "project scope" not in result.stderr
+
+
+def test_list_implicit_global_no_banner(git_sandbox, tmp_path, monkeypatch):
+    """#421 item 4 — a no-flag read verb from a cwd LACKING skills-lock.json
+    resolves to implicit-GLOBAL and must print no scope banner (the implicit
+    branch the existing `-g` test does not exercise)."""
+    runner = CliRunner()
+    # Seed the global library but DON'T create a project lock; point the verb
+    # at a project dir with no skills-lock.json so the read-only no-flag path
+    # falls back to implicit-global.
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    assert runner.invoke(main, [
+        "skill", "add", str(git_sandbox.upstream), "--slug", "demo",
+    ]).exit_code == 0
+    lockless = tmp_path / "no-lock-here"
+    lockless.mkdir()
+    assert not (lockless / "skills-lock.json").exists()
+    # No -g/-p, cwd-equivalent has no lock → implicit global → silent.
+    result = runner.invoke(main, ["--project", str(lockless), "skill", "list"])
     assert result.exit_code == 0, result.stderr
     assert "project scope" not in result.stdout
     assert "project scope" not in result.stderr
