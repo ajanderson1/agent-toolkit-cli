@@ -1,5 +1,60 @@
 # Changelog
 
+## [4.2.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v4.1.0...v4.2.0) (2026-06-15)
+
+
+### Features
+
+* **agent:** surface implicitly-resolved scope via banner ([#418](https://github.com/ajanderson1/agent-toolkit-cli/issues/418)) ([#424](https://github.com/ajanderson1/agent-toolkit-cli/issues/424)) ([ac00a6f](https://github.com/ajanderson1/agent-toolkit-cli/commit/ac00a6f371fb3d2f6763213a427c993711a68794))
+* **mcp:** surface implicitly-resolved scope via banner ([#419](https://github.com/ajanderson1/agent-toolkit-cli/issues/419)) ([#426](https://github.com/ajanderson1/agent-toolkit-cli/issues/426)) ([812e588](https://github.com/ajanderson1/agent-toolkit-cli/commit/812e588c467dd2152d1e6a59998f2c562c03e5b4))
+* **pi-extension:** surface implicitly-resolved scope via banner ([#420](https://github.com/ajanderson1/agent-toolkit-cli/issues/420)) ([#430](https://github.com/ajanderson1/agent-toolkit-cli/issues/430)) ([a239aae](https://github.com/ajanderson1/agent-toolkit-cli/commit/a239aae6151a05fcd9a2d77da6ff3c62cfd9adea))
+* **skill:** surface implicitly-resolved scope when no -g/-p given ([#417](https://github.com/ajanderson1/agent-toolkit-cli/issues/417)) ([4d0eed1](https://github.com/ajanderson1/agent-toolkit-cli/commit/4d0eed1e749dc4a94134b7114093cfc6abe7cf44))
+* **tui:** 🌐 global marker on the instructions grid ([#388](https://github.com/ajanderson1/agent-toolkit-cli/issues/388)) ([4471e4b](https://github.com/ajanderson1/agent-toolkit-cli/commit/4471e4b0bece9b5ad454466e3e81e151b8ba096f))
+
+
+### Bug Fixes
+
+* **bundle:** correct stale mcp-rejection message (kind shipped in v4.0.0) ([#404](https://github.com/ajanderson1/agent-toolkit-cli/issues/404)) ([b647eb6](https://github.com/ajanderson1/agent-toolkit-cli/commit/b647eb61dafef9c97e1b96b315d3a9274f8012e1))
+* **security:** block git ref option-injection + untrack internal planning corpus ([#425](https://github.com/ajanderson1/agent-toolkit-cli/issues/425)) ([09db458](https://github.com/ajanderson1/agent-toolkit-cli/commit/09db458356c14ac7445dc372fb9a8c9bcaca4425))
+* **skill update:** locate legacy bare-named parent clones via shared resolver ([#412](https://github.com/ajanderson1/agent-toolkit-cli/issues/412)) ([#416](https://github.com/ajanderson1/agent-toolkit-cli/issues/416)) ([907dc2b](https://github.com/ajanderson1/agent-toolkit-cli/commit/907dc2b496047a945e45790994fc0f5652c20de3))
+* **tests:** make the two env-leaking tests honor isolation ([19f5515](https://github.com/ajanderson1/agent-toolkit-cli/commit/19f55153f1d6945f0f903d2056101fe93043653d))
+
+
+### Documentation
+
+* clarify skill monorepo mechanism, add TUI reference, trim shipped roadmap items ([#411](https://github.com/ajanderson1/agent-toolkit-cli/issues/411)) ([79996a5](https://github.com/ajanderson1/agent-toolkit-cli/commit/79996a51380d60f9bc57ae9afa12012517138617))
+* deprecate auto-generated mkdocstrings API reference ([30dbb27](https://github.com/ajanderson1/agent-toolkit-cli/commit/30dbb27c0b702663def64e5ecdf9511b2a4677cf))
+* **glossary,roadmap:** define the two-axis verb model ([#406](https://github.com/ajanderson1/agent-toolkit-cli/issues/406)) ([0b5976a](https://github.com/ajanderson1/agent-toolkit-cli/commit/0b5976a5ad07743e6f110a4697b46cc93e92c6b8))
+* **harness-matrix:** make the SSOT symmetric + add convention-compliance view ([#410](https://github.com/ajanderson1/agent-toolkit-cli/issues/410)) ([31ba993](https://github.com/ajanderson1/agent-toolkit-cli/commit/31ba9932de6ee3b899a971893c52518db7f1805a))
+* **lock-files:** add unified lock-file schema reference ([85cde95](https://github.com/ajanderson1/agent-toolkit-cli/commit/85cde959f43f671e7dda4527eeb4ab2d9e7fffad))
+* **nav:** wire orphaned lock-files.md into Reference nav ([#414](https://github.com/ajanderson1/agent-toolkit-cli/issues/414)) ([f26f6ba](https://github.com/ajanderson1/agent-toolkit-cli/commit/f26f6ba119f11086a319a805d322a94a884f4a95))
+* **plan:** [#412](https://github.com/ajanderson1/agent-toolkit-cli/issues/412) parent-clone resolver — 8 TDD tasks ([c45d98b](https://github.com/ajanderson1/agent-toolkit-cli/commit/c45d98b9b385d6d2efc55a0a8f956fd8e71f23db))
+* **plan:** [#423](https://github.com/ajanderson1/agent-toolkit-cli/issues/423) verb×asset×harness coverage — guard + G1-G4 tasks ([fe18739](https://github.com/ajanderson1/agent-toolkit-cli/commit/fe18739ef93d7655b6907cb2613e6d8e0a09b006))
+* **plan:** 🌐 global marker on instructions grid ([#388](https://github.com/ajanderson1/agent-toolkit-cli/issues/388)) ([868583e](https://github.com/ajanderson1/agent-toolkit-cli/commit/868583ed7388a50289e696d1d2be57f833ea5efd))
+* **plan:** implicit-scope banner implementation plan ([#413](https://github.com/ajanderson1/agent-toolkit-cli/issues/413)) ([1f32f68](https://github.com/ajanderson1/agent-toolkit-cli/commit/1f32f68d64cfc04163861657591cc0da3c5b12e0))
+* **readme:** point verb model to the glossary SSOT ([#407](https://github.com/ajanderson1/agent-toolkit-cli/issues/407)) ([c68c3bf](https://github.com/ajanderson1/agent-toolkit-cli/commit/c68c3bf70ef90f6400502af21176663bc78267be))
+* reconcile docs site with v4.1.0 reality (MCP, bundles, asset-types) ([#403](https://github.com/ajanderson1/agent-toolkit-cli/issues/403)) ([04cbe7b](https://github.com/ajanderson1/agent-toolkit-cli/commit/04cbe7b6861d54de49fe4044c56fb6ed177ee8f7))
+* **roadmap:** link two-axis verb mention to the callout anchor ([#408](https://github.com/ajanderson1/agent-toolkit-cli/issues/408)) ([41184a8](https://github.com/ajanderson1/agent-toolkit-cli/commit/41184a8aa6838fea0eb93ec89360fc7bbf9021b2))
+* **spec,plan:** apply [#413](https://github.com/ajanderson1/agent-toolkit-cli/issues/413) critical-review findings (stdout banner, reset reword, fixture, doctor read) ([2470e0d](https://github.com/ajanderson1/agent-toolkit-cli/commit/2470e0d67a22ae92bcdacb47a7087d8c7e8635f2))
+* **spec+plan:** [#418](https://github.com/ajanderson1/agent-toolkit-cli/issues/418) agent implicit-scope banner (mirror [#413](https://github.com/ajanderson1/agent-toolkit-cli/issues/413)) ([d6df8df](https://github.com/ajanderson1/agent-toolkit-cli/commit/d6df8df8a98d775eba1ecb7e6b48ec90cf9f118e))
+* **spec+plan:** [#419](https://github.com/ajanderson1/agent-toolkit-cli/issues/419) mcp implicit-scope banner (mirror [#413](https://github.com/ajanderson1/agent-toolkit-cli/issues/413)) ([428e0bc](https://github.com/ajanderson1/agent-toolkit-cli/commit/428e0bcc77dc38cb82e3865b4b5a4a32b7058eff))
+* **spec+plan:** [#420](https://github.com/ajanderson1/agent-toolkit-cli/issues/420) pi-extension implicit-scope banner (mirror [#413](https://github.com/ajanderson1/agent-toolkit-cli/issues/413)) ([848adfa](https://github.com/ajanderson1/agent-toolkit-cli/commit/848adfaae01b775eb59c936e8b0223af9ca22994))
+* **spec+plan:** apply [#423](https://github.com/ajanderson1/agent-toolkit-cli/issues/423) critical-review findings ([38f2310](https://github.com/ajanderson1/agent-toolkit-cli/commit/38f2310d7e98348e836ab2fec2f06c1c3fb49654))
+* **spec+plan:** fold ce-doc-review findings into [#412](https://github.com/ajanderson1/agent-toolkit-cli/issues/412) ([54733bd](https://github.com/ajanderson1/agent-toolkit-cli/commit/54733bd16bd2a43d98cbe00508dff3b65e397775))
+* **spec:** 🌐 global marker on instructions grid ([#388](https://github.com/ajanderson1/agent-toolkit-cli/issues/388)) ([f08ede1](https://github.com/ajanderson1/agent-toolkit-cli/commit/f08ede18844e17251dab242a2457d5be88bb71b8))
+* **spec:** asset-type-aware lock key for agents/pi-extensions ([#409](https://github.com/ajanderson1/agent-toolkit-cli/issues/409)) ([77ddeea](https://github.com/ajanderson1/agent-toolkit-cli/commit/77ddeea6690bb353d25596ad26314198117273f4))
+* **spec:** drop [#409](https://github.com/ajanderson1/agent-toolkit-cli/issues/409) lock-key spec — won't-fix, documented instead ([fe5ce45](https://github.com/ajanderson1/agent-toolkit-cli/commit/fe5ce452f501c739781dd9d45840aa2293f3f389))
+* **spec:** fold ce-doc-review findings into [#409](https://github.com/ajanderson1/agent-toolkit-cli/issues/409) lock-key spec ([c5986a3](https://github.com/ajanderson1/agent-toolkit-cli/commit/c5986a317a798f659bad0d58818541beaaaf4407))
+* **spec:** implicit-scope banner + monorepo-refusal wording ([#413](https://github.com/ajanderson1/agent-toolkit-cli/issues/413)) ([503b115](https://github.com/ajanderson1/agent-toolkit-cli/commit/503b115fdcffca06614b98d2dd9ce7cef638a4c3))
+* **spec:** probe-both parent-clone resolver + doctor alias cleanup ([#412](https://github.com/ajanderson1/agent-toolkit-cli/issues/412)) ([9d24869](https://github.com/ajanderson1/agent-toolkit-cli/commit/9d24869997967123d602f5ade4da0435ffb3d8da))
+* **spec:** verb×asset×harness coverage — close real gaps + coverage guard ([c6d27af](https://github.com/ajanderson1/agent-toolkit-cli/commit/c6d27af9359c67424bc096de67b3c87930e464b8))
+* **strategy:** refresh users, metrics, and tracks for v4 reality ([55c58e9](https://github.com/ajanderson1/agent-toolkit-cli/commit/55c58e9cd067f0012974ae91a28c268f61388662))
+
+
+### Build
+
+* **docs:** bind `make docs` to all interfaces for meshnet access ([998751d](https://github.com/ajanderson1/agent-toolkit-cli/commit/998751dfb6015c53808bcdee86f2cf8863777727))
+
 ## [4.1.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v4.0.0...v4.1.0) (2026-06-14)
 
 
