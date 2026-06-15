@@ -28,7 +28,12 @@ from agent_toolkit_cli.skill_paths import (
     library_skill_path,
     lock_file_path,
 )
-from agent_toolkit_cli.skill_source import ParsedSource, SourceParseError, parse_source
+from agent_toolkit_cli.skill_source import (
+    ParsedSource,
+    SourceParseError,
+    parse_source,
+    sanitize_ref,
+)
 
 from .doctor_cmd import doctor_cmd
 from .import_cmd import import_cmd
@@ -255,6 +260,10 @@ def add(
         raise click.UsageError(str(exc)) from exc
 
     if ref is not None:
+        try:
+            ref = sanitize_ref(ref)
+        except SourceParseError as exc:
+            raise click.UsageError(str(exc)) from exc
         parsed = dataclasses.replace(parsed, ref=ref)
 
     if skill_name_flag is not None:
