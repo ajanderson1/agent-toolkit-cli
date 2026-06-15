@@ -14,7 +14,11 @@ from pathlib import Path
 
 import click
 
-from agent_toolkit_cli.commands.mcp._common import _HARNESSES, scope_and_roots
+from agent_toolkit_cli.commands.mcp._common import (
+    _HARNESSES,
+    scope_and_roots,
+    scope_banner,
+)
 from agent_toolkit_cli.mcp_adapters import get_adapter
 from agent_toolkit_cli.mcp_library import library_root, list_library, load_mcp_asset
 from agent_toolkit_cli.mcp_lock import lock_path_for_scope, read_lock
@@ -75,14 +79,16 @@ def list_cmd(
     project_flag: bool,
 ) -> None:
     """List library MCPs with per-harness projection state."""
-    scope, home, project_root = scope_and_roots(
+    scope, home, project_root, implicit = scope_and_roots(
         global_, project_flag,
         ctx.obj.get("project_root") if ctx.obj else None,
         read_only=True,
     )
     effective_home = home if home is not None else Path.home()
     library = library_root(Path.home())
-    lock = read_lock(lock_path_for_scope(scope, home=effective_home, project=project_root))
+    lock_path = lock_path_for_scope(scope, home=effective_home, project=project_root)
+    lock = read_lock(lock_path)
+    scope_banner(scope, implicit=implicit, lock_path=lock_path, count=len(lock))
 
     slugs = list_library(library)
     if not slugs and not lock:
