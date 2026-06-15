@@ -36,7 +36,7 @@ from agent_toolkit_cli.agent_paths import (
     library_lock_path,
     lock_file_path,
 )
-from agent_toolkit_cli.commands.agent._common import scope_and_roots
+from agent_toolkit_cli.commands.agent._common import scope_and_roots, scope_banner
 from agent_toolkit_cli import skill_git
 
 
@@ -417,10 +417,19 @@ def doctor_cmd(
     never fail the exit code. Reports findings and (unless --no-fix) offers
     to apply automatic repairs where available.
     """
-    scope, home, project_root = scope_and_roots(
+    scope, home, project_root, implicit = scope_and_roots(
         global_, project_flag,
         ctx.obj.get("project_root") if ctx.obj else None,
         read_only=True,
+    )
+    # doctor has no body-level lock read (the lock is read inside _diagnose), so
+    # read it here purely for the banner count, mirroring skill/doctor_cmd. The
+    # re-exported read_lock returns an empty LockFile on a missing file, so this
+    # is safe at implicit-global too (the banner stays silent there regardless).
+    lock_path = lock_file_path(scope=scope, home=home, project=project_root)
+    scope_banner(
+        scope, implicit=implicit, lock_path=lock_path,
+        count=len(read_lock(lock_path).skills),
     )
     findings = _diagnose(
         slugs=slugs or None,

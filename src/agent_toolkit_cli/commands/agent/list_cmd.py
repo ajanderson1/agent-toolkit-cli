@@ -13,7 +13,7 @@ import click
 from agent_toolkit_cli.agent_lock import read_lock
 from agent_toolkit_cli.table import render_table
 from agent_toolkit_cli.agent_paths import lock_file_path
-from agent_toolkit_cli.commands.agent._common import scope_and_roots
+from agent_toolkit_cli.commands.agent._common import scope_and_roots, scope_banner
 
 
 def _count_projections(slug: str, scope: str, home: object, project: object) -> int:
@@ -81,20 +81,26 @@ def list_cmd(
     as_json: bool,
 ) -> None:
     """List agents in the lock file with projection state."""
-    scope, home, project_root = scope_and_roots(
+    scope, home, project_root, implicit = scope_and_roots(
         global_,
         project_flag,
         ctx.obj.get("project_root") if ctx.obj else None,
         read_only=True,
     )
+    lock_path = lock_file_path(scope=scope, home=home, project=project_root)
     try:
-        lock = read_lock(lock_file_path(scope=scope, home=home, project=project_root))
+        lock = read_lock(lock_path)
     except FileNotFoundError:
         if as_json:
             click.echo("[]")
         else:
             click.echo("no agents found")
         return
+
+    scope_banner(
+        scope, implicit=implicit, lock_path=lock_path,
+        count=len(lock.skills), err=as_json,
+    )
 
     if as_json:
         records = []

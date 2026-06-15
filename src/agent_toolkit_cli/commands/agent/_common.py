@@ -59,8 +59,12 @@ def scope_and_roots(
     ctx_project: Path | None,
     *,
     read_only: bool = False,
-) -> tuple[Scope, Path | None, Path | None]:
-    """Resolve (scope, home, project_root) from CLI flags + context.
+) -> tuple[Scope, Path | None, Path | None, bool]:
+    """Resolve (scope, home, project_root, implicit) from CLI flags + context.
+
+    ``implicit`` is True iff neither -g nor -p was passed — i.e. the scope was
+    inferred from the presence/absence of <cwd>/agents-lock.json. Read verbs use
+    it to decide whether to print a scope reminder (#418, mirrors #413).
 
     Convention (cross-cutting, verified):
       - READ verbs pass read_only=True so they default to global outside a
@@ -73,11 +77,31 @@ def scope_and_roots(
     if global_ and project:
         raise click.UsageError("use either -g/--global or -p/--project, not both")
     if global_:
-        return "global", Path.home(), None
+        return "global", Path.home(), None, False
     if project:
         project_root = ctx_project or Path.cwd()
-        return "project", None, project_root
+        return "project", None, project_root, False
     project_root = ctx_project or Path.cwd()
     if read_only and not (project_root / _LOCK_FILENAME).exists():
-        return "global", Path.home(), None
-    return "project", None, project_root
+        return "global", Path.home(), None, True
+    return "project", None, project_root, True
+
+
+def scope_banner(scope, *, implicit, lock_path, count, err=False) -> None:
+    """Print a one-line scope reminder on implicit-project resolution.
+
+    Best-effort and informational: never raises, never affects exit codes.
+    Silent unless scope was resolved implicitly (no -g/-p) AND landed on
+    project — the one case (#418, mirrors #413) where the user got no signal
+    about which lock was picked. Goes to stdout by default (so a human sees it
+    inline with the verb output); callers emitting a machine stream pass
+    ``err=True`` to route it to stderr instead (today only ``list --json``).
+    """
+    if not (implicit and scope == "project"):
+        return
+    noun = "agent" if count == 1 else "agents"
+    click.echo(
+        f"Operating on project scope — {lock_path} ({count} {noun}). "
+        f"Pass -g for the global library.",
+        err=err,
+    )

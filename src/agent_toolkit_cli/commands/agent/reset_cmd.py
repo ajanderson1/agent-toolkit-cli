@@ -11,7 +11,7 @@ import click
 from agent_toolkit_cli import skill_git
 from agent_toolkit_cli.agent_lock import read_lock, write_lock
 from agent_toolkit_cli.agent_paths import library_agent_path, lock_file_path
-from agent_toolkit_cli.commands.agent._common import scope_and_roots
+from agent_toolkit_cli.commands.agent._common import scope_and_roots, scope_banner
 
 
 @click.command("reset")
@@ -38,7 +38,7 @@ def reset_cmd(
             "Run `agent list` to see installed agents."
         )
 
-    scope, home, project_root = scope_and_roots(
+    scope, home, project_root, implicit = scope_and_roots(
         global_,
         project_flag,
         ctx.obj.get("project_root") if ctx.obj else None,
@@ -49,6 +49,8 @@ def reset_cmd(
         lock = read_lock(lock_path)
     except FileNotFoundError:
         raise click.ClickException("no agents lock found")
+
+    scope_banner(scope, implicit=implicit, lock_path=lock_path, count=len(lock.skills))
 
     had_error = False
 
