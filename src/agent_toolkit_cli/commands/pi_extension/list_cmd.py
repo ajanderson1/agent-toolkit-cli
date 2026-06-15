@@ -5,7 +5,12 @@ import json
 
 import click
 
-from agent_toolkit_cli.commands.pi_extension._common import scope_and_roots
+from agent_toolkit_cli.commands.pi_extension._common import (
+    scope_and_roots,
+    scope_banner,
+)
+from agent_toolkit_cli.pi_extension_lock import read_lock
+from agent_toolkit_cli.pi_extension_paths import lock_file_path
 from agent_toolkit_cli.table import render_table
 from agent_toolkit_cli.pi_extension_inventory import build_inventory
 
@@ -22,11 +27,16 @@ def list_cmd(
     as_json: bool,
 ) -> None:
     """List every Pi extension the toolkit can see (store-owned, untracked, npm)."""
-    scope, home, project_root = scope_and_roots(
+    scope, home, project_root, implicit = scope_and_roots(
         global_,
         project_flag,
         ctx.obj.get("project_root") if ctx.obj else None,
         read_only=True,
+    )
+    lock_path = lock_file_path(scope=scope, home=home, project=project_root)
+    scope_banner(
+        scope, implicit=implicit, lock_path=lock_path,
+        count=len(read_lock(lock_path).skills), err=as_json,
     )
     records = build_inventory(home=home, project=project_root)
     if as_json:

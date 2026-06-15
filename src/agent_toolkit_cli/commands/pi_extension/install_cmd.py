@@ -23,7 +23,7 @@ def install_cmd(
     project_flag: bool,
 ) -> None:
     """Project a Pi extension into the chosen scope."""
-    scope, home, project = scope_and_roots(
+    scope, home, project, _implicit = scope_and_roots(
         global_, project_flag,
         ctx.obj.get("project_root") if ctx.obj else None,
     )
