@@ -799,7 +799,14 @@ def _check_slug(
                 suffixed, bare, ref=entry.ref,
                 parent_url=entry.parent_url, env=None,
             )
-            if adopt is not None and not suffixed.exists():
+            # Match the read-path resolver's adoption gate exactly: it falls
+            # back to the bare clone whenever the suffixed path is NOT a git
+            # repo (covers both "absent" and "exists but partial/aborted clone")
+            # — so doctor must surface the same situations, not just the
+            # absent-entirely case the old `not suffixed.exists()` gate caught
+            # (#422 fix 2). `legacy_bare_clone_for` (`adopt`) already confirmed
+            # the bare is genuinely ours.
+            if adopt is not None and not skill_git.is_git_repo(suffixed):
                 findings.append(Finding(
                     finding_type="legacy_bare_parent", slug=slug, scope=scope,
                     path=bare,

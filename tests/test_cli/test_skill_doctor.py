@@ -972,6 +972,34 @@ def test_doctor_flags_legacy_bare_parent(tmp_path, monkeypatch):
     assert legacy, [f.finding_type for f in findings]
 
 
+def test_doctor_flags_legacy_bare_when_suffixed_exists_but_not_repo(tmp_path, monkeypatch):
+    """#422 fix 2 — doctor must surface the legacy_bare_parent finding when the
+    suffixed path EXISTS but is NOT a git repo (a partial/aborted clone) beside
+    an adoptable bare clone. The resolver already adopts the bare in this case
+    (its gate is `is_git_repo(suffixed)`), so doctor must fire on the same
+    condition (`not is_git_repo(suffixed)`), not the narrower `not exists()`."""
+    from tests.test_cli.test_skill_owned_monorepo import (
+        _setup_parent, _add_owned_ref, _lock, _make_legacy_bare,
+    )
+    from agent_toolkit_cli import skill_doctor
+    from agent_toolkit_cli.skill_paths import parent_clone_path
+    parent_url, _ = _setup_parent(tmp_path, monkeypatch)
+    _add_owned_ref(parent_url, "mkdocs")
+    entry = _lock()["skills"]["mkdocs"]
+    _make_legacy_bare(entry)  # renames suffixed -> bare (suffixed now absent)
+    owner, repo = entry["source"].split("/", 1)
+    suffixed = parent_clone_path(owner, repo, ref=entry["ref"], env=None)
+    # Recreate the suffixed path as a partial clone: exists, but NOT a git repo.
+    suffixed.mkdir(parents=True)
+    (suffixed / "stray").write_text("partial")
+    assert not (suffixed / ".git").exists()
+    findings = skill_doctor.diagnose(
+        slugs=("mkdocs",), scope="global", home=None, project=None,
+    )
+    legacy = [f for f in findings if f.finding_type == "legacy_bare_parent"]
+    assert legacy, [f.finding_type for f in findings]
+
+
 def test_doctor_legacy_bare_fix_creates_alias_symlink(tmp_path, monkeypatch):
     from tests.test_cli.test_skill_owned_monorepo import (
         _setup_parent, _add_owned_ref, _lock, _make_legacy_bare,

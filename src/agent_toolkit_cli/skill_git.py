@@ -398,15 +398,33 @@ def _checked_out_at_ref(bare: Path, ref: str, env: dict[str, str] | None) -> boo
     discard the tree the other skill depends on. So the ref must match:
 
     - SHA pin (`looks_like_sha`): the clone is detached at a commit, so
-      `current_branch` returns ``"HEAD"`` — compare HEAD's sha instead, honouring
-      abbreviated pins via prefix match.
-    - Branch ref: require the checked-out branch to equal `ref`.
+      `current_branch` returns ``"HEAD"`` — compare HEAD's sha (prefix match,
+      honouring abbreviated pins). **But** `looks_like_sha` also matches a branch
+      literally NAMED with a hex string (e.g. ``dead123``); such a clone is on a
+      branch (not detached), so the SHA arm fails and we fall through to an exact
+      branch-name comparison. The SHA-shaped ref therefore matches on EITHER the
+      commit prefix OR an exact branch name (#422 fix 1).
+    - Branch ref (non-hex): require the checked-out branch to equal `ref`.
+
+    Accepted residuals (both astronomically unlikely — require a user-authored
+    7-40 char hex collision):
+      (a) two SHA pins whose abbreviations collide (pre-existing);
+      (b) an abbreviated-SHA `ref` string that is ALSO a sibling skill's
+          checked-out branch name — the branch arm then adopts the sibling's
+          clone for the SHA-pinned skill. Same class as (a); the branch arm only
+          fires on a genuinely hex-named branch (a true SHA pin is detached, so
+          `current_branch` returns ``"HEAD"`` which never equals a lowercase-hex
+          ref). This widening fixes the reachable hex-named-branch false-refuse;
+          (b) is the documented cost.
 
     Any git error reading the clone is treated as "does not match" (fail safe).
     """
     try:
         if looks_like_sha(ref):
-            return head_sha(bare, env=env).startswith(ref)
+            if head_sha(bare, env=env).startswith(ref):
+                return True
+            # hex-NAMED branch: clone is on a branch, not detached at a commit.
+            return current_branch(bare, env=env) == ref
         return current_branch(bare, env=env) == ref
     except GitError:
         return False

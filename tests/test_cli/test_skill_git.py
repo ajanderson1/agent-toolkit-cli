@@ -674,6 +674,58 @@ def test_legacy_bare_clone_for_none_parent_url_returns_none(tmp_path):
     ) is None
 
 
+def _bare_repo_detached_at_head(path: Path, remote: str) -> str:
+    """Like _bare_repo_on but leaves the clone in DETACHED HEAD at its tip,
+    returning that commit SHA. The existing helper only checks out named
+    branches; the true-SHA-pin guard (#422) needs a detached clone."""
+    from tests.conftest import scrub_git_env
+    _bare_repo_on(path, remote, "main")
+    env = scrub_git_env()
+    sha = subprocess.run(
+        ["git", "-C", str(path), "rev-parse", "HEAD"],
+        check=True, capture_output=True, text=True, env=env,
+    ).stdout.strip()
+    subprocess.run(
+        ["git", "-C", str(path), "checkout", "-q", sha],  # detach
+        check=True, env=env,
+    )
+    return sha
+
+
+def test_legacy_bare_clone_for_hex_named_branch_adopts(tmp_path):
+    """#422 fix 1 — a bare clone checked out on a branch literally NAMED with a
+    hex string (e.g. `dead123`) must be ADOPTED when ref equals that name.
+    `looks_like_sha('dead123')` is True, so on the pre-fix code the SHA arm
+    (`head_sha.startswith('dead123')`) fails and the clone is wrongly refused.
+    The dual-check's branch arm (`current_branch == ref`) fixes this.
+
+    Note (accepted residual, variant (b)): this same match means a SHA pin whose
+    abbreviation equals a sibling skill's hex-named branch could wrong-adopt —
+    astronomically unlikely, documented in `_checked_out_at_ref`."""
+    from agent_toolkit_cli.skill_git import legacy_bare_clone_for
+    url = "https://github.com/o/r"
+    bare = tmp_path / "_parents" / "o" / "r"
+    _bare_repo_on(bare, url, "dead123")  # branch literally named "dead123"
+    suffixed = tmp_path / "_parents" / "o" / "r@dead123"
+    assert legacy_bare_clone_for(
+        suffixed, bare, ref="dead123", parent_url=url, env=None,
+    ) == bare
+
+
+def test_legacy_bare_clone_for_true_sha_pin_adopts(tmp_path):
+    """#422 fix 1 regression guard — a clone DETACHED at the pinned commit, with
+    ref = that SHA, is still adopted via the SHA arm (the dual-check must not
+    break true SHA pins)."""
+    from agent_toolkit_cli.skill_git import legacy_bare_clone_for
+    url = "https://github.com/o/r"
+    bare = tmp_path / "_parents" / "o" / "r"
+    sha = _bare_repo_detached_at_head(bare, url)
+    suffixed = tmp_path / "_parents" / "o" / f"r@{sha}"
+    assert legacy_bare_clone_for(
+        suffixed, bare, ref=sha, parent_url=url, env=None,
+    ) == bare
+
+
 def test_remote_matches_none_parent_url_is_false(tmp_path):
     from agent_toolkit_cli.skill_git import remote_matches
     bare = tmp_path / "r"
