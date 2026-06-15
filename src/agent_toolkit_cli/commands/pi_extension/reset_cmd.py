@@ -9,7 +9,10 @@ from __future__ import annotations
 import click
 
 from agent_toolkit_cli import skill_git
-from agent_toolkit_cli.commands.pi_extension._common import scope_and_roots
+from agent_toolkit_cli.commands.pi_extension._common import (
+    scope_and_roots,
+    scope_banner,
+)
 from agent_toolkit_cli.pi_extension_lock import read_lock, write_lock
 from agent_toolkit_cli.pi_extension_paths import (
     library_pi_extension_path,
@@ -41,7 +44,7 @@ def reset_cmd(
             "Run `pi-extension list` to see installed extensions."
         )
 
-    scope, home, project_root = scope_and_roots(
+    scope, home, project_root, implicit = scope_and_roots(
         global_,
         project_flag,
         ctx.obj.get("project_root") if ctx.obj else None,
@@ -49,6 +52,7 @@ def reset_cmd(
     )
     lock_path = lock_file_path(scope=scope, home=home, project=project_root)
     lock = read_lock(lock_path)
+    scope_banner(scope, implicit=implicit, lock_path=lock_path, count=len(lock.skills))
     had_error = False
 
     for slug in slugs:

@@ -103,6 +103,49 @@ def test_update_pulls_upstream_changes(tmp_path, monkeypatch, git_sandbox):
     assert lock.skills["demo"].local_sha == sha_after
 
 
+def test_update_project_scope(tmp_path, monkeypatch, git_sandbox):
+    """`pi-extension update <slug> -p` reads the PROJECT lock and records the
+    bumped SHA back to it (#423 / AC3).
+
+    Like agents, pi-extensions use the shared-store model: the canonical lives in
+    the global library (update_cmd resolves `library_pi_extension_path(slug)`
+    regardless of scope) but the lock is per-scope. A project-scope update
+    advances the shared canonical and writes the SHA to the PROJECT lock.
+    """
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    _add_store_owned(tmp_path, git_sandbox.env, git_sandbox.upstream)
+
+    # Seed a project lock from the global one so demo exists at project scope.
+    project = tmp_path / "proj"
+    project.mkdir()
+    proj_lock_path = pep.lock_file_path(scope="project", home=None, project=project)
+    write_lock(proj_lock_path, read_lock(pep.library_lock_path(env={})))
+
+    canonical = pep.library_pi_extension_path("demo", env={})
+    _advance_remote(git_sandbox.upstream, git_sandbox.env)
+    sha_before = subprocess.run(
+        ["git", "-C", str(canonical), "rev-parse", "HEAD"],
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()
+
+    monkeypatch.chdir(project)
+    r = CliRunner().invoke(main, ["pi-extension", "update", "demo", "-p"])
+    assert r.exit_code == 0, r.output
+    assert "demo: updated" in r.output
+
+    sha_after = subprocess.run(
+        ["git", "-C", str(canonical), "rev-parse", "HEAD"],
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    assert sha_before != sha_after, "project-scope update should advance the shared canonical"
+    proj_lock = read_lock(proj_lock_path)
+    assert proj_lock.skills["demo"].local_sha == sha_after, "project lock must record the bump"
+
+
 def test_update_npm_is_noop(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     CliRunner().invoke(main, ["pi-extension", "add", "npm:foo"])
@@ -432,6 +475,25 @@ def test_reset_requires_at_least_one_slug(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     r = CliRunner().invoke(main, ["pi-extension", "reset", "-g"])
     assert r.exit_code != 0
+
+
+def test_reset_slug_not_in_lock_reports_specific_error(
+    tmp_path, monkeypatch, git_sandbox
+):
+    """`pi-extension reset <absent-slug>` => '{slug}: not in lock' + exit 1 (#423 / AC4).
+
+    Seed ONE real entry so the lock is non-empty (not the empty-lock no-op path),
+    then query a different, absent slug and assert the EXACT production message.
+    """
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _add_store_owned(tmp_path, git_sandbox.env, git_sandbox.upstream)  # seeds "demo"
+
+    r = CliRunner().invoke(main, ["pi-extension", "reset", "ghost", "-g"])
+    assert r.exit_code != 0
+    assert "ghost: not in lock" in r.output
 
 
 # ---------------------------------------------------------------------------
