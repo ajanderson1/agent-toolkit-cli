@@ -1,6 +1,17 @@
-# agent-toolkit-cli
+# Agent Toolkit CLI
+
+![Tests](https://github.com/ajanderson1/agent-toolkit-cli/actions/workflows/test.yml/badge.svg)
+![License](https://img.shields.io/badge/license-MIT%20%2B%20Commons%20Clause-blue)
+![Python](https://img.shields.io/badge/language-Python-blue)
+![Release](https://img.shields.io/github/v/release/ajanderson1/agent-toolkit-cli)
+
+---
 
 > Keep AI-agent skills, subagents, instructions, Pi extensions, and MCP servers in sync across coding harnesses.
+
+![Agent Toolkit CLI TUI](assets/agent-toolkit-cli-tui.png)
+
+---
 
 `agent-toolkit-cli` solves drift between agent harnesses. Claude Code, Codex, OpenCode, Gemini CLI, Pi, Cursor, and other tools all read different files, folders, and config shapes for the same underlying agent assets. Without a shared manager, every skill, subagent, instruction file, or MCP server gets copied by hand, forgotten, or updated in one harness but not another.
 
@@ -163,4 +174,4 @@ uv run pytest -q
 
 ## License
 
-MIT (c) AJ Anderson
+MIT License with Commons Clause. You may use, copy, modify, fork, and distribute this project, but you may not sell it or sell products/services whose value derives substantially from it. See [`LICENSE`](LICENSE).
