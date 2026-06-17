@@ -112,11 +112,11 @@ def test_skills_list_behaves_like_skill_list(git_sandbox, tmp_path: Path, monkey
     assert "demo" in by_skills.output
 
 
-def test_root_help_lists_both_skill_and_skills():
-    """Root `--help` should advertise both the canonical name and the plural alias.
+def test_root_help_lists_skills_as_canonical_command():
+    """Root `--help` should advertise the plural canonical command only.
 
     Asserts the Commands block, not arbitrary prose -- the help text mentions
-    `skills-lock.json` and 'manage skills' regardless of whether the alias is
+    `skills-lock.json` and 'manage skills' regardless of whether the command is
     wired, so a substring check would be a false positive.
     """
     import re
@@ -125,5 +125,5 @@ def test_root_help_lists_both_skill_and_skills():
     assert result.exit_code == 0, result.output
     # Click renders each command as `  <name>  <description>`. Match name
     # followed by whitespace so `skill` doesn't slip in by being a prefix of `skills`.
-    assert re.search(r"^\s+skill\s", result.output, re.MULTILINE), result.output
     assert re.search(r"^\s+skills\s", result.output, re.MULTILINE), result.output
+    assert not re.search(r"^\s+skill\s", result.output, re.MULTILINE), result.output
