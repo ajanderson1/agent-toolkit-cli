@@ -6,7 +6,7 @@
 
 **Architecture:** Add a small TUI-only display-name helper module, then route app/sidebar labels and grid headers through it. Keep persisted keys and CLI-facing catalog names unchanged.
 
-**Tech Stack:** Python 3.13+, Textual `DataTable`, pytest/pytest-asyncio, existing `agent_toolkit_tui` widgets.
+**Tech Stack:** Python 3.12+, Textual `DataTable`, pytest/pytest-asyncio, existing `agent_toolkit_tui` widgets.
 
 ---
 
@@ -179,13 +179,18 @@ git commit -m "test: cover TUI display label helpers"
 
 **Files:**
 - Modify: `src/agent_toolkit_tui/app.py`
-- Modify: `tests/test_tui/test_app.py` or `tests/test_tui/test_sidebar_highlight_sync.py`
+- Create: `tests/test_tui/test_app_labels.py`
 
 - [ ] **Step 1: Write failing sidebar/content-header tests**
 
-Add or update app tests to assert the rendered sidebar labels and content header. Use this pattern:
+Create `tests/test_tui/test_app_labels.py` with rendered sidebar labels and content header coverage:
 
 ```python
+from __future__ import annotations
+
+import pytest
+
+
 @pytest.mark.asyncio
 async def test_sidebar_uses_plural_title_case_asset_labels():
     from textual.widgets import OptionList
@@ -209,15 +214,15 @@ async def test_content_header_uses_plural_asset_label():
         app.action_asset_type("pi-extension")
         await pilot.pause()
         header = str(app.query_one("#content-header", Static).render())
-        assert header.startswith("Pi Extensions")
+        assert "Pi Extensions" in header
 ```
 
 - [ ] **Step 2: Run app label tests to verify failure**
 
-Run exact file that received the tests, for example:
+Run:
 
 ```bash
-uv run pytest tests/test_tui/test_app.py -q
+uv run pytest tests/test_tui/test_app_labels.py -q
 ```
 
 Expected: FAIL because sidebar still renders lowercase singular labels and header uses singular labels.
@@ -264,7 +269,7 @@ Keep existing spacing/dot style if current code differs; only label source chang
 - [ ] **Step 4: Run app label tests to verify pass**
 
 ```bash
-uv run pytest tests/test_tui/test_app.py tests/test_tui/test_sidebar_highlight_sync.py -q
+uv run pytest tests/test_tui/test_app_labels.py tests/test_tui/test_sidebar_highlight_sync.py -q
 ```
 
 Expected: PASS.
@@ -272,7 +277,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit app label changes**
 
 ```bash
-git add src/agent_toolkit_tui/app.py tests/test_tui/test_app.py tests/test_tui/test_sidebar_highlight_sync.py
+git add src/agent_toolkit_tui/app.py tests/test_tui/test_app_labels.py tests/test_tui/test_sidebar_highlight_sync.py
 git commit -m "fix(tui): pluralize asset navigation labels"
 ```
 
@@ -418,6 +423,16 @@ table.add_column(f"{asset_type_label('pi-extension')} {_INFO_GLYPH}", width=24)
 
 Keep the active scope column as `Pi ⓘ` because it is the Pi runtime column, not a harness key leak.
 
+Also update cell-info titles and prose in `skill_grid.py`, `instruction_grid.py`, `agent_grid.py`, and `mcp_grid.py` so user-facing sentences use `harness_label(harness)`:
+
+```python
+display = harness_label(harness)
+title = f"{row.slug} · {display} @ {self._scope}"
+body = f"Installed.\nAgent {row.slug} is projected into {display} @ {self._scope}."
+```
+
+Leave exact CLI snippets unchanged when they need raw flags, for example `--harness claude-code`, because copy/paste correctness beats display polish inside command examples.
+
 - [ ] **Step 4: Run grid tests to verify pass**
 
 ```bash
@@ -454,7 +469,7 @@ assert any("library" in str(cell) for cell in table.get_row(row_key))
 assert not any("store" in str(cell).lower() for cell in table.get_row(row_key))
 ```
 
-Add a direct info-body assertion for origin help text:
+Add direct helper assertions for origin and slug info text:
 
 ```python
 body = grid._origin_info_body()
@@ -462,9 +477,15 @@ assert "library-owned" in body
 assert "agent-toolkit library" in body
 assert "Store path" not in body
 assert "store-owned" not in body
+
+slug_body = grid._extension_info_body(row)
+assert "Origin: library" in slug_body
+assert "Library path:" in slug_body
+assert "Store path:" not in slug_body
+assert "store-owned" not in slug_body
 ```
 
-If `_origin_info_body()` does not exist yet, first assert through the modal text is difficult; create helper in implementation step and test it directly.
+If `_origin_info_body()` and `_extension_info_body()` do not exist yet, create helpers in the implementation step and test them directly.
 
 - [ ] **Step 2: Run Pi tests to verify failure**
 
@@ -492,6 +513,13 @@ _ORIGIN_MARKUP = {
 }
 ```
 
+Keep `_origin_glyph()` routed through `pi_extension_origin_label()` for fallback values:
+
+```python
+def _origin_glyph(self, origin: str) -> str:
+    return _ORIGIN_MARKUP.get(origin, pi_extension_origin_label(origin))
+```
+
 Add helper for info text:
 
 ```python
@@ -507,17 +535,31 @@ def _origin_info_body() -> str:
     )
 ```
 
-Use helper in `action_info()` for `_COL_ORIGIN`:
+Add helper for slug info so raw origin enum values do not leak:
 
 ```python
-title = f"{row.slug} · origin"
-body = _origin_info_body()
+def _extension_info_body(row: PiExtensionRow) -> str:
+    body = (
+        f"Pi extension [b]{row.slug}[/]\n"
+        f"Origin: {pi_extension_origin_label(row.origin)}\n"
+        f"Source: {row.source}"
+    )
+    if row.origin == "store-owned":
+        from agent_toolkit_cli.pi_extension_paths import library_pi_extension_path
+        ext_dir = library_pi_extension_path(row.slug)
+        body += f"\nLibrary path: {ext_dir}"
+    return body
 ```
 
-Change store path label in slug info branch:
+Use helpers in `action_info()`:
 
 ```python
-body += f"\nLibrary path: {ext_dir}"
+if col == _COL_EXTENSION:
+    title = f"{row.slug} · extension"
+    body = _extension_info_body(row)
+elif col == _COL_ORIGIN:
+    title = f"{row.slug} · origin"
+    body = _origin_info_body()
 ```
 
 Keep internal `row.origin == "store-owned"` checks unchanged.
@@ -555,16 +597,17 @@ def test_standard_info_uses_tui_harness_display_names():
         "global_linked": False,
     })
     text = "\n".join(info.lines)
-    assert "claude-code" in text
     assert "Claude" in text
     assert "Gemini" in text
     assert "Codex" in text
     assert "OpenCode" in text
+    assert "claude-code" not in text
+    assert "gemini-cli" not in text
     assert "Claude Code" not in text
     assert "Gemini CLI" not in text
 ```
 
-The raw key may remain in the bullet prefix if useful for implementers; visible display name after the dash must use short product label. If AJ wants no raw keys anywhere later, that is a separate stricter copy issue.
+Standard modal bullets should be display-only. Exact CLI command snippets elsewhere may still include raw harness flags for copy/paste correctness.
 
 - [ ] **Step 2: Run column-info tests to verify failure**
 
@@ -585,14 +628,10 @@ from agent_toolkit_tui.display_names import harness_label
 Change bullets:
 
 ```python
-bullets = [
-    f"  • {name} — {harness_label(name)}"
-    if name in AGENTS else f"  • {harness_label(name)}"
-    for name in harness_names
-]
+bullets = [f"  • {harness_label(name)}" for name in harness_names]
 ```
 
-Keep `name` in known-harness bullets so the modal still identifies internal harness keys while using product-facing display names.
+Do not include raw keys in Standard modal prose; this modal is explanatory UI, not a CLI command block.
 
 - [ ] **Step 4: Run column-info tests to verify pass**
 

@@ -57,11 +57,11 @@ Existing product names that are already concise (`Codex`, `OpenCode`, `Pi`, `Cur
 3. Asset slug columns are title case and plural-aware where appropriate:
    - `Instruction ⓘ` or `Instructions ⓘ` must be consistent with the chosen existing row-label convention.
    - `Skill ⓘ`, `Pi Extension ⓘ`, `Agent ⓘ`, `MCP ⓘ` are title case, not all-caps.
-4. Harness headers use product-facing names: `Claude`, `Gemini`, `Codex`, `OpenCode`, `Pi`, `Cursor`; no visible header says `Claude Code`, `Gemini CLI`, `claude-code`, `gemini-cli`, `codex`, or `opencode`.
+4. Harness headers and TUI prose use product-facing names: `Claude`, `Gemini`, `Codex`, `OpenCode`, `Pi`, `Cursor`; no visible display label says `Claude Code`, `Gemini CLI`, `claude-code`, `gemini-cli`, `codex`, or `opencode`. Exact CLI command snippets may still contain raw harness flags where needed for copy/paste correctness.
 5. Every Standard column includes covered count as `Standard (N)`, including skills, instructions, agents, and MCPs where Standard appears.
-6. Pi extension origin display uses `library`, not `store`; info text says library-owned/agent-toolkit library and does not show `Store path:`.
+6. Pi extension origin display uses `library`, not `store`; info text says library-owned/agent-toolkit library, shows `Library path:`, and does not show `Store path:` or `store-owned`.
 7. Column info modal copy still explains what Standard covers and includes count; titles remain meaningful and do not reintroduce old harness or store wording.
-8. Tests assert the exact visible labels for sidebar, content header, grid headers, Standard counts, harness display names, and Pi extension origin/info copy.
+8. Tests assert the exact visible labels for sidebar, content header, grid headers, Standard counts, harness display names, cell-info prose, and Pi extension origin/info copy.
 
 ## Implementation notes
 
@@ -77,7 +77,7 @@ Existing product names that are already concise (`Codex`, `OpenCode`, `Pi`, `Cur
 
 ## Test surface
 
-- `tests/test_tui/test_app.py` or existing app/sidebar tests for sidebar/content header labels.
+- `tests/test_tui/test_app_labels.py` or existing app/sidebar tests for sidebar/content header labels.
 - Existing grid tests for header labels:
   - `tests/test_tui/test_skill_grid_new_columns.py`
   - `tests/test_tui/test_instruction_grid.py`
