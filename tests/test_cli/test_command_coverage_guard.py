@@ -31,15 +31,16 @@ from agent_toolkit_cli.cli import main
 
 _TESTS = Path(__file__).resolve().parents[1]
 
-# Click registers each group under its canonical name AND any aliases (skills,
-# mcps). Map canonical group-name -> all first-token spellings tests may use.
+# Click registers each group under its canonical plural name and resolves the
+# singular forms through AssetCommandGroup.get_command(). Map canonical group-name
+# -> all first-token spellings tests may use.
 _GROUP_ALIASES = {
-    "skill": ("skill", "skills"),
-    "agent": ("agent", "agents"),
-    "instructions": ("instructions",),
-    "mcp": ("mcp", "mcps"),
-    "pi-extension": ("pi-extension", "pi_extension"),
-    "bundle": ("bundle",),
+    "skills": ("skills", "skill"),
+    "agents": ("agents", "agent"),
+    "instructions": ("instructions", "instruction"),
+    "mcps": ("mcps", "mcp"),
+    "pi-extensions": ("pi-extensions", "pi-extension"),
+    "bundles": ("bundles", "bundle"),
 }
 
 
@@ -49,7 +50,7 @@ def _registered_cells() -> set[tuple[str, str]]:
     Walk main.commands; for each sub-group, walk its .commands. This catches
     verbs defined inline in __init__.py (skill remove/uninstall) AND those in
     *_cmd.py, with zero filesystem assumptions. De-aliases GROUP names so
-    `skills`/`mcps` don't double-count.
+    singular aliases don't double-count.
 
     VERB-aliases (e.g. `ls` for `list`, `rm` for `remove`) share one callback
     with their canonical verb, so they are collapsed: per group, each distinct
