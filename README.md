@@ -13,9 +13,18 @@
 
 ---
 
-`agent-toolkit-cli` solves drift between agent harnesses. Claude Code, Codex, OpenCode, Gemini CLI, Pi, Cursor, and other tools all read different files, folders, and config shapes for the same underlying agent assets. Without a shared manager, every skill, subagent, instruction file, or MCP server gets copied by hand, forgotten, or updated in one harness but not another.
+Agent Toolkit CLI prevents agent asset drift when you switch between coding harnesses. [Claude Code](docs/harnesses/claude-code.md), [Codex](docs/harnesses/codex.md), [OpenCode](docs/harnesses/opencode.md), [Gemini CLI](docs/harnesses/gemini-cli.md), [Pi](docs/harnesses/pi.md), [Cursor](docs/harnesses/cursor.md), and other tools all expect different files, folders, and config shapes for the same underlying assets.
 
-`agent-toolkit-cli` keeps one canonical library copy per asset, records it in a lock file, then projects it into each harness by the cheapest safe mechanism that harness supports: symlink, translated file, or config injection. Add/remove manage library membership; install/uninstall manage harness visibility.
+It exists for two jobs:
+
+1. Make it easy to see which [skills](docs/asset-types/skills.md), [agents](docs/asset-types/agents.md), [instructions](docs/asset-types/instructions.md), [Pi extensions](docs/asset-types/pi-extensions.md), and [MCP servers](docs/asset-types/mcp.md) each harness can use.
+2. Keep one git-versioned source of truth for first-party and third-party assets.
+
+[`agent-toolkit-cli`](docs/agent-toolkit/cli.md) keeps one canonical library copy per asset, records it in a lock file, then projects it into each harness by the simplest safe mechanism that harness supports: symlink, translated file, or config injection. `add`/`remove` manage library membership; `install`/`uninstall` manage harness visibility.
+
+[`agent-toolkit-tui`](docs/agent-toolkit/tui.md) is the visual frontend: it makes cross-harness coverage visible and lets you manage assets at a glance.
+
+Still a work in progress. I use it day-to-day and fix bugs as I find them. Please [open an issue](https://github.com/ajanderson1/agent-toolkit-cli/issues) if you hit one.
 
 ## Install
 
@@ -23,11 +32,6 @@
 uv tool install --from git+https://github.com/ajanderson1/agent-toolkit-cli agent-toolkit
 # SSH form: git+ssh://git@github.com/ajanderson1/agent-toolkit-cli
 ```
-
-> **Don't `pip install -e .` into a Python that comes earlier on `$PATH` than `~/.local/bin/`** (e.g., pyenv-managed Pythons). The pip shim will shadow `uv tool install`'s shim. If you must install editable for development, either:
->
-> - Use a venv that you activate per-session (`python -m venv .venv && source .venv/bin/activate && pip install -e .`), or
-> - First `uv tool uninstall agent-toolkit` to make the precedence explicit, and re-install from uv when you're done.
 
 ## Quickstart
 
