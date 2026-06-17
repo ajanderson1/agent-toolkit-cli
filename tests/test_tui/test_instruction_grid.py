@@ -208,6 +208,39 @@ def test_pending_changed_message_carries_count():
     assert msg.count == 5
 
 
+def test_standard_glyph_is_neutral_when_canonical_exists():
+    """Existing canonical AGENTS.md is informational, not installed status."""
+    row = InstructionRow(
+        slug="AGENTS.md",
+        source="AGENTS.md",
+        canonical_exists=True,
+        cells={},
+    )
+    grid = InstructionGrid([row])
+
+    glyph = grid._standard_glyph(row)  # type: ignore[attr-defined]
+
+    assert "✔" not in glyph
+    assert "green" not in glyph
+    assert "AGENTS.md" in glyph or "std" in glyph
+
+
+def test_standard_glyph_reports_missing_when_canonical_absent():
+    """Missing canonical AGENTS.md remains visibly actionable/error-like."""
+    row = InstructionRow(
+        slug="AGENTS.md",
+        source="AGENTS.md",
+        canonical_exists=False,
+        cells={},
+    )
+    grid = InstructionGrid([row])
+
+    glyph = grid._standard_glyph(row)  # type: ignore[attr-defined]
+
+    assert "missing" in glyph or "✘" in glyph
+    assert "red" in glyph
+
+
 @pytest.mark.asyncio
 async def test_pending_changed_fires_on_toggle():
     """PendingChanged is posted when a cell is toggled."""

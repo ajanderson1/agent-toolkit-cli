@@ -466,10 +466,10 @@ class InstructionGrid(Vertical):
         )
 
     def _standard_glyph(self, row: InstructionRow) -> str:
-        """Return the display glyph for the standard (canonical) column. Never named _render_*."""
+        """Return display glyph for the standard/native AGENTS.md column."""
         if row.canonical_exists:
-            return _LINKED_GLYPH
-        return "[red]✘[/]"
+            return "[dim]AGENTS.md[/]"
+        return "[red]missing[/]"
 
     def _cell_glyph(self, *, row: InstructionRow, harness: str) -> str:
         """Return the display glyph for a harness cell. Never named _render_*."""
