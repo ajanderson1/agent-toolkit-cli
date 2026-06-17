@@ -153,7 +153,12 @@ def apply(
                 )
                 collisions.append(harness)
             _loud(f"→ writing {target}")
-            adapter.install(slug, asset.inner_config, scope=scope, home=home, project=project)
+            try:
+                adapter.install(slug, asset.inner_config, scope=scope, home=home, project=project)
+            except InstallError as exc:
+                _loud(f"{harness}: {exc}; skipping")
+                skipped.append(harness)
+                continue
             _loud(f"✓ wrote {target}")
             lock = upsert_entry(lock, McpLockEntry(
                 slug=slug, harness=harness,

@@ -316,6 +316,32 @@ def test_apply_returns_result_with_installed_skipped(tmp_path, monkeypatch):
     assert result.collisions == []
 
 
+def test_apply_skips_harness_that_cannot_translate(tmp_path, capsys):
+    """A harness whose adapter raises InstallError (e.g. opencode cannot
+    translate a URL-based MCP) is warned-and-skipped, not a fatal rollback."""
+    library = tmp_path / "library"
+    d = library / "http-mcp"
+    d.mkdir(parents=True)
+    (d / "config.json").write_text('{"type":"http","url":"https://example.com/mcp"}\n')
+    (d / "README.md").write_text("# http-mcp\n")
+    (library / "http-mcp.toolkit.yaml").write_text(
+        "name: http-mcp\ntransport: http\ninstall_method: url\n"
+    )
+    project = tmp_path / "proj"
+    project.mkdir()
+    result = mcp_install.apply(
+        slug="http-mcp", harnesses=["standard", "codex", "opencode"], scope="project",
+        library_root=library, home=tmp_path, project=project,
+    )
+    err = capsys.readouterr().err
+    assert "opencode" in err and "cannot translate" in err.lower()
+    # standard + codex installed; opencode skipped
+    assert sorted(result.installed) == ["codex", "standard"]
+    assert result.skipped == ["opencode"]
+    lock = read_lock(lock_path_for_scope("project", home=tmp_path, project=project))
+    assert sorted(e.harness for e in lock["http-mcp"]) == ["codex", "standard"]
+
+
 def test_apply_standard_collapses_legacy_claude_pi_rows(tmp_path):
     """Writing a `standard` row drops pre-existing claude-code/pi rows for the
     same slug (collapse-on-install), so the lock converges to one row."""
