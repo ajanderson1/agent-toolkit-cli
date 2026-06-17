@@ -364,6 +364,59 @@ async def test_standard_column_is_not_toggled():
 
 
 @pytest.mark.asyncio
+async def test_harness_info_shows_pointer_and_canonical_paths(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+):
+    """Harness info names the pointer slot and expected canonical target."""
+    home = tmp_path / "home"
+    home.mkdir()
+    agent_toolkit_dir = home / ".agent-toolkit"
+    agent_toolkit_dir.mkdir()
+    canonical = agent_toolkit_dir / "AGENTS.md"
+    canonical.write_text("# AGENTS\n")
+
+    monkeypatch.setattr(
+        "agent_toolkit_cli.instructions_paths.library_root",
+        lambda: agent_toolkit_dir / "instructions",
+    )
+    monkeypatch.setenv("HOME", str(home))
+
+    row = InstructionRow(
+        slug="AGENTS.md",
+        source="AGENTS.md",
+        canonical_exists=True,
+        cells={
+            ("claude-code", "global"): InstructionCell(
+                linked=False, conflict=False,
+            ),
+        },
+    )
+
+    class _A(App):
+        def compose(self) -> ComposeResult:
+            yield InstructionGrid([row], id="g")
+
+    app = _A()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        g = app.query_one("#g", InstructionGrid)
+        g.set_scope("global")
+        table = app.query_one("#instruction-table", DataTable)
+        table.cursor_coordinate = table.cursor_coordinate.__class__(row=0, column=2)
+        table.focus()
+        await pilot.pause()
+        await pilot.press("i")
+        await pilot.pause()
+
+        from agent_toolkit_tui.screens.cell_info import CellInfoScreen
+
+        assert isinstance(app.screen, CellInfoScreen)
+        body = app.screen._body_markup
+        assert str(home / ".claude" / "CLAUDE.md") in body
+        assert str(canonical) in body
+
+
+@pytest.mark.asyncio
 async def test_slug_info_at_project_scope_does_not_crash():
     """`i` on the slug column at project scope opens the info modal.
 
