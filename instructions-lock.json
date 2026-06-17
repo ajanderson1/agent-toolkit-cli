@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "instructions": {
+    "AGENTS.md": {
+      "scope": "project",
+      "source": "AGENTS.md",
+      "harnesses": [
+        "claude-code"
+      ]
+    }
+  }
+}
