@@ -39,12 +39,14 @@ from textual.widgets.option_list import Option, OptionDoesNotExist
 
 from agent_toolkit_tui import __version__
 from agent_toolkit_tui.agent_state import build_agent_rows
+from agent_toolkit_tui.command_state import build_command_rows
 from agent_toolkit_tui.instruction_state import build_instruction_rows
 from agent_toolkit_tui.mcp_state import build_mcp_rows
 from agent_toolkit_tui.pi_extension_state import build_pi_rows
 from agent_toolkit_tui.skill_state import build_skill_rows
 from agent_toolkit_tui.widgets import (
     AgentGrid,
+    CommandGrid,
     InstructionGrid,
     McpGrid,
     PiGrid,
@@ -52,11 +54,12 @@ from agent_toolkit_tui.widgets import (
     SkillGrid,
 )
 
-AssetType = Literal["instruction", "skill", "pi-extension", "agent", "mcp"]
+AssetType = Literal["instruction", "skill", "command", "pi-extension", "agent", "mcp"]
 
 _ASSET_TYPE_LABELS: dict[AssetType, str] = {
     "instruction": "Instruction",
     "skill": "Skill",
+    "command": "Command",
     "pi-extension": "Pi Extension",
     "agent": "Agent",
     "mcp": "MCP",
@@ -173,6 +176,7 @@ class TUIApp(App):
                     Option("instruction", id="asset-type-instruction"),
                     Option("─────────────", id="asset-type-separator", disabled=True),
                     Option("skill", id="asset-type-skill"),
+                    Option("command", id="asset-type-command"),
                     Option("pi-extension", id="asset-type-pi-extension"),
                     Option("agent", id="asset-type-agent"),
                     Option("mcp", id="asset-type-mcp"),
@@ -184,6 +188,7 @@ class TUIApp(App):
                     yield ScopeToggle(active=self._scope, id="scope-toggle")
                 yield InstructionGrid([], id="instruction-grid")
                 yield SkillGrid([], id="skill-grid")
+                yield CommandGrid([], id="command-grid")
                 yield PiGrid([], id="pi-grid")
                 yield AgentGrid([], id="agent-grid")
                 yield McpGrid([], id="mcp-grid")
@@ -215,6 +220,7 @@ class TUIApp(App):
         try:
             instruction_grid = self.query_one("#instruction-grid", InstructionGrid)
             skill_grid = self.query_one("#skill-grid", SkillGrid)
+            command_grid = self.query_one("#command-grid", CommandGrid)
             pi_grid = self.query_one("#pi-grid", PiGrid)
             agent_grid = self.query_one("#agent-grid", AgentGrid)
             mcp_grid = self.query_one("#mcp-grid", McpGrid)
@@ -235,6 +241,7 @@ class TUIApp(App):
         if asset_type == "instruction":
             instruction_grid.display = True
             skill_grid.display = False
+            command_grid.display = False
             pi_grid.display = False
             agent_grid.display = False
             mcp_grid.display = False
@@ -242,6 +249,15 @@ class TUIApp(App):
         elif asset_type == "skill":
             instruction_grid.display = False
             skill_grid.display = True
+            command_grid.display = False
+            pi_grid.display = False
+            agent_grid.display = False
+            mcp_grid.display = False
+            scope_toggle.display = True
+        elif asset_type == "command":
+            instruction_grid.display = False
+            skill_grid.display = False
+            command_grid.display = True
             pi_grid.display = False
             agent_grid.display = False
             mcp_grid.display = False
@@ -249,6 +265,7 @@ class TUIApp(App):
         elif asset_type == "pi-extension":
             instruction_grid.display = False
             skill_grid.display = False
+            command_grid.display = False
             pi_grid.display = True
             agent_grid.display = False
             mcp_grid.display = False
@@ -256,6 +273,7 @@ class TUIApp(App):
         elif asset_type == "agent":
             instruction_grid.display = False
             skill_grid.display = False
+            command_grid.display = False
             pi_grid.display = False
             agent_grid.display = True
             mcp_grid.display = False
@@ -263,6 +281,7 @@ class TUIApp(App):
         else:  # "mcp"
             instruction_grid.display = False
             skill_grid.display = False
+            command_grid.display = False
             pi_grid.display = False
             agent_grid.display = False
             mcp_grid.display = True
@@ -282,6 +301,8 @@ class TUIApp(App):
             self.action_asset_type("instruction")
         elif opt_id == "asset-type-skill":
             self.action_asset_type("skill")
+        elif opt_id == "asset-type-command":
+            self.action_asset_type("command")
         elif opt_id == "asset-type-pi-extension":
             self.action_asset_type("pi-extension")
         elif opt_id == "asset-type-agent":
@@ -290,7 +311,7 @@ class TUIApp(App):
             self.action_asset_type("mcp")
 
     def action_asset_type(self, asset_type: str) -> None:
-        if asset_type not in ("instruction", "skill", "pi-extension", "agent", "mcp"):
+        if asset_type not in ("instruction", "skill", "command", "pi-extension", "agent", "mcp"):
             return
         if asset_type == self._active_asset_type:
             return
@@ -310,12 +331,14 @@ class TUIApp(App):
 
     def _active_grid(
         self,
-    ) -> InstructionGrid | SkillGrid | PiGrid | AgentGrid | McpGrid | None:
+    ) -> InstructionGrid | SkillGrid | CommandGrid | PiGrid | AgentGrid | McpGrid | None:
         selector: str
         if self._active_asset_type == "instruction":
             selector = "#instruction-grid"
         elif self._active_asset_type == "skill":
             selector = "#skill-grid"
+        elif self._active_asset_type == "command":
+            selector = "#command-grid"
         elif self._active_asset_type == "pi-extension":
             selector = "#pi-grid"
         elif self._active_asset_type == "mcp":
@@ -332,6 +355,8 @@ class TUIApp(App):
             self._refresh_instruction_view()
         elif self._active_asset_type == "skill":
             self._refresh_skill_view()
+        elif self._active_asset_type == "command":
+            self._refresh_command_view()
         elif self._active_asset_type == "pi-extension":
             self._refresh_pi_view()
         elif self._active_asset_type == "mcp":
@@ -358,6 +383,17 @@ class TUIApp(App):
         scope, home, project = self._scope_to_roots()
         grid.set_scope(scope)
         grid.set_rows(build_skill_rows(scope=scope, home=home, project=project))
+
+    # ----- command-view -----------------------------------------------------
+
+    def _refresh_command_view(self) -> None:
+        try:
+            grid = self.query_one("#command-grid", CommandGrid)
+        except NoMatches:
+            return
+        scope, home, project = self._scope_to_roots()
+        grid.set_scope(scope)  # type: ignore[arg-type]
+        grid.set_rows(build_command_rows(scope=scope, home=home, project=project))  # type: ignore[arg-type]
 
     # ----- pi-view -----------------------------------------------------------
 
@@ -407,6 +443,13 @@ class TUIApp(App):
         self._refresh_pending_label()
         self._refresh_status_bar()
 
+    def on_command_grid_pending_changed(
+        self, event: CommandGrid.PendingChanged
+    ) -> None:
+        """Live-update footer + status bar when command grid pending changes."""
+        self._refresh_pending_label()
+        self._refresh_status_bar()
+
     def on_pi_grid_pending_changed(
         self, event: PiGrid.PendingChanged
     ) -> None:
@@ -449,6 +492,10 @@ class TUIApp(App):
             pass
         try:
             n += len(self.query_one("#skill-grid", SkillGrid).pending_entries())
+        except NoMatches:
+            pass
+        try:
+            n += len(self.query_one("#command-grid", CommandGrid).pending_entries())
         except NoMatches:
             pass
         try:
@@ -512,6 +559,12 @@ class TUIApp(App):
             except NoMatches:
                 return
             sgrid.action_info()
+        elif self._active_asset_type == "command":
+            try:
+                cgrid = self.query_one("#command-grid", CommandGrid)
+                cgrid.focus()
+            except NoMatches:
+                pass
         elif self._active_asset_type == "pi-extension":
             try:
                 pgrid = self.query_one("#pi-grid", PiGrid)
@@ -561,6 +614,8 @@ class TUIApp(App):
             self._apply_instruction_pending()
         elif self._active_asset_type == "skill":
             self._apply_skill_pending()
+        elif self._active_asset_type == "command":
+            self._apply_command_pending()
         elif self._active_asset_type == "pi-extension":
             self._apply_pi_pending()
         elif self._active_asset_type == "mcp":
@@ -1163,6 +1218,11 @@ class TUIApp(App):
             try:
                 n = self.query_one("#skill-grid", SkillGrid).row_count
             except (NoMatches, Exception):
+                n = 0
+        elif self._active_asset_type == "command":
+            try:
+                n = self.query_one("#command-grid", CommandGrid).row_count
+            except NoMatches:
                 n = 0
         elif self._active_asset_type == "pi-extension":
             try:

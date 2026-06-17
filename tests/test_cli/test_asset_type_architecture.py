@@ -33,6 +33,7 @@ INSTALL_ENTRYPOINTS = {
     "agent_toolkit_cli.agent_install": ("plan", "apply", "install", "uninstall", "remove"),
     "agent_toolkit_cli.instructions_install": ("plan", "apply", "uninstall"),
     "agent_toolkit_cli.pi_extension_install": ("plan", "apply"),
+    "agent_toolkit_cli.command_install": ("plan", "apply", "install", "uninstall"),
 }
 
 
@@ -66,39 +67,42 @@ def test_agent_paths_is_a_separate_module():
     assert ap.__file__ != sp.__file__
 
 
-def test_all_four_asset_type_install_modules_exist():
-    """All four asset types have their own install module."""
+def test_all_five_asset_type_install_modules_exist():
+    """All five asset types have their own install module."""
     expected_modules = [
         "agent_toolkit_cli.skill_install",
         "agent_toolkit_cli.agent_install",
         "agent_toolkit_cli.instructions_install",
         "agent_toolkit_cli.pi_extension_install",
+        "agent_toolkit_cli.command_install",
     ]
     for mod_name in expected_modules:
         mod = importlib.import_module(mod_name)
         assert mod is not None, f"module {mod_name!r} must exist"
 
 
-def test_all_four_asset_type_lock_modules_exist():
-    """All four asset types have their own lock module."""
+def test_all_five_asset_type_lock_modules_exist():
+    """All five asset types have their own lock module."""
     expected_modules = [
         "agent_toolkit_cli.skill_lock",
         "agent_toolkit_cli.agent_lock",
         "agent_toolkit_cli.instructions_lock",
         "agent_toolkit_cli.pi_extension_lock",
+        "agent_toolkit_cli.command_lock",
     ]
     for mod_name in expected_modules:
         mod = importlib.import_module(mod_name)
         assert mod is not None, f"module {mod_name!r} must exist"
 
 
-def test_all_four_asset_type_paths_modules_exist():
-    """All four asset types have their own paths module."""
+def test_all_five_asset_type_paths_modules_exist():
+    """All five asset types have their own paths module."""
     expected_modules = [
         "agent_toolkit_cli.skill_paths",
         "agent_toolkit_cli.agent_paths",
         "agent_toolkit_cli.instructions_paths",
         "agent_toolkit_cli.pi_extension_paths",
+        "agent_toolkit_cli.command_paths",
     ]
     for mod_name in expected_modules:
         mod = importlib.import_module(mod_name)

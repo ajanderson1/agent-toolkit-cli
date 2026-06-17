@@ -42,6 +42,14 @@ SYNTHETIC = {"standard", "standard-skill", "standard-agent"}
 # `standard` is a projection token, NOT a harness, so it is not listed.
 MCP_ADAPTERS = {"claude-code", "codex", "opencode", "pi"}
 
+COMMAND_SUPPORT = {
+    "claude-code": ("✅", "legacy markdown commands (`.claude/commands`); skills preferred"),
+    "pi": ("✅", "prompt templates (`.pi/agent/prompts`, `.pi/prompts`)"),
+    "codex": ("✅", "deprecated custom prompts; global only (`~/.codex/prompts`)"),
+    "gemini-cli": ("✅", "TOML custom commands (`.gemini/commands`)"),
+    "cursor": ("—", "research gap; forum evidence only, no deterministic adapter yet"),
+}
+
 # Headline harnesses: pinned to the top of the matrix (in this order) and
 # listed first + bolded in the nav; everything else folds into the expandable
 # alphabetical rest.
@@ -223,6 +231,10 @@ def sym_instr(v: str) -> str:
     raise SystemExit(f"unmapped instructions verdict: {v!r}")
 
 
+def sym_command(slug: str) -> str:
+    return COMMAND_SUPPORT.get(slug, ("?", "unknown — no public evidence found"))[0]
+
+
 def matrix_cells(slug: str, agents: dict[str, AgentRow], instrs: dict[str, InstrRow]) -> list[str]:
     cfg = AGENTS[slug]
     page = f"harnesses/{slug}.md"
@@ -233,6 +245,7 @@ def matrix_cells(slug: str, agents: dict[str, AgentRow], instrs: dict[str, Instr
         f"[{instr_s}]({page}#instructions)" if instr_s != "N/A" else "N/A",
         f"[✅]({page}#skills)",
         f"[{agent_s}]({page}#agents)" if agent_s != "N/A" else "N/A",
+        f"[{sym_command(slug)}]({page}#commands)" if sym_command(slug) != "N/A" else "N/A",
         f"[✅]({page}#mcp-servers)" if slug in MCP_ADAPTERS else "—",
         f"[✅]({page}#pi-extensions)" if slug == "pi" else "N/A",
     ]
@@ -243,6 +256,7 @@ MATRIX_HEADERS = [
     "[Instructions](asset-types/instructions.md)",
     "[Skills](asset-types/skills.md)",
     "[Agents](asset-types/agents.md)",
+    "[Commands](asset-types/commands.md)",
     "[MCP](asset-types/mcp.md)",
     "[Pi extensions](asset-types/pi-extensions.md)",
 ]
@@ -288,7 +302,7 @@ N/A — the harness has no such concept ·
 {main_rows}
 </tbody>
 <tbody class="matrix-toggle">
-<tr><td colspan="6"><button type="button" data-show="{label}" data-hide="Show fewer ▴">{label}</button></td></tr>
+<tr><td colspan="7"><button type="button" data-show="{label}" data-hide="Show fewer ▴">{label}</button></td></tr>
 </tbody>
 <tbody class="matrix-others" markdown hidden>
 {other_rows}
@@ -304,6 +318,8 @@ N/A — the harness has no such concept ·
   harness's skills directory.
 - **[Agents (subagents)](asset-types/agents.md)** — subagent definitions projected
   per-harness (symlink, translate, or registry mechanisms).
+- **[Commands](asset-types/commands.md)** — reusable slash-command prompts projected
+  into harness command or prompt-template locations.
 - **[MCP servers](asset-types/mcp.md)** — MCP servers projected into a harness's
   own config by name (config-injection); supported for claude-code, codex,
   opencode, and pi.
@@ -403,6 +419,19 @@ def agent_section(slug: str, row: AgentRow) -> str:
     return "\n".join(lines)
 
 
+
+def command_section(slug: str) -> str:
+    sym, how = COMMAND_SUPPORT.get(slug, ("?", "unknown — no public evidence found"))
+    lines = ["## Commands { #commands }", ""]
+    if sym == "✅":
+        lines.append("Supported by the [commands asset type](../asset-types/commands.md).")
+    elif sym == "—":
+        lines.append("Not supported by the toolkit yet — tracked as a researched gap.")
+    else:
+        lines.append("Unknown — bounded search surfaced no public evidence.")
+    lines += ["", f"- **Support:** {sym}", f"- **How:** {how}"]
+    return "\n".join(lines)
+
 def mcp_section(slug: str) -> str:
     if slug not in MCP_ADAPTERS:
         return ""
@@ -452,6 +481,9 @@ def write_harness_page(slug: str, agents: dict[str, AgentRow], instrs: dict[str,
         "✅": a.verdict, "—": "no file-drop convention",
         "N/A": "no subagent concept", "?": "no public evidence",
     }[agent_s]
+    command_sym, command_how = COMMAND_SUPPORT.get(slug, ("?", "unknown — no public evidence found"))
+    command_cell = f"[{command_sym}](#commands)" if command_sym != "N/A" else "N/A"
+    command_row = f"| [Commands](../asset-types/commands.md) | {command_cell} | {command_how} |"
     mcp_row = (
         "| [MCP servers](../asset-types/mcp.md) | [✅](#mcp-servers) | config-injection by name |"
         if slug in MCP_ADAPTERS
@@ -468,6 +500,7 @@ def write_harness_page(slug: str, agents: dict[str, AgentRow], instrs: dict[str,
         instr_section(i),
         skills_section(slug),
         agent_section(slug, a),
+        command_section(slug),
     ]
     mcp_sec = mcp_section(slug)
     if mcp_sec:
@@ -492,6 +525,7 @@ def write_harness_page(slug: str, agents: dict[str, AgentRow], instrs: dict[str,
 | [Instructions](../asset-types/instructions.md) | {instr_cell} | {instr_how} |
 | [Skills](../asset-types/skills.md) | [✅](#skills) | `{cfg.skills_dir}` |
 | [Agents (subagents)](../asset-types/agents.md) | {agent_cell} | {agent_how} |
+{command_row}
 {mcp_row}
 {pi_row}
 

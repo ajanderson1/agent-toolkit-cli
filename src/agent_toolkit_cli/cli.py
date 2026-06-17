@@ -8,6 +8,7 @@ import click
 
 from agent_toolkit_cli.commands.agent import agent
 from agent_toolkit_cli.commands.bundle import bundle
+from agent_toolkit_cli.commands.command import command
 from agent_toolkit_cli.commands.instructions import instructions
 from agent_toolkit_cli.commands.mcp import mcp
 from agent_toolkit_cli.commands.pi_extension import pi_extension
@@ -23,6 +24,7 @@ except PackageNotFoundError:
 _ASSET_COMMAND_ALIASES = {
     "skill": "skills",
     "agent": "agents",
+    "command": "commands",
     "mcp": "mcps",
     "pi-extension": "pi-extensions",
     "bundle": "bundles",
@@ -70,6 +72,7 @@ def main(ctx: click.Context, project_root: Path | None) -> None:
 
 main.add_command(skill, name="skills")
 main.add_command(agent, name="agents")
+main.add_command(command, name="commands")
 main.add_command(mcp, name="mcps")
 main.add_command(pi_extension, name="pi-extensions")
 main.add_command(bundle, name="bundles")

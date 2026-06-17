@@ -75,3 +75,8 @@ agent-toolkit-cli skill doctor           # reconcile projections
 
 See also: [Instructions](instructions.md) · [Agents](agents.md) ·
 [Glossary](../glossary.md)
+
+
+## Commands relationship
+
+Use [commands](commands.md) for lightweight slash-command prompts. Use skills when the workflow needs richer instructions, references, or tool code.

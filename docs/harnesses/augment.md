@@ -7,6 +7,7 @@
 | [Instructions](../asset-types/instructions.md) | [✅](#instructions) | pointer symlink (`CLAUDE.md` (with `AGENTS.md` as documented fallback) → `AGENTS.md`) |
 | [Skills](../asset-types/skills.md) | [✅](#skills) | `.augment/skills` |
 | [Agents (subagents)](../asset-types/agents.md) | [✅](#agents) | symlink |
+| [Commands](../asset-types/commands.md) | [?](#commands) | unknown — no public evidence found |
 | [MCP servers](../asset-types/mcp.md) | — | no toolkit adapter yet |
 | [Pi extensions](../asset-types/pi-extensions.md) | N/A | Pi-only asset type |
 
@@ -38,3 +39,10 @@ Supported via the **symlink** mechanism — see the [agents asset type](../asset
 - **Format:** markdown+frontmatter; required `name`; optional `description`,`color`,`model`,`tools`/`disabled_tools` (denylist wins)
 - **Toolkit adapter:** enabled (symlink)
 - **Source:** [docs.augmentcode.com/cli/subagents](https://docs.augmentcode.com/cli/subagents)
+
+## Commands { #commands }
+
+Unknown — bounded search surfaced no public evidence.
+
+- **Support:** ?
+- **How:** unknown — no public evidence found

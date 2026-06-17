@@ -37,6 +37,7 @@ _TESTS = Path(__file__).resolve().parents[1]
 _GROUP_ALIASES = {
     "skills": ("skills", "skill"),
     "agents": ("agents", "agent"),
+    "commands": ("commands", "command"),
     "instructions": ("instructions", "instruction"),
     "mcps": ("mcps", "mcp"),
     "pi-extensions": ("pi-extensions", "pi-extension"),

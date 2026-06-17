@@ -7,6 +7,7 @@
 | [Instructions](../asset-types/instructions.md) | N/A | no instruction-file concept |
 | [Skills](../asset-types/skills.md) | [✅](#skills) | `.codemaker/skills` |
 | [Agents (subagents)](../asset-types/agents.md) | N/A | no subagent concept |
+| [Commands](../asset-types/commands.md) | [?](#commands) | unknown — no public evidence found |
 | [MCP servers](../asset-types/mcp.md) | — | no toolkit adapter yet |
 | [Pi extensions](../asset-types/pi-extensions.md) | N/A | Pi-only asset type |
 
@@ -36,3 +37,10 @@ Not applicable — no subagent concept; won't be filled.
 - **Verdict:** unsupported (by design)
 - **Why:** batch code-gen CLI; no subagent concept
 - **Source:** [github.com/codemakerai/codemaker-cli](https://github.com/codemakerai/codemaker-cli)
+
+## Commands { #commands }
+
+Unknown — bounded search surfaced no public evidence.
+
+- **Support:** ?
+- **How:** unknown — no public evidence found

@@ -7,7 +7,7 @@
 
 ---
 
-> Keep AI-agent skills, subagents, instructions, Pi extensions, and MCP servers in sync across coding harnesses.
+> Keep AI-agent skills, subagents, commands, instructions, Pi extensions, and MCP servers in sync across coding harnesses.
 
 ![Agent Toolkit CLI TUI](assets/agent-toolkit-cli-tui.png)
 
@@ -17,7 +17,7 @@ Agent Toolkit CLI prevents agent asset drift when you switch between coding harn
 
 It exists for two jobs:
 
-1. Make it easy to see which [skills](docs/asset-types/skills.md), [agents](docs/asset-types/agents.md), [instructions](docs/asset-types/instructions.md), [Pi extensions](docs/asset-types/pi-extensions.md), and [MCP servers](docs/asset-types/mcp.md) each harness can use.
+1. Make it easy to see which [skills](docs/asset-types/skills.md), [agents](docs/asset-types/agents.md), [commands](docs/asset-types/commands.md), [instructions](docs/asset-types/instructions.md), [Pi extensions](docs/asset-types/pi-extensions.md), and [MCP servers](docs/asset-types/mcp.md) each harness can use.
 2. Keep one git-versioned source of truth for first-party and third-party assets.
 
 [`agent-toolkit-cli`](docs/agent-toolkit/cli.md) keeps one canonical library copy per asset, records it in a lock file, then projects it into each harness by the simplest safe mechanism that harness supports: symlink, translated file, or config injection. `add`/`remove` manage library membership; `install`/`uninstall` manage harness visibility.
@@ -45,6 +45,10 @@ agent-toolkit-cli skill install pdf --agents claude-code
 # Add a subagent, then project it into all covered harnesses.
 agent-toolkit-cli agent add ajanderson1/agents-workflow/release-manager
 agent-toolkit-cli agent install release-manager -g
+
+# Add a slash command prompt, then project it into default command harnesses.
+agent-toolkit-cli command add ajanderson1/commands-workflow/review --slug review
+agent-toolkit-cli command install review -g
 
 # Point supported harnesses at one canonical AGENTS.md.
 agent-toolkit-cli instructions install --scope project
@@ -105,6 +109,18 @@ agent-toolkit-cli agent remove <slug> [--force]
 ```
 
 Agent assets are canonical markdown subagent definitions. Installs use the shared `standard` slot where harnesses read the same file natively, and fall back to per-harness adapters only where needed.
+
+### Commands — reusable slash-command prompts
+
+```text
+agent-toolkit-cli command add <source> [--slug <slug>] [--ref <ref>]
+agent-toolkit-cli command install <slug> [-g|-p] [--harnesses <h>[,<h>...]]
+agent-toolkit-cli command uninstall <slug> [-g|-p] [--harnesses <h>[,<h>...]]
+agent-toolkit-cli command list [-g|-p] [--json]
+agent-toolkit-cli command status|update|push|import|reset|remove|doctor ...
+```
+
+Command assets are canonical `COMMAND.md` prompts projected into harness command or prompt-template locations. Default install targets are Claude Code, Pi, and Gemini CLI. Codex custom prompts are deprecated and install only when explicitly requested.
 
 ### Instructions — one canonical `AGENTS.md`
 

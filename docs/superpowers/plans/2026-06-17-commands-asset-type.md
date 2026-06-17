@@ -62,7 +62,7 @@ Modify:
 - Modify: `tests/test_cli/test_paths_core_default_scope.py`
 - Modify: `tests/test_cli/test_asset_type_architecture.py`
 
-- [ ] **Step 1: Write failing binding/path tests**
+- [x] **Step 1: Write failing binding/path tests**
 
 Add tests asserting commands paths mirror other git-backed kinds:
 
@@ -124,7 +124,7 @@ uv run pytest tests/test_cli/test_command_paths.py tests/test_cli/test_command_l
 
 Expected: FAIL because modules do not exist.
 
-- [ ] **Step 2: Add command binding**
+- [x] **Step 2: Add command binding**
 
 In `_paths_core.py`, add:
 
@@ -149,7 +149,7 @@ _PROJECT_LOCK_FILENAMES: tuple[str, ...] = (
 )
 ```
 
-- [ ] **Step 3: Implement `command_paths.py`**
+- [x] **Step 3: Implement `command_paths.py`**
 
 Use this shape:
 
@@ -206,7 +206,7 @@ def lock_file_path(*, scope: Scope, home: Path | None = None, project: Path | No
     return project / COMMAND_BINDING.lock_filename
 ```
 
-- [ ] **Step 4: Implement `command_lock.py`**
+- [x] **Step 4: Implement `command_lock.py`**
 
 Before writing code, define `commandPath` as a relative content-file path ending in `COMMAND.md`. For single-repo commands it is `COMMAND.md`; for monorepo commands it is `<subpath>/COMMAND.md`. On read/import, validate that `commandPath` is relative, contains no `..`, is not absolute, normalizes inside the clone root, and ends in `COMMAND.md`.
 
@@ -228,7 +228,7 @@ class LockEntry:
 
 Entry field sets include `commandPath`. Preserve unknown extras. `clone_url_from_entry`, SHA-pin helpers, add/remove/write functions should match skill semantics.
 
-- [ ] **Step 5: Update architecture guards**
+- [x] **Step 5: Update architecture guards**
 
 Change expected module lists in `tests/test_cli/test_asset_type_architecture.py` from four to five by adding:
 
@@ -240,7 +240,7 @@ Change expected module lists in `tests/test_cli/test_asset_type_architecture.py`
 
 Add `agent_toolkit_cli.command_install` to `INSTALL_ENTRYPOINTS` after Task 3 creates it.
 
-- [ ] **Step 6: Run path/lock tests**
+- [x] **Step 6: Run path/lock tests**
 
 ```bash
 uv run pytest tests/test_cli/test_command_paths.py tests/test_cli/test_command_lock.py tests/test_cli/test_paths_core_default_scope.py -q
@@ -248,7 +248,7 @@ uv run pytest tests/test_cli/test_command_paths.py tests/test_cli/test_command_l
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/agent_toolkit_cli/_paths_core.py src/agent_toolkit_cli/command_paths.py src/agent_toolkit_cli/command_lock.py tests/test_cli/test_command_paths.py tests/test_cli/test_command_lock.py tests/test_cli/test_paths_core_default_scope.py tests/test_cli/test_asset_type_architecture.py
@@ -267,7 +267,7 @@ git commit -m "feat(commands): add command paths and lock foundation" -m "Device
 - Test: `tests/test_cli/test_command_adapters/test_gemini.py`
 - Test: `tests/test_cli/test_command_install.py`
 
-- [ ] **Step 1: Write failing adapter tests**
+- [x] **Step 1: Write failing adapter tests**
 
 Adapter tests must cover every shipped harness and safety boundary: Claude global/project, Pi global/project, Gemini global/project, Codex global, Codex project refusal, unknown harness rejection, synthetic `standard-command` rejection, unmanaged destination conflict refusal, foreign symlink refusal, managed uninstall only, hand-authored file preservation, symlinked canonical `COMMAND.md` refusal, and multi-harness preflight/rollback on partial conflicts.
 
@@ -330,7 +330,7 @@ uv run pytest tests/test_cli/test_command_adapters -q
 
 Expected: FAIL because adapters do not exist.
 
-- [ ] **Step 2: Implement adapter protocol**
+- [x] **Step 2: Implement adapter protocol**
 
 `base.py`:
 
@@ -354,7 +354,7 @@ class CommandAdapter(Protocol):
 
 Use `.attk` sidecars for managed generated files, matching agent adapter ownership style. Sidecar JSON must include `tool: "agent-toolkit-cli"`, `asset_type: "command"`, `slug`, `harness`, `scope`, `canonical`, and `sha256` of generated content. For symlinks, ownership is symlink target equality to canonical `COMMAND.md`; refuse foreign symlinks. Canonical `COMMAND.md` must be a regular file, not a symlink.
 
-- [ ] **Step 3: Implement Markdown adapters**
+- [x] **Step 3: Implement Markdown adapters**
 
 Support destination maps:
 
@@ -370,7 +370,7 @@ Global uses `home`; project uses `project`; `codex` project raises `ValueError`.
 
 Install should preflight all requested destinations before writing. Symlink `COMMAND.md` to `<dest>/<slug>.md` when possible and refuse conflicting non-symlink files or foreign symlinks. If symlink fallback is needed on Windows, copy and write sidecar. If any later write fails, roll back projections created earlier in the same apply call and leave lock state unchanged.
 
-- [ ] **Step 4: Implement Gemini adapter**
+- [x] **Step 4: Implement Gemini adapter**
 
 `render_gemini_toml(command_text: str) -> str` should:
 
@@ -392,7 +392,7 @@ return tomlkit.dumps(doc)
 
 Install writes a managed `.toml` file and refuses unmanaged conflicts. Uninstall removes only managed files.
 
-- [ ] **Step 5: Implement adapter dispatcher**
+- [x] **Step 5: Implement adapter dispatcher**
 
 `command_adapters/__init__.py`:
 
@@ -411,7 +411,7 @@ def get_adapter(name: str):
     raise ValueError(f"unsupported command harness: {name}")
 ```
 
-- [ ] **Step 6: Implement `command_install.py` facade**
+- [x] **Step 6: Implement `command_install.py` facade**
 
 Expose `plan()`, `apply()`, `install()`, `uninstall()`, and `_current_linked_harnesses()`. `apply()` reads `COMMAND.md` from canonical dir and dispatches adapters.
 
@@ -437,7 +437,7 @@ def plan(*, slug, scope, source=None, ref=None, target_agents=(), home=None, pro
     )
 ```
 
-- [ ] **Step 7: Run adapter/install tests**
+- [x] **Step 7: Run adapter/install tests**
 
 ```bash
 uv run pytest tests/test_cli/test_command_adapters tests/test_cli/test_command_install.py -q
@@ -445,7 +445,7 @@ uv run pytest tests/test_cli/test_command_adapters tests/test_cli/test_command_i
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/agent_toolkit_cli/command_adapters src/agent_toolkit_cli/command_install.py tests/test_cli/test_command_adapters tests/test_cli/test_command_install.py tests/test_cli/test_asset_type_architecture.py
@@ -462,7 +462,7 @@ git commit -m "feat(commands): add command projection adapters" -m "Device: $(ho
 - Test: `tests/test_cli/test_command_add_monorepo.py`
 - Test: `tests/test_cli/test_command_install.py`
 
-- [ ] **Step 1: Write failing CLI tests**
+- [x] **Step 1: Write failing CLI tests**
 
 ```python
 from click.testing import CliRunner
@@ -496,7 +496,7 @@ uv run pytest tests/test_cli/test_cli_command_group.py tests/test_cli/test_comma
 
 Expected: FAIL.
 
-- [ ] **Step 2: Register command group**
+- [x] **Step 2: Register command group**
 
 In `cli.py`:
 
@@ -516,7 +516,7 @@ _ASSET_COMMAND_ALIASES = {
 main.add_command(command, name="commands")
 ```
 
-- [ ] **Step 3: Implement `_common.py`**
+- [x] **Step 3: Implement `_common.py`**
 
 Mirror agent `_common.py` with command harness tokens:
 
@@ -534,7 +534,7 @@ def parse_harness_tokens(raw: str) -> tuple[str, ...]:
 
 Scope resolution mirrors skill/agent behavior; read-only verbs default global outside project.
 
-- [ ] **Step 4: Implement `add_cmd.py`**
+- [x] **Step 4: Implement `add_cmd.py`**
 
 Mirror `agent add` but require `COMMAND.md`:
 
@@ -546,7 +546,7 @@ Mirror `agent add` but require `COMMAND.md`:
 - Existing same source is idempotent.
 - Do not add `--command` or `--owned` in the first cut; monorepo commands are addressed by explicit subpath only.
 
-- [ ] **Step 5: Implement install/uninstall/list/status/update/push/import/reset/remove/doctor**
+- [x] **Step 5: Implement install/uninstall/list/status/update/push/import/reset/remove/doctor**
 
 Copy skill/agent command surfaces and adapt names:
 
@@ -559,7 +559,7 @@ For Task 3 lifecycle:
 - `uninstall` no-harness default removes every known command harness projection.
 - `list --json` emits `slug`, `source`, `ref`, `upstream_sha`, `local_sha`, `scope`.
 
-- [ ] **Step 6: Run lifecycle tests**
+- [x] **Step 6: Run lifecycle tests**
 
 ```bash
 uv run pytest tests/test_cli/test_cli_command_group.py tests/test_cli/test_command_add.py tests/test_cli/test_command_add_monorepo.py tests/test_cli/test_command_install.py -q
@@ -567,7 +567,7 @@ uv run pytest tests/test_cli/test_cli_command_group.py tests/test_cli/test_comma
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/agent_toolkit_cli/cli.py src/agent_toolkit_cli/commands/command tests/test_cli/test_cli_command_group.py tests/test_cli/test_command_add.py tests/test_cli/test_command_add_monorepo.py tests/test_cli/test_command_install.py
@@ -587,7 +587,7 @@ git commit -m "feat(commands): add command CLI lifecycle" -m "Device: $(hostname
 - Test: `tests/test_cli/test_command_doctor.py`
 - Test: existing skill/agent/pi-extension smoke tests
 
-- [ ] **Step 1: Write verb parity tests**
+- [x] **Step 1: Write verb parity tests**
 
 Use existing skill tests as templates. Required assertions:
 
@@ -609,11 +609,11 @@ uv run pytest tests/test_cli/test_command_status.py tests/test_cli/test_command_
 
 Expected: FAIL until verbs are complete.
 
-- [ ] **Step 2: Complete verbs**
+- [x] **Step 2: Complete verbs**
 
 Copy proven skill/agent patterns. Preserve command-specific wording, paths, and `COMMAND.md` content checks.
 
-- [ ] **Step 3: Run no-break subset**
+- [x] **Step 3: Run no-break subset**
 
 ```bash
 uv run pytest tests/test_cli/test_cli_skill_add.py tests/test_cli/test_cli_skill_install.py tests/test_cli/test_cli_agent_group.py tests/test_cli/test_cli_pi_extension_lifecycle.py tests/test_cli/test_instructions_cli.py tests/test_cli/test_mcp_scope_banner.py -q
@@ -621,7 +621,7 @@ uv run pytest tests/test_cli/test_cli_skill_add.py tests/test_cli/test_cli_skill
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/agent_toolkit_cli/commands/command tests/test_cli/test_command_status.py tests/test_cli/test_command_update.py tests/test_cli/test_command_push.py tests/test_cli/test_command_import.py tests/test_cli/test_command_reset.py tests/test_cli/test_command_remove.py tests/test_cli/test_command_doctor.py
@@ -642,7 +642,7 @@ git commit -m "feat(commands): complete command maintenance verbs" -m "Device: $
 - Modify: `tests/test_tui/test_app.py`
 - Modify: `tests/test_tui/test_composition.py`
 
-- [ ] **Step 1: Write failing TUI tests**
+- [x] **Step 1: Write failing TUI tests**
 
 Assert sidebar includes command:
 
@@ -657,7 +657,7 @@ async def test_app_sidebar_includes_commands():
 
 Assert command rows union library/project locks and cells report projection state.
 
-- [ ] **Step 2: Implement `command_state.py`**
+- [x] **Step 2: Implement `command_state.py`**
 
 Mirror `agent_state.py` row-universe contract with command adapters:
 
@@ -675,11 +675,11 @@ class CommandRow:
     cells: dict[tuple[str, str], CommandCell] = field(default_factory=dict)
 ```
 
-- [ ] **Step 3: Implement grid widget**
+- [x] **Step 3: Implement grid widget**
 
 Mirror `AgentGrid` behavior: render slug/source/ref/state plus command harness columns. Use glyphs consistent with other grids.
 
-- [ ] **Step 4: Wire app**
+- [x] **Step 4: Wire app**
 
 Update `AssetType` literal and labels:
 
@@ -689,7 +689,7 @@ AssetType = Literal["instruction", "skill", "command", "pi-extension", "agent", 
 
 Add `CommandGrid` compose/show/refresh/apply paths. Preserve existing default active asset type (`skill`) to avoid changing startup behavior.
 
-- [ ] **Step 5: Run TUI tests**
+- [x] **Step 5: Run TUI tests**
 
 ```bash
 uv run pytest tests/test_tui/test_command_state.py tests/test_tui/test_command_grid.py tests/test_tui/test_app.py tests/test_tui/test_composition.py -q
@@ -697,7 +697,7 @@ uv run pytest tests/test_tui/test_command_state.py tests/test_tui/test_command_g
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/agent_toolkit_tui tests/test_tui
@@ -715,7 +715,7 @@ git commit -m "feat(tui): show command assets" -m "Device: $(hostname -s)"
 - Modify: `README.md`, `docs/index.md`, `docs/glossary.md`, `docs/agent-toolkit/lock-files.md`, `docs/agent-toolkit/tui.md`
 - Test: docs/matrix parity tests
 
-- [ ] **Step 1: Write docs asset page**
+- [x] **Step 1: Write docs asset page**
 
 `docs/asset-types/commands.md` must include:
 
@@ -732,11 +732,11 @@ The `command` asset type manages reusable slash-command prompts. Commands live i
 
 Include the evidence table from the spec.
 
-- [ ] **Step 2: Update CLI docs**
+- [x] **Step 2: Update CLI docs**
 
 Add command group reference to `docs/agent-toolkit/cli.md` top-level command list and full command section.
 
-- [ ] **Step 3: Update harness matrix SSOT and generator**
+- [x] **Step 3: Update harness matrix SSOT and generator**
 
 Add Commands as sixth asset type. If generator uses hard-coded columns, add `commands` column with supported/gap/N/A state for main harnesses and generated harness pages.
 
@@ -749,7 +749,7 @@ Use initial matrix semantics:
 - Cursor: — gap with research note unless deterministic validation evidence is added.
 - Other harnesses: `?` unless documented, or N/A if no slash command concept.
 
-- [ ] **Step 4: Regenerate docs**
+- [x] **Step 4: Regenerate docs**
 
 ```bash
 uv run python scripts/gen_harness_docs.py
@@ -757,11 +757,11 @@ uv run python scripts/gen_harness_docs.py
 
 Expected: `docs/matrix.md` and relevant `docs/harnesses/*.md` update.
 
-- [ ] **Step 5: Update README and TUI docs**
+- [x] **Step 5: Update README and TUI docs**
 
 Mention `commands` in asset type lists, examples, and TUI sidebar docs. Do not overwrite unrelated existing README edits; inspect `git diff README.md` first and preserve user changes.
 
-- [ ] **Step 6: Update command coverage guard**
+- [x] **Step 6: Update command coverage guard**
 
 Update `tests/test_cli/test_command_coverage_guard.py` so command verbs are not skipped:
 
@@ -774,7 +774,7 @@ _GROUP_ALIASES = {
 
 Then run the guard after command group lands.
 
-- [ ] **Step 7: Run docs tests**
+- [x] **Step 7: Run docs tests**
 
 ```bash
 uv run pytest tests/test_cli/test_instructions_packaging.py tests/test_cli/test_command_coverage_guard.py -q
@@ -789,7 +789,7 @@ uv run pytest tests -q -k "matrix or harness or docs"
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add docs scripts tests README.md mkdocs.yml
@@ -802,7 +802,7 @@ git commit -m "docs(commands): document command asset support" -m "Device: $(hos
 - Modify: `pyproject.toml`
 - Modify: `uv.lock` if project metadata is recorded there
 
-- [ ] **Step 1: Bump version and lock metadata**
+- [x] **Step 1: Bump version and lock metadata**
 
 Change:
 
@@ -818,7 +818,7 @@ version = "4.4.0"
 
 Use `4.4.0` because this is a backwards-compatible feature. Then run `uv lock` if `uv.lock` records the package version. If release-please demands a different workflow, stop and escalate before changing release config.
 
-- [ ] **Step 2: Run focused command tests**
+- [x] **Step 2: Run focused command tests**
 
 ```bash
 uv run pytest tests/test_cli/test_command_*.py tests/test_cli/test_command_adapters tests/test_tui/test_command_*.py -q
@@ -826,7 +826,7 @@ uv run pytest tests/test_cli/test_command_*.py tests/test_cli/test_command_adapt
 
 Expected: PASS.
 
-- [ ] **Step 3: Run full suite**
+- [x] **Step 3: Run full suite**
 
 ```bash
 uv run pytest -q
@@ -835,7 +835,7 @@ uv run mkdocs build --strict
 
 Expected: PASS.
 
-- [ ] **Step 4: Smoke CLI help**
+- [x] **Step 4: Smoke CLI help**
 
 ```bash
 uv run agent-toolkit-cli --version
@@ -851,7 +851,7 @@ Expected:
 - Command help works for plural and singular.
 - Existing skill/agent help still works.
 
-- [ ] **Step 5: Final no-break audit**
+- [x] **Step 5: Final no-break audit**
 
 Check:
 
@@ -868,7 +868,7 @@ Confirm:
 - No project/user hand-authored command files are removed in tests.
 - README pre-existing user edit remains intact.
 
-- [ ] **Step 6: Commit version bump**
+- [x] **Step 6: Commit version bump**
 
 ```bash
 git add pyproject.toml uv.lock

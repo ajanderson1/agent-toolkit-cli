@@ -7,6 +7,7 @@
 | [Instructions](../asset-types/instructions.md) | [✅](#instructions) | pointer symlink (`CODEBUDDY.md` → `AGENTS.md`) |
 | [Skills](../asset-types/skills.md) | [✅](#skills) | `.codebuddy/skills` |
 | [Agents (subagents)](../asset-types/agents.md) | [✅](#agents) | symlink |
+| [Commands](../asset-types/commands.md) | [?](#commands) | unknown — no public evidence found |
 | [MCP servers](../asset-types/mcp.md) | — | no toolkit adapter yet |
 | [Pi extensions](../asset-types/pi-extensions.md) | N/A | Pi-only asset type |
 
@@ -38,3 +39,10 @@ Supported via the **symlink** mechanism — see the [agents asset type](../asset
 - **Format:** markdown+frontmatter; required `name`(lc+hyphens),`description`; optional `tools`,`model`,`permissionMode`,`skills`
 - **Toolkit adapter:** enabled (symlink)
 - **Source:** [www.codebuddy.ai/docs/cli/sub-agents](https://www.codebuddy.ai/docs/cli/sub-agents)
+
+## Commands { #commands }
+
+Unknown — bounded search surfaced no public evidence.
+
+- **Support:** ?
+- **How:** unknown — no public evidence found

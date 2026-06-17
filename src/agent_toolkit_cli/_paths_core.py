@@ -2,7 +2,7 @@
 
 An `AssetTypeBinding` carries everything the path helpers need to know about a
 specific asset type. `SKILL_BINDING`, `INSTRUCTIONS_BINDING`, `AGENT_BINDING`,
-and `PI_EXTENSION_BINDING` are the four bindings instantiated today (PR1 cut
+and `PI_EXTENSION_BINDING`/`COMMAND_BINDING` are the bindings instantiated today (PR1 cut
 the seam; the instructions, agent, and pi-extension asset types were added in
 their own PRs).
 """
@@ -57,12 +57,22 @@ PI_EXTENSION_BINDING = AssetTypeBinding(
 )
 
 
+COMMAND_BINDING = AssetTypeBinding(
+    asset_type="command",
+    canonical_dirname="commands",
+    library_subdir="commands",
+    lock_filename="commands-lock.json",
+    standard_harness_name="standard-command",
+)
+
+
 # The per-kind project-lock filenames that mark a directory as "a project".
 # Sourced from the bindings so it stays in step if a kind's lock filename changes.
 _PROJECT_LOCK_FILENAMES: tuple[str, ...] = (
     SKILL_BINDING.lock_filename,
     AGENT_BINDING.lock_filename,
     PI_EXTENSION_BINDING.lock_filename,
+    COMMAND_BINDING.lock_filename,
 )
 
 

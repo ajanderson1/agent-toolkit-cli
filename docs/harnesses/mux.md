@@ -7,6 +7,7 @@
 | [Instructions](../asset-types/instructions.md) | [✅](#instructions) | native `AGENTS.md` reader |
 | [Skills](../asset-types/skills.md) | [✅](#skills) | `.mux/skills` |
 | [Agents (subagents)](../asset-types/agents.md) | [✅](#agents) | translate |
+| [Commands](../asset-types/commands.md) | [?](#commands) | unknown — no public evidence found |
 | [MCP servers](../asset-types/mcp.md) | — | no toolkit adapter yet |
 | [Pi extensions](../asset-types/pi-extensions.md) | N/A | Pi-only asset type |
 
@@ -38,3 +39,10 @@ Supported via the **translate** mechanism — see the [agents asset type](../ass
 - **Format:** markdown+frontmatter; required `name`; nested `subagent` block (`runnable`)
 - **Toolkit adapter:** enabled (translate)
 - **Source:** [mux.coder.com/agents](https://mux.coder.com/agents)
+
+## Commands { #commands }
+
+Unknown — bounded search surfaced no public evidence.
+
+- **Support:** ?
+- **How:** unknown — no public evidence found

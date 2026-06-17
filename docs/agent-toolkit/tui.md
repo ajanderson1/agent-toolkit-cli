@@ -23,7 +23,7 @@ agent-toolkit-tui
 
 ```text
 Header
-├─ Asset-type sidebar        instruction · skill · pi-extension · agent · mcp
+├─ Asset-type sidebar        instruction · skill · command · pi-extension · agent · mcp
 └─ Content
    ├─ Content header + Scope toggle   (project ⇄ global)
    └─ One grid per asset type         (swapped as you change asset type)
@@ -34,7 +34,7 @@ Footer (key hints)
 
 - **Asset-type sidebar** — pick which [asset type](../glossary.md#asset-type)
   you're managing. `instruction` sits above a separator (it is whole-scope, not
-  per-slug); `skill`, `pi-extension`, `agent`, and `mcp` follow.
+  per-slug); `skill`, `command`, `pi-extension`, `agent`, and `mcp` follow.
 - **Grid** — one row per asset, columns vary by type (slug, source, ref, state,
   per-harness cells). Press ++i++ to open the column-info panel for the active
   grid.
