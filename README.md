@@ -24,6 +24,8 @@ It exists for two jobs:
 
 [`agent-toolkit-tui`](docs/agent-toolkit/tui.md) is the visual frontend: it makes cross-harness coverage visible and lets you manage assets at a glance.
 
+Read the published docs at [ajanderson1.github.io/agent-toolkit-cli](https://ajanderson1.github.io/agent-toolkit-cli/).
+
 Still a work in progress. I use it day-to-day and fix bugs as I find them. Please [open an issue](https://github.com/ajanderson1/agent-toolkit-cli/issues) if you hit one.
 
 ## Install
