@@ -1,5 +1,32 @@
 # Changelog
 
+## [4.3.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v4.2.1...v4.3.0) (2026-06-17)
+
+
+### Features
+
+* **tui:** support double ctrl-c quit ([#447](https://github.com/ajanderson1/agent-toolkit-cli/issues/447)) ([560a113](https://github.com/ajanderson1/agent-toolkit-cli/commit/560a1139bd264b2379c4780044d42fd56e8dd956))
+
+
+### Bug Fixes
+
+* **cli:** canonicalize plural asset commands ([#446](https://github.com/ajanderson1/agent-toolkit-cli/issues/446)) ([b8b1386](https://github.com/ajanderson1/agent-toolkit-cli/commit/b8b1386b244cde7883cac82f2638d925d41ea5d8))
+* **mcp:** skip unsupported harness installs ([2bbe914](https://github.com/ajanderson1/agent-toolkit-cli/commit/2bbe9141ed16148f7995d8435880d1294e99be14))
+
+
+### Documentation
+
+* add public README polish ([cc0895a](https://github.com/ajanderson1/agent-toolkit-cli/commit/cc0895ac6bf73491f922931a173a2e1d4c76c8c8))
+* clarify public README positioning ([3105773](https://github.com/ajanderson1/agent-toolkit-cli/commit/31057734d3cbaa2cb2b0c0c9f6a7b9d725bdd5e4))
+* **issue:** prepare double ctrl-c quit ([b30e2c2](https://github.com/ajanderson1/agent-toolkit-cli/commit/b30e2c22eb45fa1de7e6377a5cb1bc80c3c59277))
+* prepare issue 440 ([f60a4f1](https://github.com/ajanderson1/agent-toolkit-cli/commit/f60a4f17b3c19710819bee250e1274ed62f3f0aa))
+* refine public README opener ([1900031](https://github.com/ajanderson1/agent-toolkit-cli/commit/1900031b20bbfaf895ab40ae094029878676f3a9))
+
+
+### CI
+
+* publish MkDocs site with Pages ([d089e0f](https://github.com/ajanderson1/agent-toolkit-cli/commit/d089e0ffab3348b55488bba747462b56331880f6))
+
 ## [4.2.1](https://github.com/ajanderson1/agent-toolkit-cli/compare/v4.2.0...v4.2.1) (2026-06-15)
 
 
