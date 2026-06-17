@@ -27,6 +27,7 @@ from textual.widgets import DataTable
 
 from agent_toolkit_tui.column_info import get_column_info
 from agent_toolkit_tui.composition import instructions_nonstandard_main
+from agent_toolkit_tui.display_names import asset_type_label, harness_label, standard_label
 from agent_toolkit_tui.instruction_state import InstructionRow
 from agent_toolkit_tui.widgets.column_info_modal import ColumnInfoModal
 
@@ -47,6 +48,12 @@ _GLOBAL_GLYPH    = "🌐"
 _HARNESS_COL_OFFSET = 2
 
 Op = Literal["link", "unlink"]
+
+
+def _standard_count() -> int:
+    from agent_toolkit_cli.instructions_matrix import instructions_matrix_rows
+
+    return sum(1 for row in instructions_matrix_rows() if row["verdict"] == "native")
 
 
 class InstructionGrid(Vertical):
@@ -206,7 +213,8 @@ class InstructionGrid(Vertical):
                 return
             cell = row.cells.get((harness, self._scope))
             scope_flag = "-g" if self._scope == "global" else "-p"
-            title = f"{row.slug} · {harness} @ {self._scope}"
+            display = harness_label(harness)
+            title = f"{row.slug} · {display} @ {self._scope}"
             pending = self._pending.get((self._scope, harness, row.slug))
             if pending == "link":
                 body = (
@@ -222,7 +230,7 @@ class InstructionGrid(Vertical):
                 body = f"Not available at {self._scope} scope."
             elif cell.conflict:
                 body = (
-                    f"[red]Conflict![/] The pointer slot for {harness} is occupied "
+                    f"[red]Conflict![/] The pointer slot for {display} is occupied "
                     "by a real file or foreign symlink.\n\n"
                     "Resolve manually before installing:\n"
                     "  Move or delete the conflicting file, then re-run install.\n\n"
@@ -230,13 +238,13 @@ class InstructionGrid(Vertical):
                 )
             elif cell.linked:
                 body = (
-                    f"Installed. Pointer for {harness} @ {self._scope} is active.\n\n"
+                    f"Installed. Pointer for {display} @ {self._scope} is active.\n\n"
                     f"CLI: [b]agent-toolkit-cli instructions uninstall {scope_flag}[/]"
                 )
             else:
                 body = (
                     f"Not installed. Press [b]space[/] to queue install "
-                    f"into {harness} @ {self._scope}.\n\n"
+                    f"into {display} @ {self._scope}.\n\n"
                     f"Or from the CLI:\n"
                     f"  [b]agent-toolkit-cli instructions install {scope_flag}[/]"
                 )
@@ -379,19 +387,15 @@ class InstructionGrid(Vertical):
         saved_scroll = (table.scroll_x, table.scroll_y)
         table.clear(columns=True)
         # Slug column.
-        table.add_column(f"INSTRUCTION {_INFO_GLYPH}", width=22)
+        table.add_column(f"{asset_type_label('instruction')} {_INFO_GLYPH}", width=22)
         # Standard column — read-only canonical status. It leads; everything
         # after it is implicitly non-standard (group-tag header row removed
         # per AJ demo feedback, #351).
-        table.add_column(f"standard {_INFO_GLYPH}", width=12)
+        table.add_column(f"{standard_label(_standard_count())} {_INFO_GLYPH}", width=16)
         # Per-harness interactive columns.
-        _HARNESS_DISPLAY: dict[str, str] = {
-            "claude-code": "CLAUDE.md",
-            "gemini-cli": "GEMINI.md",
-        }
         active = self._active_harnesses()
         for harness in active:
-            display = _HARNESS_DISPLAY.get(harness, harness)
+            display = harness_label(harness)
             table.add_column(f"{display} {_INFO_GLYPH}", width=14)
         # Source column — passive.
         table.add_column("Source", width=30)

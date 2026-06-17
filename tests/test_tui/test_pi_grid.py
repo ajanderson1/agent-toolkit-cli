@@ -26,6 +26,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from textual.app import App, ComposeResult
+from textual.coordinate import Coordinate
 from textual.widgets import DataTable, OptionList, Static
 
 from agent_toolkit_tui.pi_extension_state import PiCell, PiExtensionRow
@@ -110,12 +111,66 @@ async def test_pi_grid_mounts_with_single_scope_column():
         table = app.query_one("#pi-table", DataTable)
         labels = [str(c.label) for c in table.columns.values()]
         assert len(labels) == 4
-        assert any("EXTENSION" in lbl for lbl in labels)
+        assert "Pi Extension ⓘ" in labels
+        assert not any("EXTENSION" in label for label in labels)
         assert any(lbl.startswith("Pi ") for lbl in labels)
         assert not any("global" in lbl.lower() for lbl in labels)
         assert not any("project" in lbl.lower() for lbl in labels)
         assert any("Origin" in lbl for lbl in labels)
         assert any("Source" in lbl for lbl in labels)
+
+
+@pytest.mark.asyncio
+async def test_pi_grid_store_origin_uses_library_copy():
+    """Visible origin copy says library, never store."""
+
+    class _A(App):
+        def compose(self) -> ComposeResult:
+            yield PiGrid([_store_row("alpha")], id="g")
+
+    app = _A()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        table = app.query_one("#pi-table", DataTable)
+        cells = [str(cell) for cell in table.get_row_at(0)]
+        assert any("library" in cell for cell in cells)
+        assert not any("store" in cell.lower() for cell in cells)
+
+
+@pytest.mark.asyncio
+async def test_pi_grid_origin_and_extension_info_use_library_copy():
+    """Info surfaces translate internal store-owned enum to library wording."""
+
+    class _A(App):
+        def compose(self) -> ComposeResult:
+            yield PiGrid([_store_row("alpha")], id="g")
+
+    app = _A()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        grid = app.query_one("#g", PiGrid)
+        row = _store_row("alpha")
+
+        origin_body = grid._origin_info_body()
+        assert "library-owned" in origin_body
+        assert "agent-toolkit library" in origin_body
+        assert "Store path" not in origin_body
+        assert "store-owned" not in origin_body
+
+        extension_body = grid._extension_info_body(row)
+        assert "Origin: library" in extension_body
+        assert "Library path:" in extension_body
+        assert "Store path:" not in extension_body
+        assert "store-owned" not in extension_body
+
+        table = app.query_one("#pi-table", DataTable)
+        table.cursor_coordinate = Coordinate(row=0, column=0)
+        table.focus()
+        await pilot.press("i")
+        await pilot.pause()
+        assert "Origin: library" in app.screen._body_markup
+        assert "Store path" not in app.screen._body_markup
+        assert "store-owned" not in app.screen._body_markup
 
 
 @pytest.mark.asyncio

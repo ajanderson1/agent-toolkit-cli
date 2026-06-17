@@ -3,7 +3,7 @@
 Covers (widget-level + app-level):
 
 Widget-level:
-1.  columns renders correctly (INSTRUCTION + standard + INTERACTIVE_HARNESSES + Source)
+1.  columns renders correctly (Instruction + Standard (N) + INTERACTIVE_HARNESSES + Source)
 2.  row count
 3.  toggle unlinked cell queues 'link'
 4.  toggle linked cell queues 'unlink'
@@ -96,7 +96,7 @@ def _conflict_row(slug: str = "AGENTS.md", *, scope: str = "global") -> Instruct
 
 @pytest.mark.asyncio
 async def test_instruction_grid_mounts_with_correct_columns():
-    """Grid must show INSTRUCTION + standard + INTERACTIVE_HARNESSES + Source."""
+    """Grid must show Instruction + Standard (N) + INTERACTIVE_HARNESSES + Source."""
 
     class _A(App):
         def compose(self) -> ComposeResult:
@@ -109,8 +109,11 @@ async def test_instruction_grid_mounts_with_correct_columns():
         labels = [str(c.label) for c in table.columns.values()]
         # Slug + standard + N harness cols + Source
         assert len(labels) == len(INTERACTIVE_HARNESSES) + 3
-        assert any("INSTRUCTION" in lbl for lbl in labels)
-        assert any("standard" in lbl for lbl in labels)
+        assert "Instruction ⓘ" in labels
+        assert not any("INSTRUCTION" in lbl for lbl in labels)
+        assert any(label.startswith("Standard (") for label in labels)
+        assert not any("Claude Code" in label for label in labels)
+        assert not any("Gemini CLI" in label for label in labels)
         assert any("Source" in lbl for lbl in labels)
 
 
@@ -361,6 +364,33 @@ async def test_slug_info_at_project_scope_does_not_crash():
         # The slug-column body names the canonical AGENTS.md at the project root.
         assert "AGENTS.md" in screen._body_markup
         assert str(Path.cwd()) in screen._body_markup
+
+@pytest.mark.asyncio
+async def test_instruction_cell_info_uses_harness_display_name():
+    from textual.app import App
+    from textual.coordinate import Coordinate
+    from textual.widgets import DataTable
+
+    from agent_toolkit_tui.screens.cell_info import CellInfoScreen
+
+    class _A(App):
+        def compose(self) -> ComposeResult:
+            yield InstructionGrid([_unlinked_row()], id="g")
+
+    app = _A()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        table = app.query_one("#instruction-table", DataTable)
+        table.cursor_coordinate = Coordinate(row=0, column=2)  # claude-code
+        table.focus()
+        await pilot.pause()
+        await pilot.press("i")
+        await pilot.pause()
+        assert isinstance(app.screen, CellInfoScreen)
+        assert "Claude @ global" in app.screen._title
+        assert "claude-code @ global" not in app.screen._title
+        assert "into Claude @ global" in app.screen._body_markup
+        assert "into claude-code @ global" not in app.screen._body_markup
 
 
 # ---------------------------------------------------------------------------

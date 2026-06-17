@@ -26,10 +26,30 @@ def test_get_column_info_universal_returns_columninfo():
 
 def test_get_column_info_universal_lists_known_harnesses():
     from agent_toolkit_cli.skill_agents import get_standard_agents
+    from agent_toolkit_tui.display_names import harness_label
+
     info = get_column_info("standard")
     text = "\n".join(info.lines)
     for name in get_standard_agents():
-        assert name in text, f"universal harness {name!r} missing from info"
+        assert harness_label(name) in text, f"universal harness {name!r} missing from info"
+
+
+def test_standard_info_uses_tui_harness_display_names():
+    info = get_column_info("standard", context={
+        "asset_type": "skills",
+        "names": ("claude-code", "gemini-cli", "codex", "opencode"),
+        "global_linked": False,
+    })
+    assert info is not None
+    text = "\n".join(info.lines)
+    assert "Claude" in text
+    assert "Gemini" in text
+    assert "Codex" in text
+    assert "OpenCode" in text
+    assert "claude-code" not in text
+    assert "gemini-cli" not in text
+    assert "Claude Code" not in text
+    assert "Gemini CLI" not in text
 
 
 def test_get_column_info_unknown_returns_none():
@@ -106,11 +126,13 @@ def test_standard_info_includes_global_marker_when_no_context():
 
 def test_standard_info_is_exhaustive_with_count():
     from agent_toolkit_cli.skill_agents import get_standard_agents
+    from agent_toolkit_tui.display_names import harness_label
+
     info = get_column_info("standard")
     names = get_standard_agents()
     assert f"({len(names)})" in " ".join(info.lines)
     for name in names:
-        assert any(name in line for line in info.lines)
+        assert any(harness_label(name) in line for line in info.lines)
 
 
 def test_standard_info_is_asset_type_aware():
@@ -126,7 +148,8 @@ def test_standard_info_is_asset_type_aware():
     )
     text = " ".join(info.lines)
     assert "instructions" in text and "(2)" in text
-    assert "alpha-harness" in text and "beta-harness" in text
+    assert "Alpha Harness" in text and "Beta Harness" in text
+    assert "alpha-harness" not in text and "beta-harness" not in text
     # Marker omitted here because this row is NOT globally linked (#388).
     assert "🌐" not in text
 

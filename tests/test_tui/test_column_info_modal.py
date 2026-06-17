@@ -27,7 +27,7 @@ async def test_modal_renders_title_and_lines():
         assert "Standard" in str(rendered)
         # Body contains at least one harness name.
         body = a.screen_stack[-1].query_one("#column-info-body").render()
-        assert "amp" in str(body)
+        assert "Amp" in str(body)
 
 
 @pytest.mark.asyncio

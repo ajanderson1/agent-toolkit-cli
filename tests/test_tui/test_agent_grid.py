@@ -3,7 +3,7 @@
 Covers (8 widget-level + 8 app-level = 16 tests):
 
 Widget-level:
-1. columns renders correctly (AGENT + INTERACTIVE_HARNESSES + Source)
+1. columns renders correctly (Agent + Standard (N) + INTERACTIVE_HARNESSES + Source)
 2. row count
 3. toggle unlinked cell queues 'link'
 4. toggle linked cell queues 'unlink'
@@ -89,7 +89,7 @@ def _full_row(
 
 @pytest.mark.asyncio
 async def test_agent_grid_mounts_with_correct_columns():
-    """Grid must show AGENT plus INTERACTIVE_HARNESSES plus Source."""
+    """Grid must show Agent plus INTERACTIVE_HARNESSES plus Source."""
 
     class _A(App):
         def compose(self) -> ComposeResult:
@@ -102,16 +102,14 @@ async def test_agent_grid_mounts_with_correct_columns():
         labels = [str(c.label) for c in table.columns.values()]
         # Slug + N harness cols + State + Source = 3 + N  (#360: State column added)
         assert len(labels) == len(INTERACTIVE_HARNESSES) + 3
-        assert any("AGENT" in lbl for lbl in labels)
+        assert "Agent ⓘ" in labels
+        assert not any("AGENT" in lbl for lbl in labels)
+        assert any(label.startswith("Standard (") for label in labels)
         assert any("State" in lbl for lbl in labels)
         assert any("Source" in lbl for lbl in labels)
-        # All harness display names must appear somewhere in the column labels
-        from agent_toolkit_cli.skill_agents import AGENTS
-        for h in INTERACTIVE_HARNESSES:
-            display = AGENTS[h].display_name
-            assert any(display in lbl for lbl in labels), (
-                f"Expected column for harness {h!r} (display={display!r})"
-            )
+        assert not any("Claude Code" in label for label in labels)
+        assert not any("Gemini CLI" in label for label in labels)
+        assert any("Pi ⓘ" == label for label in labels)
 
 
 @pytest.mark.asyncio
@@ -287,6 +285,30 @@ async def test_set_scope_clears_pending():
         assert g.pending_entries() != {}
         g.set_scope("project")
         assert g.pending_entries() == {}
+
+@pytest.mark.asyncio
+async def test_agent_cell_info_uses_harness_display_name():
+    from textual.coordinate import Coordinate
+
+    from agent_toolkit_tui.screens.cell_info import CellInfoScreen
+
+    class _A(App):
+        def compose(self) -> ComposeResult:
+            yield AgentGrid([_full_row("alpha", linked=False)], id="g")
+
+    app = _A()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        table = app.query_one("#agent-table", DataTable)
+        pi_col = 1 + INTERACTIVE_HARNESSES.index("pi")
+        table.cursor_coordinate = Coordinate(row=0, column=pi_col)
+        table.focus()
+        await pilot.pause()
+        await pilot.press("i")
+        await pilot.pause()
+        assert isinstance(app.screen, CellInfoScreen)
+        assert "Pi @ global" in app.screen._title
+        assert "into Pi @ global" in app.screen._body_markup
 
 
 # ---------------------------------------------------------------------------
