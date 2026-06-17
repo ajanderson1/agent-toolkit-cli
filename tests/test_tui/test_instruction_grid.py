@@ -394,10 +394,10 @@ async def test_asset_type_sidebar_lists_instruction_first():
                     ids.append(opt.id)
             except Exception:
                 pass
-        assert "instruction" in prompts
-        assert "skill" in prompts
-        assert "pi-extension" in prompts
-        assert "agent" in prompts
+        assert "Instructions" in prompts
+        assert "Skills" in prompts
+        assert "Pi Extensions" in prompts
+        assert "Agents" in prompts
         # instruction must be first among selectable options
         assert ids[0] == "asset-type-instruction"
 

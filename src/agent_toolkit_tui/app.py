@@ -39,6 +39,7 @@ from textual.widgets.option_list import Option, OptionDoesNotExist
 
 from agent_toolkit_tui import __version__
 from agent_toolkit_tui.agent_state import build_agent_rows
+from agent_toolkit_tui.display_names import asset_type_label
 from agent_toolkit_tui.instruction_state import build_instruction_rows
 from agent_toolkit_tui.mcp_state import build_mcp_rows
 from agent_toolkit_tui.pi_extension_state import build_pi_rows
@@ -54,13 +55,8 @@ from agent_toolkit_tui.widgets import (
 
 AssetType = Literal["instruction", "skill", "pi-extension", "agent", "mcp"]
 
-_ASSET_TYPE_LABELS: dict[AssetType, str] = {
-    "instruction": "Instruction",
-    "skill": "Skill",
-    "pi-extension": "Pi Extension",
-    "agent": "Agent",
-    "mcp": "MCP",
-}
+def _asset_type_label(asset_type: AssetType, *, plural: bool = False) -> str:
+    return asset_type_label(asset_type, plural=plural)
 
 _DOUBLE_CTRL_C_QUIT_SECONDS = 1.5
 
@@ -168,14 +164,14 @@ class TUIApp(App):
         yield Header()
         with Horizontal(id="main"):
             with Vertical(id="asset-types-sidebar"):
-                yield Static("Asset type", classes="rail-header")
+                yield Static("Asset Types", classes="rail-header")
                 yield OptionList(
-                    Option("instruction", id="asset-type-instruction"),
+                    Option(_asset_type_label("instruction", plural=True), id="asset-type-instruction"),
                     Option("─────────────", id="asset-type-separator", disabled=True),
-                    Option("skill", id="asset-type-skill"),
-                    Option("pi-extension", id="asset-type-pi-extension"),
-                    Option("agent", id="asset-type-agent"),
-                    Option("mcp", id="asset-type-mcp"),
+                    Option(_asset_type_label("skill", plural=True), id="asset-type-skill"),
+                    Option(_asset_type_label("pi-extension", plural=True), id="asset-type-pi-extension"),
+                    Option(_asset_type_label("agent", plural=True), id="asset-type-agent"),
+                    Option(_asset_type_label("mcp", plural=True), id="asset-type-mcp"),
                     id="asset-types-list",
                 )
             with Vertical(id="content"):
@@ -1153,7 +1149,7 @@ class TUIApp(App):
     # ----- header + status ---------------------------------------------------
 
     def _build_content_header(self) -> str:
-        asset_type_label = _ASSET_TYPE_LABELS.get(self._active_asset_type, self._active_asset_type)
+        label = _asset_type_label(self._active_asset_type, plural=True)
         if self._active_asset_type == "instruction":
             try:
                 n = self.query_one("#instruction-grid", InstructionGrid).row_count
@@ -1179,7 +1175,7 @@ class TUIApp(App):
                 n = self.query_one("#agent-grid", AgentGrid).row_count
             except (NoMatches, Exception):
                 n = 0
-        return f"  [b]{asset_type_label}[/]   [dim]·[/]   {n} items"
+        return f"  [b]{label}[/]   [dim]·[/]   {n} items"
 
     def _refresh_content_header(self) -> None:
         try:

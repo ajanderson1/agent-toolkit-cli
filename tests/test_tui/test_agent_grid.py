@@ -296,7 +296,7 @@ async def test_set_scope_clears_pending():
 
 @pytest.mark.asyncio
 async def test_asset_type_sidebar_lists_three_asset_types():
-    """The sidebar OptionList must include skill, pi-extension, and agent."""
+    """The sidebar OptionList must include plural asset labels."""
     from agent_toolkit_tui.app import TUIApp
 
     app = TUIApp()
@@ -304,9 +304,9 @@ async def test_asset_type_sidebar_lists_three_asset_types():
         await pilot.pause()
         ol = app.query_one("#asset-types-list", OptionList)
         prompts = [str(ol.get_option_at_index(i).prompt) for i in range(ol.option_count)]
-        assert "skill" in prompts
-        assert "pi-extension" in prompts
-        assert "agent" in prompts
+        assert "Skills" in prompts
+        assert "Pi Extensions" in prompts
+        assert "Agents" in prompts
 
 
 @pytest.mark.asyncio

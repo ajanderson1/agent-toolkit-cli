@@ -769,7 +769,7 @@ async def test_apply_multi_scope_footer_is_scope_tagged(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_asset_type_sidebar_lists_both_asset_types():
-    """The sidebar OptionList must include both 'skill' and 'pi-extension' options."""
+    """The sidebar OptionList must include Skills and Pi Extensions options."""
     from agent_toolkit_tui.app import TUIApp
 
     app = TUIApp()
@@ -778,8 +778,8 @@ async def test_asset_type_sidebar_lists_both_asset_types():
         ol = app.query_one("#asset-types-list", OptionList)
         # Get option prompts
         prompts = [str(ol.get_option_at_index(i).prompt) for i in range(ol.option_count)]
-        assert "skill" in prompts
-        assert "pi-extension" in prompts
+        assert "Skills" in prompts
+        assert "Pi Extensions" in prompts
 
 
 @pytest.mark.asyncio
