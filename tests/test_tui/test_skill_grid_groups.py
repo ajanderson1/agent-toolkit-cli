@@ -10,8 +10,9 @@ import pytest
 from textual.app import App, ComposeResult
 from textual.widgets import DataTable
 
-from agent_toolkit_cli.skill_agents import AGENTS
+from agent_toolkit_cli.skill_agents import get_standard_agents
 from agent_toolkit_tui.composition import skills_nonstandard_main
+from agent_toolkit_tui.display_names import harness_label, standard_label
 from agent_toolkit_tui.skill_state import INTERACTIVE_AGENTS, SkillCell, SkillRow
 from agent_toolkit_tui.widgets.skill_grid import SkillGrid
 
@@ -41,10 +42,12 @@ async def test_columns_are_standard_plus_noncovered_main():
         await pilot.pause()
         table = app.query_one("#skill-table", DataTable)
         labels = [str(c.label) for c in table.columns.values()]
-        # slug + Standard + non-covered main harnesses + state + source
-        assert labels[1] == "Standard ⓘ"
+        # slug + Standard (N) + non-covered main harnesses + state + source
+        assert labels[0] == "Skill ⓘ"
+        assert labels[1] == f"{standard_label(len(get_standard_agents()))} ⓘ"
         for i, agent in enumerate(skills_nonstandard_main(), start=2):
-            assert AGENTS[agent].display_name in labels[i]
+            assert harness_label(agent) in labels[i]
+        assert not any("Claude Code" in label for label in labels)
         # Standard-covered main harnesses get NO own column.
         assert not any("Codex" in l or "Gemini" in l or "Cursor" in l
                        or "OpenCode" in l for l in labels), labels

@@ -2,7 +2,7 @@
 
 `i` routes via `_column_key_for_index`:
   - Standard / State (have a registered ColumnInfo) → ColumnInfoModal
-  - Agent columns (Claude Code, Pi) / slug / source → CellInfoScreen
+  - Agent columns (Claude, Pi) / slug / source → CellInfoScreen
 """
 from __future__ import annotations
 
@@ -37,12 +37,14 @@ async def test_columns_have_info_glyph_except_source():
         await pilot.pause()
         table = a.query_one("#skill-table", DataTable)
         labels = [str(c.label) for c in table.columns.values()]
-        # Layout (#351): SKILL | Standard | Claude Code | Pi | State | Source —
+        # Layout (#351/#448): Skill | Standard (N) | Claude | Pi | State | Source —
         # single-line labels; Standard leads, the rest is implicitly
         # non-standard; the long tail is CLI-only.
-        assert labels[0] == "SKILL ⓘ", f"slug label: {labels[0]!r}"
-        assert labels[1] == "Standard ⓘ", f"standard label: {labels[1]!r}"
-        assert labels[2] == "Claude Code ⓘ", f"claude-code label: {labels[2]!r}"
+        from agent_toolkit_cli.skill_agents import get_standard_agents
+
+        assert labels[0] == "Skill ⓘ", f"slug label: {labels[0]!r}"
+        assert labels[1] == f"Standard ({len(get_standard_agents())}) ⓘ", f"standard label: {labels[1]!r}"
+        assert labels[2] == "Claude ⓘ", f"claude-code label: {labels[2]!r}"
         assert labels[3] == "Pi ⓘ", f"pi label: {labels[3]!r}"
         assert labels[-2] == "State ⓘ", f"state label: {labels[-2]!r}"
         assert labels[-1] == "Source", f"source label: {labels[-1]!r}"
@@ -91,6 +93,8 @@ async def test_press_i_on_claude_code_column_opens_cell_info():
         await pilot.pause()
         assert isinstance(a.screen, CellInfoScreen), \
             "CellInfoScreen not pushed for claude-code column"
+        assert "Claude @ global" in a.screen._title
+        assert "claude-code @ global" not in a.screen._title
 
 
 @pytest.mark.asyncio
@@ -168,7 +172,7 @@ async def test_press_i_on_state_column_opens_modal():
 
 
 @pytest.mark.asyncio
-async def test_slug_header_is_uppercase():
+async def test_slug_header_is_title_case():
     from textual.app import App
     from textual.widgets import DataTable
 
@@ -181,7 +185,7 @@ async def test_slug_header_is_uppercase():
         await pilot.pause()
         table = a.query_one("#skill-table", DataTable)
         labels = [str(c.label) for c in table.columns.values()]
-        assert labels[0] == "SKILL ⓘ", f"slug header: {labels[0]!r}"
+        assert labels[0] == "Skill ⓘ", f"slug header: {labels[0]!r}"
 
 
 @pytest.mark.asyncio
@@ -218,10 +222,12 @@ async def test_full_header_row():
         await pilot.pause()
         table = a.query_one("#skill-table", DataTable)
         labels = [str(c.label) for c in table.columns.values()]
+        from agent_toolkit_cli.skill_agents import get_standard_agents
+
         assert labels == [
-            "SKILL ⓘ",
-            "Standard ⓘ",
-            "Claude Code ⓘ",
+            "Skill ⓘ",
+            f"Standard ({len(get_standard_agents())}) ⓘ",
+            "Claude ⓘ",
             "Pi ⓘ",
             "State ⓘ",
             "Source",

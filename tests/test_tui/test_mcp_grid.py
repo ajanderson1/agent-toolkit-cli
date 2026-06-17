@@ -26,8 +26,12 @@ async def test_columns_project_have_standard(monkeypatch):
         from textual.widgets import DataTable
         labels = [str(c.label) for c in
                   app.query_one(DataTable).columns.values()]
-        assert any("Standard" in s for s in labels)
-        assert any("codex" in s for s in labels)
+        assert "MCP ⓘ" in labels
+        assert any(s.startswith("Standard (") for s in labels)
+        assert any("Codex" in s for s in labels)
+        assert any("OpenCode" in s for s in labels)
+        assert not any("codex" in s for s in labels)
+        assert not any("opencode" in s for s in labels)
         assert not any("claude-code" in s for s in labels)  # folded into standard
 
 
@@ -49,8 +53,12 @@ async def test_columns_global_no_standard(monkeypatch):
         labels = [str(c.label) for c in
                   app.query_one(DataTable).columns.values()]
         assert not any("Standard" in s for s in labels)
-        assert any("claude-code" in s for s in labels)
-        assert any("pi" in s for s in labels)
+        assert any("Claude" in s for s in labels)
+        assert any("Codex" in s for s in labels)
+        assert any("OpenCode" in s for s in labels)
+        assert any("Pi" in s for s in labels)
+        assert not any("claude-code" in s for s in labels)
+        assert not any("opencode" in s for s in labels)
 
 
 @pytest.mark.asyncio
@@ -147,7 +155,8 @@ async def test_scope_toggle_rebuilds_mcp_columns():
         app.action_scope_toggle()  # → global
         await pilot.pause()
         assert not any("Standard" in s for s in labels())
-        assert any("claude-code" in s for s in labels())
+        assert any("Claude" in s for s in labels())
+        assert not any("claude-code" in s for s in labels())
 
 
 @pytest.mark.asyncio
@@ -180,3 +189,39 @@ async def test_mcp_tab_header_and_pending_label_parity():
         await pilot.pause()
         footer = str(app.query_one("#footer-pending", Static).render())
         assert "Pending: 1" in footer
+
+@pytest.mark.asyncio
+async def test_mcp_cell_info_uses_harness_display_name():
+    from textual.app import App
+    from textual.coordinate import Coordinate
+    from textual.widgets import DataTable
+
+    from agent_toolkit_tui.screens.cell_info import CellInfoScreen
+
+    seeded = McpRow(
+        slug="ctx7",
+        source="npx",
+        pin=None,
+        state="installed",
+        cells={("codex", "project"): McpCell(linked=False)},
+    )
+
+    class _A(App):
+        def compose(self):
+            grid = McpGrid([seeded], id="g")
+            grid.set_scope("project")
+            yield grid
+
+    app = _A()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        table = app.query_one("#mcp-table", DataTable)
+        table.cursor_coordinate = Coordinate(row=0, column=2)  # codex
+        table.focus()
+        await pilot.pause()
+        await pilot.press("i")
+        await pilot.pause()
+        assert isinstance(app.screen, CellInfoScreen)
+        assert "Codex @ project" in app.screen._title
+        assert "into Codex @ project" in app.screen._body_markup
+        assert "codex @ project" not in app.screen._body_markup

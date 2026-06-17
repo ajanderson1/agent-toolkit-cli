@@ -1,6 +1,6 @@
 """Standard column on the instruction grid (#351).
 
-Standard read-only column leads; claude-code + gemini-cli follow (implicitly
+Standard read-only column leads; Claude + Gemini follow (implicitly
 non-standard — single-line headers). The long tail is CLI-only (post-demo AJ
 decision). The `i` registry dispatch (ported from skill_grid, replacing the
 old inline column-1 branch) is pinned here.
@@ -39,10 +39,13 @@ async def test_columns_are_standard_plus_noncovered_main():
         await pilot.pause()
         table = app.query_one("#instruction-table", DataTable)
         labels = [str(c.label) for c in table.columns.values()]
-        # slug + standard + claude-code + gemini-cli + source
-        assert "standard" in labels[1]
-        assert any("CLAUDE.md" in l for l in labels)
-        assert any("GEMINI.md" in l for l in labels)
+        # slug + Standard (N) + Claude + Gemini + source
+        assert labels[0] == "Instruction ⓘ"
+        assert labels[1].startswith("Standard (")
+        assert any("Claude ⓘ" == l for l in labels)
+        assert any("Gemini ⓘ" == l for l in labels)
+        assert not any("claude-code" in l or "gemini-cli" in l for l in labels)
+        assert not any("Claude Code" in l or "Gemini CLI" in l for l in labels)
         # No pseudo-column, no group tags, single-line labels only.
         assert not any("… +" in l or "STANDARD" in l or "NON-STD" in l
                        or "\n" in l for l in labels), labels
@@ -69,4 +72,4 @@ async def test_press_i_on_standard_column_opens_registry_modal():
             "ColumnInfoModal not pushed for the standard column"
         body = str(app.screen.query_one("#column-info-body").render())
         assert "instructions" in body and "(39)" in body
-        assert "adal" in body  # a native reader, enumerated exhaustively
+        assert "Adal" in body  # a native reader, enumerated exhaustively

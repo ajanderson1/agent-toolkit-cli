@@ -38,6 +38,7 @@ from textual.message import Message
 from textual.widgets import DataTable
 
 from agent_toolkit_tui.column_info import get_column_info
+from agent_toolkit_tui.display_names import asset_type_label, harness_label, standard_label
 from agent_toolkit_tui.mcp_state import McpRow, mcp_interactive_harnesses
 from agent_toolkit_tui.widgets.column_info_modal import ColumnInfoModal
 
@@ -210,7 +211,8 @@ class McpGrid(Vertical):
                 return
             cell = row.cells.get((harness, self._scope))
             scope_flag = "-g" if self._scope == "global" else "-p"
-            title = f"{row.slug} · {harness} @ {self._scope}"
+            display = harness_label(harness)
+            title = f"{row.slug} · {display} @ {self._scope}"
             pending = self._pending.get((self._scope, harness, row.slug))
             if pending == "link":
                 body = (
@@ -225,11 +227,11 @@ class McpGrid(Vertical):
             elif cell is None:
                 body = f"Not available at {self._scope} scope."
             elif cell.linked:
-                body = f"Installed.\nMCP {row.slug} is projected into {harness} @ {self._scope}."
+                body = f"Installed.\nMCP {row.slug} is projected into {display} @ {self._scope}."
             else:
                 body = (
                     f"Not installed.\nPress [b]space[/] to queue install "
-                    f"into {harness} @ {self._scope}.\n\n"
+                    f"into {display} @ {self._scope}.\n\n"
                     f"Or from the CLI:\n"
                     f"  [b]agent-toolkit-cli mcp install {row.slug} "
                     f"{scope_flag} --harness {harness}[/]"
@@ -356,7 +358,7 @@ class McpGrid(Vertical):
         saved_scroll = (table.scroll_x, table.scroll_y)
         table.clear(columns=True)
         # Slug column — info glyph since `i` works on it.
-        table.add_column(f"MCP {_INFO_GLYPH}", width=22)
+        table.add_column(f"{asset_type_label('mcp')} {_INFO_GLYPH}", width=22)
         # Per-harness columns, derived per scope. "standard" is the project
         # .mcp.json projection (#399, #398), not a catalog harness — label it
         # with the covered count so the fold is legible without pressing `i`
@@ -365,9 +367,10 @@ class McpGrid(Vertical):
         for harness in self._harnesses():
             if harness == "standard":
                 from agent_toolkit_cli.mcp_standard import mcp_standard_covered
-                base = f"Standard ({len(mcp_standard_covered('project'))})"
+
+                base = standard_label(len(mcp_standard_covered("project")))
             else:
-                base = harness
+                base = harness_label(harness)
             table.add_column(f"{base} {_INFO_GLYPH}", width=16)
         # State column — shows installed/library/unlisted (#360).
         table.add_column("State", width=10)

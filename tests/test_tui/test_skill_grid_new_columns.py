@@ -46,6 +46,11 @@ async def test_source_column_is_last():
         await pilot.pause()
         table = a.query_one("#skill-table", DataTable)
         labels = [str(c.label) for c in table.columns.values()]
+        assert "Skill ⓘ" in labels
+        assert not any("SKILL" in label for label in labels)
+        assert any(label.startswith("Standard (") for label in labels)
+        assert not any("Claude Code" in label for label in labels)
+        assert not any("Gemini CLI" in label for label in labels)
         assert labels[-1] == "Source"
         row_keys = list(table.rows.keys())
         cells = list(table.get_row(row_keys[0]))
