@@ -24,6 +24,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from pathlib import Path
+from time import monotonic
 from typing import Iterable, Literal, cast
 
 from textual.app import App, ComposeResult
@@ -60,6 +61,8 @@ _ASSET_TYPE_LABELS: dict[AssetType, str] = {
     "agent": "Agent",
     "mcp": "MCP",
 }
+
+_DOUBLE_CTRL_C_QUIT_SECONDS = 1.5
 
 
 def _scope_tag(keys: Iterable[tuple[str, ...]]) -> str:
@@ -150,6 +153,7 @@ class TUIApp(App):
         Binding("slash", "focus_filter", "Filter", priority=True),
         Binding("ctrl+g", "scope_toggle", "toggle scope", priority=True),
         Binding("i", "info_pass", "Info"),
+        Binding("ctrl+c", "double_ctrl_c_quit", "Quit", priority=True),
         Binding("q", "quit", "Quit"),
     ]
 
@@ -157,6 +161,7 @@ class TUIApp(App):
         super().__init__()
         self._scope: str = "project"
         self._active_asset_type: AssetType = "skill"
+        self._last_ctrl_c_quit_at: float | None = None
         self.sub_title = f"v{__version__}"
 
     def compose(self) -> ComposeResult:
@@ -424,6 +429,17 @@ class TUIApp(App):
         self._refresh_status_bar()
 
     # ----- actions -----------------------------------------------------------
+
+    def action_double_ctrl_c_quit(self) -> None:
+        now = monotonic()
+        last = self._last_ctrl_c_quit_at
+        if last is not None and now - last <= _DOUBLE_CTRL_C_QUIT_SECONDS:
+            self._last_ctrl_c_quit_at = None
+            self.action_quit()
+            return
+
+        self._last_ctrl_c_quit_at = now
+        self.notify("Press ctrl+c again to quit")
 
     def action_quit(self) -> None:
         n = 0
