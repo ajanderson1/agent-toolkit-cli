@@ -113,6 +113,25 @@ def _cell_for(
     return InstructionCell(linked=False, conflict=False)
 
 
+def pointer_path_for(
+    harness: str,
+    *,
+    scope: Scope,
+    home: Path | None,
+    project: Path | None,
+) -> Path | None:
+    """Return the instructions pointer path for UI display, or None.
+
+    Uses the same adapter path table as ``_cell_for`` so the grid explains the
+    exact slot it already checks. Returns None when the harness/scope pair has
+    no pointer slot.
+    """
+    try:
+        return _pointer_path(harness, scope, project, home)  # noqa: PLW0212
+    except (ValueError, KeyError):
+        return None
+
+
 def build_instruction_rows(
     *,
     scope: Scope,

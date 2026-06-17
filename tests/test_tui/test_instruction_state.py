@@ -17,6 +17,7 @@ from agent_toolkit_tui.instruction_state import (
     INTERACTIVE_HARNESSES,
     _cell_for,
     build_instruction_rows,
+    pointer_path_for,
 )
 
 
@@ -127,6 +128,47 @@ def test_cell_for_gemini_cli(tmp_path: Path):
     assert cell is not None
     assert cell.linked is False
     assert cell.conflict is False
+
+
+# ---------------------------------------------------------------------------
+# pointer_path_for tests
+# ---------------------------------------------------------------------------
+
+
+def test_pointer_path_for_global_claude_code(tmp_path: Path):
+    """Global claude-code pointer path is ~/.claude/CLAUDE.md."""
+    home = tmp_path / "home"
+    home.mkdir()
+
+    path = pointer_path_for(
+        "claude-code", scope="global", home=home, project=None,
+    )
+
+    assert path == home / ".claude" / "CLAUDE.md"
+
+
+def test_pointer_path_for_project_gemini_cli(tmp_path: Path):
+    """Project gemini-cli pointer path is <project>/GEMINI.md."""
+    project = tmp_path / "project"
+    project.mkdir()
+
+    path = pointer_path_for(
+        "gemini-cli", scope="project", home=None, project=project,
+    )
+
+    assert path == project / "GEMINI.md"
+
+
+def test_pointer_path_for_unavailable_scope_returns_none(tmp_path: Path):
+    """Project-only harnesses return None for unavailable global scope."""
+    home = tmp_path / "home"
+    home.mkdir()
+
+    path = pointer_path_for(
+        "replit", scope="global", home=home, project=None,
+    )
+
+    assert path is None
 
 
 # ---------------------------------------------------------------------------
