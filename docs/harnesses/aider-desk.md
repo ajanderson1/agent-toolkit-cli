@@ -7,6 +7,7 @@
 | [Instructions](../asset-types/instructions.md) | [—](#instructions) | no pointer-satisfiable root file |
 | [Skills](../asset-types/skills.md) | [✅](#skills) | `.aider-desk/skills` |
 | [Agents (subagents)](../asset-types/agents.md) | [✅](#agents) | config_file+folder |
+| [Commands](../asset-types/commands.md) | [?](#commands) | unknown — no public evidence found |
 | [MCP servers](../asset-types/mcp.md) | — | no toolkit adapter yet |
 | [Pi extensions](../asset-types/pi-extensions.md) | N/A | Pi-only asset type |
 
@@ -38,3 +39,10 @@ Supported via the **config_file+folder** mechanism — see the [agents asset typ
 - **Format:** JSON; required `id`,`name`,`provider`,`model`,`subagent.enabled`,`subagent.systemPrompt`,`subagent.invocationMode`; `subagent.enabled:true` = spawnable
 - **Toolkit adapter:** enabled (config_file+folder)
 - **Source:** [hotovo/aider-desk src/main/agent/agent-profile-manager.ts](https://github.com/hotovo/aider-desk/blob/main/src/main/agent/agent-profile-manager.ts) + constants.ts
+
+## Commands { #commands }
+
+Unknown — bounded search surfaced no public evidence.
+
+- **Support:** ?
+- **How:** unknown — no public evidence found

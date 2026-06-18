@@ -68,6 +68,7 @@ plugins:
         kinds/instructions.md: asset-types/instructions.md
         kinds/skills.md: asset-types/skills.md
         kinds/agents.md: asset-types/agents.md
+        kinds/commands.md: asset-types/commands.md
         kinds/pi-extensions.md: asset-types/pi-extensions.md
         kinds/mcp.md: asset-types/mcp.md
 
@@ -126,6 +127,7 @@ nav:
       - Instructions: asset-types/instructions.md
       - Skills: asset-types/skills.md
       - Agents (subagents): asset-types/agents.md
+      - Commands: asset-types/commands.md
       - Pi extensions: asset-types/pi-extensions.md
       - MCP servers: asset-types/mcp.md
     - Harnesses:

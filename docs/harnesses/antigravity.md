@@ -7,6 +7,7 @@
 | [Instructions](../asset-types/instructions.md) | [✅](#instructions) | native `AGENTS.md` reader |
 | [Skills](../asset-types/skills.md) | [✅](#skills) | `.agents/skills` |
 | [Agents (subagents)](../asset-types/agents.md) | [?](#agents) | no public evidence |
+| [Commands](../asset-types/commands.md) | [?](#commands) | unknown — no public evidence found |
 | [MCP servers](../asset-types/mcp.md) | — | no toolkit adapter yet |
 | [Pi extensions](../asset-types/pi-extensions.md) | N/A | Pi-only asset type |
 
@@ -36,3 +37,10 @@ Unknown — bounded search surfaced no public evidence.
 - **Verdict:** unknown — no public evidence found
 - **Why:** dynamic orchestrator-spawned only; closed-source Go binary; community `agent.json` unconfirmed
 - **Source:** [google-gemini/gemini-cli discussion #27305](https://github.com/google-gemini/gemini-cli/discussions/27305)
+
+## Commands { #commands }
+
+Unknown — bounded search surfaced no public evidence.
+
+- **Support:** ?
+- **How:** unknown — no public evidence found

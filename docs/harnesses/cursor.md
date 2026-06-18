@@ -7,6 +7,7 @@
 | [Instructions](../asset-types/instructions.md) | [✅](#instructions) | native `AGENTS.md` reader |
 | [Skills](../asset-types/skills.md) | [✅](#skills) | `.agents/skills` |
 | [Agents (subagents)](../asset-types/agents.md) | [✅](#agents) | symlink |
+| [Commands](../asset-types/commands.md) | [—](#commands) | research gap; forum evidence only, no deterministic adapter yet |
 | [MCP servers](../asset-types/mcp.md) | — | no toolkit adapter yet |
 | [Pi extensions](../asset-types/pi-extensions.md) | N/A | Pi-only asset type |
 
@@ -38,3 +39,10 @@ Supported via the **symlink** mechanism — see the [agents asset type](../asset
 - **Format:** markdown+frontmatter; required `name`,`description`; optional `model`,`readonly`,`is_background`
 - **Toolkit adapter:** enabled (symlink)
 - **Source:** [cursor.com/docs/subagents](https://cursor.com/docs/subagents) (re-verified 2026-06-10: `.claude/agents/` + `~/.claude/agents/` are default discovery locations)
+
+## Commands { #commands }
+
+Not supported by the toolkit yet — tracked as a researched gap.
+
+- **Support:** —
+- **How:** research gap; forum evidence only, no deterministic adapter yet

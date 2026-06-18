@@ -8,14 +8,15 @@ is one lock file per asset type per scope:
 |---|---|---|---|
 | [skill](../asset-types/skills.md) | `skills-lock.json` | `skills` | slug → entry |
 | [agent](../asset-types/agents.md) | `agents-lock.json` | `skills` ⚠️ | slug → entry |
+| [command](../asset-types/commands.md) | `commands-lock.json` | `skills` ⚠️ | slug → entry (`commandPath`) |
 | [pi-extension](../asset-types/pi-extensions.md) | `pi-extensions-lock.json` | `skills` ⚠️ | slug → entry |
 | [mcp](../asset-types/mcp.md) | `mcps-lock.json` | `mcps` | slug → **list** of entries |
 | [instructions](../asset-types/instructions.md) | `instructions-lock.json` | `instructions` | slug → entry |
 
-> ⚠️ **The `agents` and `pi-extension` lock files use a top-level key named
+> ⚠️ **The `agents`, `command`, and `pi-extension` lock files use a top-level key named
 > `skills`, not `agents` / `pi-extensions`.** Their lock module re-exports the
 > skill writer verbatim (`agent_lock.py` and `pi_extension_lock.py` import
-> `write_lock` from `skill_lock.py`), which hard-codes `"skills"`. The schema is
+> compatible serializers), which hard-code `"skills"`. The schema is
 > asset-type-blind: the same envelope serves all three, distinguished only by
 > which path field each entry populates. Don't be surprised reading the raw
 > JSON.
@@ -33,7 +34,7 @@ The one exception is the skills global lock when written by `npx skills`: it
 lands at `~/.agents/.skill-lock.json` for compatibility with that tool. See
 [`skill-lock.md`](skill-lock.md) for the full skills/skills.sh interop story.
 
-## Shared envelope (skill, agent, pi-extension)
+## Shared envelope (skill, agent, command, pi-extension)
 
 These three share one serializer (`skill_lock.py`), so they have an identical
 structure. The top-level key is always `skills` regardless of asset type:
@@ -64,6 +65,7 @@ structure. The top-level key is always `skills` regardless of asset type:
 | `ref` | string \| null | Git ref pinned at add time (branch, tag, or SHA) |
 | `skillPath` | string \| null | Path within the repo to the skill (populated for skills) |
 | `agentPath` | string \| null | Path within the repo to the agent (populated for agents) |
+| `commandPath` | string \| null | Relative path ending in `COMMAND.md` (populated for commands) |
 | `piExtensionPath` | string \| null | Path within the repo to the pi-extension (populated for pi-extensions) |
 | `upstreamSha` | string \| null | Upstream commit SHA observed at add time — **not** a user pin (see [pin-vs-observed](skill-lock.md)) |
 | `localSha` | string \| null | Local commit SHA (v1 skills only) |
@@ -71,7 +73,7 @@ structure. The top-level key is always `skills` regardless of asset type:
 | `readOnly` | boolean | Whether the entry is read-only (e.g. a public third-party skill) |
 
 What distinguishes an agent entry from a skill or pi-extension entry is **which
-path field is populated** — `skillPath`, `agentPath`, or `piExtensionPath`. The
+path field is populated** — `skillPath`, `agentPath`, `commandPath`, or `piExtensionPath`. The
 other two are `null`.
 
 Unknown JSON keys are preserved on round-trip (kept in an `extras` map), so a

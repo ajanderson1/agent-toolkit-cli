@@ -7,6 +7,7 @@
 | [Instructions](../asset-types/instructions.md) | [✅](#instructions) | pointer symlink (`CLAUDE.md` → `AGENTS.md`) |
 | [Skills](../asset-types/skills.md) | [✅](#skills) | `.claude/skills` |
 | [Agents (subagents)](../asset-types/agents.md) | [✅](#agents) | symlink |
+| [Commands](../asset-types/commands.md) | [✅](#commands) | legacy markdown commands (`.claude/commands`); skills preferred |
 | [MCP servers](../asset-types/mcp.md) | [✅](#mcp-servers) | config-injection by name |
 | [Pi extensions](../asset-types/pi-extensions.md) | N/A | Pi-only asset type |
 
@@ -38,6 +39,13 @@ Supported via the **symlink** mechanism — see the [agents asset type](../asset
 - **Format:** markdown+frontmatter; required `name`,`description`; extra keys ignored; 15 optional fields
 - **Toolkit adapter:** enabled (symlink)
 - **Source:** [code.claude.com/docs/en/sub-agents](https://code.claude.com/docs/en/sub-agents)
+
+## Commands { #commands }
+
+Supported by the [commands asset type](../asset-types/commands.md).
+
+- **Support:** ✅
+- **How:** legacy markdown commands (`.claude/commands`); skills preferred
 
 ## MCP servers { #mcp-servers }
 

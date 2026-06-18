@@ -7,6 +7,7 @@
 | [Instructions](../asset-types/instructions.md) | [✅](#instructions) | native `AGENTS.md` reader |
 | [Skills](../asset-types/skills.md) | [✅](#skills) | `.windsurf/skills` |
 | [Agents (subagents)](../asset-types/agents.md) | N/A | no subagent concept |
+| [Commands](../asset-types/commands.md) | [?](#commands) | unknown — no public evidence found |
 | [MCP servers](../asset-types/mcp.md) | — | no toolkit adapter yet |
 | [Pi extensions](../asset-types/pi-extensions.md) | N/A | Pi-only asset type |
 
@@ -36,3 +37,10 @@ Not applicable — no subagent concept; won't be filled.
 - **Verdict:** unsupported (by design)
 - **Why:** Cascade single-agent; parallel sessions are full agents not file-defined; AGENTS.md=context
 - **Source:** [docs.windsurf.com/windsurf/cascade/agents-md](https://docs.windsurf.com/windsurf/cascade/agents-md)
+
+## Commands { #commands }
+
+Unknown — bounded search surfaced no public evidence.
+
+- **Support:** ?
+- **How:** unknown — no public evidence found

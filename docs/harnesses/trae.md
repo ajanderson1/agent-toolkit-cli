@@ -7,6 +7,7 @@
 | [Instructions](../asset-types/instructions.md) | [—](#instructions) | no pointer-satisfiable root file |
 | [Skills](../asset-types/skills.md) | [✅](#skills) | `.trae/skills` |
 | [Agents (subagents)](../asset-types/agents.md) | N/A | no subagent concept |
+| [Commands](../asset-types/commands.md) | [?](#commands) | unknown — no public evidence found |
 | [MCP servers](../asset-types/mcp.md) | — | no toolkit adapter yet |
 | [Pi extensions](../asset-types/pi-extensions.md) | N/A | Pi-only asset type |
 
@@ -36,3 +37,10 @@ Not applicable — no subagent concept; won't be filled.
 - **Verdict:** unsupported (by design)
 - **Why:** custom agents UI-configured (Builder), stored server-side; no on-disk file
 - **Source:** [docs.trae.ai/ide/agent](https://docs.trae.ai/ide/agent)
+
+## Commands { #commands }
+
+Unknown — bounded search surfaced no public evidence.
+
+- **Support:** ?
+- **How:** unknown — no public evidence found

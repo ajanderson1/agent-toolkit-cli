@@ -7,6 +7,7 @@
 | [Instructions](../asset-types/instructions.md) | [—](#instructions) | no pointer-satisfiable root file |
 | [Skills](../asset-types/skills.md) | [✅](#skills) | `.agents/skills` |
 | [Agents (subagents)](../asset-types/agents.md) | N/A | no subagent concept |
+| [Commands](../asset-types/commands.md) | [?](#commands) | unknown — no public evidence found |
 | [MCP servers](../asset-types/mcp.md) | — | no toolkit adapter yet |
 | [Pi extensions](../asset-types/pi-extensions.md) | N/A | Pi-only asset type |
 
@@ -36,3 +37,10 @@ Not applicable — no subagent concept; won't be filled.
 - **Verdict:** unsupported (by design)
 - **Why:** Python library; subagents are code `SubAgent` TypedDicts; no file-drop convention
 - **Source:** [langchain-ai/deepagents libs/deepagents/deepagents/middleware/subagents.py](https://github.com/langchain-ai/deepagents/blob/main/libs/deepagents/deepagents/middleware/subagents.py)
+
+## Commands { #commands }
+
+Unknown — bounded search surfaced no public evidence.
+
+- **Support:** ?
+- **How:** unknown — no public evidence found

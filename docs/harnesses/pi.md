@@ -7,6 +7,7 @@
 | [Instructions](../asset-types/instructions.md) | [✅](#instructions) | native `AGENTS.md` reader |
 | [Skills](../asset-types/skills.md) | [✅](#skills) | `.pi/skills` |
 | [Agents (subagents)](../asset-types/agents.md) | [✅](#agents) | dual-symlink |
+| [Commands](../asset-types/commands.md) | [✅](#commands) | prompt templates (`.pi/agent/prompts`, `.pi/prompts`) |
 | [MCP servers](../asset-types/mcp.md) | [✅](#mcp-servers) | config-injection by name |
 | [Pi extensions](../asset-types/pi-extensions.md) | [✅](#pi-extensions) | symlink |
 
@@ -38,6 +39,13 @@ Supported via the **dual-symlink** mechanism — see the [agents asset type](../
 - **Format:** markdown+frontmatter (all optional); read by 3rd-party `@tintinweb/pi-subagents` ext
 - **Toolkit adapter:** enabled (symlink)
 - **Source:** [github.com/tintinweb/pi-subagents](https://github.com/tintinweb/pi-subagents) ; [pi.dev/packages/pi-subagents](https://pi.dev/packages/pi-subagents)
+
+## Commands { #commands }
+
+Supported by the [commands asset type](../asset-types/commands.md).
+
+- **Support:** ✅
+- **How:** prompt templates (`.pi/agent/prompts`, `.pi/prompts`)
 
 ## MCP servers { #mcp-servers }
 

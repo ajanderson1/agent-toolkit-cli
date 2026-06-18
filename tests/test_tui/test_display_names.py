@@ -9,6 +9,7 @@ from agent_toolkit_tui.display_names import (
 def test_asset_type_labels_are_plural_for_navigation():
     assert asset_type_label("instruction", plural=True) == "Instructions"
     assert asset_type_label("skill", plural=True) == "Skills"
+    assert asset_type_label("command", plural=True) == "Commands"
     assert asset_type_label("pi-extension", plural=True) == "Pi Extensions"
     assert asset_type_label("agent", plural=True) == "Agents"
     assert asset_type_label("mcp", plural=True) == "MCPs"
@@ -17,6 +18,7 @@ def test_asset_type_labels_are_plural_for_navigation():
 def test_asset_type_labels_are_title_case_for_row_headers():
     assert asset_type_label("instruction") == "Instruction"
     assert asset_type_label("skill") == "Skill"
+    assert asset_type_label("command") == "Command"
     assert asset_type_label("pi-extension") == "Pi Extension"
     assert asset_type_label("agent") == "Agent"
     assert asset_type_label("mcp") == "MCP"

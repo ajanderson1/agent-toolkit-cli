@@ -1,6 +1,6 @@
 # CLI reference
 
-`agent-toolkit-cli` is a per-asset-type CLI for managing AI-agent assets. The top-level commands are the asset-type groups — `skill` (alias `skills`), `agent`, `instructions`, `pi-extension`, `mcp` (alias `mcps`) — plus `bundle` for installing several assets together. The frozen pre-v2 surface (`check`, `link`, `doctor`, `fix`, etc.) is pinned at the `v1.0.0` tag — see the [README](../index.md) for the install command.
+`agent-toolkit-cli` is a per-asset-type CLI for managing AI-agent assets. The top-level commands are the asset-type groups — `skill` (alias `skills`), `agent`, `command`, `instructions`, `pi-extension`, `mcp` (alias `mcps`) — plus `bundle` for installing several assets together. The frozen pre-v2 surface (`check`, `link`, `doctor`, `fix`, etc.) is pinned at the `v1.0.0` tag — see the [README](../index.md) for the install command.
 
 ## Commands
 
@@ -26,9 +26,9 @@ agent-toolkit-cli skill import <file> [--latest]   # cross-machine sync — see 
 
 Full reference, lock-file format, and skills.sh interop notes live in [`skill-lock.md`](skill-lock.md).
 
-### `agent`
+### `agent`, `command`
 
-Manage subagent definitions (the `agent` [asset type](../asset-types/agents.md)) — one canonical markdown file per agent, projected per harness.
+Manage subagent definitions (the `agent`, `command` [asset type](../asset-types/agents.md)) — one canonical markdown file per agent, projected per harness.
 
 ```text
 agent-toolkit-cli agent add <source> [--slug <slug>] [--ref <ref>]
@@ -50,6 +50,26 @@ agent-toolkit-cli agent uninstall my-agent -g                     # maximal swee
 - `agent import <file>` rebuilds the global library from another machine's `agents-lock.json` (additive, skip-if-exists; `--latest` clones at each ref's current HEAD; per-slug failures non-fatal). See [Moving to a new machine](#moving-to-a-new-machine-cross-machine-sync).
 
 `agent doctor` also checks the standard slot (#361 finding families): `standard-slot-drift` (slot differs from the scope's canonical; fix re-seeds it), `cursor-shadow` (a divergent pre-existing `.cursor/agents/<slug>.md` file — cursor's own dir **wins** name conflicts, so it shadows the slot; when the file carries the tool's `.attk` ownership sidecar the doctor offers to remove it, otherwise it is report-only — a sentinel-less divergent file may equally be hand-authored, and `agent uninstall` refuses exactly that class, so remove it manually if the shadowing is unintended), `standard-slot-orphan` (tool-written slot file with no lock entry), `standard-slot-unmanaged` (hand-authored files in `.claude/agents/` — **never** auto-removed), and `standard-slot-dangling-sidecar` (stale `.attk` ownership sidecar without its slot file). `cursor-shadow` and `standard-slot-unmanaged` are **informational**: they stay visible in the output but never fail the doctor exit code or suppress the clean verdict.
+
+### `command`
+
+Manage reusable slash-command prompts (the [`command` asset type](../asset-types/commands.md)) from canonical `COMMAND.md` folders. The group has plural alias `commands`; `command list` aliases to `ls`.
+
+```text
+agent-toolkit-cli command add <source> [--slug <slug>] [--ref <ref>]
+agent-toolkit-cli command install <slug> [-g|-p] [--harnesses <h>[,<h>...]]
+agent-toolkit-cli command uninstall <slug> [-g|-p] [--harnesses <h>[,<h>...]]
+agent-toolkit-cli command list [-g|-p] [--json]
+agent-toolkit-cli command status [-g|-p]
+agent-toolkit-cli command update [<slug>] [-g|-p]
+agent-toolkit-cli command push <slug>
+agent-toolkit-cli command import [-g|-p]
+agent-toolkit-cli command reset <slug> --force [-g|-p]
+agent-toolkit-cli command remove <slug> [-g|-p]
+agent-toolkit-cli command doctor [-g|-p]
+```
+
+Default install targets are `claude-code,pi,gemini-cli`. `codex` is explicit because Codex custom prompts are deprecated and global-only. Cursor remains a researched gap until deterministic validation evidence exists.
 
 ### `mcp`
 
@@ -152,13 +172,14 @@ By default `skill push <slug>` creates a `skill/self-improvement-<timestamp>` br
 
 **The lock file is the export artifact** — there is no `export` command. Each asset kind's global library is fully described by its per-scope lock file, so reconstructing your library on a second machine is just: copy the lock file across, then `import` it.
 
-1. On the **source** machine, locate the global lock(s) you want to carry: `skills-lock.json`, `agents-lock.json`, and/or `pi-extensions-lock.json` (in the toolkit's global config dir).
+1. On the **source** machine, locate the global lock(s) you want to carry: `skills-lock.json`, `agents-lock.json`, `commands-lock.json`, and/or `pi-extensions-lock.json` (in the toolkit's global config dir).
 2. Copy the lock file(s) to the **new** machine (any path — e.g. `~/sync/`).
 3. On the new machine, run the matching `import` per kind:
 
    ```bash
    agent-toolkit-cli skill        import ~/sync/skills-lock.json
    agent-toolkit-cli agent        import ~/sync/agents-lock.json
+   agent-toolkit-cli command      import ~/sync/commands-lock.json
    agent-toolkit-cli pi-extension import ~/sync/pi-extensions-lock.json
    ```
 

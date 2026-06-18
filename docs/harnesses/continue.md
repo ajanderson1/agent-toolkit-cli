@@ -7,6 +7,7 @@
 | [Instructions](../asset-types/instructions.md) | [—](#instructions) | no pointer-satisfiable root file |
 | [Skills](../asset-types/skills.md) | [✅](#skills) | `.continue/skills` |
 | [Agents (subagents)](../asset-types/agents.md) | [?](#agents) | no public evidence |
+| [Commands](../asset-types/commands.md) | [?](#commands) | unknown — no public evidence found |
 | [MCP servers](../asset-types/mcp.md) | — | no toolkit adapter yet |
 | [Pi extensions](../asset-types/pi-extensions.md) | N/A | Pi-only asset type |
 
@@ -36,3 +37,10 @@ Unknown — bounded search surfaced no public evidence.
 - **Verdict:** unknown — no public evidence found
 - **Why:** subagents in private testing (issue #9550), config.yaml-based; no stable public file spec
 - **Source:** [continuedev/continue#9550](https://github.com/continuedev/continue/issues/9550)
+
+## Commands { #commands }
+
+Unknown — bounded search surfaced no public evidence.
+
+- **Support:** ?
+- **How:** unknown — no public evidence found

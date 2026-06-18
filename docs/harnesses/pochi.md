@@ -7,6 +7,7 @@
 | [Instructions](../asset-types/instructions.md) | [✅](#instructions) | native `AGENTS.md` reader |
 | [Skills](../asset-types/skills.md) | [✅](#skills) | `.pochi/skills` |
 | [Agents (subagents)](../asset-types/agents.md) | [✅](#agents) | symlink |
+| [Commands](../asset-types/commands.md) | [?](#commands) | unknown — no public evidence found |
 | [MCP servers](../asset-types/mcp.md) | — | no toolkit adapter yet |
 | [Pi extensions](../asset-types/pi-extensions.md) | N/A | Pi-only asset type |
 
@@ -38,3 +39,10 @@ Supported via the **symlink** mechanism — see the [agents asset type](../asset
 - **Format:** markdown+frontmatter; required `description`; optional `name`,`tools`; spawn via `newTask(<name>)`
 - **Toolkit adapter:** enabled (symlink)
 - **Source:** [docs.getpochi.com/custom-agent](https://docs.getpochi.com/custom-agent)
+
+## Commands { #commands }
+
+Unknown — bounded search surfaced no public evidence.
+
+- **Support:** ?
+- **How:** unknown — no public evidence found

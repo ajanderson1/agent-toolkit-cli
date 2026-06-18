@@ -7,6 +7,7 @@
 | [Instructions](../asset-types/instructions.md) | [✅](#instructions) | native `AGENTS.md` reader |
 | [Skills](../asset-types/skills.md) | [✅](#skills) | `.agents/skills` |
 | [Agents (subagents)](../asset-types/agents.md) | [✅](#agents) | config_file+folder |
+| [Commands](../asset-types/commands.md) | [?](#commands) | unknown — no public evidence found |
 | [MCP servers](../asset-types/mcp.md) | — | no toolkit adapter yet |
 | [Pi extensions](../asset-types/pi-extensions.md) | N/A | Pi-only asset type |
 
@@ -38,3 +39,10 @@ Supported via the **config_file+folder** mechanism — see the [agents asset typ
 - **Format:** YAML; req `systemPrompt`,`llm.*`; spawn via `tools[].type: agent-spawner` registry
 - **Toolkit adapter:** enabled (config_file+folder)
 - **Source:** [docs.dexto.ai/docs/guides/configuring-dexto/agent-yml](https://docs.dexto.ai/docs/guides/configuring-dexto/agent-yml)
+
+## Commands { #commands }
+
+Unknown — bounded search surfaced no public evidence.
+
+- **Support:** ?
+- **How:** unknown — no public evidence found

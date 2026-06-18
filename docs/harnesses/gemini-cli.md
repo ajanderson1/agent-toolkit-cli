@@ -7,6 +7,7 @@
 | [Instructions](../asset-types/instructions.md) | [✅](#instructions) | pointer symlink (`GEMINI.md` → `AGENTS.md`) |
 | [Skills](../asset-types/skills.md) | [✅](#skills) | `.agents/skills` |
 | [Agents (subagents)](../asset-types/agents.md) | [✅](#agents) | translate |
+| [Commands](../asset-types/commands.md) | [✅](#commands) | TOML custom commands (`.gemini/commands`) |
 | [MCP servers](../asset-types/mcp.md) | — | no toolkit adapter yet |
 | [Pi extensions](../asset-types/pi-extensions.md) | N/A | Pi-only asset type |
 
@@ -38,3 +39,10 @@ Supported via the **translate** mechanism — see the [agents asset type](../ass
 - **Format:** markdown+frontmatter; ONLY `name`+`description` (zod `.strict()` rejects extras)
 - **Toolkit adapter:** enabled (translate)
 - **Source:** [`packages/core/src/agents/agentLoader.ts`](https://github.com/google-gemini/gemini-cli/blob/main/packages/core/src/agents/agentLoader.ts) localAgentSchema.strict() + `storage.ts:117-118,309-310`
+
+## Commands { #commands }
+
+Supported by the [commands asset type](../asset-types/commands.md).
+
+- **Support:** ✅
+- **How:** TOML custom commands (`.gemini/commands`)

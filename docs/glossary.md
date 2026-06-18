@@ -180,3 +180,8 @@ terms first.
     the projection, guards foreign files, rolls back on failure. A verdict
     can be *supported* while the adapter is *disabled* (e.g. Codex subagents,
     pending the shared-config decision).
+
+
+## Command asset
+
+A source-backed reusable slash-command prompt. In agent-toolkit, commands use canonical `COMMAND.md` folders, `commands-lock.json`, and per-harness projection adapters.

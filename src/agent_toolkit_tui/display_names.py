@@ -8,6 +8,7 @@ from __future__ import annotations
 _ASSET_TYPE_SINGULAR: dict[str, str] = {
     "instruction": "Instruction",
     "skill": "Skill",
+    "command": "Command",
     "pi-extension": "Pi Extension",
     "agent": "Agent",
     "mcp": "MCP",
@@ -16,6 +17,7 @@ _ASSET_TYPE_SINGULAR: dict[str, str] = {
 _ASSET_TYPE_PLURAL: dict[str, str] = {
     "instruction": "Instructions",
     "skill": "Skills",
+    "command": "Commands",
     "pi-extension": "Pi Extensions",
     "agent": "Agents",
     "mcp": "MCPs",

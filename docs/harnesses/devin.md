@@ -7,6 +7,7 @@
 | [Instructions](../asset-types/instructions.md) | [✅](#instructions) | native `AGENTS.md` reader |
 | [Skills](../asset-types/skills.md) | [✅](#skills) | `.devin/skills` |
 | [Agents (subagents)](../asset-types/agents.md) | [✅](#agents) | translate |
+| [Commands](../asset-types/commands.md) | [?](#commands) | unknown — no public evidence found |
 | [MCP servers](../asset-types/mcp.md) | — | no toolkit adapter yet |
 | [Pi extensions](../asset-types/pi-extensions.md) | N/A | Pi-only asset type |
 
@@ -38,3 +39,10 @@ Supported via the **translate** mechanism — see the [agents asset type](../ass
 - **Format:** markdown+frontmatter; req `name`,`description`; per-profile-dir `AGENT.md`; also imports project-relative `.claude/agents/*.md` (project scope only)
 - **Toolkit adapter:** enabled (translate)
 - **Source:** [docs.devin.ai/cli/subagents](https://docs.devin.ai/cli/subagents) (cli.devin.ai/docs/subagents now 301s here; re-verified 2026-06-10)
+
+## Commands { #commands }
+
+Unknown — bounded search surfaced no public evidence.
+
+- **Support:** ?
+- **How:** unknown — no public evidence found

@@ -7,6 +7,7 @@
 | [Instructions](../asset-types/instructions.md) | [✅](#instructions) | native `AGENTS.md` reader |
 | [Skills](../asset-types/skills.md) | [✅](#skills) | `.agents/skills` |
 | [Agents (subagents)](../asset-types/agents.md) | [✅](#agents) | config_file+folder |
+| [Commands](../asset-types/commands.md) | [?](#commands) | unknown — no public evidence found |
 | [MCP servers](../asset-types/mcp.md) | — | no toolkit adapter yet |
 | [Pi extensions](../asset-types/pi-extensions.md) | N/A | Pi-only asset type |
 
@@ -38,3 +39,10 @@ Supported via the **config_file+folder** mechanism — see the [agents asset typ
 - **Format:** markdown+frontmatter req `name`,`description`,`callable:true` to spawn; registered in `firebender.json` array
 - **Toolkit adapter:** currently disabled — would mutate a hot-reloaded IDE registry (firebender.json); pending AJ decision to accept shared-config mutation (PR5a)
 - **Source:** [docs.firebender.com/multi-agent/subagents](https://docs.firebender.com/multi-agent/subagents)
+
+## Commands { #commands }
+
+Unknown — bounded search surfaced no public evidence.
+
+- **Support:** ?
+- **How:** unknown — no public evidence found
