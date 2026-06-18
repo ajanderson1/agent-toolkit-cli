@@ -13,7 +13,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable
 
-from agent_toolkit_cli.skill_agents import AGENTS, get_standard_agents
+from agent_toolkit_cli.skill_agents import get_standard_agents
+from agent_toolkit_tui.display_names import harness_label
 
 
 @dataclass(frozen=True)
@@ -34,11 +35,7 @@ def _standard_info(context: dict | None = None) -> ColumnInfo:
         f"Covered by the standard convention for {asset_type} ({len(harness_names)}):",
         "",
     ]
-    bullets = [
-        f"  • {name} — {AGENTS[name].display_name}"
-        if name in AGENTS else f"  • {name}"
-        for name in harness_names
-    ]
+    bullets = [f"  • {harness_label(name)}" for name in harness_names]
     # Caller-supplied trailing lines (#361): e.g. the agents panel's devin
     # project-scope-only note at global scope. Appended after the bullets.
     extra_lines = list(ctx.get("extra_lines") or [])

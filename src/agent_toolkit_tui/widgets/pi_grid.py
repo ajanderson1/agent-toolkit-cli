@@ -31,6 +31,7 @@ from textual.coordinate import Coordinate
 from textual.message import Message
 from textual.widgets import DataTable
 
+from agent_toolkit_tui.display_names import asset_type_label, pi_extension_origin_label
 from agent_toolkit_tui.pi_extension_state import PiExtensionRow
 from agent_toolkit_tui.screens.cell_info import CellInfoScreen
 
@@ -45,7 +46,7 @@ _INFO_GLYPH      = "ⓘ"
 _GLOBAL_GLYPH    = "🌐"
 
 _ORIGIN_MARKUP = {
-    "store-owned": "[blue]store[/]",
+    "store-owned": "[blue]library[/]",
     "npm":         "[cyan]npm[/]",
     "untracked":   "[dim]untracked[/]",
 }
@@ -167,34 +168,42 @@ class PiGrid(Vertical):
         col = coord.column
         if col == _COL_EXTENSION:
             title = f"{row.slug} · extension"
-            body = (
-                f"Pi extension [b]{row.slug}[/]\n"
-                f"Origin: {row.origin}\n"
-                f"Source: {row.source}"
-            )
-            if row.origin == "store-owned":
-                from agent_toolkit_cli.pi_extension_paths import library_pi_extension_path
-                ext_dir = library_pi_extension_path(row.slug)
-                body += f"\nStore path: {ext_dir}"
+            body = self._extension_info_body(row)
         elif col == _COL_SCOPE:
             scope = self._scope
             title = f"{row.slug} · Pi ({scope})"
             body = self._info_body(row=row, scope=scope)
         elif col == _COL_ORIGIN:
             title = f"{row.slug} · origin"
-            body = (
-                f"Origin: {row.origin}\n\n"
-                f"[b]store-owned[/]: cloned into the agent-toolkit library;\n"
-                f"  managed via pi-extension add/install/update.\n"
-                f"[b]npm[/]: registry package in Pi settings.json packages[];\n"
-                f"  managed via pi-extension install (scope toggle).\n"
-                f"[b]untracked[/]: found in Pi's extensions/ dir but not in\n"
-                f"  the asset-type lock. Use pi-extension import to adopt."
-            )
+            body = self._origin_info_body()
         else:
             return
 
         self.app.push_screen(CellInfoScreen(title=title, body_markup=body))
+
+    def _extension_info_body(self, row: PiExtensionRow) -> str:
+        body = (
+            f"Pi extension [b]{row.slug}[/]\n"
+            f"Origin: {pi_extension_origin_label(row.origin)}\n"
+            f"Source: {row.source}"
+        )
+        if row.origin == "store-owned":
+            from agent_toolkit_cli.pi_extension_paths import library_pi_extension_path
+
+            ext_dir = library_pi_extension_path(row.slug)
+            body += f"\nLibrary path: {ext_dir}"
+        return body
+
+    def _origin_info_body(self) -> str:
+        return (
+            "Origin labels:\n\n"
+            "[b]library-owned[/]: cloned into the agent-toolkit library;\n"
+            "  managed via pi-extension add/install/update.\n"
+            "[b]npm[/]: registry package in Pi settings.json packages[];\n"
+            "  managed via pi-extension install (scope toggle).\n"
+            "[b]untracked[/]: found in Pi's extensions/ dir but not in\n"
+            "  the asset-type lock. Use pi-extension import to adopt."
+        )
 
     def _info_body(self, *, row: PiExtensionRow, scope: str) -> str:
         from pathlib import Path
@@ -302,7 +311,7 @@ class PiGrid(Vertical):
         # no-op and the offset holds. See skill_grid._rebuild for the full note.
         saved_scroll = (table.scroll_x, table.scroll_y)
         table.clear(columns=True)
-        table.add_column(f"EXTENSION {_INFO_GLYPH}", width=24)
+        table.add_column(f"{asset_type_label('pi-extension')} {_INFO_GLYPH}", width=24)
         table.add_column(f"Pi {_INFO_GLYPH}", width=14)
         table.add_column("Origin", width=12)
         table.add_column("Source", width=30)
@@ -353,4 +362,4 @@ class PiGrid(Vertical):
 
     def _origin_glyph(self, origin: str) -> str:
         """Return styled markup for an origin label. Never named _render_*."""
-        return _ORIGIN_MARKUP.get(origin, origin)
+        return _ORIGIN_MARKUP.get(origin, pi_extension_origin_label(origin))

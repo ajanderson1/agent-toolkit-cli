@@ -33,8 +33,12 @@ async def test_columns_standard_first_then_noncovered_main():
         await pilot.pause()
         table = app.query_one("#agent-table", DataTable)
         labels = [str(c.label) for c in table.columns.values()]
-        assert labels[1] == "Standard ⓘ"
+        from agent_toolkit_cli.agent_adapters.standard import agents_standard_covered
+
+        assert labels[0] == "Agent ⓘ"
+        assert labels[1] == f"Standard ({len(agents_standard_covered('global'))}) ⓘ"
         assert not any("Claude Code" in lbl for lbl in labels)  # absorbed
+        assert not any("claude-code" in lbl for lbl in labels)
         # cursor is covered at both scopes → NO Cursor column either.
         assert not any("Cursor" in lbl for lbl in labels)
         assert any("OpenCode" in lbl for lbl in labels)
@@ -59,11 +63,11 @@ async def test_press_i_on_standard_column_opens_registry_modal():
         body = str(app.screen.query_one("#column-info-body").render())
         assert "agents" in body
         # Covered set (global): claude-code, kode, neovate, cortex, cursor.
-        assert "kode" in body and "neovate" in body and "cortex" in body
-        assert "cursor" in body
+        assert "Kode" in body and "Neovate" in body and "Cortex" in body
+        assert "Cursor" in body
         # The global-scope panel (the grid default) carries the devin
         # project-only NOTE (devin is NOT in the global covered list).
-        assert "devin" in body
+        assert "Devin" in body
         assert "project scope only" in body
 
 
@@ -92,7 +96,7 @@ async def test_standard_modal_at_project_scope_lists_devin_without_note():
         assert isinstance(app.screen, ColumnInfoModal)
         body = str(app.screen.query_one("#column-info-body").render())
         # devin is in the covered list as a plain bullet...
-        assert "devin" in body
+        assert "Devin" in body
         # ...and the global-panel NOTE is gone.
         assert "project scope only" not in body
 

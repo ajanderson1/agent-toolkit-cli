@@ -1,6 +1,6 @@
 # TUI Label Consistency Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Standardize user-facing TUI labels for asset types, harness names, Standard columns, and Pi extension library terminology.
 
@@ -30,7 +30,7 @@
 - Create: `src/agent_toolkit_tui/display_names.py`
 - Create: `tests/test_tui/test_display_names.py`
 
-- [ ] **Step 1: Write failing helper tests**
+- [x] **Step 1: Write failing helper tests**
 
 Create `tests/test_tui/test_display_names.py`:
 
@@ -83,7 +83,7 @@ def test_pi_extension_origin_label_uses_library():
     assert pi_extension_origin_label("untracked") == "untracked"
 ```
 
-- [ ] **Step 2: Run helper tests to verify failure**
+- [x] **Step 2: Run helper tests to verify failure**
 
 Run:
 
@@ -93,7 +93,7 @@ uv run pytest tests/test_tui/test_display_names.py -q
 
 Expected: FAIL with `ModuleNotFoundError: No module named 'agent_toolkit_tui.display_names'`.
 
-- [ ] **Step 3: Implement helpers**
+- [x] **Step 3: Implement helpers**
 
 Create `src/agent_toolkit_tui/display_names.py`:
 
@@ -158,7 +158,7 @@ def pi_extension_origin_label(origin: str) -> str:
     return _PI_EXTENSION_ORIGINS.get(origin, origin)
 ```
 
-- [ ] **Step 4: Run helper tests to verify pass**
+- [x] **Step 4: Run helper tests to verify pass**
 
 Run:
 
@@ -168,7 +168,7 @@ uv run pytest tests/test_tui/test_display_names.py -q
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit helpers**
+- [x] **Step 5: Commit helpers**
 
 ```bash
 git add src/agent_toolkit_tui/display_names.py tests/test_tui/test_display_names.py
@@ -181,7 +181,7 @@ git commit -m "test: cover TUI display label helpers"
 - Modify: `src/agent_toolkit_tui/app.py`
 - Create: `tests/test_tui/test_app_labels.py`
 
-- [ ] **Step 1: Write failing sidebar/content-header tests**
+- [x] **Step 1: Write failing sidebar/content-header tests**
 
 Create `tests/test_tui/test_app_labels.py` with rendered sidebar labels and content header coverage:
 
@@ -217,7 +217,7 @@ async def test_content_header_uses_plural_asset_label():
         assert "Pi Extensions" in header
 ```
 
-- [ ] **Step 2: Run app label tests to verify failure**
+- [x] **Step 2: Run app label tests to verify failure**
 
 Run:
 
@@ -227,7 +227,7 @@ uv run pytest tests/test_tui/test_app_labels.py -q
 
 Expected: FAIL because sidebar still renders lowercase singular labels and header uses singular labels.
 
-- [ ] **Step 3: Update `app.py` labels**
+- [x] **Step 3: Update `app.py` labels**
 
 In `src/agent_toolkit_tui/app.py`:
 
@@ -266,7 +266,7 @@ return f"{label}  ·  {n} items"
 
 Keep existing spacing/dot style if current code differs; only label source changes.
 
-- [ ] **Step 4: Run app label tests to verify pass**
+- [x] **Step 4: Run app label tests to verify pass**
 
 ```bash
 uv run pytest tests/test_tui/test_app_labels.py tests/test_tui/test_sidebar_highlight_sync.py -q
@@ -274,7 +274,7 @@ uv run pytest tests/test_tui/test_app_labels.py tests/test_tui/test_sidebar_high
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit app label changes**
+- [x] **Step 5: Commit app label changes**
 
 ```bash
 git add src/agent_toolkit_tui/app.py tests/test_tui/test_app_labels.py tests/test_tui/test_sidebar_highlight_sync.py
@@ -291,7 +291,7 @@ git commit -m "fix(tui): pluralize asset navigation labels"
 - Modify: `src/agent_toolkit_tui/widgets/pi_grid.py`
 - Modify tests under `tests/test_tui/` for each grid.
 
-- [ ] **Step 1: Write failing grid-header assertions**
+- [x] **Step 1: Write failing grid-header assertions**
 
 Add exact rendered-label assertions near existing grid column tests:
 
@@ -323,7 +323,7 @@ assert "Source" in labels
 assert not any("EXTENSION" in label for label in labels)
 ```
 
-- [ ] **Step 2: Run grid tests to verify failure**
+- [x] **Step 2: Run grid tests to verify failure**
 
 ```bash
 uv run pytest \
@@ -337,7 +337,7 @@ uv run pytest \
 
 Expected: FAIL on current all-caps/raw-key labels.
 
-- [ ] **Step 3: Update grid header code**
+- [x] **Step 3: Update grid header code**
 
 Import helpers where needed:
 
@@ -433,7 +433,7 @@ body = f"Installed.\nAgent {row.slug} is projected into {display} @ {self._scope
 
 Leave exact CLI snippets unchanged when they need raw flags, for example `--harness claude-code`, because copy/paste correctness beats display polish inside command examples.
 
-- [ ] **Step 4: Run grid tests to verify pass**
+- [x] **Step 4: Run grid tests to verify pass**
 
 ```bash
 uv run pytest \
@@ -447,7 +447,7 @@ uv run pytest \
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit grid header changes**
+- [x] **Step 5: Commit grid header changes**
 
 ```bash
 git add src/agent_toolkit_tui/widgets tests/test_tui
@@ -460,7 +460,7 @@ git commit -m "fix(tui): normalize grid header labels"
 - Modify: `src/agent_toolkit_tui/widgets/pi_grid.py`
 - Modify: `tests/test_tui/test_pi_grid.py`
 
-- [ ] **Step 1: Write failing Pi origin tests**
+- [x] **Step 1: Write failing Pi origin tests**
 
 Add tests that seed a `PiExtensionRow` with `origin="store-owned"`, render the grid, and assert visible cell text:
 
@@ -487,7 +487,7 @@ assert "store-owned" not in slug_body
 
 If `_origin_info_body()` and `_extension_info_body()` do not exist yet, create helpers in the implementation step and test them directly.
 
-- [ ] **Step 2: Run Pi tests to verify failure**
+- [x] **Step 2: Run Pi tests to verify failure**
 
 ```bash
 uv run pytest tests/test_tui/test_pi_grid.py -q
@@ -495,7 +495,7 @@ uv run pytest tests/test_tui/test_pi_grid.py -q
 
 Expected: FAIL because current origin markup renders `store` and help text says `store-owned` / `Store path`.
 
-- [ ] **Step 3: Update Pi origin rendering and help copy**
+- [x] **Step 3: Update Pi origin rendering and help copy**
 
 In `pi_grid.py`, import:
 
@@ -564,7 +564,7 @@ elif col == _COL_ORIGIN:
 
 Keep internal `row.origin == "store-owned"` checks unchanged.
 
-- [ ] **Step 4: Run Pi tests to verify pass**
+- [x] **Step 4: Run Pi tests to verify pass**
 
 ```bash
 uv run pytest tests/test_tui/test_pi_grid.py -q
@@ -572,7 +572,7 @@ uv run pytest tests/test_tui/test_pi_grid.py -q
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit Pi terminology change**
+- [x] **Step 5: Commit Pi terminology change**
 
 ```bash
 git add src/agent_toolkit_tui/widgets/pi_grid.py tests/test_tui/test_pi_grid.py
@@ -585,7 +585,7 @@ git commit -m "fix(tui): call extension store entries library-owned"
 - Modify: `src/agent_toolkit_tui/column_info.py`
 - Modify: `tests/test_tui/test_column_info.py`
 
-- [ ] **Step 1: Write failing column-info tests**
+- [x] **Step 1: Write failing column-info tests**
 
 Add assertions:
 
@@ -609,7 +609,7 @@ def test_standard_info_uses_tui_harness_display_names():
 
 Standard modal bullets should be display-only. Exact CLI command snippets elsewhere may still include raw harness flags for copy/paste correctness.
 
-- [ ] **Step 2: Run column-info tests to verify failure**
+- [x] **Step 2: Run column-info tests to verify failure**
 
 ```bash
 uv run pytest tests/test_tui/test_column_info.py -q
@@ -617,7 +617,7 @@ uv run pytest tests/test_tui/test_column_info.py -q
 
 Expected: FAIL because bullets currently use `AGENTS[name].display_name`, which renders `Claude Code` and `Gemini CLI`.
 
-- [ ] **Step 3: Update bullet display names**
+- [x] **Step 3: Update bullet display names**
 
 In `column_info.py`, import:
 
@@ -633,7 +633,7 @@ bullets = [f"  • {harness_label(name)}" for name in harness_names]
 
 Do not include raw keys in Standard modal prose; this modal is explanatory UI, not a CLI command block.
 
-- [ ] **Step 4: Run column-info tests to verify pass**
+- [x] **Step 4: Run column-info tests to verify pass**
 
 ```bash
 uv run pytest tests/test_tui/test_column_info.py -q
@@ -641,7 +641,7 @@ uv run pytest tests/test_tui/test_column_info.py -q
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit column info copy**
+- [x] **Step 5: Commit column info copy**
 
 ```bash
 git add src/agent_toolkit_tui/column_info.py tests/test_tui/test_column_info.py
@@ -653,7 +653,7 @@ git commit -m "fix(tui): use concise harness names in column info"
 **Files:**
 - No source edits unless tests reveal regressions.
 
-- [ ] **Step 1: Run focused TUI test suite**
+- [x] **Step 1: Run focused TUI test suite**
 
 ```bash
 uv run pytest tests/test_tui -q
@@ -661,7 +661,7 @@ uv run pytest tests/test_tui -q
 
 Expected: PASS.
 
-- [ ] **Step 2: Run full test suite**
+- [x] **Step 2: Run full test suite**
 
 ```bash
 uv run pytest -q
@@ -669,7 +669,7 @@ uv run pytest -q
 
 Expected: PASS.
 
-- [ ] **Step 3: Manual TUI smoke check**
+- [x] **Step 3: Manual TUI smoke check**
 
 Run:
 
@@ -686,7 +686,7 @@ Check visually:
 - Harness headers say `Claude` and `Gemini`, not `Claude Code` / `Gemini CLI`.
 - Pi extension origin cells say `library`, not `store`.
 
-- [ ] **Step 4: Capture verification evidence**
+- [x] **Step 4: Capture verification evidence**
 
 Save command output and a screenshot if available under:
 
@@ -700,7 +700,7 @@ Use a short text file if screenshot capture is not practical:
 assets/verification/448/tui-label-smoke.txt
 ```
 
-- [ ] **Step 5: Final commit if verification artifacts are committed by project practice**
+- [x] **Step 5: Final commit if verification artifacts are committed by project practice**
 
 If verification artifacts are committed in this repo, run:
 

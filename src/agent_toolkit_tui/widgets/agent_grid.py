@@ -26,9 +26,9 @@ from textual.coordinate import Coordinate
 from textual.message import Message
 from textual.widgets import DataTable
 
-from agent_toolkit_cli.skill_agents import AGENTS
 from agent_toolkit_tui.agent_state import INTERACTIVE_HARNESSES, AgentRow
 from agent_toolkit_tui.column_info import get_column_info
+from agent_toolkit_tui.display_names import asset_type_label, harness_label, standard_label
 from agent_toolkit_tui.widgets.column_info_modal import ColumnInfoModal
 
 _LINKED_GLYPH   = "[green]✔[/]"
@@ -189,7 +189,8 @@ class AgentGrid(Vertical):
                 return
             cell = row.cells.get((harness, self._scope))
             scope_flag = "-g" if self._scope == "global" else "-p"
-            title = f"{row.slug} · {harness} @ {self._scope}"
+            display = harness_label(harness)
+            title = f"{row.slug} · {display} @ {self._scope}"
             pending = self._pending.get((self._scope, harness, row.slug))
             if pending == "link":
                 body = (
@@ -204,11 +205,11 @@ class AgentGrid(Vertical):
             elif cell is None:
                 body = f"Not available at {self._scope} scope."
             elif cell.linked:
-                body = f"Installed.\nAgent {row.slug} is projected into {harness} @ {self._scope}."
+                body = f"Installed.\nAgent {row.slug} is projected into {display} @ {self._scope}."
             else:
                 body = (
                     f"Not installed.\nPress [b]space[/] to queue install "
-                    f"into {harness} @ {self._scope}.\n\n"
+                    f"into {display} @ {self._scope}.\n\n"
                     f"Or from the CLI:\n"
                     f"  [b]agent-toolkit-cli agent install {row.slug} "
                     f"{scope_flag} --harnesses {harness}[/]"
@@ -326,7 +327,7 @@ class AgentGrid(Vertical):
 
             covered = sorted(agents_standard_covered(self._scope))
             extra_lines = (
-                ["", "devin reads .claude/agents at project scope only."]
+                ["", "Devin reads .claude/agents at project scope only."]
                 if self._scope == "global"
                 else []
             )
@@ -353,17 +354,18 @@ class AgentGrid(Vertical):
         saved_scroll = (table.scroll_x, table.scroll_y)
         table.clear(columns=True)
         # Slug column — info glyph since `i` works on it.
-        table.add_column(f"AGENT {_INFO_GLYPH}", width=22)
+        table.add_column(f"{asset_type_label('agent')} {_INFO_GLYPH}", width=22)
         # Per-harness columns. "standard" is the .claude/agents slot (#361),
         # not a catalog harness — label it explicitly (same special-case as
         # skill_grid). The Standard column leads; everything after it is
         # implicitly non-standard.
         for harness in INTERACTIVE_HARNESSES:
             if harness == "standard":
-                base = "Standard"
+                from agent_toolkit_cli.agent_adapters.standard import agents_standard_covered
+
+                base = standard_label(len(agents_standard_covered(self._scope)))
             else:
-                cfg = AGENTS.get(harness)
-                base = cfg.display_name if cfg else harness
+                base = harness_label(harness)
             table.add_column(f"{base} {_INFO_GLYPH}", width=14)
         # State column — shows installed/library/unlisted (#360).
         table.add_column("State", width=10)

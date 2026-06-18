@@ -813,10 +813,10 @@ version = "4.3.0"
 to:
 
 ```toml
-version = "4.4.0"
+version = "5.0.0"
 ```
 
-Use `4.4.0` because this is a backwards-compatible feature. Then run `uv lock` if `uv.lock` records the package version. If release-please demands a different workflow, stop and escalate before changing release config.
+Use `5.0.0` because the release was explicitly promoted to a major version before merge. Then run `uv lock` if `uv.lock` records the package version. If release-please demands a different workflow, stop and escalate before changing release config.
 
 - [x] **Step 2: Run focused command tests**
 
@@ -847,7 +847,7 @@ uv run agent-toolkit-cli agents --help
 
 Expected:
 
-- Version prints `4.4.0`.
+- Version prints `5.0.0`.
 - Command help works for plural and singular.
 - Existing skill/agent help still works.
 
