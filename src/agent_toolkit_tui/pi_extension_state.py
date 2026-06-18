@@ -25,6 +25,9 @@ class PiCell:
     global_loaded: bool
     project_loaded: bool
     origin: Origin
+    managed: bool = True
+    package_spec: str | None = None
+    config_path: str | None = None
 
 
 @dataclass
@@ -36,20 +39,41 @@ class PiExtensionRow:
     source: str
     global_cell: PiCell
     project_cell: PiCell
+    managed: bool = True
+    global_package_spec: str | None = None
+    project_package_spec: str | None = None
+    global_config_path: str | None = None
+    project_config_path: str | None = None
 
 
 def _row_from_record(rec: InventoryRecord) -> PiExtensionRow:
-    cell = PiCell(
+    global_cell = PiCell(
         global_loaded=rec.global_loaded,
         project_loaded=rec.project_loaded,
         origin=rec.origin,
+        managed=rec.managed,
+        package_spec=rec.global_package_spec,
+        config_path=str(rec.global_config_path) if rec.global_config_path else None,
+    )
+    project_cell = PiCell(
+        global_loaded=rec.global_loaded,
+        project_loaded=rec.project_loaded,
+        origin=rec.origin,
+        managed=rec.managed,
+        package_spec=rec.project_package_spec,
+        config_path=str(rec.project_config_path) if rec.project_config_path else None,
     )
     return PiExtensionRow(
         slug=rec.slug,
         origin=rec.origin,
         source=rec.source,
-        global_cell=cell,
-        project_cell=cell,
+        global_cell=global_cell,
+        project_cell=project_cell,
+        managed=rec.managed,
+        global_package_spec=rec.global_package_spec,
+        project_package_spec=rec.project_package_spec,
+        global_config_path=str(rec.global_config_path) if rec.global_config_path else None,
+        project_config_path=str(rec.project_config_path) if rec.project_config_path else None,
     )
 
 

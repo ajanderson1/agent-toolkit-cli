@@ -139,7 +139,7 @@ def remove_package(
     _write_atomic(path, data)
 
 
-def _npm_identity(spec_or_slug: str) -> str:
+def npm_identity(spec_or_slug: str) -> str:
     """Reduce an npm spec/slug to its bare package identity.
 
     Strips a leading ``npm:`` scheme and a trailing ``@version`` without
@@ -161,6 +161,10 @@ def _npm_identity(spec_or_slug: str) -> str:
     return ("@" + body) if scoped else body
 
 
+# Backward-compatible private alias used by older tests/callers.
+_npm_identity = npm_identity
+
+
 def remove_package_by_identity(
     spec_or_slug: str,
     *,
@@ -179,8 +183,8 @@ def remove_package_by_identity(
         return
     data = _load(path)
     packages = _string_list(data, "packages", path)
-    target = _npm_identity(spec_or_slug)
-    kept = [p for p in packages if _npm_identity(p) != target]
+    target = npm_identity(spec_or_slug)
+    kept = [p for p in packages if npm_identity(p) != target]
     if len(kept) == len(packages):
         return
     data["packages"] = kept

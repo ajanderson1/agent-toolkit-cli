@@ -8,6 +8,9 @@ import shutil
 
 import click
 
+
+from agent_toolkit_cli.pi_extension_ops import unmanaged_npm_advice
+from pathlib import Path
 from agent_toolkit_cli import skill_git
 from agent_toolkit_cli.pi_extension_lock import read_lock, remove_entry, write_lock
 from agent_toolkit_cli.pi_extension_paths import library_lock_path, library_pi_extension_path
@@ -22,6 +25,12 @@ def remove_cmd(slug: str, force: bool) -> None:
     lock = read_lock(lock_path)
     entry = lock.skills.get(slug)
     if entry is None:
+        advice = unmanaged_npm_advice(slug, scope="project", home=Path.home(), project=Path.cwd(), action="remove")
+        if advice:
+            raise click.ClickException(advice)
+        advice = unmanaged_npm_advice(slug, scope="global", home=Path.home(), project=Path.cwd(), action="remove")
+        if advice:
+            raise click.ClickException(advice)
         raise click.ClickException(f"{slug}: not in the global library")
 
     if entry.source_type != "npm":

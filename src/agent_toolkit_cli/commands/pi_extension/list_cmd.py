@@ -12,7 +12,15 @@ from agent_toolkit_cli.commands.pi_extension._common import (
 from agent_toolkit_cli.pi_extension_lock import read_lock
 from agent_toolkit_cli.pi_extension_paths import lock_file_path
 from agent_toolkit_cli.table import render_table
-from agent_toolkit_cli.pi_extension_inventory import build_inventory
+from agent_toolkit_cli.pi_extension_inventory import InventoryRecord, build_inventory
+
+
+def _origin_label(record: InventoryRecord) -> str:
+    if record.origin == "store-owned":
+        return "library"
+    if record.origin == "npm":
+        return "npm managed" if record.managed else "npm unmanaged"
+    return record.origin
 
 
 @click.command("list")
@@ -26,7 +34,7 @@ def list_cmd(
     project_flag: bool,
     as_json: bool,
 ) -> None:
-    """List every Pi extension the toolkit can see (store-owned, untracked, npm)."""
+    """List every Pi extension the toolkit can see (library, untracked, npm)."""
     scope, home, project_root, implicit = scope_and_roots(
         global_,
         project_flag,
@@ -42,8 +50,17 @@ def list_cmd(
     if as_json:
         click.echo(json.dumps([
             {
-                "slug": r.slug, "origin": r.origin, "source": r.source,
-                "globalLoaded": r.global_loaded, "projectLoaded": r.project_loaded,
+                "slug": r.slug,
+                "origin": r.origin,
+                "displayOrigin": _origin_label(r),
+                "source": r.source,
+                "managed": r.managed,
+                "globalLoaded": r.global_loaded,
+                "projectLoaded": r.project_loaded,
+                "globalPackageSpec": r.global_package_spec,
+                "projectPackageSpec": r.project_package_spec,
+                "globalConfigPath": str(r.global_config_path) if r.global_config_path else None,
+                "projectConfigPath": str(r.project_config_path) if r.project_config_path else None,
             }
             for r in records
         ], indent=2))
@@ -53,7 +70,7 @@ def list_cmd(
         return
     rows = [
         [r.slug, "✔" if r.global_loaded else "☐", "✔" if r.project_loaded else "☐",
-         r.origin, r.source]
+         _origin_label(r), r.source]
         for r in records
     ]
     click.echo(render_table(rows))

@@ -245,3 +245,36 @@ def test_npm_entry_with_hex_ref_is_not_pinned(tmp_path, monkeypatch):
     records = {r.slug: r for r in build_inventory(home=tmp_path)}
     assert records["npm-hex"].origin == "npm"
     assert records["npm-hex"].pinned_sha is None
+
+def test_npm_from_lock_and_settings_is_managed(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    lock = tmp_path / ".agent-toolkit" / "pi-extensions-lock.json"
+    lock.parent.mkdir(parents=True)
+    lock.write_text(json.dumps({
+        "version": 1,
+        "skills": {
+            "pi-recap": {"source": "npm:pi-recap", "sourceType": "npm"}
+        },
+    }) + "\n")
+    _seed_packages(tmp_path / ".pi" / "agent" / "settings.json", "npm:pi-recap")
+
+    rec = {r.slug: r for r in build_inventory(home=tmp_path)}["pi-recap"]
+
+    assert rec.origin == "npm"
+    assert rec.managed is True
+    assert rec.global_loaded is True
+    assert rec.global_package_spec == "npm:pi-recap"
+    assert rec.global_config_path == tmp_path / ".pi" / "agent" / "settings.json"
+
+
+def test_npm_from_settings_without_lock_is_unmanaged(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _seed_packages(tmp_path / ".pi" / "agent" / "settings.json", "npm:pi-title-renamer")
+
+    rec = {r.slug: r for r in build_inventory(home=tmp_path)}["pi-title-renamer"]
+
+    assert rec.origin == "npm"
+    assert rec.managed is False
+    assert rec.global_loaded is True
+    assert rec.global_package_spec == "npm:pi-title-renamer"
+    assert rec.global_config_path == tmp_path / ".pi" / "agent" / "settings.json"

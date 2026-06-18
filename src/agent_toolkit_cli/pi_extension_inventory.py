@@ -33,6 +33,11 @@ class InventoryRecord:
     global_loaded: bool = False
     project_loaded: bool = False
     pinned_sha: str | None = None
+    managed: bool = False
+    global_package_spec: str | None = None
+    project_package_spec: str | None = None
+    global_config_path: Path | None = None
+    project_config_path: Path | None = None
 
 
 def _extensions_root(*, scope: Scope, home: Path | None, project: Path | None) -> Path:
@@ -115,9 +120,10 @@ def build_inventory(
                 slug,
                 InventoryRecord(
                     slug=slug, origin=origin, source=entry.source,
-                    pinned_sha=pinned_sha,
+                    pinned_sha=pinned_sha, managed=True,
                 ),
             )
+            rec.managed = True
             # A slug that appears in both scopes: store-owned beats npm in the
             # global lock. Project lock rows refine the loaded flags only.
             if rec.origin != "store-owned" or origin == "store-owned":
@@ -148,19 +154,24 @@ def build_inventory(
     # store-owned identity; we only record the npm presence (the *_loaded
     # flag). npm does upgrade a slug first seen as loose/untracked.
     for scope, _ in scopes:
+        config_path = _pi_settings.settings_path(scope=scope, home=home, project=project)
         for spec in _pi_settings.read_packages(scope=scope, home=home, project=project):
             if not spec.startswith("npm:"):
                 continue
             slug = _npm_slug(spec)
             rec = by_slug.setdefault(
-                slug, InventoryRecord(slug=slug, origin="npm", source=spec)
+                slug, InventoryRecord(slug=slug, origin="npm", source=spec, managed=False)
             )
             if rec.origin != "store-owned":
                 rec.origin = "npm"
                 rec.source = spec
             if scope == "global":
                 rec.global_loaded = True
+                rec.global_package_spec = spec
+                rec.global_config_path = config_path
             else:
                 rec.project_loaded = True
+                rec.project_package_spec = spec
+                rec.project_config_path = config_path
 
     return [by_slug[k] for k in sorted(by_slug)]
