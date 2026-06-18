@@ -1065,3 +1065,59 @@ def test_project_info_explains_global_loaded_install_block():
     assert "Already loaded globally" in body
     assert "uninstall globally" in body
     assert "queue install" not in body
+
+@pytest.mark.asyncio
+async def test_apply_project_link_fails_when_global_loaded(monkeypatch):
+    """Stale queued project link still fails through shared pi_extension_ops guard."""
+    from agent_toolkit_tui.app import TUIApp
+    import agent_toolkit_cli.pi_extension_install as _pi_install
+    import agent_toolkit_cli.pi_extension_lock as _lock
+    import agent_toolkit_cli.pi_extension_ops as _ops
+
+    notify_calls: list[Any] = []
+
+    entry = MagicMock()
+    entry.source_type = "git"
+    entry.source = "git@github.com:x/alpha"
+    entry.ref = "main"
+    entry.pi_extension_path = None
+
+    def fake_read_lock(path):
+        lf = MagicMock()
+        lf.skills = {"alpha": entry}
+        return lf
+
+    def fake_global_plan(*, slug, scope, action, home=None, project=None):
+        assert slug == "alpha"
+        assert scope == "global"
+        assert action == "install"
+        return MagicMock(create=False)
+
+    monkeypatch.setattr(_lock, "read_lock", fake_read_lock)
+    monkeypatch.setattr(_ops, "_global_entry", lambda slug: entry)
+    monkeypatch.setattr(_pi_install, "plan", fake_global_plan)
+    monkeypatch.setattr("agent_toolkit_cli.pi_extension_paths.library_lock_path", lambda env=None: Path("/fake/lock"))
+
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        orig_notify = app.notify
+
+        def spy_notify(*a, **k):
+            notify_calls.append(k)
+            return orig_notify(*a, **k)
+
+        monkeypatch.setattr(app, "notify", spy_notify)
+        app._active_asset_type = "pi-extension"
+        grid = app.query_one("#pi-grid", PiGrid)
+        grid.set_rows([_store_row("alpha", global_loaded=True, project_loaded=False)])
+        grid.restore_pending({("project", "alpha"): "link"})
+        await pilot.pause()
+
+        app._apply_pi_pending()
+        footer = str(app.query_one("#footer-pending", Static).render())
+
+    assert "apply failed" in footer
+    assert "already installed at global scope" in footer
+    assert notify_calls
+    assert notify_calls[-1].get("severity") == "error"
