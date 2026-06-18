@@ -45,3 +45,4 @@ site/
 # in the public repo. Already excluded from the published MkDocs site via
 # mkdocs.yml exclude_docs; this also keeps it out of the repo source.
 docs/superpowers/
+CLAUDE.md
