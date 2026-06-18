@@ -1,5 +1,26 @@
 # Changelog
 
+## [5.0.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v4.3.0...v5.0.0) (2026-06-18)
+
+
+### ⚠ BREAKING CHANGES
+
+* Commands ship as the v5.0.0 release line.
+
+### Features
+
+* **commands:** add command asset type ([0a2eb8f](https://github.com/ajanderson1/agent-toolkit-cli/commit/0a2eb8f2b9c4514ddf14f08c34a16e1866e56631))
+
+
+### Bug Fixes
+
+* **tui:** inconsistent asset terminology and labels ([7a5fb38](https://github.com/ajanderson1/agent-toolkit-cli/commit/7a5fb38148da31aef443c11e604a98c55046a6f5)), closes [#448](https://github.com/ajanderson1/agent-toolkit-cli/issues/448)
+
+
+### Chores
+
+* promote commands release to v5.0.0 ([acd2e88](https://github.com/ajanderson1/agent-toolkit-cli/commit/acd2e88d21d6e9dff918b65e6d83e92fa42d8790))
+
 ## [4.3.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v4.2.1...v4.3.0) (2026-06-17)
 
 
