@@ -132,6 +132,9 @@ class PiGrid(Vertical):
         except Exception:
             pass
 
+    def _project_install_blocked(self, *, row: PiExtensionRow, loaded: bool) -> bool:
+        return self._scope == "project" and row.global_cell.global_loaded and not loaded
+
     def _notify_pending(self) -> None:
         self.post_message(self.PendingChanged(len(self._pending)))
 
@@ -253,6 +256,13 @@ class PiGrid(Vertical):
                 )
             if loaded:
                 return f"Loaded (npm).\nPackage {row.source} is in packages[] @ {scope}."
+            if scope == "project" and row.global_cell.global_loaded:
+                return (
+                    f"Not loaded in project (npm).\n"
+                    f"Already loaded globally as {row.source}.\n"
+                    f"Project install is unavailable; uninstall globally first "
+                    f"if this extension must be project-scoped."
+                )
             return (
                 f"Not loaded (npm).\nPress [b]space[/] to queue install\n"
                 f"(adds {row.source} to packages[] @ {scope})."
@@ -279,6 +289,14 @@ class PiGrid(Vertical):
             )
         if loaded:
             return f"Loaded.\n{link} → {canonical}"
+        if scope == "project" and row.global_cell.global_loaded:
+            return (
+                f"Not loaded in project.\n"
+                f"Already loaded globally.\n"
+                f"Project install is unavailable; uninstall globally first "
+                f"if this extension must be project-scoped.\n"
+                f"{link} → {canonical}"
+            )
         return (
             f"Not loaded.\nPress [b]space[/] to queue install\n"
             f"({link} → {canonical})."
@@ -316,6 +334,8 @@ class PiGrid(Vertical):
                 if scope == "global"
                 else row.project_cell.project_loaded
             )
+            if self._project_install_blocked(row=row, loaded=loaded):
+                return
             self._pending[key] = "unlink" if loaded else "link"
 
         try:

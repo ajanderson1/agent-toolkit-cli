@@ -1007,3 +1007,61 @@ async def test_ctrl_s_routes_to_skill_apply_when_active(monkeypatch):
 
     assert "skill" in called
     assert "pi" not in called
+
+@pytest.mark.asyncio
+async def test_project_install_global_loaded_row_is_non_interactive():
+    """Project-scope unloaded cell with global-loaded marker cannot queue install."""
+
+    class _A(App):
+        def compose(self) -> ComposeResult:
+            grid = PiGrid([_store_row("alpha", global_loaded=True, project_loaded=False)], id="g")
+            grid.set_scope("project")
+            yield grid
+
+    app = _A()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        g = app.query_one("#g", PiGrid)
+        table = app.query_one("#pi-table", DataTable)
+        table.cursor_coordinate = table.cursor_coordinate.__class__(row=0, column=1)
+        table.focus()
+        await pilot.pause()
+        await pilot.press("space")
+        await pilot.pause()
+
+    assert g.pending_entries() == {}
+
+
+@pytest.mark.asyncio
+async def test_project_uninstall_global_loaded_row_still_queues_unlink():
+    """Existing duplicate state can still be cleaned up from project scope."""
+
+    class _A(App):
+        def compose(self) -> ComposeResult:
+            grid = PiGrid([_store_row("alpha", global_loaded=True, project_loaded=True)], id="g")
+            grid.set_scope("project")
+            yield grid
+
+    app = _A()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        g = app.query_one("#g", PiGrid)
+        table = app.query_one("#pi-table", DataTable)
+        table.cursor_coordinate = table.cursor_coordinate.__class__(row=0, column=1)
+        table.focus()
+        await pilot.pause()
+        await pilot.press("space")
+        await pilot.pause()
+
+    assert g.pending_entries() == {("project", "alpha"): "unlink"}
+
+
+def test_project_info_explains_global_loaded_install_block():
+    grid = PiGrid([_store_row("alpha", global_loaded=True, project_loaded=False)])
+    row = grid._rows[0]
+
+    body = grid._info_body(row=row, scope="project")
+
+    assert "Already loaded globally" in body
+    assert "uninstall globally" in body
+    assert "queue install" not in body
