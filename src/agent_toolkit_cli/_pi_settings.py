@@ -69,6 +69,26 @@ def read_packages(
     return _string_list(_load(path), "packages", path)
 
 
+def has_package_identity(
+    spec_or_slug: str,
+    *,
+    scope: Scope,
+    home: Path | None = None,
+    project: Path | None = None,
+) -> bool:
+    """Return true when packages[] contains the same npm package identity.
+
+    Mirrors remove_package_by_identity() matching: `npm:foo`, `foo`, and
+    `foo@1.2.3` all match identity `foo`; scoped package names keep their
+    leading `@`.
+    """
+    target = _npm_identity(spec_or_slug)
+    return any(
+        _npm_identity(package) == target
+        for package in read_packages(scope=scope, home=home, project=project)
+    )
+
+
 def read_extension_paths(
     *,
     scope: Scope,

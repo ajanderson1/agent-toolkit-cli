@@ -58,6 +58,34 @@ def _global_entry(slug: str) -> LockEntry | None:
     return read_lock(library_lock_path(env={})).skills.get(slug)
 
 
+def _store_owned_global_loaded(slug: str, *, home: Path | None) -> bool:
+    p = pi_extension_install.plan(
+        slug=slug, scope="global", action="install", home=home, project=None
+    )
+    return not p.create
+
+
+def _globally_loaded(slug: str, entry: LockEntry, *, home: Path | None) -> bool:
+    if entry.source_type == "npm":
+        return _pi_settings.has_package_identity(
+            entry.source, scope="global", home=home, project=None
+        )
+    return _store_owned_global_loaded(slug, home=home)
+
+
+def _reject_project_install_if_global_loaded(
+    *, slug: str, entry: LockEntry, scope: Scope, home: Path | None
+) -> None:
+    if scope != "project":
+        return
+    if not _globally_loaded(slug, entry, home=home):
+        return
+    raise pi_extension_install.InstallError(
+        f"{slug}: already installed at global scope; "
+        f"uninstall globally before installing at project scope"
+    )
+
+
 def install(
     *,
     slug: str,
@@ -71,6 +99,10 @@ def install(
         raise pi_extension_install.InstallError(
             f"{slug}: not in the global library; run `pi-extension add` first"
         )
+
+    _reject_project_install_if_global_loaded(
+        slug=slug, entry=entry, scope=scope, home=home
+    )
 
     if entry.source_type == "npm":
         _pi_settings.add_package(entry.source, scope=scope, home=home, project=project)
