@@ -1,5 +1,12 @@
 # Changelog
 
+## [5.1.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v5.0.0...v5.1.0) (2026-06-18)
+
+
+### Bug Fixes
+
+* **pi-extension:** clarify unmanaged npm lifecycle ([fe69519](https://github.com/ajanderson1/agent-toolkit-cli/commit/fe695190fa3d23a0fe1b632f900c8fa308363f00)), closes [#454](https://github.com/ajanderson1/agent-toolkit-cli/issues/454)
+
 ## [5.0.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v4.3.0...v5.0.0) (2026-06-18)
 
 
