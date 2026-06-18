@@ -79,6 +79,28 @@ def _npm_row(
     )
 
 
+def _unmanaged_npm_row(slug: str) -> PiExtensionRow:
+    spec = f"npm:{slug}"
+    cell = PiCell(
+        global_loaded=True,
+        project_loaded=False,
+        origin="npm",
+        managed=False,
+        package_spec=spec,
+        config_path="/tmp/home/.pi/agent/settings.json",
+    )
+    return PiExtensionRow(
+        slug=slug,
+        origin="npm",
+        source=spec,
+        global_cell=cell,
+        project_cell=cell,
+        managed=False,
+        global_config_path="/tmp/home/.pi/agent/settings.json",
+        global_package_spec=spec,
+    )
+
+
 def _untracked_row(slug: str) -> PiExtensionRow:
     cell = PiCell(global_loaded=True, project_loaded=False, origin="untracked")
     return PiExtensionRow(
@@ -377,6 +399,53 @@ async def test_npm_row_toggles_per_scope():
         await pilot.pause()
         await pilot.press("space")
         assert g.pending_entries() == {("project", "@scope/pkg"): "unlink"}
+
+
+@pytest.mark.asyncio
+async def test_unmanaged_npm_row_is_non_interactive_and_labeled():
+    """Space on unmanaged npm warns/no-ops; origin says npm unmanaged."""
+
+    class _A(App):
+        def compose(self) -> ComposeResult:
+            yield PiGrid([_unmanaged_npm_row("pi-title-renamer")], id="g")
+
+    app = _A()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        g = app.query_one("#g", PiGrid)
+        table = app.query_one("#pi-table", DataTable)
+        assert "npm unmanaged" in str(table.get_cell_at(Coordinate(0, 2)))
+        table.cursor_coordinate = table.cursor_coordinate.__class__(row=0, column=1)
+        table.focus()
+        await pilot.pause()
+        await pilot.press("space")
+        assert g.pending_entries() == {}
+
+
+@pytest.mark.asyncio
+async def test_unmanaged_npm_info_body_gives_manual_removal_advice():
+    """Info body explains toolkit refusal and exact settings edit."""
+
+    class _A(App):
+        def compose(self) -> ComposeResult:
+            yield PiGrid([_unmanaged_npm_row("pi-title-renamer")], id="g")
+
+    app = _A()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        g = app.query_one("#g", PiGrid)
+        row = _unmanaged_npm_row("pi-title-renamer")
+        body = g._info_body(row=row, scope="global")
+        assert "unmanaged npm package" in body
+        assert "will not remove packages it did not add" in body
+        assert "/tmp/home/.pi/agent/settings.json" in body
+        assert 'remove "npm:pi-title-renamer" from packages[]' in body
+
+        # If the active scope has no npm metadata, still show the exact loaded
+        # scope path/spec instead of a vague placeholder.
+        project_body = g._info_body(row=row, scope="project")
+        assert "/tmp/home/.pi/agent/settings.json" in project_body
+        assert 'remove "npm:pi-title-renamer" from packages[]' in project_body
 
 
 @pytest.mark.asyncio

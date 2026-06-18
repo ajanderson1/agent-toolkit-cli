@@ -1,3 +1,5 @@
+import pytest
+from agent_toolkit_cli import pi_extension_install
 """Task 2 (#333): pi_extension_ops install/uninstall core (global scope).
 
 The core is the single path the CLI and TUI both call. These tests lock the
@@ -78,3 +80,33 @@ def test_install_npm_global_adds_package(tmp_path, monkeypatch):
     ops.install(slug="foo", scope="global", home=tmp_path, project=None)
     body = json.loads(_global_settings(tmp_path).read_text())
     assert body["packages"] == ["npm:foo"]
+
+def test_uninstall_unmanaged_npm_raises_with_advice(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    settings = tmp_path / ".pi" / "agent" / "settings.json"
+    settings.parent.mkdir(parents=True)
+    settings.write_text(json.dumps({"packages": ["npm:pi-title-renamer"]}))
+
+    with pytest.raises(pi_extension_install.InstallError) as excinfo:
+        ops.uninstall(slug="pi-title-renamer", scope="global", home=tmp_path)
+
+    message = str(excinfo.value)
+    assert "unmanaged npm package" in message
+    assert "will not remove packages it did not add" in message
+    assert str(settings) in message
+    assert 'remove "npm:pi-title-renamer" from packages[]' in message
+
+def test_uninstall_unmanaged_npm_project_scope_raises(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    settings = tmp_path / ".pi" / "settings.json"
+    settings.parent.mkdir(parents=True)
+    settings.write_text(json.dumps({"packages": ["npm:pi-title-renamer"]}))
+
+    with pytest.raises(pi_extension_install.InstallError) as excinfo:
+        ops.uninstall(slug="pi-title-renamer", scope="project", project=tmp_path)
+
+    message = str(excinfo.value)
+    assert "unmanaged npm package" in message
+    assert "will not remove packages it did not add" in message
+    assert str(settings) in message
+    assert 'remove "npm:pi-title-renamer" from packages[]' in message

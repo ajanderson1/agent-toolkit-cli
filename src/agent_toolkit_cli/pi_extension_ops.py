@@ -11,6 +11,7 @@ lock entry — deleting the library copy is the `remove` verb's job, not
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal
 
 from agent_toolkit_cli import _pi_settings, pi_extension_install
 from agent_toolkit_cli.pi_extension_lock import (
@@ -22,6 +23,36 @@ from agent_toolkit_cli.pi_extension_paths import (
 
 __all__ = ["install", "uninstall"]
 
+
+
+from typing import Literal
+
+def unmanaged_npm_advice(
+    slug: str,
+    *,
+    scope: Scope,
+    home: Path | None,
+    project: Path | None,
+    action: Literal["remove", "uninstall"],
+) -> str | None:
+    path = _pi_settings.settings_path(scope=scope, home=home, project=project)
+    if not path.exists():
+        return None
+    for spec in _pi_settings.read_packages(scope=scope, home=home, project=project):
+        if spec.startswith("npm:") and _pi_settings.npm_identity(spec) == _pi_settings.npm_identity(slug):
+            if action == "remove":
+                return (
+                    f"{slug} is not managed by agent-toolkit.\n"
+                    f"Found unmanaged npm package in {path}.\n"
+                    "agent-toolkit-cli will not remove packages it did not add.\n"
+                    f"To remove it manually, remove \"{spec}\" from packages[]."
+                )
+            return (
+                f"{slug} is an unmanaged npm package in Pi settings.\n"
+                "agent-toolkit-cli will not remove packages it did not add.\n"
+                f"To remove it manually, edit {path} and remove \"{spec}\" from packages[]."
+            )
+    return None
 
 def _global_entry(slug: str) -> LockEntry | None:
     return read_lock(library_lock_path(env={})).skills.get(slug)
@@ -79,6 +110,13 @@ def uninstall(
             entry.source, scope=scope, home=home, project=project
         )
         return
+
+    if entry is None:
+        advice = unmanaged_npm_advice(
+            slug, scope=scope, home=home, project=project, action="uninstall"
+        )
+        if advice:
+            raise pi_extension_install.InstallError(advice)
 
     p = pi_extension_install.plan(
         slug=slug, scope=scope, action="uninstall", home=home, project=project

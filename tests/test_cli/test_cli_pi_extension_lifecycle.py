@@ -883,3 +883,36 @@ def test_doctor_npm_row_no_half_dir(tmp_path, monkeypatch):
     from agent_toolkit_cli import pi_extension_doctor as ped
     findings = ped.diagnose(slugs=None, scope="global", home=tmp_path, project=None)
     assert not [f for f in findings if f.finding_type == "half_dir"]
+
+
+def test_remove_unmanaged_npm_prints_advice_and_fails(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    settings = tmp_path / ".pi" / "agent" / "settings.json"
+    settings.parent.mkdir(parents=True)
+    settings.write_text('{"packages": ["npm:pi-title-renamer"]}')
+    (tmp_path / ".agent-toolkit").mkdir(parents=True, exist_ok=True)
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["pi-extension", "remove", "pi-title-renamer"], catch_exceptions=False)
+
+    assert result.exit_code != 0
+    assert "not managed by agent-toolkit" in result.output
+    assert "will not remove packages it did not add" in result.output
+    assert ".pi/agent/settings.json" in result.output
+    assert 'remove "npm:pi-title-renamer" from packages[]' in result.output
+
+def test_remove_unmanaged_npm_project_scope_prints_advice_and_fails(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.chdir(str(tmp_path))
+    settings = tmp_path / ".pi" / "settings.json"
+    settings.parent.mkdir(parents=True)
+    settings.write_text('{"packages": ["npm:pi-title-renamer"]}')
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["pi-extension", "remove", "pi-title-renamer"], catch_exceptions=False)
+
+    assert result.exit_code != 0
+    assert "not managed by agent-toolkit" in result.output
+    assert "will not remove packages it did not add" in result.output
+    assert ".pi/settings.json" in result.output
+    assert 'remove "npm:pi-title-renamer" from packages[]' in result.output

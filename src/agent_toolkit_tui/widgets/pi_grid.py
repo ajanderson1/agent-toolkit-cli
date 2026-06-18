@@ -47,7 +47,6 @@ _GLOBAL_GLYPH    = "🌐"
 
 _ORIGIN_MARKUP = {
     "store-owned": "[blue]library[/]",
-    "npm":         "[cyan]npm[/]",
     "untracked":   "[dim]untracked[/]",
 }
 
@@ -184,7 +183,7 @@ class PiGrid(Vertical):
     def _extension_info_body(self, row: PiExtensionRow) -> str:
         body = (
             f"Pi extension [b]{row.slug}[/]\n"
-            f"Origin: {pi_extension_origin_label(row.origin)}\n"
+            f"Origin: {self._origin_label(row)}\n"
             f"Source: {row.source}"
         )
         if row.origin == "store-owned":
@@ -199,8 +198,10 @@ class PiGrid(Vertical):
             "Origin labels:\n\n"
             "[b]library-owned[/]: cloned into the agent-toolkit library;\n"
             "  managed via pi-extension add/install/update.\n"
-            "[b]npm[/]: registry package in Pi settings.json packages[];\n"
+            "[b]npm managed[/]: registry package in Pi settings.json packages[];\n"
             "  managed via pi-extension install (scope toggle).\n"
+            "[b]npm unmanaged[/]: registry package Pi loads from settings.json,\n"
+            "  but agent-toolkit did not add it; remove manually from packages[].\n"
             "[b]untracked[/]: found in Pi's extensions/ dir but not in\n"
             "  the asset-type lock. Use pi-extension import to adopt."
         )
@@ -226,6 +227,18 @@ class PiGrid(Vertical):
         loaded = row.global_cell.global_loaded if scope == "global" else row.project_cell.project_loaded
 
         if row.origin == "npm":
+            if not row.managed:
+                if scope == "global":
+                    path = row.global_config_path or row.project_config_path or "Pi settings.json"
+                    spec = row.global_package_spec or row.project_package_spec or row.source
+                else:
+                    path = row.project_config_path or row.global_config_path or "Pi settings.json"
+                    spec = row.project_package_spec or row.global_package_spec or row.source
+                return (
+                    "[dim]unmanaged npm package.[/]\n\n"
+                    "agent-toolkit-cli will not remove packages it did not add.\n"
+                    f"To remove it manually, edit {path} and remove \"{spec}\" from packages[]."
+                )
             if pending == "link":
                 return (
                     f"[yellow]Pending: install (npm).[/]\n"
@@ -280,6 +293,16 @@ class PiGrid(Vertical):
         if row.origin == "untracked":
             return
 
+        if row.origin == "npm" and not row.managed:
+            try:
+                self.app.notify(
+                    "unmanaged npm package: remove manually from Pi settings.json packages[]",
+                    severity="warning",
+                )
+            except Exception:
+                pass
+            return
+
         if coord.column != _COL_SCOPE:
             return
         scope = self._scope
@@ -320,7 +343,7 @@ class PiGrid(Vertical):
             cells = [
                 row.slug,
                 self._cell_glyph(row=row, scope=self._scope),
-                self._origin_glyph(row.origin),
+                self._origin_glyph(row),
                 row.source,
             ]
             table.add_row(*cells, key=f"pi:{row.slug}")
@@ -360,6 +383,13 @@ class PiGrid(Vertical):
             return f"{base} {_GLOBAL_GLYPH}"
         return base
 
-    def _origin_glyph(self, origin: str) -> str:
+    def _origin_label(self, row: PiExtensionRow) -> str:
+        if row.origin == "npm":
+            return "npm managed" if row.managed else "npm unmanaged"
+        return pi_extension_origin_label(row.origin)
+
+    def _origin_glyph(self, row: PiExtensionRow) -> str:
         """Return styled markup for an origin label. Never named _render_*."""
-        return _ORIGIN_MARKUP.get(origin, pi_extension_origin_label(origin))
+        if row.origin == "npm":
+            return "[cyan]npm managed[/]" if row.managed else "[yellow]npm unmanaged[/]"
+        return _ORIGIN_MARKUP.get(row.origin, pi_extension_origin_label(row.origin))
