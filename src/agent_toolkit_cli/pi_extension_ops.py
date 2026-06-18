@@ -78,7 +78,8 @@ def _reject_project_install_if_global_loaded(
 ) -> None:
     if scope != "project":
         return
-    if not _globally_loaded(slug, entry, home=home):
+    home_path = home or Path.home()
+    if not _globally_loaded(slug, entry, home=home_path):
         return
     raise pi_extension_install.InstallError(
         f"{slug}: already installed at global scope; "
