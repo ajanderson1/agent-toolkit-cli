@@ -25,6 +25,9 @@ from textual.containers import Vertical
 from textual.coordinate import Coordinate
 from textual.message import Message
 from textual.widgets import DataTable, Input
+from textual.events import Resize
+from rich.text import Text
+from agent_toolkit_tui.widgets._support import adjust_source_column_width
 
 from agent_toolkit_tui.command_state import INTERACTIVE_HARNESSES, CommandRow
 from agent_toolkit_tui.column_info import get_column_info
@@ -349,6 +352,15 @@ class CommandGrid(Vertical):
         """
         return None
 
+    def on_resize(self, event: Resize) -> None:
+        try:
+            table = self.query_one("#command-table", DataTable)
+        except Exception:
+            return
+
+        fixed_width = 22 + 10 + (len(INTERACTIVE_HARNESSES) * 14)
+        adjust_source_column_width(table, event, fixed_width)
+
     def _rebuild(self, table: DataTable) -> None:
         """Rebuild the DataTable from current rows + pending. Never named _render_*."""
         saved = table.cursor_coordinate
@@ -374,11 +386,11 @@ class CommandGrid(Vertical):
 
         visible = self._visible_rows()
         for row in visible:
-            cells: list[str] = [row.slug]
+            cells: list[str | Text] = [row.slug]
             for harness in INTERACTIVE_HARNESSES:
                 cells.append(self._cell_glyph(row=row, harness=harness))
             cells.append(_STATE_MARKUP.get(row.state, row.state))
-            cells.append(row.source)
+            cells.append(Text(row.source, no_wrap=True, overflow="ellipsis"))
             table.add_row(*cells, key=f"command:{row.slug}")
 
         if visible:

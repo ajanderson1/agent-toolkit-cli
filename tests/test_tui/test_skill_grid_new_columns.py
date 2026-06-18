@@ -54,7 +54,7 @@ async def test_source_column_is_last():
         assert labels[-1] == "Source"
         row_keys = list(table.rows.keys())
         cells = list(table.get_row(row_keys[0]))
-        assert cells[-1] == "git@github.com:foo/bar.git"
+        assert str(cells[-1]) == "git@github.com:foo/bar.git"
 
 
 @pytest.mark.asyncio
