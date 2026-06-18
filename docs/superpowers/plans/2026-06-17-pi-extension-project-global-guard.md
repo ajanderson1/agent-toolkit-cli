@@ -541,13 +541,15 @@ async def test_apply_project_link_fails_when_global_loaded(monkeypatch):
         lf.skills = {"alpha": entry}
         return lf
 
-    def fake_install(*, slug, scope, home=None, project=None):
-        raise _pi_install.InstallError(
-            "alpha: already installed at global scope; uninstall globally before installing at project scope"
-        )
+    def fake_global_plan(*, slug, scope, action, home=None, project=None):
+        assert slug == "alpha"
+        assert scope == "global"
+        assert action == "install"
+        return MagicMock(create=False)
 
     monkeypatch.setattr(_lock, "read_lock", fake_read_lock)
-    monkeypatch.setattr(_ops, "install", fake_install)
+    monkeypatch.setattr(_ops, "_global_entry", lambda slug: entry)
+    monkeypatch.setattr(_pi_install, "plan", fake_global_plan)
     monkeypatch.setattr("agent_toolkit_cli.pi_extension_paths.library_lock_path", lambda env=None: Path("/fake/lock"))
 
     app = TUIApp()
