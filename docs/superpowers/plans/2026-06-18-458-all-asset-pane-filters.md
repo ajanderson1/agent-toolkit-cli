@@ -1,6 +1,6 @@
 # All Asset Pane Filters Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Add Skills-style filter boxes to every Textual TUI asset pane and route `/` to the active pane's filter.
 
@@ -29,7 +29,7 @@
 - Modify: `src/agent_toolkit_tui/widgets/skill_grid.py`
 - Test: `tests/test_tui/test_skill_grid_filter.py`
 
-- [ ] **Step 1: Write shared input module**
+- [x] **Step 1: Write shared input module**
 
 Create `src/agent_toolkit_tui/widgets/filter_input.py`:
 
@@ -65,7 +65,7 @@ class GridFilterInput(Input):
             event.prevent_default()
 ```
 
-- [ ] **Step 2: Switch Skills grid to shared input**
+- [x] **Step 2: Switch Skills grid to shared input**
 
 In `src/agent_toolkit_tui/widgets/skill_grid.py`, replace local `FilterInput` with the shared widget.
 
@@ -90,7 +90,7 @@ yield GridFilterInput(table_selector="#skill-table", id="skill-filter")
 
 Keep `from textual.widgets import DataTable, Input` because `Input.Changed` and `Input.Submitted` handlers still use `Input`.
 
-- [ ] **Step 3: Verify Skills behavior is unchanged**
+- [x] **Step 3: Verify Skills behavior is unchanged**
 
 Run:
 
@@ -100,7 +100,7 @@ uv run pytest tests/test_tui/test_skill_grid_filter.py -q
 
 Expected: PASS. If Down/Tab or typing tests fail, restore the local class behavior exactly inside `GridFilterInput` before continuing.
 
-- [ ] **Step 4: Commit shared input extraction**
+- [x] **Step 4: Commit shared input extraction**
 
 ```bash
 git add src/agent_toolkit_tui/widgets/filter_input.py src/agent_toolkit_tui/widgets/skill_grid.py tests/test_tui/test_skill_grid_filter.py
@@ -118,7 +118,7 @@ git commit -m "refactor(tui): share grid filter input"
   - `tests/test_tui/test_pi_grid.py`
   - `tests/test_tui/test_mcp_grid.py`
 
-- [ ] **Step 1: Create test helper file with concrete AgentGrid coverage**
+- [x] **Step 1: Create test helper file with concrete AgentGrid coverage**
 
 Create `tests/test_tui/test_asset_grid_filters.py`:
 
@@ -252,7 +252,7 @@ async def test_agent_bulk_action_ignores_filter():
         assert pending_slugs == {"alpha", "beta", "gamma"}
 ```
 
-- [ ] **Step 2: Run new tests to verify failure**
+- [x] **Step 2: Run new tests to verify failure**
 
 Run:
 
@@ -262,7 +262,7 @@ uv run pytest tests/test_tui/test_asset_grid_filters.py -q
 
 Expected: FAIL because `#agent-filter` and `AgentGrid.set_filter()` do not exist yet.
 
-- [ ] **Step 3: Add at least one extra pane smoke test**
+- [x] **Step 3: Add at least one extra pane smoke test**
 
 Extend the same file with one instruction-pane smoke test using inline rows:
 
@@ -313,7 +313,7 @@ Expected after Step 2 remains FAIL until widget implementation lands.
 - Modify: `src/agent_toolkit_tui/widgets/instruction_grid.py`
 - Test: `tests/test_tui/test_asset_grid_filters.py`
 
-- [ ] **Step 1: Add common imports and filter fields**
+- [x] **Step 1: Add common imports and filter fields**
 
 In both files, change widget imports from:
 
@@ -339,7 +339,7 @@ In each `__init__()`, after `_pending` setup, add:
 self._filter: str = ""
 ```
 
-- [ ] **Step 2: Render filter input before the table**
+- [x] **Step 2: Render filter input before the table**
 
 In `AgentGrid.compose()`, yield filter before table:
 
@@ -361,7 +361,7 @@ table: DataTable[str] = DataTable(
 yield table
 ```
 
-- [ ] **Step 3: Add filter methods and input handlers**
+- [x] **Step 3: Add filter methods and input handlers**
 
 In `AgentGrid`, add:
 
@@ -396,7 +396,7 @@ def on_input_submitted(self, event: Input.Submitted) -> None:
 
 In `InstructionGrid`, add the same methods with `InstructionRow`, `#instruction-table`, and `instruction-filter`.
 
-- [ ] **Step 4: Rebuild from visible rows and clamp cursor safely**
+- [x] **Step 4: Rebuild from visible rows and clamp cursor safely**
 
 In both `_rebuild()` methods, preserve the existing columns and row cell construction, but replace the row loop:
 
@@ -420,7 +420,7 @@ table.scroll_to(x=saved_scroll[0], y=saved_scroll[1], animate=False, force=True)
 
 Do not change column order, labels, glyphs, or state markup.
 
-- [ ] **Step 5: Map row-targeted actions through visible rows**
+- [x] **Step 5: Map row-targeted actions through visible rows**
 
 In `AgentGrid.action_info()`, `AgentGrid._context_for()`, and `AgentGrid._toggle_at()`, replace direct `self._rows[coord.row]` / `self._rows[row_index]` lookups with:
 
@@ -444,7 +444,7 @@ Make the same changes in `InstructionGrid.action_info()`, `InstructionGrid._cont
 
 Leave `action_toggle_column()` loops over `self._rows` unchanged.
 
-- [ ] **Step 6: Run focused filter tests**
+- [x] **Step 6: Run focused filter tests**
 
 Run:
 
@@ -454,7 +454,7 @@ uv run pytest tests/test_tui/test_asset_grid_filters.py -q
 
 Expected: PASS for AgentGrid and InstructionGrid tests after fixing any exact constructor mismatch.
 
-- [ ] **Step 7: Commit Agent/Instruction filters**
+- [x] **Step 7: Commit Agent/Instruction filters**
 
 ```bash
 git add src/agent_toolkit_tui/widgets/agent_grid.py src/agent_toolkit_tui/widgets/instruction_grid.py tests/test_tui/test_asset_grid_filters.py
@@ -469,7 +469,7 @@ git commit -m "feat(tui): filter agent and instruction grids"
 - Modify: `src/agent_toolkit_tui/widgets/mcp_grid.py`
 - Test: `tests/test_tui/test_asset_grid_filters.py`
 
-- [ ] **Step 1: Add imports and `_filter` fields**
+- [x] **Step 1: Add imports and `_filter` fields**
 
 In each file, import `Input` and `GridFilterInput`:
 
@@ -480,7 +480,7 @@ from agent_toolkit_tui.widgets.filter_input import GridFilterInput
 
 Add `self._filter: str = ""` in each grid `__init__()`.
 
-- [ ] **Step 2: Add filter inputs with stable IDs**
+- [x] **Step 2: Add filter inputs with stable IDs**
 
 In `CommandGrid.compose()`:
 
@@ -502,7 +502,7 @@ yield GridFilterInput(table_selector="#mcp-table", id="mcp-filter")
 
 Each filter yield must come immediately before that grid's existing `DataTable` yield.
 
-- [ ] **Step 3: Add per-grid filter methods**
+- [x] **Step 3: Add per-grid filter methods**
 
 Use this exact structure in `CommandGrid`:
 
@@ -537,7 +537,7 @@ def on_input_submitted(self, event: Input.Submitted) -> None:
 
 Use the same structure for `PiGrid` with `PiExtensionRow`, `#pi-table`, `pi-filter`; and `McpGrid` with `McpRow`, `#mcp-table`, `mcp-filter`.
 
-- [ ] **Step 4: Rebuild from visible rows**
+- [x] **Step 4: Rebuild from visible rows**
 
 In each `_rebuild()`, replace `for row in self._rows:` with visible-row iteration:
 
@@ -549,7 +549,7 @@ for row in visible:
 
 Clamp cursor only when `visible` is non-empty. Preserve each existing `max_col` calculation and `scroll_to()` call.
 
-- [ ] **Step 5: Map row-targeted actions through visible rows**
+- [x] **Step 5: Map row-targeted actions through visible rows**
 
 In `CommandGrid`, `PiGrid`, and `McpGrid`, update `_toggle_at()`, `action_info()`, and `_context_for()` to use `_visible_rows()` exactly as in Task 3.
 
@@ -557,7 +557,7 @@ If one of these grids has an info helper that receives `row_index`, keep helper 
 
 Leave `action_toggle_column()` loops over `self._rows` unchanged.
 
-- [ ] **Step 6: Add one smoke assertion per remaining grid**
+- [x] **Step 6: Add one smoke assertion per remaining grid**
 
 Extend `tests/test_tui/test_asset_grid_filters.py` with one smoke test each for `CommandGrid`, `PiGrid`, and `McpGrid`. Each test should:
 
@@ -614,7 +614,7 @@ def _mcp_row(slug: str) -> McpRow:
 
 Use these helpers in the Pi and MCP smoke tests.
 
-- [ ] **Step 7: Run grid filter tests**
+- [x] **Step 7: Run grid filter tests**
 
 Run:
 
@@ -624,7 +624,7 @@ uv run pytest tests/test_tui/test_asset_grid_filters.py -q
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit remaining grid filters**
+- [x] **Step 8: Commit remaining grid filters**
 
 ```bash
 git add src/agent_toolkit_tui/widgets/command_grid.py src/agent_toolkit_tui/widgets/pi_grid.py src/agent_toolkit_tui/widgets/mcp_grid.py tests/test_tui/test_asset_grid_filters.py
@@ -637,7 +637,7 @@ git commit -m "feat(tui): filter command pi and mcp grids"
 - Modify: `src/agent_toolkit_tui/app.py`
 - Test: `tests/test_tui/test_app_filter_focus.py`
 
-- [ ] **Step 1: Write failing app focus tests**
+- [x] **Step 1: Write failing app focus tests**
 
 Create `tests/test_tui/test_app_filter_focus.py`:
 
@@ -674,7 +674,7 @@ async def test_slash_focuses_active_asset_filter(asset_type: str, filter_id: str
         assert app.focused.id == filter_id
 ```
 
-- [ ] **Step 2: Run app focus tests to verify failure**
+- [x] **Step 2: Run app focus tests to verify failure**
 
 Run:
 
@@ -684,7 +684,7 @@ uv run pytest tests/test_tui/test_app_filter_focus.py -q
 
 Expected: FAIL because `action_focus_filter()` still focuses `#skill-filter` for every asset type.
 
-- [ ] **Step 3: Implement active filter routing**
+- [x] **Step 3: Implement active filter routing**
 
 In `src/agent_toolkit_tui/app.py`, update `action_focus_filter()`:
 
@@ -707,7 +707,7 @@ def action_focus_filter(self) -> None:
 
 Ensure `Input` remains imported in `app.py`.
 
-- [ ] **Step 4: Run app focus tests**
+- [x] **Step 4: Run app focus tests**
 
 Run:
 
@@ -717,7 +717,7 @@ uv run pytest tests/test_tui/test_app_filter_focus.py -q
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit focus routing**
+- [x] **Step 5: Commit focus routing**
 
 ```bash
 git add src/agent_toolkit_tui/app.py tests/test_tui/test_app_filter_focus.py
@@ -731,7 +731,7 @@ git commit -m "feat(tui): focus active asset filter"
 - Review: `tests/test_tui/test_asset_grid_filters.py`
 - Review: `tests/test_tui/test_app_filter_focus.py`
 
-- [ ] **Step 1: Run focused Skills regression**
+- [x] **Step 1: Run focused Skills regression**
 
 Run:
 
@@ -741,7 +741,7 @@ uv run pytest tests/test_tui/test_skill_grid_filter.py -q
 
 Expected: PASS.
 
-- [ ] **Step 2: Run new filter suite**
+- [x] **Step 2: Run new filter suite**
 
 Run:
 
@@ -751,7 +751,7 @@ uv run pytest tests/test_tui/test_asset_grid_filters.py tests/test_tui/test_app_
 
 Expected: PASS.
 
-- [ ] **Step 3: Run full TUI suite**
+- [x] **Step 3: Run full TUI suite**
 
 Run:
 
@@ -761,7 +761,7 @@ uv run pytest tests/test_tui -q
 
 Expected: PASS.
 
-- [ ] **Step 4: Search for stale hard-coded Skills focus assumptions**
+- [x] **Step 4: Search for stale hard-coded Skills focus assumptions**
 
 Run:
 
@@ -775,7 +775,7 @@ Expected:
 - `focus_filter` maps all active asset types.
 - Every non-skill grid has `set_filter()` and `_visible_rows()`.
 
-- [ ] **Step 5: Manual TUI smoke check**
+- [x] **Step 5: Manual TUI smoke check**
 
 Run:
 
@@ -793,7 +793,7 @@ Manual checks:
 
 Capture a short note in PR body with panes checked and any pane that could not be checked because local data was unavailable.
 
-- [ ] **Step 6: Final commit if cleanup changed files**
+- [x] **Step 6: Final commit if cleanup changed files**
 
 If Step 4 or Step 5 required cleanup:
 

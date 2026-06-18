@@ -23,13 +23,14 @@ from textual.binding import Binding
 from textual.containers import Vertical
 from textual.coordinate import Coordinate
 from textual.message import Message
-from textual.widgets import DataTable
+from textual.widgets import DataTable, Input
 
 from agent_toolkit_tui.column_info import get_column_info
 from agent_toolkit_tui.composition import instructions_nonstandard_main
 from agent_toolkit_tui.display_names import asset_type_label, harness_label, standard_label
 from agent_toolkit_tui.instruction_state import InstructionRow
 from agent_toolkit_tui.widgets.column_info_modal import ColumnInfoModal
+from agent_toolkit_tui.widgets.filter_input import GridFilterInput
 
 _LINKED_GLYPH    = "[green]✔[/]"
 _UNLINKED_GLYPH  = "☐"
@@ -87,6 +88,7 @@ class InstructionGrid(Vertical):
         self._scope: Literal["global", "project"] = "global"
         # (scope, harness_name, slug) -> op
         self._pending: dict[tuple[str, str, str], Op] = {}
+        self._filter: str = ""
 
     def _active_harnesses(self) -> tuple[str, ...]:
         # Standard column + non-covered main harnesses. The long tail is
@@ -143,10 +145,35 @@ class InstructionGrid(Vertical):
             pass
 
     def compose(self) -> ComposeResult:
+        yield GridFilterInput(table_selector="#instruction-table", id="instruction-filter")
         table: DataTable[str] = DataTable(
             id="instruction-table", cursor_type="cell", zebra_stripes=True,
         )
         yield table
+
+    def set_filter(self, text: str) -> None:
+        self._filter = text.strip().lower()
+        try:
+            table = self.query_one("#instruction-table", DataTable)
+        except Exception:
+            return
+        self._rebuild(table)
+
+    def _visible_rows(self) -> list[InstructionRow]:
+        if self._filter:
+            return [row for row in self._rows if self._filter in row.slug.lower()]
+        return list(self._rows)
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        if event.input.id == "instruction-filter":
+            self.set_filter(event.value)
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        if event.input.id == "instruction-filter":
+            try:
+                self.query_one("#instruction-table", DataTable).focus()
+            except Exception:
+                pass
 
     def on_mount(self) -> None:
         try:
@@ -182,9 +209,10 @@ class InstructionGrid(Vertical):
             if info is not None:
                 self.app.push_screen(ColumnInfoModal(info))
                 return
-        if coord.row >= len(self._rows):
+        visible = self._visible_rows()
+        if coord.row >= len(visible):
             return
-        row = self._rows[coord.row]
+        row = visible[coord.row]
 
         if coord.column == 0:
             # Slug column — show instruction summary.
@@ -299,9 +327,10 @@ class InstructionGrid(Vertical):
         harness = self._harness_for_column(coord.column)
         if harness is None:
             return
-        if coord.row >= len(self._rows):
+        visible = self._visible_rows()
+        if coord.row >= len(visible):
             return
-        row = self._rows[coord.row]
+        row = visible[coord.row]
         cell = row.cells.get((harness, self._scope))
         if cell is None:
             # Cell not applicable at this scope — no-op.
@@ -362,8 +391,9 @@ class InstructionGrid(Vertical):
                 if r["verdict"] == "native"
             )
             global_linked = False
-            if row_index is not None and 0 <= row_index < len(self._rows):
-                row = self._rows[row_index]
+            visible = self._visible_rows()
+            if row_index is not None and 0 <= row_index < len(visible):
+                row = visible[row_index]
                 global_linked = any(
                     cell.linked
                     for (harness, scope), cell in row.cells.items()
@@ -400,7 +430,8 @@ class InstructionGrid(Vertical):
         # Source column — passive.
         table.add_column("Source", width=30)
 
-        for row in self._rows:
+        visible = self._visible_rows()
+        for row in visible:
             cells: list[str] = [row.slug]
             cells.append(self._standard_glyph(row))
             for harness in active:
@@ -408,8 +439,8 @@ class InstructionGrid(Vertical):
             cells.append(row.source)
             table.add_row(*cells, key=f"instruction:{row.slug}")
 
-        if self._rows:
-            max_row = len(self._rows) - 1
+        if visible:
+            max_row = len(visible) - 1
             # Layout: slug + standard + N harness cols + source.
             max_col = _HARNESS_COL_OFFSET + len(active)
             table.cursor_coordinate = Coordinate(

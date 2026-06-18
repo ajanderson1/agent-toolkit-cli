@@ -24,12 +24,13 @@ from textual.binding import Binding
 from textual.containers import Vertical
 from textual.coordinate import Coordinate
 from textual.message import Message
-from textual.widgets import DataTable
+from textual.widgets import DataTable, Input
 
 from agent_toolkit_tui.agent_state import INTERACTIVE_HARNESSES, AgentRow
 from agent_toolkit_tui.column_info import get_column_info
 from agent_toolkit_tui.display_names import asset_type_label, harness_label, standard_label
 from agent_toolkit_tui.widgets.column_info_modal import ColumnInfoModal
+from agent_toolkit_tui.widgets.filter_input import GridFilterInput
 
 _LINKED_GLYPH   = "[green]✔[/]"
 _UNLINKED_GLYPH = "☐"
@@ -81,6 +82,7 @@ class AgentGrid(Vertical):
         self._scope: Literal["global", "project"] = "global"
         # (scope, harness_name, slug) -> op
         self._pending: dict[tuple[str, str, str], Op] = {}
+        self._filter: str = ""
 
     @property
     def row_count(self) -> int:
@@ -132,10 +134,35 @@ class AgentGrid(Vertical):
             pass
 
     def compose(self) -> ComposeResult:
+        yield GridFilterInput(table_selector="#agent-table", id="agent-filter")
         table: DataTable[str] = DataTable(
             id="agent-table", cursor_type="cell", zebra_stripes=True,
         )
         yield table
+
+    def set_filter(self, text: str) -> None:
+        self._filter = text.strip().lower()
+        try:
+            table = self.query_one("#agent-table", DataTable)
+        except Exception:
+            return
+        self._rebuild(table)
+
+    def _visible_rows(self) -> list[AgentRow]:
+        if self._filter:
+            return [row for row in self._rows if self._filter in row.slug.lower()]
+        return list(self._rows)
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        if event.input.id == "agent-filter":
+            self.set_filter(event.value)
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        if event.input.id == "agent-filter":
+            try:
+                self.query_one("#agent-table", DataTable).focus()
+            except Exception:
+                pass
 
     def on_mount(self) -> None:
         try:
@@ -171,9 +198,10 @@ class AgentGrid(Vertical):
             if info is not None:
                 self.app.push_screen(ColumnInfoModal(info))
                 return
-        if coord.row >= len(self._rows):
+        visible = self._visible_rows()
+        if coord.row >= len(visible):
             return
-        row = self._rows[coord.row]
+        row = visible[coord.row]
 
         if coord.column == 0:
             title = f"{row.slug} · agent"
@@ -263,9 +291,10 @@ class AgentGrid(Vertical):
         harness = self._harness_for_column(coord.column)
         if harness is None:
             return
-        if coord.row >= len(self._rows):
+        visible = self._visible_rows()
+        if coord.row >= len(visible):
             return
-        row = self._rows[coord.row]
+        row = visible[coord.row]
         cell = row.cells.get((harness, self._scope))
         if cell is None:
             # Cell not applicable at this scope — no-op.
@@ -332,8 +361,9 @@ class AgentGrid(Vertical):
                 else []
             )
             global_linked = False
-            if 0 <= row_index < len(self._rows):
-                global_cell = self._rows[row_index].cells.get(("standard", "global"))
+            visible = self._visible_rows()
+            if 0 <= row_index < len(visible):
+                global_cell = visible[row_index].cells.get(("standard", "global"))
                 global_linked = bool(global_cell and global_cell.linked)
             return {
                 "asset_type": "agents",
@@ -372,7 +402,8 @@ class AgentGrid(Vertical):
         # Source column — passive, no info popup.
         table.add_column("Source", width=30)
 
-        for row in self._rows:
+        visible = self._visible_rows()
+        for row in visible:
             cells: list[str] = [row.slug]
             for harness in INTERACTIVE_HARNESSES:
                 cells.append(self._cell_glyph(row=row, harness=harness))
@@ -380,8 +411,8 @@ class AgentGrid(Vertical):
             cells.append(row.source)
             table.add_row(*cells, key=f"agent:{row.slug}")
 
-        if self._rows:
-            max_row = len(self._rows) - 1
+        if visible:
+            max_row = len(visible) - 1
             # Layout: slug + N harness cols + state + source.
             max_col = 2 + len(INTERACTIVE_HARNESSES)
             table.cursor_coordinate = Coordinate(

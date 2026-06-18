@@ -535,9 +535,17 @@ class TUIApp(App):
         self.action_scope("global" if self._scope == "project" else "project")
 
     def action_focus_filter(self) -> None:
-        """`/` re-focuses the filter box (restores v1 muscle memory, #249)."""
+        """`/` re-focuses the active asset pane's filter box."""
+        selectors: dict[AssetType, str] = {
+            "instruction": "#instruction-filter",
+            "skill": "#skill-filter",
+            "command": "#command-filter",
+            "pi-extension": "#pi-filter",
+            "agent": "#agent-filter",
+            "mcp": "#mcp-filter",
+        }
         try:
-            self.query_one("#skill-filter", Input).focus()
+            self.query_one(selectors[self._active_asset_type], Input).focus()
         except NoMatches:
             pass
 
