@@ -389,3 +389,38 @@ def test_bare_push_empty_lock_unchanged(tmp_path, monkeypatch):
     )
     assert result.exit_code == 0, result.output
     assert "not in the" not in result.output
+
+def test_store_owned_project_install_fails_when_global_loaded(tmp_path, monkeypatch, git_sandbox):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _add_store_owned(tmp_path, git_sandbox.env, git_sandbox.upstream)
+
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    monkeypatch.chdir(proj)
+
+    r_global = CliRunner().invoke(main, ["pi-extension", "install", "demo", "-g"])
+    assert r_global.exit_code == 0, r_global.output
+
+    r_project = CliRunner().invoke(main, ["pi-extension", "install", "demo", "-p"])
+    assert r_project.exit_code != 0
+    assert "already installed at global scope" in r_project.output
+    assert not pep.pi_extension_dir("demo", scope="project", project=proj).exists()
+
+
+def test_npm_project_install_fails_when_global_loaded(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    CliRunner().invoke(main, ["pi-extension", "add", "npm:bar"])
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    monkeypatch.chdir(proj)
+
+    r_global = CliRunner().invoke(main, ["pi-extension", "install", "bar", "-g"])
+    assert r_global.exit_code == 0, r_global.output
+
+    r_project = CliRunner().invoke(main, ["pi-extension", "install", "bar", "-p"])
+    assert r_project.exit_code != 0
+    assert "already installed at global scope" in r_project.output
+    assert "npm:bar" not in _pi_settings.read_packages(scope="project", project=proj)
