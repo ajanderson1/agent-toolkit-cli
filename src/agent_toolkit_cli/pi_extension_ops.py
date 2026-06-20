@@ -95,6 +95,7 @@ def install(
     project: Path | None = None,
 ) -> None:
     """Project `slug` into `scope`. Raises InstallError / PiSettingsError."""
+    home = home or Path.home()
     entry = _global_entry(slug)
     if entry is None:
         raise pi_extension_install.InstallError(
@@ -136,6 +137,7 @@ def uninstall(
     npm: remove matching packages[] entries by identity (catches drift).
     store-owned: unlink the projection. Global keeps the library lock entry;
     project scope prunes the project lock."""
+    home = home or Path.home()
     entry = _global_entry(slug)
 
     if entry is not None and entry.source_type == "npm":

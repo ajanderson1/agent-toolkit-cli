@@ -122,7 +122,11 @@ def test_list_json_includes_npm_managed_fields(tmp_path, monkeypatch):
         main, ["pi-extension", "list", "--json"], catch_exceptions=False
     )
     assert result.exit_code == 0
-    rows = _json.loads(result.output)
+    # Strip any potential banner
+    out = result.output
+    if "Operating on project scope" in out:
+        out = out.split("\n", 1)[1]
+    rows = _json.loads(out)
     row = next(r for r in rows if r["slug"] == "pi-title-renamer")
     assert row["origin"] == "npm"
     assert row["displayOrigin"] == "npm unmanaged"
