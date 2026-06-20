@@ -30,6 +30,9 @@ from textual.containers import Vertical
 from textual.coordinate import Coordinate
 from textual.message import Message
 from textual.widgets import DataTable, Input
+from textual.events import Resize
+from rich.text import Text
+from agent_toolkit_tui.widgets._support import adjust_source_column_width, current_source_column_width
 
 from agent_toolkit_tui.display_names import asset_type_label, pi_extension_origin_label
 from agent_toolkit_tui.pi_extension_state import PiExtensionRow
@@ -374,6 +377,15 @@ class PiGrid(Vertical):
             pass
         self._notify_pending()
 
+    def on_resize(self, event: Resize) -> None:
+        try:
+            table = self.query_one("#pi-table", DataTable)
+        except Exception:
+            return
+
+        fixed_width = 24 + 14 + 12
+        adjust_source_column_width(table, event, fixed_width)
+
     def _rebuild(self, table: DataTable) -> None:
         saved = table.cursor_coordinate
         # Preserve the viewport across clear() (#321): clear() resets scroll to
@@ -382,19 +394,20 @@ class PiGrid(Vertical):
         # restored viewport, so Textual's deferred _scroll_cursor_into_view is a
         # no-op and the offset holds. See skill_grid._rebuild for the full note.
         saved_scroll = (table.scroll_x, table.scroll_y)
+        source_width = current_source_column_width(table)
         table.clear(columns=True)
         table.add_column(f"{asset_type_label('pi-extension')} {_INFO_GLYPH}", width=24)
         table.add_column(f"Pi {_INFO_GLYPH}", width=14)
         table.add_column("Origin", width=12)
-        table.add_column("Source", width=30)
+        table.add_column("Source", width=source_width)
 
         visible = self._visible_rows()
         for row in visible:
-            cells = [
+            cells: list[str | Text] = [
                 row.slug,
                 self._cell_glyph(row=row, scope=self._scope),
                 self._origin_glyph(row),
-                row.source,
+                Text(row.source, no_wrap=True, overflow="ellipsis"),
             ]
             table.add_row(*cells, key=f"pi:{row.slug}")
 

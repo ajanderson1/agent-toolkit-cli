@@ -22,6 +22,9 @@ from textual.containers import Vertical
 from textual.coordinate import Coordinate
 from textual.message import Message
 from textual.widgets import DataTable, Input
+from textual.events import Resize
+from rich.text import Text
+from agent_toolkit_tui.widgets._support import adjust_source_column_width, current_source_column_width
 
 from agent_toolkit_cli.skill_agents import get_standard_agents
 from agent_toolkit_tui.column_info import COLUMN_INFO, get_column_info
@@ -528,6 +531,17 @@ class SkillGrid(Vertical):
             return "state"
         return None
 
+    def on_resize(self, event: Resize) -> None:
+        try:
+            table = self.query_one("#skill-table", DataTable)
+        except Exception:
+            return
+
+        # ID (20) + State (10) = 30. Plus agent cols (14 each).
+        # We also account for padding in `adjust_source_column_width`
+        fixed_width = 20 + 10 + (len(self._active_agents()) * 14)
+        adjust_source_column_width(table, event, fixed_width)
+
     def _rebuild(self, table: DataTable) -> None:
         saved = table.cursor_coordinate
         # Preserve the viewport: clear() resets scroll to the top, so a toggle
@@ -540,6 +554,7 @@ class SkillGrid(Vertical):
         # runs after this synchronous restore and lands the viewport around the
         # clamped cursor — acceptable (cursor stays visible), not the toggle case.
         saved_scroll = (table.scroll_x, table.scroll_y)
+        source_width = current_source_column_width(table)
         table.clear(columns=True)
         # Slug column has cell-info (the slug-cell panel) → glyph it.
         table.add_column(f"{asset_type_label('skill')} {_INFO_GLYPH}", width=20)
@@ -556,14 +571,14 @@ class SkillGrid(Vertical):
         # State has a column-info modal → glyph it.
         table.add_column(f"State {_INFO_GLYPH}", width=10)
         # Source is passive — no info panel, no glyph.
-        table.add_column("Source", width=30)
+        table.add_column("Source", width=source_width)
         visible = self._visible_rows()
         for row in visible:
-            cells: list[str] = [row.slug]
+            cells: list[str | Text] = [row.slug]
             for agent in active:
                 cells.append(self._cell_glyph(row=row, agent=agent))
             cells.append(_STATE_MARKUP.get(row.state, row.state))
-            cells.append(row.source)
+            cells.append(Text(row.source, no_wrap=True, overflow="ellipsis"))
             table.add_row(*cells, key=f"skill:{row.slug}")
         if visible:
             max_row = len(visible) - 1

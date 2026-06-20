@@ -36,6 +36,9 @@ from textual.containers import Vertical
 from textual.coordinate import Coordinate
 from textual.message import Message
 from textual.widgets import DataTable, Input
+from textual.events import Resize
+from rich.text import Text
+from agent_toolkit_tui.widgets._support import adjust_source_column_width, current_source_column_width
 
 from agent_toolkit_tui.column_info import get_column_info
 from agent_toolkit_tui.display_names import asset_type_label, harness_label, standard_label
@@ -379,12 +382,22 @@ class McpGrid(Vertical):
             }
         return None
 
+    def on_resize(self, event: Resize) -> None:
+        try:
+            table = self.query_one("#mcp-table", DataTable)
+        except Exception:
+            return
+
+        fixed_width = 22 + 10 + (len(self._harnesses()) * 16)
+        adjust_source_column_width(table, event, fixed_width)
+
     def _rebuild(self, table: DataTable) -> None:
         """Rebuild the DataTable from current rows + pending. Never named _render_*."""
         saved = table.cursor_coordinate
         # Preserve the viewport across clear() (#321): clear() resets scroll to
         # the top, so a toggle would jump the pane. Restore the offset below.
         saved_scroll = (table.scroll_x, table.scroll_y)
+        source_width = current_source_column_width(table)
         table.clear(columns=True)
         # Slug column — info glyph since `i` works on it.
         table.add_column(f"{asset_type_label('mcp')} {_INFO_GLYPH}", width=22)
@@ -404,15 +417,15 @@ class McpGrid(Vertical):
         # State column — shows installed/library/unlisted (#360).
         table.add_column("State", width=10)
         # Source column — passive, no info popup.
-        table.add_column("Source", width=30)
+        table.add_column("Source", width=source_width)
 
         visible = self._visible_rows()
         for row in visible:
-            cells: list[str] = [row.slug]
+            cells: list[str | Text] = [row.slug]
             for harness in self._harnesses():
                 cells.append(self._cell_glyph(row=row, harness=harness))
             cells.append(_STATE_MARKUP.get(row.state, row.state))
-            cells.append(row.source)
+            cells.append(Text(row.source, no_wrap=True, overflow="ellipsis"))
             table.add_row(*cells, key=f"mcp:{row.slug}")
 
         if visible:

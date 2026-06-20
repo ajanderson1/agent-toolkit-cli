@@ -25,6 +25,9 @@ from textual.containers import Vertical
 from textual.coordinate import Coordinate
 from textual.message import Message
 from textual.widgets import DataTable, Input
+from textual.events import Resize
+from rich.text import Text
+from agent_toolkit_tui.widgets._support import adjust_source_column_width, current_source_column_width
 
 from agent_toolkit_tui.agent_state import INTERACTIVE_HARNESSES, AgentRow
 from agent_toolkit_tui.column_info import get_column_info
@@ -373,6 +376,15 @@ class AgentGrid(Vertical):
             }
         return None
 
+    def on_resize(self, event: Resize) -> None:
+        try:
+            table = self.query_one("#agent-table", DataTable)
+        except Exception:
+            return
+
+        fixed_width = 22 + 10 + (len(INTERACTIVE_HARNESSES) * 14)
+        adjust_source_column_width(table, event, fixed_width)
+
     def _rebuild(self, table: DataTable) -> None:
         """Rebuild the DataTable from current rows + pending. Never named _render_*."""
         saved = table.cursor_coordinate
@@ -382,6 +394,7 @@ class AgentGrid(Vertical):
         # restored viewport, so Textual's deferred _scroll_cursor_into_view is a
         # no-op and the offset holds. See skill_grid._rebuild for the full note.
         saved_scroll = (table.scroll_x, table.scroll_y)
+        source_width = current_source_column_width(table)
         table.clear(columns=True)
         # Slug column — info glyph since `i` works on it.
         table.add_column(f"{asset_type_label('agent')} {_INFO_GLYPH}", width=22)
@@ -400,15 +413,15 @@ class AgentGrid(Vertical):
         # State column — shows installed/library/unlisted (#360).
         table.add_column("State", width=10)
         # Source column — passive, no info popup.
-        table.add_column("Source", width=30)
+        table.add_column("Source", width=source_width)
 
         visible = self._visible_rows()
         for row in visible:
-            cells: list[str] = [row.slug]
+            cells: list[str | Text] = [row.slug]
             for harness in INTERACTIVE_HARNESSES:
                 cells.append(self._cell_glyph(row=row, harness=harness))
             cells.append(_STATE_MARKUP.get(row.state, row.state))
-            cells.append(row.source)
+            cells.append(Text(row.source, no_wrap=True, overflow="ellipsis"))
             table.add_row(*cells, key=f"agent:{row.slug}")
 
         if visible:
