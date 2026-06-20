@@ -1,5 +1,28 @@
 # Changelog
 
+## [5.2.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v5.1.0...v5.2.0) (2026-06-20)
+
+
+### Features
+
+* **tui:** add filters to all asset panes ([#462](https://github.com/ajanderson1/agent-toolkit-cli/issues/462)) ([d410e36](https://github.com/ajanderson1/agent-toolkit-cli/commit/d410e36205e3697ca304310f7a771d008d84083e))
+
+
+### Bug Fixes
+
+* **pi-extension:** block project install when global loaded ([#460](https://github.com/ajanderson1/agent-toolkit-cli/issues/460)) ([f41232f](https://github.com/ajanderson1/agent-toolkit-cli/commit/f41232f547c94e5a2c3b44332c6bc011c5d0ca1b))
+* **tui:** show true instructions global pointer status ([#445](https://github.com/ajanderson1/agent-toolkit-cli/issues/445)) ([fbea3c1](https://github.com/ajanderson1/agent-toolkit-cli/commit/fbea3c1105a7e291da3b26ce590a0550861403bf))
+* **tui:** stretch source columns and truncate overflow ([#461](https://github.com/ajanderson1/agent-toolkit-cli/issues/461)) ([84f0c98](https://github.com/ajanderson1/agent-toolkit-cli/commit/84f0c98066acb1f17e74e47cd06f905e769697a5))
+
+
+### Documentation
+
+* plan pi-extension project install guard ([36999eb](https://github.com/ajanderson1/agent-toolkit-cli/commit/36999eba063d8f75e6f38852f5a87a65f6f6b973))
+* prepare pi-extension unmanaged npm issue ([fb3fae1](https://github.com/ajanderson1/agent-toolkit-cli/commit/fb3fae17bf0cd8bbd89fe32760646a256ca48768))
+* ready issue 458 asset pane filters ([23008fb](https://github.com/ajanderson1/agent-toolkit-cli/commit/23008fb905ee0a5c0a95f50980d886e3d29b0a73))
+* resolve review on pi-extension guard plan ([aab03e0](https://github.com/ajanderson1/agent-toolkit-cli/commit/aab03e059c3e769f2cb44cc9c73cb0b4293d1416))
+* specify pi-extension project install guard ([94a7d93](https://github.com/ajanderson1/agent-toolkit-cli/commit/94a7d939ecc595d0abcb64f8292e1e1cff2b9bb4))
+
 ## [5.1.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v5.0.0...v5.1.0) (2026-06-18)
 
 
