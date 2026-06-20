@@ -30,7 +30,7 @@
 - Modify: `src/agent_toolkit_tui/instruction_state.py`
 - Test: `tests/test_tui/test_instruction_state.py`
 
-- [ ] **Step 1: Write failing tests for pointer path helper**
+- [x] **Step 1: Write failing tests for pointer path helper**
 
 Add imports and tests to `tests/test_tui/test_instruction_state.py`:
 
@@ -71,7 +71,7 @@ def test_pointer_path_for_unavailable_scope_returns_none(tmp_path: Path):
     assert path is None
 ```
 
-- [ ] **Step 2: Run tests to verify failure**
+- [x] **Step 2: Run tests to verify failure**
 
 Run:
 
@@ -81,7 +81,7 @@ uv run pytest tests/test_tui/test_instruction_state.py::test_pointer_path_for_gl
 
 Expected: FAIL with import error or missing `pointer_path_for`.
 
-- [ ] **Step 3: Implement helper**
+- [x] **Step 3: Implement helper**
 
 Add near `_cell_for()` in `src/agent_toolkit_tui/instruction_state.py`:
 
@@ -107,7 +107,7 @@ def pointer_path_for(
 
 The `# noqa: PLW0212` is intentional: `instruction_state.py` already imports the private adapter helper for status checks, and this helper centralizes that existing private-path dependency instead of duplicating path templates in the grid.
 
-- [ ] **Step 4: Run tests to verify pass**
+- [x] **Step 4: Run tests to verify pass**
 
 Run:
 
@@ -117,7 +117,7 @@ uv run pytest tests/test_tui/test_instruction_state.py::test_pointer_path_for_gl
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/agent_toolkit_tui/instruction_state.py tests/test_tui/test_instruction_state.py
@@ -130,7 +130,7 @@ git commit -m "fix: expose instruction pointer paths for TUI status"
 - Modify: `src/agent_toolkit_tui/widgets/instruction_grid.py`
 - Test: `tests/test_tui/test_instruction_grid.py`
 
-- [ ] **Step 1: Write failing glyph tests**
+- [x] **Step 1: Write failing glyph tests**
 
 Add tests to `tests/test_tui/test_instruction_grid.py`:
 
@@ -166,7 +166,7 @@ def test_standard_glyph_reports_missing_when_canonical_absent():
     assert "red" in glyph
 ```
 
-- [ ] **Step 2: Run tests to verify failure**
+- [x] **Step 2: Run tests to verify failure**
 
 Run:
 
@@ -176,7 +176,7 @@ uv run pytest tests/test_tui/test_instruction_grid.py::test_standard_glyph_is_ne
 
 Expected: first test FAILS because `_standard_glyph()` currently returns `[green]✔[/]`.
 
-- [ ] **Step 3: Implement neutral glyph**
+- [x] **Step 3: Implement neutral glyph**
 
 Change `_standard_glyph()` in `src/agent_toolkit_tui/widgets/instruction_grid.py`:
 
@@ -188,7 +188,7 @@ def _standard_glyph(self, row: InstructionRow) -> str:
     return "[red]missing[/]"
 ```
 
-- [ ] **Step 4: Run tests to verify pass**
+- [x] **Step 4: Run tests to verify pass**
 
 Run:
 
@@ -198,7 +198,7 @@ uv run pytest tests/test_tui/test_instruction_grid.py::test_standard_glyph_is_ne
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/agent_toolkit_tui/widgets/instruction_grid.py tests/test_tui/test_instruction_grid.py
@@ -211,7 +211,7 @@ git commit -m "fix: make instructions standard column informational"
 - Modify: `src/agent_toolkit_tui/widgets/instruction_grid.py`
 - Test: `tests/test_tui/test_instruction_grid.py`
 
-- [ ] **Step 1: Write failing info-screen test**
+- [x] **Step 1: Write failing info-screen test**
 
 Add this test to `tests/test_tui/test_instruction_grid.py`:
 
@@ -264,7 +264,7 @@ async def test_harness_info_shows_pointer_and_canonical_paths(tmp_path: Path, mo
         assert str(canonical) in body
 ```
 
-- [ ] **Step 2: Run test to verify failure**
+- [x] **Step 2: Run test to verify failure**
 
 Run:
 
@@ -274,7 +274,7 @@ uv run pytest tests/test_tui/test_instruction_grid.py::test_harness_info_shows_p
 
 Expected: FAIL because current info text does not include pointer and canonical paths.
 
-- [ ] **Step 3: Import path helpers in action_info**
+- [x] **Step 3: Import path helpers in action_info**
 
 Inside the harness-cell branch of `InstructionGrid.action_info()`, import:
 
@@ -320,7 +320,7 @@ elif cell.linked:
     )
 ```
 
-- [ ] **Step 4: Run test to verify pass**
+- [x] **Step 4: Run test to verify pass**
 
 Run:
 
@@ -330,7 +330,7 @@ uv run pytest tests/test_tui/test_instruction_grid.py::test_harness_info_shows_p
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/agent_toolkit_tui/widgets/instruction_grid.py tests/test_tui/test_instruction_grid.py
@@ -344,7 +344,7 @@ R2's basic `☐` / `✔` / `!` harness glyph behavior already exists in `_cell_g
 **Files:**
 - Modify: `tests/test_tui/test_instruction_grid_global_indicator.py`
 
-- [ ] **Step 1: Add same-harness marker regression test**
+- [x] **Step 1: Add same-harness marker regression test**
 
 Add a test that creates a project row with global Claude linked and global Gemini unlinked:
 
@@ -377,7 +377,7 @@ async def test_project_global_marker_is_same_harness_scoped():
         assert "🌐" not in grid._cell_glyph(row=row, harness="gemini-cli")  # type: ignore[attr-defined]
 ```
 
-- [ ] **Step 2: Run test**
+- [x] **Step 2: Run test**
 
 Run:
 
@@ -387,7 +387,7 @@ uv run pytest tests/test_tui/test_instruction_grid_global_indicator.py::test_pro
 
 Expected: PASS if existing implementation is correct; FAIL if marker currently leaks across harnesses.
 
-- [ ] **Step 3: Fix only if needed**
+- [x] **Step 3: Fix only if needed**
 
 If the test fails, change `_cell_glyph()` in `src/agent_toolkit_tui/widgets/instruction_grid.py` so the global probe uses the same harness key only:
 
@@ -398,7 +398,7 @@ if self._scope == "project":
         return f"{base} {_GLOBAL_GLYPH}"
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/agent_toolkit_tui/widgets/instruction_grid.py tests/test_tui/test_instruction_grid_global_indicator.py
@@ -410,7 +410,7 @@ git commit -m "test: pin same-harness instruction global marker"
 **Files:**
 - No source edits unless tests expose failures.
 
-- [ ] **Step 1: Run targeted TUI tests**
+- [x] **Step 1: Run targeted TUI tests**
 
 ```bash
 uv run pytest tests/test_tui/test_instruction_state.py tests/test_tui/test_instruction_grid.py tests/test_tui/test_instruction_grid_global_indicator.py -q
@@ -418,7 +418,7 @@ uv run pytest tests/test_tui/test_instruction_state.py tests/test_tui/test_instr
 
 Expected: PASS.
 
-- [ ] **Step 2: Run full test suite**
+- [x] **Step 2: Run full test suite**
 
 ```bash
 uv run pytest -q
@@ -426,7 +426,7 @@ uv run pytest -q
 
 Expected: PASS.
 
-- [ ] **Step 3: Final commit if verification fixes were needed**
+- [x] **Step 3: Final commit if verification fixes were needed**
 
 If Step 1 or Step 2 required additional fixes:
 
@@ -437,9 +437,9 @@ git commit -m "fix: finish instructions global pointer status"
 
 ## Acceptance Checklist
 
-- [ ] `standard` column no longer shows green ✔ for canonical existence alone.
-- [ ] Global symlink-backed harness cells remain the source of truth for pointer status.
-- [ ] Harness info text names both pointer slot and expected canonical target.
-- [ ] Project-scope 🌐 marker is same-harness scoped.
-- [ ] Targeted TUI tests pass.
-- [ ] Full test suite passes.
+- [x] `standard` column no longer shows green ✔ for canonical existence alone.
+- [x] Global symlink-backed harness cells remain the source of truth for pointer status.
+- [x] Harness info text names both pointer slot and expected canonical target.
+- [x] Project-scope 🌐 marker is same-harness scoped.
+- [x] Targeted TUI tests pass.
+- [x] Full test suite passes.

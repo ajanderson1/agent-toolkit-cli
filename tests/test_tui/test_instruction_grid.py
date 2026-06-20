@@ -208,6 +208,39 @@ def test_pending_changed_message_carries_count():
     assert msg.count == 5
 
 
+def test_standard_glyph_is_neutral_when_canonical_exists():
+    """Existing canonical AGENTS.md is informational, not installed status."""
+    row = InstructionRow(
+        slug="AGENTS.md",
+        source="AGENTS.md",
+        canonical_exists=True,
+        cells={},
+    )
+    grid = InstructionGrid([row])
+
+    glyph = grid._standard_glyph(row)  # type: ignore[attr-defined]
+
+    assert "✔" not in glyph
+    assert "green" not in glyph
+    assert "AGENTS.md" in glyph or "std" in glyph
+
+
+def test_standard_glyph_reports_missing_when_canonical_absent():
+    """Missing canonical AGENTS.md remains visibly actionable/error-like."""
+    row = InstructionRow(
+        slug="AGENTS.md",
+        source="AGENTS.md",
+        canonical_exists=False,
+        cells={},
+    )
+    grid = InstructionGrid([row])
+
+    glyph = grid._standard_glyph(row)  # type: ignore[attr-defined]
+
+    assert "missing" in glyph or "✘" in glyph
+    assert "red" in glyph
+
+
 @pytest.mark.asyncio
 async def test_pending_changed_fires_on_toggle():
     """PendingChanged is posted when a cell is toggled."""
@@ -328,6 +361,59 @@ async def test_standard_column_is_not_toggled():
         await pilot.pause()
         await pilot.press("space")
         assert g.pending_entries() == {}
+
+
+@pytest.mark.asyncio
+async def test_harness_info_shows_pointer_and_canonical_paths(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+):
+    """Harness info names the pointer slot and expected canonical target."""
+    home = tmp_path / "home"
+    home.mkdir()
+    agent_toolkit_dir = home / ".agent-toolkit"
+    agent_toolkit_dir.mkdir()
+    canonical = agent_toolkit_dir / "AGENTS.md"
+    canonical.write_text("# AGENTS\n")
+
+    monkeypatch.setattr(
+        "agent_toolkit_cli.instructions_paths.library_root",
+        lambda: agent_toolkit_dir / "instructions",
+    )
+    monkeypatch.setenv("HOME", str(home))
+
+    row = InstructionRow(
+        slug="AGENTS.md",
+        source="AGENTS.md",
+        canonical_exists=True,
+        cells={
+            ("claude-code", "global"): InstructionCell(
+                linked=False, conflict=False,
+            ),
+        },
+    )
+
+    class _A(App):
+        def compose(self) -> ComposeResult:
+            yield InstructionGrid([row], id="g")
+
+    app = _A()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        g = app.query_one("#g", InstructionGrid)
+        g.set_scope("global")
+        table = app.query_one("#instruction-table", DataTable)
+        table.cursor_coordinate = table.cursor_coordinate.__class__(row=0, column=2)
+        table.focus()
+        await pilot.pause()
+        await pilot.press("i")
+        await pilot.pause()
+
+        from agent_toolkit_tui.screens.cell_info import CellInfoScreen
+
+        assert isinstance(app.screen, CellInfoScreen)
+        body = app.screen._body_markup
+        assert str(home / ".claude" / "CLAUDE.md") in body
+        assert str(canonical) in body
 
 
 @pytest.mark.asyncio

@@ -16,6 +16,7 @@ All glyph helpers are named `_cell_glyph`, `_standard_glyph`, `_rebuild`.
 """
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Literal
 
 from textual.app import ComposeResult
@@ -28,10 +29,11 @@ from textual.events import Resize
 from rich.text import Text
 from agent_toolkit_tui.widgets._support import adjust_source_column_width, current_source_column_width
 
+from agent_toolkit_cli import instructions_paths
 from agent_toolkit_tui.column_info import get_column_info
 from agent_toolkit_tui.composition import instructions_nonstandard_main
 from agent_toolkit_tui.display_names import asset_type_label, harness_label, standard_label
-from agent_toolkit_tui.instruction_state import InstructionRow
+from agent_toolkit_tui.instruction_state import InstructionRow, pointer_path_for
 from agent_toolkit_tui.widgets.column_info_modal import ColumnInfoModal
 from agent_toolkit_tui.widgets.filter_input import GridFilterInput
 
@@ -227,8 +229,6 @@ class InstructionGrid(Vertical):
                 # TUIApp._scope_to_roots), so resolve the canonical relative to
                 # it. Passing None here would crash (project_canonical_agents_md
                 # requires a real Path).
-                from pathlib import Path
-
                 from agent_toolkit_cli.instructions_paths import project_canonical_agents_md
                 canonical_path = project_canonical_agents_md(Path.cwd())
             title = f"{row.slug} · instruction"
@@ -246,36 +246,58 @@ class InstructionGrid(Vertical):
             scope_flag = "-g" if self._scope == "global" else "-p"
             display = harness_label(harness)
             title = f"{row.slug} · {display} @ {self._scope}"
+            pointer_path = pointer_path_for(
+                harness,
+                scope=self._scope,
+                home=Path.home(),
+                project=Path.cwd() if self._scope == "project" else None,
+            )
+            canonical_path = (
+                instructions_paths.global_canonical_agents_md()
+                if self._scope == "global"
+                else instructions_paths.project_canonical_agents_md(Path.cwd())
+            )
+            path_lines = ""
+            if pointer_path is not None:
+                path_lines = (
+                    f"\n\nPointer slot:\n  {pointer_path}"
+                    f"\n\nExpected target:\n  {canonical_path}"
+                )
             pending = self._pending.get((self._scope, harness, row.slug))
             if pending == "link":
                 body = (
-                    "[yellow]Pending: install pointer.[/]\n\n"
+                    "[yellow]Pending: install pointer.[/]"
+                    f"{path_lines}\n\n"
                     "Press [b]^s[/] to apply."
                 )
             elif pending == "unlink":
                 body = (
-                    "[yellow]Pending: remove pointer.[/]\n\n"
+                    "[yellow]Pending: remove pointer.[/]"
+                    f"{path_lines}\n\n"
                     "Press [b]^s[/] to apply."
                 )
             elif cell is None:
-                body = f"Not available at {self._scope} scope."
+                body = f"Not available at {self._scope} scope.{path_lines}"
             elif cell.conflict:
                 body = (
                     f"[red]Conflict![/] The pointer slot for {display} is occupied "
-                    "by a real file or foreign symlink.\n\n"
+                    "by a real file or foreign symlink."
+                    f"{path_lines}\n\n"
                     "Resolve manually before installing:\n"
                     "  Move or delete the conflicting file, then re-run install.\n\n"
                     f"CLI: [b]agent-toolkit-cli instructions install {scope_flag}[/]"
                 )
             elif cell.linked:
                 body = (
-                    f"Installed. Pointer for {display} @ {self._scope} is active.\n\n"
+                    f"Installed. Pointer for {display} @ {self._scope} is active."
+                    f"{path_lines}\n\n"
                     f"CLI: [b]agent-toolkit-cli instructions uninstall {scope_flag}[/]"
                 )
             else:
                 body = (
                     f"Not installed. Press [b]space[/] to queue install "
-                    f"into {display} @ {self._scope}.\n\n"
+                    f"into {display} @ {self._scope}."
+                    f"{path_lines}\n\n"
                     f"Or from the CLI:\n"
                     f"  [b]agent-toolkit-cli instructions install {scope_flag}[/]"
                 )
@@ -466,10 +488,10 @@ class InstructionGrid(Vertical):
         )
 
     def _standard_glyph(self, row: InstructionRow) -> str:
-        """Return the display glyph for the standard (canonical) column. Never named _render_*."""
+        """Return display glyph for the standard/native AGENTS.md column."""
         if row.canonical_exists:
-            return _LINKED_GLYPH
-        return "[red]✘[/]"
+            return "[dim]AGENTS.md[/]"
+        return "[red]missing[/]"
 
     def _cell_glyph(self, *, row: InstructionRow, harness: str) -> str:
         """Return the display glyph for a harness cell. Never named _render_*."""

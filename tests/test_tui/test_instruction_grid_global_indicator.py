@@ -50,6 +50,38 @@ async def _rendered_plain(app: App, pilot, harness: str) -> str:
 
 
 @pytest.mark.asyncio
+async def test_project_global_marker_is_same_harness_scoped():
+    """A global link for one harness must not mark another harness."""
+    row = _row_with(
+        project_cells={
+            _H0: InstructionCell(linked=True, conflict=False),
+            _H1: InstructionCell(linked=False, conflict=False),
+        },
+        global_cells={
+            _H0: InstructionCell(linked=True, conflict=False),
+            _H1: InstructionCell(linked=False, conflict=False),
+        },
+    )
+
+    class _A(App):
+        def compose(self):
+            yield InstructionGrid([row], id="g")
+
+    app = _A()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        grid = app.query_one("#g", InstructionGrid)
+        grid.set_scope("project")
+
+        assert "🌐" in grid._cell_glyph(  # type: ignore[attr-defined]
+            row=row, harness=_H0,
+        )
+        assert "🌐" not in grid._cell_glyph(  # type: ignore[attr-defined]
+            row=row, harness=_H1,
+        )
+
+
+@pytest.mark.asyncio
 async def test_project_scope_globally_linked_cell_shows_marker():
     row = _row_with(
         project_cells={h: InstructionCell(linked=False, conflict=False)
