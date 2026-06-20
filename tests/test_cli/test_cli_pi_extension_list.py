@@ -117,6 +117,7 @@ def test_list_json_includes_npm_managed_fields(tmp_path, monkeypatch):
     settings.parent.mkdir(parents=True)
     settings.write_text('{"packages": ["npm:pi-title-renamer"]}')
 
+    monkeypatch.chdir(tmp_path)
     result = CliRunner().invoke(
         main, ["pi-extension", "list", "--json"], catch_exceptions=False
     )

@@ -110,3 +110,81 @@ def test_uninstall_unmanaged_npm_project_scope_raises(tmp_path, monkeypatch):
     assert "will not remove packages it did not add" in message
     assert str(settings) in message
     assert 'remove "npm:pi-title-renamer" from packages[]' in message
+
+def test_project_install_store_owned_fails_when_global_loaded(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    canonical = _seed_store_owned(tmp_path, "demo")
+
+    ops.install(slug="demo", scope="global", home=tmp_path, project=None)
+    project = tmp_path / "proj"
+    project.mkdir()
+
+    with pytest.raises(ops.pi_extension_install.InstallError) as exc:
+        ops.install(slug="demo", scope="project", home=tmp_path, project=project)
+
+    assert "already installed at global scope" in str(exc.value)
+    project_link = pep.pi_extension_dir("demo", scope="project", project=project)
+    assert not project_link.exists()
+    assert canonical.exists()
+
+
+def test_project_install_npm_fails_when_global_loaded(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _seed_npm_lock("foo", "npm:foo")
+
+    ops.install(slug="foo", scope="global", home=tmp_path, project=None)
+    project = tmp_path / "proj"
+    project.mkdir()
+
+    with pytest.raises(ops.pi_extension_install.InstallError) as exc:
+        ops.install(slug="foo", scope="project", home=tmp_path, project=project)
+
+    assert "already installed at global scope" in str(exc.value)
+    project_settings = project / ".pi" / "settings.json"
+    assert not project_settings.exists()
+
+
+def test_project_install_npm_fails_when_global_package_identity_loaded(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _seed_npm_lock("foo", "npm:foo")
+    _seed_settings(tmp_path, {"packages": ["foo@1.2.3"]})
+    project = tmp_path / "proj"
+    project.mkdir()
+
+    with pytest.raises(ops.pi_extension_install.InstallError) as exc:
+        ops.install(slug="foo", scope="project", home=tmp_path, project=project)
+
+    assert "already installed at global scope" in str(exc.value)
+
+
+def test_project_install_succeeds_after_global_uninstall(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _seed_store_owned(tmp_path, "demo")
+    project = tmp_path / "proj"
+    project.mkdir()
+
+    ops.install(slug="demo", scope="global", home=tmp_path, project=None)
+    ops.uninstall(slug="demo", scope="global", home=tmp_path, project=None)
+    ops.install(slug="demo", scope="project", home=tmp_path, project=project)
+
+    project_link = pep.pi_extension_dir("demo", scope="project", project=project)
+    assert project_link.is_symlink()
+
+
+def test_project_uninstall_still_allowed_when_global_loaded(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    canonical = _seed_store_owned(tmp_path, "demo")
+    project = tmp_path / "proj"
+    project.mkdir()
+
+    global_link = pep.pi_extension_dir("demo", scope="global", home=tmp_path)
+    global_link.parent.mkdir(parents=True, exist_ok=True)
+    global_link.symlink_to(canonical, target_is_directory=True)
+    project_link = pep.pi_extension_dir("demo", scope="project", project=project)
+    project_link.parent.mkdir(parents=True, exist_ok=True)
+    project_link.symlink_to(canonical, target_is_directory=True)
+
+    ops.uninstall(slug="demo", scope="project", home=tmp_path, project=project)
+
+    assert global_link.is_symlink()
+    assert not project_link.exists()
