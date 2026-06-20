@@ -298,7 +298,7 @@ class TUIApp(App):
             return
         opt_id = event.option.id
         # Guard against separator or unknown options.
-        if opt_id is None or opt_id == "asset-type-separator":
+        if opt_id is None or opt_id.startswith("asset-type-separator"):
             return
         if opt_id == "asset-type-instruction":
             self.action_asset_type("instruction")
