@@ -32,6 +32,8 @@ from unittest.mock import MagicMock
 
 import pytest
 from textual.app import App, ComposeResult
+from textual.events import Resize
+from textual.geometry import Size
 from textual.widgets import DataTable, OptionList, Static
 
 from agent_toolkit_tui.instruction_state import (
@@ -92,6 +94,28 @@ def _conflict_row(slug: str = "AGENTS.md", *, scope: str = "global") -> Instruct
 # ---------------------------------------------------------------------------
 # Widget-level tests
 # ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_instruction_grid_resize_adjusts_source_column_width():
+    """InstructionGrid resize delegates remaining width to Source."""
+
+    class _A(App):
+        def compose(self) -> ComposeResult:
+            yield InstructionGrid([_unlinked_row()], id="g")
+
+    app = _A()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        g = app.query_one("#g", InstructionGrid)
+        table = app.query_one("#instruction-table", DataTable)
+        event = Resize(Size(140, 24), Size(140, 24))
+
+        g.on_resize(event)
+
+        source = list(table.columns.values())[-1]
+        fixed_width = 22 + 16 + (14 * len(g._active_harnesses()))
+        assert source.width == max(10, 140 - fixed_width)
 
 
 @pytest.mark.asyncio
@@ -505,15 +529,15 @@ async def test_asset_type_sidebar_lists_instruction_first():
         for i in range(ol.option_count):
             try:
                 opt = ol.get_option_at_index(i)
-                if opt.id not in (None, "asset-type-separator") and not opt.disabled:
+                if opt.id not in (None, "asset-type-separator-1", "asset-type-separator-2") and not opt.disabled:
                     prompts.append(str(opt.prompt))
                     ids.append(opt.id)
             except Exception:
                 pass
-        assert "Instructions" in prompts
-        assert "Skills" in prompts
-        assert "Pi Extensions" in prompts
-        assert "Agents" in prompts
+        assert any("Instructions" in p for p in prompts)
+        assert any("Skills" in p for p in prompts)
+        assert any("Pi Extensions" in p for p in prompts)
+        assert any("Agents" in p for p in prompts)
         # instruction must be first among selectable options
         assert ids[0] == "asset-type-instruction"
 

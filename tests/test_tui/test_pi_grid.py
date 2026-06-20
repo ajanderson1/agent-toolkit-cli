@@ -29,6 +29,7 @@ import pytest
 from textual.app import App, ComposeResult
 from textual.coordinate import Coordinate
 from rich.text import Text
+from textual.events import Resize
 from textual.geometry import Size
 from textual.widgets import DataTable, OptionList, Static
 
@@ -161,7 +162,7 @@ async def test_pi_grid_extension_column_uses_available_width_and_ellipsis():
         grid = app.query_one("#g", PiGrid)
         table = app.query_one("#pi-table", DataTable)
 
-        grid.on_resize(SimpleNamespace(size=Size(140, 30)))
+        grid.on_resize(Resize(Size(140, 30), Size(100, 30)))
         await pilot.pause()
 
         extension_key = list(table.columns.keys())[0]
@@ -171,6 +172,26 @@ async def test_pi_grid_extension_column_uses_available_width_and_ellipsis():
         assert isinstance(cell, Text)
         assert cell.overflow == "ellipsis"
         assert cell.no_wrap is True
+
+@pytest.mark.asyncio
+async def test_pi_grid_resize_shrinks_source_column_to_remaining_width():
+    """Resize keeps passive Source column inside available table width."""
+
+    class _A(App):
+        def compose(self) -> ComposeResult:
+            yield PiGrid([_store_row("alpha")], id="g")
+
+    app = _A()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        grid = app.query_one("#g", PiGrid)
+        table = app.query_one("#pi-table", DataTable)
+
+        grid.on_resize(Resize(Size(72, 20), Size(72, 20)))
+        assert list(table.columns.values())[-1].width == 22
+
+        grid.on_resize(Resize(Size(40, 20), Size(40, 20)))
+        assert list(table.columns.values())[-1].width == 10
 
 
 @pytest.mark.asyncio
@@ -933,8 +954,8 @@ async def test_asset_type_sidebar_lists_both_asset_types():
         ol = app.query_one("#asset-types-list", OptionList)
         # Get option prompts
         prompts = [str(ol.get_option_at_index(i).prompt) for i in range(ol.option_count)]
-        assert "Skills" in prompts
-        assert "Pi Extensions" in prompts
+        assert any("Skills" in p for p in prompts)
+        assert any("Pi Extensions" in p for p in prompts)
 
 
 @pytest.mark.asyncio

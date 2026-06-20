@@ -23,6 +23,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical
 from textual.coordinate import Coordinate
+from textual.events import Resize
 from textual.message import Message
 from textual.widgets import DataTable, Input
 from textual.events import Resize
@@ -31,6 +32,10 @@ from agent_toolkit_tui.widgets._support import adjust_source_column_width, curre
 
 from agent_toolkit_tui.command_state import INTERACTIVE_HARNESSES, CommandRow
 from agent_toolkit_tui.column_info import get_column_info
+from agent_toolkit_tui.widgets._support import (
+    adjust_source_column_width,
+    set_source_column_width,
+)
 from agent_toolkit_tui.widgets.column_info_modal import ColumnInfoModal
 from agent_toolkit_tui.widgets.filter_input import GridFilterInput
 
@@ -40,6 +45,13 @@ _PENDING_LINK   = "[yellow]+[/]"
 _PENDING_UNLINK = "[yellow]-[/]"
 _INFO_GLYPH     = "ⓘ"
 _GLOBAL_GLYPH   = "🌐"
+_COMMAND_COL_WIDTH = 22
+_HARNESS_COL_WIDTH = 14
+_STATE_COL_WIDTH = 10
+_SOURCE_COL_WIDTH = 30
+_SOURCE_COLUMN_FIXED_WIDTH = (
+    _COMMAND_COL_WIDTH + (_HARNESS_COL_WIDTH * len(INTERACTIVE_HARNESSES)) + _STATE_COL_WIDTH
+)
 
 # Row-state badges (#360). `installed` renders as an em-dash to keep the
 # common case quiet; `library` mirrors skill_grid's dim available state;
@@ -172,6 +184,17 @@ class CommandGrid(Vertical):
             self._rebuild(table)
         except Exception:
             pass
+
+    def on_resize(self, event: Resize) -> None:
+        try:
+            table = self.query_one("#command-table", DataTable)
+        except Exception:
+            return
+        adjust_source_column_width(
+            table,
+            event,
+            fixed_width=_SOURCE_COLUMN_FIXED_WIDTH,
+        )
 
     def action_toggle_cell(self) -> None:
         try:
@@ -373,17 +396,18 @@ class CommandGrid(Vertical):
         source_width = current_source_column_width(table)
         table.clear(columns=True)
         # Slug column — info glyph since `i` works on it.
-        table.add_column(f"COMMAND {_INFO_GLYPH}", width=22)
+        table.add_column(f"COMMAND {_INFO_GLYPH}", width=_COMMAND_COL_WIDTH)
         # Per-harness columns. "standard" is the .claude/commands slot (#361),
         # not a catalog harness — label it explicitly (same special-case as
         # skill_grid). The Standard column leads; everything after it is
         # implicitly non-standard.
         for harness in INTERACTIVE_HARNESSES:
-            table.add_column(f"{harness} {_INFO_GLYPH}", width=14)
+            table.add_column(f"{harness} {_INFO_GLYPH}", width=_HARNESS_COL_WIDTH)
         # State column — shows installed/library/unlisted (#360).
-        table.add_column("State", width=10)
+        table.add_column("State", width=_STATE_COL_WIDTH)
         # Source column — passive, no info popup.
         table.add_column("Source", width=source_width)
+        self._adjust_source_column_width(table)
 
         visible = self._visible_rows()
         for row in visible:
@@ -406,6 +430,10 @@ class CommandGrid(Vertical):
         table.scroll_to(
             x=saved_scroll[0], y=saved_scroll[1], animate=False, force=True
         )
+
+    def _adjust_source_column_width(self, table: DataTable) -> None:
+        if self.size.width > 0:
+            set_source_column_width(table, self.size.width, _SOURCE_COLUMN_FIXED_WIDTH)
 
     def _cell_glyph(self, *, row: CommandRow, harness: str) -> str:
         """Return the display glyph for a harness cell. Never named _render_*."""

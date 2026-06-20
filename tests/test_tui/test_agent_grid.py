@@ -25,6 +25,7 @@ App-level:
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -326,9 +327,9 @@ async def test_asset_type_sidebar_lists_three_asset_types():
         await pilot.pause()
         ol = app.query_one("#asset-types-list", OptionList)
         prompts = [str(ol.get_option_at_index(i).prompt) for i in range(ol.option_count)]
-        assert "Skills" in prompts
-        assert "Pi Extensions" in prompts
-        assert "Agents" in prompts
+        assert any("Skills" in p for p in prompts)
+        assert any("Pi Extensions" in p for p in prompts)
+        assert any("Agents" in p for p in prompts)
 
 
 @pytest.mark.asyncio
@@ -769,3 +770,23 @@ async def test_state_column_rendered():
         state_i = next(i for i, lbl in enumerate(labels) if "State" in lbl)
         source_i = next(i for i, lbl in enumerate(labels) if "Source" in lbl)
         assert source_i == state_i + 1
+
+
+@pytest.mark.asyncio
+async def test_agent_grid_resize_gives_source_remaining_width():
+    """Resize shrinks Source column to remaining width instead of fixed 30."""
+
+    class _A(App):
+        def compose(self) -> ComposeResult:
+            yield AgentGrid([_full_row("alpha")], id="g")
+
+    app = _A()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        g = app.query_one("#g", AgentGrid)
+        table = app.query_one("#agent-table", DataTable)
+
+        g.on_resize(SimpleNamespace(size=SimpleNamespace(width=120)))
+
+        source_column = list(table.columns.values())[-1]
+        assert source_column.width == 32

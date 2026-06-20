@@ -36,7 +36,7 @@ uv run pytest -q
 uv run agent-toolkit-cli skill list
 ```
 
-`lefthook.yml` runs `uv run pytest -q` on pre-commit.
+`lefthook.yml` runs `uv run pytest -q` on pre-push.
 
 ## Testing
 

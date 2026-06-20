@@ -34,6 +34,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical
 from textual.coordinate import Coordinate
+from textual.events import Resize
 from textual.message import Message
 from textual.widgets import DataTable, Input
 from textual.events import Resize
@@ -43,6 +44,7 @@ from agent_toolkit_tui.widgets._support import adjust_source_column_width, curre
 from agent_toolkit_tui.column_info import get_column_info
 from agent_toolkit_tui.display_names import asset_type_label, harness_label, standard_label
 from agent_toolkit_tui.mcp_state import McpRow, mcp_interactive_harnesses
+from agent_toolkit_tui.widgets._support import adjust_source_column_width
 from agent_toolkit_tui.widgets.column_info_modal import ColumnInfoModal
 from agent_toolkit_tui.widgets.filter_input import GridFilterInput
 
@@ -93,6 +95,7 @@ class McpGrid(Vertical):
         super().__init__(id=id)
         self._rows = sorted(rows, key=lambda r: r.slug)
         self._scope: Literal["global", "project"] = "global"
+        self._last_resize: Resize | None = None
         # (scope, harness_name, slug) -> op
         self._pending: dict[tuple[str, str, str], Op] = {}
         self._filter: str = ""
@@ -195,6 +198,14 @@ class McpGrid(Vertical):
             self._rebuild(table)
         except Exception:
             pass
+
+    def on_resize(self, event: Resize) -> None:
+        self._last_resize = event
+        try:
+            table = self.query_one("#mcp-table", DataTable)
+        except Exception:
+            return
+        self._adjust_source_width(table, event)
 
     def action_toggle_cell(self) -> None:
         try:
@@ -388,8 +399,16 @@ class McpGrid(Vertical):
         except Exception:
             return
 
-        fixed_width = 22 + 10 + (len(self._harnesses()) * 16)
-        adjust_source_column_width(table, event, fixed_width)
+        adjust_source_column_width(table, event, self._fixed_column_width())
+
+    def _fixed_column_width(self) -> int:
+        """Width used by every column before Source."""
+        return 22 + (16 * len(self._harnesses())) + 10
+
+    def _adjust_source_width(self, table: DataTable, event: Resize) -> None:
+        adjust_source_column_width(
+            table, event, fixed_width=self._fixed_column_width()
+        )
 
     def _rebuild(self, table: DataTable) -> None:
         """Rebuild the DataTable from current rows + pending. Never named _render_*."""
@@ -436,6 +455,8 @@ class McpGrid(Vertical):
                 row=min(saved.row, max_row),
                 column=min(saved.column, max_col),
             )
+        if self._last_resize is not None:
+            self._adjust_source_width(table, self._last_resize)
         # Pin the viewport back (clamped by Textual to the new content range).
         table.scroll_to(
             x=saved_scroll[0], y=saved_scroll[1], animate=False, force=True

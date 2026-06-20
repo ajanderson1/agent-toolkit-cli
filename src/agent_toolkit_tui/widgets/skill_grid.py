@@ -31,6 +31,10 @@ from agent_toolkit_tui.column_info import COLUMN_INFO, get_column_info
 from agent_toolkit_tui.display_names import asset_type_label, harness_label, standard_label
 from agent_toolkit_tui.composition import skills_nonstandard_main
 from agent_toolkit_tui.skill_state import SkillRow
+from agent_toolkit_tui.widgets._support import (
+    adjust_source_column_width,
+    set_source_column_width,
+)
 from agent_toolkit_tui.widgets.column_info_modal import ColumnInfoModal
 from agent_toolkit_tui.widgets.filter_input import GridFilterInput
 
@@ -218,6 +222,13 @@ class SkillGrid(Vertical):
             self._rebuild(table)
         except Exception:
             pass
+
+    def on_resize(self, event: events.Resize) -> None:
+        try:
+            table = self.query_one("#skill-table", DataTable)
+        except Exception:
+            return
+        adjust_source_column_width(table, event, self._source_column_fixed_width())
 
     def action_toggle_cell(self) -> None:
         try:
@@ -572,6 +583,7 @@ class SkillGrid(Vertical):
         table.add_column(f"State {_INFO_GLYPH}", width=10)
         # Source is passive — no info panel, no glyph.
         table.add_column("Source", width=source_width)
+        self._adjust_source_column_width(table)
         visible = self._visible_rows()
         for row in visible:
             cells: list[str | Text] = [row.slug]
@@ -592,6 +604,17 @@ class SkillGrid(Vertical):
         table.scroll_to(
             x=saved_scroll[0], y=saved_scroll[1], animate=False, force=True
         )
+
+    def _source_column_fixed_width(self) -> int:
+        return 20 + (14 * len(self._active_agents())) + 10
+
+    def _adjust_source_column_width(self, table: DataTable) -> None:
+        if self.size.width > 0:
+            set_source_column_width(
+                table,
+                self.size.width,
+                self._source_column_fixed_width(),
+            )
 
     def _cell_glyph(self, *, row: SkillRow, agent: str) -> str:
         cell = row.cells.get((agent, self._scope))

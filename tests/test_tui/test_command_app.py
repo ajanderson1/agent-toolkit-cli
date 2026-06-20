@@ -6,4 +6,4 @@ async def test_app_sidebar_includes_commands():
     async with app.run_test() as pilot:
         option_list = app.query_one("#asset-types-list")
         labels = [str(option.prompt) for option in option_list.options]
-        assert "Commands" in labels
+        assert any("Commands" in l for l in labels)

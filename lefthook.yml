@@ -1,6 +1,6 @@
-pre-commit:
+pre-push:
   parallel: true
   commands:
     pytest:
-      run: uv run pytest -q
+      run: PATH="/opt/homebrew/bin:~/.cargo/bin:~/.local/bin:$PATH" uv run pytest -q
       stage_fixed: false

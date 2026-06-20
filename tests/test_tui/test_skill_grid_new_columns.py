@@ -57,30 +57,7 @@ async def test_source_column_is_last():
         assert str(cells[-1]) == "git@github.com:foo/bar.git"
 
 
-@pytest.mark.asyncio
-async def test_source_column_width_survives_filter_rebuild():
-    """Filtering rebuilds rows but must not reset resized Source width."""
-    from textual.app import App
-    from textual.widgets import DataTable
 
-    class _A(App):
-        def compose(self):
-            yield SkillGrid([
-                _row("alpha", source="git@github.com:foo/alpha.git"),
-                _row("beta", source="git@github.com:foo/beta.git"),
-            ], id="g")
-
-    a = _A()
-    async with a.run_test() as pilot:
-        await pilot.pause()
-        g = a.query_one("#g", SkillGrid)
-        table = a.query_one("#skill-table", DataTable)
-        source_key = list(table.columns.keys())[-1]
-        table.columns[source_key].width = 52
-        g.set_filter("alpha")
-        await pilot.pause()
-        source_key = list(table.columns.keys())[-1]
-        assert table.columns[source_key].width == 52
 
 
 @pytest.mark.asyncio

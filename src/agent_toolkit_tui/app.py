@@ -145,6 +145,12 @@ class TUIApp(App):
     TITLE = "agent-toolkit-tui"
 
     BINDINGS = [
+        Binding("1", "asset_type('instruction')", "Instructions", show=False),
+        Binding("2", "asset_type('command')", "Commands", show=False),
+        Binding("3", "asset_type('skill')", "Skills", show=False),
+        Binding("4", "asset_type('agent')", "Agents", show=False),
+        Binding("5", "asset_type('mcp')", "MCPs", show=False),
+        Binding("6", "asset_type('pi-extension')", "Pi Extensions", show=False),
         Binding("ctrl+s", "apply", "Apply", priority=True),
         Binding("ctrl+d", "diff", "Diff", priority=True),
         Binding("ctrl+r", "refresh", "Refresh", priority=True),
@@ -169,13 +175,14 @@ class TUIApp(App):
             with Vertical(id="asset-types-sidebar"):
                 yield Static("Asset Types", classes="rail-header")
                 yield OptionList(
-                    Option(_asset_type_label("instruction", plural=True), id="asset-type-instruction"),
-                    Option("─────────────", id="asset-type-separator", disabled=True),
-                    Option(_asset_type_label("skill", plural=True), id="asset-type-skill"),
-                    Option(_asset_type_label("command", plural=True), id="asset-type-command"),
-                    Option(_asset_type_label("pi-extension", plural=True), id="asset-type-pi-extension"),
-                    Option(_asset_type_label("agent", plural=True), id="asset-type-agent"),
-                    Option(_asset_type_label("mcp", plural=True), id="asset-type-mcp"),
+                    Option(f"1  {_asset_type_label('instruction', plural=True)}", id="asset-type-instruction"),
+                    Option("─────────────", id="asset-type-separator-1", disabled=True),
+                    Option(f"2  {_asset_type_label('command', plural=True)}", id="asset-type-command"),
+                    Option(f"3  {_asset_type_label('skill', plural=True)}", id="asset-type-skill"),
+                    Option(f"4  {_asset_type_label('agent', plural=True)}", id="asset-type-agent"),
+                    Option(f"5  {_asset_type_label('mcp', plural=True)}", id="asset-type-mcp"),
+                    Option("─────────────", id="asset-type-separator-2", disabled=True),
+                    Option(f"6  {_asset_type_label('pi-extension', plural=True)}", id="asset-type-pi-extension"),
                     id="asset-types-list",
                 )
             with Vertical(id="content"):

@@ -23,6 +23,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical
 from textual.coordinate import Coordinate
+from textual.events import Resize
 from textual.message import Message
 from textual.widgets import DataTable, Input
 from textual.events import Resize
@@ -34,6 +35,11 @@ from agent_toolkit_tui.column_info import get_column_info
 from agent_toolkit_tui.composition import instructions_nonstandard_main
 from agent_toolkit_tui.display_names import asset_type_label, harness_label, standard_label
 from agent_toolkit_tui.instruction_state import InstructionRow, pointer_path_for
+from agent_toolkit_tui.widgets._support import (
+    adjust_source_column_width,
+    set_source_column_width,
+    current_source_column_width,
+)
 from agent_toolkit_tui.widgets.column_info_modal import ColumnInfoModal
 from agent_toolkit_tui.widgets.filter_input import GridFilterInput
 
@@ -52,6 +58,10 @@ _GLOBAL_GLYPH    = "🌐"
 #   2..2+N-1 = active harness columns (_active_harnesses())
 #   2+N = Source
 _HARNESS_COL_OFFSET = 2
+_INSTRUCTION_COL_WIDTH = 22
+_STANDARD_COL_WIDTH = 16
+_HARNESS_COL_WIDTH = 14
+_SOURCE_COL_WIDTH = 30
 
 Op = Literal["link", "unlink"]
 
@@ -186,6 +196,14 @@ class InstructionGrid(Vertical):
             self._rebuild(table)
         except Exception:
             pass
+
+    def on_resize(self, event: Resize) -> None:
+        """Keep Source sized to the remaining viewport width."""
+        try:
+            table = self.query_one("#instruction-table", DataTable)
+        except Exception:
+            return
+        adjust_source_column_width(table, event, self._source_column_fixed_width())
 
     def action_toggle_cell(self) -> None:
         try:
@@ -452,18 +470,25 @@ class InstructionGrid(Vertical):
         source_width = current_source_column_width(table)
         table.clear(columns=True)
         # Slug column.
-        table.add_column(f"{asset_type_label('instruction')} {_INFO_GLYPH}", width=22)
+        table.add_column(
+            f"{asset_type_label('instruction')} {_INFO_GLYPH}",
+            width=_INSTRUCTION_COL_WIDTH,
+        )
         # Standard column — read-only canonical status. It leads; everything
         # after it is implicitly non-standard (group-tag header row removed
         # per AJ demo feedback, #351).
-        table.add_column(f"{standard_label(_standard_count())} {_INFO_GLYPH}", width=16)
+        table.add_column(
+            f"{standard_label(_standard_count())} {_INFO_GLYPH}",
+            width=_STANDARD_COL_WIDTH,
+        )
         # Per-harness interactive columns.
         active = self._active_harnesses()
         for harness in active:
             display = harness_label(harness)
-            table.add_column(f"{display} {_INFO_GLYPH}", width=14)
+            table.add_column(f"{display} {_INFO_GLYPH}", width=_HARNESS_COL_WIDTH)
         # Source column — passive.
         table.add_column("Source", width=source_width)
+        self._adjust_source_column_width(table)
 
         visible = self._visible_rows()
         for row in visible:
@@ -486,6 +511,21 @@ class InstructionGrid(Vertical):
         table.scroll_to(
             x=saved_scroll[0], y=saved_scroll[1], animate=False, force=True
         )
+
+    def _source_column_fixed_width(self) -> int:
+        return (
+            _INSTRUCTION_COL_WIDTH
+            + _STANDARD_COL_WIDTH
+            + (_HARNESS_COL_WIDTH * len(self._active_harnesses()))
+        )
+
+    def _adjust_source_column_width(self, table: DataTable) -> None:
+        if self.size.width > 0:
+            set_source_column_width(
+                table,
+                self.size.width,
+                self._source_column_fixed_width(),
+            )
 
     def _standard_glyph(self, row: InstructionRow) -> str:
         """Return display glyph for the standard/native AGENTS.md column."""

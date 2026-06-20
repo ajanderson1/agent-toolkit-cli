@@ -28,6 +28,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical
 from textual.coordinate import Coordinate
+from textual.events import Resize
 from textual.message import Message
 from textual.widgets import DataTable, Input
 from textual.events import Resize
@@ -35,6 +36,10 @@ from rich.text import Text
 from agent_toolkit_tui.widgets._support import current_source_column_width
 
 from agent_toolkit_tui.display_names import asset_type_label, pi_extension_origin_label
+from agent_toolkit_tui.widgets._support import (
+    adjust_source_column_width,
+    set_source_column_width,
+)
 from agent_toolkit_tui.pi_extension_state import PiExtensionRow
 from agent_toolkit_tui.screens.cell_info import CellInfoScreen
 from agent_toolkit_tui.widgets.filter_input import GridFilterInput
@@ -65,6 +70,7 @@ _MIN_EXTENSION_WIDTH = 10
 _MIN_SOURCE_WIDTH = 10
 _SCOPE_COLUMN_WIDTH = 14
 _ORIGIN_COLUMN_WIDTH = 12
+_FIXED_COLUMN_WIDTH = 24 + 14 + 12
 
 
 class PiGrid(Vertical):
@@ -184,6 +190,13 @@ class PiGrid(Vertical):
             self._rebuild(table)
         except Exception:
             pass
+
+    def on_resize(self, event: Resize) -> None:
+        try:
+            table = self.query_one("#pi-table", DataTable)
+        except Exception:
+            return
+        adjust_source_column_width(table, event, _FIXED_COLUMN_WIDTH)
 
     def action_toggle_cell(self) -> None:
         try:
@@ -383,43 +396,7 @@ class PiGrid(Vertical):
             pass
         self._notify_pending()
 
-    def on_resize(self, event: Resize) -> None:
-        try:
-            table = self.query_one("#pi-table", DataTable)
-        except Exception:
-            return
 
-        self._adjust_text_column_widths(table, event)
-
-    def _text_width_for_extension_column(self) -> int:
-        header_width = len(f"{asset_type_label('pi-extension')} {_INFO_GLYPH}")
-        row_width = max((len(row.slug) for row in self._visible_rows()), default=0)
-        return max(_DEFAULT_EXTENSION_WIDTH, header_width, row_width)
-
-    @staticmethod
-    def _column_width(table: DataTable, index: int, default: int) -> int:
-        if len(table.columns) <= index:
-            return default
-        column_key = list(table.columns.keys())[index]
-        return table.columns[column_key].width or default
-
-    def _adjust_text_column_widths(self, table: DataTable, event: Resize) -> None:
-        if len(table.columns) < 4:
-            return
-        total_padding = len(table.columns) * 2 + 2
-        available = event.size.width - _SCOPE_COLUMN_WIDTH - _ORIGIN_COLUMN_WIDTH - total_padding
-        if available <= 0:
-            return
-
-        extension_width = min(
-            self._text_width_for_extension_column(),
-            max(_MIN_EXTENSION_WIDTH, available - _MIN_SOURCE_WIDTH),
-        )
-        source_width = max(_MIN_SOURCE_WIDTH, available - extension_width)
-
-        column_keys = list(table.columns.keys())
-        table.columns[column_keys[_COL_EXTENSION]].width = extension_width
-        table.columns[column_keys[_COL_SOURCE]].width = source_width
         table.refresh()
 
     def _rebuild(self, table: DataTable) -> None:
@@ -442,6 +419,7 @@ class PiGrid(Vertical):
         table.add_column(f"Pi {_INFO_GLYPH}", width=_SCOPE_COLUMN_WIDTH)
         table.add_column("Origin", width=_ORIGIN_COLUMN_WIDTH)
         table.add_column("Source", width=source_width)
+        self._adjust_source_column_width(table)
 
         visible = self._visible_rows()
         for row in visible:
@@ -464,6 +442,22 @@ class PiGrid(Vertical):
         table.scroll_to(
             x=saved_scroll[0], y=saved_scroll[1], animate=False, force=True
         )
+
+    def _adjust_source_column_width(self, table: DataTable) -> None:
+        if self.size.width > 0:
+            set_source_column_width(table, self.size.width, _FIXED_COLUMN_WIDTH)
+
+    def _text_width_for_extension_column(self) -> int:
+        header_width = len(f"{asset_type_label('pi-extension')} {_INFO_GLYPH}")
+        row_width = max((len(row.slug) for row in self._visible_rows()), default=0)
+        return max(_DEFAULT_EXTENSION_WIDTH, header_width, row_width)
+
+    @staticmethod
+    def _column_width(table: DataTable, index: int, default: int) -> int:
+        if len(table.columns) <= index:
+            return default
+        column_key = list(table.columns.keys())[index]
+        return table.columns[column_key].width or default
 
     def _cell_glyph(self, *, row: PiExtensionRow, scope: str) -> str:
         """Return the display glyph for a scope cell. Never named _render_*."""

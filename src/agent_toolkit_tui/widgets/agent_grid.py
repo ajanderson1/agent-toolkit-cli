@@ -23,6 +23,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical
 from textual.coordinate import Coordinate
+from textual.events import Resize
 from textual.message import Message
 from textual.widgets import DataTable, Input
 from textual.events import Resize
@@ -32,6 +33,10 @@ from agent_toolkit_tui.widgets._support import adjust_source_column_width, curre
 from agent_toolkit_tui.agent_state import INTERACTIVE_HARNESSES, AgentRow
 from agent_toolkit_tui.column_info import get_column_info
 from agent_toolkit_tui.display_names import asset_type_label, harness_label, standard_label
+from agent_toolkit_tui.widgets._support import (
+    adjust_source_column_width,
+    set_source_column_width,
+)
 from agent_toolkit_tui.widgets.column_info_modal import ColumnInfoModal
 from agent_toolkit_tui.widgets.filter_input import GridFilterInput
 
@@ -41,6 +46,7 @@ _PENDING_LINK   = "[yellow]+[/]"
 _PENDING_UNLINK = "[yellow]-[/]"
 _INFO_GLYPH     = "ⓘ"
 _GLOBAL_GLYPH   = "🌐"
+_SOURCE_COLUMN_FIXED_WIDTH = 22 + (14 * len(INTERACTIVE_HARNESSES)) + 10
 
 # Row-state badges (#360). `installed` renders as an em-dash to keep the
 # common case quiet; `library` mirrors skill_grid's dim available state;
@@ -173,6 +179,17 @@ class AgentGrid(Vertical):
             self._rebuild(table)
         except Exception:
             pass
+
+    def on_resize(self, event: Resize) -> None:
+        try:
+            table = self.query_one("#agent-table", DataTable)
+        except Exception:
+            return
+        adjust_source_column_width(
+            table,
+            event,
+            fixed_width=_SOURCE_COLUMN_FIXED_WIDTH,
+        )
 
     def action_toggle_cell(self) -> None:
         try:
@@ -414,6 +431,7 @@ class AgentGrid(Vertical):
         table.add_column("State", width=10)
         # Source column — passive, no info popup.
         table.add_column("Source", width=source_width)
+        self._adjust_source_column_width(table)
 
         visible = self._visible_rows()
         for row in visible:
@@ -436,6 +454,10 @@ class AgentGrid(Vertical):
         table.scroll_to(
             x=saved_scroll[0], y=saved_scroll[1], animate=False, force=True
         )
+
+    def _adjust_source_column_width(self, table: DataTable) -> None:
+        if self.size.width > 0:
+            set_source_column_width(table, self.size.width, _SOURCE_COLUMN_FIXED_WIDTH)
 
     def _cell_glyph(self, *, row: AgentRow, harness: str) -> str:
         """Return the display glyph for a harness cell. Never named _render_*."""
