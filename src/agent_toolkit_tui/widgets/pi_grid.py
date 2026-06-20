@@ -32,7 +32,7 @@ from textual.message import Message
 from textual.widgets import DataTable, Input
 from textual.events import Resize
 from rich.text import Text
-from agent_toolkit_tui.widgets._support import adjust_source_column_width, current_source_column_width
+from agent_toolkit_tui.widgets._support import current_source_column_width
 
 from agent_toolkit_tui.display_names import asset_type_label, pi_extension_origin_label
 from agent_toolkit_tui.pi_extension_state import PiExtensionRow
@@ -59,6 +59,12 @@ _COL_EXTENSION = 0
 _COL_SCOPE     = 1
 _COL_ORIGIN    = 2
 _COL_SOURCE    = 3
+
+_DEFAULT_EXTENSION_WIDTH = 24
+_MIN_EXTENSION_WIDTH = 10
+_MIN_SOURCE_WIDTH = 10
+_SCOPE_COLUMN_WIDTH = 14
+_ORIGIN_COLUMN_WIDTH = 12
 
 
 class PiGrid(Vertical):
@@ -383,8 +389,38 @@ class PiGrid(Vertical):
         except Exception:
             return
 
-        fixed_width = 24 + 14 + 12
-        adjust_source_column_width(table, event, fixed_width)
+        self._adjust_text_column_widths(table, event)
+
+    def _text_width_for_extension_column(self) -> int:
+        header_width = len(f"{asset_type_label('pi-extension')} {_INFO_GLYPH}")
+        row_width = max((len(row.slug) for row in self._visible_rows()), default=0)
+        return max(_DEFAULT_EXTENSION_WIDTH, header_width, row_width)
+
+    @staticmethod
+    def _column_width(table: DataTable, index: int, default: int) -> int:
+        if len(table.columns) <= index:
+            return default
+        column_key = list(table.columns.keys())[index]
+        return table.columns[column_key].width or default
+
+    def _adjust_text_column_widths(self, table: DataTable, event: Resize) -> None:
+        if len(table.columns) < 4:
+            return
+        total_padding = len(table.columns) * 2 + 2
+        available = event.size.width - _SCOPE_COLUMN_WIDTH - _ORIGIN_COLUMN_WIDTH - total_padding
+        if available <= 0:
+            return
+
+        extension_width = min(
+            self._text_width_for_extension_column(),
+            max(_MIN_EXTENSION_WIDTH, available - _MIN_SOURCE_WIDTH),
+        )
+        source_width = max(_MIN_SOURCE_WIDTH, available - extension_width)
+
+        column_keys = list(table.columns.keys())
+        table.columns[column_keys[_COL_EXTENSION]].width = extension_width
+        table.columns[column_keys[_COL_SOURCE]].width = source_width
+        table.refresh()
 
     def _rebuild(self, table: DataTable) -> None:
         saved = table.cursor_coordinate
@@ -394,17 +430,23 @@ class PiGrid(Vertical):
         # restored viewport, so Textual's deferred _scroll_cursor_into_view is a
         # no-op and the offset holds. See skill_grid._rebuild for the full note.
         saved_scroll = (table.scroll_x, table.scroll_y)
+        extension_width = self._column_width(
+            table, _COL_EXTENSION, self._text_width_for_extension_column()
+        )
         source_width = current_source_column_width(table)
         table.clear(columns=True)
-        table.add_column(f"{asset_type_label('pi-extension')} {_INFO_GLYPH}", width=24)
-        table.add_column(f"Pi {_INFO_GLYPH}", width=14)
-        table.add_column("Origin", width=12)
+        table.add_column(
+            f"{asset_type_label('pi-extension')} {_INFO_GLYPH}",
+            width=extension_width,
+        )
+        table.add_column(f"Pi {_INFO_GLYPH}", width=_SCOPE_COLUMN_WIDTH)
+        table.add_column("Origin", width=_ORIGIN_COLUMN_WIDTH)
         table.add_column("Source", width=source_width)
 
         visible = self._visible_rows()
         for row in visible:
             cells: list[str | Text] = [
-                row.slug,
+                Text(row.slug, no_wrap=True, overflow="ellipsis"),
                 self._cell_glyph(row=row, scope=self._scope),
                 self._origin_glyph(row),
                 Text(row.source, no_wrap=True, overflow="ellipsis"),
