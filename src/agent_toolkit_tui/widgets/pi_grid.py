@@ -29,11 +29,12 @@ from textual.binding import Binding
 from textual.containers import Vertical
 from textual.coordinate import Coordinate
 from textual.message import Message
-from textual.widgets import DataTable
+from textual.widgets import DataTable, Input
 
 from agent_toolkit_tui.display_names import asset_type_label, pi_extension_origin_label
 from agent_toolkit_tui.pi_extension_state import PiExtensionRow
 from agent_toolkit_tui.screens.cell_info import CellInfoScreen
+from agent_toolkit_tui.widgets.filter_input import GridFilterInput
 
 Op = Literal["link", "unlink"]
 
@@ -83,6 +84,7 @@ class PiGrid(Vertical):
         self._scope: Literal["global", "project"] = "global"
         # (scope: "global"|"project", slug) -> Op
         self._pending: dict[tuple[str, str], Op] = {}
+        self._filter: str = ""
 
     @property
     def row_count(self) -> int:
@@ -136,8 +138,33 @@ class PiGrid(Vertical):
         self.post_message(self.PendingChanged(len(self._pending)))
 
     def compose(self) -> ComposeResult:
+        yield GridFilterInput(table_selector="#pi-table", id="pi-filter")
         table: DataTable[str] = DataTable(id="pi-table", cursor_type="cell", zebra_stripes=True)
         yield table
+
+    def set_filter(self, text: str) -> None:
+        self._filter = text.strip().lower()
+        try:
+            table = self.query_one("#pi-table", DataTable)
+        except Exception:
+            return
+        self._rebuild(table)
+
+    def _visible_rows(self) -> list[PiExtensionRow]:
+        if self._filter:
+            return [row for row in self._rows if self._filter in row.slug.lower()]
+        return list(self._rows)
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        if event.input.id == "pi-filter":
+            self.set_filter(event.value)
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        if event.input.id == "pi-filter":
+            try:
+                self.query_one("#pi-table", DataTable).focus()
+            except Exception:
+                pass
 
     def on_mount(self) -> None:
         try:
@@ -160,9 +187,10 @@ class PiGrid(Vertical):
         except Exception:
             return
         coord = table.cursor_coordinate
-        if coord.row >= len(self._rows):
+        visible = self._visible_rows()
+        if coord.row >= len(visible):
             return
-        row = self._rows[coord.row]
+        row = visible[coord.row]
 
         col = coord.column
         if col == _COL_EXTENSION:
@@ -285,9 +313,10 @@ class PiGrid(Vertical):
         )
 
     def _toggle_at(self, coord: Coordinate) -> None:
-        if coord.row >= len(self._rows):
+        visible = self._visible_rows()
+        if coord.row >= len(visible):
             return
-        row = self._rows[coord.row]
+        row = visible[coord.row]
 
         # Untracked rows are non-interactive — no lock entry to act on.
         if row.origin == "untracked":
@@ -339,7 +368,8 @@ class PiGrid(Vertical):
         table.add_column("Origin", width=12)
         table.add_column("Source", width=30)
 
-        for row in self._rows:
+        visible = self._visible_rows()
+        for row in visible:
             cells = [
                 row.slug,
                 self._cell_glyph(row=row, scope=self._scope),
@@ -348,8 +378,8 @@ class PiGrid(Vertical):
             ]
             table.add_row(*cells, key=f"pi:{row.slug}")
 
-        if self._rows:
-            max_row = len(self._rows) - 1
+        if visible:
+            max_row = len(visible) - 1
             max_col = _COL_SOURCE
             table.cursor_coordinate = Coordinate(
                 row=min(saved.row, max_row),

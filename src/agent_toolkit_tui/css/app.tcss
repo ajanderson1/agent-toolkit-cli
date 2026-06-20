@@ -72,9 +72,14 @@ Screen {
     height: 1fr;
 }
 
-/* Fuzzy-filter search box at the top of the grid (#249). Compact top bar
-   above the DataTable; focused on open so typing narrows the list. */
-SkillGrid Input#skill-filter {
+/* Fuzzy-filter search box at the top of each grid (#249/#458). Compact top
+   bar above the DataTable; focused on open so typing narrows the list. */
+Input#instruction-filter,
+Input#skill-filter,
+Input#command-filter,
+Input#pi-filter,
+Input#agent-filter,
+Input#mcp-filter {
     height: 3;
     border: round $primary 30%;
     margin: 0 1 1 1;
@@ -101,6 +106,22 @@ AgentGrid {
     height: 1fr;
 }
 AgentGrid DataTable {
+    height: 1fr;
+}
+
+/* Command grid — mirrors SkillGrid styling. */
+CommandGrid {
+    height: 1fr;
+}
+CommandGrid DataTable {
+    height: 1fr;
+}
+
+/* MCP grid — mirrors SkillGrid styling. */
+McpGrid {
+    height: 1fr;
+}
+McpGrid DataTable {
     height: 1fr;
 }
 

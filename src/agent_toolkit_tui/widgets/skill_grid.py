@@ -16,12 +16,10 @@ from __future__ import annotations
 
 from typing import Literal
 
-from textual import events
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical
 from textual.coordinate import Coordinate
-from textual.css.query import NoMatches
 from textual.message import Message
 from textual.widgets import DataTable, Input
 
@@ -31,6 +29,7 @@ from agent_toolkit_tui.display_names import asset_type_label, harness_label, sta
 from agent_toolkit_tui.composition import skills_nonstandard_main
 from agent_toolkit_tui.skill_state import SkillRow
 from agent_toolkit_tui.widgets.column_info_modal import ColumnInfoModal
+from agent_toolkit_tui.widgets.filter_input import GridFilterInput
 
 _STATE_MARKUP = {
     "clean":   "[green]clean[/]",
@@ -56,31 +55,6 @@ _INFO_GLYPH     = "ⓘ"
 _GLOBAL_GLYPH   = "🌐"
 
 Op = Literal["link", "unlink"]
-
-
-class FilterInput(Input):
-    """Filter box that hands focus to the skill table on Down / Tab.
-
-    Down-arrow and Tab are the "I'm done typing, let me pick a skill" gesture
-    (#249). We intercept them here and move focus into the sibling
-    `#skill-table` DataTable, stopping the event so Tab does not run Textual's
-    default focus-cycle and Down does not get swallowed as a no-op cursor
-    move inside the (single-line) input. Every other key — including printable
-    characters that happen to match an App binding like `s`/`q` — falls
-    through to the Input's normal handling.
-    """
-
-    def on_key(self, event: events.Key) -> None:
-        if event.key in ("down", "tab"):
-            try:
-                self.screen.query_one("#skill-table", DataTable).focus()
-            except NoMatches:
-                # No table to hand focus to (not mounted yet) — let the key
-                # fall through to the Input's default handling rather than
-                # swallowing it.
-                return
-            event.stop()
-            event.prevent_default()
 
 
 class SkillGrid(Vertical):
@@ -198,7 +172,7 @@ class SkillGrid(Vertical):
 
     def compose(self) -> ComposeResult:
         # Filter box on top, table below — mirrors the v1 layout (#249).
-        yield FilterInput(placeholder="filter…", id="skill-filter")
+        yield GridFilterInput(table_selector="#skill-table", id="skill-filter")
         table = DataTable(id="skill-table", cursor_type="cell", zebra_stripes=True)
         yield table
 
