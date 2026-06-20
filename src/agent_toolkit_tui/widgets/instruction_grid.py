@@ -26,7 +26,7 @@ from textual.message import Message
 from textual.widgets import DataTable, Input
 from textual.events import Resize
 from rich.text import Text
-from agent_toolkit_tui.widgets._support import adjust_source_column_width
+from agent_toolkit_tui.widgets._support import adjust_source_column_width, current_source_column_width
 
 from agent_toolkit_tui.column_info import get_column_info
 from agent_toolkit_tui.composition import instructions_nonstandard_main
@@ -427,6 +427,7 @@ class InstructionGrid(Vertical):
         # restored viewport, so Textual's deferred _scroll_cursor_into_view is a
         # no-op and the offset holds. See skill_grid._rebuild for the full note.
         saved_scroll = (table.scroll_x, table.scroll_y)
+        source_width = current_source_column_width(table)
         table.clear(columns=True)
         # Slug column.
         table.add_column(f"{asset_type_label('instruction')} {_INFO_GLYPH}", width=22)
@@ -440,7 +441,7 @@ class InstructionGrid(Vertical):
             display = harness_label(harness)
             table.add_column(f"{display} {_INFO_GLYPH}", width=14)
         # Source column — passive.
-        table.add_column("Source", width=30)
+        table.add_column("Source", width=source_width)
 
         visible = self._visible_rows()
         for row in visible:

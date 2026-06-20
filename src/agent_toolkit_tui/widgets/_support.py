@@ -1,6 +1,15 @@
 from textual.widgets import DataTable
 from textual.events import Resize
 
+
+def current_source_column_width(table: DataTable, default: int = 30) -> int:
+    """Return the current Source column width before a table rebuild."""
+    if not table.columns:
+        return default
+    source_col_key = list(table.columns.keys())[-1]
+    return table.columns[source_col_key].width or default
+
+
 def adjust_source_column_width(table: DataTable, event: Resize, fixed_width: int) -> None:
     """Adjust the Source column to take up the remaining width."""
     if not table.columns:

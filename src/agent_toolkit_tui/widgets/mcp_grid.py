@@ -38,7 +38,7 @@ from textual.message import Message
 from textual.widgets import DataTable, Input
 from textual.events import Resize
 from rich.text import Text
-from agent_toolkit_tui.widgets._support import adjust_source_column_width
+from agent_toolkit_tui.widgets._support import adjust_source_column_width, current_source_column_width
 
 from agent_toolkit_tui.column_info import get_column_info
 from agent_toolkit_tui.display_names import asset_type_label, harness_label, standard_label
@@ -397,6 +397,7 @@ class McpGrid(Vertical):
         # Preserve the viewport across clear() (#321): clear() resets scroll to
         # the top, so a toggle would jump the pane. Restore the offset below.
         saved_scroll = (table.scroll_x, table.scroll_y)
+        source_width = current_source_column_width(table)
         table.clear(columns=True)
         # Slug column — info glyph since `i` works on it.
         table.add_column(f"{asset_type_label('mcp')} {_INFO_GLYPH}", width=22)
@@ -416,7 +417,7 @@ class McpGrid(Vertical):
         # State column — shows installed/library/unlisted (#360).
         table.add_column("State", width=10)
         # Source column — passive, no info popup.
-        table.add_column("Source", width=30)
+        table.add_column("Source", width=source_width)
 
         visible = self._visible_rows()
         for row in visible:
