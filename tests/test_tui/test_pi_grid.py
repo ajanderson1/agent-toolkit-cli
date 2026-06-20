@@ -21,12 +21,15 @@ Covers:
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
 from textual.app import App, ComposeResult
 from textual.coordinate import Coordinate
+from rich.text import Text
+from textual.geometry import Size
 from textual.widgets import DataTable, OptionList, Static
 
 from agent_toolkit_tui.pi_extension_state import PiCell, PiExtensionRow
@@ -140,6 +143,34 @@ async def test_pi_grid_mounts_with_single_scope_column():
         assert not any("project" in lbl.lower() for lbl in labels)
         assert any("Origin" in lbl for lbl in labels)
         assert any("Source" in lbl for lbl in labels)
+
+
+@pytest.mark.asyncio
+async def test_pi_grid_extension_column_uses_available_width_and_ellipsis():
+    """Long extension names should not hard-clip while spare pane width exists."""
+
+    long_slug = "@juicesharp/rpiv-ask-user-question"
+
+    class _A(App):
+        def compose(self) -> ComposeResult:
+            yield PiGrid([_npm_row(long_slug)], id="g")
+
+    app = _A()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        grid = app.query_one("#g", PiGrid)
+        table = app.query_one("#pi-table", DataTable)
+
+        grid.on_resize(SimpleNamespace(size=Size(140, 30)))
+        await pilot.pause()
+
+        extension_key = list(table.columns.keys())[0]
+        assert table.columns[extension_key].width >= len(long_slug)
+
+        cell = table.get_cell_at(Coordinate(0, 0))
+        assert isinstance(cell, Text)
+        assert cell.overflow == "ellipsis"
+        assert cell.no_wrap is True
 
 
 @pytest.mark.asyncio
