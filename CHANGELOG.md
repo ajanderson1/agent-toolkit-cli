@@ -1,5 +1,12 @@
 # Changelog
 
+## [5.2.1](https://github.com/ajanderson1/agent-toolkit-cli/compare/v5.2.0...v5.2.1) (2026-06-20)
+
+
+### Bug Fixes
+
+* **tui:** expand pi-extension name column ([#463](https://github.com/ajanderson1/agent-toolkit-cli/issues/463)) ([b9538fd](https://github.com/ajanderson1/agent-toolkit-cli/commit/b9538fd35a55f10ad2f214ce2ab2eb82b746dac8))
+
 ## [5.2.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v5.1.0...v5.2.0) (2026-06-20)
 
 

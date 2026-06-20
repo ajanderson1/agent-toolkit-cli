@@ -1,6 +1,6 @@
 [project]
 name = "agent-toolkit"
-version = "5.2.0"
+version = "5.2.1"
 license = { file = "LICENSE" }
 requires-python = ">=3.12"
 dependencies = [
