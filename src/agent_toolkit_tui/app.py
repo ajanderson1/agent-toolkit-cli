@@ -36,6 +36,7 @@ from textual.widgets import (
     Button, Footer, Header, Input, Label, OptionList, Static,
 )
 from textual.widgets.option_list import Option, OptionDoesNotExist
+from rich.text import Text
 
 from agent_toolkit_tui import __version__
 from agent_toolkit_tui.agent_state import build_agent_rows
@@ -138,6 +139,19 @@ class ConfirmDiscardScreen(ModalScreen[bool]):
         self.dismiss(False)
 
 
+class SidebarOptionList(OptionList):
+    """Sidebar specifically to capture 1-6 bindings when focused."""
+
+    BINDINGS = [
+        Binding("1", "asset_type('instruction')", "Instructions", show=False),
+        Binding("2", "asset_type('command')", "Commands", show=False),
+        Binding("3", "asset_type('skill')", "Skills", show=False),
+        Binding("4", "asset_type('agent')", "Agents", show=False),
+        Binding("5", "asset_type('mcp')", "MCPs", show=False),
+        Binding("6", "asset_type('pi-extension')", "Pi Extensions", show=False),
+    ]
+
+
 class TUIApp(App):
     """agent-toolkit-tui — Textual cockpit over `agent-toolkit-cli`."""
 
@@ -145,17 +159,12 @@ class TUIApp(App):
     TITLE = "agent-toolkit-tui"
 
     BINDINGS = [
-        Binding("ctrl+1", "asset_type('instruction')", "Instructions", show=False),
-        Binding("ctrl+2", "asset_type('command')", "Commands", show=False),
-        Binding("ctrl+3", "asset_type('skill')", "Skills", show=False),
-        Binding("ctrl+4", "asset_type('agent')", "Agents", show=False),
-        Binding("ctrl+5", "asset_type('mcp')", "MCPs", show=False),
-        Binding("ctrl+6", "asset_type('pi-extension')", "Pi Extensions", show=False),
         Binding("ctrl+s", "apply", "Apply", priority=True),
         Binding("ctrl+d", "diff", "Diff", priority=True),
         Binding("ctrl+r", "refresh", "Refresh", priority=True),
         Binding("ctrl+z", "revert", "Revert", priority=True),
         Binding("slash", "focus_filter", "Filter", priority=True),
+        Binding("ctrl+w", "focus_sidebar", "Focus Sidebar", priority=True),
         Binding("ctrl+g", "scope_toggle", "toggle scope", priority=True),
         Binding("i", "info_pass", "Info"),
         Binding("ctrl+c", "double_ctrl_c_quit", "Quit", priority=True),
@@ -174,15 +183,15 @@ class TUIApp(App):
         with Horizontal(id="main"):
             with Vertical(id="asset-types-sidebar"):
                 yield Static("Asset Types", classes="rail-header")
-                yield OptionList(
-                    Option(f"^1  {_asset_type_label('instruction', plural=True)}", id="asset-type-instruction"),
+                yield SidebarOptionList(
+                    Option(Text.from_markup(f"[dim]1 -[/dim] {_asset_type_label('instruction', plural=True)}"), id="asset-type-instruction"),
                     Option("─────────────", id="asset-type-separator-1", disabled=True),
-                    Option(f"^2  {_asset_type_label('command', plural=True)}", id="asset-type-command"),
-                    Option(f"^3  {_asset_type_label('skill', plural=True)}", id="asset-type-skill"),
-                    Option(f"^4  {_asset_type_label('agent', plural=True)}", id="asset-type-agent"),
-                    Option(f"^5  {_asset_type_label('mcp', plural=True)}", id="asset-type-mcp"),
+                    Option(Text.from_markup(f"[dim]2 -[/dim] {_asset_type_label('command', plural=True)}"), id="asset-type-command"),
+                    Option(Text.from_markup(f"[dim]3 -[/dim] {_asset_type_label('skill', plural=True)}"), id="asset-type-skill"),
+                    Option(Text.from_markup(f"[dim]4 -[/dim] {_asset_type_label('agent', plural=True)}"), id="asset-type-agent"),
+                    Option(Text.from_markup(f"[dim]5 -[/dim] {_asset_type_label('mcp', plural=True)}"), id="asset-type-mcp"),
                     Option("─────────────", id="asset-type-separator-2", disabled=True),
-                    Option(f"^6  {_asset_type_label('pi-extension', plural=True)}", id="asset-type-pi-extension"),
+                    Option(Text.from_markup(f"[dim]6 -[/dim] {_asset_type_label('pi-extension', plural=True)}"), id="asset-type-pi-extension"),
                     id="asset-types-list",
                 )
             with Vertical(id="content"):
@@ -236,7 +245,7 @@ class TUIApp(App):
         # asset-type switch — however triggered — moves the highlight, not just a
         # direct click on the option.
         try:
-            asset_types_list = self.query_one("#asset-types-list", OptionList)
+            asset_types_list = self.query_one("#asset-types-list", SidebarOptionList)
             asset_types_list.highlighted = asset_types_list.get_option_index(f"asset-type-{asset_type}")
         except (NoMatches, OptionDoesNotExist):
             pass
@@ -291,7 +300,7 @@ class TUIApp(App):
             scope_toggle.display = True
 
     def on_option_list_option_selected(
-        self, event: OptionList.OptionSelected
+        self, event: SidebarOptionList.OptionSelected
     ) -> None:
         """Handle sidebar asset-type selection."""
         if event.option_list.id != "asset-types-list":
@@ -540,6 +549,13 @@ class TUIApp(App):
 
     def action_scope_toggle(self) -> None:
         self.action_scope("global" if self._scope == "project" else "project")
+
+    def action_focus_sidebar(self) -> None:
+        """Focus the sidebar OptionList."""
+        try:
+            self.query_one("#asset-types-list").focus()
+        except Exception:
+            pass
 
     def action_focus_filter(self) -> None:
         """`/` re-focuses the active asset pane's filter box."""
