@@ -1,5 +1,20 @@
 # Changelog
 
+## [5.3.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v5.2.1...v5.3.0) (2026-06-21)
+
+
+### Features
+
+* implement dynamic resizing for Source column in grids ([f866e43](https://github.com/ajanderson1/agent-toolkit-cli/commit/f866e431978992cc3a611b251781390251b7e747))
+* **ui:** reorder sidebar tabs and add 1-N shortcuts ([#466](https://github.com/ajanderson1/agent-toolkit-cli/issues/466)) ([15062bb](https://github.com/ajanderson1/agent-toolkit-cli/commit/15062bb29f9b7278b8a0619a4c4dfd26b623fe34))
+
+
+### Bug Fixes
+
+* dummy commit to trigger patch release bump ([cf1590b](https://github.com/ajanderson1/agent-toolkit-cli/commit/cf1590bd7261c3bccf0bf2e939ea8c31ab0e91a5))
+* **ui:** use ctrl+1-6 for sidebar shortcuts instead of bare 1-6 ([f37d3ed](https://github.com/ajanderson1/agent-toolkit-cli/commit/f37d3ed5da95ab656cc1802073fe216c0975a06f))
+* update lefthook configuration and enhance pi_extension_ops for home path handling ([42e3ef1](https://github.com/ajanderson1/agent-toolkit-cli/commit/42e3ef1101122061aa50dae7009238f0547a6f16))
+
 ## [5.2.1](https://github.com/ajanderson1/agent-toolkit-cli/compare/v5.2.0...v5.2.1) (2026-06-20)
 
 
