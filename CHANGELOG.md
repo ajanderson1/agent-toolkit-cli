@@ -1,5 +1,12 @@
 # Changelog
 
+## [5.3.1](https://github.com/ajanderson1/agent-toolkit-cli/compare/v5.3.0...v5.3.1) (2026-06-21)
+
+
+### Bug Fixes
+
+* **ui:** revert to 1-6 sidebar shortcuts active only on focus ([c99e438](https://github.com/ajanderson1/agent-toolkit-cli/commit/c99e438beba1d6dd8b3f610a85957b6a579c43cb))
+
 ## [5.3.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v5.2.1...v5.3.0) (2026-06-21)
 
 
