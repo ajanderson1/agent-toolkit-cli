@@ -1,5 +1,12 @@
 # Changelog
 
+## [5.3.2](https://github.com/ajanderson1/agent-toolkit-cli/compare/v5.3.1...v5.3.2) (2026-07-01)
+
+
+### Documentation
+
+* ready Hermes main harness issue ([e01941e](https://github.com/ajanderson1/agent-toolkit-cli/commit/e01941e46c9a78645d5f77f0be096d72bb0ba182))
+
 ## [5.3.1](https://github.com/ajanderson1/agent-toolkit-cli/compare/v5.3.0...v5.3.1) (2026-06-21)
 
 
