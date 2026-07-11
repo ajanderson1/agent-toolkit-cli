@@ -88,8 +88,8 @@ async def test_footer_pending_updates_on_toggle_up_and_down():
 
 
 @pytest.mark.asyncio
-async def test_footer_pending_counts_three_harnesses():
-    """One skill toggled across all three harness columns → Pending: 3."""
+async def test_footer_pending_counts_four_harnesses():
+    """One skill toggled across all four harness columns → Pending: 4."""
     app = _FooterHost([_row("j")])
     async with app.run_test() as pilot:
         await pilot.pause()
@@ -99,7 +99,7 @@ async def test_footer_pending_counts_three_harnesses():
             await pilot.pause()
             await pilot.press("space")
             await pilot.pause()
-        assert "Pending: 3" in _footer_text(app)
+        assert "Pending: 4" in _footer_text(app)
 
 
 def test_pending_changed_message_carries_count():
@@ -112,7 +112,7 @@ def test_pending_changed_message_carries_count():
 
 @pytest.mark.asyncio
 async def test_apply_counts_per_harness_write(monkeypatch):
-    """1 skill × 3 harness links → 'applied: 3 ok, 0 failed'.
+    """1 skill × 4 harness links → 'applied: 4 ok, 0 failed'.
 
     The footer text is read synchronously right after the apply call: the
     apply's clear_pending posts an async PendingChanged that would re-render
@@ -134,7 +134,7 @@ async def test_apply_counts_per_harness_write(monkeypatch):
         await pilot.pause()
         app._scope = "global"
         grid = app.query_one("#skill-grid", SkillGrid)
-        # Queue a global link for the same slug across all three harnesses.
+        # Queue a global link for the same slug across all four harnesses.
         pending = {("global", a, "demo"): "link" for a in INTERACTIVE_AGENTS}
         grid.restore_pending(pending)
         await pilot.pause()
@@ -142,7 +142,7 @@ async def test_apply_counts_per_harness_write(monkeypatch):
         app._apply_skill_pending()
         footer = _footer_text(app)  # read before queued messages drain
 
-    assert "applied: 3 ok, 0 failed" in footer
+    assert "applied: 4 ok, 0 failed" in footer
 
 
 @pytest.mark.asyncio
@@ -150,7 +150,7 @@ async def test_apply_failed_count_is_symmetric(monkeypatch):
     """A group that raises contributes its intended write count to failed.
 
     On the error path the summary is carried by the notify() title
-    ("Apply: 0 ok, 3 failed"); the footer shows the collapsed error line.
+    ("Apply: 0 ok, 4 failed"); the footer shows the collapsed error line.
     """
     titles: list[str] = []
 
@@ -181,7 +181,7 @@ async def test_apply_failed_count_is_symmetric(monkeypatch):
 
     assert "apply failed" in footer
     assert titles, "expected an error notify with a summary title"
-    assert "3 failed" in titles[-1]
+    assert "4 failed" in titles[-1]
 
 
 @pytest.mark.asyncio
