@@ -139,6 +139,7 @@ async def test_pi_grid_mounts_with_single_scope_column():
         assert len(labels) == 4
         assert "Pi Extension ⓘ" in labels
         assert not any("EXTENSION" in label for label in labels)
+        assert not any("Hermes" in label for label in labels)
         assert any(lbl.startswith("Pi ") for lbl in labels)
         assert not any("global" in lbl.lower() for lbl in labels)
         assert not any("project" in lbl.lower() for lbl in labels)

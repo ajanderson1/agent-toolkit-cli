@@ -72,8 +72,13 @@ def test_agents_nonstandard_main_today():
     # re-verification); codex and hermes-agent are unsupported-by-design;
     # gemini-cli/opencode/pi keep their own columns. MAIN_HARNESSES declaration
     # order, filtered — same convention as the skills/instructions helpers.
+    assert AGENTS["hermes-agent"].subagent_mechanism == "none"
     assert agents_nonstandard_main("global") == ("gemini-cli", "opencode", "pi")
     assert agents_nonstandard_main("project") == ("gemini-cli", "opencode", "pi")
+    assert all(
+        "hermes-agent" not in agents_nonstandard_main(scope)
+        for scope in ("global", "project")
+    )
 
 
 def test_agents_coverage_guard():
