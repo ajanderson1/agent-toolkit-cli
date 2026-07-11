@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -51,6 +52,22 @@ async def test_toggle_cell_queues_link():
         await pilot.pause()
         await pilot.press("space")
         assert g.pending_entries() == {("global", "claude-code", "j"): "link"}
+
+
+@pytest.mark.asyncio
+async def test_toggle_cell_queues_link_for_hermes():
+    from textual.app import App
+    class _A(App):
+        def compose(self):
+            yield SkillGrid([_row("j", linked=())], id="g")
+    a = _A()
+    async with a.run_test() as pilot:
+        await pilot.pause()
+        g = a.query_one("#g", SkillGrid)
+        g.cursor_to_cell(row_slug="j", agent_name="hermes-agent")
+        await pilot.pause()
+        await pilot.press("space")
+        assert g.pending_entries() == {("global", "hermes-agent", "j"): "link"}
 
 
 @pytest.mark.asyncio
@@ -110,3 +127,49 @@ async def test_toggle_twice_clears_pending():
         await pilot.press("space")
         await pilot.press("space")
         assert g.pending_entries() == {}
+
+
+@pytest.mark.asyncio
+async def test_apply_link_calls_skill_install_apply_for_hermes(monkeypatch):
+    from textual.widgets import Static
+
+    from agent_toolkit_tui.app import TUIApp
+    import agent_toolkit_cli.skill_install as skill_install
+
+    apply_calls: list[dict[str, object]] = []
+
+    def fake_apply(plan, *, home=None, project=None, env=None):
+        apply_calls.append({
+            "slug": plan.slug,
+            "scope": plan.scope,
+            "add_agents": plan.add_agents,
+            "home": home,
+            "project": project,
+        })
+        return SimpleNamespace(
+            created=(Path("/fake/.hermes/skills/demo"),),
+            removed=(),
+        )
+
+    monkeypatch.setattr(skill_install, "apply", fake_apply)
+    monkeypatch.setattr("agent_toolkit_tui.app.build_skill_rows", lambda **kw: [])
+
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        grid = app.query_one("#skill-grid", SkillGrid)
+        grid.set_rows([_row("demo")])
+        grid.restore_pending({("global", "hermes-agent", "demo"): "link"})
+        await pilot.pause()
+
+        app._apply_skill_pending()
+        footer = str(app.query_one("#footer-pending", Static).render())
+
+    assert "applied:" in footer
+    assert apply_calls == [{
+        "slug": "demo",
+        "scope": "global",
+        "add_agents": ("hermes-agent",),
+        "home": Path.home(),
+        "project": None,
+    }]
