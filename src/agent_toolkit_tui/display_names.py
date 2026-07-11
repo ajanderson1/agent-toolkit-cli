@@ -30,6 +30,7 @@ _HARNESS_LABELS: dict[str, str] = {
     "opencode": "OpenCode",
     "pi": "Pi",
     "cursor": "Cursor",
+    "hermes-agent": "Hermes",
 }
 
 _PI_EXTENSION_ORIGINS: dict[str, str] = {

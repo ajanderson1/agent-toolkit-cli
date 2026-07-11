@@ -31,6 +31,7 @@ def test_harness_labels_hide_internal_cli_suffixes():
     assert harness_label("opencode") == "OpenCode"
     assert harness_label("pi") == "Pi"
     assert harness_label("cursor") == "Cursor"
+    assert harness_label("hermes-agent") == "Hermes"
 
 
 def test_harness_label_falls_back_to_titleized_key():
