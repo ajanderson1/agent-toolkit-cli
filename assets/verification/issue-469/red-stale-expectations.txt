@@ -1,0 +1,148 @@
+FFFF                                                                     [100%]
+=================================== FAILURES ===================================
+_____________________________ test_full_header_row _____________________________
+
+    @pytest.mark.asyncio
+    async def test_full_header_row():
+        """Header row matches spec exactly."""
+        from textual.app import App
+        from textual.widgets import DataTable
+
+        class _A(App):
+            def compose(self):
+                yield SkillGrid([_row("alpha")], id="g")
+
+        a = _A()
+        async with a.run_test() as pilot:
+            await pilot.pause()
+            table = a.query_one("#skill-table", DataTable)
+            labels = [str(c.label) for c in table.columns.values()]
+            from agent_toolkit_cli.skill_agents import get_standard_agents
+
+>           assert labels == [
+                "Skill ⓘ",
+                f"Standard ({len(get_standard_agents())}) ⓘ",
+                "Claude ⓘ",
+                "Pi ⓘ",
+                "State ⓘ",
+                "Source",
+            ], f"unexpected header row: {labels!r}"
+E           AssertionError: unexpected header row: ['Skill ⓘ', 'Standard (13) ⓘ', 'Claude ⓘ', 'Pi ⓘ', 'Hermes ⓘ', 'State ⓘ', 'Source']
+E           assert ['Skill ⓘ', '...State ⓘ', ...] == ['Skill ⓘ', '... ⓘ', 'Source']
+E
+E             At index 4 diff: 'Hermes ⓘ' != 'State ⓘ'
+E             Left contains one more item: 'Source'
+E             Use -v to get more diff
+
+tests/test_tui/test_skill_grid_column_info.py:227: AssertionError
+__________________ test_footer_pending_counts_three_harnesses __________________
+
+    @pytest.mark.asyncio
+    async def test_footer_pending_counts_three_harnesses():
+        """One skill toggled across all three harness columns → Pending: 3."""
+        app = _FooterHost([_row("j")])
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            grid = app.query_one("#skill-grid", SkillGrid)
+            for agent in INTERACTIVE_AGENTS:
+                grid.cursor_to_cell(row_slug="j", agent_name=agent)
+                await pilot.pause()
+                await pilot.press("space")
+                await pilot.pause()
+>           assert "Pending: 3" in _footer_text(app)
+E           AssertionError: assert 'Pending: 3' in 'Pending: 4'
+E            +  where 'Pending: 4' = _footer_text(_FooterHost(title='_FooterHost', classes={'-dark-mode'}, pseudo_classes={'focus', 'dark'}))
+
+tests/test_tui/test_status_counters.py:102: AssertionError
+_____________________ test_apply_counts_per_harness_write ______________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10c5ab350>
+
+    @pytest.mark.asyncio
+    async def test_apply_counts_per_harness_write(monkeypatch):
+        """1 skill × 3 harness links → 'applied: 3 ok, 0 failed'.
+
+        The footer text is read synchronously right after the apply call: the
+        apply's clear_pending posts an async PendingChanged that would re-render
+        'Pending: 0' on the next event-loop turn (the real TUI shows the summary
+        line until the next toggle, which is correct).
+        """
+        def fake_apply(plan, *, home=None, project=None, env=None):
+            # One symlink created per add-agent.
+            created = tuple(Path(f"/tmp/{a}") for a in plan.add_agents)
+            return InstallResult(
+                plan=plan, canonical_path=Path("/tmp/canon"),
+                created=created, removed=(), skipped=(), lock_action="unchanged",
+            )
+
+        monkeypatch.setattr(skill_install, "apply", fake_apply)
+
+        app = TUIApp()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app._scope = "global"
+            grid = app.query_one("#skill-grid", SkillGrid)
+            # Queue a global link for the same slug across all three harnesses.
+            pending = {("global", a, "demo"): "link" for a in INTERACTIVE_AGENTS}
+            grid.restore_pending(pending)
+            await pilot.pause()
+
+            app._apply_skill_pending()
+            footer = _footer_text(app)  # read before queued messages drain
+
+>       assert "applied: 3 ok, 0 failed" in footer
+E       AssertionError: assert 'applied: 3 ok, 0 failed' in 'applied: 4 ok, 0 failed'
+
+tests/test_tui/test_status_counters.py:145: AssertionError
+_____________________ test_apply_failed_count_is_symmetric _____________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10c6e3d50>
+
+    @pytest.mark.asyncio
+    async def test_apply_failed_count_is_symmetric(monkeypatch):
+        """A group that raises contributes its intended write count to failed.
+
+        On the error path the summary is carried by the notify() title
+        ("Apply: 0 ok, 3 failed"); the footer shows the collapsed error line.
+        """
+        titles: list[str] = []
+
+        def fake_apply(plan, *, home=None, project=None, env=None):
+            raise skill_install.InstallError("boom")
+
+        monkeypatch.setattr(skill_install, "apply", fake_apply)
+
+        app = TUIApp()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app._scope = "global"
+            orig_notify = app.notify
+
+            def spy_notify(*a, **k):
+                titles.append(k.get("title", ""))
+                return orig_notify(*a, **k)
+
+            monkeypatch.setattr(app, "notify", spy_notify)
+            grid = app.query_one("#skill-grid", SkillGrid)
+            grid.restore_pending(
+                {("global", a, "demo"): "link" for a in INTERACTIVE_AGENTS}
+            )
+            await pilot.pause()
+
+            app._apply_skill_pending()
+            footer = _footer_text(app)  # read before queued messages drain
+
+        assert "apply failed" in footer
+        assert titles, "expected an error notify with a summary title"
+>       assert "3 failed" in titles[-1]
+E       AssertionError: assert '3 failed' in 'Apply: 0 ok, 4 failed'
+
+tests/test_tui/test_status_counters.py:184: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_tui/test_skill_grid_column_info.py::test_full_header_row - ...
+FAILED tests/test_tui/test_status_counters.py::test_footer_pending_counts_three_harnesses
+FAILED tests/test_tui/test_status_counters.py::test_apply_counts_per_harness_write
+FAILED tests/test_tui/test_status_counters.py::test_apply_failed_count_is_symmetric
+4 failed in 3.25s
+
+Expected red exit code: 1

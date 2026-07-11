@@ -1,0 +1,1 @@
+assets/verification/issue-469/hermes-skill-grid.svg
