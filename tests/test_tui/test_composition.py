@@ -18,16 +18,17 @@ from agent_toolkit_tui.composition import (
 def test_main_harnesses_members():
     assert MAIN_HARNESSES == (
         "claude-code", "gemini-cli", "codex", "opencode", "pi", "cursor",
+        "hermes-agent",
     )
 
 
 def test_skills_nonstandard_main_today():
     # gemini-cli / codex / opencode / cursor read .agents/skills → standard.
-    assert skills_nonstandard_main() == ("claude-code", "pi")
+    assert skills_nonstandard_main() == ("claude-code", "pi", "hermes-agent")
 
 
 def test_instructions_nonstandard_main_today():
-    # codex / opencode / pi / cursor read AGENTS.md natively → standard.
+    # codex / opencode / pi / cursor / hermes-agent read AGENTS.md natively → standard.
     assert instructions_nonstandard_main() == ("claude-code", "gemini-cli")
 
 
@@ -47,6 +48,7 @@ def test_instructions_coverage_guard():
     from agent_toolkit_cli.instructions_matrix import instructions_matrix_rows
 
     verdicts = {r["harness"]: r["verdict"] for r in instructions_matrix_rows()}
+    assert verdicts["hermes-agent"] == "native"
     rendered = set(instructions_nonstandard_main())
     for h in MAIN_HARNESSES:
         verdict = verdicts.get(h, "")
@@ -67,11 +69,16 @@ def test_agents_nonstandard_main_today():
     from agent_toolkit_tui.composition import agents_nonstandard_main
 
     # claude-code AND cursor are standard-covered (cursor per the 2026-06-10
-    # re-verification); codex is unsupported-by-design; gemini-cli/opencode/pi
-    # keep their own columns. MAIN_HARNESSES declaration order, filtered —
-    # same convention as the skills/instructions helpers.
+    # re-verification); codex and hermes-agent are unsupported-by-design;
+    # gemini-cli/opencode/pi keep their own columns. MAIN_HARNESSES declaration
+    # order, filtered — same convention as the skills/instructions helpers.
+    assert AGENTS["hermes-agent"].subagent_mechanism == "none"
     assert agents_nonstandard_main("global") == ("gemini-cli", "opencode", "pi")
     assert agents_nonstandard_main("project") == ("gemini-cli", "opencode", "pi")
+    assert all(
+        "hermes-agent" not in agents_nonstandard_main(scope)
+        for scope in ("global", "project")
+    )
 
 
 def test_agents_coverage_guard():

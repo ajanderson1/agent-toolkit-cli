@@ -1,14 +1,15 @@
 """Interactive DataTable for the TUI's skill tab.
 
-Columns: SKILL ⓘ | Standard ⓘ | Claude Code ⓘ | Pi ⓘ | State ⓘ | Source.
+Columns: SKILL ⓘ | Standard ⓘ | non-standard main harnesses ⓘ | State ⓘ | Source.
 
 `space` toggles a cell (queues link/unlink in `_pending`).
 `a` toggles a column.
-`i` opens ColumnInfoModal for columns with registered info (Standard, State); for all other glyphed columns (SKILL, Claude Code, Pi) it opens CellInfoScreen with per-cell or slug context. The Source column has no info panel.
+`i` opens ColumnInfoModal for columns with registered info (Standard, State); for all other glyphed columns it opens CellInfoScreen with per-cell or slug context. The Source column has no info panel.
 `^s` Apply is handled by the App, which reads pending_entries().
 
-The long tail of agents is managed via the CLI; the TUI grid only shows
-the interactive shortlist (standard + claude-code + pi). The `Source`
+The long tail of harnesses is managed via the CLI; the TUI grid only shows
+the standard column plus the non-standard main harnesses derived from
+`skills_nonstandard_main()` (currently Claude, Pi, Hermes). The `Source`
 column is passive (no toggle / no info popup); the SKILL slug-cell info
 modal surfaces the skill description when present.
 """

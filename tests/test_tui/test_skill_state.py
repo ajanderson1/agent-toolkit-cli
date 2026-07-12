@@ -19,9 +19,14 @@ from tests.test_cli.test_skill_update_monorepo import _init_parent
 # ---------------------------------------------------------------------------
 
 
+def _add_demo_library(runner, upstream_path):
+    """Add demo skill to the library only."""
+    return runner.invoke(main, ["skill", "add", str(upstream_path), "--slug", "demo"])
+
+
 def _add_demo_project(runner, upstream_path, project, library_root):
     """Add demo skill to library then install it at project scope for claude-code."""
-    r = runner.invoke(main, ["skill", "add", str(upstream_path), "--slug", "demo"])
+    r = _add_demo_library(runner, upstream_path)
     if r.exit_code != 0:
         return r
     (project / ".claude").mkdir(exist_ok=True)
@@ -69,6 +74,51 @@ def test_build_skill_rows_empty(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
     rows = build_skill_rows(scope="global", home=tmp_path, project=None)
     assert rows == []
+
+
+def test_build_skill_rows_global_scope_includes_hermes_cell_for_library_skill(
+    git_sandbox, tmp_path: Path, monkeypatch,
+):
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+
+    runner = CliRunner()
+    r = _add_demo_library(runner, git_sandbox.upstream)
+    assert r.exit_code == 0, r.output
+
+    rows = build_skill_rows(
+        scope="global",
+        home=Path(git_sandbox.env["HOME"]),
+        project=None,
+    )
+    row = next(r for r in rows if r.slug == "demo")
+    assert ("hermes-agent", "global") in row.cells
+
+
+def test_build_skill_rows_project_scope_includes_hermes_cell_for_library_skill(
+    git_sandbox, tmp_path: Path, monkeypatch,
+):
+    project = tmp_path / "proj"
+    project.mkdir()
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+
+    runner = CliRunner()
+    r = _add_demo_library(runner, git_sandbox.upstream)
+    assert r.exit_code == 0, r.output
+
+    rows = build_skill_rows(
+        scope="project",
+        home=Path(git_sandbox.env["HOME"]),
+        project=project,
+    )
+    row = next(r for r in rows if r.slug == "demo")
+    assert row.state == "library"
+    assert ("hermes-agent", "project") in row.cells
 
 
 def test_build_skill_rows_missing_canonical(

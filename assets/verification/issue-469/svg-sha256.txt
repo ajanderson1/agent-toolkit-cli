@@ -1,0 +1,1 @@
+b6cffe1ff03f40834b5e0524cae4f5b5d916fa09290b1f86b175999de1920e58  assets/verification/issue-469/hermes-skill-grid.svg

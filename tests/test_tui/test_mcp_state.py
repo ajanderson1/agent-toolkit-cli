@@ -18,6 +18,7 @@ def test_interactive_harnesses_project_has_standard_first():
     assert mcp_interactive_harnesses("project") == (
         "standard", "codex", "opencode",
     )
+    assert "hermes-agent" not in mcp_interactive_harnesses("project")
 
 
 def test_interactive_harnesses_global_no_standard():
@@ -25,6 +26,7 @@ def test_interactive_harnesses_global_no_standard():
     assert mcp_interactive_harnesses("global") == (
         "claude-code", "codex", "opencode", "pi",
     )
+    assert "hermes-agent" not in mcp_interactive_harnesses("global")
 
 
 class _FakeAdapter:

@@ -229,6 +229,7 @@ async def test_full_header_row():
             f"Standard ({len(get_standard_agents())}) ⓘ",
             "Claude ⓘ",
             "Pi ⓘ",
+            "Hermes ⓘ",
             "State ⓘ",
             "Source",
         ], f"unexpected header row: {labels!r}"
