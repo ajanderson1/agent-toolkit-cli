@@ -1,5 +1,12 @@
 # Changelog
 
+## [5.4.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v5.3.2...v5.4.0) (2026-07-12)
+
+
+### Features
+
+* **tui:** expose Hermes as a main harness ([#471](https://github.com/ajanderson1/agent-toolkit-cli/issues/471)) ([f286431](https://github.com/ajanderson1/agent-toolkit-cli/commit/f28643101349ae81b0c6b258163198c41229400e))
+
 ## [5.3.2](https://github.com/ajanderson1/agent-toolkit-cli/compare/v5.3.1...v5.3.2) (2026-07-01)
 
 
