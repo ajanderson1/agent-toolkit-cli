@@ -33,6 +33,31 @@ def test_scope_and_roots_implicit_global_when_no_cwd_lock(tmp_path: Path):
     assert (scope, home, root, implicit) == ("global", Path.home(), None, True)
 
 
+def test_scope_and_roots_implicit_paperclip_project_without_lock(
+    tmp_path, monkeypatch,
+):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    company = tmp_path / ".paperclip/instances/default/companies/company-123"
+    nested = company / "workspace"
+    nested.mkdir(parents=True)
+    scope, home, root, implicit = scope_and_roots(
+        False, False, nested, read_only=True,
+    )
+    assert (scope, home, root, implicit) == ("project", None, company.resolve(), True)
+
+
+def test_scope_and_roots_explicit_project_normalizes_paperclip_descendant(
+    tmp_path, monkeypatch,
+):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    company = tmp_path / ".paperclip/instances/default/companies/company-123"
+    nested = company / "workspace"
+    nested.mkdir(parents=True)
+    assert scope_and_roots(False, True, nested) == (
+        "project", None, company.resolve(), False,
+    )
+
+
 # ── scope_banner helper ─────────────────────────────────────────────────────
 
 
