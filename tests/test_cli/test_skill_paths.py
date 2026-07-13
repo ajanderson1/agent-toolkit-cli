@@ -71,6 +71,34 @@ def test_agent_projection_dir_project_non_universal(tmp_path: Path):
     assert p == project / ".claude" / "skills" / "journal"
 
 
+def test_agent_projection_dir_project_hermes_profile_uses_profile_skill_root(
+    tmp_path: Path,
+):
+    """A Hermes profile is its own HERMES_HOME, not a generic project root."""
+    profile = tmp_path / ".hermes" / "profiles" / "liaison"
+    profile.mkdir(parents=True)
+    (profile / "profile.yaml").write_text("name: liaison\n", encoding="utf-8")
+
+    p = agent_projection_dir(
+        "hermes-agent", "context7-mcp", scope="project", home=None, project=profile,
+    )
+
+    assert p == profile / "skills" / "context7-mcp"
+
+
+def test_agent_projection_dir_project_hermes_nonprofile_uses_harness_root(
+    tmp_path: Path,
+):
+    """Ordinary projects retain the Hermes harness convention."""
+    project = tmp_path / "project"
+
+    p = agent_projection_dir(
+        "hermes-agent", "context7-mcp", scope="project", home=None, project=project,
+    )
+
+    assert p == project / ".hermes" / "skills" / "context7-mcp"
+
+
 def test_agent_projection_dir_global_uses_catalog(tmp_path: Path):
     """Global scope ignores home, uses cfg.global_skills_dir."""
     p = agent_projection_dir("claude-code", "demo", scope="global", home=tmp_path, project=None)

@@ -196,6 +196,16 @@ def project_parents_root(project: Path) -> Path:
     return project_store_root(project)
 
 
+def _is_hermes_profile_home(project: Path) -> bool:
+    """Return whether ``project`` is a named Hermes profile home.
+
+    Hermes treats ``~/.hermes/profiles/<name>`` as the active ``HERMES_HOME``;
+    its skills therefore live directly in ``<profile>/skills`` rather than the
+    generic project's ``.hermes/skills`` harness directory.
+    """
+    return project.parent.name == "profiles" and (project / "profile.yaml").is_file()
+
+
 def agent_projection_dir(
     agent_name: str, slug: str, *,
     scope: Scope, home: Path | None, project: Path | None,
@@ -207,6 +217,8 @@ def agent_projection_dir(
     if scope == "global":
         return cfg.global_skills_dir / slug
     project_root = _root(scope, home, project)
+    if agent_name == "hermes-agent" and _is_hermes_profile_home(project_root):
+        return project_root / "skills" / slug
     return project_root / cfg.skills_dir / slug
 
 
