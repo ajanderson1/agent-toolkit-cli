@@ -59,6 +59,7 @@ _PENDING_UNLINK = "[yellow]-[/]"
 _DRIFT_GLYPH    = "[red]![/]"
 _STRAY_GLYPH    = "[yellow]?[/]"  # symlink exists but skill isn't installed here
 _SKIPPED_GLYPH  = "[dim]●[/]"  # canonical-only, no symlink needed
+_UNAVAIL_GLYPH  = "[dim]—[/]"  # harness not toggleable in this context
 _INFO_GLYPH     = "ⓘ"
 _GLOBAL_GLYPH   = "🌐"
 
@@ -320,16 +321,26 @@ class SkillGrid(Vertical):
     ) -> str:
         from pathlib import Path
 
+        from agent_toolkit_cli.paperclip_paths import normalize_skill_project_root
         from agent_toolkit_cli.skill_paths import (
             agent_projection_dir,
             canonical_skill_dir,
         )
 
+        # Unavailable cells (e.g. company-only Paperclip outside a company)
+        # have no projection to describe; explain the context requirement
+        # before any path resolver that would raise.
+        if not getattr(cell, "available", True):
+            return f"[dim]Unavailable.[/]\n{cell.unavailable_reason}"
+
+        project_root = (
+            None if scope == "global" else normalize_skill_project_root(Path.cwd())
+        )
         canonical = canonical_skill_dir(
             row.slug,
             scope=scope,
             home=Path.home() if scope == "global" else None,
-            project=None if scope == "global" else Path.cwd(),
+            project=project_root,
         )
         if agent == "standard":
             if scope == "global":
@@ -362,7 +373,7 @@ class SkillGrid(Vertical):
             row.slug,
             scope=scope,
             home=Path.home() if scope == "global" else None,
-            project=None if scope == "global" else Path.cwd(),
+            project=project_root,
         )
         if cell.skipped:
             return (
@@ -429,7 +440,7 @@ class SkillGrid(Vertical):
         any_off = False
         for r in self._rows:
             cell = r.cells.get((agent, scope))
-            if cell is None or cell.skipped:
+            if cell is None or cell.skipped or not cell.available:
                 continue
             key = (scope, agent, r.slug)
             pending = self._pending.get(key)
@@ -442,7 +453,7 @@ class SkillGrid(Vertical):
         target_op: Op = "link" if any_off else "unlink"
         for r in self._rows:
             cell = r.cells.get((agent, scope))
-            if cell is None or cell.skipped:
+            if cell is None or cell.skipped or not cell.available:
                 continue
             key = (scope, agent, r.slug)
             ground_matches = (
@@ -502,7 +513,7 @@ class SkillGrid(Vertical):
             return
         row = visible[coord.row]
         cell = row.cells.get((agent, self._scope))
-        if cell is None or cell.skipped:
+        if cell is None or cell.skipped or not cell.available:
             return
         # Standard at project scope is now a plain projection symlink into the
         # external store (post-#235/#237), so unlinking it is non-destructive and
@@ -621,6 +632,8 @@ class SkillGrid(Vertical):
         cell = row.cells.get((agent, self._scope))
         if cell is None:
             base = " "
+        elif not cell.available:
+            base = _UNAVAIL_GLYPH
         elif cell.skipped:
             base = _SKIPPED_GLYPH
         else:

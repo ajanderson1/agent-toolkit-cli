@@ -341,6 +341,14 @@ class TUIApp(App):
             return "global", Path.home(), None
         return "project", Path.home(), Path.cwd()
 
+    def _skill_project_root(self) -> Path:
+        """Project root for the Skills pane, folding a Paperclip company
+        descendant to its company root. Skills-only: other asset panes keep
+        their literal CWD project root."""
+        from agent_toolkit_cli.paperclip_paths import normalize_skill_project_root
+
+        return normalize_skill_project_root(Path.cwd())
+
     def _active_grid(
         self,
     ) -> InstructionGrid | SkillGrid | CommandGrid | PiGrid | AgentGrid | McpGrid | None:
@@ -392,7 +400,8 @@ class TUIApp(App):
             grid = self.query_one("#skill-grid", SkillGrid)
         except NoMatches:
             return
-        scope, home, project = self._scope_to_roots()
+        scope, home, _ = self._scope_to_roots()
+        project = None if scope == "global" else self._skill_project_root()
         grid.set_scope(scope)
         grid.set_rows(build_skill_rows(scope=scope, home=home, project=project))
 
@@ -802,7 +811,7 @@ class TUIApp(App):
     def _apply_skill_pending(self) -> None:
         from agent_toolkit_cli.skill_install import (
             InstallError, InstallPlan, apply as engine_apply,
-            ensure_project_canonical,
+            ensure_project_canonical, validate_projection_context,
         )
         from agent_toolkit_cli.skill_paths import library_lock_path
 
@@ -826,9 +835,18 @@ class TUIApp(App):
         for (scope, slug), (adds, removes) in by_slug.items():
             n_writes = len(adds) + len(removes)
             home = Path.home() if scope == "global" else None
-            project = None if scope == "global" else Path.cwd()
+            project = None if scope == "global" else self._skill_project_root()
             if scope == "project":
                 try:
+                    # Fail loudly on an invalid Paperclip projection before any
+                    # canonical materialization or lock write.
+                    validate_projection_context(
+                        slug=slug,
+                        target_agents=(*adds, *removes),
+                        scope=scope,
+                        home=home,
+                        project=project,
+                    )
                     ensure_project_canonical(
                         slug=slug,
                         project=project,

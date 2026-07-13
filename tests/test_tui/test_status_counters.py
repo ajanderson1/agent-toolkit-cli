@@ -21,13 +21,24 @@ from agent_toolkit_tui.app import TUIApp
 from agent_toolkit_tui.skill_state import INTERACTIVE_AGENTS, SkillCell, SkillRow
 from agent_toolkit_tui.widgets.skill_grid import SkillGrid
 
+# Paperclip is a project-only, company-scoped harness (#474): it is present in
+# INTERACTIVE_AGENTS but never toggleable at global scope. These counters are
+# about the globally-linkable harness set, so exclude it here.
+_GLOBAL_AGENTS: tuple[str, ...] = tuple(
+    a for a in INTERACTIVE_AGENTS if a != "paperclip"
+)
+
 
 def _row(slug: str, *, scope: str = "global",
          linked: tuple[str, ...] = ()) -> SkillRow:
-    cells = {
-        (a, scope): SkillCell(linked=(a in linked), drift=False, skipped=False)
-        for a in INTERACTIVE_AGENTS
-    }
+    cells = {}
+    for a in INTERACTIVE_AGENTS:
+        # Mirror real availability: Paperclip is unavailable at global scope.
+        available = not (a == "paperclip" and scope == "global")
+        cells[(a, scope)] = SkillCell(
+            linked=(a in linked), drift=False, skipped=False,
+            available=available,
+        )
     return SkillRow(
         slug=slug, source=f"x/{slug}", ref="main", state="clean", cells=cells,
     )
@@ -94,7 +105,7 @@ async def test_footer_pending_counts_four_harnesses():
     async with app.run_test() as pilot:
         await pilot.pause()
         grid = app.query_one("#skill-grid", SkillGrid)
-        for agent in INTERACTIVE_AGENTS:
+        for agent in _GLOBAL_AGENTS:
             grid.cursor_to_cell(row_slug="j", agent_name=agent)
             await pilot.pause()
             await pilot.press("space")
@@ -135,7 +146,7 @@ async def test_apply_counts_per_harness_write(monkeypatch):
         app._scope = "global"
         grid = app.query_one("#skill-grid", SkillGrid)
         # Queue a global link for the same slug across all four harnesses.
-        pending = {("global", a, "demo"): "link" for a in INTERACTIVE_AGENTS}
+        pending = {("global", a, "demo"): "link" for a in _GLOBAL_AGENTS}
         grid.restore_pending(pending)
         await pilot.pause()
 
@@ -172,7 +183,7 @@ async def test_apply_failed_count_is_symmetric(monkeypatch):
         monkeypatch.setattr(app, "notify", spy_notify)
         grid = app.query_one("#skill-grid", SkillGrid)
         grid.restore_pending(
-            {("global", a, "demo"): "link" for a in INTERACTIVE_AGENTS}
+            {("global", a, "demo"): "link" for a in _GLOBAL_AGENTS}
         )
         await pilot.pause()
 

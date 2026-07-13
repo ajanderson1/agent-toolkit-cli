@@ -230,6 +230,7 @@ async def test_full_header_row():
             "Claude ⓘ",
             "Pi ⓘ",
             "Hermes ⓘ",
+            "Paperclip ⓘ",
             "State ⓘ",
             "Source",
         ], f"unexpected header row: {labels!r}"
