@@ -30,12 +30,16 @@
 - `tests/test_cli/test_paperclip_paths.py` — path recognition and normalization contract.
 - `tests/test_cli/test_cli_skill_paperclip.py` — end-to-end CLI projection, preflight, conflict, and uninstall coverage.
 - `tests/test_tui/test_paperclip_skill_tui.py` — company-only TUI availability, toggling, and apply coverage.
+- `docs/harnesses/paperclip.md` — generated Paperclip capability page.
+- `assets/verification/issue-474/` — CLI and multi-state TUI evidence with written visual judgment.
 
 ### Modified files
 
 - `src/agent_toolkit_cli/skill_agents.py` — register `paperclip` as a real, non-Standard Skills harness.
 - `src/agent_toolkit_cli/skill_paths.py` — resolve the Paperclip project projection destination at the existing path boundary.
 - `src/agent_toolkit_cli/skill_install.py` — preflight company-only projection targets before any mutation.
+- `src/agent_toolkit_cli/_install_core.py` — skip contextually unavailable Paperclip during catalog-wide projection scans.
+- `src/agent_toolkit_cli/skill_doctor.py` — scan the resolved Paperclip company projection root without breaking ordinary projects.
 - `src/agent_toolkit_cli/commands/skill/_common.py` — normalize implicit/explicit skill project roots and recognize Paperclip context before lockfile fallback.
 - `src/agent_toolkit_cli/commands/skill/__init__.py` — make omitted install/uninstall scope Paperclip-aware while preserving the ordinary global default.
 - `src/agent_toolkit_tui/skill_state.py` — represent unavailable company-only cells and probe Paperclip projections safely.
@@ -45,12 +49,15 @@
 - `src/agent_toolkit_tui/display_names.py` — render `Paperclip`.
 - `tests/test_cli/test_skill_agents.py` — pin the new catalog count/configuration.
 - `tests/test_cli/test_cli_skill_scope_banner.py` — pin Paperclip implicit project-scope behavior.
+- `tests/test_cli/test_cli_skill_list.py` — pin harness-filtered Paperclip projection state and ordinary-scope scans.
+- `tests/test_cli/test_cli_skill_doctor.py` — pin correct/missing/foreign/stray Paperclip company projections.
+- `tests/test_harness_docs.py` — pin generated Paperclip company-only Skills metadata.
 - `tests/test_tui/test_composition.py` — pin main-harness coverage and exclude unsupported asset actions.
 - `tests/test_tui/test_display_names.py` — pin the Paperclip display label.
 - `tests/test_tui/test_skill_grid_apply.py` — teach shared fixtures about cell availability.
 - `docs/agent-toolkit/harness-matrix.md` — add Paperclip to all-harness parity rows and update counts.
 - `scripts/gen_harness_docs.py` — mark Paperclip as headline and supply its logo metadata.
-- `docs/matrix.md`, `docs/harnesses/paperclip.md`, `mkdocs.yml` — regenerated compatibility views/navigation.
+- `docs/matrix.md` and `mkdocs.yml` — regenerated compatibility views/navigation.
 
 ---
 
@@ -63,7 +70,7 @@
 - Modify: `tests/test_cli/test_cli_skill_scope_banner.py`
 
 **Interfaces:**
-- Produces: `PaperclipCompanyContext`, `PaperclipContextError`, `detect_paperclip_company(path, *, paperclip_root=None)`, `require_paperclip_company(path, *, paperclip_root=None)`, and `normalize_skill_project_root(path)`.
+- Produces: `PaperclipCompanyContext`, `PaperclipContextError`, `detect_paperclip_company(path, *, paperclip_root=None)`, `require_paperclip_company(path, *, paperclip_root=None)`, and `normalize_skill_project_root(path, *, paperclip_root=None)`.
 - Consumes: `Path.home()` only as the production default; tests pass an explicit temporary `paperclip_root`.
 
 - [ ] **Step 1: Write failing path-context tests**
@@ -280,13 +287,17 @@ git commit -m "feat(paperclip): detect company project roots" -m "Device: $(host
 - Modify: `src/agent_toolkit_cli/skill_agents.py`
 - Modify: `src/agent_toolkit_cli/skill_paths.py`
 - Modify: `src/agent_toolkit_cli/skill_install.py`
+- Modify: `src/agent_toolkit_cli/_install_core.py`
+- Modify: `src/agent_toolkit_cli/skill_doctor.py`
 - Modify: `src/agent_toolkit_cli/commands/skill/__init__.py`
 - Modify: `tests/test_cli/test_skill_agents.py`
 - Create: `tests/test_cli/test_cli_skill_paperclip.py`
+- Modify: `tests/test_cli/test_cli_skill_list.py`
+- Modify: `tests/test_cli/test_cli_skill_doctor.py`
 
 **Interfaces:**
 - Consumes: `require_paperclip_company()` and `normalize_skill_project_root()` from Task 1.
-- Produces: catalog token `paperclip`, Paperclip-aware `agent_projection_dir()`, and `validate_projection_context(slug, target_agents, scope, home, project)`.
+- Produces: catalog token `paperclip`, `is_skill_projection_available(agent_name, scope, project)`, Paperclip-aware `agent_projection_dir()`, and `validate_projection_context(slug, target_agents, scope, home, project)`.
 
 - [ ] **Step 1: Write failing catalog and destination tests**
 
@@ -299,6 +310,7 @@ def test_paperclip_is_company_scoped_skill_harness():
     assert not cfg.is_standard
     assert cfg.subagent_mechanism == "none"
     assert "company-scoped Skills" in cfg.disabled_reason
+    assert not cfg.detect_installed()  # context-constrained; resolved explicitly
 
 # Update the catalog-size assertion from 57 to 58.
 ```
@@ -338,7 +350,10 @@ Expected: failures show missing `AGENTS['paperclip']` and unsupported projection
     # A non-Standard sentinel; project resolution is handled by skill_paths.
     skills_dir=".paperclip-company/skills",
     global_skills_dir=HOME / ".paperclip" / "skills",
-    detect_installed=lambda: (HOME / ".paperclip").exists(),
+    # Catalog detection has no scope/project arguments. Keep this false so
+    # global `all` operations never accidentally select a company-only target;
+    # _resolve_agents adds Paperclip only in a detected company project.
+    detect_installed=lambda: False,
     subagent_mechanism="none",
     disabled_reason="company-scoped Skills harness only; no Agent asset adapter",
 ),
@@ -346,14 +361,35 @@ Expected: failures show missing `AGENTS['paperclip']` and unsupported projection
 
 ```python
 # src/agent_toolkit_cli/skill_paths.py
-from agent_toolkit_cli.paperclip_paths import require_paperclip_company
+from agent_toolkit_cli.paperclip_paths import (
+    detect_paperclip_company,
+    require_paperclip_company,
+)
+
+
+def is_skill_projection_available(
+    agent_name: str, *, scope: Scope, project: Path | None,
+) -> bool:
+    if agent_name != "paperclip":
+        return True
+    return (
+        scope == "project"
+        and project is not None
+        and detect_paperclip_company(project) is not None
+    )
+
 
 # At the start of agent_projection_dir(), after validating agent_name:
 if agent_name == "paperclip":
-    if scope != "project" or project is None:
+    if not is_skill_projection_available(
+        agent_name, scope=scope, project=project,
+    ):
         raise ValueError("Paperclip skills are company-scoped and require project scope")
+    assert project is not None
     return require_paperclip_company(project).skills_root / slug
 ```
+
+Catalog-wide scanners are different from explicit targets: update `_install_core._current_linked_agents()` to `continue` when `is_skill_projection_available()` is false, and update `skill_doctor` projection-root enumeration to skip unavailable Paperclip while deriving available roots through `agent_projection_dir(name, "__probe__", scope=scope, home=home, project=project).parent`. Explicit Paperclip targets still call preflight and fail loudly. Add regression tests proving global and generic-project `plan()`, harness-filtered list, and doctor complete normally when Paperclip is unselected.
 
 - [ ] **Step 4: Add projection preflight before any mutation**
 
@@ -370,8 +406,13 @@ def validate_projection_context(
     home: Path | None,
     project: Path | None,
 ) -> None:
-    if "paperclip" not in target_agents:
+    agents = tuple(target_agents)
+    if "paperclip" not in agents:
         return
+    if not slug or slug in {".", ".."} or Path(slug).name != slug or Path(slug).is_absolute():
+        raise InstallError(
+            f"{slug!r}: Paperclip skill slug must be one non-empty leaf name"
+        )
     if scope != "project" or project is None:
         raise InstallError(
             "paperclip: company-scoped skills require project scope inside "
@@ -385,6 +426,23 @@ def validate_projection_context(
         slug, scope="project", home=home, project=project,
     )
     destination = context.skills_root / slug
+    # Paperclip's instance/company library is expected to be a real directory
+    # chain. Reject an existing symlinked ancestor rather than following a
+    # redirect outside the instance tree. Missing parents remain creatable.
+    for ancestor in (context.instance_root / "skills", context.skills_root):
+        if ancestor.is_symlink():
+            raise InstallError(
+                f"{slug}/paperclip: symlinked projection parent is unsupported: "
+                f"{ancestor}"
+            )
+    try:
+        destination.parent.resolve(strict=False).relative_to(
+            (context.instance_root / "skills").resolve(strict=False)
+        )
+    except ValueError as exc:
+        raise InstallError(
+            f"{slug}/paperclip: projection escapes the instance skills root"
+        ) from exc
     if destination.is_symlink():
         if destination.resolve() != canonical.resolve():
             raise InstallError(
@@ -398,7 +456,7 @@ def validate_projection_context(
         )
 ```
 
-Call `validate_projection_context()` with concrete `slug`, agents, scope, home, and project arguments at the top of both `plan()` and `apply()` before canonical or lock resolution. Also call it from CLI/TUI project install before `ensure_project_canonical()`. This ensures direct engine callers receive the same fail-loud contract and destination conflicts cannot leave a new project canonical or lock entry behind.
+At the start of `plan()`, materialize `target_agents = tuple(target_agents)` once, then pass that tuple to validation and `_core_plan` so generator inputs are not consumed. At the start of `apply()`, validate the union `(*plan.add_agents, *plan.remove_agents)` before canonical or lock resolution so direct removal callers receive the same ownership checks. Call the validator from the CLI before `ensure_project_canonical()`; Task 3 adds the corresponding TUI call. Add direct-engine generator-input and Paperclip-removal conflict tests. These checks ensure destination conflicts cannot leave a new project canonical or lock entry behind.
 
 - [ ] **Step 5: Write failing CLI integration tests**
 
@@ -554,6 +612,92 @@ def test_uninstall_refuses_foreign_projection(paperclip_install):
     assert uninstall.exit_code != 0
     assert "conflicting symlink" in uninstall.output
     assert env.projection.resolve() == foreign.resolve()
+
+
+def test_global_all_ignores_context_constrained_paperclip(paperclip_install):
+    env = paperclip_install
+    result = env.runner.invoke(main, [
+        "skill", "install", "demo", "--scope", "global", "--agents", "all",
+    ])
+    assert result.exit_code == 0, result.output
+    assert "company-scoped" not in result.output
+
+
+def test_company_list_filter_reads_paperclip_projection(paperclip_install):
+    env = paperclip_install
+    assert env.runner.invoke(main, [
+        "--project", str(env.company), "skill", "install", "demo",
+        "--agents", "paperclip",
+    ]).exit_code == 0
+    listed = env.runner.invoke(main, [
+        "--project", str(env.company), "skill", "list", "-p",
+        "--agent", "paperclip", "--json",
+    ])
+    assert listed.exit_code == 0, listed.output
+    assert '"slug": "demo"' in listed.output
+
+
+def test_generic_project_plan_and_doctor_skip_unavailable_paperclip(
+    paperclip_install, tmp_path,
+):
+    env = paperclip_install
+    project = tmp_path / "ordinary"
+    project.mkdir()
+    listed = env.runner.invoke(main, [
+        "--project", str(project), "skill", "list", "-p", "--json",
+    ])
+    doctor = env.runner.invoke(main, [
+        "--project", str(project), "skill", "doctor", "-p",
+    ])
+    assert listed.exit_code == 0, listed.output
+    assert doctor.exit_code == 0, doctor.output
+
+
+def test_doctor_finds_stray_company_projection(paperclip_install):
+    env = paperclip_install
+    stray = env.projection.parent / "stray"
+    target = env.home / "stray-target"
+    target.mkdir()
+    stray.parent.mkdir(parents=True)
+    stray.symlink_to(target)
+    doctor = env.runner.invoke(main, [
+        "--project", str(env.company), "skill", "doctor", "-p",
+    ])
+    assert doctor.exit_code != 0
+    assert "stray" in doctor.output
+    assert stray.is_symlink()
+
+
+@pytest.mark.parametrize("slug", ["", ".", "..", "../escape", "nested/escape", "/tmp/escape"])
+def test_engine_rejects_non_leaf_paperclip_slugs_before_writes(
+    paperclip_install, slug,
+):
+    env = paperclip_install
+    with pytest.raises(InstallError, match="one non-empty leaf name"):
+        validate_projection_context(
+            slug=slug,
+            target_agents=(name for name in ("paperclip",)),
+            scope="project",
+            home=None,
+            project=env.company,
+        )
+    assert not (env.company / "skills-lock.json").exists()
+
+
+def test_symlinked_skills_parent_is_rejected(paperclip_install):
+    env = paperclip_install
+    skills = env.home / ".paperclip/instances/default/skills"
+    redirected = env.home / "redirected"
+    redirected.mkdir()
+    skills.parent.mkdir(parents=True, exist_ok=True)
+    skills.symlink_to(redirected)
+    result = env.runner.invoke(main, [
+        "--project", str(env.company), "skill", "install", "demo",
+        "--agents", "paperclip",
+    ])
+    assert result.exit_code != 0
+    assert "symlinked projection parent" in result.output
+    assert not (redirected / "company-123/demo").exists()
 ```
 
 - [ ] **Step 6: Make omitted install/uninstall scope Paperclip-aware**
@@ -568,7 +712,7 @@ Change the Click scope option from a hard default to an explicit/implicit distin
 )
 ```
 
-Then resolve before materialization in both commands:
+Resolve scope/root before expanding agent tokens in both commands:
 
 ```python
 candidate = (ctx.obj.get("project_root") if ctx.obj else None) or Path.cwd()
@@ -578,6 +722,10 @@ if project_flag:
 elif scope is None:
     scope = "project" if context is not None else "global"
 project_root = normalize_skill_project_root(candidate) if scope == "project" else None
+
+target_agents = _resolve_agents(
+    agents_str, scope, project=project_root,
+)
 validate_projection_context(
     slug=slug,
     target_agents=target_agents,
@@ -587,18 +735,34 @@ validate_projection_context(
 )
 ```
 
-Preserve the existing ordinary no-flag behavior: outside Paperclip, `skill install demo` still installs Standard globally.
+Make `all` context-aware without changing catalog-wide detection:
+
+```python
+def _resolve_agents(
+    agents_str: str, scope: str, *, project: Path | None = None,
+) -> tuple[str, ...]:
+    if agents_str == "all":
+        resolved = list(detect_installed_agents())
+        if is_skill_projection_available(
+            "paperclip", scope=scope, project=project,
+        ):
+            resolved.append("paperclip")
+        return tuple(dict.fromkeys(resolved))
+    # Preserve existing explicit-token parsing below.
+```
+
+For bare uninstall, append `paperclip` to the existing maximal target only when `is_skill_projection_available("paperclip", scope=scope, project=project_root)` is true. Preserve ordinary behavior: outside Paperclip, `skill install demo` still installs Standard globally; global `--agents all` remains valid even when `~/.paperclip` exists; inside a company, `all` and bare uninstall include Paperclip.
 
 - [ ] **Step 7: Run CLI integration and regression tests**
 
-Run: `uv run pytest tests/test_cli/test_cli_skill_paperclip.py tests/test_cli/test_cli_skill_install.py tests/test_cli/test_skill_install_engine.py tests/test_cli/test_skill_paths.py -q`
+Run: `uv run pytest tests/test_cli/test_cli_skill_paperclip.py tests/test_cli/test_cli_skill_install.py tests/test_cli/test_skill_install_engine.py tests/test_cli/test_skill_paths.py tests/test_cli/test_cli_skill_list.py tests/test_cli/test_cli_skill_doctor.py -q`
 
 Expected: all tests pass; no test writes beneath the real home directory.
 
 - [ ] **Step 8: Commit the projection unit**
 
 ```bash
-git add src/agent_toolkit_cli/skill_agents.py src/agent_toolkit_cli/skill_paths.py src/agent_toolkit_cli/skill_install.py src/agent_toolkit_cli/commands/skill/__init__.py tests/test_cli/test_skill_agents.py tests/test_cli/test_cli_skill_paperclip.py
+git add src/agent_toolkit_cli/skill_agents.py src/agent_toolkit_cli/skill_paths.py src/agent_toolkit_cli/skill_install.py src/agent_toolkit_cli/_install_core.py src/agent_toolkit_cli/skill_doctor.py src/agent_toolkit_cli/commands/skill/__init__.py tests/test_cli/test_skill_agents.py tests/test_cli/test_cli_skill_paperclip.py tests/test_cli/test_cli_skill_list.py tests/test_cli/test_cli_skill_doctor.py
 git commit -m "feat(paperclip): project skills into company libraries" -m "Device: $(hostname -s)"
 ```
 
@@ -700,16 +864,24 @@ class SkillCell:
 
 # At the start of _cell_for() after the Standard branch:
 if agent_name == "paperclip":
-    if scope != "project" or project is None or detect_paperclip_company(project) is None:
+    # Global cells still need the caller's current company context to explain
+    # whether the correction is “switch scope” or “open a company project.”
+    context_path = project or Path.cwd()
+    context = detect_paperclip_company(context_path)
+    if scope != "project" or context is None:
+        if scope == "global" and context is not None:
+            reason = "Paperclip is project-only; switch the TUI to Project scope."
+        else:
+            reason = (
+                "Paperclip skills are company-scoped; open the TUI inside "
+                "~/.paperclip/instances/<instance>/companies/<company-id>."
+            )
         return SkillCell(
             linked=False,
             drift=False,
             skipped=False,
             available=False,
-            unavailable_reason=(
-                "Paperclip skills are company-scoped; open the TUI inside "
-                "~/.paperclip/instances/<instance>/companies/<company-id>."
-            ),
+            unavailable_reason=reason,
         )
 ```
 
@@ -776,10 +948,38 @@ async def test_company_paperclip_cell_queues_project_link(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_unavailable_paperclip_column_bulk_toggle_queues_nothing(tmp_path):
+    row = _row_with_paperclip(available=False)
+    # Mount SkillGrid, focus Paperclip, press `a`.
+    assert grid.pending_entries() == {}
+
+
+@pytest.mark.asyncio
+async def test_unavailable_info_copy_distinguishes_scope_from_context(tmp_path):
+    # Open `i` on global-in-company and project-outside-company fixtures.
+    assert "switch the TUI to Project scope" in global_body
+    assert "instances/<instance>/companies/<company-id>" in generic_body
+
+
+@pytest.mark.asyncio
 async def test_apply_uses_normalized_company_root(monkeypatch, tmp_path):
     # Run TUIApp from a descendant; monkeypatch engine_apply and
     # ensure_project_canonical; assert both receive the detected company root,
     # never the descendant and never a .agents projection target.
+
+
+@pytest.mark.asyncio
+async def test_paperclip_apply_round_trip_updates_cell_and_footer(tmp_path):
+    # Use the real hermetic project canonical/projection flow. After Apply,
+    # assert the projection exists, refreshed Paperclip cell.linked is true,
+    # and footer contains `applied: 1 ok, 0 failed`.
+
+
+@pytest.mark.asyncio
+async def test_paperclip_conflict_preserves_pending_and_shows_error(tmp_path):
+    # Seed a foreign destination, Apply a queued Paperclip link, then assert:
+    # error footer + notification, pending link retained, foreign destination
+    # unchanged, and no project canonical or skills-lock created.
 ```
 
 Update shared `_row()` helpers only by relying on the new defaults unless a test explicitly needs `available=False`.
@@ -809,6 +1009,7 @@ git commit -m "feat(tui): expose Paperclip company skills" -m "Device: $(hostnam
 - Regenerate: `mkdocs.yml`
 - Test: `tests/test_instructions_matrix.py`
 - Test: `tests/test_subagent_matrix.py`
+- Create: `tests/test_harness_docs.py`
 
 **Interfaces:**
 - Consumes: catalog token `paperclip` and TUI main-harness decision.
@@ -841,13 +1042,28 @@ In `docs/agent-toolkit/harness-matrix.md`:
 
 Do not claim Paperclip reads `AGENTS.md`, commands, MCP configuration, or Agent Toolkit agent definitions.
 
-- [ ] **Step 3: Add generator headline/logo metadata**
+- [ ] **Step 3: Add generator headline/logo and contextual Skills metadata**
 
 ```python
 # scripts/gen_harness_docs.py
 MAIN = ["claude-code", "pi", "codex", "gemini-cli", "opencode", "paperclip"]
 LOGOS["paperclip"] = _fav("paperclip.ing")
+
+SKILLS_OVERRIDES = {
+    "paperclip": {
+        "summary": (
+            "Supported at project scope for a detected Paperclip company; "
+            "global scope is unavailable."
+        ),
+        "project_dir": "<instance-root>/skills/<company-id>",
+        "global_dir": "unavailable — Paperclip skills are company-scoped",
+        "general": "no — gets a company-library projection",
+        "source": "Agent Toolkit issue #474 and its approved design",
+    },
+}
 ```
+
+Update `skills_section()` to render `SKILLS_OVERRIDES[slug]` when present and retain the existing catalog-based branch for every other harness. The Paperclip page must never render the catalog sentinel `.paperclip-company/skills`, the non-actionable `~/.paperclip/skills`, or vercel-labs attribution as the source for this custom entry.
 
 - [ ] **Step 4: Regenerate owned documentation**
 
@@ -857,20 +1073,25 @@ Expected: `docs/harnesses/paperclip.md` is created, `docs/matrix.md` includes Pa
 
 - [ ] **Step 5: Run matrix and generated-doc tests**
 
-Run: `uv run pytest tests/test_instructions_matrix.py tests/test_subagent_matrix.py tests/test_tui/test_composition.py -q`
+Run: `uv run pytest tests/test_instructions_matrix.py tests/test_subagent_matrix.py tests/test_harness_docs.py tests/test_tui/test_composition.py -q`
 
 Expected: all parity and main-harness coverage tests pass.
 
 - [ ] **Step 6: Inspect the generated Paperclip page for honest capability labels**
 
-Run: `rg -n "Paperclip|Skills|Instructions|Subagents|Commands|MCP" docs/harnesses/paperclip.md docs/matrix.md`
+Run:
 
-Expected: Skills is supported through the company-scoped path; unsupported/unknown asset types do not show actionable support.
+```bash
+rg -n "Paperclip|Skills|Instructions|Subagents|Commands|MCP|instances/.*/skills" docs/harnesses/paperclip.md docs/matrix.md
+! rg -n "\.paperclip-company/skills|~/.paperclip/skills|vercel-labs/skills" docs/harnesses/paperclip.md
+```
+
+Expected: Skills is supported through the company-scoped project path, global scope is unavailable, custom-source attribution is honest, and unsupported/unknown asset types do not show actionable support. Add a generator test that asserts these exact inclusions/exclusions so later regeneration cannot reintroduce sentinel paths.
 
 - [ ] **Step 7: Commit documentation and generated views**
 
 ```bash
-git add docs/agent-toolkit/harness-matrix.md scripts/gen_harness_docs.py docs/matrix.md docs/harnesses/paperclip.md mkdocs.yml
+git add docs/agent-toolkit/harness-matrix.md scripts/gen_harness_docs.py docs/matrix.md docs/harnesses/paperclip.md mkdocs.yml tests/test_harness_docs.py
 git commit -m "docs: add Paperclip harness compatibility" -m "Device: $(hostname -s)"
 ```
 
@@ -896,10 +1117,13 @@ uv run pytest \
   tests/test_cli/test_cli_skill_paperclip.py \
   tests/test_cli/test_cli_skill_install.py \
   tests/test_cli/test_skill_install_engine.py \
+  tests/test_cli/test_cli_skill_list.py \
+  tests/test_cli/test_cli_skill_doctor.py \
   tests/test_tui/test_paperclip_skill_tui.py \
   tests/test_tui/test_skill_state.py \
   tests/test_tui/test_skill_grid_apply.py \
-  tests/test_tui/test_composition.py -q
+  tests/test_tui/test_composition.py \
+  tests/test_harness_docs.py -q
 ```
 
 Expected: all focused tests pass.
@@ -927,12 +1151,19 @@ Save command output to `assets/verification/issue-474/cli.txt`.
 
 - [ ] **Step 4: Capture TUI evidence and written visual judgment**
 
-Launch the TUI against the temporary company fixture, capture the Skills pane, and save the artifact under `assets/verification/issue-474/`. Write `assets/verification/issue-474/verdict.md` containing:
+Capture these named artifacts under `assets/verification/issue-474/`:
+
+- `paperclip-company-before-apply.*` — company project Skills pane with actionable Paperclip cell;
+- `paperclip-company-after-apply.*` — linked cell plus visible success footer;
+- `paperclip-global-unavailable.*` — global-scope unavailable glyph with the `i` info screen explaining “switch to Project scope”;
+- `paperclip-unsupported-pane.*` — one non-Skills pane showing no Paperclip action.
+
+Write `assets/verification/issue-474/verdict.md` containing:
 
 ```markdown
 # Visual judgment
 
-PASS — The Skills pane shows Paperclip as a dedicated main-harness column in company project scope. The Paperclip cell is actionable in the company fixture, unavailable outside company scope, and no unsupported asset pane presents a Paperclip action.
+PASS — `paperclip-company-before-apply` and `paperclip-company-after-apply` show the dedicated Paperclip Skills column transition from actionable to linked with success feedback. `paperclip-global-unavailable` shows the non-actionable global state and corrective copy. `paperclip-unsupported-pane` confirms no Paperclip action leaks into unsupported asset panes.
 ```
 
 - [ ] **Step 5: Check the final diff for forbidden API/auth scope**

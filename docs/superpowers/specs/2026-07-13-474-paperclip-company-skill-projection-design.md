@@ -59,7 +59,7 @@ Paperclip project scope uses the existing Agent Toolkit lifecycle:
 
 - project lock: `<company-root>/skills-lock.json`
 - project canonical: the existing external Agent Toolkit project store derived from the normalized company root
-- source reconstruction, pinning, dirty-state detection, update, push, doctor, and removal: unchanged unless they need the normalized root passed through
+- source reconstruction, pinning, dirty-state detection, update, push, list/filter, doctor, and removal: unchanged unless they need the normalized root passed through
 
 Paperclip’s company skill directory is a harness projection destination, not a replacement canonical clone and not a second lockfile location.
 
@@ -149,7 +149,7 @@ The Skills state model represents Paperclip availability separately from linked/
 4. Agent Toolkit preflights the Paperclip destination and ordinary project canonical.
 5. Existing project materialization creates or reuses the canonical and writes `<company-root>/skills-lock.json`.
 6. The projection engine creates `<instance-root>/skills/<company-id>/<slug>` pointing to the canonical.
-7. Status/TUI read back the actual projection before reporting it installed.
+7. Harness-filtered list output and the TUI read back the actual projection before reporting it installed.
 
 ### Uninstall
 
@@ -187,7 +187,7 @@ The Skills state model represents Paperclip availability separately from linked/
 - Repeated install is idempotent.
 - Foreign symlink and real-directory conflicts fail without partial projection.
 - Uninstall removes owned projection only.
-- Status/doctor observe the Paperclip projection correctly.
+- Harness-filtered list and doctor observe the Paperclip projection correctly; `skill status` retains its existing canonical working-tree meaning.
 - Existing generic-project and global skill tests remain unchanged.
 
 ### TUI tests
