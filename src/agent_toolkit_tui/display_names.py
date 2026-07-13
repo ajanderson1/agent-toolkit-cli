@@ -31,6 +31,7 @@ _HARNESS_LABELS: dict[str, str] = {
     "pi": "Pi",
     "cursor": "Cursor",
     "hermes-agent": "Hermes",
+    "paperclip": "Paperclip",
 }
 
 _PI_EXTENSION_ORIGINS: dict[str, str] = {

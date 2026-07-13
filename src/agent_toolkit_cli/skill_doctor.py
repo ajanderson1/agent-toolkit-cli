@@ -23,7 +23,8 @@ from agent_toolkit_cli.skill_lock import (
     write_lock,
 )
 from agent_toolkit_cli.skill_paths import (
-    Scope, agent_projection_dir, canonical_skill_dir, library_lock_path,
+    Scope, agent_projection_dir, canonical_skill_dir,
+    is_skill_projection_available, library_lock_path,
     library_root as _library_root_fn, lock_file_path,
 )
 
@@ -138,7 +139,18 @@ def _scan_stray_symlinks(
         )
         if skip:
             continue
-        if scope == "global":
+        # Paperclip has no fixed catalog projection dir: derive its real
+        # company skills root through the projection boundary, and skip it
+        # entirely when unavailable (global scope or outside a company).
+        if agent_name == "paperclip":
+            if not is_skill_projection_available(
+                agent_name, scope=scope, project=project,
+            ):
+                continue
+            parent = agent_projection_dir(
+                agent_name, "__probe__", scope=scope, home=home, project=project,
+            ).parent
+        elif scope == "global":
             parent = _runtime_global_skills_dir(cfg, runtime_home)
         else:
             assert project is not None
@@ -557,6 +569,9 @@ def _projection_paths(
             agent_name=name, scope=scope, project=project,
         )
         if skip:
+            continue
+        # A context-unavailable Paperclip has no projection to check.
+        if not is_skill_projection_available(name, scope=scope, project=project):
             continue
         out.append((name, agent_projection_dir(
             name, slug, scope=scope, home=home, project=project,

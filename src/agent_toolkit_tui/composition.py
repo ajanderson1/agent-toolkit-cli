@@ -22,7 +22,7 @@ from agent_toolkit_cli.skill_agents import AGENTS
 # own column) on every asset type they support.
 MAIN_HARNESSES: tuple[str, ...] = (
     "claude-code", "gemini-cli", "codex", "opencode", "pi", "cursor",
-    "hermes-agent",
+    "hermes-agent", "paperclip",
 )
 
 

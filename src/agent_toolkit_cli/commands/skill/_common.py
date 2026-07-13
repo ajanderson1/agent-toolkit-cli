@@ -6,6 +6,10 @@ from typing import Literal
 
 import click
 
+from agent_toolkit_cli.paperclip_paths import (
+    detect_paperclip_company,
+    normalize_skill_project_root,
+)
 from agent_toolkit_cli.skill_agents import AGENTS
 
 Scope = Literal["project", "global"]
@@ -31,15 +35,21 @@ def scope_and_roots(
     """
     if global_ and project:
         raise click.UsageError("use either -g/--global or -p/--project, not both")
+    # Explicit -g never redirects, even inside a Paperclip company.
     if global_:
         return "global", Path.home(), None, False
-    if project:
-        project_root = ctx_project or Path.cwd()
-        return "project", None, project_root, False
     project_root = ctx_project or Path.cwd()
+    paperclip = detect_paperclip_company(project_root)
+    normalized = normalize_skill_project_root(project_root)
+    if project:
+        return "project", None, normalized, False
+    # A detected Paperclip company defaults to project scope even before a
+    # skills-lock.json exists (the company root owns the lock once written).
+    if paperclip is not None:
+        return "project", None, normalized, True
     if read_only and not (project_root / "skills-lock.json").exists():
         return "global", Path.home(), None, True
-    return "project", None, project_root, True
+    return "project", None, normalized, True
 
 
 def scope_banner(scope, *, implicit, lock_path, count, err=False) -> None:

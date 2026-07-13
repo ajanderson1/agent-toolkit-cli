@@ -17,7 +17,19 @@ def test_catalog_size():
     """54 real agents + 1 synthetic 'standard' pseudo-entry."""
     # +1 for standard-skill (PR1 of v3.0.0, coexists with universal)
     # +1 for standard-agent (PR2 of v3.0.0)
-    assert len(AGENTS) == 57
+    # +1 for paperclip (company-scoped Skills harness, issue #474)
+    assert len(AGENTS) == 58
+
+
+def test_paperclip_is_company_scoped_skill_harness():
+    cfg = AGENTS["paperclip"]
+    assert cfg.display_name == "Paperclip"
+    assert not cfg.is_standard
+    assert cfg.subagent_mechanism == "none"
+    assert "company-scoped Skills" in cfg.disabled_reason
+    # Context-constrained: catalog detection has no scope/project arguments, so
+    # it must stay false or global `all` would select a company-only target.
+    assert not cfg.detect_installed()
 
 
 def test_every_entry_key_matches_its_name():

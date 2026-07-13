@@ -21,6 +21,7 @@ from typing import Literal
 import yaml
 
 from agent_toolkit_cli import skill_git
+from agent_toolkit_cli.paperclip_paths import detect_paperclip_company
 from agent_toolkit_cli.skill_install import _should_skip_symlink
 from agent_toolkit_cli.skill_lock import read_lock
 from agent_toolkit_cli.skill_paths import (
@@ -53,6 +54,8 @@ class SkillCell:
     drift: bool        # symlink exists, points elsewhere, AND canonical exists at this scope
     skipped: bool      # standard-global: no symlink needed, canonical IS the dir
     stray: bool = False  # symlink exists but skill isn't installed at this scope
+    available: bool = True  # False → the harness cannot be toggled in this context
+    unavailable_reason: str = ""  # human-facing explanation when not available
 
 
 @dataclass
@@ -135,6 +138,31 @@ def _cell_for(
             return SkillCell(linked=True, drift=False, skipped=False)
         # Symlink exists but points elsewhere — drifted.
         return SkillCell(linked=False, drift=True, skipped=False)
+
+    if agent_name == "paperclip":
+        # Global cells still need the caller's current company context to
+        # explain whether the correction is “switch scope” or “open a company.”
+        context_path = project or Path.cwd()
+        context = detect_paperclip_company(context_path)
+        if scope != "project" or context is None:
+            if scope == "global" and context is not None:
+                reason = (
+                    "Paperclip is project-only; switch the TUI to Project scope."
+                )
+            else:
+                reason = (
+                    "Paperclip skills are company-scoped; open the TUI inside "
+                    "~/.paperclip/instances/<instance>/companies/<company-id>."
+                )
+            return SkillCell(
+                linked=False,
+                drift=False,
+                skipped=False,
+                available=False,
+                unavailable_reason=reason,
+            )
+        # Available company project cell: falls through to the standard
+        # link/drift/stray probe below via agent_projection_dir().
 
     canonical = canonical_skill_dir(slug, scope=scope, home=home, project=project)
     skip, _ = _should_skip_symlink(

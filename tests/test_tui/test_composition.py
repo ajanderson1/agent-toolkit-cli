@@ -18,13 +18,29 @@ from agent_toolkit_tui.composition import (
 def test_main_harnesses_members():
     assert MAIN_HARNESSES == (
         "claude-code", "gemini-cli", "codex", "opencode", "pi", "cursor",
-        "hermes-agent",
+        "hermes-agent", "paperclip",
     )
 
 
 def test_skills_nonstandard_main_today():
-    # gemini-cli / codex / opencode / cursor read .agents/skills → standard.
-    assert skills_nonstandard_main() == ("claude-code", "pi", "hermes-agent")
+    # gemini-cli / codex / opencode / cursor read .agents/skills → standard;
+    # paperclip is a non-standard, company-scoped skills column (issue #474).
+    assert skills_nonstandard_main() == (
+        "claude-code", "pi", "hermes-agent", "paperclip",
+    )
+
+
+def test_paperclip_is_not_actionable_in_other_asset_compositions():
+    from agent_toolkit_cli.command_adapters import SUPPORTED_HARNESSES as _CMD
+    from agent_toolkit_tui.composition import agents_nonstandard_main
+
+    assert "paperclip" not in instructions_nonstandard_main()
+    assert all(
+        "paperclip" not in agents_nonstandard_main(scope)
+        for scope in ("global", "project")
+    )
+    assert "paperclip" not in _MCP_HARNESSES
+    assert "paperclip" not in _CMD
 
 
 def test_instructions_nonstandard_main_today():
