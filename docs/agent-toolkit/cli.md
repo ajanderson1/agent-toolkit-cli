@@ -16,11 +16,27 @@ agent-toolkit-cli skill update [<slug>...] [-g|-p]      # merge-aware
 agent-toolkit-cli skill push   [<slug>...] [-g|-p] [--direct]   # PR-branch by default
 agent-toolkit-cli skill remove <slug>... [-g|-p] [--force]          # alias: rm
 agent-toolkit-cli skill import <file> [--latest]   # cross-machine sync — see "Moving to a new machine"
+agent-toolkit-cli skill doctor [<slug>...] [-g|-p] [--no-fix]
 ```
 
 `<source>` accepts `owner/repo`, a full HTTPS URL, an SSH URL, or a local path. `-g/--global` and `-p/--project` select scope; default is global. `skill list --json` emits a JSON array (`slug`, `source`, `ref`, `upstream_sha`, `local_sha`, `scope`) for scripting; `-a/--agent <name>` filters to skills currently symlinked into that agent (or the `standard` token).
 
 `skill import <file>` rebuilds the global library from another machine's `skills-lock.json` — an additive, skip-if-exists merge that clones each absent skill at the lock's recorded SHA (or `--latest` for each ref's current HEAD); per-skill clone failures are non-fatal (exit 1 if any failed). See [Moving to a new machine](#moving-to-a-new-machine-cross-machine-sync).
+
+`skill doctor` reports and, with confirmation, repairs library/projection drift. It normally treats a symlink outside `skills-lock.json` as stale. If another system actively owns a global projection, declare that exact link and its permitted resolved target glob in `~/.agent-toolkit/external-skill-projections.json` instead of adding it to the lock:
+
+```json
+{
+  "version": 1,
+  "projections": [{
+    "path": ".pi/agent/skills/paperclip",
+    "targetGlob": ".npm/_npx/*/node_modules/@paperclipai/server/skills/paperclip",
+    "owner": "Paperclip"
+  }]
+}
+```
+
+The `path` and `targetGlob` fields are home-relative. Doctor ignores the link only when both its exact path and its live resolved target match. Missing or changed targets remain repairable stray findings; malformed registry data fails loudly. This registry documents external ownership only — it never makes the external skill part of the agent-toolkit library.
 
 > **Terminology:** *standard* — formerly "general" (v3), earlier "universal" (pre-v3). The old token spellings were removed in v4; they now raise an unknown-token error.
 
