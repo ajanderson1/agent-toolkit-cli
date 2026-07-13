@@ -137,6 +137,7 @@ nav:
       - Codex: harnesses/codex.md
       - Gemini CLI: harnesses/gemini-cli.md
       - OpenCode: harnesses/opencode.md
+      - Paperclip: harnesses/paperclip.md
       - Others:
         - AdaL: harnesses/adal.md
         - AiderDesk: harnesses/aider-desk.md

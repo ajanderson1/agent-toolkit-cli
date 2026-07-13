@@ -25,8 +25,8 @@ each row, the **support table** (machine-read), then **notes**:
 
 | Section | Asset type | Rows | Parity test |
 |---|---|---|---|
-| [Instructions](#instruction-file-instructions-asset-type-support-all-harnesses) | `instructions` (root `AGENTS.md` context) | 54 | `tests/test_instructions_matrix.py` |
-| [Subagents](#subagent-agent-asset-type-support-all-harnesses) | `agent` (delegable subagents) | 54 | `tests/test_subagent_matrix.py` |
+| [Instructions](#instruction-file-instructions-asset-type-support-all-harnesses) | `instructions` (root `AGENTS.md` context) | 55 | `tests/test_instructions_matrix.py` |
+| [Subagents](#subagent-agent-asset-type-support-all-harnesses) | `agent` (delegable subagents) | 55 | `tests/test_subagent_matrix.py` |
 
 The verdict vocabulary is shared: a **supported** mechanism, **unsupported
 (gap)** (the harness could but the toolkit hasn't), **unsupported (by design)**
@@ -51,9 +51,9 @@ Only three asset types have a *shared* convention to comply with. **MCP servers*
 
 | Asset type | Our convention (canonical placement) | Complies natively | Needs adapter work |
 |---|---|--:|--:|
-| `instructions` | canonical `AGENTS.md` at the root | **39 / 54** | 15 (7 pointer-symlink + 8 unsupported) |
-| `skills` | the [general dir](../glossary.md#general) `.agents/skills` | **14 / 54** | 40 (own skills dir each) |
-| `agents` | the shared [standard slot](#notes-agent-subagent) `.claude/agents/` | **6 / 54** | 22 supported via own slot + 26 unsupported |
+| `instructions` | canonical `AGENTS.md` at the root | **39 / 55** | 16 (7 pointer-symlink + 9 unsupported) |
+| `skills` | the [general dir](../glossary.md#general) `.agents/skills` | **14 / 55** | 41 (own skills dir each; Paperclip projects to its company library) |
+| `agents` | the shared [standard slot](#notes-agent-subagent) `.claude/agents/` | **6 / 55** | 22 supported via own slot + 27 unsupported |
 
 **`instructions` — 39 compliant.** The `native` set in the
 [instructions table](#instruction-file-instructions-asset-type-support-all-harnesses).
@@ -162,6 +162,7 @@ This asset type has **one supported mechanism** (pointer symlinks only — no
 | `openclaw` | native | `AGENTS.md` | none (global/workspace-only) / `~/.openclaw/workspace/AGENTS.md` | yes |  | https://docs.openclaw.ai/concepts/system-prompt + https://github.com/openclaw/openclaw README ("Injected prompt files: `AGENTS.md`, `SOUL.md`, `TOOLS.md`"; "Workspace root: `~/.openclaw/workspace`") |
 | `opencode` | native | `AGENTS.md` | `./AGENTS.md` / `~/.config/opencode/AGENTS.md` | yes |  | https://opencode.ai/docs/rules/ |
 | `openhands` | native | `AGENTS.md` | `./AGENTS.md` (workspace root) / none documented (project-only auto-load) | yes |  | https://docs.openhands.dev/sdk/guides/skill |
+| `paperclip` | unsupported (by design) | none | none / none | no |  | Paperclip company integration in Agent Toolkit is intentionally Skills-only; issue #474 |
 | `pi` | native | `AGENTS.md` | `./AGENTS.md` / `~/.pi/agent/AGENTS.md` | yes |  | https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/README.md (current upstream README documents AGENTS.md loaded at startup from cwd + parents + `~/.pi/agent/AGENTS.md`) |
 | `pochi` | native | `README.pochi.md` OR `AGENTS.md` (treated identically) | `./AGENTS.md` (or `./README.pochi.md`) / `~/.pochi/README.pochi.md` (AGENTS.md alternative implied — docs say files are "treated identically") | yes |  | https://docs.getpochi.com/rules/ |
 | `qoder` | native | `AGENTS.md` | `./AGENTS.md` (also `.qoder/rules/`) / none (project-only) | yes |  | https://docs.qoder.com/user-guide/rules |
@@ -178,7 +179,7 @@ This asset type has **one supported mechanism** (pointer symlinks only — no
 
 ### Notes (instructions)
 
-- **Massively native-skewed result.** 39/54 harnesses (72%) read `AGENTS.md`
+- **Massively native-skewed result.** 39/55 harnesses (71%) read `AGENTS.md`
   natively at one or both scopes. The `AGENTS.md` standard has become the
   cross-harness default — the implementation surface is just the 7
   `symlink`-verdict harnesses.
@@ -308,6 +309,7 @@ How an `agent` (subagent) asset is projected into a harness:
 | `openclaw` | unsupported (gap) |  |  | messaging-gateway personas (`~/.openclaw/agents/<id>/soul.md`), not coding subagents | https://docs.openclaw.ai/concepts/multi-agent |
 | `opencode` | translate | translate | `~/.config/opencode/{agent,agents}/**/*.md` / `.opencode/{agent,agents}/**/*.md` | markdown+frontmatter; inject `mode: subagent`; name from filename; glob singular+plural | [`packages/opencode/src/config/agent.ts`](https://github.com/sst/opencode/blob/dev/packages/opencode/src/config/agent.ts) load(); [`agent/agent.ts:32`](https://github.com/sst/opencode/blob/dev/packages/opencode/src/agent/agent.ts) |
 | `openhands` | unsupported (gap) |  |  | microagents/skills = prompt injection on keyword, not spawn; `.openhands/skills/` | https://docs.openhands.dev/overview/skills |
+| `paperclip` | unsupported (by design) |  |  | company-scoped Skills library only; no Agent asset adapter | issue #474 |
 | `pi` | dual-symlink | dual-symlink | `~/.pi/agent/agents/<slug>.md` / `.pi/agents/<slug>.md` (legacy `.agents/` fallback) | markdown+frontmatter (all optional); read by 3rd-party `@tintinweb/pi-subagents` ext | [github.com/tintinweb/pi-subagents](https://github.com/tintinweb/pi-subagents) ; [pi.dev/packages/pi-subagents](https://pi.dev/packages/pi-subagents) |
 | `pochi` | symlink | symlink | `~/.pochi/agents/<name>.md` / `.pochi/agents/<name>.md` | markdown+frontmatter; required `description`; optional `name`,`tools`; spawn via `newTask(<name>)` | https://docs.getpochi.com/custom-agent |
 | `qoder` | symlink | symlink | `~/.qoder/agents/<name>.md` / `.qoder/agents/<name>.md` | markdown+frontmatter; required `name`,`description`; optional `tools`,`skills`,`mcpServers` | https://docs.qoder.com/extensions/subagent |

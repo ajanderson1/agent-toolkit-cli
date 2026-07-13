@@ -122,7 +122,11 @@ def projected_agents(slug: str, scope: str, lock: Path) -> tuple[str, ...]:
          dexto sharing .agents/skills restore it only by coincidence) — and
          agents whose projection dir IS the bundle path collapse into it.
     """
-    from agent_toolkit_cli.skill_paths import AGENTS, agent_projection_dir
+    from agent_toolkit_cli.skill_paths import (
+        AGENTS,
+        agent_projection_dir,
+        is_skill_projection_available,
+    )
 
     synthetic = {"standard", "standard-skill", "standard-agent"}
     project = None if scope == "global" else lock.parent
@@ -132,6 +136,10 @@ def projected_agents(slug: str, scope: str, lock: Path) -> tuple[str, ...]:
         found.append("standard")
     for name in AGENTS:
         if name in synthetic:
+            continue
+        # Context-unavailable Paperclip (e.g. global scope) has no projection
+        # dir to probe; skip it rather than letting the resolver raise (#474).
+        if not is_skill_projection_available(name, scope=scope, project=project):
             continue
         link = agent_projection_dir(name, slug, scope=scope, home=None, project=project)
         if link.is_symlink() and link != bundle:

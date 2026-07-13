@@ -48,12 +48,15 @@ COMMAND_SUPPORT = {
     "codex": ("✅", "deprecated custom prompts; global only (`~/.codex/prompts`)"),
     "gemini-cli": ("✅", "TOML custom commands (`.gemini/commands`)"),
     "cursor": ("—", "research gap; forum evidence only, no deterministic adapter yet"),
+    # Paperclip's Agent Toolkit integration is Skills-only by design; it has no
+    # command/prompt concept the toolkit projects into (issue #474).
+    "paperclip": ("N/A", "company Skills integration only; no command concept"),
 }
 
 # Headline harnesses: pinned to the top of the matrix (in this order) and
 # listed first + bolded in the nav; everything else folds into the expandable
 # alphabetical rest.
-MAIN = ["claude-code", "pi", "codex", "gemini-cli", "opencode"]
+MAIN = ["claude-code", "pi", "codex", "gemini-cli", "opencode", "paperclip"]
 
 
 def _gh(org: str) -> str:
@@ -111,6 +114,7 @@ LOGOS: dict[str, str] = {
     "openclaw": _fav("openclaw.ai"),
     "opencode": _fav("opencode.ai"),
     "openhands": _fav("all-hands.dev"),
+    "paperclip": _fav("paperclip.ing"),
     "pi": _fav("pi.dev"),
     "pochi": _fav("getpochi.com"),
     "qoder": _fav("qoder.com"),
@@ -361,8 +365,40 @@ def instr_section(row: InstrRow) -> str:
     return "\n".join(lines)
 
 
+# Harnesses whose Skills placement is not the plain catalog dir. Paperclip is
+# company-scoped: it projects into a detected company's library at project
+# scope and is unavailable globally, so its page must NOT render the catalog
+# sentinel dir (`.paperclip-company/skills`), the non-actionable global dir
+# (`~/.paperclip/skills`), or vercel-labs attribution as the source.
+SKILLS_OVERRIDES: dict[str, dict[str, str]] = {
+    "paperclip": {
+        "summary": (
+            "Supported at project scope for a detected Paperclip company; "
+            "global scope is unavailable."
+        ),
+        "project_dir": "<instance-root>/skills/<company-id>",
+        "global_dir": "unavailable — Paperclip skills are company-scoped",
+        "general": "no — gets a company-library projection",
+        "source": "Agent Toolkit issue #474 and its approved design",
+    },
+}
+
+
 def skills_section(slug: str) -> str:
     cfg = AGENTS[slug]
+    override = SKILLS_OVERRIDES.get(slug)
+    if override is not None:
+        return "\n".join([
+            "## Skills { #skills }",
+            "",
+            override["summary"],
+            "",
+            f"- **Project dir:** `{override['project_dir']}`",
+            f"- **Global dir:** {override['global_dir']}",
+            f"- **[General-dir](../glossary.md#general) (`.agents/skills`) "
+            f"reader:** {override['general']}",
+            f"- **Source:** {override['source']}",
+        ])
     general = (
         "yes — reads the per-asset-type general directory directly"
         if cfg.is_standard
@@ -427,6 +463,8 @@ def command_section(slug: str) -> str:
         lines.append("Supported by the [commands asset type](../asset-types/commands.md).")
     elif sym == "—":
         lines.append("Not supported by the toolkit yet — tracked as a researched gap.")
+    elif sym == "N/A":
+        lines.append("Not applicable — no command concept in this integration.")
     else:
         lines.append("Unknown — bounded search surfaced no public evidence.")
     lines += ["", f"- **Support:** {sym}", f"- **How:** {how}"]
@@ -481,6 +519,14 @@ def write_harness_page(slug: str, agents: dict[str, AgentRow], instrs: dict[str,
         "✅": a.verdict, "—": "no file-drop convention",
         "N/A": "no subagent concept", "?": "no public evidence",
     }[agent_s]
+    # Skills 'How' cell: honour a company-scoped override so the page never
+    # prints the catalog sentinel dir for a harness that projects elsewhere.
+    _skills_override = SKILLS_OVERRIDES.get(slug)
+    skills_how = (
+        f"`{_skills_override['project_dir']}` (project scope; company-scoped)"
+        if _skills_override is not None
+        else f"`{cfg.skills_dir}`"
+    )
     command_sym, command_how = COMMAND_SUPPORT.get(slug, ("?", "unknown — no public evidence found"))
     command_cell = f"[{command_sym}](#commands)" if command_sym != "N/A" else "N/A"
     command_row = f"| [Commands](../asset-types/commands.md) | {command_cell} | {command_how} |"
@@ -523,7 +569,7 @@ def write_harness_page(slug: str, agents: dict[str, AgentRow], instrs: dict[str,
 | Asset type | Support | How |
 |---|:-:|---|
 | [Instructions](../asset-types/instructions.md) | {instr_cell} | {instr_how} |
-| [Skills](../asset-types/skills.md) | [✅](#skills) | `{cfg.skills_dir}` |
+| [Skills](../asset-types/skills.md) | [✅](#skills) | {skills_how} |
 | [Agents (subagents)](../asset-types/agents.md) | {agent_cell} | {agent_how} |
 {command_row}
 {mcp_row}
