@@ -21,6 +21,7 @@ from agent_toolkit_cli.skill_paths import (
     Scope,
     agent_projection_dir,
     canonical_skill_dir,
+    is_skill_projection_available,
 )
 from agent_toolkit_cli.skill_source import ParsedSource
 
@@ -239,6 +240,13 @@ def _current_linked_agents(
             agent_name=name, scope=scope, project=project,
         )
         if skip:
+            continue
+
+        # Catalog-wide scan: a context-unavailable Paperplip (global scope, or
+        # outside a company project) has no projection destination to probe, so
+        # skip it rather than letting agent_projection_dir() raise. Explicit
+        # Paperclip targets still go through validate_projection_context().
+        if not is_skill_projection_available(name, scope=scope, project=project):
             continue
 
         link = agent_projection_dir(

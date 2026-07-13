@@ -33,9 +33,31 @@ from agent_toolkit_cli._paths_core import (
     library_lock_path_for_asset_type,
     library_root_for_asset_type,
 )
+from agent_toolkit_cli.paperclip_paths import (
+    detect_paperclip_company,
+    require_paperclip_company,
+)
 from agent_toolkit_cli.skill_agents import AGENTS, UnknownAgentError
 
 Scope = Literal["project", "global"]
+
+
+def is_skill_projection_available(
+    agent_name: str, *, scope: Scope, project: Path | None,
+) -> bool:
+    """Whether a skill projection destination exists for this agent+scope.
+
+    Every non-Paperclip harness is always available. Paperclip is only
+    available at project scope inside a detected company, so catalog-wide
+    scanners skip it elsewhere instead of raising.
+    """
+    if agent_name != "paperclip":
+        return True
+    return (
+        scope == "project"
+        and project is not None
+        and detect_paperclip_company(project) is not None
+    )
 
 
 def _root(scope: Scope, home: Path | None, project: Path | None) -> Path:
@@ -203,6 +225,18 @@ def agent_projection_dir(
     """Where the per-agent skill projection lives, given agent + scope."""
     if agent_name not in AGENTS:
         raise UnknownAgentError(agent_name)
+    if agent_name == "paperclip":
+        # Paperclip's real destination is the detected company skill library,
+        # never the catalog sentinel dir. Fail loud when it is unavailable so a
+        # mis-scoped explicit target cannot silently land elsewhere.
+        if not is_skill_projection_available(
+            agent_name, scope=scope, project=project,
+        ):
+            raise ValueError(
+                "Paperclip skills are company-scoped and require project scope"
+            )
+        assert project is not None
+        return require_paperclip_company(project).skills_root / slug
     cfg = AGENTS[agent_name]
     if scope == "global":
         return cfg.global_skills_dir / slug

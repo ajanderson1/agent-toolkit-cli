@@ -377,6 +377,22 @@ AGENTS: dict[str, AgentConfig] = {
         global_skills_dir=HOME / ".openhands/skills",
         detect_installed=lambda: (HOME / ".openhands").exists(),
     ),
+    "paperclip": AgentConfig(
+        name="paperclip",
+        display_name="Paperclip",
+        # A non-Standard sentinel: real project resolution is handled by
+        # skill_paths.agent_projection_dir(), which folds a company descendant
+        # into <instance-root>/skills/<company-id>. These catalog paths are
+        # never used for a real projection and must never surface in docs.
+        skills_dir=".paperclip-company/skills",
+        global_skills_dir=HOME / ".paperclip" / "skills",
+        # Catalog detection has no scope/project arguments. Keep this false so
+        # global `all` operations never accidentally select a company-only
+        # target; _resolve_agents adds Paperclip only in a detected company.
+        detect_installed=lambda: False,
+        subagent_mechanism="none",
+        disabled_reason="company-scoped Skills harness only; no Agent asset adapter",
+    ),
     "pi": AgentConfig(
         name="pi",
         display_name="Pi",

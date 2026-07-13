@@ -28,6 +28,10 @@ from typing import Iterable, Literal
 import click
 
 from agent_toolkit_cli import skill_git
+from agent_toolkit_cli.paperclip_paths import (
+    PaperclipContextError,
+    require_paperclip_company,
+)
 from agent_toolkit_cli._install_core import (
     DirtyCanonicalError,  # noqa: F401  re-exported for callers
     InstallError,
@@ -62,6 +66,78 @@ def _standard_bundle_link(slug: str) -> Path:
     return Path.home() / ".agents" / "skills" / slug
 
 
+def validate_projection_context(
+    *,
+    slug: str,
+    target_agents: Iterable[str],
+    scope: Scope,
+    home: Path | None,
+    project: Path | None,
+) -> None:
+    """Fail loudly on an invalid Paperclip projection before any mutation.
+
+    A no-op unless ``paperclip`` is a target. When it is, this refuses
+    traversal-like slugs, non-project scope, a missing company context, a
+    symlinked projection ancestor that could redirect outside the instance
+    tree, and a conflicting real file/foreign symlink at the destination.
+    Running this before canonical materialization or lock writes guarantees a
+    rejected install leaves no project canonical or lock entry behind.
+    """
+    agents = tuple(target_agents)
+    if "paperclip" not in agents:
+        return
+    if (
+        not slug
+        or slug in {".", ".."}
+        or Path(slug).name != slug
+        or Path(slug).is_absolute()
+    ):
+        raise InstallError(
+            f"{slug!r}: Paperclip skill slug must be one non-empty leaf name"
+        )
+    if scope != "project" or project is None:
+        raise InstallError(
+            "paperclip: company-scoped skills require project scope inside "
+            "~/.paperclip/instances/<instance>/companies/<company-id>"
+        )
+    try:
+        context = require_paperclip_company(project)
+    except PaperclipContextError as exc:
+        raise InstallError(f"paperclip: {exc}") from exc
+    canonical = canonical_skill_dir(
+        slug, scope="project", home=home, project=project,
+    )
+    destination = context.skills_root / slug
+    # Paperclip's instance/company library is expected to be a real directory
+    # chain. Reject an existing symlinked ancestor rather than following a
+    # redirect outside the instance tree. Missing parents remain creatable.
+    for ancestor in (context.instance_root / "skills", context.skills_root):
+        if ancestor.is_symlink():
+            raise InstallError(
+                f"{slug}/paperclip: symlinked projection parent is unsupported: "
+                f"{ancestor}"
+            )
+    try:
+        destination.parent.resolve(strict=False).relative_to(
+            (context.instance_root / "skills").resolve(strict=False)
+        )
+    except ValueError as exc:
+        raise InstallError(
+            f"{slug}/paperclip: projection escapes the instance skills root"
+        ) from exc
+    if destination.is_symlink():
+        if destination.resolve() != canonical.resolve():
+            raise InstallError(
+                f"{slug}/paperclip: conflicting symlink at {destination}: "
+                f"points to {destination.resolve()}, expected {canonical}"
+            )
+    elif destination.exists():
+        raise InstallError(
+            f"{slug}/paperclip: conflicting non-symlink at {destination}; "
+            "refusing to overwrite"
+        )
+
+
 def _project_standard_link(project: Path, slug: str) -> Path:
     """The <project>/.agents/skills/<slug> path for the standard bundle at project scope.
 
@@ -90,9 +166,15 @@ def plan(
     plan reflects user intent ('I want codex globally'), apply realises it
     ('codex is standard so no symlink needed').
     """
+    # Materialize once: target_agents may be a one-shot generator that both the
+    # validator and the core plan would otherwise consume.
+    agents = tuple(target_agents)
+    validate_projection_context(
+        slug=slug, target_agents=agents, scope=scope, home=home, project=project,
+    )
     return _core_plan(
         slug=slug, scope=scope, source=source, ref=ref,
-        target_agents=target_agents, home=home, project=project,
+        target_agents=agents, home=home, project=project,
         canonical_dir_resolver=canonical_skill_dir,
         standard_bundle_link=_standard_bundle_link,
         synthetic_names=_SKILL_SYNTHETIC_NAMES,
@@ -142,6 +224,16 @@ def apply(
             f"(subpath={plan.source.subpath!r}); monorepo skills are installed "
             f"by the monorepo add path. This is an internal misuse of apply()."
         )
+
+    # Direct engine callers (including project-scope removals) get the same
+    # fail-loud Paperclip ownership contract before any canonical/lock work.
+    validate_projection_context(
+        slug=plan.slug,
+        target_agents=(*plan.add_agents, *plan.remove_agents),
+        scope=plan.scope,
+        home=home,
+        project=project,
+    )
 
     canonical = canonical_skill_dir(
         plan.slug, scope=plan.scope, home=home, project=project,

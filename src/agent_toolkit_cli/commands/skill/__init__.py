@@ -14,6 +14,10 @@ from agent_toolkit_cli.skill_agents import (
     AGENTS,
     detect_installed_agents,
 )
+from agent_toolkit_cli.paperclip_paths import (
+    detect_paperclip_company,
+    normalize_skill_project_root,
+)
 from agent_toolkit_cli.skill_install import (
     InstallError,
     InstallPlan,
@@ -21,9 +25,11 @@ from agent_toolkit_cli.skill_install import (
     _standard_bundle_link,
     apply as engine_apply,
     ensure_project_canonical,
+    validate_projection_context,
 )
 from agent_toolkit_cli.skill_lock import LockFile, read_lock, remove_entry, write_lock
 from agent_toolkit_cli.skill_paths import (
+    is_skill_projection_available,
     library_lock_path,
     library_skill_path,
     lock_file_path,
@@ -201,18 +207,29 @@ def skill() -> None:
     """Manage skills via per-skill upstream git repos + skills-lock.json."""
 
 
-def _resolve_agents(agents_str: str, scope: str) -> tuple[str, ...]:
+def _resolve_agents(
+    agents_str: str, scope: str, *, project: Path | None = None,
+) -> tuple[str, ...]:
     """Expand a comma-separated --agents string into a tuple of agent names.
 
     Special values:
       "standard" → the standard bundle token (creates ~/.agents/skills/<slug>)
-      "all"      → every agent detected as installed at the given scope
+      "all"      → every agent detected as installed at the given scope, plus
+                   Paperclip when the scope/project make it available (a
+                   detected company project). Paperclip is never added by the
+                   context-free catalog detector, so global `all` never selects
+                   it merely because ~/.paperclip exists.
 
     Old spellings (universal, general-*) are no longer recognised (#356) and
     fall through to the unknown-token guard below.
     """
     if agents_str == "all":
-        return tuple(detect_installed_agents())
+        resolved = list(detect_installed_agents())
+        if is_skill_projection_available(
+            "paperclip", scope=scope, project=project,
+        ):
+            resolved.append("paperclip")
+        return tuple(dict.fromkeys(resolved))
     parts = [p.strip() for p in agents_str.split(",") if p.strip()]
     # "standard" is a valid token; other names must be in the catalog.
     unknown = [p for p in parts if p != "standard" and p not in AGENTS]
@@ -519,15 +536,16 @@ Examples:
 @click.option("--agents", "agents_str", default="standard", show_default=True,
               help="Comma-separated agent names, 'standard', or 'all'. "
                    "Defaults to the standard bundle.")
-@click.option("--scope", "scope", default="global",
+@click.option("--scope", "scope", default=None,
               type=click.Choice(["global", "project"]),
-              help="Scope: global (default) or project.")
+              help="Scope (default: global, or project inside a Paperclip "
+                   "company).")
 @click.option("-p", "--project", "project_flag", is_flag=True,
               help="Shorthand for --scope project.")
 @click.pass_context
 def install_cmd(
     ctx: click.Context, slug: str, agents_str: str,
-    scope: str, project_flag: bool,
+    scope: str | None, project_flag: bool,
 ) -> None:
     """Create agent-visibility symlinks for a library skill.
 
@@ -535,17 +553,37 @@ def install_cmd(
     For --scope project, the project canonical is cloned from the global
     library's recorded source if not already present.
     """
+    candidate = (
+        (ctx.obj.get("project_root") if ctx.obj else None) or Path.cwd()
+    )
+    context = detect_paperclip_company(candidate)
     if project_flag:
         scope = "project"
+    elif scope is None:
+        scope = "project" if context is not None else "global"
+    project_root = (
+        normalize_skill_project_root(candidate) if scope == "project" else None
+    )
 
     try:
-        target_agents = _resolve_agents(agents_str, scope)
+        target_agents = _resolve_agents(agents_str, scope, project=project_root)
     except click.UsageError:
         raise
 
     if not target_agents:
         click.echo(f"{slug}: no agents specified; nothing to do")
         return
+
+    try:
+        validate_projection_context(
+            slug=slug,
+            target_agents=target_agents,
+            scope=scope,
+            home=None if scope == "project" else Path.home(),
+            project=project_root,
+        )
+    except InstallError as exc:
+        raise click.ClickException(str(exc)) from exc
 
     global_lock_path = library_lock_path()
 
@@ -572,10 +610,9 @@ def install_cmd(
 
     else:
         # Project scope: canonical is at <project>/.agents/skills/<slug>/.
-        project_root = (
-            ctx.obj.get("project_root") if ctx.obj else None
-        ) or Path.cwd()
-
+        # project_root was normalized above (Paperclip descendants fold to the
+        # company root); reuse it so the lock and canonical land there.
+        assert project_root is not None
         try:
             ensure_project_canonical(
                 slug=slug,
@@ -625,19 +662,29 @@ Examples:
               help="Comma-separated agent names, 'standard', or 'all'. "
                    "Default (omitted): remove everywhere — the standard bundle "
                    "plus every detected agent.")
-@click.option("--scope", "scope", default="global",
+@click.option("--scope", "scope", default=None,
               type=click.Choice(["global", "project"]),
-              help="Scope: global (default) or project.")
+              help="Scope (default: global, or project inside a Paperclip "
+                   "company).")
 @click.option("-p", "--project", "project_flag", is_flag=True,
               help="Shorthand for --scope project.")
 @click.pass_context
 def uninstall_cmd(
     ctx: click.Context, slug: str, agents_str: str | None,
-    scope: str, project_flag: bool,
+    scope: str | None, project_flag: bool,
 ) -> None:
     """Remove agent-visibility symlinks. Library/project canonical untouched."""
+    candidate = (
+        (ctx.obj.get("project_root") if ctx.obj else None) or Path.cwd()
+    )
+    context = detect_paperclip_company(candidate)
     if project_flag:
         scope = "project"
+    elif scope is None:
+        scope = "project" if context is not None else "global"
+    project_root = (
+        normalize_skill_project_root(candidate) if scope == "project" else None
+    )
 
     if agents_str is None:
         # Maximal default — deliberately asymmetric with install's `standard`.
@@ -650,9 +697,16 @@ def uninstall_cmd(
         # returns ("standard", *sorted(detected))). Computed here as a tuple rather
         # than via a token because _resolve_agents("standard,all") would raise.
         target_agents = ("standard", *detect_installed_agents())
+        # Include Paperclip only inside a detected company project.
+        if is_skill_projection_available(
+            "paperclip", scope=scope, project=project_root,
+        ):
+            target_agents = (*target_agents, "paperclip")
     else:
         try:
-            target_agents = _resolve_agents(agents_str, scope)
+            target_agents = _resolve_agents(
+                agents_str, scope, project=project_root,
+            )
         except click.UsageError:
             raise
 
@@ -672,9 +726,9 @@ def uninstall_cmd(
             raise click.ClickException(str(exc)) from exc
         removed = result.removed
     else:
-        project_root = (
-            ctx.obj.get("project_root") if ctx.obj else None
-        ) or Path.cwd()
+        # project_root was normalized above (Paperclip descendants fold to the
+        # company root); reuse it so lock lookup matches the install target.
+        assert project_root is not None
         # Every agent — including the synthetic "standard" bundle token —
         # projects via a symlink under the external-store model; apply() removes
         # <project>/.agents/skills/<slug> for "standard".
