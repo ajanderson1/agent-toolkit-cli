@@ -121,6 +121,41 @@ def test_build_skill_rows_project_scope_includes_hermes_cell_for_library_skill(
     assert ("hermes-agent", "project") in row.cells
 
 
+def test_build_skill_rows_project_hermes_profile_reports_profile_projection(
+    git_sandbox, tmp_path: Path, monkeypatch,
+):
+    """The project Hermes cell follows the profile's active HERMES_HOME."""
+    profile = tmp_path / ".hermes" / "profiles" / "liaison"
+    profile.mkdir(parents=True)
+    (profile / "profile.yaml").write_text("name: liaison\n", encoding="utf-8")
+    library_root = tmp_path / "lib" / "skills"
+    for k, v in git_sandbox.env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+
+    runner = CliRunner()
+    r = _add_demo_library(runner, git_sandbox.upstream)
+    assert r.exit_code == 0, r.output
+    r = runner.invoke(main, [
+        "--project", str(profile),
+        "skill", "install", "demo", "--scope", "project",
+        "--agents", "hermes-agent",
+    ])
+    assert r.exit_code == 0, r.output
+
+    rows = build_skill_rows(
+        scope="project",
+        home=Path(git_sandbox.env["HOME"]),
+        project=profile,
+    )
+    row = next(r for r in rows if r.slug == "demo")
+    assert row.cells[("hermes-agent", "project")] == SkillCell(
+        linked=True, drift=False, skipped=False,
+    )
+    assert (profile / "skills" / "demo").is_symlink()
+    assert not (profile / ".hermes" / "skills" / "demo").exists()
+
+
 def test_build_skill_rows_missing_canonical(
     git_sandbox, tmp_path: Path, monkeypatch,
 ):

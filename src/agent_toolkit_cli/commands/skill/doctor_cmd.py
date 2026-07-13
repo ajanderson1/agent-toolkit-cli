@@ -3,7 +3,10 @@ from __future__ import annotations
 
 import click
 
-from agent_toolkit_cli.skill_doctor import diagnose
+from agent_toolkit_cli.skill_doctor import (
+    ExternalProjectionRegistryError,
+    diagnose,
+)
 from agent_toolkit_cli.skill_lock import read_lock
 from agent_toolkit_cli.skill_paths import lock_file_path
 
@@ -35,11 +38,16 @@ def doctor_cmd(
         scope, implicit=implicit, lock_path=lock_path,
         count=len(read_lock(lock_path).skills),
     )
-    findings = diagnose(
-        slugs=slugs or None,
-        scope=scope, home=home, project=project_root,
-        repair_foreign=repair_foreign,
-    )
+    try:
+        findings = diagnose(
+            slugs=slugs or None,
+            scope=scope, home=home, project=project_root,
+            repair_foreign=repair_foreign,
+        )
+    except ExternalProjectionRegistryError as exc:
+        raise click.ClickException(
+            f"invalid external skill projection registry: {exc}",
+        ) from exc
     if not findings:
         click.echo("✓ all clean")
         return

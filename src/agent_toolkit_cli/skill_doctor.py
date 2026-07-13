@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import dataclasses
 import datetime as _dt
+import glob
+import json
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
@@ -54,6 +56,17 @@ class Finding:
     fix_action: FixAction | None
 
 
+class ExternalProjectionRegistryError(ValueError):
+    """The user-owned external skill projection registry is invalid."""
+
+
+@dataclass(frozen=True)
+class ExternalProjection:
+    path: Path
+    target_glob: Path
+    owner: str
+
+
 def diagnose(
     *,
     slugs: tuple[str, ...] | None,
@@ -74,6 +87,12 @@ def diagnose(
         if slugs is None
         else tuple(s for s in slugs if s in lock.skills)
     )
+    runtime_home = home or Path.home()
+    external_projections = (
+        _read_external_projections(runtime_home)
+        if scope == "global"
+        else ()
+    )
     findings: list[Finding] = []
     for slug in targets:
         findings.extend(_check_slug(
@@ -84,6 +103,7 @@ def diagnose(
     if slugs is None:
         findings.extend(_scan_stray_symlinks(
             scope=scope, home=home, project=project, lock=lock,
+            runtime_home=runtime_home, external_projections=external_projections,
         ))
         findings.extend(_scan_orphan_canonicals(
             scope=scope, home=home, project=project, lock=lock,
@@ -118,8 +138,83 @@ def _runtime_global_skills_dir(cfg, runtime_home: Path) -> Path:
     return runtime_home / relative
 
 
+def _read_external_projections(
+    runtime_home: Path,
+) -> tuple[ExternalProjection, ...]:
+    """Read the optional global registry for projections owned elsewhere."""
+    registry_path = (
+        runtime_home / ".agent-toolkit" / "external-skill-projections.json"
+    )
+    if not registry_path.exists():
+        return ()
+    try:
+        payload = json.loads(registry_path.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ExternalProjectionRegistryError(str(exc)) from exc
+    if not isinstance(payload, dict) or payload.get("version") != 1:
+        raise ExternalProjectionRegistryError("expected an object with version 1")
+    projections = payload.get("projections")
+    if not isinstance(projections, list):
+        raise ExternalProjectionRegistryError("projections must be a list")
+
+    parsed: list[ExternalProjection] = []
+    for index, projection in enumerate(projections):
+        if not isinstance(projection, dict):
+            raise ExternalProjectionRegistryError(
+                f"projections[{index}] must be an object",
+            )
+        values = {
+            field: projection.get(field)
+            for field in ("path", "targetGlob", "owner")
+        }
+        if any(not isinstance(value, str) or not value for value in values.values()):
+            raise ExternalProjectionRegistryError(
+                f"projections[{index}] needs non-empty path, targetGlob, and owner strings",
+            )
+        path = Path(values["path"])
+        target_glob = Path(values["targetGlob"])
+        if (
+            path.is_absolute()
+            or target_glob.is_absolute()
+            or ".." in path.parts
+            or ".." in target_glob.parts
+        ):
+            raise ExternalProjectionRegistryError(
+                f"projections[{index}] paths must be home-relative without '..'",
+            )
+        parsed.append(ExternalProjection(
+            path=path,
+            target_glob=target_glob,
+            owner=values["owner"],
+        ))
+    return tuple(parsed)
+
+
+def _is_declared_external_projection(
+    link: Path,
+    runtime_home: Path,
+    external_projections: tuple[ExternalProjection, ...],
+) -> bool:
+    """Return true only for an exact registered link and live target match."""
+    try:
+        resolved_target = link.resolve(strict=True)
+    except OSError:
+        return False
+    for projection in external_projections:
+        if link != runtime_home / projection.path:
+            continue
+        expected_targets = {
+            Path(path).resolve()
+            for path in glob.glob(str(runtime_home / projection.target_glob))
+        }
+        if resolved_target in expected_targets:
+            return True
+    return False
+
+
 def _scan_stray_symlinks(
     *, scope: Scope, home: Path | None, project: Path | None, lock: LockFile,
+    runtime_home: Path, external_projections: tuple[ExternalProjection, ...],
 ) -> list[Finding]:
     """Find symlinks in projection dirs whose basename isn't in the lock.
 
@@ -130,7 +225,6 @@ def _scan_stray_symlinks(
     findings: list[Finding] = []
     known = set(lock.skills)
     seen: set[Path] = set()
-    runtime_home = Path.home()
     for agent_name, cfg in AGENTS.items():
         if cfg.is_standard:
             continue
@@ -169,6 +263,10 @@ def _scan_stray_symlinks(
                 continue
             slug = link.name
             if slug in known:
+                continue
+            if _is_declared_external_projection(
+                link, runtime_home, external_projections,
+            ):
                 continue
             try:
                 target = link.readlink()

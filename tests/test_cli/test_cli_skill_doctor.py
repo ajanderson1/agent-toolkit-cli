@@ -1,6 +1,7 @@
 """Integration tests for `agent-toolkit-cli skill doctor`."""
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
 from pathlib import Path
@@ -324,3 +325,68 @@ def test_skill_doctor_reclone_sha_pinned_lands_on_pin(
         check=True, env=git_sandbox.env, capture_output=True, text=True,
     ).stdout.strip()
     assert head == first_sha
+
+
+def test_diagnose_ignores_matching_external_projection(tmp_path: Path, monkeypatch):
+    """A declared external projection is not an agent-toolkit stray."""
+    from agent_toolkit_cli import skill_doctor
+
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(tmp_path / "lib" / "skills"))
+    monkeypatch.setenv("HOME", str(fake_home))
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: fake_home))
+
+    projection = fake_home / ".pi" / "agent" / "skills" / "paperclip"
+    target = (
+        fake_home / ".npm" / "_npx" / "cache-id" / "node_modules"
+        / "@paperclipai" / "server" / "skills" / "paperclip"
+    )
+    target.mkdir(parents=True)
+    projection.parent.mkdir(parents=True)
+    projection.symlink_to(target)
+    registry = fake_home / ".agent-toolkit" / "external-skill-projections.json"
+    registry.parent.mkdir()
+    registry.write_text(json.dumps({
+        "version": 1,
+        "projections": [{
+            "path": ".pi/agent/skills/paperclip",
+            "targetGlob": ".npm/_npx/*/node_modules/@paperclipai/server/skills/paperclip",
+            "owner": "Paperclip",
+        }],
+    }))
+
+    findings = skill_doctor.diagnose(
+        slugs=None, scope="global", home=fake_home, project=None,
+    )
+    assert not [f for f in findings if f.finding_type == "stray_symlink"]
+
+    projection.unlink()
+    mismatched_target = fake_home / "other-owner" / "paperclip"
+    mismatched_target.mkdir(parents=True)
+    projection.symlink_to(mismatched_target)
+    findings = skill_doctor.diagnose(
+        slugs=None, scope="global", home=fake_home, project=None,
+    )
+    strays = [f for f in findings if f.finding_type == "stray_symlink"]
+    assert len(strays) == 1
+    assert strays[0].path == projection
+
+
+def test_doctor_rejects_malformed_external_projection_registry(
+    git_sandbox, tmp_path: Path, monkeypatch,
+):
+    for key, value in git_sandbox.env.items():
+        monkeypatch.setenv(key, value)
+    runner = CliRunner()
+    _, fake_home = _seed(runner, git_sandbox.upstream, monkeypatch, tmp_path)
+    registry = fake_home / ".agent-toolkit" / "external-skill-projections.json"
+    registry.parent.mkdir()
+    registry.write_text("not JSON")
+
+    result = runner.invoke(
+        main, ["skill", "doctor", "demo", "-g", "--no-fix"],
+    )
+
+    assert result.exit_code == 1
+    assert "invalid external skill projection registry" in result.output
