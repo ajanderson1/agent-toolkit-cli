@@ -1,5 +1,24 @@
 # Changelog
 
+## [5.5.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v5.4.0...v5.5.0) (2026-07-13)
+
+
+### Features
+
+* **paperclip:** install skills into company library ([#476](https://github.com/ajanderson1/agent-toolkit-cli/issues/476)) ([8d7312d](https://github.com/ajanderson1/agent-toolkit-cli/commit/8d7312d1b5041dee5b4f6ac91f1f123d1305a1c5))
+
+
+### Bug Fixes
+
+* **skills:** preserve declared external projections ([#473](https://github.com/ajanderson1/agent-toolkit-cli/issues/473)) ([1ae16c1](https://github.com/ajanderson1/agent-toolkit-cli/commit/1ae16c11727d2dac7801767330b547e1085e8834))
+
+
+### Documentation
+
+* harden Paperclip skill plan after review ([10a1e4e](https://github.com/ajanderson1/agent-toolkit-cli/commit/10a1e4e2868a917f6e7c29d9e05a4396fa32884c))
+* plan Paperclip company skill projection ([ffcb31b](https://github.com/ajanderson1/agent-toolkit-cli/commit/ffcb31b6fb99ed3ae01106c087ee215139430dc4))
+* specify Paperclip company skill projection ([8ebddea](https://github.com/ajanderson1/agent-toolkit-cli/commit/8ebddead043c7ed74489cf4f2cc4f0b86afa4222))
+
 ## [5.4.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v5.3.2...v5.4.0) (2026-07-12)
 
 
