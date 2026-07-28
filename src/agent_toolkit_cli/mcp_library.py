@@ -14,6 +14,14 @@ from pathlib import Path
 
 import yaml  # type: ignore[import-untyped]
 
+from agent_toolkit_cli.mcp_adapters import atomic_write_text
+from agent_toolkit_cli.mcp_manifest import (
+    McpManifestEntry,
+    entry_from_materialisation,
+    entry_to_inner_config,
+    entry_to_metadata,
+)
+
 
 @dataclass(frozen=True)
 class McpAsset:
@@ -83,34 +91,64 @@ def _validate_inner_config(slug: str, inner: object, path: Path) -> None:
         raise ValueError(f"{path}: 'env' must be a string→string object")
 
 
+def scan_entry_files(
+    library: Path,
+) -> dict[str, tuple[Path | None, Path | None]]:
+    """Return the sorted union of physical config and sidecar entry paths."""
+    if not library.is_dir():
+        return {}
+
+    found: dict[str, list[Path | None]] = {}
+    for child in library.iterdir():
+        if child.is_dir() and (child / "config.json").is_file():
+            found.setdefault(child.name, [None, None])[0] = child / "config.json"
+        elif child.is_file() and child.name.endswith(".toolkit.yaml"):
+            slug = child.name.removesuffix(".toolkit.yaml")
+            found.setdefault(slug, [None, None])[1] = child
+    return {
+        slug: (paths[0], paths[1])
+        for slug, paths in sorted(found.items())
+    }
+
+
+def materialize_entry(
+    library: Path,
+    entry: McpManifestEntry,
+    *,
+    overwrite: bool,
+) -> Path:
+    """Atomically materialise config first, then sidecar, from manifest state."""
+    entry_dir = library / entry.slug
+    config_path = entry_dir / "config.json"
+    sidecar_path = library / f"{entry.slug}.toolkit.yaml"
+    if not overwrite and (config_path.exists() or sidecar_path.exists()):
+        raise FileExistsError(
+            f"MCP '{entry.slug}' already exists in the library: {entry_dir}"
+        )
+
+    entry_dir.mkdir(parents=True, exist_ok=True)
+    atomic_write_text(
+        config_path,
+        json.dumps(entry_to_inner_config(entry), indent=2) + "\n",
+    )
+    readme_path = entry_dir / "README.md"
+    if not readme_path.exists():
+        atomic_write_text(readme_path, f"# {entry.slug}\n")
+    atomic_write_text(
+        sidecar_path,
+        yaml.safe_dump(entry_to_metadata(entry), sort_keys=True),
+    )
+    return entry_dir
+
+
 def list_library(library: Path) -> list[str]:
     """Return sorted slugs of every entry directory containing a config.json."""
-    if not library.is_dir():
-        return []
-    slugs = [
-        d.name
-        for d in library.iterdir()
-        if d.is_dir() and (d / "config.json").is_file()
-    ]
-    return sorted(slugs)
+    return [slug for slug, (config, _sidecar) in scan_entry_files(library).items() if config]
 
 
 def write_entry(library: Path, slug: str, *, inner_config: dict, metadata: dict) -> Path:
-    """Author one library entry (used by `mcp add`). Returns the entry dir.
-
-    Refuses to overwrite an existing entry unless the caller deleted it first
-    (re-`add` of an existing slug is an explicit error; `update` is the verb
-    that rewrites entries).
-    """
-    entry = library / slug
-    if (entry / "config.json").is_file():
-        raise FileExistsError(f"MCP '{slug}' already exists in the library: {entry}")
-    entry.mkdir(parents=True, exist_ok=True)
-    (entry / "config.json").write_text(
-        json.dumps(inner_config, indent=2) + "\n", encoding="utf-8"
+    """Compatibility wrapper for legacy callers; writes through materialisation."""
+    entry = entry_from_materialisation(
+        McpAsset(slug=slug, inner_config=inner_config, metadata=metadata)
     )
-    (entry / "README.md").write_text(f"# {slug}\n", encoding="utf-8")
-    (library / f"{slug}.toolkit.yaml").write_text(
-        yaml.safe_dump(metadata, sort_keys=True), encoding="utf-8"
-    )
-    return entry
+    return materialize_entry(library, entry, overwrite=False)
