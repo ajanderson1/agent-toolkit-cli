@@ -70,6 +70,98 @@ def _seed(home: Path, slug: str = "context7", *, env: list[str] | None = None) -
     return library
 
 
+def _manifest_file(home: Path) -> Path:
+    return home / ".agent-toolkit" / "mcps-library.json"
+
+
+def _manifest_entry(slug: str, *, description: str | None = None) -> dict:
+    return {
+        "slug": slug,
+        "install_method": "npx",
+        "transport": "stdio",
+        "source": "ctx7",
+        "command": "npx",
+        "args": ["-y", "ctx7@9.9.9"],
+        "env": [],
+        "description": description,
+        "resolved_version": "9.9.9",
+    }
+
+
+def _read_manifest(home: Path) -> dict:
+    return json.loads(_manifest_file(home).read_text())["mcps"]
+
+
+def _write_manifest(home: Path, entries: dict[str, dict]) -> None:
+    path = _manifest_file(home)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"version": 1, "mcps": entries}, indent=2) + "\n")
+
+
+def _migrate_seeded_library(home: Path, monkeypatch) -> None:
+    _seed(home)
+    monkeypatch.setenv("HOME", str(home))
+    result = CliRunner().invoke(main, ["mcp", "migrate"])
+    assert result.exit_code == 0, result.output
+
+
+def _snapshot_library(home: Path) -> dict[str, bytes]:
+    root = home / ".agent-toolkit"
+    return {
+        str(path.relative_to(root)): path.read_bytes()
+        for path in sorted(root.rglob("*"))
+        if path.is_file()
+    }
+
+
+def _fail_sidecar_write(monkeypatch) -> None:
+    import agent_toolkit_cli.mcp_library as mcp_library
+
+    real_write = mcp_library.atomic_write_text
+
+    def fail_sidecar(path: Path, content: str) -> None:
+        if path.name.endswith(".toolkit.yaml"):
+            raise OSError("simulated sidecar failure")
+        real_write(path, content)
+
+    monkeypatch.setattr(mcp_library, "atomic_write_text", fail_sidecar)
+
+
+def _setup_complete_pair_without_manifest(home: Path) -> None:
+    _seed(home)
+
+
+def _setup_manifest_entry_without_pair(home: Path) -> None:
+    _write_manifest(home, {"missing": _manifest_entry("missing")})
+
+
+def _setup_manifest_entry_with_config_only(home: Path) -> None:
+    library = home / ".agent-toolkit" / "mcps"
+    (library / "half").mkdir(parents=True)
+    (library / "half" / "config.json").write_text(
+        '{"type":"stdio","command":"npx","args":["-y","ctx7@9.9.9"]}\n'
+    )
+    _write_manifest(home, {"half": _manifest_entry("half")})
+
+
+def _setup_manifest_entry_with_tampered_pair(home: Path) -> None:
+    _seed(home)
+    _write_manifest(home, {"context7": _manifest_entry("context7")})
+    config = home / ".agent-toolkit" / "mcps" / "context7" / "config.json"
+    config.write_text('{"type":"stdio","command":"evil","args":[]}\n')
+
+
+def _seed_credentialed_url_entry(home: Path, *, slug: str) -> None:
+    library = home / ".agent-toolkit" / "mcps"
+    (library / slug).mkdir(parents=True)
+    (library / slug / "config.json").write_text(
+        '{"type":"http","url":"https://user:credential-value@host/sse"}\n'
+    )
+    (library / f"{slug}.toolkit.yaml").write_text(
+        f"name: {slug}\ninstall_method: url\ntransport: http\n"
+    )
+
+
 def test_mcp_group_registered():
     result = CliRunner().invoke(main, ["mcp", "--help"])
     assert result.exit_code == 0
@@ -162,6 +254,179 @@ def test_mcp_uninstall_not_installed_reports_specific_error(tmp_path, monkeypatc
     result = CliRunner().invoke(main, ["mcp", "uninstall", "context7", "-p"])
     assert result.exit_code != 0
     assert "context7 is not installed at project scope" in result.output
+
+
+def test_mcp_migrate_adopts_legacy_library(tmp_path, monkeypatch):
+    before = _snapshot_library(tmp_path) if (tmp_path / ".agent-toolkit").exists() else {}
+    _seed(tmp_path, slug="context7", env=["API_TOKEN"])
+    physical_before = _snapshot_library(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    result = CliRunner().invoke(main, ["mcp", "migrate"])
+
+    assert result.exit_code == 0, result.output
+    manifest = _read_manifest(tmp_path)
+    assert manifest["context7"]["source"] == "ctx7"
+    assert manifest["context7"]["env"] == ["API_TOKEN"]
+    assert "adopted context7" in result.output
+    physical_after = _snapshot_library(tmp_path)
+    assert {
+        key: value for key, value in physical_after.items() if key != "mcps-library.json"
+    } == physical_before
+    assert before == {}
+
+
+def test_mcp_migrate_is_idempotent(tmp_path, monkeypatch):
+    _seed(tmp_path, slug="one")
+    _seed(tmp_path, slug="two")
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    first = CliRunner().invoke(main, ["mcp", "migrate"])
+    before = _manifest_file(tmp_path).read_text()
+    second = CliRunner().invoke(main, ["mcp", "migrate"])
+
+    assert first.exit_code == second.exit_code == 0
+    assert "0 adopted" in second.output
+    assert _manifest_file(tmp_path).read_text() == before
+
+
+def test_mcp_migrate_resumes_partial_manifest_without_overwriting_authority(
+    tmp_path, monkeypatch
+):
+    _seed(tmp_path, slug="one")
+    _seed(tmp_path, slug="two")
+    _write_manifest(
+        tmp_path,
+        {"one": _manifest_entry("one", description="authoritative")},
+    )
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    result = CliRunner().invoke(main, ["mcp", "migrate"])
+
+    assert result.exit_code == 0, result.output
+    manifest = _read_manifest(tmp_path)
+    assert manifest["one"]["description"] == "authoritative"
+    assert "two" in manifest
+    assert "adopted two" in result.output
+
+
+@pytest.mark.parametrize("half", ["config", "sidecar"])
+def test_mcp_migrate_creates_empty_manifest_when_only_half_pair_exists(
+    tmp_path, monkeypatch, half
+):
+    library = tmp_path / ".agent-toolkit" / "mcps"
+    if half == "config":
+        (library / "half").mkdir(parents=True)
+        (library / "half" / "config.json").write_text(
+            '{"type":"stdio","command":"npx"}\n'
+        )
+    else:
+        library.mkdir(parents=True)
+        (library / "half.toolkit.yaml").write_text("name: half\n")
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    result = CliRunner().invoke(main, ["mcp", "migrate"])
+
+    assert result.exit_code == 0, result.output
+    assert _read_manifest(tmp_path) == {}
+    assert "skipped half" in result.output
+
+
+def test_mcp_migrate_adopts_uvx_docker_and_url_entries(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    library = tmp_path / ".agent-toolkit" / "mcps"
+    fixtures = {
+        "uv": (
+            '{"type":"stdio","command":"uvx","args":["uv-server==1.0.0"]}\n',
+            "name: uv\ninstall_method: uvx\ntransport: stdio\nresolved_version: 1.0.0\n",
+        ),
+        "docker": (
+            '{"type":"stdio","command":"docker","args":["run","--rm","-i","ghcr.io/org/server:latest"]}\n',
+            "name: docker\ninstall_method: docker\ntransport: stdio\nresolved_version: latest\n",
+        ),
+        "remote": (
+            '{"type":"http","url":"https://host/sse"}\n',
+            "name: remote\ninstall_method: url\ntransport: http\n",
+        ),
+    }
+    for slug, (config, sidecar) in fixtures.items():
+        (library / slug).mkdir(parents=True)
+        (library / slug / "config.json").write_text(config)
+        (library / f"{slug}.toolkit.yaml").write_text(sidecar)
+
+    result = CliRunner().invoke(main, ["mcp", "migrate"])
+
+    manifest = _read_manifest(tmp_path)
+    assert result.exit_code == 0, result.output
+    assert manifest["uv"]["source"] == "uv-server"
+    assert manifest["docker"]["source"] == "ghcr.io/org/server:latest"
+    assert manifest["remote"]["source"] == "https://host/sse"
+
+
+def test_mcp_migrate_quarantines_config_env_without_echoing_value(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    library = tmp_path / ".agent-toolkit" / "mcps"
+    (library / "legacy-env").mkdir(parents=True)
+    (library / "legacy-env" / "config.json").write_text(
+        '{"type":"stdio","command":"npx","args":["-y","ctx7@9.9.9"],'
+        '"env":{"API_TOKEN":"credential-value"}}\n'
+    )
+    (library / "legacy-env.toolkit.yaml").write_text(
+        "name: legacy-env\ninstall_method: npx\ntransport: stdio\n"
+        "resolved_version: 9.9.9\n"
+    )
+
+    result = CliRunner().invoke(main, ["mcp", "migrate"])
+
+    assert result.exit_code == 0, result.output
+    assert "legacy-env" not in _read_manifest(tmp_path)
+    assert "credential-value" not in result.output
+    assert "value redacted" in result.output
+
+
+def test_mcp_migrate_quarantines_credentialed_url_without_echoing_value(
+    tmp_path, monkeypatch
+):
+    _seed_credentialed_url_entry(tmp_path, slug="unsafe")
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    result = CliRunner().invoke(main, ["mcp", "migrate"])
+
+    assert result.exit_code == 0, result.output
+    assert "unsafe" not in _read_manifest(tmp_path)
+    assert "credential-value" not in result.output
+    assert "value redacted" in result.output
+
+
+def test_mcp_migrate_adopts_local_entry_with_source_dir(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    repo = tmp_path / "myserver"
+    repo.mkdir()
+    _git(repo, "init", "-q")
+    (repo / "server.py").write_text("print('v1')\n")
+    _git(repo, "add", "server.py")
+    _git(repo, "commit", "-q", "-m", "v1")
+    sha = _head_sha(repo)
+    library = tmp_path / ".agent-toolkit" / "mcps"
+    (library / "loc").mkdir(parents=True)
+    (library / "loc" / "config.json").write_text(
+        '{"type":"stdio","command":"python","args":["server.py"]}\n'
+    )
+    (library / "loc.toolkit.yaml").write_text(
+        f"name: loc\ninstall_method: local\ntransport: stdio\n"
+        f"source_dir: {repo.resolve()}\nresolved_version: {sha}\n"
+    )
+
+    result = CliRunner().invoke(main, ["mcp", "migrate"])
+
+    entry = _read_manifest(tmp_path)["loc"]
+    assert result.exit_code == 0, result.output
+    assert entry["source"] == str(repo.resolve())
+    assert entry["command"] == "python"
+    assert entry["args"] == ["server.py"]
+    assert entry["resolved_version"] == sha
 
 
 def test_mcp_add_url_authors_entry(tmp_path, monkeypatch):
