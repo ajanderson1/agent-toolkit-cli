@@ -11,6 +11,7 @@ from __future__ import annotations
 import click
 
 from agent_toolkit_cli.commands.mcp.add_cmd import add_cmd
+from agent_toolkit_cli.commands.mcp.import_cmd import import_cmd
 from agent_toolkit_cli.commands.mcp.doctor_cmd import doctor_cmd
 from agent_toolkit_cli.commands.mcp.install_cmd import install_cmd
 from agent_toolkit_cli.commands.mcp.list_cmd import list_cmd
@@ -30,6 +31,7 @@ mcp.add_command(list_cmd)
 mcp.add_command(list_cmd, name="ls")
 mcp.add_command(status_cmd)
 mcp.add_command(add_cmd)
+mcp.add_command(import_cmd)
 mcp.add_command(migrate_cmd)
 mcp.add_command(install_cmd)
 mcp.add_command(uninstall_cmd)
