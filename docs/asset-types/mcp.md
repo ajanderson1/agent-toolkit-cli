@@ -14,15 +14,34 @@ ownership — the toolkit manages the `mcpServers.<slug>` / `[mcp_servers.<slug>
 key, nothing else.
 
 - **Library:** `~/.agent-toolkit/mcps/` — a plain local store (not a git clone).
-  Each entry is `<library>/<slug>/config.json` plus a `<library>/<slug>.toolkit.yaml`
-  metadata sidecar.
-- **Lock file:** `mcps-lock.json` — global `~/.agent-toolkit/mcps-lock.json`,
-  project `<project>/mcps-lock.json`. Each slug maps to a list of locked
-  per-harness projections.
+  Each entry materialises as `<library>/<slug>/config.json` plus
+  `<library>/<slug>.toolkit.yaml`.
+- **Library inventory:** `~/.agent-toolkit/mcps-library.json` — the global,
+  authoritative authoring record for every library entry.
+- **Projection lock:** `mcps-lock.json` — global
+  `~/.agent-toolkit/mcps-lock.json`, project `<project>/mcps-lock.json`. Each
+  slug maps to locked per-harness projections, not library membership.
 - **Pinning:** `add` / `update` best-effort resolve the current version and store
-  it in the entry's `resolved_version`, so projected configs are effectively
-  pinned (transparency, not enforcement). When resolution fails the entry is
-  recorded `floating`.
+  it in the manifest record's `resolved_version`, so projected configs are
+  effectively pinned (transparency, not enforcement). When resolution fails
+  the entry is recorded `floating`.
+
+## Library manifest
+
+The manifest is the boss; config and sidecar files are its output, never a peer
+record. `add` and `update` commit manifest state first, then atomically replace
+the pair one file at a time. If a write is interrupted, the manifest still says
+what should exist and `mcp doctor` reports the missing, half-written, orphaned,
+or drifted materialisation.
+
+Run `agent-toolkit-cli mcp migrate` once to adopt a legacy physical library. It
+is explicit, global-only, idempotent, and non-destructive; unsafe or
+non-lossless entries stay untouched and are omitted. `add` and `update` refuse
+to backfill legacy entries implicitly.
+
+`mcp doctor` is read-only. When the manifest is absent it prints the remediation
+`agent-toolkit-cli mcp migrate`; it never creates or repairs state. `mcp remove`
+removes projections only and retains both the manifest record and library pair.
 
 ## Supported harnesses
 
@@ -52,13 +71,14 @@ detected; pass `--force` to override. Project-scope writes are not gated.
 
 ```bash
 agent-toolkit-cli mcp add --npx|--uvx|--docker|--url|--local <source> [--slug <slug>]
+agent-toolkit-cli mcp migrate                    # adopt a legacy global library
 agent-toolkit-cli mcp install <slug>   [--harness <name>]... [-g|-p] [--force]
 agent-toolkit-cli mcp uninstall <slug> [--harness <name>]... [-g|-p]
-agent-toolkit-cli mcp remove <slug>    [-g|-p]   # full undo: every locked harness
+agent-toolkit-cli mcp remove <slug>    [-g|-p]   # remove every locked projection
 agent-toolkit-cli mcp update <slug>             # re-resolve + re-project
 agent-toolkit-cli mcp list   [-g|-p]            # alias: ls
 agent-toolkit-cli mcp status [<slug>...] [-g|-p]
-agent-toolkit-cli mcp doctor [-g|-p]            # read-only drift report
+agent-toolkit-cli mcp doctor [-g|-p]            # read-only library + projection report
 ```
 
 See also: [Skills](skills.md) · [Agents](agents.md) ·
