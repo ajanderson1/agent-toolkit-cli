@@ -64,6 +64,18 @@ def _asset_type_label(asset_type: AssetType, *, plural: bool = False) -> str:
 
 _DOUBLE_CTRL_C_QUIT_SECONDS = 1.5
 
+# Single owner of the AssetType -> filter-input selector map. Consumed by
+# `/` (action_focus_filter), by every asset-type switch (action_asset_type),
+# and by startup (on_mount) — so the three cannot drift (#477).
+_FILTER_SELECTORS: dict[AssetType, str] = {
+    "instruction": "#instruction-filter",
+    "skill": "#skill-filter",
+    "command": "#command-filter",
+    "pi-extension": "#pi-filter",
+    "agent": "#agent-filter",
+    "mcp": "#mcp-filter",
+}
+
 
 def _scope_tag(keys: Iterable[tuple[str, ...]]) -> str:
     """Return ' (N global, M project)' when pending ops span both scopes.
@@ -151,6 +163,10 @@ class SidebarOptionList(OptionList):
         Binding("6", "asset_type('pi-extension')", "Pi Extensions", show=False),
     ]
 
+    def action_asset_type(self, asset_type: str) -> None:
+        """Forward sidebar-only number bindings to the owning TUI app."""
+        cast("TUIApp", self.app).action_asset_type(asset_type)
+
 
 class TUIApp(App):
     """agent-toolkit-tui — Textual cockpit over `agent-toolkit-cli`."""
@@ -219,11 +235,9 @@ class TUIApp(App):
         self._refresh_content_header()
         self._refresh_pending_label()
         self._refresh_status_bar()
-        # Focus the filter box on open (#249).
-        try:
-            self.query_one("#skill-filter", Input).focus()
-        except Exception:
-            pass
+        # Focus the filter box on open (#249) via the same path as every
+        # asset-type switch (#477), so startup and switch cannot drift.
+        self._focus_filter(self._active_asset_type)
 
     # ----- asset-type switching -----------------------------------------------------
 
@@ -326,6 +340,10 @@ class TUIApp(App):
         if asset_type not in ("instruction", "skill", "command", "pi-extension", "agent", "mcp"):
             return
         if asset_type == self._active_asset_type:
+            # Re-selecting the tab you are already on still puts the caret in
+            # its filter (#477 R3). Skip the expensive refresh; that is what
+            # this branch has always existed to do.
+            self._focus_filter(asset_type)  # type: ignore[arg-type]
             return
         self._active_asset_type = asset_type  # type: ignore[assignment]
         self._show_asset_type(asset_type)  # type: ignore[arg-type]
@@ -333,6 +351,9 @@ class TUIApp(App):
         self._refresh_content_header()
         self._refresh_pending_label()
         self._refresh_status_bar()
+        # LAST, and after _show_asset_type: a hidden Input cannot take focus,
+        # and the refusal is silent (#477 R2 ordering constraint).
+        self._focus_filter(asset_type)  # type: ignore[arg-type]
 
     # ----- instruction-view --------------------------------------------------
 
@@ -566,20 +587,23 @@ class TUIApp(App):
         except Exception:
             pass
 
+    def _focus_filter(self, asset_type: AssetType) -> None:
+        """Focus `asset_type`'s filter input. No-op if it is not mounted.
+
+        Non-destructive by contract (#477): it must not touch filter text,
+        pending queues, scope, or cursor coordinate.
+        """
+        selector = _FILTER_SELECTORS.get(asset_type)
+        if selector is None:
+            return
+        try:
+            self.query_one(selector, Input).focus()
+        except NoMatches:
+            return
+
     def action_focus_filter(self) -> None:
         """`/` re-focuses the active asset pane's filter box."""
-        selectors: dict[AssetType, str] = {
-            "instruction": "#instruction-filter",
-            "skill": "#skill-filter",
-            "command": "#command-filter",
-            "pi-extension": "#pi-filter",
-            "agent": "#agent-filter",
-            "mcp": "#mcp-filter",
-        }
-        try:
-            self.query_one(selectors[self._active_asset_type], Input).focus()
-        except NoMatches:
-            pass
+        self._focus_filter(self._active_asset_type)
 
     def action_info_pass(self) -> None:
         """Delegate `i` to the active grid widget."""
