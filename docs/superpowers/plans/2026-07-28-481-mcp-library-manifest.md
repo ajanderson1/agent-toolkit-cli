@@ -93,7 +93,7 @@ uses `README.md` as state.
 - Produces: `McpManifestEntry`, manifest read/write functions, safe
   authoring-record conversion, and `UnsafeMcpSpecError` for all later tasks.
 
-- [ ] **Step 1: Write failing manifest-envelope tests**
+- [x] **Step 1: Write failing manifest-envelope tests**
 
 ```python
 def test_manifest_round_trip_is_sorted_and_newline_terminated(tmp_path):
@@ -119,13 +119,13 @@ def test_read_manifest_fails_loud_on_invalid_envelope(tmp_path, body):
         read_manifest(path)
 ```
 
-- [ ] **Step 2: Run the focused tests to verify they fail**
+- [x] **Step 2: Run the focused tests to verify they fail**
 
 Run: `uv run pytest -q tests/test_mcp_manifest.py`
 
 Expected: collection failure because `mcp_manifest` does not exist.
 
-- [ ] **Step 3: Implement the model and serializer**
+- [x] **Step 3: Implement the model and serializer**
 
 Create the frozen dataclass exactly as declared in Shared interfaces. Implement
 `manifest_path(home)` as `home / ".agent-toolkit" / MANIFEST_FILENAME`.
@@ -150,7 +150,7 @@ values would violate the lossless-migration contract.
 empty lists), and call `atomic_write_text(path, json.dumps(body, indent=2) + "\n")`.
 Do not write a temporary manifest by hand.
 
-- [ ] **Step 4: Add conversion and safety tests**
+- [x] **Step 4: Add conversion and safety tests**
 
 ```python
 def test_url_entry_materialises_from_source_only():
@@ -192,13 +192,13 @@ Implement `entry_to_inner_config`, `entry_to_metadata`, and
 legacy materialisations that cannot losslessly supply all authoring fields
 rather than guessing a source token.
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [x] **Step 5: Run tests to verify they pass**
 
 Run: `uv run pytest -q tests/test_mcp_manifest.py`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit the unit**
+- [x] **Step 6: Commit the unit**
 
 ```bash
 git add src/agent_toolkit_cli/mcp_manifest.py tests/test_mcp_manifest.py
@@ -217,7 +217,7 @@ git commit --only -m "feat(mcp): add library manifest model" -m "Device: $(hostn
 - Produces: `scan_entry_files` and `materialize_entry` for migration, add,
   update, and doctor.
 
-- [ ] **Step 1: Write failing physical-pair tests**
+- [x] **Step 1: Write failing physical-pair tests**
 
 ```python
 def test_scan_entry_files_includes_config_only_and_sidecar_only(tmp_path):
@@ -236,13 +236,13 @@ def test_materialize_entry_writes_config_and_sidecar_from_manifest(tmp_path):
     assert yaml.safe_load((tmp_path / "demo.toolkit.yaml").read_text())["env"] == ["API_TOKEN"]
 ```
 
-- [ ] **Step 2: Run the focused tests to verify they fail**
+- [x] **Step 2: Run the focused tests to verify they fail**
 
 Run: `uv run pytest -q tests/test_mcp_library.py`
 
 Expected: import failure for the two new functions.
 
-- [ ] **Step 3: Implement scan and materialisation**
+- [x] **Step 3: Implement scan and materialisation**
 
 Implement `scan_entry_files` by collecting every immediate child directory with
 `config.json` and every root `*.toolkit.yaml`, stripping only the exact suffix.
@@ -268,7 +268,7 @@ reading and structural validation. Replace direct writes in `write_entry` with a
 compatibility wrapper around the atomic materialisation path or retire it only
 after all callers move; do not leave a second non-atomic writer.
 
-- [ ] **Step 4: Add a failure-between-writes test**
+- [x] **Step 4: Add a failure-between-writes test**
 
 ```python
 def test_materialize_entry_leaves_config_only_when_sidecar_write_fails(tmp_path, monkeypatch):
@@ -287,13 +287,13 @@ def test_materialize_entry_leaves_config_only_when_sidecar_write_fails(tmp_path,
     assert not (tmp_path / "demo.toolkit.yaml").exists()
 ```
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [x] **Step 5: Run tests to verify they pass**
 
 Run: `uv run pytest -q tests/test_mcp_library.py tests/test_mcp_manifest.py`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit the unit**
+- [x] **Step 6: Commit the unit**
 
 ```bash
 git add src/agent_toolkit_cli/mcp_library.py tests/test_mcp_library.py
@@ -312,7 +312,7 @@ git commit --only -m "feat(mcp): materialize manifest library entries" -m "Devic
   `read_manifest`, `write_manifest`, and `manifest_path`.
 - Produces: global-only `agent-toolkit-cli mcp migrate`.
 
-- [ ] **Step 0: Add shared CLI test helpers**
+- [x] **Step 0: Add shared CLI test helpers**
 
 Add these helpers near the existing `_seed`, `_git`, and `_head_sha` helpers in
 `tests/test_cli_mcp.py`; they make every later test setup deterministic.
@@ -392,7 +392,7 @@ def _seed_credentialed_url_entry(home: Path, *, slug: str) -> None:
     )
 ```
 
-- [ ] **Step 1: Write failing CLI migration tests**
+- [x] **Step 1: Write failing CLI migration tests**
 
 ```python
 def test_mcp_migrate_adopts_legacy_library(tmp_path, monkeypatch):
@@ -428,13 +428,13 @@ def test_mcp_migrate_resumes_partial_manifest_without_overwriting_authority(tmp_
     assert "two" in manifest
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest -q tests/test_cli_mcp.py -k migrate`
 
 Expected: `migrate` is not registered.
 
-- [ ] **Step 3: Implement migration and registration**
+- [x] **Step 3: Implement migration and registration**
 
 Define a Click `migrate` command with no `-g`/`-p` flags. It:
 
@@ -454,7 +454,7 @@ Define a Click `migrate` command with no `-g`/`-p` flags. It:
 
 Register the command after `add_cmd` in `commands/mcp/__init__.py`.
 
-- [ ] **Step 4: Add edge-case tests**
+- [x] **Step 4: Add edge-case tests**
 
 ```python
 def test_mcp_migrate_creates_empty_manifest_when_only_half_pair_exists(tmp_path, monkeypatch):
@@ -525,13 +525,13 @@ def test_mcp_migrate_adopts_local_entry_with_source_dir(tmp_path, monkeypatch):
     assert entry["resolved_version"] == sha
 ```
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [x] **Step 5: Run tests to verify they pass**
 
 Run: `uv run pytest -q tests/test_cli_mcp.py -k migrate`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit the unit**
+- [x] **Step 6: Commit the unit**
 
 ```bash
 git add src/agent_toolkit_cli/commands/mcp/migrate_cmd.py src/agent_toolkit_cli/commands/mcp/__init__.py tests/test_cli_mcp.py
@@ -549,7 +549,7 @@ git commit --only -m "feat(mcp): add explicit library migration" -m "Device: $(h
   `materialize_entry`.
 - Produces: an add operation whose expected state exists before its pair.
 
-- [ ] **Step 1: Write failing add-contract tests**
+- [x] **Step 1: Write failing add-contract tests**
 
 ```python
 def test_mcp_add_writes_manifest_before_materialisation(tmp_path, monkeypatch):
@@ -577,14 +577,14 @@ def test_mcp_add_refuses_to_implicitly_backfill_any_legacy_shape(tmp_path, monke
     assert not (tmp_path / ".agent-toolkit" / "mcps-library.json").exists()
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest -q tests/test_cli_mcp.py -k 'add and (manifest or backfill)'`
 
 Expected: the legacy-library case currently creates an entry instead of
 requiring migration.
 
-- [ ] **Step 3: Refactor add around an authoring record**
+- [x] **Step 3: Refactor add around an authoring record**
 
 Keep current Click validation, slug derivation, version resolution, and output.
 Immediately after determining all values, build one `McpManifestEntry` using:
@@ -611,7 +611,7 @@ materialize_entry(library, entry, overwrite=False)
 The manifest write must occur before calling `materialize_entry`. Do not touch
 `mcps-lock.json`.
 
-- [ ] **Step 4: Add unsafe-input and interrupted-write tests**
+- [x] **Step 4: Add unsafe-input and interrupted-write tests**
 
 ```python
 def test_mcp_add_rejects_secret_without_echoing_it(tmp_path, monkeypatch):
@@ -632,13 +632,13 @@ def test_mcp_add_keeps_authoritative_manifest_if_sidecar_write_fails(tmp_path, m
 Use the Task 2 writer-failure fixture rather than inventing a second failure
 mechanism. Doctor coverage for this final state belongs to Task 6.
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [x] **Step 5: Run tests to verify they pass**
 
 Run: `uv run pytest -q tests/test_cli_mcp.py -k 'add or migrate'`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit the unit**
+- [x] **Step 6: Commit the unit**
 
 ```bash
 git add src/agent_toolkit_cli/commands/mcp/add_cmd.py tests/test_cli_mcp.py
@@ -659,7 +659,7 @@ git commit --only -m "feat(mcp): record additions in library manifest" -m "Devic
 - Produces: update/re-project/list behavior that cannot accept materialisation
   edits as new library truth.
 
-- [ ] **Step 1: Write failing authority tests**
+- [x] **Step 1: Write failing authority tests**
 
 ```python
 def test_mcp_update_requires_explicit_migration_for_legacy_library(tmp_path, monkeypatch):
@@ -680,14 +680,14 @@ def test_mcp_install_uses_manifest_not_tampered_materialisation(tmp_path, monkey
     assert json.loads((project / ".mcp.json").read_text())["mcpServers"]["context7"]["command"] == "npx"
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest -q tests/test_cli_mcp.py tests/test_mcp_install.py -k 'migration or manifest or tampered'`
 
 Expected: update still reads the sidecar/config and install projects the
 hand-edited materialisation.
 
-- [ ] **Step 3: Refactor update and projection loading**
+- [x] **Step 3: Refactor update and projection loading**
 
 In `update_cmd.py`, require a manifest file for non-empty libraries and look up
 the slug in `read_manifest`. Refactor `_reresolve` to receive
@@ -722,7 +722,7 @@ columns directly from each manifest record, never by reloading a physical pair.
 Before migration, retain `list_library` behavior and print a concise `mcp migrate`
 advisory once; do not write.
 
-- [ ] **Step 4: Add regression tests**
+- [x] **Step 4: Add regression tests**
 
 ```python
 def test_mcp_update_manifest_first_then_doctor_reports_drift(tmp_path, monkeypatch):
@@ -753,13 +753,13 @@ def test_mcp_remove_preserves_manifest_and_library_entry(tmp_path, monkeypatch):
     assert (tmp_path / ".agent-toolkit" / "mcps" / "context7" / "config.json").is_file()
 ```
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [x] **Step 5: Run tests to verify they pass**
 
 Run: `uv run pytest -q tests/test_cli_mcp.py tests/test_mcp_install.py`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit the unit**
+- [x] **Step 6: Commit the unit**
 
 ```bash
 git add src/agent_toolkit_cli/commands/mcp/update_cmd.py src/agent_toolkit_cli/commands/mcp/list_cmd.py src/agent_toolkit_cli/mcp_install.py tests/test_cli_mcp.py tests/test_mcp_install.py
@@ -778,7 +778,7 @@ git commit --only -m "feat(mcp): use manifest as library authority" -m "Device: 
 - Produces: library findings plus unchanged projection findings and non-zero exit
   on any finding.
 
-- [ ] **Step 1: Write failing doctor tests for every finding family**
+- [x] **Step 1: Write failing doctor tests for every finding family**
 
 ```python
 @pytest.mark.parametrize(
@@ -807,14 +807,14 @@ def test_mcp_doctor_missing_manifest_prints_exact_migration_remediation(tmp_path
     assert not (tmp_path / ".agent-toolkit" / "mcps-library.json").exists()
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest -q tests/test_cli_mcp.py -k doctor`
 
 Expected: current doctor only checks projection locks and returns clean for the
 library-only setups.
 
-- [ ] **Step 3: Implement the library diagnosis pass**
+- [x] **Step 3: Implement the library diagnosis pass**
 
 Add a helper returning library `Finding` objects plus an optional remediation
 flag. It must:
@@ -844,7 +844,7 @@ context7 · library · library-entry-drift
 Print the exact migration remediation after all findings when the manifest is
 absent. Do not call `write_manifest`, `materialize_entry`, or `migrate`.
 
-- [ ] **Step 4: Add secret-redaction and clean-state tests**
+- [x] **Step 4: Add secret-redaction and clean-state tests**
 
 ```python
 def test_mcp_doctor_redacts_secret_in_orphaned_legacy_entry(tmp_path, monkeypatch):
@@ -863,13 +863,13 @@ def test_mcp_doctor_clean_manifest_and_pair_is_clean(tmp_path, monkeypatch):
     assert "all clean" in result.output
 ```
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [x] **Step 5: Run tests to verify they pass**
 
 Run: `uv run pytest -q tests/test_cli_mcp.py -k doctor`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit the unit**
+- [x] **Step 6: Commit the unit**
 
 ```bash
 git add src/agent_toolkit_cli/commands/mcp/doctor_cmd.py tests/test_cli_mcp.py
@@ -889,7 +889,7 @@ git commit --only -m "feat(mcp): diagnose library manifest drift" -m "Device: $(
 - Produces: discoverable migration/remediation behavior and release-quality
   verification evidence.
 
-- [ ] **Step 1: Write documentation assertions as an explicit review checklist**
+- [x] **Step 1: Write documentation assertions as an explicit review checklist**
 
 Add these exact facts to both relevant docs where they fit their existing
 structure:
@@ -903,7 +903,7 @@ structure:
 - `mcp remove` removes projections only and keeps the library manifest entry.
 ```
 
-- [ ] **Step 2: Update the CLI reference and MCP asset page**
+- [x] **Step 2: Update the CLI reference and MCP asset page**
 
 In `docs/agent-toolkit/cli.md`, add `agent-toolkit-cli mcp migrate` to the MCP
 command block and describe when migration is required. In
@@ -911,7 +911,7 @@ command block and describe when migration is required. In
 **How it works** that contrasts it with `mcps-lock.json` and explains doctor’s
 read-only boundary.
 
-- [ ] **Step 3: Run targeted verification**
+- [x] **Step 3: Run targeted verification**
 
 Run:
 
@@ -922,14 +922,14 @@ rg -n "mcps-library\.json|mcp migrate|mcps-lock\.json|projection" docs/agent-too
 
 Expected: pytest exits 0; the grep shows each required documentation fact.
 
-- [ ] **Step 4: Run the repository suite**
+- [x] **Step 4: Run the repository suite**
 
 Run: `uv run pytest -q`
 
 Expected: PASS. Store terminal output and any manual CLI smoke transcript in
 `assets/verification/issue-481/` before opening a PR.
 
-- [ ] **Step 5: Commit the unit**
+- [x] **Step 5: Commit the unit**
 
 ```bash
 git add docs/agent-toolkit/cli.md docs/asset-types/mcp.md tests/test_cli_mcp.py
