@@ -1,15 +1,16 @@
 """Interactive DataTable for the TUI's command tab.
 
-Columns (#361/#360): AGENT ⓘ | Standard ⓘ | <non-covered main harnesses…> | State | Source.
+Columns: COMMAND ⓘ | Claude ⓘ | Pi ⓘ | Gemini ⓘ | State | Source.
+
+There is no Standard column: unlike skills (#351), agents (#361), and MCPs
+(#399), commands have no convergence projection yet — see #482. The
+``"standard"`` branches below are deliberately dormant until it lands.
 
 Layout: [0]=slug, [1..N]=harnesses, [N+1]=state, [N+2]=source.
 
 Mirrors skill_grid.py: per-harness columns, scope toggle, toggle-queue →
 pending → apply. Pending key shape: (scope, harness_name, slug) — same
-3-tuple as skill. The Standard column IS a harness column (the
-.claude/commands slot is a real installable destination) — it toggles like
-any other; `i` on it opens the registry-backed ColumnInfoModal listing
-the covered harnesses for the active scope.
+3-tuple as skill.
 
 CRITICAL: never name any method `_render_*` — it collides with Textual's
 internal flag mechanism and produces "bool is not callable" from compose.
@@ -32,6 +33,7 @@ from agent_toolkit_tui.widgets._support import adjust_source_column_width, curre
 
 from agent_toolkit_tui.command_state import INTERACTIVE_HARNESSES, CommandRow
 from agent_toolkit_tui.column_info import get_column_info
+from agent_toolkit_tui.display_names import harness_label
 from agent_toolkit_tui.widgets._support import (
     adjust_source_column_width,
     set_source_column_width,
@@ -204,10 +206,11 @@ class CommandGrid(Vertical):
         self._toggle_at(table.cursor_coordinate)
 
     def action_info(self) -> None:
-        """Route `i` by column. The standard column has registered ColumnInfo
-        and opens ColumnInfoModal — the registry path mirroring
-        instruction_grid (#351/#361). Everything else opens CellInfoScreen
-        with the per-cell state."""
+        """Route `i` to per-cell info.
+
+        Commands have no Standard column or standard-column info panel until
+        #482 adds a convergence projection.
+        """
         from agent_toolkit_tui.screens.cell_info import CellInfoScreen
 
         try:
@@ -352,27 +355,21 @@ class CommandGrid(Vertical):
         return None
 
     def _column_key_for_index(self, col: int) -> str | None:
-        """Resolve a column index to a COLUMN_INFO registry key (#361).
+        """Resolve a column index to a COLUMN_INFO registry key.
 
-        Only the standard column has registered ColumnInfo; harness/slug/
-        source columns return None and fall through to CellInfoScreen.
+        Commands currently have no Standard column; all rendered columns fall
+        through to CellInfoScreen until #482 adds a convergence projection.
         """
+        # Dormant until #482 adds a commands standard projection:
+        # INTERACTIVE_HARNESSES (= DEFAULT_HARNESSES) never contains "standard"
+        # today, so this branch is unreachable. Kept deliberately so the column
+        # wiring is already correct when the projection lands.
         if self._harness_for_column(col) == "standard":
             return "standard"
         return None
 
     def _context_for(self, *, key: str, row_index: int) -> dict | None:
-        """Context for get_column_info(): the standard panel enumerates the
-        native .claude/commands readers from the per-scope coverage SSOT (#361).
-
-        At global scope the panel carries the devin note (devin reads the
-        slot at project scope only, so it is absent from the global covered
-        set); at project scope devin is simply covered and the note is gone.
-
-        Also surfaces whether the focused row is installed globally so the
-        modal can omit the 🌐 paragraph when it's not (#374) — mirrors
-        skill_grid._context_for.
-        """
+        """Return no standard-column context until #482 adds that projection."""
         return None
 
     def on_resize(self, event: Resize) -> None:
@@ -397,12 +394,14 @@ class CommandGrid(Vertical):
         table.clear(columns=True)
         # Slug column — info glyph since `i` works on it.
         table.add_column(f"COMMAND {_INFO_GLYPH}", width=_COMMAND_COL_WIDTH)
-        # Per-harness columns. "standard" is the .claude/commands slot (#361),
-        # not a catalog harness — label it explicitly (same special-case as
-        # skill_grid). The Standard column leads; everything after it is
-        # implicitly non-standard.
+        # Display labels, not raw catalog keys (#478 R6 — escapee from the
+        # #448 terminology sweep). There is no Standard column here: commands
+        # have no convergence projection yet (#482).
         for harness in INTERACTIVE_HARNESSES:
-            table.add_column(f"{harness} {_INFO_GLYPH}", width=_HARNESS_COL_WIDTH)
+            table.add_column(
+                f"{harness_label(harness)} {_INFO_GLYPH}",
+                width=_HARNESS_COL_WIDTH,
+            )
         # State column — shows installed/library/unlisted (#360).
         table.add_column("State", width=_STATE_COL_WIDTH)
         # Source column — passive, no info popup.
