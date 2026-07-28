@@ -97,6 +97,7 @@ agent-toolkit-cli mcp migrate                                  # explicitly adop
 agent-toolkit-cli mcp install <slug>   [--harness <h>]... [-g|-p] [--force]
 agent-toolkit-cli mcp uninstall <slug> [--harness <h>]... [-g|-p] [--force]
 agent-toolkit-cli mcp remove <slug>    [-g|-p] [--force]       # remove every locked projection
+agent-toolkit-cli mcp import <file> [--latest]                 # cross-machine sync
 agent-toolkit-cli mcp update <slug>                            # re-resolve + re-project
 agent-toolkit-cli mcp list   [-g|-p]                           # alias: ls
 agent-toolkit-cli mcp status [<slug>...] [-g|-p]
@@ -109,7 +110,7 @@ agent-toolkit-cli mcp doctor [-g|-p]
 - `mcp install` projects a library MCP into the chosen scope's harnesses; `--harness` (repeatable) selects from `claude-code`, `codex`, `opencode`, `pi`, or `standard`. `--force` bypasses the running-claude guard for `~/.claude.json` writes.
 - `mcps-lock.json` records per-scope harness projections, not library membership. `mcp uninstall` removes projections from one scope; `mcp remove` removes every locked projection but keeps the library files and manifest record.
 - `mcp update` re-resolves manifest authority and re-projects every reachable locked harness. `mcp doctor` diagnoses library and projection drift read-only—it never writes. A missing manifest is remediated with exactly `agent-toolkit-cli mcp migrate`.
-- There is **no `mcp import`** — MCP cross-machine sync is tracked separately ([#429](https://github.com/ajanderson1/agent-toolkit-cli/issues/429)). (The `instructions` asset type likewise has no `import`: it has no per-machine library to reconstruct.)
+- `mcp import <file>` rebuilds the global library from another machine's `mcps-library.json` (additive, skip-if-exists; `--local` entries hard-skipped; secret-quarantined). See [Moving to a new machine](#moving-to-a-new-machine-cross-machine-sync). (The `instructions` asset type has no `import` as it has no per-machine library to reconstruct.)
 
 ### `pi-extension`
 
@@ -200,6 +201,7 @@ By default `skill push <slug>` creates a `skill/self-improvement-<timestamp>` br
    agent-toolkit-cli agent        import ~/sync/agents-lock.json
    agent-toolkit-cli command      import ~/sync/commands-lock.json
    agent-toolkit-cli pi-extension import ~/sync/pi-extensions-lock.json
+   agent-toolkit-cli mcp          import ~/sync/mcps-library.json
    ```
 
 **Shared import semantic.** Import is an **additive, skip-if-exists merge**: only slugs absent locally are added, so re-running is safe. By default each new asset is cloned at the **recorded SHA** from the lock — so local commits or uncommitted changes that lived only on the source machine are **NOT** carried across. Pass `--latest` to clone each new asset at its ref's current HEAD instead. Per-slug clone failures are non-fatal (the command still imports the rest and exits 1 if any failed).
@@ -215,7 +217,7 @@ By default `skill push <slug>` creates a `skill/self-improvement-<timestamp>` br
 
 **Why no `export` command (by design).** A separate export step would be redundant: the lock file already *is* a complete, portable description of the library. Copying it and running `import` on the far side is the whole sync. `import`'s skill docstring states this directly — *"The export artifact is just another machine's global skills-lock.json — there is no `export` command."*
 
-`mcp` has no `import` yet (cross-machine sync for MCP servers is tracked: [#429](https://github.com/ajanderson1/agent-toolkit-cli/issues/429)); `instructions` has no per-machine library to sync.
+`instructions` has no per-machine library to sync, so it is the only asset type without an `import`.
 
 ---
 
