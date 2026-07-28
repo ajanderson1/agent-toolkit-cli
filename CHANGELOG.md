@@ -1,5 +1,30 @@
 # Changelog
 
+## [5.6.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v5.5.0...v5.6.0) (2026-07-28)
+
+
+### Features
+
+* **tui:** make column info predictable ([#486](https://github.com/ajanderson1/agent-toolkit-cli/issues/486)) ([4bf53aa](https://github.com/ajanderson1/agent-toolkit-cli/commit/4bf53aaa969f359e1d7623ce6ab5ee48be86236a))
+* **tui:** settings screen from the command palette — theme + main-harness selection ([#487](https://github.com/ajanderson1/agent-toolkit-cli/issues/487)) ([12b1c7d](https://github.com/ajanderson1/agent-toolkit-cli/commit/12b1c7d154c28fc41346f2d2993ffc1d4a42c89a))
+* **tui:** Standard column first and always labelled Standard (N) on every asset type ([#485](https://github.com/ajanderson1/agent-toolkit-cli/issues/485)) ([f60c682](https://github.com/ajanderson1/agent-toolkit-cli/commit/f60c682a757e4dae4f72db6de30554a79f404c2a))
+
+
+### Bug Fixes
+
+* **tui:** focus filter after asset-type switch ([#484](https://github.com/ajanderson1/agent-toolkit-cli/issues/484)) ([66541b0](https://github.com/ajanderson1/agent-toolkit-cli/commit/66541b08c980ee4485d32cfb3891da0e613bc34f))
+
+
+### Documentation
+
+* **477:** spec + plan for tab-switch filter focus ([b458114](https://github.com/ajanderson1/agent-toolkit-cli/commit/b458114256a2c0fea034a4bf9000d0d7962ae4e2))
+* **478:** spec + plan for Standard column consistency ([47391fb](https://github.com/ajanderson1/agent-toolkit-cli/commit/47391fb8936225e7142ae0b9a68347b03a4f091e))
+* **479:** spec + plan for column info affordances ([d087b38](https://github.com/ajanderson1/agent-toolkit-cli/commit/d087b3874df4dfb7becb3cbe6b4316503acad6a9))
+* **480:** spec + plan for the TUI settings screen ([fa71868](https://github.com/ajanderson1/agent-toolkit-cli/commit/fa718681938ec98a0f37cb978b398be5236fc52d))
+* **mcp:** plan library manifest ([d5f714f](https://github.com/ajanderson1/agent-toolkit-cli/commit/d5f714f07cfc46d0f79675b06d925ae67dacdc3a))
+* **mcp:** resolve manifest plan review ([ce65c70](https://github.com/ajanderson1/agent-toolkit-cli/commit/ce65c7049423c3a0605713e4cf11804d8c23a65a))
+* **mcp:** specify library manifest ([dccfa3d](https://github.com/ajanderson1/agent-toolkit-cli/commit/dccfa3dcaa1ac1b8a29602178def247544b1987c))
+
 ## [5.5.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v5.4.0...v5.5.0) (2026-07-13)
 
 
