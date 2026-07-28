@@ -20,8 +20,6 @@ NO_STANDARD_SLOT = {
     ("pi-extension", "global"): "single-harness asset type; no convergence dir",
     ("pi-extension", "project"): "single-harness asset type; no convergence dir",
     ("mcp", "global"): "the standard projection IS the project .mcp.json",
-    ("command", "global"): "no standard projection yet — see #482",
-    ("command", "project"): "no standard projection yet — see #482",
 }
 
 ASSET_TYPES = ["instruction", "command", "skill", "agent", "mcp", "pi-extension"]
@@ -54,3 +52,8 @@ def test_agents_count_differs_by_scope():
     assert standard_column_header("agent", "global") != standard_column_header(
         "agent", "project"
     )
+
+
+def test_commands_standard_counts():
+    assert standard_column_header("command", "global") == "Standard (2)"
+    assert standard_column_header("command", "project") == "Standard (3)"

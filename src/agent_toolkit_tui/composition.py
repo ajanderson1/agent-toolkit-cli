@@ -117,15 +117,29 @@ def mcp_nonstandard_main(
     )
 
 
-def commands_main(
+def commands_nonstandard_main(
+    scope: str,
     selection: tuple[str, ...] | None = None,
 ) -> tuple[str, ...]:
-    """Selected command columns, filtered from command SUPPORTED_HARNESSES."""
-    from agent_toolkit_cli.command_adapters import (
-        SUPPORTED_HARNESSES as COMMAND_SUPPORTED_HARNESSES,
-    )
+    """Selected command harnesses needing their own column at ``scope``.
+
+    Claude Code is always standard-covered; Pi/Gemini remain individual when
+    selected. Codex is CLI-only and never a Commands grid column.
+    """
+    from agent_toolkit_cli.command_adapters.standard import commands_standard_covered
 
     chosen = effective_main_harnesses(selection)
+    covered = commands_standard_covered(scope)
     return tuple(
-        harness for harness in chosen if harness in COMMAND_SUPPORTED_HARNESSES
+        name
+        for name in ("claude-code", "pi", "gemini-cli")
+        if name not in covered and name in chosen
     )
+
+
+def commands_main(
+    scope: str,
+    selection: tuple[str, ...] | None = None,
+) -> tuple[str, ...]:
+    """Standard-first command columns for the active scope."""
+    return ("standard", *commands_nonstandard_main(scope, selection))

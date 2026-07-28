@@ -107,7 +107,7 @@ def _mcp_project_grid() -> McpGrid:
 def _command_grid() -> CommandGrid:
     cells = {
         (harness, "global"): CommandCell(linked=False)
-        for harness in _command_harnesses()
+        for harness in _command_harnesses("global")
     }
     return CommandGrid(
         [CommandRow(slug="demo", source="owner/repo", ref="main", cells=cells)],
@@ -178,7 +178,7 @@ CASES = (
         "global",
         "command-table",
         _command_grid,
-        ("claude-code", "codex", "gemini-cli", "pi", "state"),
+        ("standard", "pi", "gemini-cli", "state"),
     ),
     _Case(
         "pi-extensions",

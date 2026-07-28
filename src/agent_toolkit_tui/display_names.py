@@ -97,7 +97,11 @@ def _standard_covered_count(asset_type: str, scope: str) -> int | None:
             # global slot to count (#478 R4, composition.py:58-71).
             return None
 
-    # command: no standard projection exists yet (#482).
+    if asset_type == "command":
+        from agent_toolkit_cli.command_adapters.standard import commands_standard_covered
+
+        return len(commands_standard_covered(scope))
+
     # pi-extension: single-harness asset type; nothing converges (#478 R5).
     return None
 
