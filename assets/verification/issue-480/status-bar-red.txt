@@ -1,0 +1,32 @@
+$ uv run --frozen --no-sync pytest tests/test_tui/test_settings_screen.py -q -k visible_status_bar_row
+F                                                                        [100%]
+=================================== FAILURES ===================================
+____________ test_bad_settings_notice_has_a_visible_status_bar_row _____________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x109b0de00>
+tmp_path = PosixPath('/private/var/folders/0j/g2kc9yj15n1d692kh_1z5nr80000gn/T/pytest-of-ajanderson/pytest-1076/test_bad_settings_notice_has_a0')
+
+    @pytest.mark.asyncio
+    async def test_bad_settings_notice_has_a_visible_status_bar_row(
+        monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        path = _settings_path(monkeypatch, tmp_path)
+        _stub_rows(monkeypatch)
+        path.write_text("{")
+        app = TUIApp()
+
+        async with app.run_test() as pilot:
+            await pilot.pause()
+
+            status = app.query_one("#status-bar", Static)
+>           assert status.region.height >= 2
+E           AssertionError: assert 1 >= 2
+E            +  where 1 = Region(x=0, y=21, width=80, height=1).height
+E            +    where Region(x=0, y=21, width=80, height=1) = Static(id='status-bar').region
+
+tests/test_tui/test_settings_screen.py:268: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_tui/test_settings_screen.py::test_bad_settings_notice_has_a_visible_status_bar_row
+1 failed, 8 deselected in 0.25s
+
+[exit 1]

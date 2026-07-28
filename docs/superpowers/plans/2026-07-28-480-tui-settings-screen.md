@@ -33,7 +33,7 @@
 - Create: `tests/test_tui/test_settings_persistence.py`
 - Create: `src/agent_toolkit_tui/settings.py`
 
-- [ ] **Step 1: Write the failing persistence tests**
+- [x] **Step 1: Write the failing persistence tests**
 
 Create `tests/test_tui/test_settings_persistence.py` covering, with
 `monkeypatch.setenv("AGENT_TOOLKIT_TUI_SETTINGS", str(tmp_path / "s.json"))`:
@@ -71,7 +71,7 @@ uv run pytest tests/test_tui/test_settings_persistence.py -q
 
 Expected: `ImportError` — `settings.py` does not exist. Correct red.
 
-- [ ] **Step 2: Implement `settings.py`**
+- [x] **Step 2: Implement `settings.py`**
 
 Key shapes:
 
@@ -104,7 +104,7 @@ diagnostic. It **does** propagate genuine `OSError` other than "not found"
 `unknown_harnesses` merged back into `harnesses`, so an unrecognised key
 survives the round-trip (R6). Write atomically (temp file + `os.replace`).
 
-- [ ] **Step 3: Green + commit**
+- [x] **Step 3: Green + commit**
 
 ```bash
 uv run pytest tests/test_tui/test_settings_persistence.py -q
@@ -121,7 +121,7 @@ Include the `Device:` trailer.
 - Modify: `src/agent_toolkit_tui/skill_state.py`, `src/agent_toolkit_tui/agent_state.py`
 - Modify: `tests/test_tui/test_composition.py`
 
-- [ ] **Step 1: Extend the invariant test to a non-default selection**
+- [x] **Step 1: Extend the invariant test to a non-default selection**
 
 In `tests/test_tui/test_composition.py`, add:
 
@@ -156,7 +156,7 @@ uv run pytest tests/test_tui/test_composition.py -q
 
 Expected: FAIL — the helpers take no selection yet.
 
-- [ ] **Step 2: Add selection parameters**
+- [x] **Step 2: Add selection parameters**
 
 Give each helper an optional `selection: tuple[str, ...] | None = None`
 parameter defaulting to `MAIN_HARNESSES` (so every existing caller is
@@ -177,7 +177,7 @@ Same shape for `instructions_nonstandard_main`, `agents_nonstandard_main`,
 `DEFAULT_HARNESSES` in particular belongs to `agent_toolkit_cli` and must stay
 untouched (spec R7).
 
-- [ ] **Step 3: Kill the import-time snapshots**
+- [x] **Step 3: Kill the import-time snapshots**
 
 `skill_state.INTERACTIVE_AGENTS` (`skill_state.py:48`) and
 `agent_state.INTERACTIVE_HARNESSES` (`agent_state.py:37`) are module-level
@@ -197,7 +197,7 @@ Say so in the PR body; it is a behaviour change, small but real.
 Tests import these names — update them rather than keeping a compatibility
 alias, so no caller silently keeps the frozen value.
 
-- [ ] **Step 4: Green + commit**
+- [x] **Step 4: Green + commit**
 
 ```bash
 uv run pytest tests/test_tui -q
@@ -212,7 +212,7 @@ git commit -m "feat(tui): selection-aware column composition"
 - Modify: `src/agent_toolkit_tui/app.py`
 - Create: `tests/test_tui/test_settings_screen.py`
 
-- [ ] **Step 1: Write the failing screen tests**
+- [x] **Step 1: Write the failing screen tests**
 
 ```python
 async def test_palette_exposes_settings_command(...)
@@ -236,7 +236,7 @@ async def test_unticking_everything_leaves_a_usable_grid(...)
 async def test_bad_settings_file_surfaces_a_status_bar_notice(...)
 ```
 
-- [ ] **Step 2: Build the screen**
+- [x] **Step 2: Build the screen**
 
 `SettingsScreen(ModalScreen[None])` with the `ConfirmDiscardScreen` /
 `ColumnInfoModal` chrome idiom already in the codebase (`escape` closes):
@@ -251,7 +251,7 @@ async def test_bad_settings_file_surfaces_a_status_bar_notice(...)
 Apply on save: write via `settings.save()`, set `self.app.theme`, then rebuild
 the grids.
 
-- [ ] **Step 3: Register the palette command**
+- [x] **Step 3: Register the palette command**
 
 Add a `Provider` subclass yielding a `Settings` hit and register it on
 `TUIApp.COMMANDS`. Per spec R2 there is **no** keybinding — do not add one.
@@ -262,7 +262,7 @@ Verify the palette is reachable in this Textual version:
 uv run python -c "from textual.app import App; print(App.COMMANDS)"
 ```
 
-- [ ] **Step 4: Apply settings at startup**
+- [x] **Step 4: Apply settings at startup**
 
 In `on_mount`, load settings before `_show_asset_type`, apply the theme, and
 push any `diagnostics` into the status bar. Replace the bare
@@ -270,7 +270,7 @@ push any `diagnostics` into the status bar. Replace the bare
 invalid persisted theme is already handled by `settings.load()`, so a raw
 exception here is a genuine fault and must not be swallowed.
 
-- [ ] **Step 5: Rebuild columns on change**
+- [x] **Step 5: Rebuild columns on change**
 
 A selection change must rebuild every grid's columns, not just the visible one
 — otherwise a hidden tab keeps stale columns until its next refresh. Route
@@ -282,7 +282,7 @@ Preserve pending queues where the existing contract allows (`set_rows` clears
 by contract — say so in the PR body rather than silently losing a user's queued
 toggles after a settings change).
 
-- [ ] **Step 6: Green + commit**
+- [x] **Step 6: Green + commit**
 
 ```bash
 uv run pytest tests/test_tui/test_settings_screen.py tests/test_tui -q
@@ -292,18 +292,18 @@ git commit -m "feat(tui): settings screen from the command palette"
 
 ## Task 4: Documentation
 
-- [ ] **Step 1: Document the new schema**
+- [x] **Step 1: Document the new schema**
 
 `docs/agent-toolkit/` already documents `skill-lock.md`. Add
 `tui-settings.md`: the file location, the env override, every field, the v1
 schema, the failure behaviours from R6, and the explicit statement that **the
 CLI does not read it** (spec R7).
 
-- [ ] **Step 2: Note it in AGENTS.md**
+- [x] **Step 2: Note it in AGENTS.md**
 
 Add `tui-settings.json` to the code map so the next agent finds it.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add docs AGENTS.md
@@ -312,13 +312,13 @@ git commit -m "docs: tui-settings.json schema v1"
 
 ## Task 5: Regression sweep and visual judgment
 
-- [ ] **Step 1: Full suite**
+- [x] **Step 1: Full suite**
 
 ```bash
 uv run pytest -q
 ```
 
-- [ ] **Step 2: Constant-mutation scan**
+- [x] **Step 2: Constant-mutation scan**
 
 ```bash
 rg -n "MAIN_HARNESSES|_MCP_HARNESSES|DEFAULT_HARNESSES" src/
@@ -333,7 +333,7 @@ rg -n "agent_toolkit_tui" src/agent_toolkit_cli/
 
 Expected: no hits. This is the spec R7 boundary.
 
-- [ ] **Step 3: CLI determinism check**
+- [x] **Step 3: CLI determinism check**
 
 With a non-default selection persisted, confirm the CLI is unaffected:
 
@@ -345,7 +345,7 @@ uv run agent-toolkit-cli skill status
 Output must be byte-identical to a run with the settings file removed. This is
 the load-bearing check for R7 — if it differs, stop.
 
-- [ ] **Step 4: Manual visual check**
+- [x] **Step 4: Manual visual check**
 
 ```bash
 uv run agent-toolkit-tui
@@ -366,7 +366,7 @@ uv run agent-toolkit-tui
 Screenshots into `assets/verification/issue-480/`, one-line visual verdict in
 the PR body per `~/.conventions/conventions/testing.md`.
 
-- [ ] **Step 5: Final commit**
+- [x] **Step 5: Final commit**
 
 ```bash
 git add -A src/agent_toolkit_tui tests docs

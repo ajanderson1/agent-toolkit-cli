@@ -14,7 +14,7 @@ from textual.coordinate import Coordinate
 from textual.widgets import DataTable, Input
 
 from agent_toolkit_tui.app import TUIApp
-from agent_toolkit_tui.skill_state import INTERACTIVE_AGENTS, SkillCell, SkillRow
+from agent_toolkit_tui.skill_state import interactive_agents, SkillCell, SkillRow
 from agent_toolkit_tui.widgets.skill_grid import SkillGrid
 
 
@@ -22,7 +22,7 @@ def _row(slug: str, *, scope: str = "global",
          linked: tuple[str, ...] = ()) -> SkillRow:
     cells = {
         (a, scope): SkillCell(linked=(a in linked), drift=False, skipped=False)
-        for a in INTERACTIVE_AGENTS
+        for a in interactive_agents()
     }
     return SkillRow(
         slug=slug, source=f"x/{slug}", ref="main", state="clean", cells=cells,
@@ -209,7 +209,7 @@ async def test_toggle_after_filter_from_stale_high_cursor():
         await pilot.pause()
         table = g.query_one("#skill-table", DataTable)
         # Park the cursor on the last row's claude-code column.
-        cc_col = 1 + list(INTERACTIVE_AGENTS).index("claude-code")
+        cc_col = 1 + list(interactive_agents()).index("claude-code")
         table.cursor_coordinate = Coordinate(row=4, column=cc_col)
         await pilot.pause()
         # Collapse the list to a single row whose slug sorts first.

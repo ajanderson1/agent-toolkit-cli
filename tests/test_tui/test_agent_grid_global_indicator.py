@@ -1,7 +1,7 @@
 """Render tests for the agents-tab globally-installed indicator (#374).
 
 Mirrors test_skill_grid_global_indicator.py (#188). Harness names beyond
-"standard" are derived (INTERACTIVE_HARNESSES), so tests index into the
+"standard" are derived (interactive_harnesses("global")), so tests index into the
 tuple instead of hard-coding names.
 """
 from __future__ import annotations
@@ -11,11 +11,11 @@ from rich.text import Text
 from textual.app import App
 from textual.widgets import DataTable
 
-from agent_toolkit_tui.agent_state import INTERACTIVE_HARNESSES, AgentCell, AgentRow
+from agent_toolkit_tui.agent_state import interactive_harnesses, AgentCell, AgentRow
 from agent_toolkit_tui.widgets.agent_grid import AgentGrid
 
-_H0 = INTERACTIVE_HARNESSES[0]  # "standard"
-_H1 = INTERACTIVE_HARNESSES[1]  # first non-standard main harness
+_H0 = interactive_harnesses("global")[0]  # "standard"
+_H1 = interactive_harnesses("global")[1]  # first non-standard main harness
 
 
 def _row_with(
@@ -39,7 +39,7 @@ async def _rendered_plain(app: App, pilot, harness: str) -> str:
     grid._rebuild(table)  # type: ignore[attr-defined]
     await pilot.pause()
     row_key = list(table.rows.keys())[0]
-    col_key = list(table.columns.keys())[1 + list(INTERACTIVE_HARNESSES).index(harness)]
+    col_key = list(table.columns.keys())[1 + list(interactive_harnesses("global")).index(harness)]
     return Text.from_markup(str(table.get_cell(row_key, col_key))).plain
 
 
@@ -49,7 +49,7 @@ async def test_project_scope_globally_linked_cell_shows_marker():
     a sibling harness without a global link does not."""
     row = _row_with(
         "alpha",
-        project_cells={h: AgentCell(linked=False) for h in INTERACTIVE_HARNESSES},
+        project_cells={h: AgentCell(linked=False) for h in interactive_harnesses("global")},
         global_cells={_H0: AgentCell(linked=True), _H1: AgentCell(linked=False)},
     )
 
@@ -70,7 +70,7 @@ async def test_global_scope_view_does_not_show_marker():
     """In global scope, even a globally-linked cell must not show 🌐."""
     row = _row_with(
         "alpha",
-        global_cells={h: AgentCell(linked=True) for h in INTERACTIVE_HARNESSES},
+        global_cells={h: AgentCell(linked=True) for h in interactive_harnesses("global")},
     )
 
     class _A(App):
@@ -81,7 +81,7 @@ async def test_global_scope_view_does_not_show_marker():
     async with a.run_test() as pilot:
         a.query_one("#g", AgentGrid).set_scope("global")
         await pilot.pause()
-        for harness in INTERACTIVE_HARNESSES:
+        for harness in interactive_harnesses("global"):
             assert "🌐" not in await _rendered_plain(a, pilot, harness)
 
 
@@ -115,7 +115,7 @@ async def test_unlisted_row_shows_marker():
     row = _row_with(
         "alpha",
         state="unlisted",
-        project_cells={h: AgentCell(linked=True) for h in INTERACTIVE_HARNESSES},
+        project_cells={h: AgentCell(linked=True) for h in interactive_harnesses("global")},
         global_cells={_H0: AgentCell(linked=True)},
     )
 
@@ -180,7 +180,7 @@ async def test_no_global_cells_no_marker_no_crash():
     simply render no marker — no KeyError, no crash."""
     row = _row_with(
         "alpha",
-        project_cells={h: AgentCell(linked=True) for h in INTERACTIVE_HARNESSES},
+        project_cells={h: AgentCell(linked=True) for h in interactive_harnesses("global")},
     )
 
     class _A(App):
@@ -191,5 +191,5 @@ async def test_no_global_cells_no_marker_no_crash():
     async with a.run_test() as pilot:
         a.query_one("#g", AgentGrid).set_scope("project")
         await pilot.pause()
-        for harness in INTERACTIVE_HARNESSES:
+        for harness in interactive_harnesses("global"):
             assert "🌐" not in await _rendered_plain(a, pilot, harness)

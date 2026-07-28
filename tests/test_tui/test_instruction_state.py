@@ -14,7 +14,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from agent_toolkit_tui.instruction_state import (
-    INTERACTIVE_HARNESSES,
+    interactive_harnesses,
     _cell_for,
     build_instruction_rows,
     pointer_path_for,
@@ -211,7 +211,7 @@ def test_build_instruction_rows_empty_lock_canonical_exists(tmp_path: Path, monk
     assert row.slug == "AGENTS.md"
     assert row.canonical_exists is True
     # All cells should be unlinked (no pointers installed yet)
-    for harness in INTERACTIVE_HARNESSES:
+    for harness in interactive_harnesses():
         cell = row.cells.get((harness, "global"))
         if cell is not None:
             assert cell.linked is False
@@ -329,8 +329,8 @@ def test_build_instruction_rows_conflict_cell(tmp_path: Path, monkeypatch):
 
 
 def test_interactive_harnesses_are_correct():
-    """INTERACTIVE_HARNESSES must be exactly the 2 pinned harnesses."""
-    assert INTERACTIVE_HARNESSES == ("claude-code", "gemini-cli")
+    """interactive_harnesses() must be exactly the 2 pinned harnesses."""
+    assert interactive_harnesses() == ("claude-code", "gemini-cli")
 
 
 def test_project_scope_probes_global_shadow_cell(tmp_path: Path, monkeypatch):

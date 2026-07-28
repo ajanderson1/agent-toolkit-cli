@@ -5,7 +5,10 @@ the long tail is CLI-only (post-demo AJ decision). The coverage guard below is
 the load-bearing invariant: every main harness must be covered — standard or
 own column — on every asset type it supports.
 """
+import pytest
+
 from agent_toolkit_cli.skill_agents import AGENTS
+from agent_toolkit_tui import composition
 from agent_toolkit_tui.composition import (
     MAIN_HARNESSES,
     _MCP_HARNESSES,
@@ -148,3 +151,94 @@ def test_mcp_coverage_guard():
             assert h in covered or h in rendered, (
                 f"{h} is neither standard-covered nor a rendered MCP column at {scope}"
             )
+
+
+@pytest.mark.parametrize(
+    "selection",
+    [
+        MAIN_HARNESSES,
+        ("claude-code", "pi"),
+        (),
+    ],
+)
+def test_coverage_invariant_holds_for_any_selection(
+    selection: tuple[str, ...],
+) -> None:
+    """Every selected, supported harness stays standard-covered or rendered."""
+    from agent_toolkit_cli.agent_adapters.standard import agents_standard_covered
+    from agent_toolkit_cli.command_adapters import DEFAULT_HARNESSES
+    from agent_toolkit_cli.instructions_matrix import instructions_matrix_rows
+    from agent_toolkit_cli.mcp_standard import mcp_standard_covered
+
+    skills_standard = {name for name, agent in AGENTS.items() if agent.is_standard}
+    skills_rendered = set(skills_nonstandard_main(selection))
+    for harness in selection:
+        assert harness in skills_standard or harness in skills_rendered
+
+    verdicts = {row["harness"]: row["verdict"] for row in instructions_matrix_rows()}
+    instructions_rendered = set(instructions_nonstandard_main(selection))
+    for harness in selection:
+        verdict = verdicts.get(harness, "")
+        if verdict.startswith(("unsupported", "unknown")) or not verdict:
+            continue
+        assert verdict == "native" or harness in instructions_rendered
+
+    for scope in ("global", "project"):
+        agents_rendered = set(composition.agents_nonstandard_main(scope, selection))
+        agents_covered = agents_standard_covered(scope)
+        for harness in selection:
+            if AGENTS[harness].subagent_mechanism != "none":
+                assert harness in agents_covered or harness in agents_rendered
+
+        try:
+            mcp_covered = set(mcp_standard_covered(scope))
+        except KeyError:
+            mcp_covered = set()
+        mcp_rendered = set(mcp_nonstandard_main(scope, selection))
+        for harness in selection:
+            if harness in _MCP_HARNESSES:
+                assert harness in mcp_covered or harness in mcp_rendered
+
+    commands_rendered = set(composition.commands_main(selection))
+    for harness in selection:
+        if harness in DEFAULT_HARNESSES:
+            assert harness in commands_rendered
+
+
+def test_selection_filters_but_never_adds() -> None:
+    selection = ("ghost-harness", "paperclip")
+
+    assert skills_nonstandard_main(selection) == ("paperclip",)
+    assert instructions_nonstandard_main(selection) == ()
+    assert composition.agents_nonstandard_main("project", selection) == ()
+    assert mcp_nonstandard_main("global", selection) == ()
+    assert composition.commands_main(selection) == ()
+
+
+def test_selection_reaches_mcp_and_command_columns() -> None:
+    selection = ("claude-code", "opencode", "pi")
+
+    assert mcp_nonstandard_main("project", selection) == ("opencode",)
+    assert mcp_nonstandard_main("global", selection) == (
+        "claude-code",
+        "opencode",
+        "pi",
+    )
+    assert composition.commands_main(selection) == ("claude-code", "pi")
+
+
+def test_standard_coverage_is_not_affected_by_selection() -> None:
+    from agent_toolkit_cli.agent_adapters.standard import agents_standard_covered
+    from agent_toolkit_cli.mcp_standard import mcp_standard_covered
+
+    skills_standard = {name for name, agent in AGENTS.items() if agent.is_standard}
+    assert {"gemini-cli", "codex", "opencode", "cursor"} <= skills_standard
+    assert skills_nonstandard_main(()) == ()
+
+    assert {"claude-code", "cursor"} <= agents_standard_covered("project")
+    assert composition.agents_nonstandard_main(
+        "project", ("claude-code", "cursor")
+    ) == ()
+
+    assert mcp_standard_covered("project") == frozenset({"claude-code", "pi"})
+    assert mcp_nonstandard_main("project", ("claude-code", "pi")) == ()

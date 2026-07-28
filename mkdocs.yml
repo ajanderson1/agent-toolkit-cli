@@ -193,6 +193,7 @@ nav:
   - Reference:
     - CLI reference: agent-toolkit/cli.md
     - TUI reference: agent-toolkit/tui.md
+    - TUI settings schema: agent-toolkit/tui-settings.md
     - Bundles: agent-toolkit/bundles.md
     - Lock files: agent-toolkit/lock-files.md
     - Skill lock (deep dive): agent-toolkit/skill-lock.md

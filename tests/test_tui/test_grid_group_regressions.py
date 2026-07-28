@@ -10,7 +10,7 @@ import pytest
 from textual.app import App, ComposeResult
 from textual.widgets import DataTable
 
-from agent_toolkit_tui.agent_state import INTERACTIVE_HARNESSES, AgentCell, AgentRow
+from agent_toolkit_tui.agent_state import interactive_harnesses, AgentCell, AgentRow
 from agent_toolkit_tui.pi_extension_state import PiCell, PiExtensionRow
 from agent_toolkit_tui.widgets.agent_grid import AgentGrid
 from agent_toolkit_tui.widgets.pi_grid import PiGrid
@@ -19,7 +19,7 @@ from agent_toolkit_tui.widgets.pi_grid import PiGrid
 def _agent_row(slug: str = "demo") -> AgentRow:
     return AgentRow(
         slug=slug, source=f"ajanderson1/{slug}", ref="main",
-        cells={(INTERACTIVE_HARNESSES[0], "global"): AgentCell(linked=True)},
+        cells={(interactive_harnesses("global")[0], "global"): AgentCell(linked=True)},
     )
 
 

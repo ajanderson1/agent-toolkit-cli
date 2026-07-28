@@ -102,12 +102,21 @@ class McpGrid(Vertical):
         self._last_resize: Resize | None = None
         # (scope, harness_name, slug) -> op
         self._pending: dict[tuple[str, str, str], Op] = {}
+        self._selection: tuple[str, ...] | None = None
         self._filter: str = ""
 
     def _harnesses(self) -> tuple[str, ...]:
         """Rendered harness columns for the active scope (NOT a constant —
         the set differs by scope; standard appears only at project)."""
-        return mcp_interactive_harnesses(self._scope)
+        return mcp_interactive_harnesses(self._scope, self._selection)
+
+    def set_harness_selection(self, selection: tuple[str, ...]) -> None:
+        """Apply a presentation-only harness filter and rebuild columns."""
+        self._selection = selection
+        try:
+            self._rebuild(self.query_one("#mcp-table", DataTable))
+        except Exception:
+            pass
 
     @property
     def row_count(self) -> int:

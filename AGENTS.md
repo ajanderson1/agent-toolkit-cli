@@ -22,8 +22,10 @@ src/agent_toolkit_cli/             Python package: skill command + lockfile mach
   skill_source.py                  Parse `<owner/repo>` / URL / SSH / local-path sources.
   _repo_resolution.py              Resolve toolkit-repo root (used by TUI).
   _support.py                      Status constants used by TUI.
-src/agent_toolkit_tui/             Textual TUI: skill grid (claude-code + pi).
-docs/agent-toolkit/                Human-readable reference (cli.md, skill-lock.md).
+src/agent_toolkit_tui/             Textual TUI across all built asset types.
+  settings.py                      `tui-settings.json` schema, validation, atomic persistence.
+  screens/settings.py              Palette-only settings screen.
+docs/agent-toolkit/                Human-readable reference (CLI, TUI, lock/settings schemas).
 docs/solutions/                    Documented decisions & fixes (bugs, trade-offs, patterns) by category, with YAML frontmatter (module, tags, problem_type).
 tests/                             pytest. TUI tests live in tests/test_tui/.
 ```

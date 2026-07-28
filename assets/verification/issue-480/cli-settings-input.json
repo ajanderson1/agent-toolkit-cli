@@ -1,0 +1,5 @@
+{
+  "schema": "agent-toolkit-tui-settings/v1",
+  "theme": "nord",
+  "harnesses": ["pi"]
+}

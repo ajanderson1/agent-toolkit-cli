@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from agent_toolkit_tui.skill_state import INTERACTIVE_AGENTS, SkillCell, SkillRow
+from agent_toolkit_tui.skill_state import interactive_agents, SkillCell, SkillRow
 from agent_toolkit_tui.widgets.skill_grid import SkillGrid
 
 
@@ -14,7 +14,7 @@ def _row(slug: str, *, scope="global",
          linked: tuple[str, ...] = (),
          skipped: tuple[str, ...] = ()) -> SkillRow:
     cells = {}
-    for a in INTERACTIVE_AGENTS:
+    for a in interactive_agents():
         cells[(a, scope)] = SkillCell(
             linked=(a in linked), drift=False, skipped=(a in skipped),
         )

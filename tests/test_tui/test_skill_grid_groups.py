@@ -13,13 +13,13 @@ from textual.widgets import DataTable
 from agent_toolkit_cli.skill_agents import get_standard_agents
 from agent_toolkit_tui.composition import skills_nonstandard_main
 from agent_toolkit_tui.display_names import harness_label, standard_label
-from agent_toolkit_tui.skill_state import INTERACTIVE_AGENTS, SkillCell, SkillRow
+from agent_toolkit_tui.skill_state import interactive_agents, SkillCell, SkillRow
 from agent_toolkit_tui.widgets.skill_grid import SkillGrid
 
 
 def _row(slug: str, *, scope: str = "global") -> SkillRow:
     cells = {(a, scope): SkillCell(linked=False, drift=False, skipped=False)
-             for a in INTERACTIVE_AGENTS}
+             for a in interactive_agents()}
     return SkillRow(
         slug=slug, source=f"x/{slug}", ref="main",
         state="clean", cells=cells,
@@ -55,4 +55,4 @@ async def test_columns_are_standard_plus_noncovered_main():
         assert not any("… +" in l or "STANDARD" in l or "NON-STD" in l
                        or "\n" in l for l in labels), labels
         # Layout is exactly: slug + N agents + state + source.
-        assert len(labels) == len(INTERACTIVE_AGENTS) + 3
+        assert len(labels) == len(interactive_agents()) + 3

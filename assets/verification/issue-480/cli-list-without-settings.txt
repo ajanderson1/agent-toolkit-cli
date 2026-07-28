@@ -1,0 +1,9 @@
+Operating on project scope — /Users/ajanderson/GitHub/projects/agent-toolkit-cli/.worktrees/run-issue-480-1785230239/skills-lock.json (8 skills). Pass -g for the global library.
+autonomous-run  ajanderson1/skills-workflow       main
+cmux-pm         ajanderson1/skills-orchestration  main
+domain-manager  ajanderson1/skills-infra          main
+journal         ajanderson1/skills-journal        main
+mkdocs          ajanderson1/skills-infra          main
+pinchtab        pinchtab/pinchtab                 (default)
+pocketsmith     ajanderson1/skills-finance        main
+skill-builder   ajanderson1/skills-authoring      main

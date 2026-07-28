@@ -1,7 +1,7 @@
 """Render tests for the instructions-tab globally-linked indicator (#388).
 
 Mirrors test_agent_grid_global_indicator.py (#374). Harness names are derived
-(INTERACTIVE_HARNESSES), so tests index into the tuple instead of hard-coding.
+(interactive_harnesses()), so tests index into the tuple instead of hard-coding.
 """
 from __future__ import annotations
 
@@ -11,14 +11,14 @@ from textual.app import App
 from textual.widgets import DataTable
 
 from agent_toolkit_tui.instruction_state import (
-    INTERACTIVE_HARNESSES,
+    interactive_harnesses,
     InstructionCell,
     InstructionRow,
 )
 from agent_toolkit_tui.widgets.instruction_grid import InstructionGrid
 
-_H0 = INTERACTIVE_HARNESSES[0]  # claude-code
-_H1 = INTERACTIVE_HARNESSES[1]  # gemini-cli
+_H0 = interactive_harnesses()[0]  # claude-code
+_H1 = interactive_harnesses()[1]  # gemini-cli
 
 
 def _row_with(
@@ -43,8 +43,8 @@ async def _rendered_plain(app: App, pilot, harness: str) -> str:
     await pilot.pause()
     row_key = list(table.rows.keys())[0]
     # Column layout: 0=slug, 1=standard, 2.. = harness cols (in
-    # INTERACTIVE_HARNESSES order), last = Source.
-    col_index = 2 + list(INTERACTIVE_HARNESSES).index(harness)
+    # interactive_harnesses() order), last = Source.
+    col_index = 2 + list(interactive_harnesses()).index(harness)
     col_key = list(table.columns.keys())[col_index]
     return Text.from_markup(str(table.get_cell(row_key, col_key))).plain
 
@@ -85,7 +85,7 @@ async def test_project_global_marker_is_same_harness_scoped():
 async def test_project_scope_globally_linked_cell_shows_marker():
     row = _row_with(
         project_cells={h: InstructionCell(linked=False, conflict=False)
-                       for h in INTERACTIVE_HARNESSES},
+                       for h in interactive_harnesses()},
         global_cells={_H0: InstructionCell(linked=True, conflict=False),
                       _H1: InstructionCell(linked=False, conflict=False)},
     )
@@ -106,7 +106,7 @@ async def test_project_scope_globally_linked_cell_shows_marker():
 async def test_global_scope_view_does_not_show_marker():
     row = _row_with(
         global_cells={h: InstructionCell(linked=True, conflict=False)
-                      for h in INTERACTIVE_HARNESSES},
+                      for h in interactive_harnesses()},
     )
 
     class _A(App):
@@ -117,7 +117,7 @@ async def test_global_scope_view_does_not_show_marker():
     async with a.run_test() as pilot:
         a.query_one("#g", InstructionGrid).set_scope("global")
         await pilot.pause()
-        for harness in INTERACTIVE_HARNESSES:
+        for harness in interactive_harnesses():
             assert "🌐" not in await _rendered_plain(a, pilot, harness)
 
 
@@ -167,7 +167,7 @@ async def test_no_global_cells_no_marker_no_crash():
     """Rows without any (harness, 'global') cells render no marker, no crash."""
     row = _row_with(
         project_cells={h: InstructionCell(linked=True, conflict=False)
-                       for h in INTERACTIVE_HARNESSES},
+                       for h in interactive_harnesses()},
     )
 
     class _A(App):
@@ -178,7 +178,7 @@ async def test_no_global_cells_no_marker_no_crash():
     async with a.run_test() as pilot:
         a.query_one("#g", InstructionGrid).set_scope("project")
         await pilot.pause()
-        for harness in INTERACTIVE_HARNESSES:
+        for harness in interactive_harnesses():
             assert "🌐" not in await _rendered_plain(a, pilot, harness)
 
 

@@ -1,0 +1,15 @@
+{
+  "schema": "agent-toolkit-tui-settings/v1",
+  "theme": "nord",
+  "harnesses": [
+    "claude-code",
+    "gemini-cli",
+    "codex",
+    "opencode",
+    "pi",
+    "cursor",
+    "hermes-agent",
+    "paperclip",
+    "ghost-harness"
+  ]
+}

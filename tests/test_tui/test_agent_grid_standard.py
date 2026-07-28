@@ -12,12 +12,12 @@ from textual.app import App, ComposeResult
 from textual.coordinate import Coordinate
 from textual.widgets import DataTable
 
-from agent_toolkit_tui.agent_state import INTERACTIVE_HARNESSES, AgentCell, AgentRow
+from agent_toolkit_tui.agent_state import interactive_harnesses, AgentCell, AgentRow
 from agent_toolkit_tui.widgets.agent_grid import AgentGrid
 
 
 def _row(slug: str = "demo", scope: str = "global") -> AgentRow:
-    cells = {(h, scope): AgentCell(linked=False) for h in INTERACTIVE_HARNESSES}
+    cells = {(h, scope): AgentCell(linked=False) for h in interactive_harnesses("global")}
     return AgentRow(slug=slug, source=f"x/{slug}", ref="main", cells=cells)
 
 
@@ -118,7 +118,7 @@ async def test_press_i_on_nonstandard_column_falls_through_to_cell_info():
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one("#agent-table", DataTable)
-        pi_col = 1 + INTERACTIVE_HARNESSES.index("pi")
+        pi_col = 1 + interactive_harnesses("global").index("pi")
         table.cursor_coordinate = Coordinate(row=0, column=pi_col)
         table.focus()
         await pilot.pause()

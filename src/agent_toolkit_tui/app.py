@@ -23,12 +23,14 @@ Layout (matches existing CSS scaffold in css/app.tcss):
 from __future__ import annotations
 
 from collections import defaultdict
+from dataclasses import replace
 from pathlib import Path
 from time import monotonic
 from typing import Iterable, Literal, cast
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
+from textual.command import DiscoveryHit, Hit, Hits, Provider
 from textual.containers import Horizontal, Vertical
 from textual.css.query import NoMatches
 from textual.screen import ModalScreen
@@ -36,6 +38,7 @@ from textual.widgets import (
     Button, Footer, Header, Input, Label, OptionList, Static,
 )
 from textual.widgets.option_list import Option, OptionDoesNotExist
+from rich.markup import escape
 from rich.text import Text
 
 from agent_toolkit_tui import __version__
@@ -45,6 +48,14 @@ from agent_toolkit_tui.display_names import asset_type_label
 from agent_toolkit_tui.instruction_state import build_instruction_rows
 from agent_toolkit_tui.mcp_state import build_mcp_rows
 from agent_toolkit_tui.pi_extension_state import build_pi_rows
+from agent_toolkit_tui.settings import (
+    SettingsPathError,
+    SettingsWriteError,
+    TuiSettings,
+    default_path as settings_path,
+    load as load_settings,
+    save as save_settings,
+)
 from agent_toolkit_tui.skill_state import build_skill_rows
 from agent_toolkit_tui.widgets import (
     AgentGrid,
@@ -168,11 +179,33 @@ class SidebarOptionList(OptionList):
         cast("TUIApp", self.app).action_asset_type(asset_type)
 
 
+class SettingsCommandProvider(Provider):
+    """Palette-only entry point for TUI settings."""
+
+    async def discover(self) -> Hits:
+        yield DiscoveryHit(
+            "Settings",
+            self.app.action_settings,
+            help="Theme and main harness columns",
+        )
+
+    async def search(self, query: str) -> Hits:
+        matcher = self.matcher(query)
+        if (score := matcher.match("Settings")) > 0:
+            yield Hit(
+                score,
+                matcher.highlight("Settings"),
+                self.app.action_settings,
+                help="Theme and main harness columns",
+            )
+
+
 class TUIApp(App):
     """agent-toolkit-tui — Textual cockpit over `agent-toolkit-cli`."""
 
     CSS_PATH = "css/app.tcss"
     TITLE = "agent-toolkit-tui"
+    COMMANDS = App.COMMANDS | {SettingsCommandProvider}
 
     BINDINGS = [
         Binding("ctrl+s", "apply", "Apply", priority=True),
@@ -192,6 +225,8 @@ class TUIApp(App):
         self._scope: str = "project"
         self._active_asset_type: AssetType = "skill"
         self._last_ctrl_c_quit_at: float | None = None
+        self._tui_settings = TuiSettings()
+        self._settings_diagnostics: tuple[str, ...] = ()
         self.sub_title = f"v{__version__}"
 
     def compose(self) -> ComposeResult:
@@ -224,11 +259,22 @@ class TUIApp(App):
         yield Static("", id="footer-pending")
         yield Footer()
 
+    @property
+    def tui_settings(self) -> TuiSettings:
+        return self._tui_settings
+
     def on_mount(self) -> None:
         try:
-            self.theme = "gruvbox"
-        except Exception:
-            pass
+            loaded = load_settings(available_themes=self.available_themes)
+        except OSError as exc:
+            path = settings_path()
+            loaded = TuiSettings(
+                diagnostics=(f"{path}: unreadable settings ({exc})",)
+            )
+        self._tui_settings = loaded
+        self._settings_diagnostics = loaded.diagnostics
+        self.theme = loaded.theme
+        self._set_grid_harness_selection(loaded.harnesses)
         # Start with the skill asset type active; hide others initially.
         self._show_asset_type("skill")
         self._refresh_skill_view()
@@ -411,8 +457,16 @@ class TUIApp(App):
         except NoMatches:
             return
         scope, home, project = self._scope_to_roots()
+        grid.set_harness_selection(self._tui_settings.harnesses)
         grid.set_scope(scope)  # type: ignore[arg-type]
-        grid.set_rows(build_instruction_rows(scope=scope, home=home, project=project))  # type: ignore[arg-type]
+        grid.set_rows(
+            build_instruction_rows(
+                scope=scope,
+                home=home,
+                project=project,
+                selection=self._tui_settings.harnesses,
+            )
+        )  # type: ignore[arg-type]
 
     # ----- skill-view --------------------------------------------------------
 
@@ -423,8 +477,16 @@ class TUIApp(App):
             return
         scope, home, _ = self._scope_to_roots()
         project = None if scope == "global" else self._skill_project_root()
+        grid.set_harness_selection(self._tui_settings.harnesses)
         grid.set_scope(scope)
-        grid.set_rows(build_skill_rows(scope=scope, home=home, project=project))
+        grid.set_rows(
+            build_skill_rows(
+                scope=scope,
+                home=home,
+                project=project,
+                selection=self._tui_settings.harnesses,
+            )
+        )
 
     # ----- command-view -----------------------------------------------------
 
@@ -434,8 +496,16 @@ class TUIApp(App):
         except NoMatches:
             return
         scope, home, project = self._scope_to_roots()
+        grid.set_harness_selection(self._tui_settings.harnesses)
         grid.set_scope(scope)  # type: ignore[arg-type]
-        grid.set_rows(build_command_rows(scope=scope, home=home, project=project))  # type: ignore[arg-type]
+        grid.set_rows(
+            build_command_rows(
+                scope=scope,
+                home=home,
+                project=project,
+                selection=self._tui_settings.harnesses,
+            )
+        )  # type: ignore[arg-type]
 
     # ----- pi-view -----------------------------------------------------------
 
@@ -455,8 +525,16 @@ class TUIApp(App):
         except NoMatches:
             return
         scope, home, project = self._scope_to_roots()
+        grid.set_harness_selection(self._tui_settings.harnesses)
         grid.set_scope(scope)  # type: ignore[arg-type]
-        grid.set_rows(build_agent_rows(scope=scope, home=home, project=project))  # type: ignore[arg-type]
+        grid.set_rows(
+            build_agent_rows(
+                scope=scope,
+                home=home,
+                project=project,
+                selection=self._tui_settings.harnesses,
+            )
+        )  # type: ignore[arg-type]
 
     # ----- mcp-view ----------------------------------------------------------
 
@@ -466,8 +544,40 @@ class TUIApp(App):
         except NoMatches:
             return
         scope, home, project = self._scope_to_roots()
+        grid.set_harness_selection(self._tui_settings.harnesses)
         grid.set_scope(scope)  # type: ignore[arg-type]
-        grid.set_rows(build_mcp_rows(scope=scope, home=home, project=project))  # type: ignore[arg-type]
+        grid.set_rows(
+            build_mcp_rows(
+                scope=scope,
+                home=home,
+                project=project,
+                selection=self._tui_settings.harnesses,
+            )
+        )  # type: ignore[arg-type]
+
+    def _set_grid_harness_selection(self, selection: tuple[str, ...]) -> None:
+        """Set the selection on every harness grid, including hidden tabs."""
+        grids = (
+            ("#instruction-grid", InstructionGrid),
+            ("#skill-grid", SkillGrid),
+            ("#command-grid", CommandGrid),
+            ("#agent-grid", AgentGrid),
+            ("#mcp-grid", McpGrid),
+        )
+        for selector, grid_type in grids:
+            try:
+                self.query_one(selector, grid_type).set_harness_selection(selection)
+            except NoMatches:
+                pass
+
+    def _refresh_all_views(self) -> None:
+        """Rebuild every asset grid after a committed harness change."""
+        self._refresh_instruction_view()
+        self._refresh_skill_view()
+        self._refresh_command_view()
+        self._refresh_pi_view()
+        self._refresh_agent_view()
+        self._refresh_mcp_view()
 
     # ----- messages ----------------------------------------------------------
 
@@ -610,6 +720,65 @@ class TUIApp(App):
         grid = self._active_grid()
         if grid is not None:
             grid.action_info()
+
+    def action_settings(self) -> None:
+        """Open Settings; invoked only by the command-palette provider."""
+        from agent_toolkit_tui.screens.settings import SettingsScreen
+
+        if isinstance(self.screen, SettingsScreen):
+            return
+        self.push_screen(SettingsScreen(self._tui_settings))
+
+    def apply_theme_setting(self, theme: str) -> bool:
+        """Atomically persist and then apply a theme, preserving harness state."""
+        if theme not in self.available_themes:
+            self.notify(
+                f"Theme {theme!r} is not available.",
+                title="Settings not saved",
+                severity="error",
+            )
+            return False
+        if theme == self._tui_settings.theme:
+            return True
+
+        updated = replace(self._tui_settings, theme=theme, retained_theme=None)
+        try:
+            save_settings(updated)
+        except (OSError, SettingsPathError, SettingsWriteError) as exc:
+            self.notify(
+                str(exc),
+                title="Settings not saved",
+                severity="error",
+            )
+            return False
+
+        self._tui_settings = updated
+        self.theme = theme
+        return True
+
+    def apply_harness_settings(self, harnesses: tuple[str, ...]) -> bool:
+        """Persist harness drafts, rebuild every grid, and keep constants intact."""
+        updated = replace(self._tui_settings, harnesses=harnesses)
+        try:
+            save_settings(updated)
+        except (OSError, SettingsPathError, SettingsWriteError) as exc:
+            self.notify(
+                str(exc),
+                title="Settings not saved",
+                severity="error",
+            )
+            return False
+
+        self._tui_settings = updated
+        self._set_grid_harness_selection(harnesses)
+        # set_rows clears pending queues by the existing grid contract. This is
+        # intentionally disclosed in the PR rather than hidden behind new v1
+        # persistence semantics (#480 plan Task 3 Step 5).
+        self._refresh_all_views()
+        self._refresh_content_header()
+        self._refresh_pending_label()
+        self._refresh_status_bar()
+        return True
 
     def action_refresh(self) -> None:
         self._refresh_active_view()
@@ -1422,6 +1591,10 @@ class TUIApp(App):
                 f"  [b green]{linked}[/] linked   "
                 f"[b yellow]{pending}[/] pending"
             )
+        settings_diagnostics = getattr(self, "_settings_diagnostics", ())
+        if settings_diagnostics:
+            diagnostic = " | ".join(settings_diagnostics)
+            text = f"  [b yellow]Settings:[/] {escape(diagnostic)}   {text.strip()}"
         try:
             self.query_one("#status-bar", Static).update(text)
         except Exception:

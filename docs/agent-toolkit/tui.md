@@ -36,8 +36,8 @@ Footer (key hints)
   you're managing. `instruction` sits above a separator (it is whole-scope, not
   per-slug); `skill`, `command`, `pi-extension`, `agent`, and `mcp` follow.
 - **Grid** — one row per asset, columns vary by type (slug, source, ref, state,
-  per-harness cells). Press ++i++ to open the column-info panel for the active
-  grid.
+  per-harness cells). Press ++i++ for the selected asset; click a glyphed column
+  header for column-level information.
 - **Scope toggle** — flips the whole view between **project** and **global**
   [scope](../glossary.md#scope). The grid re-reads at the new scope; pending
   edits queued in the other scope are kept, not discarded.
@@ -57,13 +57,29 @@ Footer (key hints)
 | ++ctrl+z++ | **Revert** | Clear the active grid's *entire* pending queue — both scopes. |
 | ++slash++ | **Filter** | Focus the fuzzy filter box over the grid. |
 | ++ctrl+g++ | **Scope toggle** | Switch project ⇄ global. |
-| ++i++ | **Info** | Open the active grid's column-info panel. |
+| ++ctrl+p++ | **Command palette** | Choose **Settings** for theme and main-harness columns. |
+| ++i++ | **Info** | Open information for the selected asset, regardless of column. |
 | ++q++ | **Quit** | Prompts to confirm if you have unapplied pending edits. |
 
 !!! note "📸 Screenshot — `tui-pending-apply.png`"
 
     A grid with queued edits and the pending line populated, just before
     ++ctrl+s++ — the moment the TUI's edit-then-apply model is clearest.
+
+## Settings
+
+Open ++ctrl+p++ and choose **Settings**. Theme choices come from Textual's live
+theme registry and persist immediately. Main-harness checkboxes are drafts:
+**Save** commits them and rebuilds every grid; **Cancel** or **Escape** discards
+only those drafts. There is no settings keybinding outside the command palette.
+
+A harness preference hides only its standalone columns. It never changes
+Standard coverage, and it cannot add a harness the asset type does not support.
+Saving rebuilds grids using their existing `set_rows()` contract, which clears
+pending queues; apply or revert queued edits first.
+
+See [TUI settings schema](tui-settings.md) for the JSON fields, environment
+override, failure handling, and the explicit CLI boundary.
 
 ## How edits flow
 
@@ -84,5 +100,5 @@ Quitting with unapplied edits raises a confirm-discard prompt.
     The scope toggle mid-switch (or the `(N global, M project)` tag in the
     pending line) demonstrating that a single queue can span both scopes.
 
-See also: [CLI reference](cli.md) · [Glossary](../glossary.md) ·
-[Roadmap](roadmap.md)
+See also: [CLI reference](cli.md) · [TUI settings schema](tui-settings.md) ·
+[Glossary](../glossary.md) · [Roadmap](roadmap.md)

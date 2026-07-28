@@ -102,12 +102,21 @@ class InstructionGrid(Vertical):
         self._scope: Literal["global", "project"] = "global"
         # (scope, harness_name, slug) -> op
         self._pending: dict[tuple[str, str, str], Op] = {}
+        self._selection: tuple[str, ...] | None = None
         self._filter: str = ""
 
     def _active_harnesses(self) -> tuple[str, ...]:
         # Standard column + non-covered main harnesses. The long tail is
         # CLI-only (#351 post-demo decision).
-        return instructions_nonstandard_main()
+        return instructions_nonstandard_main(self._selection)
+
+    def set_harness_selection(self, selection: tuple[str, ...]) -> None:
+        """Apply a presentation-only harness filter and rebuild columns."""
+        self._selection = selection
+        try:
+            self._rebuild(self.query_one("#instruction-table", DataTable))
+        except Exception:
+            pass
 
     @property
     def row_count(self) -> int:

@@ -20,14 +20,14 @@ from textual.app import App, ComposeResult
 from textual.coordinate import Coordinate
 from textual.widgets import DataTable
 
-from agent_toolkit_tui.skill_state import INTERACTIVE_AGENTS, SkillCell, SkillRow
+from agent_toolkit_tui.skill_state import interactive_agents, SkillCell, SkillRow
 from agent_toolkit_tui.widgets.skill_grid import SkillGrid
 
 
 def _row(slug: str, *, scope: str = "global") -> SkillRow:
     cells = {
         (a, scope): SkillCell(linked=False, drift=False, skipped=False)
-        for a in INTERACTIVE_AGENTS
+        for a in interactive_agents()
     }
     return SkillRow(slug=slug, source=f"x/{slug}", ref="main", state="clean", cells=cells)
 
@@ -115,13 +115,16 @@ async def test_toggle_column_preserves_scroll_offset():
 @pytest.mark.asyncio
 async def test_agent_grid_toggle_preserves_scroll_offset():
     """AgentGrid: mid-pane toggle must not move the viewport (#321)."""
-    from agent_toolkit_tui.agent_state import INTERACTIVE_HARNESSES, AgentCell, AgentRow
+    from agent_toolkit_tui.agent_state import AgentCell, AgentRow, interactive_harnesses
     from agent_toolkit_tui.widgets.agent_grid import AgentGrid
 
     def _arow(slug: str) -> AgentRow:
         return AgentRow(
             slug=slug, source=f"x/{slug}", ref="main",
-            cells={(h, "global"): AgentCell(linked=False) for h in INTERACTIVE_HARNESSES},
+            cells={
+                (h, "global"): AgentCell(linked=False)
+                for h in interactive_harnesses("global")
+            },
         )
 
     class _A(App):
@@ -152,15 +155,19 @@ async def test_instruction_grid_toggle_preserves_scroll_offset():
     grid with many synthetic rows directly.
     """
     from agent_toolkit_tui.instruction_state import (
-        INTERACTIVE_HARNESSES, InstructionCell, InstructionRow,
+        InstructionCell,
+        InstructionRow,
+        interactive_harnesses,
     )
     from agent_toolkit_tui.widgets.instruction_grid import InstructionGrid
 
     def _irow(slug: str) -> InstructionRow:
         return InstructionRow(
             slug=slug, source="AGENTS.md", canonical_exists=True,
-            cells={(h, "global"): InstructionCell(linked=False, conflict=False)
-                   for h in INTERACTIVE_HARNESSES},
+            cells={
+                (h, "global"): InstructionCell(linked=False, conflict=False)
+                for h in interactive_harnesses()
+            },
         )
 
     class _A(App):

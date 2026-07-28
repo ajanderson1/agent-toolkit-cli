@@ -1,0 +1,9 @@
+Operating on project scope — /Users/ajanderson/GitHub/projects/agent-toolkit-cli/.worktrees/run-issue-480-1785230239/skills-lock.json (8 skills). Pass -g for the global library.
+autonomous-run	missing
+cmux-pm	missing
+domain-manager	missing
+journal	missing
+mkdocs	missing
+pinchtab	missing
+pocketsmith	missing
+skill-builder	missing

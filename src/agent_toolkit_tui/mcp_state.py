@@ -30,12 +30,12 @@ Scope = Literal["global", "project"]
 State = Literal["installed", "library", "unlisted"]
 
 
-def mcp_interactive_harnesses(scope: str) -> tuple[str, ...]:
-    """Rendered harness columns for `scope`: the standard slot first (project
-    only), then the non-covered MCP harnesses. Derived per scope — never a
-    frozen constant — because the column set differs by scope (no standard at
-    global)."""
-    nonstandard = mcp_nonstandard_main(scope)
+def mcp_interactive_harnesses(
+    scope: str,
+    selection: tuple[str, ...] | None = None,
+) -> tuple[str, ...]:
+    """Selected MCP columns for ``scope``, including project Standard."""
+    nonstandard = mcp_nonstandard_main(scope, selection)
     if scope == "project":
         return ("standard",) + nonstandard
     return nonstandard
@@ -94,6 +94,7 @@ def build_mcp_rows(
     scope: Scope,
     home: Path | None,
     project: Path | None,
+    selection: tuple[str, ...] | None = None,
 ) -> list[McpRow]:
     """Build McpRow list from union(library DIRECTORY, scope lock) + filesystem.
 
@@ -121,7 +122,7 @@ def build_mcp_rows(
     )
     universe = sorted(lib_slugs | set(scope_lock))
 
-    harnesses = mcp_interactive_harnesses(scope)
+    harnesses = mcp_interactive_harnesses(scope, selection)
     rows: list[McpRow] = []
     for slug in universe:
         in_lib = slug in lib_slugs
