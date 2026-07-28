@@ -24,7 +24,7 @@
 
 ## Task 0: Confirm the dependency and the premise
 
-- [ ] **Step 1: Verify #478 has landed**
+- [x] **Step 1: Verify #478 has landed**
 
 ```bash
 git log --oneline -20 | rg -i "standard column|478" || echo "NOT LANDED"
@@ -34,7 +34,7 @@ uv run python -c "from agent_toolkit_tui.display_names import standard_column_he
 Expected: prints `Standard (13)`. If it raises `ImportError`, **stop** — #478 is
 a hard prerequisite. Park and report.
 
-- [ ] **Step 2: Re-derive the rendered column set**
+- [x] **Step 2: Re-derive the rendered column set**
 
 ```bash
 uv run python - <<'PY'
@@ -60,7 +60,7 @@ and note the addition in the PR body. Do **not** ship a column with no panel.
 **Files:**
 - Create: `tests/test_tui/test_column_info_coverage.py`
 
-- [ ] **Step 1: Write the both-ways invariant**
+- [x] **Step 1: Write the both-ways invariant**
 
 Create `tests/test_tui/test_column_info_coverage.py`:
 
@@ -115,7 +115,7 @@ def test_no_orphan_registry_entries():
     assert not orphans, f"registry has entries no grid renders: {sorted(orphans)}"
 ```
 
-- [ ] **Step 2: Confirm the red**
+- [x] **Step 2: Confirm the red**
 
 ```bash
 uv run pytest tests/test_tui/test_column_info_coverage.py -q
@@ -130,7 +130,7 @@ Expected: `ImportError` on `registered_pairs`, or failures for every non-
 - Modify: `src/agent_toolkit_tui/column_info.py`
 - Modify: `tests/test_tui/test_column_info.py`
 
-- [ ] **Step 1: Restructure the registry key**
+- [x] **Step 1: Restructure the registry key**
 
 Rewrite `COLUMN_INFO` as `dict[tuple[str, str], Callable[..., ColumnInfo]]`
 keyed by `(asset_type, column)`. Change the accessor to:
@@ -155,7 +155,7 @@ def registered_pairs() -> frozenset[tuple[str, str]]:
 instead of returning `None`. Every caller currently branches on `None` — update
 them in Task 3 rather than leaving a silent fallback.
 
-- [ ] **Step 2: Port the Standard factories**
+- [x] **Step 2: Port the Standard factories**
 
 Keep `_standard_info`'s substance but split the `if asset_type == ...` chains
 into four small factories (`_standard_skills`, `_standard_instructions`,
@@ -174,7 +174,7 @@ Carry across **verbatim**:
 Re-read `column_info.py:29-95` before deleting anything; the comments there
 record why each clause exists.
 
-- [ ] **Step 3: Add the harness factories**
+- [x] **Step 3: Add the harness factories**
 
 Add one factory per `(asset_type, harness)` pair in spec R5 — 17 pairs. Each
 returns a title (`f"{harness_label(h)} — {asset_type_label(asset_type)}"`) and a
@@ -188,7 +188,7 @@ path, add a comment pinning it to its source, e.g.:
 # path source: command_adapters/markdown.py DESTINATIONS["pi"]
 ```
 
-- [ ] **Step 4: Add the State and Origin factories**
+- [x] **Step 4: Add the State and Origin factories**
 
 Four State factories (skills keeps today's six-badge legend verbatim from
 `_state_info`; agents/commands/mcp share the three-badge legend from spec R5)
@@ -197,7 +197,7 @@ and one Origin factory for Pi Extensions.
 Do not collapse the four State panels into one — the vocabularies genuinely
 differ (spec Non-goals).
 
-- [ ] **Step 5: Green the coverage test**
+- [x] **Step 5: Green the coverage test**
 
 ```bash
 uv run pytest tests/test_tui/test_column_info_coverage.py tests/test_tui/test_column_info.py -q
@@ -207,7 +207,7 @@ Expected: PASS. Existing `test_column_info.py` cases will need their call sites
 updated for the new signature — that is a genuine API change, not a test to
 weaken.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/agent_toolkit_tui/column_info.py tests/test_tui/test_column_info*.py
@@ -220,7 +220,7 @@ git commit -m "feat(tui): per-asset-type column info registry"
 - Modify: all six grids in `src/agent_toolkit_tui/widgets/`
 - Create: `tests/test_tui/test_header_click_info.py`
 
-- [ ] **Step 1: Write the failing header-click test**
+- [x] **Step 1: Write the failing header-click test**
 
 Create `tests/test_tui/test_header_click_info.py` with, for each asset type, a
 pilot test that posts a `DataTable.HeaderSelected` for each glyphed column and
@@ -257,7 +257,7 @@ uv run pytest tests/test_tui/test_header_click_info.py -q
 
 Expected: FAIL — no handler exists.
 
-- [ ] **Step 2: Add the handler to each grid**
+- [x] **Step 2: Add the handler to each grid**
 
 In each grid, add:
 
@@ -284,7 +284,7 @@ Note: `DataTable.HeaderSelected` only fires when the table's header is
 clickable. Confirm `show_header` is on (it is, by default) and that no grid
 sets `header_height=0`.
 
-- [ ] **Step 3: Glyph the bare headers**
+- [x] **Step 3: Glyph the bare headers**
 
 Add ` {_INFO_GLYPH}` to the `State` header in `agent_grid.py:431`,
 `command_grid.py:407`, and `mcp_grid.py:437`, and to `Origin` in
@@ -293,13 +293,13 @@ Add ` {_INFO_GLYPH}` to the `State` header in `agent_grid.py:431`,
 Widen the affected column constants by 2 if the glyph pushes the label to
 truncate; check visually in Task 5 rather than guessing.
 
-- [ ] **Step 4: Green**
+- [x] **Step 4: Green**
 
 ```bash
 uv run pytest tests/test_tui/test_header_click_info.py -q
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/agent_toolkit_tui/widgets tests/test_tui/test_header_click_info.py
@@ -314,7 +314,7 @@ git commit -m "feat(tui): click a column header for column info"
 - Modify/Create: the asset panel screen
 - Create: `tests/test_tui/test_asset_info_key.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/test_tui/test_asset_info_key.py`:
 
@@ -347,7 +347,7 @@ async def test_i_with_zero_visible_rows_is_a_noop():
 Fill in the bodies using the `_visible_rows` / cursor idiom from
 `tests/test_tui/test_asset_grid_filters.py`.
 
-- [ ] **Step 2: Repoint `action_info()`**
+- [x] **Step 2: Repoint `action_info()`**
 
 In every grid, delete the column branch from `action_info()`. It becomes:
 resolve the row from `_visible_rows()` at `cursor_coordinate.row`, bail if out
@@ -358,14 +358,14 @@ ref, and per-scope state. Reuse `CellInfoScreen`'s chrome — it already closes 
 `escape`/`q`/`i` — or add a sibling screen if the field set diverges enough to
 make the reuse contorted. Do not keep two screens that differ only cosmetically.
 
-- [ ] **Step 3: Fix the Commands branch in `app.py`**
+- [x] **Step 3: Fix the Commands branch in `app.py`**
 
 Replace the `cgrid.focus()` branch in `action_info_pass()` with
 `cgrid.action_info()`. While there, collapse the six near-identical branches
 into a lookup over `self._active_grid()` if it reads more clearly — but keep it
 a pure refactor, tested by the same suite.
 
-- [ ] **Step 4: Green, then check nothing lost the State legend**
+- [x] **Step 4: Green, then check nothing lost the State legend**
 
 ```bash
 uv run pytest tests/test_tui/test_asset_info_key.py tests/test_tui -q
@@ -376,7 +376,7 @@ the **old** `i` semantics. They must be rewritten to the new contract — header
 click for column info, `i` for asset info — not deleted. Losing them loses the
 regression net for the exact behaviour being changed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/agent_toolkit_tui tests/test_tui
@@ -385,13 +385,13 @@ git commit -m "feat(tui): i explains the asset, not the column"
 
 ## Task 5: Sweep and visual judgment
 
-- [ ] **Step 1: Full suite**
+- [x] **Step 1: Full suite**
 
 ```bash
 uv run pytest -q
 ```
 
-- [ ] **Step 2: Dead-affordance scan**
+- [x] **Step 2: Dead-affordance scan**
 
 ```bash
 rg -n "_INFO_GLYPH" src/agent_toolkit_tui/widgets
@@ -407,7 +407,7 @@ rg -n "get_column_info|COLUMN_INFO" src/agent_toolkit_tui
 
 No caller may still branch on a `None` return.
 
-- [ ] **Step 3: Manual visual check**
+- [x] **Step 3: Manual visual check**
 
 ```bash
 uv run agent-toolkit-tui
@@ -432,7 +432,7 @@ Capture one screenshot per asset type plus one of each Standard panel into
 `assets/verification/issue-479/`, and write a one-line visual verdict in the PR
 body per `~/.conventions/conventions/testing.md`.
 
-- [ ] **Step 4: Final commit**
+- [x] **Step 4: Final commit**
 
 ```bash
 git add src/agent_toolkit_tui tests/test_tui
