@@ -151,8 +151,7 @@ async def test_context_for_reports_global_linked_true():
         await pilot.pause()
         ctx = g._context_for(key="standard", row_index=0)  # type: ignore[attr-defined]
         assert ctx is not None
-        assert ctx["global_linked"] is True
-        assert ctx["asset_type"] == "agents"
+        assert ctx == {"scope": "project", "global_linked": True}
 
 
 @pytest.mark.asyncio
@@ -170,9 +169,9 @@ async def test_context_for_reports_global_linked_false():
         g.set_scope("project")
         await pilot.pause()
         ctx = g._context_for(key="standard", row_index=0)  # type: ignore[attr-defined]
-        assert ctx is not None and ctx["global_linked"] is False
+        assert ctx == {"scope": "project", "global_linked": False}
         oob = g._context_for(key="standard", row_index=99)  # type: ignore[attr-defined]
-        assert oob is not None and oob["global_linked"] is False
+        assert oob == {"scope": "project", "global_linked": False}
 
 
 @pytest.mark.asyncio

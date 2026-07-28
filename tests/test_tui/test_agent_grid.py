@@ -103,7 +103,8 @@ async def test_agent_grid_mounts_with_correct_columns():
         labels = [str(c.label) for c in table.columns.values()]
         # Slug + N harness cols + State + Source = 3 + N  (#360: State column added)
         assert len(labels) == len(INTERACTIVE_HARNESSES) + 3
-        assert "Agent ⓘ" in labels
+        assert "Agent" in labels
+        assert "Agent ⓘ" not in labels
         assert not any("AGENT" in lbl for lbl in labels)
         assert any(label.startswith("Standard (") for label in labels)
         assert any("State" in lbl for lbl in labels)
@@ -288,7 +289,7 @@ async def test_set_scope_clears_pending():
         assert g.pending_entries() == {}
 
 @pytest.mark.asyncio
-async def test_agent_cell_info_uses_harness_display_name():
+async def test_agent_i_opens_asset_info_from_harness_column():
     from textual.coordinate import Coordinate
 
     from agent_toolkit_tui.screens.cell_info import CellInfoScreen
@@ -308,8 +309,10 @@ async def test_agent_cell_info_uses_harness_display_name():
         await pilot.press("i")
         await pilot.pause()
         assert isinstance(app.screen, CellInfoScreen)
-        assert "Pi @ global" in app.screen._title
-        assert "into Pi @ global" in app.screen._body_markup
+        assert app.screen._title == "alpha · Agent"
+        assert "Source: ajanderson1/alpha" in app.screen._body_markup
+        assert "Ref:    main" in app.screen._body_markup
+        assert "State (global): installed" in app.screen._body_markup
 
 
 # ---------------------------------------------------------------------------

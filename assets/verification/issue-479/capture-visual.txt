@@ -1,0 +1,3 @@
+$ uv run python assets/verification/issue-479/capture_visual_evidence.py
+assets/verification/issue-479
+exit_code=0

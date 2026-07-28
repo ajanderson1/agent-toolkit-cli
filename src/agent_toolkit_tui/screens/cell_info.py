@@ -8,8 +8,37 @@ from textual.screen import ModalScreen
 from textual.widgets import Label, Static
 
 
+def asset_info_body(
+    *,
+    asset_label: str,
+    slug: str,
+    description: str | None,
+    description_location: str,
+    source: str,
+    ref: str | None,
+    state: str,
+    scope: str,
+    extra_lines: list[str] | None = None,
+) -> str:
+    """Render the shared asset-level panel body used by every grid (#479)."""
+    lines = [f"{asset_label} [b]{slug}[/]"]
+    if description and description.strip():
+        lines += ["", "Description:", description]
+    else:
+        lines += ["", f"No description in {description_location}."]
+    lines += [
+        "",
+        f"Source: {source}",
+        f"Ref:    {ref or '—'}",
+        f"State ({scope}): {state}",
+    ]
+    if extra_lines:
+        lines += ["", *extra_lines]
+    return "\n".join(lines)
+
+
 class CellInfoScreen(ModalScreen[None]):
-    """Read-only info modal for a single SkillGrid cell."""
+    """Read-only info modal for a selected asset or legacy cell."""
 
     DEFAULT_CSS = """
     CellInfoScreen {

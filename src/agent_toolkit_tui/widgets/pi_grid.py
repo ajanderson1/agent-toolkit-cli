@@ -1,6 +1,6 @@
 """Interactive DataTable for the TUI's pi-extension tab.
 
-Columns: EXTENSION | Pi | Origin | Source.
+Columns: Pi Extension | Pi ⓘ | Origin ⓘ | Source.
 
 One scope is visible at a time; the app's ctrl+g scope toggle flips it
 app-wide (#349). The header carries no scope name — the ScopeToggle widget
@@ -11,7 +11,8 @@ preservation across the toggle is orchestrated by the App, not the widget.
 
 `space` queues a link/unlink for the cell under the cursor.
 `ctrl+s` Apply is handled by the App, which reads pending_entries().
-`i` opens CellInfoScreen with per-cell context.
+Clicking a glyphed header explains the column; `i` always explains the
+selected extension.
 
 CRITICAL: never name any method `_render_*` — it collides with Textual's
 internal flag mechanism and produces a "bool is not callable" error from
@@ -35,6 +36,7 @@ from textual.events import Resize
 from rich.text import Text
 from agent_toolkit_tui.widgets._support import current_source_column_width
 
+from agent_toolkit_tui.column_info import get_column_info
 from agent_toolkit_tui.display_names import asset_type_label, pi_extension_origin_label
 from agent_toolkit_tui.widgets._support import (
     adjust_source_column_width,
@@ -42,6 +44,7 @@ from agent_toolkit_tui.widgets._support import (
 )
 from agent_toolkit_tui.pi_extension_state import PiExtensionRow
 from agent_toolkit_tui.screens.cell_info import CellInfoScreen
+from agent_toolkit_tui.widgets.column_info_modal import ColumnInfoModal
 from agent_toolkit_tui.widgets.filter_input import GridFilterInput
 
 Op = Literal["link", "unlink"]
@@ -206,32 +209,62 @@ class PiGrid(Vertical):
         self._toggle_at(table.cursor_coordinate)
 
     def action_info(self) -> None:
-        """Open CellInfoScreen for the cell under the cursor."""
+        """Open the selected Pi extension's asset panel, regardless of column."""
+        from agent_toolkit_tui.screens.cell_info import asset_info_body
+
         try:
             table = self.query_one("#pi-table", DataTable)
         except Exception:
             return
-        coord = table.cursor_coordinate
         visible = self._visible_rows()
-        if coord.row >= len(visible):
+        if table.cursor_coordinate.row >= len(visible):
             return
-        row = visible[coord.row]
+        row = visible[table.cursor_coordinate.row]
+        loaded = (
+            row.global_cell.global_loaded
+            if self._scope == "global"
+            else row.project_cell.project_loaded
+        )
+        state = "untracked" if row.origin == "untracked" else "loaded" if loaded else "not loaded"
+        self.app.push_screen(
+            CellInfoScreen(
+                title=f"{row.slug} · {asset_type_label('pi-extension')}",
+                body_markup=asset_info_body(
+                    asset_label=asset_type_label("pi-extension"),
+                    slug=row.slug,
+                    description=None,
+                    description_location="extension metadata",
+                    source=row.source,
+                    ref=None,
+                    state=state,
+                    scope=self._scope,
+                    extra_lines=[f"Origin: {self._origin_label(row)}"],
+                ),
+            )
+        )
 
-        col = coord.column
-        if col == _COL_EXTENSION:
-            title = f"{row.slug} · extension"
-            body = self._extension_info_body(row)
-        elif col == _COL_SCOPE:
-            scope = self._scope
-            title = f"{row.slug} · Pi ({scope})"
-            body = self._info_body(row=row, scope=scope)
-        elif col == _COL_ORIGIN:
-            title = f"{row.slug} · origin"
-            body = self._origin_info_body()
-        else:
+    def _column_key_for_index(self, col: int) -> str | None:
+        """Resolve every explainable header to its registry key (#479 R2)."""
+        if col == _COL_SCOPE:
+            return "pi"
+        if col == _COL_ORIGIN:
+            return "origin"
+        return None
+
+    def on_data_table_header_selected(self, event: DataTable.HeaderSelected) -> None:
+        """Click a glyphed header to explain that column (#479 R1)."""
+        key = self._column_key_for_index(event.column_index)
+        if key is None:
             return
-
-        self.app.push_screen(CellInfoScreen(title=title, body_markup=body))
+        self.app.push_screen(
+            ColumnInfoModal(
+                get_column_info(
+                    key,
+                    asset_type="pi-extension",
+                    context={"scope": self._scope},
+                )
+            )
+        )
 
     def _extension_info_body(self, row: PiExtensionRow) -> str:
         body = (
@@ -412,12 +445,10 @@ class PiGrid(Vertical):
         )
         source_width = current_source_column_width(table)
         table.clear(columns=True)
-        table.add_column(
-            f"{asset_type_label('pi-extension')} {_INFO_GLYPH}",
-            width=extension_width,
-        )
+        # The asset column is explained by `i`, not header click (#479).
+        table.add_column(asset_type_label("pi-extension"), width=extension_width)
         table.add_column(f"Pi {_INFO_GLYPH}", width=_SCOPE_COLUMN_WIDTH)
-        table.add_column("Origin", width=_ORIGIN_COLUMN_WIDTH)
+        table.add_column(f"Origin {_INFO_GLYPH}", width=_ORIGIN_COLUMN_WIDTH)
         table.add_column("Source", width=source_width)
         self._adjust_source_column_width(table)
 
@@ -448,7 +479,7 @@ class PiGrid(Vertical):
             set_source_column_width(table, self.size.width, _FIXED_COLUMN_WIDTH)
 
     def _text_width_for_extension_column(self) -> int:
-        header_width = len(f"{asset_type_label('pi-extension')} {_INFO_GLYPH}")
+        header_width = len(asset_type_label("pi-extension"))
         row_width = max((len(row.slug) for row in self._visible_rows()), default=0)
         return max(_DEFAULT_EXTENSION_WIDTH, header_width, row_width)
 

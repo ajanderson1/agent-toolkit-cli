@@ -2,12 +2,12 @@
 
 The standard slot leads the harness columns; claude-code and cursor are
 absorbed into it (both read .claude/agents natively at both scopes).
-Pressing `i` on the Standard column opens the registry-backed
-ColumnInfoModal listing the covered harnesses per scope.
+Clicking Standard opens its registry-backed column panel; `i` stays asset-level.
 """
 from __future__ import annotations
 
 import pytest
+from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.coordinate import Coordinate
 from textual.widgets import DataTable
@@ -26,6 +26,17 @@ class _A(App):
         yield AgentGrid([_row()], id="g")
 
 
+def _post_standard_header(grid: AgentGrid, table: DataTable) -> None:
+    grid.post_message(
+        DataTable.HeaderSelected(
+            table,
+            column_key=list(table.columns)[1],
+            column_index=1,
+            label=Text(str(list(table.columns.values())[1].label)),
+        )
+    )
+
+
 @pytest.mark.asyncio
 async def test_columns_standard_first_then_noncovered_main():
     app = _A()
@@ -35,7 +46,7 @@ async def test_columns_standard_first_then_noncovered_main():
         labels = [str(c.label) for c in table.columns.values()]
         from agent_toolkit_cli.agent_adapters.standard import agents_standard_covered
 
-        assert labels[0] == "Agent ⓘ"
+        assert labels[0] == "Agent"
         assert labels[1] == f"Standard ({len(agents_standard_covered('global'))}) ⓘ"
         assert not any("Claude Code" in lbl for lbl in labels)  # absorbed
         assert not any("claude-code" in lbl for lbl in labels)
@@ -47,17 +58,15 @@ async def test_columns_standard_first_then_noncovered_main():
 
 
 @pytest.mark.asyncio
-async def test_press_i_on_standard_column_opens_registry_modal():
+async def test_click_standard_header_opens_registry_modal():
     from agent_toolkit_tui.widgets.column_info_modal import ColumnInfoModal
 
     app = _A()
     async with app.run_test() as pilot:
         await pilot.pause()
+        grid = app.query_one("#g", AgentGrid)
         table = app.query_one("#agent-table", DataTable)
-        table.cursor_coordinate = Coordinate(row=0, column=1)
-        table.focus()
-        await pilot.pause()
-        await pilot.press("i")
+        _post_standard_header(grid, table)
         await pilot.pause()
         assert isinstance(app.screen, ColumnInfoModal)
         body = str(app.screen.query_one("#column-info-body").render())
@@ -88,10 +97,7 @@ async def test_standard_modal_at_project_scope_lists_devin_without_note():
         grid.set_scope("project")
         await pilot.pause()
         table = app.query_one("#agent-table", DataTable)
-        table.cursor_coordinate = Coordinate(row=0, column=1)
-        table.focus()
-        await pilot.pause()
-        await pilot.press("i")
+        _post_standard_header(grid, table)
         await pilot.pause()
         assert isinstance(app.screen, ColumnInfoModal)
         body = str(app.screen.query_one("#column-info-body").render())

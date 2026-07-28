@@ -1,6 +1,6 @@
 """Interactive DataTable for the TUI's agent tab.
 
-Columns (#361/#360): AGENT ⓘ | Standard ⓘ | <non-covered main harnesses…> | State | Source.
+Columns (#361/#360): Agent | Standard ⓘ | <non-covered main harnesses…> ⓘ | State ⓘ | Source.
 
 Layout: [0]=slug, [1..N]=harnesses, [N+1]=state, [N+2]=source.
 
@@ -8,8 +8,8 @@ Mirrors skill_grid.py: per-harness columns, scope toggle, toggle-queue →
 pending → apply. Pending key shape: (scope, harness_name, slug) — same
 3-tuple as skill. The Standard column IS a harness column (the
 .claude/agents slot is a real installable destination) — it toggles like
-any other; `i` on it opens the registry-backed ColumnInfoModal listing
-the covered harnesses for the active scope.
+any other. Clicking a glyphed header explains the column; `i` always explains
+the selected agent.
 
 CRITICAL: never name any method `_render_*` — it collides with Textual's
 internal flag mechanism and produces "bool is not callable" from compose.
@@ -203,71 +203,32 @@ class AgentGrid(Vertical):
         self._toggle_at(table.cursor_coordinate)
 
     def action_info(self) -> None:
-        """Route `i` by column. The standard column has registered ColumnInfo
-        and opens ColumnInfoModal — the registry path mirroring
-        instruction_grid (#351/#361). Everything else opens CellInfoScreen
-        with the per-cell state."""
-        from agent_toolkit_tui.screens.cell_info import CellInfoScreen
+        """Open the selected agent's asset panel, regardless of column (#479)."""
+        from agent_toolkit_tui.screens.cell_info import CellInfoScreen, asset_info_body
 
         try:
             table = self.query_one("#agent-table", DataTable)
         except Exception:
             return
-        coord = table.cursor_coordinate
-        key = self._column_key_for_index(coord.column)
-        if key is not None:
-            info = get_column_info(
-                key, context=self._context_for(key=key, row_index=coord.row),
-            )
-            if info is not None:
-                self.app.push_screen(ColumnInfoModal(info))
-                return
         visible = self._visible_rows()
-        if coord.row >= len(visible):
+        if table.cursor_coordinate.row >= len(visible):
             return
-        row = visible[coord.row]
-
-        if coord.column == 0:
-            title = f"{row.slug} · agent"
-            body = (
-                f"Agent [b]{row.slug}[/]\n"
-                f"Source: {row.source}\n"
-                f"Ref:    {row.ref}\n"
-                f"State:  {'—' if row.state == 'installed' else row.state}"
+        row = visible[table.cursor_coordinate.row]
+        self.app.push_screen(
+            CellInfoScreen(
+                title=f"{row.slug} · {asset_type_label('agent')}",
+                body_markup=asset_info_body(
+                    asset_label=asset_type_label("agent"),
+                    slug=row.slug,
+                    description=None,
+                    description_location="agent definition",
+                    source=row.source,
+                    ref=row.ref,
+                    state=row.state,
+                    scope=self._scope,
+                ),
             )
-        else:
-            harness = self._harness_for_column(coord.column)
-            if harness is None:
-                return
-            cell = row.cells.get((harness, self._scope))
-            scope_flag = "-g" if self._scope == "global" else "-p"
-            display = harness_label(harness)
-            title = f"{row.slug} · {display} @ {self._scope}"
-            pending = self._pending.get((self._scope, harness, row.slug))
-            if pending == "link":
-                body = (
-                    "[yellow]Pending: install.[/]\n\n"
-                    "Press [b]^s[/] to apply."
-                )
-            elif pending == "unlink":
-                body = (
-                    "[yellow]Pending: uninstall.[/]\n\n"
-                    "Press [b]^s[/] to apply."
-                )
-            elif cell is None:
-                body = f"Not available at {self._scope} scope."
-            elif cell.linked:
-                body = f"Installed.\nAgent {row.slug} is projected into {display} @ {self._scope}."
-            else:
-                body = (
-                    f"Not installed.\nPress [b]space[/] to queue install "
-                    f"into {display} @ {self._scope}.\n\n"
-                    f"Or from the CLI:\n"
-                    f"  [b]agent-toolkit-cli agent install {row.slug} "
-                    f"{scope_flag} --harnesses {harness}[/]"
-                )
-
-        self.app.push_screen(CellInfoScreen(title=title, body_markup=body))
+        )
 
     def action_toggle_column(self) -> None:
         """Toggle all rows in the column under the cursor."""
@@ -352,50 +313,43 @@ class AgentGrid(Vertical):
         return None
 
     def _column_key_for_index(self, col: int) -> str | None:
-        """Resolve a column index to a COLUMN_INFO registry key (#361).
-
-        Only the standard column has registered ColumnInfo; harness/slug/
-        source columns return None and fall through to CellInfoScreen.
-        """
-        if self._harness_for_column(col) == "standard":
-            return "standard"
+        """Resolve every explainable header to its registry key (#479 R2)."""
+        harness = self._harness_for_column(col)
+        if harness is not None:
+            return harness
+        if col == len(INTERACTIVE_HARNESSES) + 1:
+            return "state"
         return None
 
-    def _context_for(self, *, key: str, row_index: int) -> dict | None:
-        """Context for get_column_info(): the standard panel enumerates the
-        native .claude/agents readers from the per-scope coverage SSOT (#361).
-
-        At global scope the panel carries the devin note (devin reads the
-        slot at project scope only, so it is absent from the global covered
-        set); at project scope devin is simply covered and the note is gone.
-
-        Also surfaces whether the focused row is installed globally so the
-        modal can omit the 🌐 paragraph when it's not (#374) — mirrors
-        skill_grid._context_for.
-        """
-        if key == "standard":
-            from agent_toolkit_cli.agent_adapters.standard import (
-                agents_standard_covered,
+    def on_data_table_header_selected(self, event: DataTable.HeaderSelected) -> None:
+        """Click a glyphed header to explain that column (#479 R1)."""
+        key = self._column_key_for_index(event.column_index)
+        if key is None:
+            return
+        self.app.push_screen(
+            ColumnInfoModal(
+                get_column_info(
+                    key,
+                    asset_type="agent",
+                    context=self._context_for(
+                        key=key,
+                        row_index=event.data_table.cursor_coordinate.row,
+                    ),
+                )
             )
+        )
 
-            covered = sorted(agents_standard_covered(self._scope))
-            extra_lines = (
-                ["", "Devin reads .claude/agents at project scope only."]
-                if self._scope == "global"
-                else []
-            )
-            global_linked = False
-            visible = self._visible_rows()
-            if 0 <= row_index < len(visible):
-                global_cell = visible[row_index].cells.get(("standard", "global"))
-                global_linked = bool(global_cell and global_cell.linked)
-            return {
-                "asset_type": "agents",
-                "names": tuple(covered),
-                "extra_lines": extra_lines,
-                "global_linked": global_linked,
-            }
-        return None
+    def _context_for(self, *, key: str, row_index: int) -> dict[str, object]:
+        """Return live scope context; marker copy additionally needs row state."""
+        context: dict[str, object] = {"scope": self._scope}
+        if key != "standard":
+            return context
+        context["global_linked"] = False
+        visible = self._visible_rows()
+        if 0 <= row_index < len(visible):
+            global_cell = visible[row_index].cells.get(("standard", "global"))
+            context["global_linked"] = bool(global_cell and global_cell.linked)
+        return context
 
     def on_resize(self, event: Resize) -> None:
         try:
@@ -417,8 +371,8 @@ class AgentGrid(Vertical):
         saved_scroll = (table.scroll_x, table.scroll_y)
         source_width = current_source_column_width(table)
         table.clear(columns=True)
-        # Slug column — info glyph since `i` works on it.
-        table.add_column(f"{asset_type_label('agent')} {_INFO_GLYPH}", width=22)
+        # The asset column is explained by `i`, not header click (#479).
+        table.add_column(asset_type_label("agent"), width=22)
         # Per-harness columns. "standard" is the .claude/agents slot (#361),
         # not a catalog harness. The Standard column leads; everything after it
         # is implicitly non-standard.
@@ -428,8 +382,8 @@ class AgentGrid(Vertical):
         for harness in INTERACTIVE_HARNESSES:
             base = headers.get(harness, harness_label(harness))
             table.add_column(f"{base} {_INFO_GLYPH}", width=14)
-        # State column — shows installed/library/unlisted (#360).
-        table.add_column("State", width=10)
+        # State column — explains its asset-type-specific badges (#479).
+        table.add_column(f"State {_INFO_GLYPH}", width=10)
         # Source column — passive, no info popup.
         table.add_column("Source", width=source_width)
         self._adjust_source_column_width(table)

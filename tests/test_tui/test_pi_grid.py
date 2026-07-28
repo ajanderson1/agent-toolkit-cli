@@ -137,7 +137,8 @@ async def test_pi_grid_mounts_with_single_scope_column():
         table = app.query_one("#pi-table", DataTable)
         labels = [str(c.label) for c in table.columns.values()]
         assert len(labels) == 4
-        assert "Pi Extension ⓘ" in labels
+        assert "Pi Extension" in labels
+        assert "Pi Extension ⓘ" not in labels
         assert not any("EXTENSION" in label for label in labels)
         assert not any("Hermes" in label for label in labels)
         assert any(lbl.startswith("Pi ") for lbl in labels)

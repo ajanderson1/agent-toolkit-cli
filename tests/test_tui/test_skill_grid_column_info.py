@@ -1,305 +1,188 @@
-"""Pilot tests for SkillGrid's column-info wiring.
+"""Regression tests for SkillGrid's split info affordances (#479).
 
-`i` routes via `_column_key_for_index`:
-  - Standard / State (have a registered ColumnInfo) → ColumnInfoModal
-  - Agent columns (Claude, Pi) / slug / source → CellInfoScreen
+Header clicks explain columns; `i` always explains the selected skill.
 """
 from __future__ import annotations
 
 import pytest
+from rich.text import Text
+from textual.app import App
+from textual.coordinate import Coordinate
+from textual.widgets import DataTable
 
+from agent_toolkit_cli.skill_agents import get_standard_agents
+from agent_toolkit_tui.screens.cell_info import CellInfoScreen
 from agent_toolkit_tui.skill_state import INTERACTIVE_AGENTS, SkillCell, SkillRow
 from agent_toolkit_tui.widgets.column_info_modal import ColumnInfoModal
 from agent_toolkit_tui.widgets.skill_grid import SkillGrid
 
 
 def _row(slug: str, *, scope: str = "global") -> SkillRow:
-    cells = {(a, scope): SkillCell(linked=False, drift=False, skipped=False)
-             for a in INTERACTIVE_AGENTS}
+    cells = {
+        (agent, scope): SkillCell(linked=False, drift=False, skipped=False)
+        for agent in INTERACTIVE_AGENTS
+    }
     return SkillRow(
-        slug=slug, source=f"x/{slug}", ref="main",
-        state="clean", cells=cells,
+        slug=slug,
+        source=f"x/{slug}",
+        ref="main",
+        state="clean",
+        cells=cells,
+    )
+
+
+def _post_header(grid: SkillGrid, table: DataTable, index: int) -> None:
+    grid.post_message(
+        DataTable.HeaderSelected(
+            table,
+            column_key=list(table.columns)[index],
+            column_index=index,
+            label=Text(str(list(table.columns.values())[index].label)),
+        )
     )
 
 
 @pytest.mark.asyncio
-async def test_columns_have_info_glyph_except_source():
-    """Every column whose cells expose an info panel gets ⓘ; Source is passive (#212)."""
-    from textual.app import App
-    from textual.widgets import DataTable
+async def test_only_column_info_headers_have_glyphs() -> None:
+    """The asset and Source headers are passive; every column-info header is glyphed."""
 
-    class _A(App):
+    class _A(App[None]):
         def compose(self):
             yield SkillGrid([_row("alpha")], id="g")
 
-    a = _A()
-    async with a.run_test() as pilot:
+    app = _A()
+    async with app.run_test() as pilot:
         await pilot.pause()
-        table = a.query_one("#skill-table", DataTable)
-        labels = [str(c.label) for c in table.columns.values()]
-        # Layout (#351/#448): Skill | Standard (N) | Claude | Pi | State | Source —
-        # single-line labels; Standard leads, the rest is implicitly
-        # non-standard; the long tail is CLI-only.
-        from agent_toolkit_cli.skill_agents import get_standard_agents
+        labels = [
+            str(column.label)
+            for column in app.query_one("#skill-table", DataTable).columns.values()
+        ]
 
-        assert labels[0] == "Skill ⓘ", f"slug label: {labels[0]!r}"
-        assert labels[1] == f"Standard ({len(get_standard_agents())}) ⓘ", f"standard label: {labels[1]!r}"
-        assert labels[2] == "Claude ⓘ", f"claude-code label: {labels[2]!r}"
-        assert labels[3] == "Pi ⓘ", f"pi label: {labels[3]!r}"
-        assert labels[-2] == "State ⓘ", f"state label: {labels[-2]!r}"
-        assert labels[-1] == "Source", f"source label: {labels[-1]!r}"
-        assert "ⓘ" not in labels[-1], f"source must not have glyph: {labels[-1]!r}"
+        assert labels[0] == "Skill"
+        assert labels[1] == f"Standard ({len(get_standard_agents())}) ⓘ"
+        assert labels[2:6] == ["Claude ⓘ", "Pi ⓘ", "Hermes ⓘ", "Paperclip ⓘ"]
+        assert labels[-2:] == ["State ⓘ", "Source"]
 
 
 @pytest.mark.asyncio
-async def test_press_i_on_universal_column_opens_column_info_modal():
-    """i on universal column opens ColumnInfoModal (registered column info)."""
-    from textual.app import App
-
-    class _A(App):
+async def test_click_standard_header_opens_column_info_modal() -> None:
+    class _A(App[None]):
         def compose(self):
             yield SkillGrid([_row("alpha")], id="g")
 
-    a = _A()
-    async with a.run_test() as pilot:
+    app = _A()
+    async with app.run_test() as pilot:
         await pilot.pause()
-        g = a.query_one("#g", SkillGrid)
-        g.cursor_to_cell(row_slug="alpha", agent_name="standard")
+        grid = app.query_one("#g", SkillGrid)
+        table = app.query_one("#skill-table", DataTable)
+        _post_header(grid, table, 1)
         await pilot.pause()
-        await pilot.press("i")
-        await pilot.pause()
-        assert isinstance(a.screen, ColumnInfoModal), \
-            "ColumnInfoModal not pushed for universal column"
+
+        assert isinstance(app.screen, ColumnInfoModal)
+        assert app.screen._info.title == "Standard — Skills"
+        assert any(".agents/skills/<slug>/" in line for line in app.screen._info.lines)
 
 
 @pytest.mark.asyncio
-async def test_press_i_on_claude_code_column_opens_cell_info():
-    """i on agent (non-info-registered) columns opens CellInfoScreen with cell state."""
-    from textual.app import App
-
-    from agent_toolkit_tui.screens.cell_info import CellInfoScreen
-
-    class _A(App):
+async def test_i_opens_identical_asset_info_from_standard_harness_and_state() -> None:
+    class _A(App[None]):
         def compose(self):
             yield SkillGrid([_row("alpha")], id="g")
 
-    a = _A()
-    async with a.run_test() as pilot:
+    app = _A()
+    async with app.run_test() as pilot:
         await pilot.pause()
-        g = a.query_one("#g", SkillGrid)
-        g.cursor_to_cell(row_slug="alpha", agent_name="claude-code")
-        await pilot.pause()
-        await pilot.press("i")
-        await pilot.pause()
-        assert isinstance(a.screen, CellInfoScreen), \
-            "CellInfoScreen not pushed for claude-code column"
-        assert "Claude @ global" in a.screen._title
-        assert "claude-code @ global" not in a.screen._title
+        table = app.query_one("#skill-table", DataTable)
+        panels: list[tuple[str, str]] = []
+        for column in (1, 2, len(INTERACTIVE_AGENTS) + 1):
+            table.cursor_coordinate = Coordinate(row=0, column=column)
+            table.focus()
+            await pilot.press("i")
+            await pilot.pause()
+            assert isinstance(app.screen, CellInfoScreen)
+            assert not isinstance(app.screen, ColumnInfoModal)
+            panels.append((app.screen._title, app.screen._body_markup))
+            await pilot.press("escape")
+            await pilot.pause()
+
+        assert panels[0] == panels[1] == panels[2]
+        assert panels[0][0] == "alpha · Skill"
 
 
 @pytest.mark.asyncio
-async def test_press_i_on_slug_column_opens_cell_info():
-    """i on the slug column opens CellInfoScreen (not ColumnInfoModal)."""
-    from textual.app import App
-    from textual.coordinate import Coordinate
-    from textual.widgets import DataTable
-
-    from agent_toolkit_tui.screens.cell_info import CellInfoScreen
-
-    class _A(App):
+async def test_column_key_for_index_resolves_every_explainable_header() -> None:
+    class _A(App[None]):
         def compose(self):
             yield SkillGrid([_row("alpha")], id="g")
 
-    a = _A()
-    async with a.run_test() as pilot:
+    app = _A()
+    async with app.run_test() as pilot:
         await pilot.pause()
-        table = a.query_one("#skill-table", DataTable)
-        table.cursor_coordinate = Coordinate(row=0, column=0)
-        table.focus()  # filter Input is focused on open (#249); table needs focus to receive `i`
-        await pilot.pause()
-        await pilot.press("i")
-        await pilot.pause()
-        assert isinstance(a.screen, CellInfoScreen), \
-            "CellInfoScreen not pushed for slug column"
-        assert not any(isinstance(s, ColumnInfoModal) for s in a.screen_stack)
+        grid = app.query_one("#g", SkillGrid)
+        count = len(INTERACTIVE_AGENTS)
+
+        assert grid._column_key_for_index(0) is None
+        for index, agent in enumerate(INTERACTIVE_AGENTS, start=1):
+            assert grid._column_key_for_index(index) == agent
+        assert grid._column_key_for_index(count + 1) == "state"
+        assert grid._column_key_for_index(count + 2) is None
 
 
 @pytest.mark.asyncio
-async def test_column_key_for_index_resolves_state():
-    """Layout: [0]=SKILL, [1..N]=agents, [N+1]=State, [N+2]=Source."""
-    from textual.app import App
-    from agent_toolkit_tui.skill_state import INTERACTIVE_AGENTS
-
-    class _A(App):
+async def test_click_state_header_opens_state_legend() -> None:
+    class _A(App[None]):
         def compose(self):
             yield SkillGrid([_row("alpha")], id="g")
 
-    a = _A()
-    async with a.run_test() as pilot:
+    app = _A()
+    async with app.run_test() as pilot:
         await pilot.pause()
-        g = a.query_one("#g", SkillGrid)
-        n = len(INTERACTIVE_AGENTS)
-        assert g._column_key_for_index(0) is None       # SKILL
-        for i, agent in enumerate(INTERACTIVE_AGENTS, start=1):
-            assert g._column_key_for_index(i) == agent
-        assert g._column_key_for_index(n + 1) == "state"
-        assert g._column_key_for_index(n + 2) is None  # Source
+        grid = app.query_one("#g", SkillGrid)
+        table = app.query_one("#skill-table", DataTable)
+        _post_header(grid, table, len(INTERACTIVE_AGENTS) + 1)
+        await pilot.pause()
+
+        assert isinstance(app.screen, ColumnInfoModal)
+        assert app.screen._info.title == "State badges — Skills"
+        assert any("unlisted" in line for line in app.screen._info.lines)
 
 
 @pytest.mark.asyncio
-async def test_press_i_on_state_column_opens_modal():
-    from textual.app import App
-    from textual.coordinate import Coordinate
-    from textual.widgets import DataTable
-    from agent_toolkit_tui.skill_state import INTERACTIVE_AGENTS
+@pytest.mark.parametrize("globally_linked", [False, True])
+async def test_standard_header_marker_matches_selected_row(globally_linked: bool) -> None:
+    cells = {
+        (agent, scope): SkillCell(linked=False, drift=False, skipped=False)
+        for agent in INTERACTIVE_AGENTS
+        for scope in ("global", "project")
+    }
+    cells[("standard", "global")] = SkillCell(
+        linked=globally_linked,
+        drift=False,
+        skipped=False,
+    )
+    row = SkillRow(
+        slug="alpha",
+        source="x/alpha",
+        ref="main",
+        state="library",
+        cells=cells,
+    )
 
-    class _A(App):
-        def compose(self):
-            yield SkillGrid([_row("alpha")], id="g")
-
-    a = _A()
-    async with a.run_test() as pilot:
-        await pilot.pause()
-        table = a.query_one("#skill-table", DataTable)
-        state_col = len(INTERACTIVE_AGENTS) + 1
-        table.cursor_coordinate = Coordinate(row=0, column=state_col)
-        table.focus()  # filter Input is focused on open (#249); table needs focus to receive `i`
-        await pilot.pause()
-        await pilot.press("i")
-        await pilot.pause()
-        assert any(isinstance(s, ColumnInfoModal) for s in a.screen_stack), \
-            "ColumnInfoModal not pushed when pressing i on state column"
-
-
-@pytest.mark.asyncio
-async def test_slug_header_is_title_case():
-    from textual.app import App
-    from textual.widgets import DataTable
-
-    class _A(App):
-        def compose(self):
-            yield SkillGrid([_row("alpha")], id="g")
-
-    a = _A()
-    async with a.run_test() as pilot:
-        await pilot.pause()
-        table = a.query_one("#skill-table", DataTable)
-        labels = [str(c.label) for c in table.columns.values()]
-        assert labels[0] == "Skill ⓘ", f"slug header: {labels[0]!r}"
-
-
-@pytest.mark.asyncio
-async def test_state_header_is_capitalised_with_glyph():
-    from textual.app import App
-    from textual.widgets import DataTable
-    from agent_toolkit_tui.skill_state import INTERACTIVE_AGENTS
-
-    class _A(App):
-        def compose(self):
-            yield SkillGrid([_row("alpha")], id="g")
-
-    a = _A()
-    async with a.run_test() as pilot:
-        await pilot.pause()
-        table = a.query_one("#skill-table", DataTable)
-        labels = [str(c.label) for c in table.columns.values()]
-        state_col = len(INTERACTIVE_AGENTS) + 1
-        assert labels[state_col] == "State ⓘ", f"state header: {labels[state_col]!r}"
-
-
-@pytest.mark.asyncio
-async def test_full_header_row():
-    """Header row matches spec exactly."""
-    from textual.app import App
-    from textual.widgets import DataTable
-
-    class _A(App):
-        def compose(self):
-            yield SkillGrid([_row("alpha")], id="g")
-
-    a = _A()
-    async with a.run_test() as pilot:
-        await pilot.pause()
-        table = a.query_one("#skill-table", DataTable)
-        labels = [str(c.label) for c in table.columns.values()]
-        from agent_toolkit_cli.skill_agents import get_standard_agents
-
-        assert labels == [
-            "Skill ⓘ",
-            f"Standard ({len(get_standard_agents())}) ⓘ",
-            "Claude ⓘ",
-            "Pi ⓘ",
-            "Hermes ⓘ",
-            "Paperclip ⓘ",
-            "State ⓘ",
-            "Source",
-        ], f"unexpected header row: {labels!r}"
-
-
-@pytest.mark.asyncio
-async def test_universal_modal_omits_global_marker_when_not_globally_linked():
-    """In project scope, opening the Standard column info on a row whose global
-    cell is NOT linked produces a modal without the 🌐 marker paragraph (#212)."""
-    from textual.app import App
-
-    from agent_toolkit_tui.skill_state import INTERACTIVE_AGENTS, SkillCell, SkillRow
-
-    # Project-scope row with global cells populated but NOT linked.
-    cells = {}
-    for a in INTERACTIVE_AGENTS:
-        cells[(a, "project")] = SkillCell(linked=False, drift=False, skipped=False)
-        cells[(a, "global")] = SkillCell(linked=False, drift=False, skipped=False)
-    row = SkillRow(slug="alpha", source="x/alpha", ref="main", state="library", cells=cells)
-
-    class _A(App):
+    class _A(App[None]):
         def compose(self):
             grid = SkillGrid([row], id="g")
             grid.set_scope("project")
             yield grid
 
-    a = _A()
-    async with a.run_test() as pilot:
+    app = _A()
+    async with app.run_test() as pilot:
         await pilot.pause()
-        g = a.query_one("#g", SkillGrid)
-        g.cursor_to_cell(row_slug="alpha", agent_name="standard")
+        grid = app.query_one("#g", SkillGrid)
+        table = app.query_one("#skill-table", DataTable)
+        table.cursor_coordinate = Coordinate(row=0, column=1)
+        _post_header(grid, table, 1)
         await pilot.pause()
-        await pilot.press("i")
-        await pilot.pause()
-        assert isinstance(a.screen, ColumnInfoModal)
-        text = "\n".join(a.screen._info.lines)
-        assert "🌐" not in text, f"unexpected 🌐 in modal: {a.screen._info.lines}"
 
-
-@pytest.mark.asyncio
-async def test_universal_modal_keeps_global_marker_when_globally_linked():
-    """In project scope, opening the Standard column info on a row whose global
-    cell IS linked still includes the 🌐 marker paragraph."""
-    from textual.app import App
-
-    from agent_toolkit_tui.skill_state import INTERACTIVE_AGENTS, SkillCell, SkillRow
-
-    cells = {}
-    for a in INTERACTIVE_AGENTS:
-        cells[(a, "project")] = SkillCell(linked=False, drift=False, skipped=False)
-        cells[(a, "global")] = SkillCell(linked=False, drift=False, skipped=False)
-    # The universal global cell is linked — caller has the skill globally installed.
-    cells[("standard", "global")] = SkillCell(linked=True, drift=False, skipped=False)
-    row = SkillRow(slug="alpha", source="x/alpha", ref="main", state="library", cells=cells)
-
-    class _A(App):
-        def compose(self):
-            grid = SkillGrid([row], id="g")
-            grid.set_scope("project")
-            yield grid
-
-    a = _A()
-    async with a.run_test() as pilot:
-        await pilot.pause()
-        g = a.query_one("#g", SkillGrid)
-        g.cursor_to_cell(row_slug="alpha", agent_name="standard")
-        await pilot.pause()
-        await pilot.press("i")
-        await pilot.pause()
-        assert isinstance(a.screen, ColumnInfoModal)
-        text = "\n".join(a.screen._info.lines)
-        assert "🌐" in text, f"expected 🌐 in modal: {a.screen._info.lines}"
+        assert isinstance(app.screen, ColumnInfoModal)
+        text = "\n".join(app.screen._info.lines)
+        assert ("🌐" in text) is globally_linked

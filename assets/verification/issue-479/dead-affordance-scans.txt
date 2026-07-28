@@ -1,0 +1,40 @@
+$ rg -n "_INFO_GLYPH" src/agent_toolkit_tui/widgets
+src/agent_toolkit_tui/widgets/instruction_grid.py:56:_INFO_GLYPH      = "ⓘ"
+src/agent_toolkit_tui/widgets/instruction_grid.py:408:            f"{standard_header} {_INFO_GLYPH}",
+src/agent_toolkit_tui/widgets/instruction_grid.py:415:            table.add_column(f"{display} {_INFO_GLYPH}", width=_HARNESS_COL_WIDTH)
+src/agent_toolkit_tui/widgets/skill_grid.py:66:_INFO_GLYPH     = "ⓘ"
+src/agent_toolkit_tui/widgets/skill_grid.py:555:            table.add_column(f"{base} {_INFO_GLYPH}", width=14)
+src/agent_toolkit_tui/widgets/skill_grid.py:557:        table.add_column(f"State {_INFO_GLYPH}", width=10)
+src/agent_toolkit_tui/widgets/pi_grid.py:57:_INFO_GLYPH      = "ⓘ"
+src/agent_toolkit_tui/widgets/pi_grid.py:450:        table.add_column(f"Pi {_INFO_GLYPH}", width=_SCOPE_COLUMN_WIDTH)
+src/agent_toolkit_tui/widgets/pi_grid.py:451:        table.add_column(f"Origin {_INFO_GLYPH}", width=_ORIGIN_COLUMN_WIDTH)
+src/agent_toolkit_tui/widgets/agent_grid.py:51:_INFO_GLYPH     = "ⓘ"
+src/agent_toolkit_tui/widgets/agent_grid.py:384:            table.add_column(f"{base} {_INFO_GLYPH}", width=14)
+src/agent_toolkit_tui/widgets/agent_grid.py:386:        table.add_column(f"State {_INFO_GLYPH}", width=10)
+src/agent_toolkit_tui/widgets/command_grid.py:48:_INFO_GLYPH     = "ⓘ"
+src/agent_toolkit_tui/widgets/command_grid.py:377:                f"{harness_label(harness)} {_INFO_GLYPH}",
+src/agent_toolkit_tui/widgets/command_grid.py:381:        table.add_column(f"State {_INFO_GLYPH}", width=_STATE_COL_WIDTH)
+src/agent_toolkit_tui/widgets/mcp_grid.py:59:_INFO_GLYPH     = "ⓘ"
+src/agent_toolkit_tui/widgets/mcp_grid.py:410:            table.add_column(f"{base} {_INFO_GLYPH}", width=16)
+src/agent_toolkit_tui/widgets/mcp_grid.py:412:        table.add_column(f"State {_INFO_GLYPH}", width=10)
+
+$ rg -n "get_column_info|COLUMN_INFO" src/agent_toolkit_tui
+src/agent_toolkit_tui/widgets/instruction_grid.py:35:from agent_toolkit_tui.column_info import get_column_info
+src/agent_toolkit_tui/widgets/instruction_grid.py:354:                get_column_info(
+src/agent_toolkit_tui/widgets/agent_grid.py:34:from agent_toolkit_tui.column_info import get_column_info
+src/agent_toolkit_tui/widgets/agent_grid.py:331:                get_column_info(
+src/agent_toolkit_tui/widgets/skill_grid.py:30:from agent_toolkit_tui.column_info import get_column_info
+src/agent_toolkit_tui/widgets/skill_grid.py:438:                get_column_info(
+src/agent_toolkit_tui/widgets/skill_grid.py:502:        """Resolve a column index to a COLUMN_INFO key.
+src/agent_toolkit_tui/widgets/mcp_grid.py:44:from agent_toolkit_tui.column_info import get_column_info
+src/agent_toolkit_tui/widgets/mcp_grid.py:348:                get_column_info(
+src/agent_toolkit_tui/widgets/pi_grid.py:39:from agent_toolkit_tui.column_info import get_column_info
+src/agent_toolkit_tui/widgets/pi_grid.py:261:                get_column_info(
+src/agent_toolkit_tui/widgets/command_grid.py:35:from agent_toolkit_tui.column_info import get_column_info
+src/agent_toolkit_tui/widgets/command_grid.py:334:                get_column_info(
+src/agent_toolkit_tui/column_info.py:257:COLUMN_INFO: dict[tuple[str, str], Factory] = {
+src/agent_toolkit_tui/column_info.py:287:def get_column_info(
+src/agent_toolkit_tui/column_info.py:299:    return COLUMN_INFO[(asset_type, column)](context or {})
+src/agent_toolkit_tui/column_info.py:305:    return frozenset(COLUMN_INFO)
+
+exit_code=0
