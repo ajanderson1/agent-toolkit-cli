@@ -1,5 +1,27 @@
 # Changelog
 
+## [5.7.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v5.6.0...v5.7.0) (2026-07-28)
+
+
+### Features
+
+* **commands:** add shared .claude/commands projection ([#495](https://github.com/ajanderson1/agent-toolkit-cli/issues/495)) ([8c563c2](https://github.com/ajanderson1/agent-toolkit-cli/commit/8c563c2c8ff589cb6ff91c9cbb7b510192354eb0))
+* **mcp:** record authoritative MCP library manifest ([#489](https://github.com/ajanderson1/agent-toolkit-cli/issues/489)) ([059c484](https://github.com/ajanderson1/agent-toolkit-cli/commit/059c48428636cbed71274c9c4c47e3a148bddd0a))
+* **tui:** choose any main harness in command palette ([#491](https://github.com/ajanderson1/agent-toolkit-cli/issues/491)) ([#493](https://github.com/ajanderson1/agent-toolkit-cli/issues/493)) ([3cae910](https://github.com/ajanderson1/agent-toolkit-cli/commit/3cae910ec76b8f26c888c133c3712b493bcf584a))
+
+
+### Bug Fixes
+
+* **tui:** dim ModalScreen backdrop so info panes overlay the grid ([#492](https://github.com/ajanderson1/agent-toolkit-cli/issues/492)) ([2bb70e4](https://github.com/ajanderson1/agent-toolkit-cli/commit/2bb70e4caf0cdff329a57b68b1cd513ecd6697e5)), closes [#488](https://github.com/ajanderson1/agent-toolkit-cli/issues/488)
+
+
+### Documentation
+
+* **482:** land research, spec, and plan on main ([#494](https://github.com/ajanderson1/agent-toolkit-cli/issues/494)) ([8f6d53e](https://github.com/ajanderson1/agent-toolkit-cli/commit/8f6d53e303170986a92f8827e7a7e4cae1ae1cfe))
+* **488:** firm modal overlay backdrop spec + plan ([712ea2b](https://github.com/ajanderson1/agent-toolkit-cli/commit/712ea2b5bc0f54045a42bca99ba9c1d9a2715964))
+* **491:** plan main-harness palette chooser ([03b8318](https://github.com/ajanderson1/agent-toolkit-cli/commit/03b8318b313b67f409f7733606d7fe790ac1dad3))
+* **491:** specify main-harness palette chooser ([6f16e7a](https://github.com/ajanderson1/agent-toolkit-cli/commit/6f16e7a864e64dfd8f4b81fc9847ad15a0a70224))
+
 ## [5.6.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v5.5.0...v5.6.0) (2026-07-28)
 
 
