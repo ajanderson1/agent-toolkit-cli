@@ -42,7 +42,11 @@ from rich.text import Text
 from agent_toolkit_tui.widgets._support import adjust_source_column_width, current_source_column_width
 
 from agent_toolkit_tui.column_info import get_column_info
-from agent_toolkit_tui.display_names import asset_type_label, harness_label, standard_label
+from agent_toolkit_tui.display_names import (
+    asset_type_label,
+    harness_label,
+    standard_column_header,
+)
 from agent_toolkit_tui.mcp_state import McpRow, mcp_interactive_harnesses
 from agent_toolkit_tui.widgets._support import adjust_source_column_width
 from agent_toolkit_tui.widgets.column_info_modal import ColumnInfoModal
@@ -427,9 +431,11 @@ class McpGrid(Vertical):
         # 2 harnesses. project-only, so covered is always a set there.
         for harness in self._harnesses():
             if harness == "standard":
-                from agent_toolkit_cli.mcp_standard import mcp_standard_covered
-
-                base = standard_label(len(mcp_standard_covered("project")))
+                base = standard_column_header("mcp", self._scope)
+                assert base is not None, (
+                    "mcp grid rendered a standard column at a scope with no "
+                    "standard slot — _harnesses() and the header rule disagree"
+                )
             else:
                 base = harness_label(harness)
             table.add_column(f"{base} {_INFO_GLYPH}", width=16)

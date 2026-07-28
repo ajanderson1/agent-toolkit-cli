@@ -32,7 +32,11 @@ from agent_toolkit_tui.widgets._support import adjust_source_column_width, curre
 
 from agent_toolkit_tui.agent_state import INTERACTIVE_HARNESSES, AgentRow
 from agent_toolkit_tui.column_info import get_column_info
-from agent_toolkit_tui.display_names import asset_type_label, harness_label, standard_label
+from agent_toolkit_tui.display_names import (
+    asset_type_label,
+    harness_label,
+    standard_column_header,
+)
 from agent_toolkit_tui.widgets._support import (
     adjust_source_column_width,
     set_source_column_width,
@@ -421,9 +425,8 @@ class AgentGrid(Vertical):
         # implicitly non-standard.
         for harness in INTERACTIVE_HARNESSES:
             if harness == "standard":
-                from agent_toolkit_cli.agent_adapters.standard import agents_standard_covered
-
-                base = standard_label(len(agents_standard_covered(self._scope)))
+                base = standard_column_header("agent", self._scope)
+                assert base is not None, "agents always have a standard slot"
             else:
                 base = harness_label(harness)
             table.add_column(f"{base} {_INFO_GLYPH}", width=14)
