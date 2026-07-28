@@ -585,6 +585,9 @@ class SkillGrid(Vertical):
         # Slug column has cell-info (the slug-cell panel) → glyph it.
         table.add_column(f"{asset_type_label('skill')} {_INFO_GLYPH}", width=20)
         active = self._active_agents()
+        standard_header = standard_column_header("skill", self._scope)
+        assert standard_header is not None, "skills always have a standard slot"
+        headers = {"standard": standard_header}
         for agent in active:
             # Every interactive agent column exposes either a column-info
             # modal (Standard) or per-cell info (e.g. Claude Code, Pi via
@@ -592,11 +595,7 @@ class SkillGrid(Vertical):
             # load-bearing bundle key (v3.7 full rename, #350). The Standard
             # column leads; everything after it is implicitly non-standard
             # (group-tag header row removed per AJ demo feedback, #351).
-            if agent == "standard":
-                base = standard_column_header("skill", self._scope)
-                assert base is not None, "skills always have a standard slot"
-            else:
-                base = harness_label(agent)
+            base = headers.get(agent, harness_label(agent))
             table.add_column(f"{base} {_INFO_GLYPH}", width=14)
         # State has a column-info modal → glyph it.
         table.add_column(f"State {_INFO_GLYPH}", width=10)

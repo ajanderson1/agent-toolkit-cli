@@ -420,15 +420,13 @@ class AgentGrid(Vertical):
         # Slug column — info glyph since `i` works on it.
         table.add_column(f"{asset_type_label('agent')} {_INFO_GLYPH}", width=22)
         # Per-harness columns. "standard" is the .claude/agents slot (#361),
-        # not a catalog harness — label it explicitly (same special-case as
-        # skill_grid). The Standard column leads; everything after it is
-        # implicitly non-standard.
+        # not a catalog harness. The Standard column leads; everything after it
+        # is implicitly non-standard.
+        standard_header = standard_column_header("agent", self._scope)
+        assert standard_header is not None, "agents always have a standard slot"
+        headers = {"standard": standard_header}
         for harness in INTERACTIVE_HARNESSES:
-            if harness == "standard":
-                base = standard_column_header("agent", self._scope)
-                assert base is not None, "agents always have a standard slot"
-            else:
-                base = harness_label(harness)
+            base = headers.get(harness, harness_label(harness))
             table.add_column(f"{base} {_INFO_GLYPH}", width=14)
         # State column — shows installed/library/unlisted (#360).
         table.add_column("State", width=10)
