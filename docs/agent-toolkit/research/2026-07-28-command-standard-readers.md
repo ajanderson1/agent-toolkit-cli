@@ -91,6 +91,8 @@ unmerged claims.
 
 ## Implementation consequences for #482
 
+**Implemented by #482.**
+
 1. Install the standard artifact at `~/.claude/commands/<slug>.md` (global) or
    `<project>/.claude/commands/<slug>.md` (project), with existing sentinel and
    foreign-file protections.
