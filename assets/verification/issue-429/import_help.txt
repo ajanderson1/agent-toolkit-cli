@@ -1,0 +1,14 @@
+Usage: agent-toolkit-cli mcp import [OPTIONS] FILE
+
+  Add MCP servers from another machine's manifest FILE into the global
+  library.
+
+Options:
+  --latest  Re-resolve versioned specs (npx/uvx) to their current upstream
+            HEAD/version.
+  --help    Show this message and exit.
+
+  Examples:
+
+    agent-toolkit-cli mcp import ~/sync/mcps-library.json
+    agent-toolkit-cli mcp import ~/sync/mcps-library.json --latest
