@@ -27,7 +27,7 @@ from textual.events import Resize
 from rich.text import Text
 from agent_toolkit_tui.widgets._support import adjust_source_column_width, current_source_column_width
 
-from agent_toolkit_tui.column_info import COLUMN_INFO, get_column_info
+from agent_toolkit_tui.column_info import get_column_info
 from agent_toolkit_tui.display_names import (
     asset_type_label,
     harness_label,
@@ -243,74 +243,32 @@ class SkillGrid(Vertical):
         self._toggle_at(table.cursor_coordinate)
 
     def action_info(self) -> None:
-        """Route `i` by column. Columns with a registered ColumnInfo open
-        ColumnInfoModal (header-level info such as Standard bundle, State
-        badge legend). Everything else opens CellInfoScreen with the per-cell
-        state (linked target, drift+doctor command, pending op, slug source)."""
-        from agent_toolkit_tui.screens.cell_info import CellInfoScreen
+        """Open the selected skill's asset panel, regardless of column (#479)."""
+        from agent_toolkit_tui.screens.cell_info import CellInfoScreen, asset_info_body
 
         try:
             table = self.query_one("#skill-table", DataTable)
         except Exception:
             return
-        coord = table.cursor_coordinate
-        # Cursor indexes the *visible* (filtered) rows, not the full set (#249).
         visible = self._visible_rows()
-        if coord.row >= len(visible):
+        if table.cursor_coordinate.row >= len(visible):
             return
-
-        # Column-level info first: defer to ColumnInfoModal for registered keys.
-        # Use COLUMN_INFO membership directly so the factory isn't called twice
-        # (action_open_column_info calls it with context to build the real modal).
-        col_key = self._column_key_for_index(coord.column)
-        if col_key is not None and ("skill", col_key) in COLUMN_INFO:
-            self.action_open_column_info()
-            return
-
-        row = visible[coord.row]
-        scope = self._scope
-        scope_flag = "-g" if scope == "global" else "-p"
-
-        # Slug column → source/ref/state context.
-        if coord.column == 0:
-            # 'library' = no meaningful state (slug in library, not yet
-            # installed here). Render as em-dash so the modal doesn't look
-            # like it's printing a debug literal.
-            if row.state == "library":
-                state_display = "—"
-            elif row.state == "unlisted":
-                state_display = "unlisted — not in library (re-add via: skill doctor -p)"
-            else:
-                state_display = row.state
-            title = f"{row.slug} · slug"
-            body = (
-                f"Skill [b]{row.slug}[/]\n"
-                f"Source: {row.source}\n"
-                f"Ref:    {row.ref}\n"
-                f"State:  {state_display}"
+        row = visible[table.cursor_coordinate.row]
+        self.app.push_screen(
+            CellInfoScreen(
+                title=f"{row.slug} · {asset_type_label('skill')}",
+                body_markup=asset_info_body(
+                    asset_label=asset_type_label("skill"),
+                    slug=row.slug,
+                    description=row.description,
+                    description_location="SKILL.md",
+                    source=row.source,
+                    ref=row.ref,
+                    state=row.state,
+                    scope=self._scope,
+                ),
             )
-            if row.description:
-                body += f"\n\nDescription:\n{row.description}"
-        else:
-            # Agent column without registered info (e.g. Claude Code, Pi) — cell-state body.
-            agent = self._agent_for_column(coord.column)
-            if agent is None:
-                return
-            cell = row.cells.get((agent, scope))
-            if cell is None:
-                return
-            display = harness_label(agent)
-            title = f"{row.slug} · {display} @ {scope}"
-            pending = self._pending.get((scope, agent, row.slug))
-            body = self._info_body_for_cell(
-                row=row,
-                agent=agent,
-                cell=cell,
-                pending=pending,
-                scope=scope,
-                scope_flag=scope_flag,
-            )
-        self.app.push_screen(CellInfoScreen(title=title, body_markup=body))
+        )
 
     def _info_body_for_cell(
         self,
@@ -483,28 +441,6 @@ class SkillGrid(Vertical):
                     context=self._context_for(
                         key=key,
                         row_index=event.data_table.cursor_coordinate.row,
-                    ),
-                )
-            )
-        )
-
-    def action_open_column_info(self) -> None:
-        """Open column info for the current cell during the transition to #479."""
-        try:
-            table = self.query_one("#skill-table", DataTable)
-        except Exception:
-            return
-        key = self._column_key_for_index(table.cursor_coordinate.column)
-        if key is None:
-            return
-        self.app.push_screen(
-            ColumnInfoModal(
-                get_column_info(
-                    key,
-                    asset_type="skill",
-                    context=self._context_for(
-                        key=key,
-                        row_index=table.cursor_coordinate.row,
                     ),
                 )
             )

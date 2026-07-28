@@ -211,116 +211,38 @@ class InstructionGrid(Vertical):
         self._toggle_at(table.cursor_coordinate)
 
     def action_info(self) -> None:
-        """Route `i` by column. The standard column has registered ColumnInfo
-        and opens ColumnInfoModal — the registry path that replaced the old
-        inline column-1 branch (#351). Everything else opens CellInfoScreen
-        with the per-cell state."""
-        from agent_toolkit_tui.screens.cell_info import CellInfoScreen
+        """Open the selected instruction's asset panel, regardless of column."""
+        from agent_toolkit_tui.screens.cell_info import CellInfoScreen, asset_info_body
 
         try:
             table = self.query_one("#instruction-table", DataTable)
         except Exception:
             return
-        coord = table.cursor_coordinate
-        key = self._column_key_for_index(coord.column)
-        if key is not None:
-            info = get_column_info(
-                key,
-                asset_type="instruction",
-                context=self._context_for(key=key, row_index=coord.row),
-            )
-            if info is not None:
-                self.app.push_screen(ColumnInfoModal(info))
-                return
         visible = self._visible_rows()
-        if coord.row >= len(visible):
+        if table.cursor_coordinate.row >= len(visible):
             return
-        row = visible[coord.row]
-
-        if coord.column == 0:
-            # Slug column — show instruction summary.
-            if self._scope == "global":
-                from agent_toolkit_cli.instructions_paths import global_canonical_agents_md
-                canonical_path = global_canonical_agents_md()
-            else:
-                # Project scope: the app uses cwd as the project root (see
-                # TUIApp._scope_to_roots), so resolve the canonical relative to
-                # it. Passing None here would crash (project_canonical_agents_md
-                # requires a real Path).
-                from agent_toolkit_cli.instructions_paths import project_canonical_agents_md
-                canonical_path = project_canonical_agents_md(Path.cwd())
-            title = f"{row.slug} · instruction"
-            body = (
-                f"Instruction [b]{row.slug}[/]\n"
-                f"Source: {row.source}\n"
-                f"Scope:  {self._scope}\n"
-                f"Canonical: {canonical_path}"
+        row = visible[table.cursor_coordinate.row]
+        canonical_path = (
+            instructions_paths.global_canonical_agents_md()
+            if self._scope == "global"
+            else instructions_paths.project_canonical_agents_md(Path.cwd())
+        )
+        self.app.push_screen(
+            CellInfoScreen(
+                title=f"{row.slug} · {asset_type_label('instruction')}",
+                body_markup=asset_info_body(
+                    asset_label=asset_type_label("instruction"),
+                    slug=row.slug,
+                    description=None,
+                    description_location="AGENTS.md",
+                    source=row.source,
+                    ref=None,
+                    state="canonical present" if row.canonical_exists else "canonical missing",
+                    scope=self._scope,
+                    extra_lines=[f"Canonical: {canonical_path}"],
+                ),
             )
-        else:
-            harness = self._harness_for_column(coord.column)
-            if harness is None:
-                return
-            cell = row.cells.get((harness, self._scope))
-            scope_flag = "-g" if self._scope == "global" else "-p"
-            display = harness_label(harness)
-            title = f"{row.slug} · {display} @ {self._scope}"
-            pointer_path = pointer_path_for(
-                harness,
-                scope=self._scope,
-                home=Path.home(),
-                project=Path.cwd() if self._scope == "project" else None,
-            )
-            canonical_path = (
-                instructions_paths.global_canonical_agents_md()
-                if self._scope == "global"
-                else instructions_paths.project_canonical_agents_md(Path.cwd())
-            )
-            path_lines = ""
-            if pointer_path is not None:
-                path_lines = (
-                    f"\n\nPointer slot:\n  {pointer_path}"
-                    f"\n\nExpected target:\n  {canonical_path}"
-                )
-            pending = self._pending.get((self._scope, harness, row.slug))
-            if pending == "link":
-                body = (
-                    "[yellow]Pending: install pointer.[/]"
-                    f"{path_lines}\n\n"
-                    "Press [b]^s[/] to apply."
-                )
-            elif pending == "unlink":
-                body = (
-                    "[yellow]Pending: remove pointer.[/]"
-                    f"{path_lines}\n\n"
-                    "Press [b]^s[/] to apply."
-                )
-            elif cell is None:
-                body = f"Not available at {self._scope} scope.{path_lines}"
-            elif cell.conflict:
-                body = (
-                    f"[red]Conflict![/] The pointer slot for {display} is occupied "
-                    "by a real file or foreign symlink."
-                    f"{path_lines}\n\n"
-                    "Resolve manually before installing:\n"
-                    "  Move or delete the conflicting file, then re-run install.\n\n"
-                    f"CLI: [b]agent-toolkit-cli instructions install {scope_flag}[/]"
-                )
-            elif cell.linked:
-                body = (
-                    f"Installed. Pointer for {display} @ {self._scope} is active."
-                    f"{path_lines}\n\n"
-                    f"CLI: [b]agent-toolkit-cli instructions uninstall {scope_flag}[/]"
-                )
-            else:
-                body = (
-                    f"Not installed. Press [b]space[/] to queue install "
-                    f"into {display} @ {self._scope}."
-                    f"{path_lines}\n\n"
-                    f"Or from the CLI:\n"
-                    f"  [b]agent-toolkit-cli instructions install {scope_flag}[/]"
-                )
-
-        self.app.push_screen(CellInfoScreen(title=title, body_markup=body))
+        )
 
     def action_toggle_column(self) -> None:
         """Toggle all rows in the column under the cursor."""
