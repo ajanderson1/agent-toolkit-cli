@@ -35,6 +35,7 @@ from textual.events import Resize
 from rich.text import Text
 from agent_toolkit_tui.widgets._support import current_source_column_width
 
+from agent_toolkit_tui.column_info import get_column_info
 from agent_toolkit_tui.display_names import asset_type_label, pi_extension_origin_label
 from agent_toolkit_tui.widgets._support import (
     adjust_source_column_width,
@@ -42,6 +43,7 @@ from agent_toolkit_tui.widgets._support import (
 )
 from agent_toolkit_tui.pi_extension_state import PiExtensionRow
 from agent_toolkit_tui.screens.cell_info import CellInfoScreen
+from agent_toolkit_tui.widgets.column_info_modal import ColumnInfoModal
 from agent_toolkit_tui.widgets.filter_input import GridFilterInput
 
 Op = Literal["link", "unlink"]
@@ -233,6 +235,29 @@ class PiGrid(Vertical):
 
         self.app.push_screen(CellInfoScreen(title=title, body_markup=body))
 
+    def _column_key_for_index(self, col: int) -> str | None:
+        """Resolve every explainable header to its registry key (#479 R2)."""
+        if col == _COL_SCOPE:
+            return "pi"
+        if col == _COL_ORIGIN:
+            return "origin"
+        return None
+
+    def on_data_table_header_selected(self, event: DataTable.HeaderSelected) -> None:
+        """Click a glyphed header to explain that column (#479 R1)."""
+        key = self._column_key_for_index(event.column_index)
+        if key is None:
+            return
+        self.app.push_screen(
+            ColumnInfoModal(
+                get_column_info(
+                    key,
+                    asset_type="pi-extension",
+                    context={"scope": self._scope},
+                )
+            )
+        )
+
     def _extension_info_body(self, row: PiExtensionRow) -> str:
         body = (
             f"Pi extension [b]{row.slug}[/]\n"
@@ -412,12 +437,10 @@ class PiGrid(Vertical):
         )
         source_width = current_source_column_width(table)
         table.clear(columns=True)
-        table.add_column(
-            f"{asset_type_label('pi-extension')} {_INFO_GLYPH}",
-            width=extension_width,
-        )
+        # The asset column is explained by `i`, not header click (#479).
+        table.add_column(asset_type_label("pi-extension"), width=extension_width)
         table.add_column(f"Pi {_INFO_GLYPH}", width=_SCOPE_COLUMN_WIDTH)
-        table.add_column("Origin", width=_ORIGIN_COLUMN_WIDTH)
+        table.add_column(f"Origin {_INFO_GLYPH}", width=_ORIGIN_COLUMN_WIDTH)
         table.add_column("Source", width=source_width)
         self._adjust_source_column_width(table)
 

@@ -263,7 +263,7 @@ class SkillGrid(Vertical):
         # Use COLUMN_INFO membership directly so the factory isn't called twice
         # (action_open_column_info calls it with context to build the real modal).
         col_key = self._column_key_for_index(coord.column)
-        if col_key is not None and col_key in COLUMN_INFO:
+        if col_key is not None and ("skill", col_key) in COLUMN_INFO:
             self.action_open_column_info()
             return
 
@@ -470,37 +470,56 @@ class SkillGrid(Vertical):
         self._rebuild(table)
         self._notify_pending()
 
+    def on_data_table_header_selected(self, event: DataTable.HeaderSelected) -> None:
+        """Click a glyphed header to explain that column (#479 R1)."""
+        key = self._column_key_for_index(event.column_index)
+        if key is None:
+            return
+        self.app.push_screen(
+            ColumnInfoModal(
+                get_column_info(
+                    key,
+                    asset_type="skill",
+                    context=self._context_for(
+                        key=key,
+                        row_index=event.data_table.cursor_coordinate.row,
+                    ),
+                )
+            )
+        )
+
     def action_open_column_info(self) -> None:
-        """Open ColumnInfoModal for the column under the cursor, if registered."""
+        """Open column info for the current cell during the transition to #479."""
         try:
             table = self.query_one("#skill-table", DataTable)
         except Exception:
             return
-        col = table.cursor_coordinate.column
-        key = self._column_key_for_index(col)
+        key = self._column_key_for_index(table.cursor_coordinate.column)
         if key is None:
             return
-        context = self._context_for(key=key, row_index=table.cursor_coordinate.row)
-        info = get_column_info(key, context=context)
-        if info is None:
-            return
-        self.app.push_screen(ColumnInfoModal(info))
+        self.app.push_screen(
+            ColumnInfoModal(
+                get_column_info(
+                    key,
+                    asset_type="skill",
+                    context=self._context_for(
+                        key=key,
+                        row_index=table.cursor_coordinate.row,
+                    ),
+                )
+            )
+        )
 
-    def _context_for(self, *, key: str, row_index: int) -> dict | None:
-        """Build the per-call context dict for get_column_info().
-
-        The 'standard' key surfaces whether the focused row is also installed
-        globally so the modal can omit the 🌐 paragraph when it's not.
-        """
+    def _context_for(self, *, key: str, row_index: int) -> dict[str, object]:
+        """Build live scope context for a column-info factory."""
+        context: dict[str, object] = {"scope": self._scope}
         if key != "standard":
-            return None
-        # row_index comes from the table cursor → index the visible rows (#249).
+            return context
         visible = self._visible_rows()
-        if row_index < 0 or row_index >= len(visible):
-            return None
-        row = visible[row_index]
-        global_cell = row.cells.get(("standard", "global"))
-        return {"global_linked": bool(global_cell and global_cell.linked)}
+        if 0 <= row_index < len(visible):
+            global_cell = visible[row_index].cells.get(("standard", "global"))
+            context["global_linked"] = bool(global_cell and global_cell.linked)
+        return context
 
     def _toggle_at(self, coord: Coordinate) -> None:
         try:
@@ -582,8 +601,8 @@ class SkillGrid(Vertical):
         saved_scroll = (table.scroll_x, table.scroll_y)
         source_width = current_source_column_width(table)
         table.clear(columns=True)
-        # Slug column has cell-info (the slug-cell panel) → glyph it.
-        table.add_column(f"{asset_type_label('skill')} {_INFO_GLYPH}", width=20)
+        # The asset column is explained by `i`, not header click (#479).
+        table.add_column(asset_type_label("skill"), width=20)
         active = self._active_agents()
         standard_header = standard_column_header("skill", self._scope)
         assert standard_header is not None, "skills always have a standard slot"

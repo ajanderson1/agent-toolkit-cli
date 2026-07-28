@@ -233,7 +233,9 @@ class McpGrid(Vertical):
         key = self._column_key_for_index(coord.column)
         if key is not None:
             info = get_column_info(
-                key, context=self._context_for(key=key, row_index=coord.row),
+                key,
+                asset_type="mcp",
+                context=self._context_for(key=key, row_index=coord.row),
             )
             if info is not None:
                 self.app.push_screen(ColumnInfoModal(info))
@@ -369,33 +371,36 @@ class McpGrid(Vertical):
         return None
 
     def _column_key_for_index(self, col: int) -> str | None:
-        """Resolve a column index to a COLUMN_INFO registry key (#361).
-
-        Only the standard column has registered ColumnInfo; harness/slug/
-        source columns return None and fall through to CellInfoScreen.
-        """
-        if self._harness_for_column(col) == "standard":
-            return "standard"
+        """Resolve every explainable header to its registry key (#479 R2)."""
+        harness = self._harness_for_column(col)
+        if harness is not None:
+            return harness
+        if col == len(self._harnesses()) + 1:
+            return "state"
         return None
 
-    def _context_for(self, *, key: str, row_index: int) -> dict | None:
-        if key == "standard":
-            from agent_toolkit_cli.mcp_standard import mcp_standard_covered
-            covered = sorted(mcp_standard_covered("project"))
-            return {
-                "asset_type": "mcps",
-                "names": tuple(covered),
-                # Spell out the toggle consequence so the fold isn't a mystery
-                # (review F9): one cell = N harnesses, project-scope only.
-                "extra_lines": [
-                    "",
-                    f"Toggling this cell installs into all {len(covered)} at once "
-                    "(one shared .mcp.json entry).",
-                    "Project scope only — at global scope these are separate columns.",
-                ],
-                "global_linked": False,  # MCP standard is project-only; no 🌐 marker
-            }
-        return None
+    def on_data_table_header_selected(self, event: DataTable.HeaderSelected) -> None:
+        """Click a glyphed header to explain that column (#479 R1)."""
+        key = self._column_key_for_index(event.column_index)
+        if key is None:
+            return
+        self.app.push_screen(
+            ColumnInfoModal(
+                get_column_info(
+                    key,
+                    asset_type="mcp",
+                    context=self._context_for(
+                        key=key,
+                        row_index=event.data_table.cursor_coordinate.row,
+                    ),
+                )
+            )
+        )
+
+    def _context_for(self, *, key: str, row_index: int) -> dict[str, object]:
+        """Return scope from the live grid; MCP has no cross-scope marker."""
+        del key, row_index
+        return {"scope": self._scope}
 
     def on_resize(self, event: Resize) -> None:
         try:
@@ -422,8 +427,8 @@ class McpGrid(Vertical):
         saved_scroll = (table.scroll_x, table.scroll_y)
         source_width = current_source_column_width(table)
         table.clear(columns=True)
-        # Slug column — info glyph since `i` works on it.
-        table.add_column(f"{asset_type_label('mcp')} {_INFO_GLYPH}", width=22)
+        # The asset column is explained by `i`, not header click (#479).
+        table.add_column(asset_type_label("mcp"), width=22)
         # Per-harness columns, derived per scope. "standard" is the project
         # .mcp.json projection (#399, #398), not a catalog harness — label it
         # with the covered count so the fold is legible without pressing `i`
@@ -444,8 +449,8 @@ class McpGrid(Vertical):
         for harness in harnesses:
             base = headers.get(harness, harness_label(harness))
             table.add_column(f"{base} {_INFO_GLYPH}", width=16)
-        # State column — shows installed/library/unlisted (#360).
-        table.add_column("State", width=10)
+        # State column — explains its asset-type-specific badges (#479).
+        table.add_column(f"State {_INFO_GLYPH}", width=10)
         # Source column — passive, no info popup.
         table.add_column("Source", width=source_width)
 

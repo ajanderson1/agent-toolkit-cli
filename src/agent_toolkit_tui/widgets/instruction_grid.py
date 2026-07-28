@@ -225,7 +225,9 @@ class InstructionGrid(Vertical):
         key = self._column_key_for_index(coord.column)
         if key is not None:
             info = get_column_info(
-                key, context=self._context_for(key=key, row_index=coord.row)
+                key,
+                asset_type="instruction",
+                context=self._context_for(key=key, row_index=coord.row),
             )
             if info is not None:
                 self.app.push_screen(ColumnInfoModal(info))
@@ -410,42 +412,46 @@ class InstructionGrid(Vertical):
         return None
 
     def _column_key_for_index(self, col: int) -> str | None:
-        """Resolve a column index to a COLUMN_INFO registry key (#351).
-
-        Only the standard column has registered ColumnInfo; harness/slug/
-        source columns return None and fall through to CellInfoScreen.
-        """
+        """Resolve every explainable header to its registry key (#479 R2)."""
         if col == 1:
             return "standard"
+        index = col - _HARNESS_COL_OFFSET
+        active = self._active_harnesses()
+        if 0 <= index < len(active):
+            return active[index]
         return None
 
-    def _context_for(self, *, key: str, row_index: int | None = None) -> dict | None:
-        """Context for get_column_info(). The standard panel enumerates the
-        native AGENTS.md readers from the harness-matrix SSOT (#351) and, when
-        a row is focused, reports whether that row's slot is linked globally so
-        the 🌐 marker block renders (#388, mirrors agent_grid._context_for)."""
-        if key == "standard":
-            from agent_toolkit_cli.instructions_matrix import instructions_matrix_rows
-
-            native = tuple(
-                r["harness"] for r in instructions_matrix_rows()
-                if r["verdict"] == "native"
-            )
-            global_linked = False
-            visible = self._visible_rows()
-            if row_index is not None and 0 <= row_index < len(visible):
-                row = visible[row_index]
-                global_linked = any(
-                    cell.linked
-                    for (harness, scope), cell in row.cells.items()
-                    if scope == "global"
+    def on_data_table_header_selected(self, event: DataTable.HeaderSelected) -> None:
+        """Click a glyphed header to explain that column (#479 R1)."""
+        key = self._column_key_for_index(event.column_index)
+        if key is None:
+            return
+        self.app.push_screen(
+            ColumnInfoModal(
+                get_column_info(
+                    key,
+                    asset_type="instruction",
+                    context=self._context_for(
+                        key=key,
+                        row_index=event.data_table.cursor_coordinate.row,
+                    ),
                 )
-            return {
-                "asset_type": "instructions",
-                "names": native,
-                "global_linked": global_linked,
-            }
-        return None
+            )
+        )
+
+    def _context_for(self, *, key: str, row_index: int | None = None) -> dict[str, object]:
+        """Return live scope context; marker copy additionally needs row state."""
+        context: dict[str, object] = {"scope": self._scope}
+        if key != "standard":
+            return context
+        visible = self._visible_rows()
+        if row_index is not None and 0 <= row_index < len(visible):
+            context["global_linked"] = any(
+                cell.linked
+                for (_harness, scope), cell in visible[row_index].cells.items()
+                if scope == "global"
+            )
+        return context
 
     def on_resize(self, event: Resize) -> None:
         try:
@@ -467,11 +473,8 @@ class InstructionGrid(Vertical):
         saved_scroll = (table.scroll_x, table.scroll_y)
         source_width = current_source_column_width(table)
         table.clear(columns=True)
-        # Slug column.
-        table.add_column(
-            f"{asset_type_label('instruction')} {_INFO_GLYPH}",
-            width=_INSTRUCTION_COL_WIDTH,
-        )
+        # The asset column is explained by `i`, not header click (#479).
+        table.add_column(asset_type_label("instruction"), width=_INSTRUCTION_COL_WIDTH)
         # Standard column — read-only canonical status. It leads; everything
         # after it is implicitly non-standard (group-tag header row removed
         # per AJ demo feedback, #351).

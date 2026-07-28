@@ -221,7 +221,9 @@ class CommandGrid(Vertical):
         key = self._column_key_for_index(coord.column)
         if key is not None:
             info = get_column_info(
-                key, context=self._context_for(key=key, row_index=coord.row),
+                key,
+                asset_type="command",
+                context=self._context_for(key=key, row_index=coord.row),
             )
             if info is not None:
                 self.app.push_screen(ColumnInfoModal(info))
@@ -355,22 +357,36 @@ class CommandGrid(Vertical):
         return None
 
     def _column_key_for_index(self, col: int) -> str | None:
-        """Resolve a column index to a COLUMN_INFO registry key.
-
-        Commands currently have no Standard column; all rendered columns fall
-        through to CellInfoScreen until #482 adds a convergence projection.
-        """
-        # Dormant until #482 adds a commands standard projection:
-        # INTERACTIVE_HARNESSES (= DEFAULT_HARNESSES) never contains "standard"
-        # today, so this branch is unreachable. Kept deliberately so the column
-        # wiring is already correct when the projection lands.
-        if self._harness_for_column(col) == "standard":
-            return "standard"
+        """Resolve every explainable header to its registry key (#479 R2)."""
+        harness = self._harness_for_column(col)
+        if harness is not None:
+            return harness
+        if col == len(INTERACTIVE_HARNESSES) + 1:
+            return "state"
         return None
 
-    def _context_for(self, *, key: str, row_index: int) -> dict | None:
-        """Return no standard-column context until #482 adds that projection."""
-        return None
+    def on_data_table_header_selected(self, event: DataTable.HeaderSelected) -> None:
+        """Click a glyphed header to explain that column (#479 R1)."""
+        key = self._column_key_for_index(event.column_index)
+        if key is None:
+            return
+        self.app.push_screen(
+            ColumnInfoModal(
+                get_column_info(
+                    key,
+                    asset_type="command",
+                    context=self._context_for(
+                        key=key,
+                        row_index=event.data_table.cursor_coordinate.row,
+                    ),
+                )
+            )
+        )
+
+    def _context_for(self, *, key: str, row_index: int) -> dict[str, object]:
+        """Return scope from the live grid; commands have no Standard slot."""
+        del key, row_index
+        return {"scope": self._scope}
 
     def on_resize(self, event: Resize) -> None:
         try:
@@ -392,8 +408,8 @@ class CommandGrid(Vertical):
         saved_scroll = (table.scroll_x, table.scroll_y)
         source_width = current_source_column_width(table)
         table.clear(columns=True)
-        # Slug column — info glyph since `i` works on it.
-        table.add_column(f"COMMAND {_INFO_GLYPH}", width=_COMMAND_COL_WIDTH)
+        # The asset column is explained by `i`, not header click (#479).
+        table.add_column("Command", width=_COMMAND_COL_WIDTH)
         # Display labels, not raw catalog keys (#478 R6 — escapee from the
         # #448 terminology sweep). There is no Standard column here: commands
         # have no convergence projection yet (#482).
@@ -402,8 +418,8 @@ class CommandGrid(Vertical):
                 f"{harness_label(harness)} {_INFO_GLYPH}",
                 width=_HARNESS_COL_WIDTH,
             )
-        # State column — shows installed/library/unlisted (#360).
-        table.add_column("State", width=_STATE_COL_WIDTH)
+        # State column — explains its asset-type-specific badges (#479).
+        table.add_column(f"State {_INFO_GLYPH}", width=_STATE_COL_WIDTH)
         # Source column — passive, no info popup.
         table.add_column("Source", width=source_width)
         self._adjust_source_column_width(table)
