@@ -46,3 +46,6 @@ site/
 # mkdocs.yml exclude_docs; this also keeps it out of the repo source.
 docs/superpowers/
 CLAUDE.md
+
+# Pi subagents scratch
+.pi-subagents/

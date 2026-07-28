@@ -8,26 +8,12 @@
       "skillPath": "autonomous-run",
       "parentUrl": "https://github.com/ajanderson1/skills-workflow"
     },
-    "cmux-pm": {
-      "source": "ajanderson1/skills-orchestration",
-      "sourceType": "github",
-      "ref": "main",
-      "skillPath": "cmux-pm",
-      "parentUrl": "https://github.com/ajanderson1/skills-orchestration"
-    },
     "domain-manager": {
       "source": "ajanderson1/skills-infra",
       "sourceType": "github",
       "ref": "main",
       "skillPath": "domain-manager",
       "parentUrl": "https://github.com/ajanderson1/skills-infra"
-    },
-    "journal": {
-      "source": "ajanderson1/skills-journal",
-      "sourceType": "github",
-      "ref": "main",
-      "skillPath": "journal",
-      "parentUrl": "https://github.com/ajanderson1/skills-journal"
     },
     "mkdocs": {
       "source": "ajanderson1/skills-infra",
@@ -56,6 +42,14 @@
       "ref": "main",
       "skillPath": "skill-builder",
       "parentUrl": "https://github.com/ajanderson1/skills-authoring"
+    },
+    "textual": {
+      "source": "johnlarkin1/claude-code-extensions",
+      "sourceType": "github",
+      "ref": "main",
+      "skillPath": "skills/textual",
+      "parentUrl": "https://github.com/johnlarkin1/claude-code-extensions",
+      "readOnly": true
     }
   }
 }
