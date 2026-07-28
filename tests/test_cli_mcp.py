@@ -214,6 +214,40 @@ def test_mcp_install_absent_slug_errors(tmp_path, monkeypatch):
     assert "not found" in result.output.lower()
 
 
+def test_mcp_install_rejects_unsafe_manifest_with_redacted_error(
+    tmp_path, monkeypatch
+):
+    _write_manifest(
+        tmp_path,
+        {
+            "unsafe": {
+                "slug": "unsafe",
+                "install_method": "url",
+                "transport": "http",
+                "source": "https://user:manifest-secret@host/sse",
+                "command": None,
+                "args": [],
+                "env": [],
+                "description": None,
+                "resolved_version": None,
+            }
+        },
+    )
+    project = tmp_path / "proj"
+    project.mkdir()
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.chdir(project)
+
+    result = CliRunner().invoke(
+        main,
+        ["mcp", "install", "unsafe", "--harness", "claude-code", "-p"],
+    )
+
+    assert result.exit_code != 0
+    assert "value redacted" in result.output
+    assert "manifest-secret" not in result.output
+
+
 def test_mcp_list_shows_seeded_slug(tmp_path, monkeypatch):
     _seed(tmp_path)
     monkeypatch.setenv("HOME", str(tmp_path))

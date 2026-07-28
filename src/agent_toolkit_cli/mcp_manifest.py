@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import re
+import shlex
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -49,8 +50,9 @@ _SLUG_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 _ENV_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _REFERENCE_RE = re.compile(r"^\$(?:[A-Za-z_][A-Za-z0-9_]*|\{[A-Za-z_][A-Za-z0-9_]*\})$")
 _SECRET_NAME_RE = re.compile(
-    r"(?:^|[_-])(?:api[_-]?key|token|secret|password|passwd|credential|"
-    r"private[_-]?key|access[_-]?key|client[_-]?secret|auth|dsn|database[_-]?url)"
+    r"(?:^|[_-])(?:api[_-]?key|key|token|secret|password|passwd|credential|"
+    r"private[_-]?key|access[_-]?key|client[_-]?secret|auth|authorization|"
+    r"signature|sig|dsn|database[_-]?url)"
     r"(?:$|[_-])",
     re.IGNORECASE,
 )
@@ -251,7 +253,16 @@ def entry_from_materialisation(asset: McpAsset) -> McpManifestEntry:
         elif method == "uvx":
             source = args[-1].split("==", 1)[0]
         elif method == "docker":
-            source = args[-1]
+            source, docker_version = _normalise_docker_image(args[-1])
+            normalised_args = list(args)
+            normalised_args[-1] = source
+            args = tuple(normalised_args)
+            if resolved_version is None:
+                resolved_version = docker_version
+            elif resolved_version != docker_version:
+                raise ValueError(
+                    "MCP materialisation cannot be reconstructed losslessly"
+                )
         elif method == "local":
             source_value = metadata.get("source_dir")
             if not isinstance(source_value, str):
@@ -281,7 +292,7 @@ def assert_safe_entry(entry: McpManifestEntry) -> None:
     _validate_entry_types(entry)
     _assert_safe_string("source", entry.source, inspect_url=True)
     if entry.command is not None:
-        _assert_safe_string("command", entry.command, inspect_url=True)
+        _assert_safe_command(entry.command)
     _assert_safe_args(entry.args)
     if entry.description is not None:
         _assert_safe_string("description", entry.description, inspect_url=True)
@@ -387,10 +398,16 @@ def _validate_entry(entry: McpManifestEntry) -> None:
         or entry.args[-1].split("==", 1)[0] != entry.source
     ):
         raise ValueError("malformed MCP library manifest entry")
-    if entry.install_method == "docker" and (
-        not entry.args or entry.command != "docker" or entry.args[-1] != entry.source
-    ):
-        raise ValueError("malformed MCP library manifest entry")
+    if entry.install_method == "docker":
+        effective_image, docker_version = _normalise_docker_image(entry.source)
+        if (
+            not entry.args
+            or entry.command != "docker"
+            or entry.source != effective_image
+            or entry.args[-1] != entry.source
+            or entry.resolved_version != docker_version
+        ):
+            raise ValueError("malformed MCP library manifest entry")
     if entry.install_method == "local" and not Path(entry.source).is_absolute():
         raise ValueError("malformed MCP library manifest entry")
 
@@ -400,6 +417,15 @@ def _npx_source(spec: str) -> str:
         package, separator, _version = spec.rpartition("@")
         return package if separator and package else spec
     return spec.split("@", 1)[0]
+
+
+def _normalise_docker_image(image: str) -> tuple[str, str]:
+    if "@" in image:
+        return image, image.rsplit("@", 1)[-1]
+    leaf = image.rsplit("/", 1)[-1]
+    if ":" in leaf:
+        return image, leaf.rsplit(":", 1)[-1]
+    return f"{image}:latest", "latest"
 
 
 def _object_without_duplicates(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -449,6 +475,25 @@ def _assert_safe_string(field_path: str, value: str, *, inspect_url: bool) -> No
             raise UnsafeMcpSpecError(f"{field_path}.query")
 
 
+def _assert_safe_command(command: str) -> None:
+    _assert_safe_string("command", command, inspect_url=True)
+    try:
+        tokens = tuple(shlex.split(command))
+    except ValueError:
+        return
+    for index, token in enumerate(tokens):
+        _assert_safe_string("command", token, inspect_url=True)
+        option = _OPTION_RE.fullmatch(token)
+        if (
+            option
+            and _is_secret_name(option.group(1))
+            and index + 1 < len(tokens)
+        ):
+            value = tokens[index + 1]
+            if value and not value.startswith("-") and not _is_reference(value):
+                raise UnsafeMcpSpecError("command")
+
+
 def _assert_safe_args(args: tuple[str, ...]) -> None:
     for index, arg in enumerate(args):
         field_path = f"args[{index}]"
@@ -464,7 +509,7 @@ def _assert_safe_args(args: tuple[str, ...]) -> None:
 def _assert_safe_materialisation(inner: dict, metadata: dict) -> None:
     command = inner.get("command")
     if isinstance(command, str):
-        _assert_safe_string("command", command, inspect_url=True)
+        _assert_safe_command(command)
     args = inner.get("args")
     if isinstance(args, list) and all(isinstance(arg, str) for arg in args):
         _assert_safe_args(tuple(args))

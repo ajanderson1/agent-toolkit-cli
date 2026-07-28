@@ -148,6 +148,34 @@ def test_url_entry_materialises_from_source_only():
             ),
             "sk-proj-abcdefghijklmnopqrstuvwxyz",
         ),
+        (
+            McpManifestEntry(
+                "bad-command",
+                "local",
+                "stdio",
+                "/srv/mcp",
+                "python --token=command-secret",
+                (),
+                (),
+                None,
+                None,
+            ),
+            "command-secret",
+        ),
+        (
+            McpManifestEntry(
+                "bad-query",
+                "url",
+                "http",
+                "https://host/sse?key=query-secret",
+                None,
+                (),
+                (),
+                None,
+                None,
+            ),
+            "query-secret",
+        ),
     ],
 )
 def test_unsafe_entry_error_redacts_literal(entry, literal):
@@ -221,6 +249,24 @@ def test_method_records_materialise_without_losing_authoring_fields(entry):
     metadata = entry_to_metadata(entry)
 
     assert entry_from_materialisation(McpAsset(entry.slug, inner, metadata)) == entry
+
+
+def test_untagged_docker_materialisation_normalises_effective_latest_tag():
+    asset = McpAsset(
+        "docker",
+        {
+            "type": "stdio",
+            "command": "docker",
+            "args": ["run", "--rm", "-i", "localhost:5000/org/server"],
+        },
+        {"name": "docker", "install_method": "docker", "transport": "stdio"},
+    )
+
+    entry = entry_from_materialisation(asset)
+
+    assert entry.source == "localhost:5000/org/server:latest"
+    assert entry.args[-1] == "localhost:5000/org/server:latest"
+    assert entry.resolved_version == "latest"
 
 
 def test_npx_scoped_package_round_trips_from_materialisation():
