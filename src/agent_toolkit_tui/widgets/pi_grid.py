@@ -479,7 +479,7 @@ class PiGrid(Vertical):
             set_source_column_width(table, self.size.width, _FIXED_COLUMN_WIDTH)
 
     def _text_width_for_extension_column(self) -> int:
-        header_width = len(f"{asset_type_label('pi-extension')} {_INFO_GLYPH}")
+        header_width = len(asset_type_label("pi-extension"))
         row_width = max((len(row.slug) for row in self._visible_rows()), default=0)
         return max(_DEFAULT_EXTENSION_WIDTH, header_width, row_width)
 

@@ -28,6 +28,7 @@ class ColumnInfoModal(ModalScreen[None]):
         width: 60;
         height: auto;
         max-height: 80%;
+        overflow-y: auto;
     }
     ColumnInfoModal #column-info-title {
         width: 100%;

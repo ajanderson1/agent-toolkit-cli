@@ -49,6 +49,35 @@ async def test_modal_escape_closes():
 
 
 @pytest.mark.asyncio
+async def test_long_modal_body_scrolls_in_a_small_terminal():
+    """The 39-harness Instructions panel must remain fully reachable (#479)."""
+    from textual.app import App
+    from textual.containers import Vertical
+
+    info = get_column_info(
+        "standard",
+        asset_type="instruction",
+        context={"scope": "project", "global_linked": True},
+    )
+
+    class _A(App):
+        def on_mount(self) -> None:
+            self.push_screen(ColumnInfoModal(info))
+
+    app = _A()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await pilot.pause()
+        panel = app.screen.query_one(Vertical)
+        assert panel.virtual_size.height > panel.size.height
+        assert panel.allow_vertical_scroll
+
+        panel.scroll_end(animate=False)
+        await pilot.pause()
+        assert panel.scroll_y == panel.max_scroll_y
+        assert panel.scroll_y > 0
+
+
+@pytest.mark.asyncio
 async def test_modal_i_key_closes():
     """Pressing `i` closes a mouse-opened column modal."""
     from textual.app import App
