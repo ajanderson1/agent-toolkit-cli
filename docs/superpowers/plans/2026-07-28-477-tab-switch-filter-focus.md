@@ -25,7 +25,7 @@
 - Create: `tests/test_tui/test_tab_switch_filter_focus.py`
 - Read for idiom: `tests/test_tui/test_app_filter_focus.py`, `tests/test_tui/test_sidebar_highlight_sync.py`
 
-- [ ] **Step 1: Create the test module**
+- [x] **Step 1: Create the test module**
 
 Create `tests/test_tui/test_tab_switch_filter_focus.py`:
 
@@ -158,7 +158,7 @@ async def test_escape_hatch_from_filter_to_table(asset_type, filter_id, table_id
         assert app.focused.id == filter_id
 ```
 
-- [ ] **Step 2: Run and confirm the expected failures**
+- [x] **Step 2: Run and confirm the expected failures**
 
 ```bash
 uv run pytest tests/test_tui/test_tab_switch_filter_focus.py -q
@@ -185,7 +185,7 @@ here. Record it and escalate.
 **Files:**
 - Modify: `src/agent_toolkit_tui/app.py`
 
-- [ ] **Step 1: Add the module constant**
+- [x] **Step 1: Add the module constant**
 
 Near the other module-level constants in `src/agent_toolkit_tui/app.py` (above
 `class TUIApp`), add:
@@ -207,7 +207,7 @@ _FILTER_SELECTORS: dict[AssetType, str] = {
 Confirm `AssetType` is already defined/imported above this point in the file; if
 it is declared *below*, place the constant after its declaration instead.
 
-- [ ] **Step 2: Add the helper and rewrite `action_focus_filter`**
+- [x] **Step 2: Add the helper and rewrite `action_focus_filter`**
 
 Replace the body of `action_focus_filter` and add a private helper beside it:
 
@@ -234,7 +234,7 @@ Replace the body of `action_focus_filter` and add a private helper beside it:
 `NoMatches` is already imported in `app.py` (used by `_show_asset_type`);
 confirm with `rg -n "from textual.css.query import" src/agent_toolkit_tui/app.py`.
 
-- [ ] **Step 3: Run the `/` regression**
+- [x] **Step 3: Run the `/` regression**
 
 ```bash
 uv run pytest tests/test_tui/test_app_filter_focus.py -q
@@ -248,7 +248,7 @@ Expected: PASS (behaviour is unchanged; only the map moved).
 - Modify: `src/agent_toolkit_tui/app.py`
 - Test: `tests/test_tui/test_tab_switch_filter_focus.py`
 
-- [ ] **Step 1: Call the helper from `action_asset_type` (two sites)**
+- [x] **Step 1: Call the helper from `action_asset_type` (two sites)**
 
 Rewrite `action_asset_type`. The focus call appears **twice** — once on the
 early-return branch (that grid is already displayed) and once as the final
@@ -278,7 +278,7 @@ to focus it.
         self._focus_filter(asset_type)  # type: ignore[arg-type]
 ```
 
-- [ ] **Step 2: Route startup through the same helper**
+- [x] **Step 2: Route startup through the same helper**
 
 In `on_mount`, replace the hardcoded block:
 
@@ -302,7 +302,7 @@ Leave the rest of `on_mount` (theme, `_show_asset_type("skill")`, the four
 refresh calls) unchanged, and keep `_focus_filter` as the **last** statement so
 no later refresh steals focus.
 
-- [ ] **Step 3: Run the new suite**
+- [x] **Step 3: Run the new suite**
 
 ```bash
 uv run pytest tests/test_tui/test_tab_switch_filter_focus.py -q
@@ -321,7 +321,7 @@ likely cause is the ordering constraint: confirm `_focus_filter` runs after
 `app.query_one(selector).display is True` immediately before the focus call to
 prove visibility.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/agent_toolkit_tui/app.py tests/test_tui/test_tab_switch_filter_focus.py
@@ -336,7 +336,7 @@ Include the `Device:` trailer required by `~/.conventions/conventions/git.md`.
 - Review: `src/agent_toolkit_tui/app.py`
 - Review: `tests/test_tui/`
 
-- [ ] **Step 1: Full TUI suite**
+- [x] **Step 1: Full TUI suite**
 
 ```bash
 uv run pytest tests/test_tui -q
@@ -346,7 +346,7 @@ Expected: PASS. Pay attention to `test_sidebar_highlight_sync.py`,
 `test_view_pane_preservation.py`, and `test_double_ctrl_c_quit.py` — all three
 make focus-sensitive assertions.
 
-- [ ] **Step 2: Full suite**
+- [x] **Step 2: Full suite**
 
 ```bash
 uv run pytest -q
@@ -354,7 +354,7 @@ uv run pytest -q
 
 Expected: PASS.
 
-- [ ] **Step 3: Stale-copy scan**
+- [x] **Step 3: Stale-copy scan**
 
 ```bash
 rg -n "skill-filter|instruction-filter|command-filter|pi-filter|agent-filter|mcp-filter" src/agent_toolkit_tui
@@ -363,7 +363,7 @@ rg -n "skill-filter|instruction-filter|command-filter|pi-filter|agent-filter|mcp
 Expected: the six ids appear in `_FILTER_SELECTORS` and in each grid's
 `compose()`/handlers only. No second selector map in `app.py`.
 
-- [ ] **Step 4: Manual smoke**
+- [x] **Step 4: Manual smoke**
 
 ```bash
 uv run agent-toolkit-tui
@@ -390,7 +390,7 @@ Capture the terminal evidence (screenshot or asciinema) into
 `assets/verification/issue-477/` and record a one-line visual verdict in the PR
 body, per `~/.conventions/conventions/testing.md`.
 
-- [ ] **Step 5: Final commit if the sweep changed anything**
+- [x] **Step 5: Final commit if the sweep changed anything**
 
 ```bash
 git add src/agent_toolkit_tui tests/test_tui
