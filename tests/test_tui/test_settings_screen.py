@@ -250,3 +250,19 @@ async def test_bad_settings_file_surfaces_a_status_bar_notice(
         assert str(path) in status
         assert "malformed JSON" in status
         assert app.theme == DEFAULT_THEME
+
+
+@pytest.mark.asyncio
+async def test_bad_settings_notice_has_a_visible_status_bar_row(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    path = _settings_path(monkeypatch, tmp_path)
+    _stub_rows(monkeypatch)
+    path.write_text("{")
+    app = TUIApp()
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+
+        status = app.query_one("#status-bar", Static)
+        assert status.region.height >= 2
