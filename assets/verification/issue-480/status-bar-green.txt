@@ -1,0 +1,5 @@
+$ uv run --frozen --no-sync pytest tests/test_tui/test_settings_screen.py -q -k visible_status_bar_row
+.                                                                        [100%]
+1 passed, 8 deselected in 0.20s
+
+[exit 0]

@@ -1,0 +1,9 @@
+PASS palette: ctrl+p search exposes Settings and opens the Settings screen.
+PASS theme: Nord applies while the modal remains open and a second app instance loads it.
+PASS draft split: unchecking Pi then changing theme keeps Pi in persisted harnesses until Save.
+PASS Pi save: Pi disappears from Skills, Agents, Commands, and global MCPs; restart preserves it. labels={'skill': ['Skill', 'Standard (13) ⓘ', 'Claude ⓘ', 'Hermes ⓘ', 'Paperclip ⓘ', 'State ⓘ', 'Source'], 'agent': ['Agent', 'Standard (6) ⓘ', 'Gemini ⓘ', 'OpenCode ⓘ', 'State ⓘ', 'Source'], 'command': ['Command', 'Claude ⓘ', 'Gemini ⓘ', 'State ⓘ', 'Source'], 'mcp-global': ['MCP', 'Claude ⓘ', 'Codex ⓘ', 'OpenCode ⓘ', 'State ⓘ', 'Source']}; restart={'skill': ['Skill', 'Standard (13) ⓘ', 'Claude ⓘ', 'Hermes ⓘ', 'Paperclip ⓘ', 'State ⓘ', 'Source'], 'agent': ['Agent', 'Standard (6) ⓘ', 'Gemini ⓘ', 'OpenCode ⓘ', 'State ⓘ', 'Source'], 'command': ['Command', 'Claude ⓘ', 'Gemini ⓘ', 'State ⓘ', 'Source'], 'mcp-global': ['MCP', 'Claude ⓘ', 'Codex ⓘ', 'OpenCode ⓘ', 'State ⓘ', 'Source']}
+PASS Cursor checkbox: visibly states it has no standalone column to hide.
+PASS empty selection: usable Skills grid remains ['Skill', 'Standard (13) ⓘ', 'State ⓘ', 'Source'].
+PASS malformed file: defaults load and the status bar names the file and malformed JSON.
+PASS unknown harness: ghost-harness is reported and survives a theme save unchanged.
+Contact sheet: assets/verification/issue-480/visual-contact-sheet.png

@@ -1,0 +1,20 @@
+# CLI determinism — #480 R7
+
+Temporary AGENT_TOOLKIT_TUI_SETTINGS input: cli-settings-input.json (non-default theme=nord; harnesses=[pi]).
+Commands use --frozen --no-sync: --frozen alone may emit uv environment-sync timing to stderr, which is outside the CLI process and varies per invocation. --no-sync removes that harness noise while keeping the lock frozen; the compared files contain complete command stdout+stderr.
+
+$ AGENT_TOOLKIT_TUI_SETTINGS=<temporary non-default file> uv run --frozen --no-sync agent-toolkit-cli skill list
+$ AGENT_TOOLKIT_TUI_SETTINGS=<absent temporary file> uv run --frozen --no-sync agent-toolkit-cli skill list
+with-settings exit: 0
+without-settings exit: 0
+cmp: IDENTICAL (exit 0)
+3ee42e98796e41235e8709e8fca23ba6b6150bc1b495ff8b8e179fc94b6726a8  assets/verification/issue-480/cli-list-with-settings.txt
+3ee42e98796e41235e8709e8fca23ba6b6150bc1b495ff8b8e179fc94b6726a8  assets/verification/issue-480/cli-list-without-settings.txt
+
+$ AGENT_TOOLKIT_TUI_SETTINGS=<temporary non-default file> uv run --frozen --no-sync agent-toolkit-cli skill status
+$ AGENT_TOOLKIT_TUI_SETTINGS=<absent temporary file> uv run --frozen --no-sync agent-toolkit-cli skill status
+with-settings exit: 0
+without-settings exit: 0
+cmp: IDENTICAL (exit 0)
+1465d586307cffd5e072674518166f7fb8a3a0fb890dff97c212abdf10d00691  assets/verification/issue-480/cli-status-with-settings.txt
+1465d586307cffd5e072674518166f7fb8a3a0fb890dff97c212abdf10d00691  assets/verification/issue-480/cli-status-without-settings.txt

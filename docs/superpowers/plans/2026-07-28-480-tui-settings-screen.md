@@ -318,7 +318,7 @@ git commit -m "docs: tui-settings.json schema v1"
 uv run pytest -q
 ```
 
-- [ ] **Step 2: Constant-mutation scan**
+- [x] **Step 2: Constant-mutation scan**
 
 ```bash
 rg -n "MAIN_HARNESSES|_MCP_HARNESSES|DEFAULT_HARNESSES" src/
@@ -333,7 +333,7 @@ rg -n "agent_toolkit_tui" src/agent_toolkit_cli/
 
 Expected: no hits. This is the spec R7 boundary.
 
-- [ ] **Step 3: CLI determinism check**
+- [x] **Step 3: CLI determinism check**
 
 With a non-default selection persisted, confirm the CLI is unaffected:
 
@@ -345,7 +345,7 @@ uv run agent-toolkit-cli skill status
 Output must be byte-identical to a run with the settings file removed. This is
 the load-bearing check for R7 — if it differs, stop.
 
-- [ ] **Step 4: Manual visual check**
+- [x] **Step 4: Manual visual check**
 
 ```bash
 uv run agent-toolkit-tui
@@ -366,7 +366,7 @@ uv run agent-toolkit-tui
 Screenshots into `assets/verification/issue-480/`, one-line visual verdict in
 the PR body per `~/.conventions/conventions/testing.md`.
 
-- [ ] **Step 5: Final commit**
+- [x] **Step 5: Final commit**
 
 ```bash
 git add -A src/agent_toolkit_tui tests docs

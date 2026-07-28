@@ -1,0 +1,34 @@
+$ rg -n MAIN_HARNESSES\|_MCP_HARNESSES\|DEFAULT_HARNESSES src/
+src/agent_toolkit_cli/command_adapters/__init__.py:7:DEFAULT_HARNESSES = ("claude-code", "pi", "gemini-cli")
+src/agent_toolkit_tui/composition.py:11:invariant — every MAIN_HARNESSES member is either standard-covered or has its
+src/agent_toolkit_tui/composition.py:18:from agent_toolkit_cli.command_adapters import DEFAULT_HARNESSES
+src/agent_toolkit_tui/composition.py:24:MAIN_HARNESSES: tuple[str, ...] = (
+src/agent_toolkit_tui/composition.py:33:    """Return the selected MAIN_HARNESSES in canonical render order.
+src/agent_toolkit_tui/composition.py:38:    chosen = MAIN_HARNESSES if selection is None else selection
+src/agent_toolkit_tui/composition.py:39:    return tuple(harness for harness in MAIN_HARNESSES if harness in chosen)
+src/agent_toolkit_tui/composition.py:49:        for harness in MAIN_HARNESSES
+src/agent_toolkit_tui/composition.py:61:        for harness in MAIN_HARNESSES
+src/agent_toolkit_tui/composition.py:75:        for harness in MAIN_HARNESSES
+src/agent_toolkit_tui/composition.py:83:# canonical render order. Distinct from MAIN_HARNESSES: MCP has no gemini-cli
+src/agent_toolkit_tui/composition.py:85:# MAIN_HARNESSES.
+src/agent_toolkit_tui/composition.py:86:_MCP_HARNESSES: tuple[str, ...] = ("claude-code", "codex", "opencode", "pi")
+src/agent_toolkit_tui/composition.py:108:        for harness in _MCP_HARNESSES
+src/agent_toolkit_tui/composition.py:118:    return tuple(harness for harness in DEFAULT_HARNESSES if harness in chosen)
+src/agent_toolkit_tui/screens/settings.py:16:    MAIN_HARNESSES,
+src/agent_toolkit_tui/screens/settings.py:150:                for harness in MAIN_HARNESSES:
+src/agent_toolkit_tui/screens/settings.py:186:            for harness in MAIN_HARNESSES
+src/agent_toolkit_tui/settings.py:16:from agent_toolkit_tui.composition import MAIN_HARNESSES
+src/agent_toolkit_tui/settings.py:28:    harnesses: tuple[str, ...] = MAIN_HARNESSES
+src/agent_toolkit_tui/settings.py:97:    effective = tuple(harness for harness in harnesses if harness in MAIN_HARNESSES)
+src/agent_toolkit_tui/settings.py:98:    unknown = tuple(harness for harness in harnesses if harness not in MAIN_HARNESSES)
+[exit 0]
+
+$ rg -n agent_toolkit_tui src/agent_toolkit_cli/
+src/agent_toolkit_cli/_support.py:7:#   - agent_toolkit_tui/widgets/asset_grid.py
+[exit 0]
+
+$ rg -n INTERACTIVE_AGENTS\|INTERACTIVE_HARNESSES src/ tests/
+[exit 1]
+
+$ git diff origin/main -- pyproject.toml uv.lock
+[exit 0]
