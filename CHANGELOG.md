@@ -1,5 +1,13 @@
 # Changelog
 
+## [5.8.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v5.7.0...v5.8.0) (2026-07-28)
+
+
+### Features
+
+* **mcp:** add mcp import for cross-machine sync ([#496](https://github.com/ajanderson1/agent-toolkit-cli/issues/496)) ([c679279](https://github.com/ajanderson1/agent-toolkit-cli/commit/c6792799ff75b4c3249fc7302c8b279719597671))
+* **tui:** multi-select modal for main harness picker ([#497](https://github.com/ajanderson1/agent-toolkit-cli/issues/497)) ([6e82447](https://github.com/ajanderson1/agent-toolkit-cli/commit/6e824475d5c51ddeda3ff17ad8f058dcc2190db0))
+
 ## [5.7.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v5.6.0...v5.7.0) (2026-07-28)
 
 
