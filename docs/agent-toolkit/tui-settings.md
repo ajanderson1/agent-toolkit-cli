@@ -28,21 +28,19 @@ targets remain independent of TUI presentation preferences.
 | `theme` | A Textual theme name from the running app's `available_themes`. Defaults to `gruvbox`. |
 | `harnesses` | Main harnesses allowed to render standalone columns. An empty list is valid. |
 
-The harness list is a filter over the curated `MAIN_HARNESSES` tuple; it cannot
-add unsupported or long-tail columns. Standard columns and their counts are
-filesystem facts and do not change. The same filter reaches Skills,
-Instructions, Agents, MCPs, and Commands within each asset type's supported
-set.
+The harness list is a selection over the real `AGENTS` catalog harnesses
+(`MAIN_HARNESS_CANDIDATES`). Fresh installs default to today's eight primary
+harnesses. Standard columns and their counts are filesystem facts and do not
+change. The same selection reaches Skills, Instructions, Agents, MCPs, and
+Commands within each asset type's supported set.
 
-Theme selection and harness selection have deliberately different commit
-boundaries:
+Theme selection and harness selection apply directly via the command palette (`ctrl+p`):
 
-- selecting a theme atomically writes it immediately while preserving the last
-  committed harness list;
-- harness checkboxes remain drafts until **Save**; **Cancel** or **Escape**
-  discards only those drafts;
-- saving harnesses rebuilds every grid. Existing grid `set_rows()` semantics
-  clear pending queues, so apply or revert queued changes first.
+- selecting a theme in **Theme** atomically writes it immediately while preserving
+  the active main-harness list;
+- toggling a harness in **Main harnesses** immediately adds or removes it from your
+  selection, saves to disk, and rebuilds every grid;
+- if any grid has queued edits, a confirmation prompt asks before discarding them.
 
 Supported v1 writes use a temporary sibling file followed by `os.replace`.
 Unknown top-level v1 fields, unknown harness names, and an unavailable persisted
@@ -60,9 +58,9 @@ explicit migration or reset exists.
 | Unknown schema | Defaults plus a status-bar notice; no coercion or write until an explicit migration/reset exists. |
 | Theme unavailable in the installed Textual version | `gruvbox` plus a notice; the unavailable name is retained on unrelated saves. |
 | Unknown top-level v1 field | Retained on later saves. |
-| Harness name absent from `MAIN_HARNESSES` | Ignored for rendering, reported, and retained on later saves. |
+| Harness name absent from `MAIN_HARNESS_CANDIDATES` | Ignored for rendering, reported, and retained on later saves. |
 | Empty `harnesses` list | Accepted; grids keep their asset, Standard where applicable, State, and Source columns. |
 
 See [TUI reference](tui.md) for the palette workflow. Implementation lives in
 `src/agent_toolkit_tui/settings.py` and
-`src/agent_toolkit_tui/screens/settings.py`.
+`src/agent_toolkit_tui/app.py`.

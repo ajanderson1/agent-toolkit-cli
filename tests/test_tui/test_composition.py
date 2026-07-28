@@ -10,6 +10,8 @@ import pytest
 from agent_toolkit_cli.skill_agents import AGENTS
 from agent_toolkit_tui import composition
 from agent_toolkit_tui.composition import (
+    DEFAULT_MAIN_HARNESSES,
+    MAIN_HARNESS_CANDIDATES,
     MAIN_HARNESSES,
     _MCP_HARNESSES,
     instructions_nonstandard_main,
@@ -19,18 +21,24 @@ from agent_toolkit_tui.composition import (
 
 
 def test_main_harnesses_members():
-    assert MAIN_HARNESSES == (
+    assert DEFAULT_MAIN_HARNESSES == (
         "claude-code", "gemini-cli", "codex", "opencode", "pi", "cursor",
         "hermes-agent", "paperclip",
     )
+    assert MAIN_HARNESSES == DEFAULT_MAIN_HARNESSES
+    assert "standard" not in MAIN_HARNESS_CANDIDATES
+    assert "standard-skill" not in MAIN_HARNESS_CANDIDATES
+    assert "standard-agent" not in MAIN_HARNESS_CANDIDATES
+    assert "claude-code" in MAIN_HARNESS_CANDIDATES
 
 
 def test_skills_nonstandard_main_today():
     # gemini-cli / codex / opencode / cursor read .agents/skills → standard;
     # paperclip is a non-standard, company-scoped skills column (issue #474).
-    assert skills_nonstandard_main() == (
+    # Returns members in catalog order (MAIN_HARNESS_CANDIDATES).
+    assert set(skills_nonstandard_main()) == {
         "claude-code", "pi", "hermes-agent", "paperclip",
-    )
+    }
 
 
 def test_paperclip_is_not_actionable_in_other_asset_compositions():
@@ -216,15 +224,16 @@ def test_selection_filters_but_never_adds() -> None:
 
 
 def test_selection_reaches_mcp_and_command_columns() -> None:
-    selection = ("claude-code", "opencode", "pi")
+    selection = ("claude-code", "opencode", "pi", "codex")
 
-    assert mcp_nonstandard_main("project", selection) == ("opencode",)
+    assert mcp_nonstandard_main("project", selection) == ("codex", "opencode")
     assert mcp_nonstandard_main("global", selection) == (
         "claude-code",
+        "codex",
         "opencode",
         "pi",
     )
-    assert composition.commands_main(selection) == ("claude-code", "pi")
+    assert composition.commands_main(selection) == ("claude-code", "codex", "pi")
 
 
 def test_standard_coverage_is_not_affected_by_selection() -> None:

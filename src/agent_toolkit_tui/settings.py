@@ -13,7 +13,10 @@ import os
 from pathlib import Path
 import tempfile
 
-from agent_toolkit_tui.composition import MAIN_HARNESSES
+from agent_toolkit_tui.composition import (
+    DEFAULT_MAIN_HARNESSES,
+    MAIN_HARNESS_CANDIDATES,
+)
 
 SCHEMA = "agent-toolkit-tui-settings/v1"
 DEFAULT_THEME = "gruvbox"
@@ -34,7 +37,7 @@ class TuiSettings:
     """Validated settings plus retained forward-compatibility state."""
 
     theme: str = DEFAULT_THEME
-    harnesses: tuple[str, ...] = MAIN_HARNESSES
+    harnesses: tuple[str, ...] = DEFAULT_MAIN_HARNESSES
     unknown_harnesses: tuple[str, ...] = ()
     diagnostics: tuple[str, ...] = ()
     retained_theme: str | None = None
@@ -129,8 +132,12 @@ def load(
     unknown_top_level = tuple(
         (key, value) for key, value in payload.items() if key not in _KNOWN_FIELDS
     )
-    effective = tuple(harness for harness in harnesses if harness in MAIN_HARNESSES)
-    unknown = tuple(harness for harness in harnesses if harness not in MAIN_HARNESSES)
+    effective = tuple(
+        harness for harness in harnesses if harness in MAIN_HARNESS_CANDIDATES
+    )
+    unknown = tuple(
+        harness for harness in harnesses if harness not in MAIN_HARNESS_CANDIDATES
+    )
     if unknown:
         names = ", ".join(repr(harness) for harness in unknown)
         diagnostics.append(

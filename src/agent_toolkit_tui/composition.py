@@ -19,12 +19,18 @@ from agent_toolkit_cli.command_adapters import DEFAULT_HARNESSES
 from agent_toolkit_cli.instructions_adapters import SUPPORTED_HARNESSES
 from agent_toolkit_cli.skill_agents import AGENTS
 
-# The harnesses of interest that must always be covered (standard column or
-# own column) on every asset type they support.
-MAIN_HARNESSES: tuple[str, ...] = (
+# The fresh-install default main harnesses.
+DEFAULT_MAIN_HARNESSES: tuple[str, ...] = (
     "claude-code", "gemini-cli", "codex", "opencode", "pi", "cursor",
     "hermes-agent", "paperclip",
 )
+
+# All real catalog harnesses eligible for main-harness selection.
+MAIN_HARNESS_CANDIDATES: tuple[str, ...] = tuple(
+    ag.name for ag in AGENTS.values() if ag.show_in_standard_list
+)
+
+MAIN_HARNESSES = DEFAULT_MAIN_HARNESSES
 
 
 def effective_main_harnesses(
@@ -32,11 +38,13 @@ def effective_main_harnesses(
 ) -> tuple[str, ...]:
     """Return the selected MAIN_HARNESSES in canonical render order.
 
-    A selection is only a filter: unknown or long-tail names cannot add a TUI
-    column, and ``None`` preserves the fresh-install default.
+    A selection is only a filter against MAIN_HARNESS_CANDIDATES, and ``None``
+    preserves the fresh-install default.
     """
-    chosen = MAIN_HARNESSES if selection is None else selection
-    return tuple(harness for harness in MAIN_HARNESSES if harness in chosen)
+    chosen = DEFAULT_MAIN_HARNESSES if selection is None else selection
+    return tuple(
+        harness for harness in MAIN_HARNESS_CANDIDATES if harness in chosen
+    )
 
 
 def skills_nonstandard_main(
@@ -46,8 +54,8 @@ def skills_nonstandard_main(
     chosen = effective_main_harnesses(selection)
     return tuple(
         harness
-        for harness in MAIN_HARNESSES
-        if not AGENTS[harness].is_standard and harness in chosen
+        for harness in chosen
+        if harness in AGENTS and not AGENTS[harness].is_standard
     )
 
 
@@ -58,8 +66,8 @@ def instructions_nonstandard_main(
     chosen = effective_main_harnesses(selection)
     return tuple(
         harness
-        for harness in MAIN_HARNESSES
-        if harness in SUPPORTED_HARNESSES and harness in chosen
+        for harness in chosen
+        if harness in SUPPORTED_HARNESSES
     )
 
 
@@ -72,10 +80,10 @@ def agents_nonstandard_main(
     covered = agents_standard_covered(scope)
     return tuple(
         harness
-        for harness in MAIN_HARNESSES
-        if AGENTS[harness].subagent_mechanism != "none"
+        for harness in chosen
+        if harness in AGENTS
+        and AGENTS[harness].subagent_mechanism != "none"
         and harness not in covered
-        and harness in chosen
     )
 
 
@@ -113,6 +121,12 @@ def mcp_nonstandard_main(
 def commands_main(
     selection: tuple[str, ...] | None = None,
 ) -> tuple[str, ...]:
-    """Selected command columns, filtered from the CLI-owned default tuple."""
+    """Selected command columns, filtered from command SUPPORTED_HARNESSES."""
+    from agent_toolkit_cli.command_adapters import (
+        SUPPORTED_HARNESSES as COMMAND_SUPPORTED_HARNESSES,
+    )
+
     chosen = effective_main_harnesses(selection)
-    return tuple(harness for harness in DEFAULT_HARNESSES if harness in chosen)
+    return tuple(
+        harness for harness in chosen if harness in COMMAND_SUPPORTED_HARNESSES
+    )

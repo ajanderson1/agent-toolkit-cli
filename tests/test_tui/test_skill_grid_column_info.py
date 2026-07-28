@@ -60,7 +60,7 @@ async def test_only_column_info_headers_have_glyphs() -> None:
 
         assert labels[0] == "Skill"
         assert labels[1] == f"Standard ({len(get_standard_agents())}) ⓘ"
-        assert labels[2:6] == ["Claude ⓘ", "Pi ⓘ", "Hermes ⓘ", "Paperclip ⓘ"]
+        assert labels[2:6] == ["Claude ⓘ", "Hermes ⓘ", "Paperclip ⓘ", "Pi ⓘ"]
         assert labels[-2:] == ["State ⓘ", "Source"]
 
 

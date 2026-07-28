@@ -57,7 +57,7 @@ Footer (key hints)
 | ++ctrl+z++ | **Revert** | Clear the active grid's *entire* pending queue — both scopes. |
 | ++slash++ | **Filter** | Focus the fuzzy filter box over the grid. |
 | ++ctrl+g++ | **Scope toggle** | Switch project ⇄ global. |
-| ++ctrl+p++ | **Command palette** | Choose **Settings** for theme and main-harness columns. |
+| ++ctrl+p++ | **Command palette** | Choose **Theme** or **Main harnesses** to customize themes or standalone columns. |
 | ++i++ | **Info** | Open information for the selected asset, regardless of column. |
 | ++q++ | **Quit** | Prompts to confirm if you have unapplied pending edits. |
 
@@ -66,17 +66,18 @@ Footer (key hints)
     A grid with queued edits and the pending line populated, just before
     ++ctrl+s++ — the moment the TUI's edit-then-apply model is clearest.
 
-## Settings
+## Theme and Main Harness Preferences
 
-Open ++ctrl+p++ and choose **Settings**. Theme choices come from Textual's live
-theme registry and persist immediately. Main-harness checkboxes are drafts:
-**Save** commits them and rebuilds every grid; **Cancel** or **Escape** discards
-only those drafts. There is no settings keybinding outside the command palette.
+Open ++ctrl+p++ and choose **Theme** or **Main harnesses**.
 
-A harness preference hides only its standalone columns. It never changes
-Standard coverage, and it cannot add a harness the asset type does not support.
-Saving rebuilds grids using their existing `set_rows()` contract, which clears
-pending queues; apply or revert queued edits first.
+- **Theme** opens Textual's theme chooser; selecting a theme persists it to
+  `tui-settings.json` and updates the app live.
+- **Main harnesses** lists all catalogued harnesses; selecting one toggles its
+  presence as a standalone column across all supported asset grids. If unapplied
+  pending edits are queued, a confirmation prompt asks before discarding them.
+
+A harness preference hides or shows only standalone columns. It never changes
+Standard coverage, and it cannot render a harness an asset type does not support.
 
 See [TUI settings schema](tui-settings.md) for the JSON fields, environment
 override, failure handling, and the explicit CLI boundary.

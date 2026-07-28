@@ -138,7 +138,7 @@ CASES = (
         "global",
         "skill-table",
         _skill_grid,
-        ("standard", "claude-code", "pi", "hermes-agent", "paperclip", "state"),
+        ("standard", "claude-code", "hermes-agent", "paperclip", "pi", "state"),
     ),
     _Case(
         "instructions",
@@ -178,7 +178,7 @@ CASES = (
         "global",
         "command-table",
         _command_grid,
-        ("claude-code", "pi", "gemini-cli", "state"),
+        ("claude-code", "codex", "gemini-cli", "pi", "state"),
     ),
     _Case(
         "pi-extensions",
