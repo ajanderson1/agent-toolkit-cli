@@ -65,6 +65,7 @@ class _FooterHost(App):
 
     # Reuse the real implementations so the wiring under test is the shipped one.
     on_skill_grid_pending_changed = TUIApp.on_skill_grid_pending_changed
+    _get_all_pending_edits = TUIApp._get_all_pending_edits
     _refresh_pending_label = TUIApp._refresh_pending_label
     _refresh_status_bar = TUIApp._refresh_status_bar
     _scope_to_roots = TUIApp._scope_to_roots

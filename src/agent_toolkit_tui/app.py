@@ -26,14 +26,14 @@ from collections import defaultdict
 from dataclasses import replace
 from pathlib import Path
 from time import monotonic
-from typing import Iterable, Literal, cast
+from typing import Callable, Iterable, Literal, cast
 
-from textual.app import App, ComposeResult
+from textual.app import App, ComposeResult, SystemCommand
 from textual.binding import Binding
 from textual.command import DiscoveryHit, Hit, Hits, Provider
 from textual.containers import Horizontal, Vertical
 from textual.css.query import NoMatches
-from textual.screen import ModalScreen
+from textual.screen import ModalScreen, Screen
 from textual.widgets import (
     Button, Footer, Header, Input, Label, OptionList, Static,
 )
@@ -41,9 +41,13 @@ from textual.widgets.option_list import Option, OptionDoesNotExist
 from rich.markup import escape
 from rich.text import Text
 
+from agent_toolkit_cli.skill_agents import AGENTS
 from agent_toolkit_tui import __version__
 from agent_toolkit_tui.agent_state import build_agent_rows
 from agent_toolkit_tui.command_state import build_command_rows
+from agent_toolkit_tui.composition import (
+    MAIN_HARNESS_CANDIDATES,
+)
 from agent_toolkit_tui.display_names import asset_type_label
 from agent_toolkit_tui.instruction_state import build_instruction_rows
 from agent_toolkit_tui.mcp_state import build_mcp_rows
@@ -141,13 +145,14 @@ class ConfirmDiscardScreen(ModalScreen[bool]):
         Binding("n", "cancel", "Cancel"),
     ]
 
-    def __init__(self, n_pending: int) -> None:
+    def __init__(self, n_pending: int, message: str | None = None) -> None:
         super().__init__()
         self._n_pending = n_pending
+        self._message = message or f"Discard {self._n_pending} pending change(s)?"
 
     def compose(self) -> ComposeResult:
         with Vertical():
-            yield Label(f"Discard {self._n_pending} pending change(s)?")
+            yield Label(self._message)
             with Horizontal(id="buttons"):
                 yield Button("Discard", variant="warning", id="discard")
                 yield Button("Cancel", variant="primary", id="cancel")
@@ -179,25 +184,83 @@ class SidebarOptionList(OptionList):
         cast("TUIApp", self.app).action_asset_type(asset_type)
 
 
-class SettingsCommandProvider(Provider):
-    """Palette-only entry point for TUI settings."""
+class PersistentThemeProvider(Provider):
+    """Command palette provider for themes that persists theme choice on selection."""
+
+    @property
+    def commands(self) -> list[tuple[str, Callable[[], None]]]:
+        themes = self.app.available_themes
+
+        def make_callback(theme_name: str) -> Callable[[], None]:
+            def callback() -> None:
+                cast("TUIApp", self.app).apply_theme_setting(theme_name)
+
+            return callback
+
+        return [
+            (theme_name, make_callback(theme_name))
+            for theme_name in sorted(themes.keys())
+        ]
 
     async def discover(self) -> Hits:
-        yield DiscoveryHit(
-            "Settings",
-            self.app.action_settings,
-            help="Theme and main harness columns",
-        )
+        for name, callback in self.commands:
+            yield DiscoveryHit(name, callback, help=f"Set theme to {name}")
 
     async def search(self, query: str) -> Hits:
         matcher = self.matcher(query)
-        if (score := matcher.match("Settings")) > 0:
-            yield Hit(
-                score,
-                matcher.highlight("Settings"),
-                self.app.action_settings,
-                help="Theme and main harness columns",
-            )
+        for name, callback in self.commands:
+            if (score := matcher.match(name)) > 0:
+                yield Hit(
+                    score,
+                    matcher.highlight(name),
+                    callback,
+                    help=f"Set theme to {name}",
+                )
+
+
+class HarnessCommandProvider(Provider):
+    """Command palette provider for selecting main harness columns."""
+
+    @property
+    def commands(self) -> list[tuple[str, str, str, Callable[[], None]]]:
+        app = cast("TUIApp", self.app)
+        current_selection = set(app.tui_settings.harnesses)
+
+        items: list[tuple[str, str, str, Callable[[], None]]] = []
+        for key in MAIN_HARNESS_CANDIDATES:
+            config = AGENTS.get(key)
+            display_name = config.display_name if config else key
+            is_selected = key in current_selection
+            marker = "[x]" if is_selected else "[ ]"
+            label = f"{marker} {display_name}"
+
+            def make_callback(harness_key: str) -> Callable[[], None]:
+                def callback() -> None:
+                    app.toggle_main_harness(harness_key)
+
+                return callback
+
+            items.append((key, display_name, label, make_callback(key)))
+        return items
+
+    async def discover(self) -> Hits:
+        for _key, _display_name, label, callback in self.commands:
+            yield DiscoveryHit(label, callback, help="Toggle main harness column")
+
+    async def search(self, query: str) -> Hits:
+        matcher = self.matcher(query)
+        for key, display_name, label, callback in self.commands:
+            score_key = matcher.match(key)
+            score_display = matcher.match(display_name)
+            score_label = matcher.match(label)
+            best_score = max(score_key, score_display, score_label)
+            if best_score > 0:
+                yield Hit(
+                    best_score,
+                    matcher.highlight(label),
+                    callback,
+                    help="Toggle main harness column",
+                )
 
 
 class TUIApp(App):
@@ -205,7 +268,6 @@ class TUIApp(App):
 
     CSS_PATH = "css/app.tcss"
     TITLE = "agent-toolkit-tui"
-    COMMANDS = App.COMMANDS | {SettingsCommandProvider}
 
     BINDINGS = [
         Binding("ctrl+s", "apply", "Apply", priority=True),
@@ -219,6 +281,14 @@ class TUIApp(App):
         Binding("ctrl+c", "double_ctrl_c_quit", "Quit", priority=True),
         Binding("q", "quit", "Quit"),
     ]
+
+    def get_system_commands(self, screen: Screen) -> Iterable[SystemCommand]:
+        yield from super().get_system_commands(screen)
+        yield SystemCommand(
+            "Main harnesses",
+            "Choose which harnesses receive standalone grid columns",
+            self.action_main_harnesses,
+        )
 
     def __init__(self) -> None:
         super().__init__()
@@ -625,6 +695,24 @@ class TUIApp(App):
 
     # ----- actions -----------------------------------------------------------
 
+    def _get_all_pending_edits(self) -> dict[tuple[str, ...], str]:
+        """Collect pending edit keys across all six grid types."""
+        pending: dict[tuple[str, ...], str] = {}
+        for selector in (
+            "#instruction-grid",
+            "#skill-grid",
+            "#command-grid",
+            "#pi-grid",
+            "#agent-grid",
+            "#mcp-grid",
+        ):
+            try:
+                grid = self.query_one(selector)
+                pending.update(grid.pending_entries())  # type: ignore[attr-defined]
+            except Exception:
+                pass
+        return pending
+
     def action_double_ctrl_c_quit(self) -> None:
         now = monotonic()
         last = self._last_ctrl_c_quit_at
@@ -637,27 +725,7 @@ class TUIApp(App):
         self.notify("Press ctrl+c again to quit")
 
     def action_quit(self) -> None:
-        n = 0
-        try:
-            n += len(self.query_one("#instruction-grid", InstructionGrid).pending_entries())
-        except NoMatches:
-            pass
-        try:
-            n += len(self.query_one("#skill-grid", SkillGrid).pending_entries())
-        except NoMatches:
-            pass
-        try:
-            n += len(self.query_one("#command-grid", CommandGrid).pending_entries())
-        except NoMatches:
-            pass
-        try:
-            n += len(self.query_one("#pi-grid", PiGrid).pending_entries())
-        except NoMatches:
-            pass
-        try:
-            n += len(self.query_one("#agent-grid", AgentGrid).pending_entries())
-        except NoMatches:
-            pass
+        n = len(self._get_all_pending_edits())
         if n == 0:
             self.exit()
             return
@@ -665,6 +733,7 @@ class TUIApp(App):
         def _on_close(discard: bool | None) -> None:
             if discard:
                 self.exit()
+
         self.push_screen(ConfirmDiscardScreen(n), _on_close)
 
     def action_scope(self, scope: str) -> None:
@@ -721,13 +790,51 @@ class TUIApp(App):
         if grid is not None:
             grid.action_info()
 
-    def action_settings(self) -> None:
-        """Open Settings; invoked only by the command-palette provider."""
-        from agent_toolkit_tui.screens.settings import SettingsScreen
+    def search_themes(self) -> None:
+        from textual.command import CommandPalette
 
-        if isinstance(self.screen, SettingsScreen):
+        self.push_screen(
+            CommandPalette(
+                providers=[PersistentThemeProvider],
+                placeholder="Search for themes…",
+            )
+        )
+
+    def action_main_harnesses(self) -> None:
+        self.search_main_harnesses()
+
+    def search_main_harnesses(self) -> None:
+        from textual.command import CommandPalette
+
+        self.push_screen(
+            CommandPalette(
+                providers=[HarnessCommandProvider],
+                placeholder="Search for main harnesses…",
+            )
+        )
+
+    def toggle_main_harness(self, harness: str) -> None:
+        """Toggle a main harness selection, prompting if pending edits exist."""
+        current = self._tui_settings.harnesses
+        if harness in current:
+            new_selection = tuple(h for h in current if h != harness)
+        else:
+            new_set = set(current) | {harness}
+            new_selection = tuple(
+                h for h in MAIN_HARNESS_CANDIDATES if h in new_set
+            )
+
+        n_pending = len(self._get_all_pending_edits())
+        if n_pending == 0:
+            self.apply_harness_settings(new_selection)
             return
-        self.push_screen(SettingsScreen(self._tui_settings))
+
+        def _on_confirm(discard: bool | None) -> None:
+            if discard:
+                self.apply_harness_settings(new_selection)
+
+        msg = f"Discard {n_pending} pending change(s) and update main harnesses?"
+        self.push_screen(ConfirmDiscardScreen(n_pending, message=msg), _on_confirm)
 
     def apply_theme_setting(self, theme: str) -> bool:
         """Atomically persist and then apply a theme, preserving harness state."""
@@ -1461,15 +1568,10 @@ class TUIApp(App):
             pass
 
     def _refresh_pending_label(self) -> None:
-        keys: list[tuple[str, ...]] = []
-        for selector in ("#instruction-grid", "#skill-grid", "#pi-grid", "#agent-grid", "#mcp-grid"):
-            try:
-                keys.extend(self.query_one(selector).pending_entries().keys())  # type: ignore[attr-defined]
-            except Exception:
-                pass
+        pending = self._get_all_pending_edits()
         try:
             self.query_one("#footer-pending", Static).update(
-                f"Pending: {len(keys)}{_scope_tag(keys)}"
+                f"Pending: {len(pending)}{_scope_tag(pending.keys())}"
             )
         except Exception:
             pass

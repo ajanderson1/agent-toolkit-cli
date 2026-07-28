@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable
 
+from agent_toolkit_tui.composition import MAIN_HARNESS_CANDIDATES
 from agent_toolkit_tui.display_names import asset_type_label, harness_label
 
 
@@ -82,6 +83,10 @@ _HARNESS_SENTENCES: dict[tuple[str, str], str] = {
         "by the shared `.mcp.json` slot instead of its own entry."
     ),
     ("command", "claude-code"): "Reads command markdown from `.claude/commands/`.",
+    ("command", "codex"): (
+        "Reads command markdown from `.codex/prompts/` (project) or "
+        "`~/.codex/prompts/` (global)."
+    ),
     ("command", "pi"): (
         "Reads command markdown from `.pi/prompts/` (project) or "
         "`.pi/agent/prompts/` (global)."
@@ -226,9 +231,12 @@ def _standard_mcps(context: dict[str, object]) -> ColumnInfo:
 
 
 def _harness_info(asset_type: str, harness: str, _context: dict[str, object]) -> ColumnInfo:
+    sentence = _HARNESS_SENTENCES.get((asset_type, harness))
+    if not sentence:
+        sentence = f"Manages {asset_type_label(asset_type, plural=True).lower()} for {harness_label(harness)}."
     return ColumnInfo(
         title=f"{harness_label(harness)} — {asset_type_label(asset_type, plural=True)}",
-        lines=[_HARNESS_SENTENCES[(asset_type, harness)]],
+        lines=[sentence],
     )
 
 
@@ -276,6 +284,7 @@ COLUMN_INFO: dict[tuple[str, str], Factory] = {
     ("mcp", "pi"): lambda context: _harness_info("mcp", "pi", context),
     ("mcp", "state"): lambda context: _three_badge_state("mcp", context),
     ("command", "claude-code"): lambda context: _harness_info("command", "claude-code", context),
+    ("command", "codex"): lambda context: _harness_info("command", "codex", context),
     ("command", "pi"): lambda context: _harness_info("command", "pi", context),
     ("command", "gemini-cli"): lambda context: _harness_info("command", "gemini-cli", context),
     ("command", "state"): lambda context: _three_badge_state("command", context),
@@ -296,7 +305,13 @@ def get_column_info(
     gain an inert info glyph.
     """
 
-    return COLUMN_INFO[(asset_type, column)](context or {})
+    if (asset_type, column) in COLUMN_INFO:
+        return COLUMN_INFO[(asset_type, column)](context or {})
+
+    if column in MAIN_HARNESS_CANDIDATES:
+        return _harness_info(asset_type, column, context or {})
+
+    raise KeyError((asset_type, column))
 
 
 def registered_pairs() -> frozenset[tuple[str, str]]:
