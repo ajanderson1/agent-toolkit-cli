@@ -1081,6 +1081,80 @@ class TUIApp(App):
                 f"applied: {ok} ok, {failed} failed{tag}"
             )
 
+    def _apply_command_pending(self) -> None:
+        """Apply pending Commands Standard/Pi/Gemini toggles via the facade."""
+        from agent_toolkit_cli._install_core import InstallError, InstallPlan
+        from agent_toolkit_cli import command_install
+
+        try:
+            grid = self.query_one("#command-grid", CommandGrid)
+        except NoMatches:
+            return
+        pending = grid.pending_entries()
+        if not pending:
+            return
+        tag = _scope_tag(pending)
+        by_slug: dict[tuple[str, str], tuple[set[str], set[str]]] = defaultdict(
+            lambda: (set(), set())
+        )
+        for (scope, harness, slug), op in pending.items():
+            adds, removes = by_slug[(scope, slug)]
+            (adds if op == "link" else removes).add(harness)
+
+        ok = failed = 0
+        errors: list[str] = []
+        failed_groups: set[tuple[str, str]] = set()
+        _active_scope, home, active_project = self._scope_to_roots()
+
+        for (scope, slug), (adds, removes) in by_slug.items():
+            n_writes = len(adds) + len(removes)
+            apply_home = Path.home() if scope == "global" else home
+            project = None if scope == "global" else active_project
+            p = InstallPlan(
+                slug=slug,
+                scope=scope,  # type: ignore[arg-type]
+                source=None,
+                ref=None,
+                add_agents=tuple(sorted(adds)),
+                remove_agents=tuple(sorted(removes)),
+            )
+            try:
+                result = command_install.apply(p, home=apply_home, project=project)
+                ok += len(result.created) + len(result.removed)
+            except (InstallError, ValueError) as exc:
+                errors.append(f"{slug}: {exc}")
+                failed += n_writes
+                failed_groups.add((scope, slug))
+
+        saved = {
+            k: v
+            for k, v in grid.pending_entries().items()
+            if (k[0], k[2]) in failed_groups
+        } if failed else {}
+        if failed == 0:
+            grid.clear_pending()
+        self._refresh_command_view()
+        if saved:
+            grid.restore_pending(saved)
+        self._refresh_pending_label()
+        self._refresh_status_bar()
+        if errors:
+            first = " ".join(errors[0].split())
+            extra = f" (+{len(errors) - 1} more)" if len(errors) > 1 else ""
+            self.query_one("#footer-pending", Static).update(
+                f"[red]apply failed[/] — {first}{extra}{tag}"
+            )
+            self.notify(
+                "\n\n".join(errors),
+                title=f"Apply: {ok} ok, {failed} failed",
+                severity="error",
+                timeout=12,
+            )
+        else:
+            self.query_one("#footer-pending", Static).update(
+                f"applied: {ok} ok, {failed} failed{tag}"
+            )
+
     def _apply_skill_pending(self) -> None:
         from agent_toolkit_cli.skill_install import (
             InstallError, InstallPlan, apply as engine_apply,

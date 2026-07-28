@@ -85,7 +85,7 @@ agent-toolkit-cli command remove <slug> [-g|-p]
 agent-toolkit-cli command doctor [-g|-p]
 ```
 
-Default install targets are `claude-code,pi,gemini-cli`. `codex` is explicit because Codex custom prompts are deprecated and global-only. Cursor remains a researched gap until deterministic validation evidence exists.
+Default install targets are `standard,pi,gemini-cli` (#482). The shared Standard slot is `.claude/commands/<slug>.md` — Claude Code + Neovate globally, and Devin (as an imported skill) in projects. `--harnesses claude-code` normalizes to `standard`. No-flag uninstall is maximal (`standard` plus every concrete command harness) so legacy installs are cleaned. `command list --json` exposes `harnesses`; `command doctor` is read-only and reports missing/untracked Standard projections. The Commands TUI shows Standard first. `codex` is explicit because Codex custom prompts are deprecated and global-only. Cursor remains a researched gap until deterministic validation evidence exists.
 
 ### `mcp`
 

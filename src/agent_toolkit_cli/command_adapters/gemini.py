@@ -46,6 +46,12 @@ class GeminiCommandAdapter:
             raise ValueError("project scope requires project")
         return project / ".gemini" / "commands" / f"{slug}.toml"
 
+    def is_installed(self, slug: str, source_file: Path, *, scope: str, home: Path | None, project: Path | None) -> bool:
+        dest = self.destination(slug, scope=scope, home=home, project=project)
+        if not dest.exists() or dest.is_symlink():
+            return False
+        return is_managed_file(dest, slug=slug, harness=self.name)
+
     def install(self, slug: str, source_file: Path, *, scope: str, home: Path | None, project: Path | None) -> Path:
         ensure_regular_command_file(source_file)
         text = source_file.read_text()

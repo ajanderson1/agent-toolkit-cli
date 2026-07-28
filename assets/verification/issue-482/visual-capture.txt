@@ -1,0 +1,22 @@
+## scope=global
+headers: ['Command', 'Standard (2) ⓘ', 'Pi ⓘ', 'Gemini ⓘ', 'State ⓘ', 'Source']
+info: Standard — Commands
+  Covered harnesses (2):
+
+    • Claude
+    • Neovate
+
+  One Markdown command slot at `.claude/commands/<slug>.md` serves Claude and Neovate.
+pending: {"('global', 'standard', 'demo')": 'link'}
+
+## scope=project
+headers: ['Command', 'Standard (3) ⓘ', 'Pi ⓘ', 'Gemini ⓘ', 'State ⓘ', 'Source']
+info: Standard — Commands
+  Covered harnesses (3):
+
+    • Claude
+    • Devin
+    • Neovate
+
+  One Markdown command slot at `.claude/commands/<slug>.md` serves Claude and Neovate; Devin imports it as a skill.
+pending: {"('project', 'standard', 'demo')": 'link'}

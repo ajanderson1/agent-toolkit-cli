@@ -1,12 +1,14 @@
 """Interactive DataTable for the TUI's command tab.
 
-Columns: Command | Claude ⓘ | Pi ⓘ | Gemini ⓘ | State ⓘ | Source.
+Columns: Command | Standard (N) ⓘ | Pi ⓘ | Gemini ⓘ | State ⓘ | Source.
 
-There is no Standard column: unlike skills (#351), agents (#361), and MCPs
-(#399), commands have no convergence projection yet — see #482. Clicking a
-glyphed header explains the column; `i` always explains the selected command.
+Commands have a live Standard slot (#482): one `.claude/commands/<slug>.md`
+file covers Claude Code + Neovate (and project-scope Devin as a skill). Pi
+and Gemini remain individual columns; Codex is CLI-only. Clicking a glyphed
+header explains the column; `i` always explains the selected command.
 
-Layout: [0]=slug, [1..N]=harnesses, [N+1]=state, [N+2]=source.
+Layout: [0]=slug, [1]=standard, [2..N]=nonstandard harnesses, [N+1]=state,
+[N+2]=source.
 
 Mirrors skill_grid.py: per-harness columns, scope toggle, toggle-queue →
 pending → apply. Pending key shape: (scope, harness_name, slug) — same
@@ -33,7 +35,7 @@ from agent_toolkit_tui.widgets._support import adjust_source_column_width, curre
 
 from agent_toolkit_tui.command_state import CommandRow, interactive_harnesses
 from agent_toolkit_tui.column_info import get_column_info
-from agent_toolkit_tui.display_names import asset_type_label, harness_label
+from agent_toolkit_tui.display_names import asset_type_label, harness_label, standard_column_header
 from agent_toolkit_tui.widgets._support import (
     adjust_source_column_width,
     set_source_column_width,
@@ -118,9 +120,14 @@ class CommandGrid(Vertical):
     def set_scope(self, scope: Literal["global", "project"]) -> None:
         self._scope = scope
         self._pending.clear()
+        try:
+            if self.is_mounted:
+                self._rebuild(self.query_one("#command-table", DataTable))
+        except Exception:
+            pass
 
     def _harnesses(self) -> tuple[str, ...]:
-        return interactive_harnesses(self._selection)
+        return interactive_harnesses(self._scope, self._selection)
 
     def set_harness_selection(self, selection: tuple[str, ...]) -> None:
         """Apply a presentation-only harness filter and rebuild columns."""
@@ -353,7 +360,7 @@ class CommandGrid(Vertical):
         )
 
     def _context_for(self, *, key: str, row_index: int) -> dict[str, object]:
-        """Return scope from the live grid; commands have no Standard slot."""
+        """Return scope from the live grid for Standard/harness info panels."""
         del key, row_index
         return {"scope": self._scope}
 
@@ -378,15 +385,16 @@ class CommandGrid(Vertical):
         table.clear(columns=True)
         # The asset column is explained by `i`, not header click (#479).
         table.add_column("Command", width=_COMMAND_COL_WIDTH)
-        # Display labels, not raw catalog keys (#478 R6 — escapee from the
-        # #448 terminology sweep). There is no Standard column here: commands
-        # have no convergence projection yet (#482).
+        # Standard-first: Standard (N) then Pi/Gemini (#482).
         harnesses = self._harnesses()
         for harness in harnesses:
-            table.add_column(
-                f"{harness_label(harness)} {_INFO_GLYPH}",
-                width=_HARNESS_COL_WIDTH,
-            )
+            if harness == "standard":
+                header = standard_column_header("command", self._scope)
+                assert header is not None, "commands always have a Standard slot"
+                label = f"{header} {_INFO_GLYPH}"
+            else:
+                label = f"{harness_label(harness)} {_INFO_GLYPH}"
+            table.add_column(label, width=_HARNESS_COL_WIDTH)
         # State column — explains its asset-type-specific badges (#479).
         table.add_column(f"State {_INFO_GLYPH}", width=_STATE_COL_WIDTH)
         # Source column — passive, no info popup.

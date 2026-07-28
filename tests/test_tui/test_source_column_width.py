@@ -20,7 +20,7 @@ async def test_command_grid_resize_adjusts_source_column_width():
         slug="demo",
         source="owner/repo-with-a-long-source-name",
         ref="main",
-        cells={(interactive_harnesses()[0], "global"): CommandCell(False)},
+        cells={(interactive_harnesses("global")[0], "global"): CommandCell(False)},
     )
 
     class _A(App):
@@ -36,5 +36,5 @@ async def test_command_grid_resize_adjusts_source_column_width():
         grid.on_resize(_resize(220))
 
         source_col = list(table.columns.values())[-1]
-        fixed_width = 22 + (14 * len(interactive_harnesses())) + 10
+        fixed_width = 22 + (14 * len(interactive_harnesses("global"))) + 10
         assert source_col.width == 220 - fixed_width

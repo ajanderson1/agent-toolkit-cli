@@ -82,11 +82,6 @@ _HARNESS_SENTENCES: dict[tuple[str, str], str] = {
         "Reads `mcpServers` from a JSON config; at project scope it is covered "
         "by the shared `.mcp.json` slot instead of its own entry."
     ),
-    ("command", "claude-code"): "Reads command markdown from `.claude/commands/`.",
-    ("command", "codex"): (
-        "Reads command markdown from `.codex/prompts/` (project) or "
-        "`~/.codex/prompts/` (global)."
-    ),
     ("command", "pi"): (
         "Reads command markdown from `.pi/prompts/` (project) or "
         "`.pi/agent/prompts/` (global)."
@@ -230,6 +225,35 @@ def _standard_mcps(context: dict[str, object]) -> ColumnInfo:
     return _standard_info("mcp", names, context)
 
 
+def _standard_commands(context: dict[str, object]) -> ColumnInfo:
+    # source: command_adapters.standard.commands_standard_covered()
+    from agent_toolkit_cli.command_adapters.standard import commands_standard_covered
+
+    scope = _scope(context, default="global")
+    names = tuple(sorted(commands_standard_covered(scope)))
+    if scope == "project":
+        sentence = (
+            "One Markdown command slot at `.claude/commands/<slug>.md` serves "
+            "Claude and Neovate; Devin imports it as a skill."
+        )
+    else:
+        sentence = (
+            "One Markdown command slot at `.claude/commands/<slug>.md` serves "
+            "Claude and Neovate."
+        )
+    lines = [
+        f"Covered harnesses ({len(names)}):",
+        "",
+        *[f"  • {harness_label(name)}" for name in names],
+        "",
+        sentence,
+    ]
+    return ColumnInfo(
+        title=f"Standard — {asset_type_label('command', plural=True)}",
+        lines=lines,
+    )
+
+
 def _harness_info(asset_type: str, harness: str, _context: dict[str, object]) -> ColumnInfo:
     sentence = _HARNESS_SENTENCES.get((asset_type, harness))
     if not sentence:
@@ -283,8 +307,7 @@ COLUMN_INFO: dict[tuple[str, str], Factory] = {
     ("mcp", "opencode"): lambda context: _harness_info("mcp", "opencode", context),
     ("mcp", "pi"): lambda context: _harness_info("mcp", "pi", context),
     ("mcp", "state"): lambda context: _three_badge_state("mcp", context),
-    ("command", "claude-code"): lambda context: _harness_info("command", "claude-code", context),
-    ("command", "codex"): lambda context: _harness_info("command", "codex", context),
+    ("command", "standard"): _standard_commands,
     ("command", "pi"): lambda context: _harness_info("command", "pi", context),
     ("command", "gemini-cli"): lambda context: _harness_info("command", "gemini-cli", context),
     ("command", "state"): lambda context: _three_badge_state("command", context),

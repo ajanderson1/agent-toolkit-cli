@@ -207,10 +207,14 @@ def test_coverage_invariant_holds_for_any_selection(
             if harness in _MCP_HARNESSES:
                 assert harness in mcp_covered or harness in mcp_rendered
 
-    commands_rendered = set(composition.commands_main(selection))
-    for harness in selection:
-        if harness in DEFAULT_HARNESSES:
-            assert harness in commands_rendered
+    from agent_toolkit_cli.command_adapters.standard import commands_standard_covered
+    for scope in ("global", "project"):
+        commands_rendered = set(composition.commands_main(scope, selection))
+        covered = commands_standard_covered(scope)
+        for harness in selection:
+            if harness in ("claude-code", "pi", "gemini-cli"):
+                assert harness in covered or harness in composition.commands_nonstandard_main(scope, selection)
+        assert "standard" in commands_rendered
 
 
 def test_selection_filters_but_never_adds() -> None:
@@ -220,7 +224,7 @@ def test_selection_filters_but_never_adds() -> None:
     assert instructions_nonstandard_main(selection) == ()
     assert composition.agents_nonstandard_main("project", selection) == ()
     assert mcp_nonstandard_main("global", selection) == ()
-    assert composition.commands_main(selection) == ()
+    assert composition.commands_main("global", selection) == ("standard",)
 
 
 def test_selection_reaches_mcp_and_command_columns() -> None:
@@ -233,7 +237,7 @@ def test_selection_reaches_mcp_and_command_columns() -> None:
         "opencode",
         "pi",
     )
-    assert composition.commands_main(selection) == ("claude-code", "codex", "pi")
+    assert composition.commands_main("global", selection) == ("standard", "pi")
 
 
 def test_standard_coverage_is_not_affected_by_selection() -> None:

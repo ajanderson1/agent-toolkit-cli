@@ -17,8 +17,8 @@ EXPECTED = {
     ("agent", "project"): ("standard", "gemini-cli", "opencode", "pi", "state"),
     ("mcp", "global"): ("claude-code", "codex", "opencode", "pi", "state"),
     ("mcp", "project"): ("standard", "codex", "opencode", "state"),
-    ("command", "global"): ("claude-code", "codex", "gemini-cli", "pi", "state"),
-    ("command", "project"): ("claude-code", "codex", "gemini-cli", "pi", "state"),
+    ("command", "global"): ("standard", "pi", "gemini-cli", "state"),
+    ("command", "project"): ("standard", "pi", "gemini-cli", "state"),
     ("pi-extension", "global"): ("pi", "origin"),
     ("pi-extension", "project"): ("pi", "origin"),
 }

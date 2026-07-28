@@ -200,7 +200,6 @@ def test_standard_project_marker_is_present_only_for_a_globally_linked_asset(
             "Reads `mcpServers` from a JSON config; at project scope it is covered "
             "by the shared `.mcp.json` slot instead of its own entry.",
         ),
-        ("command", "claude-code", "Reads command markdown from `.claude/commands/`."),
         (
             "command",
             "pi",
@@ -253,3 +252,16 @@ def test_pi_extension_origin_panel_uses_the_three_authored_origins() -> None:
         "• npm — installed as an npm package",
         "• untracked — present in Pi but not managed by the toolkit",
     ]
+
+
+
+def test_command_standard_panel_is_scope_aware() -> None:
+    global_info = _info("standard", "command", "global", global_linked=False)
+    project_info = _info("standard", "command", "project", global_linked=False)
+    global_text = "\n".join(global_info.lines)
+    project_text = "\n".join(project_info.lines)
+    assert "Claude" in global_text
+    assert "Neovate" in global_text
+    assert "Devin" not in global_text
+    assert "Devin" in project_text
+    assert "skill" in project_text.lower()
