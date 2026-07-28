@@ -12,7 +12,7 @@ from textual.widgets import DataTable
 
 from agent_toolkit_cli.skill_agents import get_standard_agents
 from agent_toolkit_tui.screens.cell_info import CellInfoScreen
-from agent_toolkit_tui.skill_state import INTERACTIVE_AGENTS, SkillCell, SkillRow
+from agent_toolkit_tui.skill_state import interactive_agents, SkillCell, SkillRow
 from agent_toolkit_tui.widgets.column_info_modal import ColumnInfoModal
 from agent_toolkit_tui.widgets.skill_grid import SkillGrid
 
@@ -20,7 +20,7 @@ from agent_toolkit_tui.widgets.skill_grid import SkillGrid
 def _row(slug: str, *, scope: str = "global") -> SkillRow:
     cells = {
         (agent, scope): SkillCell(linked=False, drift=False, skipped=False)
-        for agent in INTERACTIVE_AGENTS
+        for agent in interactive_agents()
     }
     return SkillRow(
         slug=slug,
@@ -94,7 +94,7 @@ async def test_i_opens_identical_asset_info_from_standard_harness_and_state() ->
         await pilot.pause()
         table = app.query_one("#skill-table", DataTable)
         panels: list[tuple[str, str]] = []
-        for column in (1, 2, len(INTERACTIVE_AGENTS) + 1):
+        for column in (1, 2, len(interactive_agents()) + 1):
             table.cursor_coordinate = Coordinate(row=0, column=column)
             table.focus()
             await pilot.press("i")
@@ -119,10 +119,10 @@ async def test_column_key_for_index_resolves_every_explainable_header() -> None:
     async with app.run_test() as pilot:
         await pilot.pause()
         grid = app.query_one("#g", SkillGrid)
-        count = len(INTERACTIVE_AGENTS)
+        count = len(interactive_agents())
 
         assert grid._column_key_for_index(0) is None
-        for index, agent in enumerate(INTERACTIVE_AGENTS, start=1):
+        for index, agent in enumerate(interactive_agents(), start=1):
             assert grid._column_key_for_index(index) == agent
         assert grid._column_key_for_index(count + 1) == "state"
         assert grid._column_key_for_index(count + 2) is None
@@ -139,7 +139,7 @@ async def test_click_state_header_opens_state_legend() -> None:
         await pilot.pause()
         grid = app.query_one("#g", SkillGrid)
         table = app.query_one("#skill-table", DataTable)
-        _post_header(grid, table, len(INTERACTIVE_AGENTS) + 1)
+        _post_header(grid, table, len(interactive_agents()) + 1)
         await pilot.pause()
 
         assert isinstance(app.screen, ColumnInfoModal)
@@ -152,7 +152,7 @@ async def test_click_state_header_opens_state_legend() -> None:
 async def test_standard_header_marker_matches_selected_row(globally_linked: bool) -> None:
     cells = {
         (agent, scope): SkillCell(linked=False, drift=False, skipped=False)
-        for agent in INTERACTIVE_AGENTS
+        for agent in interactive_agents()
         for scope in ("global", "project")
     }
     cells[("standard", "global")] = SkillCell(

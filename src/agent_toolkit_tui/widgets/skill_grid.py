@@ -70,7 +70,7 @@ Op = Literal["link", "unlink"]
 
 
 class SkillGrid(Vertical):
-    """One row per locked skill; interactive cells for INTERACTIVE_AGENTS."""
+    """One row per locked skill with selection-aware harness cells."""
 
     class PendingChanged(Message):
         """Posted whenever the pending toggle set changes.
@@ -101,13 +101,22 @@ class SkillGrid(Vertical):
         self._scope: Literal["global", "project"] = "global"
         # (scope, agent_name, slug) -> op
         self._pending: dict[tuple[str, str, str], Op] = {}
+        self._selection: tuple[str, ...] | None = None
         # Case-insensitive substring filter on slug (#249). "" = show all.
         self._filter: str = ""
 
     def _active_agents(self) -> tuple[str, ...]:
         # Standard column + non-covered main harnesses. The long tail is
         # CLI-only (#351 post-demo decision).
-        return ("standard",) + skills_nonstandard_main()
+        return ("standard",) + skills_nonstandard_main(self._selection)
+
+    def set_harness_selection(self, selection: tuple[str, ...]) -> None:
+        """Apply a presentation-only harness filter and rebuild columns."""
+        self._selection = selection
+        try:
+            self._rebuild(self.query_one("#skill-table", DataTable))
+        except Exception:
+            pass
 
     @property
     def row_count(self) -> int:

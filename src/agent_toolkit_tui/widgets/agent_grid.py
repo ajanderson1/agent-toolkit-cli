@@ -30,7 +30,7 @@ from textual.events import Resize
 from rich.text import Text
 from agent_toolkit_tui.widgets._support import adjust_source_column_width, current_source_column_width
 
-from agent_toolkit_tui.agent_state import INTERACTIVE_HARNESSES, AgentRow
+from agent_toolkit_tui.agent_state import AgentRow, interactive_harnesses
 from agent_toolkit_tui.column_info import get_column_info
 from agent_toolkit_tui.display_names import (
     asset_type_label,
@@ -50,7 +50,6 @@ _PENDING_LINK   = "[yellow]+[/]"
 _PENDING_UNLINK = "[yellow]-[/]"
 _INFO_GLYPH     = "ⓘ"
 _GLOBAL_GLYPH   = "🌐"
-_SOURCE_COLUMN_FIXED_WIDTH = 22 + (14 * len(INTERACTIVE_HARNESSES)) + 10
 
 # Row-state badges (#360). `installed` renders as an em-dash to keep the
 # common case quiet; `library` mirrors skill_grid's dim available state;
@@ -65,7 +64,7 @@ Op = Literal["link", "unlink"]
 
 
 class AgentGrid(Vertical):
-    """One row per locked agent; interactive cells for INTERACTIVE_HARNESSES."""
+    """One row per locked agent with selection-aware harness cells."""
 
     class PendingChanged(Message):
         """Posted whenever the pending toggle set changes.
@@ -95,6 +94,7 @@ class AgentGrid(Vertical):
         self._scope: Literal["global", "project"] = "global"
         # (scope, harness_name, slug) -> op
         self._pending: dict[tuple[str, str, str], Op] = {}
+        self._selection: tuple[str, ...] | None = None
         self._filter: str = ""
 
     @property
@@ -117,6 +117,21 @@ class AgentGrid(Vertical):
     def set_scope(self, scope: Literal["global", "project"]) -> None:
         self._scope = scope
         self._pending.clear()
+        try:
+            self._rebuild(self.query_one("#agent-table", DataTable))
+        except Exception:
+            pass
+
+    def _harnesses(self) -> tuple[str, ...]:
+        return interactive_harnesses(self._scope, self._selection)
+
+    def set_harness_selection(self, selection: tuple[str, ...]) -> None:
+        """Apply a presentation-only harness filter and rebuild columns."""
+        self._selection = selection
+        try:
+            self._rebuild(self.query_one("#agent-table", DataTable))
+        except Exception:
+            pass
 
     def pending_entries(self) -> dict[tuple[str, str, str], Op]:
         return dict(self._pending)
@@ -192,7 +207,7 @@ class AgentGrid(Vertical):
         adjust_source_column_width(
             table,
             event,
-            fixed_width=_SOURCE_COLUMN_FIXED_WIDTH,
+            fixed_width=self._fixed_column_width(),
         )
 
     def action_toggle_cell(self) -> None:
@@ -297,19 +312,20 @@ class AgentGrid(Vertical):
         self._notify_pending()
 
     def _column_index(self, harness_name: str) -> int:
-        """Return the table column index for a harness name. Layout: [0]=slug, [1..N]=harnesses, [N+1]=state, [N+2]=source."""
+        """Return the table column index for a harness name."""
         try:
-            return 1 + list(INTERACTIVE_HARNESSES).index(harness_name)
+            return 1 + self._harnesses().index(harness_name)
         except ValueError:
             return -1
 
     def _harness_for_column(self, col: int) -> str | None:
-        """Return the harness name for a table column index, or None for slug/state/source cols. Layout: [0]=slug, [1..N]=harnesses, [N+1]=state, [N+2]=source."""
+        """Return the harness for a table column, excluding metadata columns."""
         if col < 1:
             return None
         idx = col - 1
-        if 0 <= idx < len(INTERACTIVE_HARNESSES):
-            return INTERACTIVE_HARNESSES[idx]
+        harnesses = self._harnesses()
+        if 0 <= idx < len(harnesses):
+            return harnesses[idx]
         return None
 
     def _column_key_for_index(self, col: int) -> str | None:
@@ -317,7 +333,7 @@ class AgentGrid(Vertical):
         harness = self._harness_for_column(col)
         if harness is not None:
             return harness
-        if col == len(INTERACTIVE_HARNESSES) + 1:
+        if col == len(self._harnesses()) + 1:
             return "state"
         return None
 
@@ -357,8 +373,7 @@ class AgentGrid(Vertical):
         except Exception:
             return
 
-        fixed_width = 22 + 10 + (len(INTERACTIVE_HARNESSES) * 14)
-        adjust_source_column_width(table, event, fixed_width)
+        adjust_source_column_width(table, event, self._fixed_column_width())
 
     def _rebuild(self, table: DataTable) -> None:
         """Rebuild the DataTable from current rows + pending. Never named _render_*."""
@@ -379,7 +394,8 @@ class AgentGrid(Vertical):
         standard_header = standard_column_header("agent", self._scope)
         assert standard_header is not None, "agents always have a standard slot"
         headers = {"standard": standard_header}
-        for harness in INTERACTIVE_HARNESSES:
+        harnesses = self._harnesses()
+        for harness in harnesses:
             base = headers.get(harness, harness_label(harness))
             table.add_column(f"{base} {_INFO_GLYPH}", width=14)
         # State column — explains its asset-type-specific badges (#479).
@@ -391,7 +407,7 @@ class AgentGrid(Vertical):
         visible = self._visible_rows()
         for row in visible:
             cells: list[str | Text] = [row.slug]
-            for harness in INTERACTIVE_HARNESSES:
+            for harness in harnesses:
                 cells.append(self._cell_glyph(row=row, harness=harness))
             cells.append(_STATE_MARKUP.get(row.state, row.state))
             cells.append(Text(row.source, no_wrap=True, overflow="ellipsis"))
@@ -400,7 +416,7 @@ class AgentGrid(Vertical):
         if visible:
             max_row = len(visible) - 1
             # Layout: slug + N harness cols + state + source.
-            max_col = 2 + len(INTERACTIVE_HARNESSES)
+            max_col = 2 + len(harnesses)
             table.cursor_coordinate = Coordinate(
                 row=min(saved.row, max_row),
                 column=min(saved.column, max_col),
@@ -410,9 +426,14 @@ class AgentGrid(Vertical):
             x=saved_scroll[0], y=saved_scroll[1], animate=False, force=True
         )
 
+    def _fixed_column_width(self) -> int:
+        return 22 + (14 * len(self._harnesses())) + 10
+
     def _adjust_source_column_width(self, table: DataTable) -> None:
         if self.size.width > 0:
-            set_source_column_width(table, self.size.width, _SOURCE_COLUMN_FIXED_WIDTH)
+            set_source_column_width(
+                table, self.size.width, self._fixed_column_width()
+            )
 
     def _cell_glyph(self, *, row: AgentRow, harness: str) -> str:
         """Return the display glyph for a harness cell. Never named _render_*."""

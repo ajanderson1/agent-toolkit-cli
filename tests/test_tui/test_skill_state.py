@@ -6,7 +6,7 @@ from click.testing import CliRunner
 from agent_toolkit_cli.cli import main
 from agent_toolkit_cli.skill_paths import canonical_skill_dir
 from agent_toolkit_tui.skill_state import (
-    INTERACTIVE_AGENTS,
+    interactive_agents,
     SkillCell,
     _cell_for,
     build_skill_rows,
@@ -591,12 +591,12 @@ def test_build_skill_rows_project_scope_populates_global_cells(
     rows = build_skill_rows(scope="project", home=home, project=project)
     demo = next(r for r in rows if r.slug == "demo")
     # Project cells still present (existing behaviour).
-    for agent in INTERACTIVE_AGENTS:
+    for agent in interactive_agents():
         assert (agent, "project") in demo.cells, (
             f"project cell missing for agent {agent!r}: {demo.cells.keys()}"
         )
     # Global cells now also present (new behaviour).
-    for agent in INTERACTIVE_AGENTS:
+    for agent in interactive_agents():
         assert (agent, "global") in demo.cells, (
             f"global cell missing for agent {agent!r}: {demo.cells.keys()}"
         )
@@ -620,7 +620,7 @@ def test_build_skill_rows_project_scope_without_home_skips_global_cells(
 
     rows = build_skill_rows(scope="project", home=None, project=project)
     demo = next(r for r in rows if r.slug == "demo")
-    for agent in INTERACTIVE_AGENTS:
+    for agent in interactive_agents():
         assert (agent, "project") in demo.cells
         assert (agent, "global") not in demo.cells, (
             f"unexpected global cell when home=None: {demo.cells.keys()}"
@@ -647,7 +647,7 @@ def test_build_skill_rows_global_scope_unchanged(
 
     rows = build_skill_rows(scope="global", home=home, project=None)
     demo = next(r for r in rows if r.slug == "demo")
-    for agent in INTERACTIVE_AGENTS:
+    for agent in interactive_agents():
         assert (agent, "global") in demo.cells
         assert (agent, "project") not in demo.cells, (
             f"unexpected project cell at global scope: {demo.cells.keys()}"

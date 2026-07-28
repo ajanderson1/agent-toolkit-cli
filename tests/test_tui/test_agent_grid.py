@@ -3,7 +3,7 @@
 Covers (8 widget-level + 8 app-level = 16 tests):
 
 Widget-level:
-1. columns renders correctly (Agent + Standard (N) + INTERACTIVE_HARNESSES + Source)
+1. columns renders correctly (Agent + Standard (N) + interactive_harnesses("global") + Source)
 2. row count
 3. toggle unlinked cell queues 'link'
 4. toggle linked cell queues 'unlink'
@@ -33,7 +33,7 @@ import pytest
 from textual.app import App, ComposeResult
 from textual.widgets import DataTable, OptionList, Static
 
-from agent_toolkit_tui.agent_state import INTERACTIVE_HARNESSES, AgentCell, AgentRow
+from agent_toolkit_tui.agent_state import interactive_harnesses, AgentCell, AgentRow
 from agent_toolkit_tui.widgets.agent_grid import AgentGrid
 from agent_toolkit_tui.widgets.pi_grid import PiGrid
 from agent_toolkit_tui.widgets.skill_grid import SkillGrid
@@ -44,7 +44,7 @@ from agent_toolkit_tui.widgets.skill_grid import SkillGrid
 # ---------------------------------------------------------------------------
 
 
-def _linked_row(slug: str, *, harness: str = INTERACTIVE_HARNESSES[0]) -> AgentRow:
+def _linked_row(slug: str, *, harness: str = interactive_harnesses("global")[0]) -> AgentRow:
     """Row with exactly one harness linked at global scope."""
     return AgentRow(
         slug=slug,
@@ -54,7 +54,7 @@ def _linked_row(slug: str, *, harness: str = INTERACTIVE_HARNESSES[0]) -> AgentR
     )
 
 
-def _unlinked_row(slug: str, *, harness: str = INTERACTIVE_HARNESSES[0]) -> AgentRow:
+def _unlinked_row(slug: str, *, harness: str = interactive_harnesses("global")[0]) -> AgentRow:
     """Row with exactly one harness unlinked at global scope."""
     return AgentRow(
         slug=slug,
@@ -70,10 +70,10 @@ def _full_row(
     linked: bool = False,
     scope: str = "global",
 ) -> AgentRow:
-    """Row with all INTERACTIVE_HARNESSES, all at the same linked state."""
+    """Row with all interactive_harnesses("global"), all at the same linked state."""
     cells = {
         (h, scope): AgentCell(linked=linked)
-        for h in INTERACTIVE_HARNESSES
+        for h in interactive_harnesses("global")
     }
     return AgentRow(
         slug=slug,
@@ -90,7 +90,7 @@ def _full_row(
 
 @pytest.mark.asyncio
 async def test_agent_grid_mounts_with_correct_columns():
-    """Grid must show Agent plus INTERACTIVE_HARNESSES plus Source."""
+    """Grid must show Agent plus interactive_harnesses("global") plus Source."""
 
     class _A(App):
         def compose(self) -> ComposeResult:
@@ -102,7 +102,7 @@ async def test_agent_grid_mounts_with_correct_columns():
         table = app.query_one("#agent-table", DataTable)
         labels = [str(c.label) for c in table.columns.values()]
         # Slug + N harness cols + State + Source = 3 + N  (#360: State column added)
-        assert len(labels) == len(INTERACTIVE_HARNESSES) + 3
+        assert len(labels) == len(interactive_harnesses("global")) + 3
         assert "Agent" in labels
         assert "Agent ⓘ" not in labels
         assert not any("AGENT" in lbl for lbl in labels)
@@ -146,13 +146,13 @@ async def test_toggle_unlinked_cell_queues_link():
         g = app.query_one("#g", AgentGrid)
         g.set_scope("global")
         table = app.query_one("#agent-table", DataTable)
-        # Column 1 = first INTERACTIVE_HARNESSES entry
+        # Column 1 = first interactive_harnesses("global") entry
         table.cursor_coordinate = table.cursor_coordinate.__class__(row=0, column=1)
         table.focus()
         await pilot.pause()
         await pilot.press("space")
         pending = g.pending_entries()
-        first_harness = INTERACTIVE_HARNESSES[0]
+        first_harness = interactive_harnesses("global")[0]
         assert pending.get(("global", first_harness, "alpha")) == "link"
 
 
@@ -175,7 +175,7 @@ async def test_toggle_linked_cell_queues_unlink():
         await pilot.pause()
         await pilot.press("space")
         pending = g.pending_entries()
-        first_harness = INTERACTIVE_HARNESSES[0]
+        first_harness = interactive_harnesses("global")[0]
         assert pending.get(("global", first_harness, "alpha")) == "unlink"
 
 
@@ -261,7 +261,7 @@ async def test_toggle_column_queues_all_in_column():
         await pilot.pause()
         await pilot.press("a")
         pending = g.pending_entries()
-        first_harness = INTERACTIVE_HARNESSES[0]
+        first_harness = interactive_harnesses("global")[0]
         assert pending.get(("global", first_harness, "a")) == "link"
         assert pending.get(("global", first_harness, "b")) == "link"
 
@@ -302,7 +302,7 @@ async def test_agent_i_opens_asset_info_from_harness_column():
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one("#agent-table", DataTable)
-        pi_col = 1 + INTERACTIVE_HARNESSES.index("pi")
+        pi_col = 1 + interactive_harnesses("global").index("pi")
         table.cursor_coordinate = Coordinate(row=0, column=pi_col)
         table.focus()
         await pilot.pause()

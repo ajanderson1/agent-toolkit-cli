@@ -8,7 +8,7 @@ Key differences from skill_state:
   installable file, not a symlink bundle. It renders as the first column.
 - No git working-tree state badge (agents are installed files, not git repos per-se).
 - Linked = adapter destination exists (adapter.destination(...).exists() or .is_symlink()).
-- INTERACTIVE_HARNESSES is derived: standard slot + non-covered main harnesses.
+- Interactive harnesses derive at call time from scope + user selection.
 
 Row-universe contract: union(library lock, scope lock) — canonical statement
 in skill_state.py's module docstring (#360). Rows carry a `state`:
@@ -30,11 +30,12 @@ from agent_toolkit_tui.composition import agents_nonstandard_main
 Scope = Literal["global", "project"]
 State = Literal["installed", "library", "unlisted"]
 
-# Rendered columns (#361): the standard slot first, then the non-covered
-# main harnesses (derived per scope; the two scopes yield the same set
-# today because devin is not a MAIN harness). Cells are still keyed by
-# (harness, scope). The long tail is CLI-only.
-INTERACTIVE_HARNESSES: tuple[str, ...] = ("standard",) + agents_nonstandard_main("global")
+def interactive_harnesses(
+    scope: str,
+    selection: tuple[str, ...] | None = None,
+) -> tuple[str, ...]:
+    """Rendered agent cells, derived at call time for the real scope."""
+    return ("standard",) + agents_nonstandard_main(scope, selection)
 
 
 @dataclass(frozen=True)
@@ -90,6 +91,7 @@ def build_agent_rows(
     scope: Scope,
     home: Path | None,
     project: Path | None,
+    selection: tuple[str, ...] | None = None,
 ) -> list[AgentRow]:
     """Build AgentRow list from union(library lock, scope lock) + filesystem.
 
@@ -109,6 +111,7 @@ def build_agent_rows(
     # only surface for unlisted (scope-only) slugs.
     universe = {**scope_slugs, **lib_slugs}
 
+    harnesses = interactive_harnesses(scope, selection)
     rows: list[AgentRow] = []
     for slug in sorted(universe):
         entry = universe[slug]
@@ -119,7 +122,7 @@ def build_agent_rows(
         else:
             state = "library"
         cells: dict[tuple[str, str], AgentCell] = {}
-        for harness in INTERACTIVE_HARNESSES:
+        for harness in harnesses:
             cell = _cell_for(slug, harness, scope=scope, home=home, project=project)
             if cell is not None:
                 cells[(harness, scope)] = cell
@@ -129,7 +132,7 @@ def build_agent_rows(
         # in the universe — the probe is a filesystem check, independent of
         # lock membership — matching skill_state (#188).
         if scope == "project" and home is not None:
-            for harness in INTERACTIVE_HARNESSES:
+            for harness in harnesses:
                 cell = _cell_for(slug, harness, scope="global", home=home, project=None)
                 if cell is not None:
                     cells[(harness, "global")] = cell

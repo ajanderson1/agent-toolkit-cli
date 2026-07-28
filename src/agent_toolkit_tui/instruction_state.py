@@ -6,7 +6,7 @@ per-harness cell state. Mirrors agent_state.py for the instruction asset type.
 Key differences from agent_state:
 - Manages pointer symlinks to a canonical AGENTS.md file, not copies.
 - Cell state includes a `conflict` flag (real file or foreign symlink in slot).
-- INTERACTIVE_HARNESSES is the pinned shortlist: claude-code, gemini-cli.
+- Interactive harnesses derive at call time from the selected main set.
   The `standard` column is rendered separately by the grid as a read-only status
   column (shows canonical_exists), NOT listed here.
 - If the lock is empty but the canonical AGENTS.md exists, emit a single
@@ -31,10 +31,11 @@ from agent_toolkit_cli.instructions_lock import read_lock
 
 Scope = Literal["global", "project"]
 
-# Derived shortlist of installable harnesses whose cells the TUI grid renders
-# (#351 — derived from the composition, not pinned; the long tail is
-# CLI-only). `standard` is informational only and NOT included here.
-INTERACTIVE_HARNESSES: tuple[str, ...] = instructions_nonstandard_main()
+def interactive_harnesses(
+    selection: tuple[str, ...] | None = None,
+) -> tuple[str, ...]:
+    """Rendered instruction cells, derived at call time from the selection."""
+    return instructions_nonstandard_main(selection)
 
 
 @dataclass(frozen=True)
@@ -137,10 +138,11 @@ def build_instruction_rows(
     scope: Scope,
     home: Path | None,
     project: Path | None,
+    selection: tuple[str, ...] | None = None,
 ) -> list[InstructionRow]:
     """Build InstructionRow list from the instructions lock + filesystem.
 
-    Reads the scope-appropriate lock. For each slug × INTERACTIVE_HARNESSES,
+    Reads the scope-appropriate lock. For each slug × selected harness,
     tests whether the pointer exists and resolves correctly.
 
     Empty-lock first-run behavior:
@@ -160,6 +162,7 @@ def build_instruction_rows(
         lock_path = instructions_paths.lock_file_path("project", project)
 
     canonical_exists = canonical.exists()
+    harnesses = interactive_harnesses(selection)
 
     # Read lock (returns empty lock if file absent).
     lock = read_lock(lock_path)
@@ -174,7 +177,7 @@ def build_instruction_rows(
             canonical_exists=True,
             cells={},
         )
-        for harness in INTERACTIVE_HARNESSES:
+        for harness in harnesses:
             cell = _cell_for(
                 "AGENTS.md", harness,
                 scope=scope, home=home, project=project,
@@ -184,7 +187,7 @@ def build_instruction_rows(
                 row.cells[(harness, scope)] = cell
         # Project-scope global shadow probe for the 🌐 marker (#388).
         if scope == "project" and home is not None:
-            for harness in INTERACTIVE_HARNESSES:
+            for harness in harnesses:
                 gcell = _cell_for(
                     "AGENTS.md", harness,
                     scope="global", home=home, project=None,
@@ -198,7 +201,7 @@ def build_instruction_rows(
     for slug in sorted(lock.instructions):
         entry = lock.instructions[slug]
         cells: dict[tuple[str, str], InstructionCell] = {}
-        for harness in INTERACTIVE_HARNESSES:
+        for harness in harnesses:
             cell = _cell_for(
                 slug, harness,
                 scope=scope, home=home, project=project,
@@ -212,7 +215,7 @@ def build_instruction_rows(
         # canonical itself (scope="global"), so do NOT pass the project
         # _canonical override here.
         if scope == "project" and home is not None:
-            for harness in INTERACTIVE_HARNESSES:
+            for harness in harnesses:
                 gcell = _cell_for(
                     slug, harness,
                     scope="global", home=home, project=None,

@@ -15,6 +15,7 @@ tests/test_tui/test_composition.py.
 from __future__ import annotations
 
 from agent_toolkit_cli.agent_adapters.standard import agents_standard_covered
+from agent_toolkit_cli.command_adapters import DEFAULT_HARNESSES
 from agent_toolkit_cli.instructions_adapters import SUPPORTED_HARNESSES
 from agent_toolkit_cli.skill_agents import AGENTS
 
@@ -26,24 +27,55 @@ MAIN_HARNESSES: tuple[str, ...] = (
 )
 
 
-def skills_nonstandard_main() -> tuple[str, ...]:
-    """Main harnesses that need their own skills column (not standard-covered)."""
-    return tuple(n for n in MAIN_HARNESSES if not AGENTS[n].is_standard)
+def effective_main_harnesses(
+    selection: tuple[str, ...] | None = None,
+) -> tuple[str, ...]:
+    """Return the selected MAIN_HARNESSES in canonical render order.
+
+    A selection is only a filter: unknown or long-tail names cannot add a TUI
+    column, and ``None`` preserves the fresh-install default.
+    """
+    chosen = MAIN_HARNESSES if selection is None else selection
+    return tuple(harness for harness in MAIN_HARNESSES if harness in chosen)
 
 
-def instructions_nonstandard_main() -> tuple[str, ...]:
-    """Main harnesses that need their own instructions column (symlink verdict)."""
-    return tuple(h for h in MAIN_HARNESSES if h in SUPPORTED_HARNESSES)
+def skills_nonstandard_main(
+    selection: tuple[str, ...] | None = None,
+) -> tuple[str, ...]:
+    """Selected main harnesses needing their own skills column."""
+    chosen = effective_main_harnesses(selection)
+    return tuple(
+        harness
+        for harness in MAIN_HARNESSES
+        if not AGENTS[harness].is_standard and harness in chosen
+    )
 
 
-def agents_nonstandard_main(scope: str) -> tuple[str, ...]:
-    """Main harnesses that need their own agents column at `scope`:
-    support the agent asset type (mechanism != 'none') and are not covered
-    by the standard .claude/agents slot (#361)."""
+def instructions_nonstandard_main(
+    selection: tuple[str, ...] | None = None,
+) -> tuple[str, ...]:
+    """Selected main harnesses needing an instructions pointer column."""
+    chosen = effective_main_harnesses(selection)
+    return tuple(
+        harness
+        for harness in MAIN_HARNESSES
+        if harness in SUPPORTED_HARNESSES and harness in chosen
+    )
+
+
+def agents_nonstandard_main(
+    scope: str,
+    selection: tuple[str, ...] | None = None,
+) -> tuple[str, ...]:
+    """Selected main harnesses needing their own agents column at ``scope``."""
+    chosen = effective_main_harnesses(selection)
     covered = agents_standard_covered(scope)
     return tuple(
-        h for h in MAIN_HARNESSES
-        if AGENTS[h].subagent_mechanism != "none" and h not in covered
+        harness
+        for harness in MAIN_HARNESSES
+        if AGENTS[harness].subagent_mechanism != "none"
+        and harness not in covered
+        and harness in chosen
     )
 
 
@@ -54,18 +86,33 @@ def agents_nonstandard_main(scope: str) -> tuple[str, ...]:
 _MCP_HARNESSES: tuple[str, ...] = ("claude-code", "codex", "opencode", "pi")
 
 
-def mcp_nonstandard_main(scope: str) -> tuple[str, ...]:
-    """Main MCP harnesses that need their own column at `scope`: the four real
-    MCP harnesses minus those covered by the standard project .mcp.json
-    projection (#399).
+def mcp_nonstandard_main(
+    scope: str,
+    selection: tuple[str, ...] | None = None,
+) -> tuple[str, ...]:
+    """Selected MCP harnesses needing their own column at ``scope``.
 
     Scope asymmetry (load-bearing): STANDARD_MCP_READERS has ONLY a 'project'
     key, so mcp_standard_covered('global') raises KeyError. At global scope the
-    covered set is empty and all four harnesses render their own column."""
+    covered set is empty and all selected MCP harnesses render their own column.
+    """
     from agent_toolkit_cli.mcp_standard import mcp_standard_covered
 
+    chosen = effective_main_harnesses(selection)
     try:
         covered = mcp_standard_covered(scope)
     except KeyError:
         covered = frozenset()
-    return tuple(h for h in _MCP_HARNESSES if h not in covered)
+    return tuple(
+        harness
+        for harness in _MCP_HARNESSES
+        if harness not in covered and harness in chosen
+    )
+
+
+def commands_main(
+    selection: tuple[str, ...] | None = None,
+) -> tuple[str, ...]:
+    """Selected command columns, filtered from the CLI-owned default tuple."""
+    chosen = effective_main_harnesses(selection)
+    return tuple(harness for harness in DEFAULT_HARNESSES if harness in chosen)

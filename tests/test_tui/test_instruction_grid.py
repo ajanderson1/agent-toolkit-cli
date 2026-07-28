@@ -3,7 +3,7 @@
 Covers (widget-level + app-level):
 
 Widget-level:
-1.  columns renders correctly (Instruction + Standard (N) + INTERACTIVE_HARNESSES + Source)
+1.  columns renders correctly (Instruction + Standard (N) + interactive_harnesses() + Source)
 2.  row count
 3.  toggle unlinked cell queues 'link'
 4.  toggle linked cell queues 'unlink'
@@ -37,7 +37,7 @@ from textual.geometry import Size
 from textual.widgets import DataTable, OptionList, Static
 
 from agent_toolkit_tui.instruction_state import (
-    INTERACTIVE_HARNESSES,
+    interactive_harnesses,
     InstructionCell,
     InstructionRow,
 )
@@ -50,10 +50,10 @@ from agent_toolkit_tui.widgets.instruction_grid import InstructionGrid
 
 
 def _unlinked_row(slug: str = "AGENTS.md", *, scope: str = "global") -> InstructionRow:
-    """Row with all INTERACTIVE_HARNESSES unlinked at the given scope."""
+    """Row with all interactive_harnesses() unlinked at the given scope."""
     cells = {
         (h, scope): InstructionCell(linked=False, conflict=False)
-        for h in INTERACTIVE_HARNESSES
+        for h in interactive_harnesses()
     }
     return InstructionRow(
         slug=slug,
@@ -64,10 +64,10 @@ def _unlinked_row(slug: str = "AGENTS.md", *, scope: str = "global") -> Instruct
 
 
 def _linked_row(slug: str = "AGENTS.md", *, scope: str = "global") -> InstructionRow:
-    """Row with all INTERACTIVE_HARNESSES linked at the given scope."""
+    """Row with all interactive_harnesses() linked at the given scope."""
     cells = {
         (h, scope): InstructionCell(linked=True, conflict=False)
-        for h in INTERACTIVE_HARNESSES
+        for h in interactive_harnesses()
     }
     return InstructionRow(
         slug=slug,
@@ -78,10 +78,10 @@ def _linked_row(slug: str = "AGENTS.md", *, scope: str = "global") -> Instructio
 
 
 def _conflict_row(slug: str = "AGENTS.md", *, scope: str = "global") -> InstructionRow:
-    """Row with all INTERACTIVE_HARNESSES in conflict state."""
+    """Row with all interactive_harnesses() in conflict state."""
     cells = {
         (h, scope): InstructionCell(linked=False, conflict=True)
-        for h in INTERACTIVE_HARNESSES
+        for h in interactive_harnesses()
     }
     return InstructionRow(
         slug=slug,
@@ -120,7 +120,7 @@ async def test_instruction_grid_resize_adjusts_source_column_width():
 
 @pytest.mark.asyncio
 async def test_instruction_grid_mounts_with_correct_columns():
-    """Grid must show Instruction + Standard (N) + INTERACTIVE_HARNESSES + Source."""
+    """Grid must show Instruction + Standard (N) + interactive_harnesses() + Source."""
 
     class _A(App):
         def compose(self) -> ComposeResult:
@@ -132,7 +132,7 @@ async def test_instruction_grid_mounts_with_correct_columns():
         table = app.query_one("#instruction-table", DataTable)
         labels = [str(c.label) for c in table.columns.values()]
         # Slug + standard + N harness cols + Source
-        assert len(labels) == len(INTERACTIVE_HARNESSES) + 3
+        assert len(labels) == len(interactive_harnesses()) + 3
         assert "Instruction" in labels
         assert "Instruction ⓘ" not in labels
         assert not any("INSTRUCTION" in lbl for lbl in labels)
@@ -178,7 +178,7 @@ async def test_toggle_unlinked_cell_queues_link():
         await pilot.pause()
         await pilot.press("space")
         pending = g.pending_entries()
-        first_harness = INTERACTIVE_HARNESSES[0]
+        first_harness = interactive_harnesses()[0]
         assert pending.get(("global", first_harness, "AGENTS.md")) == "link"
 
 
@@ -201,7 +201,7 @@ async def test_toggle_linked_cell_queues_unlink():
         await pilot.pause()
         await pilot.press("space")
         pending = g.pending_entries()
-        first_harness = INTERACTIVE_HARNESSES[0]
+        first_harness = interactive_harnesses()[0]
         assert pending.get(("global", first_harness, "AGENTS.md")) == "unlink"
 
 
@@ -317,7 +317,7 @@ async def test_toggle_column_queues_all_in_column():
         await pilot.pause()
         await pilot.press("a")
         pending = g.pending_entries()
-        first_harness = INTERACTIVE_HARNESSES[0]
+        first_harness = interactive_harnesses()[0]
         assert pending.get(("global", first_harness, "AGENTS.md")) == "link"
 
 

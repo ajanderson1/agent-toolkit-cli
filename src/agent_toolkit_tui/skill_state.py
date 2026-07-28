@@ -41,11 +41,11 @@ from agent_toolkit_tui.composition import skills_nonstandard_main
 State = Literal["clean", "dirty", "missing", "copy", "library", "unlisted"]
 Scope = Literal["global", "project"]
 
-# Column composition is derived from the main-harness set (#351); the long
-# tail is CLI-only, so the loader probes only the rendered columns.
-# "standard" is first — it represents the bundle toggle (~/.agents/skills/<slug>
-# symlink at global scope; project canonical existence at project scope).
-INTERACTIVE_AGENTS: tuple[str, ...] = ("standard",) + skills_nonstandard_main()
+def interactive_agents(
+    selection: tuple[str, ...] | None = None,
+) -> tuple[str, ...]:
+    """Rendered skill cells, derived at call time from the user selection."""
+    return ("standard",) + skills_nonstandard_main(selection)
 
 
 @dataclass(frozen=True)
@@ -187,7 +187,11 @@ def _cell_for(
 
 
 def build_skill_rows(
-    *, scope: Scope, home: Path | None, project: Path | None,
+    *,
+    scope: Scope,
+    home: Path | None,
+    project: Path | None,
+    selection: tuple[str, ...] | None = None,
 ) -> list[SkillRow]:
     # Row universe = union(library lock, scope lock) — see module docstring.
     # At global scope the library lock IS the scope lock, so the union is a
@@ -203,6 +207,7 @@ def build_skill_rows(
             if slug not in universe:
                 universe[slug] = proj_entry
                 unlisted.add(slug)
+    harnesses = interactive_agents(selection)
     rows: list[SkillRow] = []
     for slug in sorted(universe):
         entry = universe[slug]
@@ -248,7 +253,7 @@ def build_skill_rows(
                 else "clean"
             )
         cells: dict[tuple[str, str], SkillCell] = {}
-        for agent in INTERACTIVE_AGENTS:
+        for agent in harnesses:
             cells[(agent, scope)] = _cell_for(
                 slug, agent, scope=scope, home=home, project=project,
             )
@@ -256,7 +261,7 @@ def build_skill_rows(
         # the globally-installed indicator (#188). Skipped when home is
         # None (callers that don't care about the indicator).
         if scope == "project" and home is not None:
-            for agent in INTERACTIVE_AGENTS:
+            for agent in harnesses:
                 cells[(agent, "global")] = _cell_for(
                     slug, agent, scope="global", home=home, project=None,
                 )

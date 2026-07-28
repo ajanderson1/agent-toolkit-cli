@@ -7,7 +7,7 @@ from textual.coordinate import Coordinate
 from textual.widgets import DataTable
 
 from agent_toolkit_tui.screens.cell_info import CellInfoScreen, asset_info_body
-from agent_toolkit_tui.skill_state import INTERACTIVE_AGENTS, SkillCell, SkillRow
+from agent_toolkit_tui.skill_state import interactive_agents, SkillCell, SkillRow
 from agent_toolkit_tui.widgets.skill_grid import SkillGrid
 
 
@@ -28,7 +28,7 @@ def _row(
             skipped=False,
             stray=agent in stray,
         )
-        for agent in INTERACTIVE_AGENTS
+        for agent in interactive_agents()
     }
     return SkillRow(
         slug=slug,

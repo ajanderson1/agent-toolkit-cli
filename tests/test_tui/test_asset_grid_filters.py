@@ -6,17 +6,17 @@ from textual.coordinate import Coordinate
 from textual.widgets import DataTable, Input
 
 from agent_toolkit_tui.agent_state import (
-    INTERACTIVE_HARNESSES as AGENT_HARNESSES,
+    interactive_harnesses as _agent_harnesses,
     AgentCell,
     AgentRow,
 )
 from agent_toolkit_tui.command_state import (
-    INTERACTIVE_HARNESSES as COMMAND_HARNESSES,
+    interactive_harnesses as _command_harnesses,
     CommandCell,
     CommandRow,
 )
 from agent_toolkit_tui.instruction_state import (
-    INTERACTIVE_HARNESSES as INSTRUCTION_HARNESSES,
+    interactive_harnesses as _instruction_harnesses,
     InstructionCell,
     InstructionRow,
 )
@@ -38,7 +38,7 @@ def _agent_row(slug: str, *, linked: bool = False) -> AgentRow:
         slug=slug,
         source="owner/repo",
         ref="main",
-        cells={(AGENT_HARNESSES[0], "global"): AgentCell(linked=linked)},
+        cells={(_agent_harnesses("global")[0], "global"): AgentCell(linked=linked)},
     )
 
 
@@ -112,7 +112,7 @@ async def test_agent_toggle_after_filter_targets_visible_row():
         table.focus()
         await pilot.press("space")
 
-        assert list(grid.pending_entries()) == [("global", AGENT_HARNESSES[0], "beta")]
+        assert list(grid.pending_entries()) == [("global", _agent_harnesses("global")[0], "beta")]
 
 
 @pytest.mark.asyncio
@@ -154,7 +154,7 @@ def _instruction_row(slug: str) -> InstructionRow:
         canonical_exists=True,
         cells={
             (harness, "global"): InstructionCell(linked=False, conflict=False)
-            for harness in INSTRUCTION_HARNESSES
+            for harness in _instruction_harnesses()
         },
     )
 
@@ -185,7 +185,7 @@ def _command_row(slug: str) -> CommandRow:
         slug=slug,
         source="owner/repo",
         ref="main",
-        cells={(COMMAND_HARNESSES[0], "global"): CommandCell(linked=False)},
+        cells={(_command_harnesses()[0], "global"): CommandCell(linked=False)},
     )
 
 

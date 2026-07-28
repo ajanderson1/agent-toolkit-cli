@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from agent_toolkit_tui.skill_state import (
-    INTERACTIVE_AGENTS,
+    interactive_agents,
     SkillCell,
     SkillRow,
     _cell_for,
@@ -22,7 +22,7 @@ def _company(tmp_path: Path):
 
 def _row_with_paperclip(*, available: bool, scope: str = "project") -> SkillRow:
     cells = {}
-    for a in INTERACTIVE_AGENTS:
+    for a in interactive_agents():
         if a == "paperclip":
             cells[(a, scope)] = SkillCell(
                 linked=False, drift=False, skipped=False,

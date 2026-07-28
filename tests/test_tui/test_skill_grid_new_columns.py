@@ -9,7 +9,7 @@ from __future__ import annotations
 import pytest
 
 from agent_toolkit_tui.skill_state import (
-    INTERACTIVE_AGENTS,
+    interactive_agents,
     SkillCell,
     SkillRow,
     _read_skill_description,
@@ -19,7 +19,7 @@ from agent_toolkit_tui.widgets.skill_grid import SkillGrid
 
 def _row(slug: str, *, description: str = "", source: str = "", state="clean") -> SkillRow:
     cells = {(a, "global"): SkillCell(linked=False, drift=False, skipped=False)
-             for a in INTERACTIVE_AGENTS}
+             for a in interactive_agents()}
     return SkillRow(
         slug=slug,
         source=source or f"x/{slug}",

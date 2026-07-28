@@ -10,24 +10,24 @@ from textual.app import App, ComposeResult
 from textual.widgets import DataTable
 
 from agent_toolkit_tui.agent_state import (
-    INTERACTIVE_HARNESSES as AGENT_HARNESSES,
+    interactive_harnesses as _agent_harnesses,
     AgentCell,
     AgentRow,
 )
 from agent_toolkit_tui.column_info import get_column_info
 from agent_toolkit_tui.command_state import (
-    INTERACTIVE_HARNESSES as COMMAND_HARNESSES,
+    interactive_harnesses as _command_harnesses,
     CommandCell,
     CommandRow,
 )
 from agent_toolkit_tui.instruction_state import (
-    INTERACTIVE_HARNESSES as INSTRUCTION_HARNESSES,
+    interactive_harnesses as _instruction_harnesses,
     InstructionCell,
     InstructionRow,
 )
 from agent_toolkit_tui.mcp_state import McpCell, McpRow
 from agent_toolkit_tui.pi_extension_state import PiCell, PiExtensionRow
-from agent_toolkit_tui.skill_state import INTERACTIVE_AGENTS, SkillCell, SkillRow
+from agent_toolkit_tui.skill_state import interactive_agents, SkillCell, SkillRow
 from agent_toolkit_tui.widgets.agent_grid import AgentGrid
 from agent_toolkit_tui.widgets.column_info_modal import ColumnInfoModal
 from agent_toolkit_tui.widgets.command_grid import CommandGrid
@@ -50,7 +50,7 @@ class _Case:
 def _skill_grid() -> SkillGrid:
     cells = {
         (harness, "global"): SkillCell(linked=False, drift=False, skipped=False)
-        for harness in INTERACTIVE_AGENTS
+        for harness in interactive_agents()
     }
     return SkillGrid(
         [SkillRow(slug="demo", source="owner/repo", ref="main", state="clean", cells=cells)],
@@ -61,7 +61,7 @@ def _skill_grid() -> SkillGrid:
 def _instruction_grid() -> InstructionGrid:
     cells = {
         (harness, "global"): InstructionCell(linked=False, conflict=False)
-        for harness in INSTRUCTION_HARNESSES
+        for harness in _instruction_harnesses()
     }
     return InstructionGrid(
         [InstructionRow(slug="AGENTS.md", source="AGENTS.md", canonical_exists=True, cells=cells)],
@@ -72,7 +72,7 @@ def _instruction_grid() -> InstructionGrid:
 def _agent_grid() -> AgentGrid:
     cells = {
         (harness, "global"): AgentCell(linked=False)
-        for harness in AGENT_HARNESSES
+        for harness in _agent_harnesses("global")
     }
     return AgentGrid(
         [AgentRow(slug="demo", source="owner/repo", ref="main", cells=cells)],
@@ -107,7 +107,7 @@ def _mcp_project_grid() -> McpGrid:
 def _command_grid() -> CommandGrid:
     cells = {
         (harness, "global"): CommandCell(linked=False)
-        for harness in COMMAND_HARNESSES
+        for harness in _command_harnesses()
     }
     return CommandGrid(
         [CommandRow(slug="demo", source="owner/repo", ref="main", cells=cells)],

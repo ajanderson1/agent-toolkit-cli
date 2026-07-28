@@ -205,9 +205,9 @@ async def test_longtail_projection_blocks_entry_drop(
     r = runner.invoke(main, ["skill", "add", str(git_sandbox.upstream), "--slug", "demo"])
     assert r.exit_code == 0, r.output
     (project / ".claude").mkdir(exist_ok=True)
-    # goose is NOT in INTERACTIVE_AGENTS — a CLI-only long-tail projection.
-    from agent_toolkit_tui.skill_state import INTERACTIVE_AGENTS
-    assert "goose" not in INTERACTIVE_AGENTS
+    # goose is NOT in interactive_agents() — a CLI-only long-tail projection.
+    from agent_toolkit_tui.skill_state import interactive_agents
+    assert "goose" not in interactive_agents()
     r = runner.invoke(main, [
         "--project", str(project),
         "skill", "install", "demo", "--scope", "project",

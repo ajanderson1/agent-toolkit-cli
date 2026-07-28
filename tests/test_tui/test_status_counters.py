@@ -18,21 +18,21 @@ from textual.widgets import Static
 import agent_toolkit_cli.skill_install as skill_install
 from agent_toolkit_cli.skill_install import InstallResult
 from agent_toolkit_tui.app import TUIApp
-from agent_toolkit_tui.skill_state import INTERACTIVE_AGENTS, SkillCell, SkillRow
+from agent_toolkit_tui.skill_state import interactive_agents, SkillCell, SkillRow
 from agent_toolkit_tui.widgets.skill_grid import SkillGrid
 
 # Paperclip is a project-only, company-scoped harness (#474): it is present in
-# INTERACTIVE_AGENTS but never toggleable at global scope. These counters are
+# interactive_agents() but never toggleable at global scope. These counters are
 # about the globally-linkable harness set, so exclude it here.
 _GLOBAL_AGENTS: tuple[str, ...] = tuple(
-    a for a in INTERACTIVE_AGENTS if a != "paperclip"
+    a for a in interactive_agents() if a != "paperclip"
 )
 
 
 def _row(slug: str, *, scope: str = "global",
          linked: tuple[str, ...] = ()) -> SkillRow:
     cells = {}
-    for a in INTERACTIVE_AGENTS:
+    for a in interactive_agents():
         # Mirror real availability: Paperclip is unavailable at global scope.
         available = not (a == "paperclip" and scope == "global")
         cells[(a, scope)] = SkillCell(
