@@ -4,7 +4,7 @@ import shutil
 from pathlib import Path
 
 from agent_toolkit_cli._install_core import InstallError
-from agent_toolkit_cli.command_adapters.base import ensure_regular_command_file, remove_managed_file, write_sidecar
+from agent_toolkit_cli.command_adapters.base import ensure_regular_command_file, is_managed_file, remove_managed_file, write_sidecar
 
 DESTINATIONS = {
     "claude-code": ((".claude", "commands"), (".claude", "commands")),
@@ -30,6 +30,20 @@ class MarkdownCommandAdapter:
         if project is None:
             raise ValueError("project scope requires project")
         return project.joinpath(*project_parts, f"{slug}.md")
+
+    def is_installed(self, slug: str, source_file: Path, *, scope: str, home: Path | None, project: Path | None) -> bool:
+        dest = self.destination(slug, scope=scope, home=home, project=project)
+        if dest.is_symlink():
+            try:
+                return dest.resolve() == source_file.resolve()
+            except OSError:
+                return False
+        if dest.exists() and is_managed_file(dest, slug=slug, harness=self.name):
+            try:
+                return dest.read_bytes() == source_file.read_bytes()
+            except OSError:
+                return False
+        return False
 
     def install(self, slug: str, source_file: Path, *, scope: str, home: Path | None, project: Path | None) -> Path:
         ensure_regular_command_file(source_file)
