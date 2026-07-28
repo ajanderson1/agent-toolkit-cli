@@ -32,7 +32,11 @@ from agent_toolkit_tui.widgets._support import adjust_source_column_width, curre
 
 from agent_toolkit_tui.agent_state import INTERACTIVE_HARNESSES, AgentRow
 from agent_toolkit_tui.column_info import get_column_info
-from agent_toolkit_tui.display_names import asset_type_label, harness_label, standard_label
+from agent_toolkit_tui.display_names import (
+    asset_type_label,
+    harness_label,
+    standard_column_header,
+)
 from agent_toolkit_tui.widgets._support import (
     adjust_source_column_width,
     set_source_column_width,
@@ -416,16 +420,13 @@ class AgentGrid(Vertical):
         # Slug column — info glyph since `i` works on it.
         table.add_column(f"{asset_type_label('agent')} {_INFO_GLYPH}", width=22)
         # Per-harness columns. "standard" is the .claude/agents slot (#361),
-        # not a catalog harness — label it explicitly (same special-case as
-        # skill_grid). The Standard column leads; everything after it is
-        # implicitly non-standard.
+        # not a catalog harness. The Standard column leads; everything after it
+        # is implicitly non-standard.
+        standard_header = standard_column_header("agent", self._scope)
+        assert standard_header is not None, "agents always have a standard slot"
+        headers = {"standard": standard_header}
         for harness in INTERACTIVE_HARNESSES:
-            if harness == "standard":
-                from agent_toolkit_cli.agent_adapters.standard import agents_standard_covered
-
-                base = standard_label(len(agents_standard_covered(self._scope)))
-            else:
-                base = harness_label(harness)
+            base = headers.get(harness, harness_label(harness))
             table.add_column(f"{base} {_INFO_GLYPH}", width=14)
         # State column — shows installed/library/unlisted (#360).
         table.add_column("State", width=10)

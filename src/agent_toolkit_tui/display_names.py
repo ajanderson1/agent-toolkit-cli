@@ -58,5 +58,61 @@ def standard_label(count: int) -> str:
     return f"Standard ({count})"
 
 
+def _standard_covered_count(asset_type: str, scope: str) -> int | None:
+    """Live covered-harness count for ``asset_type`` at ``scope``.
+
+    ``None`` means this asset type has no standard slot here (#478 R4/R5),
+    which is a real answer — not an error. An unknown asset type raises
+    ``KeyError`` so a new asset type cannot be silently treated as slot-less.
+
+    Imports are function-local and resolved at call time on purpose: counts
+    must track their SSOT, never an import-time snapshot (#478 R1).
+    """
+    if asset_type not in _ASSET_TYPE_SINGULAR:
+        raise KeyError(f"unknown asset type: {asset_type!r}")
+
+    if asset_type == "skill":
+        from agent_toolkit_cli.skill_agents import get_standard_agents
+
+        return len(get_standard_agents())
+
+    if asset_type == "agent":
+        from agent_toolkit_cli.agent_adapters.standard import agents_standard_covered
+
+        return len(agents_standard_covered(scope))
+
+    if asset_type == "instruction":
+        from agent_toolkit_cli.instructions_matrix import instructions_matrix_rows
+
+        return sum(1 for row in instructions_matrix_rows() if row["verdict"] == "native")
+
+    if asset_type == "mcp":
+        from agent_toolkit_cli.mcp_standard import mcp_standard_covered
+
+        try:
+            return len(mcp_standard_covered(scope))
+        except KeyError:
+            # Deliberate: STANDARD_MCP_READERS has only a ``project`` key. The
+            # standard MCP projection IS the project .mcp.json, so there is no
+            # global slot to count (#478 R4, composition.py:58-71).
+            return None
+
+    # command: no standard projection exists yet (#482).
+    # pi-extension: single-harness asset type; nothing converges (#478 R5).
+    return None
+
+
+def standard_column_header(asset_type: str, scope: str) -> str | None:
+    """Return ``Standard (N)`` or ``None`` when no standard slot exists.
+
+    Single owner of the standard-column header rule (#478 R1). Every grid
+    calls this instead of re-deriving a count behind its own special case.
+    """
+    count = _standard_covered_count(asset_type, scope)
+    if count is None:
+        return None
+    return standard_label(count)
+
+
 def pi_extension_origin_label(origin: str) -> str:
     return _PI_EXTENSION_ORIGINS.get(origin, origin)

@@ -42,7 +42,11 @@ from rich.text import Text
 from agent_toolkit_tui.widgets._support import adjust_source_column_width, current_source_column_width
 
 from agent_toolkit_tui.column_info import get_column_info
-from agent_toolkit_tui.display_names import asset_type_label, harness_label, standard_label
+from agent_toolkit_tui.display_names import (
+    asset_type_label,
+    harness_label,
+    standard_column_header,
+)
 from agent_toolkit_tui.mcp_state import McpRow, mcp_interactive_harnesses
 from agent_toolkit_tui.widgets._support import adjust_source_column_width
 from agent_toolkit_tui.widgets.column_info_modal import ColumnInfoModal
@@ -425,13 +429,20 @@ class McpGrid(Vertical):
         # with the covered count so the fold is legible without pressing `i`
         # (review F9): "Standard (2) ⓘ" tells the user this one cell stands for
         # 2 harnesses. project-only, so covered is always a set there.
-        for harness in self._harnesses():
-            if harness == "standard":
-                from agent_toolkit_cli.mcp_standard import mcp_standard_covered
-
-                base = standard_label(len(mcp_standard_covered("project")))
-            else:
-                base = harness_label(harness)
+        harnesses = self._harnesses()
+        standard_header = standard_column_header("mcp", self._scope)
+        if standard_header is None:
+            assert "standard" not in harnesses, (
+                "mcp header rule has no standard slot, but _harnesses() rendered one"
+            )
+            headers: dict[str, str] = {}
+        else:
+            assert "standard" in harnesses, (
+                "mcp header rule has a standard slot, but _harnesses() omitted it"
+            )
+            headers = {"standard": standard_header}
+        for harness in harnesses:
+            base = headers.get(harness, harness_label(harness))
             table.add_column(f"{base} {_INFO_GLYPH}", width=16)
         # State column — shows installed/library/unlisted (#360).
         table.add_column("State", width=10)

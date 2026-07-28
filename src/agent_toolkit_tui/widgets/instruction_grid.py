@@ -33,7 +33,11 @@ from agent_toolkit_tui.widgets._support import adjust_source_column_width, curre
 from agent_toolkit_cli import instructions_paths
 from agent_toolkit_tui.column_info import get_column_info
 from agent_toolkit_tui.composition import instructions_nonstandard_main
-from agent_toolkit_tui.display_names import asset_type_label, harness_label, standard_label
+from agent_toolkit_tui.display_names import (
+    asset_type_label,
+    harness_label,
+    standard_column_header,
+)
 from agent_toolkit_tui.instruction_state import InstructionRow, pointer_path_for
 from agent_toolkit_tui.widgets._support import (
     adjust_source_column_width,
@@ -64,12 +68,6 @@ _HARNESS_COL_WIDTH = 14
 _SOURCE_COL_WIDTH = 30
 
 Op = Literal["link", "unlink"]
-
-
-def _standard_count() -> int:
-    from agent_toolkit_cli.instructions_matrix import instructions_matrix_rows
-
-    return sum(1 for row in instructions_matrix_rows() if row["verdict"] == "native")
 
 
 class InstructionGrid(Vertical):
@@ -477,8 +475,10 @@ class InstructionGrid(Vertical):
         # Standard column — read-only canonical status. It leads; everything
         # after it is implicitly non-standard (group-tag header row removed
         # per AJ demo feedback, #351).
+        standard_header = standard_column_header("instruction", self._scope)
+        assert standard_header is not None, "instructions always have a standard slot"
         table.add_column(
-            f"{standard_label(_standard_count())} {_INFO_GLYPH}",
+            f"{standard_header} {_INFO_GLYPH}",
             width=_STANDARD_COL_WIDTH,
         )
         # Per-harness interactive columns.

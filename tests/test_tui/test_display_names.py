@@ -2,6 +2,7 @@ from agent_toolkit_tui.display_names import (
     asset_type_label,
     harness_label,
     pi_extension_origin_label,
+    standard_column_header,
     standard_label,
 )
 
@@ -42,6 +43,14 @@ def test_harness_label_falls_back_to_titleized_key():
 def test_standard_label_always_includes_count():
     assert standard_label(2) == "Standard (2)"
     assert standard_label(17) == "Standard (17)"
+
+
+def test_standard_column_header_uses_live_skill_coverage():
+    from agent_toolkit_cli.skill_agents import get_standard_agents
+
+    assert standard_column_header("skill", "global") == standard_label(
+        len(get_standard_agents())
+    )
 
 
 def test_pi_extension_origin_label_uses_library():

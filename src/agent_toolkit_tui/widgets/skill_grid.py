@@ -27,9 +27,12 @@ from textual.events import Resize
 from rich.text import Text
 from agent_toolkit_tui.widgets._support import adjust_source_column_width, current_source_column_width
 
-from agent_toolkit_cli.skill_agents import get_standard_agents
 from agent_toolkit_tui.column_info import COLUMN_INFO, get_column_info
-from agent_toolkit_tui.display_names import asset_type_label, harness_label, standard_label
+from agent_toolkit_tui.display_names import (
+    asset_type_label,
+    harness_label,
+    standard_column_header,
+)
 from agent_toolkit_tui.composition import skills_nonstandard_main
 from agent_toolkit_tui.skill_state import SkillRow
 from agent_toolkit_tui.widgets._support import (
@@ -582,6 +585,9 @@ class SkillGrid(Vertical):
         # Slug column has cell-info (the slug-cell panel) → glyph it.
         table.add_column(f"{asset_type_label('skill')} {_INFO_GLYPH}", width=20)
         active = self._active_agents()
+        standard_header = standard_column_header("skill", self._scope)
+        assert standard_header is not None, "skills always have a standard slot"
+        headers = {"standard": standard_header}
         for agent in active:
             # Every interactive agent column exposes either a column-info
             # modal (Standard) or per-cell info (e.g. Claude Code, Pi via
@@ -589,7 +595,7 @@ class SkillGrid(Vertical):
             # load-bearing bundle key (v3.7 full rename, #350). The Standard
             # column leads; everything after it is implicitly non-standard
             # (group-tag header row removed per AJ demo feedback, #351).
-            base = standard_label(len(get_standard_agents())) if agent == "standard" else harness_label(agent)
+            base = headers.get(agent, harness_label(agent))
             table.add_column(f"{base} {_INFO_GLYPH}", width=14)
         # State has a column-info modal → glyph it.
         table.add_column(f"State {_INFO_GLYPH}", width=10)
