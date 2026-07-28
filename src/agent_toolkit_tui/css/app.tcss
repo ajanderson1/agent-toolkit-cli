@@ -7,6 +7,13 @@ Screen {
     background: $surface;
 }
 
+/* ModalScreens must keep Textual's dim translucent backdrop so the live
+   grid stays visible underneath info/confirm popups (#488). The broader
+   Screen rule above would otherwise paint them solid $surface. */
+ModalScreen {
+    background: $background 60%;
+}
+
 /* Main row — sidebar + content side-by-side, full remaining height. */
 #main {
     layout: horizontal;
