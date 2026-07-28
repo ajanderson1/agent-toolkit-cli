@@ -43,7 +43,7 @@ async def test_columns_are_standard_plus_noncovered_main():
         table = app.query_one("#skill-table", DataTable)
         labels = [str(c.label) for c in table.columns.values()]
         # slug + Standard (N) + non-covered main harnesses + state + source
-        assert labels[0] == "Skill ⓘ"
+        assert labels[0] == "Skill"
         assert labels[1] == f"{standard_label(len(get_standard_agents()))} ⓘ"
         for i, agent in enumerate(skills_nonstandard_main(), start=2):
             assert harness_label(agent) in labels[i]

@@ -133,7 +133,8 @@ async def test_instruction_grid_mounts_with_correct_columns():
         labels = [str(c.label) for c in table.columns.values()]
         # Slug + standard + N harness cols + Source
         assert len(labels) == len(INTERACTIVE_HARNESSES) + 3
-        assert "Instruction ⓘ" in labels
+        assert "Instruction" in labels
+        assert "Instruction ⓘ" not in labels
         assert not any("INSTRUCTION" in lbl for lbl in labels)
         assert any(label.startswith("Standard (") for label in labels)
         assert not any("Claude Code" in label for label in labels)
@@ -388,10 +389,10 @@ async def test_standard_column_is_not_toggled():
 
 
 @pytest.mark.asyncio
-async def test_harness_info_shows_pointer_and_canonical_paths(
+async def test_asset_info_shows_canonical_path_from_harness_column(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ):
-    """Harness info names the pointer slot and expected canonical target."""
+    """`i` stays asset-level while retaining the canonical instruction path."""
     home = tmp_path / "home"
     home.mkdir()
     agent_toolkit_dir = home / ".agent-toolkit"
@@ -436,8 +437,9 @@ async def test_harness_info_shows_pointer_and_canonical_paths(
 
         assert isinstance(app.screen, CellInfoScreen)
         body = app.screen._body_markup
-        assert str(home / ".claude" / "CLAUDE.md") in body
         assert str(canonical) in body
+        assert str(home / ".claude" / "CLAUDE.md") not in body
+        assert "State (global): canonical present" in body
 
 
 @pytest.mark.asyncio
@@ -476,7 +478,7 @@ async def test_slug_info_at_project_scope_does_not_crash():
         assert str(Path.cwd()) in screen._body_markup
 
 @pytest.mark.asyncio
-async def test_instruction_cell_info_uses_harness_display_name():
+async def test_instruction_i_opens_asset_info_from_harness_column():
     from textual.app import App
     from textual.coordinate import Coordinate
     from textual.widgets import DataTable
@@ -497,10 +499,9 @@ async def test_instruction_cell_info_uses_harness_display_name():
         await pilot.press("i")
         await pilot.pause()
         assert isinstance(app.screen, CellInfoScreen)
-        assert "Claude @ global" in app.screen._title
-        assert "claude-code @ global" not in app.screen._title
-        assert "into Claude @ global" in app.screen._body_markup
-        assert "into claude-code @ global" not in app.screen._body_markup
+        assert app.screen._title == "AGENTS.md · Instruction"
+        assert "Source: AGENTS.md" in app.screen._body_markup
+        assert "State (global): canonical present" in app.screen._body_markup
 
 
 # ---------------------------------------------------------------------------

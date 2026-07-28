@@ -26,7 +26,8 @@ async def test_columns_project_have_standard(monkeypatch):
         from textual.widgets import DataTable
         labels = [str(c.label) for c in
                   app.query_one(DataTable).columns.values()]
-        assert "MCP ⓘ" in labels
+        assert "MCP" in labels
+        assert "MCP ⓘ" not in labels
         assert any(s.startswith("Standard (") for s in labels)
         assert any("Codex" in s for s in labels)
         assert any("OpenCode" in s for s in labels)
@@ -92,30 +93,23 @@ async def test_standard_cell_toggles_pending():
         assert ("project", "standard", "ctx7") in pend
 
 
-def test_context_for_standard_is_mcps():
+def test_context_for_standard_contains_live_scope():
     grid = McpGrid([_row()])
     grid.set_scope("project")
     grid.set_rows([_row()])
     ctx = grid._context_for(key="standard", row_index=0)
-    assert ctx is not None
-    assert ctx["asset_type"] == "mcps"
-    assert set(ctx["names"]) == {"claude-code", "pi"}
-    assert ctx["global_linked"] is False
-    # F9: the modal spells out the fold (one cell = N harnesses, project-only).
-    joined = "\n".join(ctx["extra_lines"])
-    assert "installs into all 2" in joined
-    assert "Project scope only" in joined
+    assert ctx == {"scope": "project"}
 
 
 def test_column_info_mcps_title_not_bundle():
     # F5: the Standard column-info title for mcps must NOT be "Standard bundle".
     from agent_toolkit_tui.column_info import get_column_info
-    info = get_column_info("standard", context={
-        "asset_type": "mcps", "names": ("claude-code", "pi"),
-        "extra_lines": [], "global_linked": False,
-    })
-    assert info is not None
-    assert info.title == "Standard projection (.mcp.json)"
+    info = get_column_info(
+        "standard",
+        asset_type="mcp",
+        context={"scope": "project"},
+    )
+    assert info.title == "Standard — MCPs"
     assert "bundle" not in info.title.lower()
 
 
@@ -191,7 +185,7 @@ async def test_mcp_tab_header_and_pending_label_parity():
         assert "Pending: 1" in footer
 
 @pytest.mark.asyncio
-async def test_mcp_cell_info_uses_harness_display_name():
+async def test_mcp_i_opens_asset_info_from_harness_column():
     from textual.app import App
     from textual.coordinate import Coordinate
     from textual.widgets import DataTable
@@ -222,6 +216,6 @@ async def test_mcp_cell_info_uses_harness_display_name():
         await pilot.press("i")
         await pilot.pause()
         assert isinstance(app.screen, CellInfoScreen)
-        assert "Codex @ project" in app.screen._title
-        assert "into Codex @ project" in app.screen._body_markup
-        assert "codex @ project" not in app.screen._body_markup
+        assert app.screen._title == "ctx7 · MCP"
+        assert "Source: npx" in app.screen._body_markup
+        assert "State (project): installed" in app.screen._body_markup

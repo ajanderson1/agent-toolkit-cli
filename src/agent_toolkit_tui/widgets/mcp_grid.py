@@ -2,8 +2,8 @@
 
 Columns are scope-dependent (parity-ported from agent_grid.py, #361/#374):
 
-- Project: MCP ⓘ | Standard (2) ⓘ | codex ⓘ | opencode ⓘ | State | Source.
-- Global:  MCP ⓘ | claude-code ⓘ | codex ⓘ | opencode ⓘ | pi ⓘ | State | Source.
+- Project: MCP | Standard (2) ⓘ | Codex ⓘ | OpenCode ⓘ | State ⓘ | Source.
+- Global:  MCP | Claude ⓘ | Codex ⓘ | OpenCode ⓘ | Pi ⓘ | State ⓘ | Source.
 
 Layout: [0]=slug, [1..N]=harnesses, [N+1]=state, [N+2]=source.
 
@@ -11,8 +11,8 @@ Mirrors agent_grid.py: per-harness columns, scope toggle, toggle-queue →
 pending → apply. Pending key shape: (scope, harness_name, slug) — same
 3-tuple as agent. The Standard column IS a harness column (the project
 .mcp.json projection, #399, is a real installable destination) — it toggles
-like any other; `i` on it opens the registry-backed ColumnInfoModal listing
-the covered harnesses ({claude-code, pi}).
+like any other. Clicking a glyphed header explains the column; `i` always
+explains the selected MCP.
 
 Two MCP-specific differences from agent_grid.py:
 - The column set is derived PER SCOPE via mcp_interactive_harnesses(scope),
@@ -219,73 +219,32 @@ class McpGrid(Vertical):
         self._toggle_at(table.cursor_coordinate)
 
     def action_info(self) -> None:
-        """Route `i` by column. The standard column has registered ColumnInfo
-        and opens ColumnInfoModal — the registry path mirroring
-        agent_grid (#351/#361). Everything else opens CellInfoScreen
-        with the per-cell state."""
-        from agent_toolkit_tui.screens.cell_info import CellInfoScreen
+        """Open the selected MCP's asset panel, regardless of column (#479)."""
+        from agent_toolkit_tui.screens.cell_info import CellInfoScreen, asset_info_body
 
         try:
             table = self.query_one("#mcp-table", DataTable)
         except Exception:
             return
-        coord = table.cursor_coordinate
-        key = self._column_key_for_index(coord.column)
-        if key is not None:
-            info = get_column_info(
-                key,
-                asset_type="mcp",
-                context=self._context_for(key=key, row_index=coord.row),
-            )
-            if info is not None:
-                self.app.push_screen(ColumnInfoModal(info))
-                return
         visible = self._visible_rows()
-        if coord.row >= len(visible):
+        if table.cursor_coordinate.row >= len(visible):
             return
-        row = visible[coord.row]
-
-        if coord.column == 0:
-            title = f"{row.slug} · mcp"
-            body = (
-                f"MCP [b]{row.slug}[/]\n"
-                f"Source: {row.source}\n"
-                f"Pin:    {row.pin or '—'}\n"
-                f"State:  {'—' if row.state == 'installed' else row.state}"
+        row = visible[table.cursor_coordinate.row]
+        self.app.push_screen(
+            CellInfoScreen(
+                title=f"{row.slug} · {asset_type_label('mcp')}",
+                body_markup=asset_info_body(
+                    asset_label=asset_type_label("mcp"),
+                    slug=row.slug,
+                    description=None,
+                    description_location="MCP definition",
+                    source=row.source,
+                    ref=row.pin,
+                    state=row.state,
+                    scope=self._scope,
+                ),
             )
-        else:
-            harness = self._harness_for_column(coord.column)
-            if harness is None:
-                return
-            cell = row.cells.get((harness, self._scope))
-            scope_flag = "-g" if self._scope == "global" else "-p"
-            display = harness_label(harness)
-            title = f"{row.slug} · {display} @ {self._scope}"
-            pending = self._pending.get((self._scope, harness, row.slug))
-            if pending == "link":
-                body = (
-                    "[yellow]Pending: install.[/]\n\n"
-                    "Press [b]^s[/] to apply."
-                )
-            elif pending == "unlink":
-                body = (
-                    "[yellow]Pending: uninstall.[/]\n\n"
-                    "Press [b]^s[/] to apply."
-                )
-            elif cell is None:
-                body = f"Not available at {self._scope} scope."
-            elif cell.linked:
-                body = f"Installed.\nMCP {row.slug} is projected into {display} @ {self._scope}."
-            else:
-                body = (
-                    f"Not installed.\nPress [b]space[/] to queue install "
-                    f"into {display} @ {self._scope}.\n\n"
-                    f"Or from the CLI:\n"
-                    f"  [b]agent-toolkit-cli mcp install {row.slug} "
-                    f"{scope_flag} --harness {harness}[/]"
-                )
-
-        self.app.push_screen(CellInfoScreen(title=title, body_markup=body))
+        )
 
     def action_toggle_column(self) -> None:
         """Toggle all rows in the column under the cursor."""

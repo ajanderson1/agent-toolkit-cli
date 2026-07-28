@@ -607,36 +607,9 @@ class TUIApp(App):
 
     def action_info_pass(self) -> None:
         """Delegate `i` to the active grid widget."""
-        if self._active_asset_type == "instruction":
-            try:
-                igrid = self.query_one("#instruction-grid", InstructionGrid)
-            except NoMatches:
-                return
-            igrid.action_info()
-        elif self._active_asset_type == "skill":
-            try:
-                sgrid = self.query_one("#skill-grid", SkillGrid)
-            except NoMatches:
-                return
-            sgrid.action_info()
-        elif self._active_asset_type == "command":
-            try:
-                cgrid = self.query_one("#command-grid", CommandGrid)
-                cgrid.focus()
-            except NoMatches:
-                pass
-        elif self._active_asset_type == "pi-extension":
-            try:
-                pgrid = self.query_one("#pi-grid", PiGrid)
-            except NoMatches:
-                return
-            pgrid.action_info()
-        else:
-            try:
-                agrid = self.query_one("#agent-grid", AgentGrid)
-            except NoMatches:
-                return
-            agrid.action_info()
+        grid = self._active_grid()
+        if grid is not None:
+            grid.action_info()
 
     def action_refresh(self) -> None:
         self._refresh_active_view()

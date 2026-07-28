@@ -1,6 +1,6 @@
 """Interactive DataTable for the TUI's instruction tab.
 
-Columns (#351): INSTRUCTION ⓘ | standard ⓘ | <non-covered main harnesses…> | Source.
+Columns (#351): Instruction | Standard ⓘ | <non-covered main harnesses…> ⓘ | Source.
 
 Mirrors agent_grid.py: per-harness columns, scope toggle, toggle-queue →
 pending → apply. Pending key shape: (scope, harness_name, slug) — same
@@ -8,7 +8,8 @@ pending → apply. Pending key shape: (scope, harness_name, slug) — same
 
 The `standard` column is read-only (canonical_exists status). It is NOT
 toggleable. Conflict cells are also not toggleable (adapter refuses; shown
-distinctly as [red]![/]).
+distinctly as [red]![/]). Clicking a glyphed header explains the column; `i`
+always explains the selected instruction.
 
 CRITICAL: never name any method `_render_*` — it collides with Textual's
 internal flag mechanism and produces "bool is not callable" from compose.
@@ -38,7 +39,7 @@ from agent_toolkit_tui.display_names import (
     harness_label,
     standard_column_header,
 )
-from agent_toolkit_tui.instruction_state import InstructionRow, pointer_path_for
+from agent_toolkit_tui.instruction_state import InstructionRow
 from agent_toolkit_tui.widgets._support import (
     adjust_source_column_width,
     set_source_column_width,
@@ -366,6 +367,7 @@ class InstructionGrid(Vertical):
         context: dict[str, object] = {"scope": self._scope}
         if key != "standard":
             return context
+        context["global_linked"] = False
         visible = self._visible_rows()
         if row_index is not None and 0 <= row_index < len(visible):
             context["global_linked"] = any(

@@ -1,6 +1,6 @@
 """Interactive DataTable for the TUI's agent tab.
 
-Columns (#361/#360): AGENT ⓘ | Standard ⓘ | <non-covered main harnesses…> | State | Source.
+Columns (#361/#360): Agent | Standard ⓘ | <non-covered main harnesses…> ⓘ | State ⓘ | Source.
 
 Layout: [0]=slug, [1..N]=harnesses, [N+1]=state, [N+2]=source.
 
@@ -8,8 +8,8 @@ Mirrors skill_grid.py: per-harness columns, scope toggle, toggle-queue →
 pending → apply. Pending key shape: (scope, harness_name, slug) — same
 3-tuple as skill. The Standard column IS a harness column (the
 .claude/agents slot is a real installable destination) — it toggles like
-any other; `i` on it opens the registry-backed ColumnInfoModal listing
-the covered harnesses for the active scope.
+any other. Clicking a glyphed header explains the column; `i` always explains
+the selected agent.
 
 CRITICAL: never name any method `_render_*` — it collides with Textual's
 internal flag mechanism and produces "bool is not callable" from compose.
@@ -344,6 +344,7 @@ class AgentGrid(Vertical):
         context: dict[str, object] = {"scope": self._scope}
         if key != "standard":
             return context
+        context["global_linked"] = False
         visible = self._visible_rows()
         if 0 <= row_index < len(visible):
             global_cell = visible[row_index].cells.get(("standard", "global"))

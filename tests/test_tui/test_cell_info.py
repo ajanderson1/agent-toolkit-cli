@@ -1,9 +1,12 @@
-"""Pilot tests for the CellInfoScreen modal."""
+"""Pilot tests for the shared asset-level CellInfoScreen (#479)."""
 from __future__ import annotations
 
 import pytest
+from textual.app import App
+from textual.coordinate import Coordinate
+from textual.widgets import DataTable
 
-from agent_toolkit_tui.screens.cell_info import CellInfoScreen
+from agent_toolkit_tui.screens.cell_info import CellInfoScreen, asset_info_body
 from agent_toolkit_tui.skill_state import INTERACTIVE_AGENTS, SkillCell, SkillRow
 from agent_toolkit_tui.widgets.skill_grid import SkillGrid
 
@@ -14,273 +17,160 @@ def _row(
     scope: str = "global",
     linked: tuple[str, ...] = (),
     drifted: tuple[str, ...] = (),
-    skipped: tuple[str, ...] = (),
     stray: tuple[str, ...] = (),
     description: str = "",
+    state: str = "clean",
 ) -> SkillRow:
-    cells = {}
-    for a in INTERACTIVE_AGENTS:
-        cells[(a, scope)] = SkillCell(
-            linked=(a in linked),
-            drift=(a in drifted),
-            skipped=(a in skipped),
-            stray=(a in stray),
+    cells = {
+        (agent, scope): SkillCell(
+            linked=agent in linked,
+            drift=agent in drifted,
+            skipped=False,
+            stray=agent in stray,
         )
+        for agent in INTERACTIVE_AGENTS
+    }
     return SkillRow(
         slug=slug,
         source=f"x/{slug}",
         ref="main",
-        state="clean",
+        state=state,
         cells=cells,
         description=description,
     )
 
 
+async def _open_skill_info(app: App, pilot, column: int = 0) -> CellInfoScreen:
+    table = app.query_one("#skill-table", DataTable)
+    table.cursor_coordinate = Coordinate(row=0, column=column)
+    table.focus()
+    await pilot.press("i")
+    await pilot.pause()
+    assert isinstance(app.screen, CellInfoScreen)
+    return app.screen
+
+
 @pytest.mark.asyncio
-async def test_modal_renders_title_and_body():
-    from textual.app import App
+async def test_modal_renders_title_and_body() -> None:
     pushed: list[CellInfoScreen] = []
 
-    class _A(App):
-        def on_mount(self):
+    class _A(App[None]):
+        def on_mount(self) -> None:
             screen = CellInfoScreen(
-                title="demo · claude-code @ global",
-                body_markup="Linked.\nPath: /tmp/x",
+                title="demo · Skill",
+                body_markup="Skill [b]demo[/]\nSource: /tmp/x",
             )
             pushed.append(screen)
             self.push_screen(screen)
 
-    a = _A()
-    async with a.run_test() as pilot:
+    app = _A()
+    async with app.run_test() as pilot:
         await pilot.pause()
-        assert pushed
-        text = pushed[0].query_one("#cell-info-body").content
-        # Rich Text or str — coerce both.
-        rendered = str(text)
-        assert "Linked." in rendered
+        rendered = str(pushed[0].query_one("#cell-info-body").content)
+        assert "demo" in rendered
         assert "/tmp/x" in rendered
 
 
 @pytest.mark.asyncio
-async def test_modal_dismisses_on_escape():
-    from textual.app import App
-
-    class _A(App):
-        def on_mount(self):
+async def test_modal_dismisses_on_escape() -> None:
+    class _A(App[None]):
+        def on_mount(self) -> None:
             self.push_screen(CellInfoScreen(title="t", body_markup="b"))
 
-    a = _A()
-    async with a.run_test() as pilot:
+    app = _A()
+    async with app.run_test() as pilot:
         await pilot.pause()
-        assert isinstance(a.screen, CellInfoScreen)
+        assert isinstance(app.screen, CellInfoScreen)
         await pilot.press("escape")
         await pilot.pause()
-        assert not isinstance(a.screen, CellInfoScreen)
+        assert not isinstance(app.screen, CellInfoScreen)
 
 
+@pytest.mark.parametrize(
+    "row",
+    [
+        _row("journal", drifted=("claude-code",)),
+        _row("journal", stray=("claude-code",)),
+        _row("journal"),
+    ],
+    ids=("drifted-cell", "stray-cell", "unlinked-cell"),
+)
 @pytest.mark.asyncio
-async def test_info_on_drift_cell_shows_doctor_command():
-    from textual.app import App
+async def test_i_explains_the_asset_not_selected_cell_state(row: SkillRow) -> None:
+    """Legacy cell-specific `i` cases now all render one predictable row panel."""
 
-    class _A(App):
-        def compose(self):
-            yield SkillGrid([_row("journal", drifted=("claude-code",))], id="g")
-
-    a = _A()
-    async with a.run_test() as pilot:
-        await pilot.pause()
-        g = a.query_one("#g", SkillGrid)
-        g.cursor_to_cell(row_slug="journal", agent_name="claude-code")
-        await pilot.pause()
-        await pilot.press("i")
-        await pilot.pause()
-        assert isinstance(a.screen, CellInfoScreen)
-        body = str(a.screen.query_one("#cell-info-body").content)
-        assert "skill doctor journal -g" in body
-        assert "drift" in body.lower()
-
-
-@pytest.mark.asyncio
-async def test_info_on_stray_cell_shows_rm_command():
-    """A stray symlink cell shows the rm command, not a doctor re-link."""
-    from textual.app import App
-
-    class _A(App):
-        def compose(self):
-            yield SkillGrid([_row("aj-workflow", stray=("claude-code",))], id="g")
-
-    a = _A()
-    async with a.run_test() as pilot:
-        await pilot.pause()
-        g = a.query_one("#g", SkillGrid)
-        g.cursor_to_cell(row_slug="aj-workflow", agent_name="claude-code")
-        await pilot.pause()
-        await pilot.press("i")
-        await pilot.pause()
-        assert isinstance(a.screen, CellInfoScreen)
-        body = str(a.screen.query_one("#cell-info-body").content)
-        assert "stray" in body.lower()
-        assert "rm " in body
-        # Does not direct user to a per-slug doctor invocation (which is a no-op
-        # for strays since the slug isn't in the lock).
-        assert "skill doctor aj-workflow" not in body
-
-
-@pytest.mark.asyncio
-async def test_info_on_unlinked_cell_explains_space():
-    from textual.app import App
-
-    class _A(App):
-        def compose(self):
-            yield SkillGrid([_row("journal")], id="g")
-
-    a = _A()
-    async with a.run_test() as pilot:
-        await pilot.pause()
-        g = a.query_one("#g", SkillGrid)
-        g.cursor_to_cell(row_slug="journal", agent_name="claude-code")
-        await pilot.pause()
-        await pilot.press("i")
-        await pilot.pause()
-        assert isinstance(a.screen, CellInfoScreen)
-        body = str(a.screen.query_one("#cell-info-body").content)
-        assert "space" in body.lower()
-
-
-@pytest.mark.asyncio
-async def test_info_on_slug_column_shows_source():
-    from textual.app import App
-
-    class _A(App):
-        def compose(self):
-            yield SkillGrid([_row("journal")], id="g")
-
-    a = _A()
-    async with a.run_test() as pilot:
-        await pilot.pause()
-        g = a.query_one("#g", SkillGrid)
-        from textual.coordinate import Coordinate
-        from textual.widgets import DataTable
-        t = g.query_one("#skill-table", DataTable)
-        t.cursor_coordinate = Coordinate(row=0, column=0)  # slug col
-        t.focus()  # filter Input is focused on open (#249); table needs focus to receive `i`
-        await pilot.pause()
-        await pilot.press("i")
-        await pilot.pause()
-        assert isinstance(a.screen, CellInfoScreen)
-        body = str(a.screen.query_one("#cell-info-body").content)
-        assert "x/journal" in body  # the source string from _row
-
-
-@pytest.mark.asyncio
-async def test_info_on_slug_column_includes_description_when_present():
-    """A row with a SKILL.md description surfaces it under the slug-cell info body."""
-    from textual.app import App
-    from textual.coordinate import Coordinate
-    from textual.widgets import DataTable
-
-    class _A(App):
-        def compose(self):
-            yield SkillGrid([_row("journal", description="An atomic-note journal skill.")], id="g")
-
-    a = _A()
-    async with a.run_test() as pilot:
-        await pilot.pause()
-        g = a.query_one("#g", SkillGrid)
-        t = g.query_one("#skill-table", DataTable)
-        t.cursor_coordinate = Coordinate(row=0, column=0)
-        t.focus()  # filter Input is focused on open (#249); table needs focus to receive `i`
-        await pilot.pause()
-        await pilot.press("i")
-        await pilot.pause()
-        assert isinstance(a.screen, CellInfoScreen)
-        body = str(a.screen.query_one("#cell-info-body").content)
-        assert "Description" in body
-        assert "An atomic-note journal skill." in body
-
-
-@pytest.mark.asyncio
-async def test_info_on_slug_column_omits_description_when_empty():
-    """No `Description:` label appears when the row has no description string."""
-    from textual.app import App
-    from textual.coordinate import Coordinate
-    from textual.widgets import DataTable
-
-    class _A(App):
-        def compose(self):
-            yield SkillGrid([_row("journal", description="")], id="g")
-
-    a = _A()
-    async with a.run_test() as pilot:
-        await pilot.pause()
-        g = a.query_one("#g", SkillGrid)
-        t = g.query_one("#skill-table", DataTable)
-        t.cursor_coordinate = Coordinate(row=0, column=0)
-        t.focus()  # filter Input is focused on open (#249); table needs focus to receive `i`
-        await pilot.pause()
-        await pilot.press("i")
-        await pilot.pause()
-        assert isinstance(a.screen, CellInfoScreen)
-        body = str(a.screen.query_one("#cell-info-body").content)
-        assert "Description" not in body
-
-
-@pytest.mark.asyncio
-async def test_info_on_slug_column_library_state_renders_em_dash():
-    """A row in the 'library' state shows `State:  —` (em dash), not the literal word (#212)."""
-    from textual.app import App
-    from textual.coordinate import Coordinate
-    from textual.widgets import DataTable
-
-    # Build a row with state='library' — _row() defaults to 'clean', so override.
-    row = _row("journal")
-    row.state = "library"
-
-    class _A(App):
+    class _A(App[None]):
         def compose(self):
             yield SkillGrid([row], id="g")
 
-    a = _A()
-    async with a.run_test() as pilot:
+    app = _A()
+    async with app.run_test() as pilot:
         await pilot.pause()
-        g = a.query_one("#g", SkillGrid)
-        t = g.query_one("#skill-table", DataTable)
-        t.cursor_coordinate = Coordinate(row=0, column=0)
-        t.focus()  # filter Input is focused on open (#249); table needs focus to receive `i`
-        await pilot.pause()
-        await pilot.press("i")
-        await pilot.pause()
-        assert isinstance(a.screen, CellInfoScreen)
-        body = str(a.screen.query_one("#cell-info-body").content)
-        assert "State:  —" in body, f"expected em-dash for library state, got: {body!r}"
-        assert "State:  library" not in body, (
-            f"slug-cell modal should not print literal 'library', got: {body!r}"
-        )
+        screen = await _open_skill_info(app, pilot, column=2)
+        body = screen._body_markup
+
+        assert screen._title == "journal · Skill"
+        assert "Source: x/journal" in body
+        assert "Ref:    main" in body
+        assert "State (global): clean" in body
+        assert "skill doctor" not in body
+        assert "Press [b]space" not in body
 
 
 @pytest.mark.asyncio
-async def test_info_on_slug_column_non_library_state_still_renders_word():
-    """A non-library state still shows the literal state value (e.g. 'clean')."""
-    from textual.app import App
-    from textual.coordinate import Coordinate
-    from textual.widgets import DataTable
+async def test_asset_info_includes_description_when_present() -> None:
+    row = _row("journal", description="An atomic-note journal skill.")
 
-    row = _row("journal")  # state defaults to 'clean'
-
-    class _A(App):
+    class _A(App[None]):
         def compose(self):
             yield SkillGrid([row], id="g")
 
-    a = _A()
-    async with a.run_test() as pilot:
+    app = _A()
+    async with app.run_test() as pilot:
         await pilot.pause()
-        g = a.query_one("#g", SkillGrid)
-        t = g.query_one("#skill-table", DataTable)
-        t.cursor_coordinate = Coordinate(row=0, column=0)
-        t.focus()  # filter Input is focused on open (#249); table needs focus to receive `i`
+        screen = await _open_skill_info(app, pilot)
+        assert "Description:" in screen._body_markup
+        assert "An atomic-note journal skill." in screen._body_markup
+
+
+@pytest.mark.asyncio
+async def test_asset_info_plainly_reports_missing_description() -> None:
+    class _A(App[None]):
+        def compose(self):
+            yield SkillGrid([_row("journal")], id="g")
+
+    app = _A()
+    async with app.run_test() as pilot:
         await pilot.pause()
-        await pilot.press("i")
+        screen = await _open_skill_info(app, pilot)
+        assert "No description in SKILL.md." in screen._body_markup
+        assert "Description:" not in screen._body_markup
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("state", ["library", "clean"])
+async def test_asset_info_names_the_scope_and_row_state(state: str) -> None:
+    class _A(App[None]):
+        def compose(self):
+            yield SkillGrid([_row("journal", state=state)], id="g")
+
+    app = _A()
+    async with app.run_test() as pilot:
         await pilot.pause()
-        assert isinstance(a.screen, CellInfoScreen)
-        body = str(a.screen.query_one("#cell-info-body").content)
-        assert "State:  clean" in body, f"non-library state should render literal: {body!r}"
+        screen = await _open_skill_info(app, pilot)
+        assert f"State (global): {state}" in screen._body_markup
+
+
+def test_asset_info_body_uses_em_dash_when_ref_is_unavailable() -> None:
+    body = asset_info_body(
+        asset_label="MCP",
+        slug="demo",
+        description=None,
+        description_location="MCP definition",
+        source="npx",
+        ref=None,
+        state="installed",
+        scope="project",
+    )
+    assert "Ref:    —" in body
+    assert "State (project): installed" in body

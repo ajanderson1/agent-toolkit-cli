@@ -1,4 +1,4 @@
-"""Modal screen that shows ColumnInfo for a SkillGrid column.
+"""Modal screen that shows ColumnInfo for any TUI asset-grid column.
 
 Modeled after ConfirmDiscardScreen in app.py — same idiom for a tiny
 disclosure surface. `esc` and `i` both close. Read-only; no actions.

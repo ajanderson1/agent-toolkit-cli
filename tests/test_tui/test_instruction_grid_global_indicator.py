@@ -201,9 +201,7 @@ async def test_context_for_standard_reports_global_linked_true():
         g.set_scope("project")
         await pilot.pause()
         ctx = g._context_for(key="standard", row_index=0)  # type: ignore[attr-defined]
-        assert ctx is not None
-        assert ctx["asset_type"] == "instructions"
-        assert ctx["global_linked"] is True
+        assert ctx == {"scope": "project", "global_linked": True}
 
 
 @pytest.mark.asyncio
@@ -223,9 +221,9 @@ async def test_context_for_standard_reports_global_linked_false():
         g.set_scope("project")
         await pilot.pause()
         ctx = g._context_for(key="standard", row_index=0)  # type: ignore[attr-defined]
-        assert ctx is not None and ctx["global_linked"] is False
+        assert ctx == {"scope": "project", "global_linked": False}
         oob = g._context_for(key="standard", row_index=99)  # type: ignore[attr-defined]
-        assert oob is not None and oob["global_linked"] is False
+        assert oob == {"scope": "project", "global_linked": False}
 
 
 def test_column_info_instructions_marker_block_present():
@@ -235,9 +233,9 @@ def test_column_info_instructions_marker_block_present():
 
     info = get_column_info(
         "standard",
-        context={"asset_type": "instructions", "names": (), "global_linked": True},
+        asset_type="instruction",
+        context={"scope": "project", "global_linked": True},
     )
-    assert info is not None
     assert any("🌐 marker" in line for line in info.lines)
 
 
@@ -247,7 +245,7 @@ def test_column_info_instructions_marker_block_omitted_when_not_global():
 
     info = get_column_info(
         "standard",
-        context={"asset_type": "instructions", "names": (), "global_linked": False},
+        asset_type="instruction",
+        context={"scope": "project", "global_linked": False},
     )
-    assert info is not None
     assert not any("🌐 marker" in line for line in info.lines)

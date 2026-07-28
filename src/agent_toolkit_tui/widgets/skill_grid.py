@@ -1,10 +1,10 @@
 """Interactive DataTable for the TUI's skill tab.
 
-Columns: SKILL ⓘ | Standard ⓘ | non-standard main harnesses ⓘ | State ⓘ | Source.
+Columns: Skill | Standard ⓘ | non-standard main harnesses ⓘ | State ⓘ | Source.
 
 `space` toggles a cell (queues link/unlink in `_pending`).
-`a` toggles a column.
-`i` opens ColumnInfoModal for columns with registered info (Standard, State); for all other glyphed columns it opens CellInfoScreen with per-cell or slug context. The Source column has no info panel.
+`a` toggles a column. Clicking a glyphed header opens its column panel;
+`i` always opens the selected skill's asset panel. Source stays passive.
 `^s` Apply is handled by the App, which reads pending_entries().
 
 The long tail of harnesses is managed via the CLI; the TUI grid only shows
@@ -451,6 +451,7 @@ class SkillGrid(Vertical):
         context: dict[str, object] = {"scope": self._scope}
         if key != "standard":
             return context
+        context["global_linked"] = False
         visible = self._visible_rows()
         if 0 <= row_index < len(visible):
             global_cell = visible[row_index].cells.get(("standard", "global"))

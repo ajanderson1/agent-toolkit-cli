@@ -11,9 +11,7 @@ from agent_toolkit_tui.widgets.column_info_modal import ColumnInfoModal
 async def test_modal_renders_title_and_lines():
     from textual.app import App
 
-    # #350 full rename: key and title both say "standard"/"Standard".
-    info = get_column_info("standard")
-    assert info is not None
+    info = get_column_info("standard", asset_type="skill", context={"scope": "global"})
 
     class _A(App):
         def on_mount(self) -> None:
@@ -34,8 +32,7 @@ async def test_modal_renders_title_and_lines():
 async def test_modal_escape_closes():
     from textual.app import App
 
-    info = get_column_info("standard")
-    assert info is not None
+    info = get_column_info("standard", asset_type="skill", context={"scope": "global"})
 
     class _A(App):
         def on_mount(self) -> None:
@@ -53,11 +50,10 @@ async def test_modal_escape_closes():
 
 @pytest.mark.asyncio
 async def test_modal_i_key_closes():
-    """Pressing `i` again toggles the modal closed (symmetry with opening)."""
+    """Pressing `i` closes a mouse-opened column modal."""
     from textual.app import App
 
-    info = get_column_info("standard")
-    assert info is not None
+    info = get_column_info("standard", asset_type="skill", context={"scope": "global"})
 
     class _A(App):
         def on_mount(self) -> None:

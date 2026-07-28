@@ -46,7 +46,8 @@ async def test_source_column_is_last():
         await pilot.pause()
         table = a.query_one("#skill-table", DataTable)
         labels = [str(c.label) for c in table.columns.values()]
-        assert "Skill ⓘ" in labels
+        assert "Skill" in labels
+        assert "Skill ⓘ" not in labels
         assert not any("SKILL" in label for label in labels)
         assert any(label.startswith("Standard (") for label in labels)
         assert any(label.startswith("Claude ") for label in labels)
@@ -135,9 +136,10 @@ def test_unlisted_state_markup():
 
 
 def test_unlisted_in_state_legend():
-    """#360: the State column's `i` legend explains the unlisted badge."""
+    """The clicked State header's authored legend explains the unlisted badge."""
     from agent_toolkit_tui.column_info import get_column_info
-    info = get_column_info("state")
+
+    info = get_column_info("state", asset_type="skill", context={"scope": "global"})
     assert any("unlisted" in line for line in info.lines)
 
 

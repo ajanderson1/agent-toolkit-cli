@@ -1,6 +1,6 @@
 """Interactive DataTable for the TUI's pi-extension tab.
 
-Columns: EXTENSION | Pi | Origin | Source.
+Columns: Pi Extension | Pi ⓘ | Origin ⓘ | Source.
 
 One scope is visible at a time; the app's ctrl+g scope toggle flips it
 app-wide (#349). The header carries no scope name — the ScopeToggle widget
@@ -11,7 +11,8 @@ preservation across the toggle is orchestrated by the App, not the widget.
 
 `space` queues a link/unlink for the cell under the cursor.
 `ctrl+s` Apply is handled by the App, which reads pending_entries().
-`i` opens CellInfoScreen with per-cell context.
+Clicking a glyphed header explains the column; `i` always explains the
+selected extension.
 
 CRITICAL: never name any method `_render_*` — it collides with Textual's
 internal flag mechanism and produces a "bool is not callable" error from
@@ -208,32 +209,39 @@ class PiGrid(Vertical):
         self._toggle_at(table.cursor_coordinate)
 
     def action_info(self) -> None:
-        """Open CellInfoScreen for the cell under the cursor."""
+        """Open the selected Pi extension's asset panel, regardless of column."""
+        from agent_toolkit_tui.screens.cell_info import asset_info_body
+
         try:
             table = self.query_one("#pi-table", DataTable)
         except Exception:
             return
-        coord = table.cursor_coordinate
         visible = self._visible_rows()
-        if coord.row >= len(visible):
+        if table.cursor_coordinate.row >= len(visible):
             return
-        row = visible[coord.row]
-
-        col = coord.column
-        if col == _COL_EXTENSION:
-            title = f"{row.slug} · extension"
-            body = self._extension_info_body(row)
-        elif col == _COL_SCOPE:
-            scope = self._scope
-            title = f"{row.slug} · Pi ({scope})"
-            body = self._info_body(row=row, scope=scope)
-        elif col == _COL_ORIGIN:
-            title = f"{row.slug} · origin"
-            body = self._origin_info_body()
-        else:
-            return
-
-        self.app.push_screen(CellInfoScreen(title=title, body_markup=body))
+        row = visible[table.cursor_coordinate.row]
+        loaded = (
+            row.global_cell.global_loaded
+            if self._scope == "global"
+            else row.project_cell.project_loaded
+        )
+        state = "untracked" if row.origin == "untracked" else "loaded" if loaded else "not loaded"
+        self.app.push_screen(
+            CellInfoScreen(
+                title=f"{row.slug} · {asset_type_label('pi-extension')}",
+                body_markup=asset_info_body(
+                    asset_label=asset_type_label("pi-extension"),
+                    slug=row.slug,
+                    description=None,
+                    description_location="extension metadata",
+                    source=row.source,
+                    ref=None,
+                    state=state,
+                    scope=self._scope,
+                    extra_lines=[f"Origin: {self._origin_label(row)}"],
+                ),
+            )
+        )
 
     def _column_key_for_index(self, col: int) -> str | None:
         """Resolve every explainable header to its registry key (#479 R2)."""
