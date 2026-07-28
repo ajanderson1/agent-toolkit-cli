@@ -10,7 +10,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable
 
-from agent_toolkit_cli.skill_agents import AGENTS
 from agent_toolkit_tui.composition import MAIN_HARNESS_CANDIDATES
 from agent_toolkit_tui.display_names import asset_type_label, harness_label
 

@@ -3,7 +3,6 @@
 from pathlib import Path
 import pytest
 
-from agent_toolkit_cli.skill_agents import AGENTS
 from agent_toolkit_tui.app import (
     ConfirmDiscardScreen,
     HarnessCommandProvider,
@@ -122,4 +121,61 @@ async def test_toggle_main_harness_protected_by_pending_edits(temp_settings_path
         await pilot.pause()
 
         assert "aider-desk" not in app.tui_settings.harnesses
+        assert len(app._get_all_pending_edits()) == 1
+
+
+@pytest.mark.asyncio
+async def test_all_grid_pending_enumeration_includes_mcp_and_commands(temp_settings_path: Path):
+    app = TUIApp()
+    async with app.run_test():
+        cmd_grid = app.query_one("#command-grid")
+        cmd_grid.restore_pending({("project", "claude-code", "my-cmd"): "link"})
+
+        mcp_grid = app.query_one("#mcp-grid")
+        mcp_grid.restore_pending({("project", "codex", "my-mcp"): "link"})
+
+        pending = app._get_all_pending_edits()
+        assert len(pending) == 2
+        assert ("project", "claude-code", "my-cmd") in pending
+        assert ("project", "codex", "my-mcp") in pending
+
+
+@pytest.mark.asyncio
+async def test_toggle_main_harness_discard_and_change_path(temp_settings_path: Path):
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        grid = app.query_one("#skill-grid")
+        grid.restore_pending({("project", "test-skill"): "link"})
+
+        app.toggle_main_harness("aider-desk")
+        await pilot.pause()
+
+        assert isinstance(app.screen, ConfirmDiscardScreen)
+
+        app.screen.action_discard()
+        await pilot.pause()
+
+        assert "aider-desk" in app.tui_settings.harnesses
+        loaded = load_settings()
+        assert "aider-desk" in loaded.harnesses
+        assert len(app._get_all_pending_edits()) == 0
+
+
+@pytest.mark.asyncio
+async def test_apply_harness_settings_save_failure_retains_pending_and_selection(
+    temp_settings_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setenv("AGENT_TOOLKIT_TUI_SETTINGS", " relative/path ")
+
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        initial_selection = app.tui_settings.harnesses
+        grid = app.query_one("#skill-grid")
+        grid.restore_pending({("project", "test-skill"): "link"})
+
+        success = app.apply_harness_settings(("aider-desk",))
+        await pilot.pause()
+
+        assert success is False
+        assert app.tui_settings.harnesses == initial_selection
         assert len(app._get_all_pending_edits()) == 1

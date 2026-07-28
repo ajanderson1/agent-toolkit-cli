@@ -15,7 +15,6 @@ tests/test_tui/test_composition.py.
 from __future__ import annotations
 
 from agent_toolkit_cli.agent_adapters.standard import agents_standard_covered
-from agent_toolkit_cli.command_adapters import DEFAULT_HARNESSES
 from agent_toolkit_cli.instructions_adapters import SUPPORTED_HARNESSES
 from agent_toolkit_cli.skill_agents import AGENTS
 
