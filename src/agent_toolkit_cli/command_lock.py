@@ -29,6 +29,8 @@ class LockEntry:
     parent_url: str | None = None
     read_only: bool = False
     extras: dict[str, object] = field(default_factory=dict)
+    # Appended after extras so legacy positional callers keep binding extras.
+    harnesses: tuple[str, ...] = ()
 
     @property
     def ref_looks_pinned(self) -> bool:
@@ -46,7 +48,17 @@ class LockFile:
     wrapper_extras: dict[str, object] = field(default_factory=dict)
 
 
-_FIELDS = {"source", "sourceType", "ref", "commandPath", "upstreamSha", "localSha", "parentUrl", "readOnly"}
+_FIELDS = {
+    "source",
+    "sourceType",
+    "ref",
+    "commandPath",
+    "upstreamSha",
+    "localSha",
+    "parentUrl",
+    "readOnly",
+    "harnesses",
+}
 
 
 def validate_command_path(value: str | None) -> str | None:
@@ -58,6 +70,20 @@ def validate_command_path(value: str | None) -> str | None:
     if p.name != "COMMAND.md":
         raise ValueError(f"commandPath must end in COMMAND.md: {value!r}")
     return str(p)
+
+
+def _parse_harnesses(raw: object) -> tuple[str, ...]:
+    if raw is None:
+        return ()
+    if not isinstance(raw, list):
+        raise ValueError(f"harnesses must be a list of strings, got {type(raw).__name__}")
+    out: list[str] = []
+    for item in raw:
+        if not isinstance(item, str):
+            raise ValueError(f"harnesses entries must be strings, got {type(item).__name__}")
+        if item not in out:
+            out.append(item)
+    return tuple(out)
 
 
 def _entry_from_dict(d: dict) -> LockEntry:
@@ -72,6 +98,7 @@ def _entry_from_dict(d: dict) -> LockEntry:
         parent_url=d.get("parentUrl"),
         read_only=bool(d.get("readOnly", False)),
         extras=extras,
+        harnesses=_parse_harnesses(d.get("harnesses")),
     )
 
 
@@ -89,6 +116,9 @@ def _entry_to_dict(e: LockEntry) -> dict:
         out["parentUrl"] = e.parent_url
     if e.read_only:
         out["readOnly"] = True
+    # Emit harnesses before extras so extras cannot override the typed field.
+    if e.harnesses:
+        out["harnesses"] = list(dict.fromkeys(e.harnesses))
     out.update(e.extras)
     return out
 
@@ -107,7 +137,10 @@ def read_lock(path: Path) -> LockFile:
 
 
 def write_lock(path: Path, lock: LockFile) -> None:
-    data: dict[str, object] = {"version": lock.version, "skills": {slug: _entry_to_dict(e) for slug, e in sorted(lock.skills.items())}}
+    data: dict[str, object] = {
+        "version": lock.version,
+        "skills": {slug: _entry_to_dict(e) for slug, e in sorted(lock.skills.items())},
+    }
     data.update(lock.wrapper_extras)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")

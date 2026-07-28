@@ -86,7 +86,7 @@ def import_cmd(file: Path | None, latest: bool, global_: bool, project_flag: boo
                 local = skill_git.head_sha(repo_for_sha, env=None)
             except Exception:
                 local = None
-            current = add_entry(current, slug, LockEntry(source=entry.source, source_type=entry.source_type, ref=entry.ref, command_path=entry.command_path, upstream_sha=upstream, local_sha=local, parent_url=entry.parent_url, read_only=entry.read_only, extras=dict(entry.extras)))
+            current = add_entry(current, slug, LockEntry(source=entry.source, source_type=entry.source_type, ref=entry.ref, command_path=entry.command_path, upstream_sha=upstream, local_sha=local, parent_url=entry.parent_url, read_only=entry.read_only, extras=dict(entry.extras), harnesses=()))
             write_lock(current_path, current)
             added.append(slug)
             click.echo(f"  added    {slug}  <- {entry.source}")
