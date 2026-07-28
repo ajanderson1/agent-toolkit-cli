@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 import json
 from pathlib import Path
 
@@ -67,6 +68,21 @@ def test_malformed_json_returns_defaults_with_loud_diagnostic(
     assert "malformed JSON" in settings.diagnostics[0]
 
 
+def test_invalid_utf8_returns_defaults_with_loud_diagnostic(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    path = _settings_path(monkeypatch, tmp_path)
+    path.write_bytes(b"\xff\xfe invalid UTF-8")
+
+    settings = load(available_themes={DEFAULT_THEME})
+
+    assert settings.theme == DEFAULT_THEME
+    assert settings.harnesses == MAIN_HARNESSES
+    assert settings.diagnostics
+    assert str(path) in settings.diagnostics[0]
+    assert "UTF-8" in settings.diagnostics[0]
+
+
 def test_unknown_schema_returns_defaults_with_loud_diagnostic(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -85,6 +101,43 @@ def test_unknown_schema_returns_defaults_with_loud_diagnostic(
     assert settings.diagnostics
     assert str(path) in settings.diagnostics[0]
     assert "schema" in settings.diagnostics[0]
+
+
+def test_future_schema_cannot_be_overwritten(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    path = _settings_path(monkeypatch, tmp_path)
+    original = {
+        "schema": "agent-toolkit-tui-settings/v99",
+        "theme": "future-theme",
+        "harnesses": ["future-harness"],
+        "future_option": {"nested": ["must", "survive"]},
+    }
+    path.write_text(json.dumps(original), encoding="utf-8")
+
+    settings = load(available_themes={DEFAULT_THEME})
+
+    with pytest.raises(ValueError, match="unsupported schema"):
+        save(settings)
+
+    assert json.loads(path.read_text(encoding="utf-8")) == original
+
+
+def test_unknown_top_level_v1_fields_survive_save(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    path = _settings_path(monkeypatch, tmp_path)
+    original = {
+        "schema": SCHEMA,
+        "theme": "nord",
+        "harnesses": ["pi"],
+        "future_option": {"nested": ["must", "survive"]},
+    }
+    path.write_text(json.dumps(original), encoding="utf-8")
+
+    save(load(available_themes={DEFAULT_THEME, "nord"}))
+
+    assert json.loads(path.read_text(encoding="utf-8")) == original
 
 
 def test_unknown_harness_key_is_retained_but_not_rendered(
@@ -118,6 +171,22 @@ def test_unavailable_theme_falls_back_with_diagnostic(
     assert any("retired-theme" in diagnostic for diagnostic in settings.diagnostics)
 
 
+def test_unavailable_theme_survives_unrelated_harness_save(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    path = _settings_path(monkeypatch, tmp_path)
+    _write(path, theme="retired-theme", harnesses=["pi"])
+
+    settings = load(available_themes={DEFAULT_THEME, "nord"})
+    assert settings.theme == DEFAULT_THEME
+
+    save(replace(settings, harnesses=("codex",)))
+
+    persisted = json.loads(path.read_text(encoding="utf-8"))
+    assert persisted["theme"] == "retired-theme"
+    assert persisted["harnesses"] == ["codex"]
+
+
 def test_empty_selection_is_legal(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -140,6 +209,29 @@ def test_env_override_is_honoured(
 
     assert path.exists()
     assert default_path() == path
+
+
+@pytest.mark.parametrize("override", ("relative-settings.json", " "))
+def test_relative_or_whitespace_env_override_is_rejected(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, override: str
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    _write(
+        tmp_path / override,
+        theme="nord",
+        harnesses=["pi"],
+    )
+
+    settings = load(
+        available_themes={DEFAULT_THEME, "nord"},
+        env={"AGENT_TOOLKIT_TUI_SETTINGS": override},
+    )
+
+    assert settings.theme == DEFAULT_THEME
+    assert settings.harnesses == MAIN_HARNESSES
+    assert settings.diagnostics
+    assert "AGENT_TOOLKIT_TUI_SETTINGS" in settings.diagnostics[0]
+    assert "absolute" in settings.diagnostics[0]
 
 
 def test_default_path_is_under_agent_toolkit_home(

@@ -235,6 +235,109 @@ async def test_unticking_everything_leaves_a_usable_grid(
 
 
 @pytest.mark.asyncio
+async def test_invalid_utf8_settings_file_surfaces_a_status_bar_notice(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    path = _settings_path(monkeypatch, tmp_path)
+    _stub_rows(monkeypatch)
+    path.write_bytes(b"\xff\xfe invalid UTF-8")
+    app = TUIApp()
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+
+        status = str(app.query_one("#status-bar", Static).render())
+        assert str(path) in status
+        assert "UTF-8" in status
+        assert app.theme == DEFAULT_THEME
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("override", ("relative-settings.json", " "))
+async def test_invalid_settings_override_is_visible_on_startup(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, override: str
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / override).write_text(
+        json.dumps(
+            {
+                "schema": "agent-toolkit-tui-settings/v1",
+                "theme": "nord",
+                "harnesses": ["pi"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("AGENT_TOOLKIT_TUI_SETTINGS", override)
+    _stub_rows(monkeypatch)
+    app = TUIApp()
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+
+        status = str(app.query_one("#status-bar", Static).render())
+        assert "AGENT_TOOLKIT_TUI_SETTINGS" in status
+        assert "absolute" in status
+        assert app.theme == DEFAULT_THEME
+
+
+@pytest.mark.asyncio
+async def test_future_schema_harness_save_is_refused_without_overwrite(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    path = _settings_path(monkeypatch, tmp_path)
+    _stub_rows(monkeypatch)
+    original = {
+        "schema": "agent-toolkit-tui-settings/v99",
+        "theme": "future-theme",
+        "harnesses": ["future-harness"],
+        "future_option": {"must": "survive"},
+    }
+    path.write_text(json.dumps(original), encoding="utf-8")
+    app = TUIApp()
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+
+        status = str(app.query_one("#status-bar", Static).render())
+        assert "unsupported schema" in status
+        assert app.apply_harness_settings(("pi",)) is False
+        await pilot.pause()
+
+    assert json.loads(path.read_text(encoding="utf-8")) == original
+
+
+@pytest.mark.asyncio
+async def test_harness_save_retains_an_unavailable_persisted_theme(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    path = _settings_path(monkeypatch, tmp_path)
+    _stub_rows(monkeypatch)
+    path.write_text(
+        json.dumps(
+            {
+                "schema": "agent-toolkit-tui-settings/v1",
+                "theme": "retired-theme",
+                "harnesses": ["pi"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    app = TUIApp()
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+
+        assert app.theme == DEFAULT_THEME
+        assert app.apply_harness_settings(("codex",)) is True
+        await pilot.pause()
+
+    persisted = json.loads(path.read_text(encoding="utf-8"))
+    assert persisted["theme"] == "retired-theme"
+    assert persisted["harnesses"] == ["codex"]
+
+
+@pytest.mark.asyncio
 async def test_bad_settings_file_surfaces_a_status_bar_notice(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

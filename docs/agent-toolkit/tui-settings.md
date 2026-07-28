@@ -7,8 +7,10 @@ The TUI owns one user-level preferences file:
 ```
 
 Set `AGENT_TOOLKIT_TUI_SETTINGS` to an absolute path to override that location.
-The CLI never reads this file: CLI output and install targets remain independent
-of TUI presentation preferences.
+The value must not be empty or whitespace-only; relative and whitespace paths
+are rejected with a visible diagnostic and never resolve against the current
+working directory. The CLI never reads this file: CLI output and install
+targets remain independent of TUI presentation preferences.
 
 ## Schema v1
 
@@ -42,17 +44,22 @@ boundaries:
 - saving harnesses rebuilds every grid. Existing grid `set_rows()` semantics
   clear pending queues, so apply or revert queued changes first.
 
-Writes use a temporary sibling file followed by `os.replace`.
+Supported v1 writes use a temporary sibling file followed by `os.replace`.
+Unknown top-level v1 fields, unknown harness names, and an unavailable persisted
+theme survive unrelated saves. Unsupported schemas are read-only until an
+explicit migration or reset exists.
 
 ## Failure behaviour
 
 | State | Result |
 |---|---|
 | File missing | `gruvbox` plus every main harness; no notice. |
+| Invalid `AGENT_TOOLKIT_TUI_SETTINGS` override | Defaults plus a status-bar notice explaining that an absolute, non-whitespace path is required. |
 | Unreadable file | Defaults plus a status-bar notice naming the path and error. |
-| Malformed JSON or invalid field types | Defaults plus a status-bar notice naming the path and reason. |
-| Unknown schema | Defaults plus a status-bar notice; no coercion. |
-| Theme unavailable in the installed Textual version | `gruvbox` plus a notice. |
+| Invalid UTF-8, malformed JSON, or invalid field types | Defaults plus a status-bar notice naming the path and reason. |
+| Unknown schema | Defaults plus a status-bar notice; no coercion or write until an explicit migration/reset exists. |
+| Theme unavailable in the installed Textual version | `gruvbox` plus a notice; the unavailable name is retained on unrelated saves. |
+| Unknown top-level v1 field | Retained on later saves. |
 | Harness name absent from `MAIN_HARNESSES` | Ignored for rendering, reported, and retained on later saves. |
 | Empty `harnesses` list | Accepted; grids keep their asset, Standard where applicable, State, and Source columns. |
 

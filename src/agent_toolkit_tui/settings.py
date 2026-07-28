@@ -18,6 +18,15 @@ from agent_toolkit_tui.composition import MAIN_HARNESSES
 SCHEMA = "agent-toolkit-tui-settings/v1"
 DEFAULT_THEME = "gruvbox"
 _ENV_VAR = "AGENT_TOOLKIT_TUI_SETTINGS"
+_KNOWN_FIELDS = frozenset(("schema", "theme", "harnesses"))
+
+
+class SettingsPathError(ValueError):
+    """Raised when the explicit settings-path override is unsafe."""
+
+
+class SettingsWriteError(ValueError):
+    """Raised when loaded settings cannot be safely rewritten."""
 
 
 @dataclass(frozen=True)
@@ -28,20 +37,33 @@ class TuiSettings:
     harnesses: tuple[str, ...] = MAIN_HARNESSES
     unknown_harnesses: tuple[str, ...] = ()
     diagnostics: tuple[str, ...] = ()
+    retained_theme: str | None = None
+    unknown_top_level: tuple[tuple[str, object], ...] = ()
+    write_error: str | None = None
 
 
 def default_path(env: Mapping[str, str] | None = None) -> Path:
-    """Return the settings path, honouring the explicit environment override."""
+    """Return the settings path, rejecting unsafe explicit overrides."""
 
     environ = os.environ if env is None else env
-    override = environ.get(_ENV_VAR)
-    if override:
-        return Path(override).expanduser()
-    return Path.home() / ".agent-toolkit" / "tui-settings.json"
+    if _ENV_VAR not in environ:
+        return Path.home() / ".agent-toolkit" / "tui-settings.json"
+
+    override = environ[_ENV_VAR]
+    if not override.strip():
+        raise SettingsPathError(
+            f"{_ENV_VAR} must be a non-whitespace absolute path; unset it to use the default"
+        )
+    path = Path(override).expanduser()
+    if not path.is_absolute():
+        raise SettingsPathError(
+            f"{_ENV_VAR} must be an absolute path; got {override!r}"
+        )
+    return path
 
 
-def _defaults(*diagnostics: str) -> TuiSettings:
-    return TuiSettings(diagnostics=tuple(diagnostics))
+def _defaults(*diagnostics: str, write_error: str | None = None) -> TuiSettings:
+    return TuiSettings(diagnostics=tuple(diagnostics), write_error=write_error)
 
 
 def load(
@@ -57,15 +79,21 @@ def load(
     them as malformed data.
     """
 
-    path = default_path(env)
     try:
-        raw = path.read_text()
+        path = default_path(env)
+    except SettingsPathError as exc:
+        return _defaults(str(exc))
+
+    try:
+        raw = path.read_text(encoding="utf-8")
     except FileNotFoundError:
         return _defaults()
+    except UnicodeDecodeError as exc:
+        return _defaults(f"{path}: invalid UTF-8 ({exc})")
 
     try:
         payload = json.loads(raw)
-    except (json.JSONDecodeError, UnicodeError) as exc:
+    except json.JSONDecodeError as exc:
         return _defaults(f"{path}: malformed JSON ({exc})")
 
     if not isinstance(payload, dict):
@@ -73,9 +101,11 @@ def load(
 
     schema = payload.get("schema")
     if schema != SCHEMA:
-        return _defaults(
-            f"{path}: unsupported schema {schema!r}; expected {SCHEMA!r}"
+        message = (
+            f"{path}: unsupported schema {schema!r}; expected {SCHEMA!r}; "
+            "refusing writes until an explicit migration or reset exists"
         )
+        return _defaults(message, write_error=message)
 
     theme = payload.get("theme")
     harnesses = payload.get("harnesses")
@@ -88,12 +118,17 @@ def load(
 
     diagnostics: list[str] = []
     chosen_theme = theme
+    retained_theme: str | None = None
     if available_themes is not None and theme not in available_themes:
         chosen_theme = DEFAULT_THEME
+        retained_theme = theme
         diagnostics.append(
             f"{path}: theme {theme!r} is unavailable; using {DEFAULT_THEME!r}"
         )
 
+    unknown_top_level = tuple(
+        (key, value) for key, value in payload.items() if key not in _KNOWN_FIELDS
+    )
     effective = tuple(harness for harness in harnesses if harness in MAIN_HARNESSES)
     unknown = tuple(harness for harness in harnesses if harness not in MAIN_HARNESSES)
     if unknown:
@@ -107,6 +142,8 @@ def load(
         harnesses=effective,
         unknown_harnesses=unknown,
         diagnostics=tuple(diagnostics),
+        retained_theme=retained_theme,
+        unknown_top_level=unknown_top_level,
     )
 
 
@@ -115,15 +152,25 @@ def save(
     *,
     env: Mapping[str, str] | None = None,
 ) -> Path:
-    """Atomically persist schema v1, retaining unknown harness names."""
+    """Atomically persist writable v1 settings without losing retained data."""
+
+    if settings.write_error is not None:
+        raise SettingsWriteError(settings.write_error)
 
     path = default_path(env)
     path.parent.mkdir(parents=True, exist_ok=True)
-    payload = {
-        "schema": SCHEMA,
-        "theme": settings.theme,
-        "harnesses": [*settings.harnesses, *settings.unknown_harnesses],
-    }
+    payload: dict[str, object] = dict(settings.unknown_top_level)
+    payload.update(
+        {
+            "schema": SCHEMA,
+            "theme": (
+                settings.retained_theme
+                if settings.retained_theme is not None
+                else settings.theme
+            ),
+            "harnesses": [*settings.harnesses, *settings.unknown_harnesses],
+        }
+    )
 
     temporary: Path | None = None
     try:

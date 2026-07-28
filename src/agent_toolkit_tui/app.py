@@ -49,6 +49,8 @@ from agent_toolkit_tui.instruction_state import build_instruction_rows
 from agent_toolkit_tui.mcp_state import build_mcp_rows
 from agent_toolkit_tui.pi_extension_state import build_pi_rows
 from agent_toolkit_tui.settings import (
+    SettingsPathError,
+    SettingsWriteError,
     TuiSettings,
     default_path as settings_path,
     load as load_settings,
@@ -739,10 +741,10 @@ class TUIApp(App):
         if theme == self._tui_settings.theme:
             return True
 
-        updated = replace(self._tui_settings, theme=theme)
+        updated = replace(self._tui_settings, theme=theme, retained_theme=None)
         try:
             save_settings(updated)
-        except OSError as exc:
+        except (OSError, SettingsPathError, SettingsWriteError) as exc:
             self.notify(
                 str(exc),
                 title="Settings not saved",
@@ -759,7 +761,7 @@ class TUIApp(App):
         updated = replace(self._tui_settings, harnesses=harnesses)
         try:
             save_settings(updated)
-        except OSError as exc:
+        except (OSError, SettingsPathError, SettingsWriteError) as exc:
             self.notify(
                 str(exc),
                 title="Settings not saved",
