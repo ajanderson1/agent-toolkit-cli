@@ -24,6 +24,6 @@
 
 ## PR #487 data-steward follow-up
 
-`pr-487-data-steward-follow-up.md` records the compatibility remediation at `4ccc573dab60e1169bb6a13220ce105a9e3a71cb`: focused regressions, the complete TUI suite, and the full gate all passed.
+`pr-487-data-steward-follow-up.md` records the compatibility remediation at `4ccc5732cd6542041cb097cc5261d4445efb224a`: focused regressions, the complete TUI suite, and the full gate all passed.
 
 **Overall verdict: PASS.**

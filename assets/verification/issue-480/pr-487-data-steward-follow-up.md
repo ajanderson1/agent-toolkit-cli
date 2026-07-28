@@ -1,6 +1,6 @@
 # PR #487 data-steward follow-up
 
-**Code under review:** `4ccc573dab60e1169bb6a13220ce105a9e3a71cb`
+**Code under review:** `4ccc5732cd6542041cb097cc5261d4445efb224a`
 
 ## Resolved findings
 
