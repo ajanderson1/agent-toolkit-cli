@@ -429,6 +429,121 @@ def test_mcp_migrate_adopts_local_entry_with_source_dir(tmp_path, monkeypatch):
     assert entry["resolved_version"] == sha
 
 
+def test_mcp_add_writes_manifest_before_materialisation(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(
+        "agent_toolkit_cli.commands.mcp._resolve.resolve_npm_version",
+        lambda _: "1.2.3",
+    )
+
+    result = CliRunner().invoke(
+        main, ["mcp", "add", "--npx", "pkg", "--env", "API_TOKEN"]
+    )
+
+    assert result.exit_code == 0, result.output
+    manifest = _read_manifest(tmp_path)
+    assert manifest["pkg"]["source"] == "pkg"
+    assert manifest["pkg"]["env"] == ["API_TOKEN"]
+
+
+@pytest.mark.parametrize("legacy_shape", ["config", "sidecar", "complete"])
+def test_mcp_add_refuses_to_implicitly_backfill_any_legacy_shape(
+    tmp_path, monkeypatch, legacy_shape
+):
+    library = tmp_path / ".agent-toolkit" / "mcps"
+    if legacy_shape in {"config", "complete"}:
+        (library / "legacy").mkdir(parents=True)
+        (library / "legacy" / "config.json").write_text(
+            '{"type":"stdio","command":"npx"}\n'
+        )
+    if legacy_shape in {"sidecar", "complete"}:
+        library.mkdir(parents=True, exist_ok=True)
+        (library / "legacy.toolkit.yaml").write_text("name: legacy\n")
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    result = CliRunner().invoke(
+        main, ["mcp", "add", "--url", "https://new/sse"]
+    )
+
+    assert result.exit_code != 0
+    assert "agent-toolkit-cli mcp migrate" in result.output
+    assert not _manifest_file(tmp_path).exists()
+
+
+def test_mcp_add_rejects_secret_without_echoing_it(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    result = CliRunner().invoke(
+        main,
+        ["mcp", "add", "--url", "https://u:literal-secret@host/sse"],
+    )
+
+    assert result.exit_code != 0
+    assert "literal-secret" not in result.output
+    assert "value redacted" in result.output
+    assert not _manifest_file(tmp_path).exists()
+
+
+def test_mcp_add_keeps_authoritative_manifest_if_sidecar_write_fails(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _fail_sidecar_write(monkeypatch)
+
+    result = CliRunner().invoke(
+        main,
+        ["mcp", "add", "--url", "https://host/sse", "--slug", "demo"],
+    )
+
+    assert result.exit_code != 0
+    assert "demo" in _read_manifest(tmp_path)
+    assert (tmp_path / ".agent-toolkit" / "mcps" / "demo" / "config.json").is_file()
+    assert not (
+        tmp_path / ".agent-toolkit" / "mcps" / "demo.toolkit.yaml"
+    ).exists()
+
+
+def test_mcp_add_normalises_versioned_source_tokens(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(
+        "agent_toolkit_cli.commands.mcp._resolve.resolve_npm_version",
+        lambda _: "2.0.0",
+    )
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "mcp",
+            "add",
+            "--npx",
+            "@scope/pkg@1.0.0",
+            "--slug",
+            "scoped",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    entry = _read_manifest(tmp_path)["scoped"]
+    assert entry["source"] == "@scope/pkg"
+    assert entry["args"][-1] == "@scope/pkg@2.0.0"
+
+
+def test_mcp_add_local_allows_command_without_args(tmp_path, monkeypatch):
+    server = tmp_path / "server"
+    server.mkdir()
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    result = CliRunner().invoke(
+        main,
+        ["mcp", "add", "--local", str(server), "--command", "server-bin"],
+    )
+
+    assert result.exit_code == 0, result.output
+    entry = _read_manifest(tmp_path)["server"]
+    assert entry["command"] == "server-bin"
+    assert entry["args"] == []
+
+
 def test_mcp_add_url_authors_entry(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.chdir(tmp_path)

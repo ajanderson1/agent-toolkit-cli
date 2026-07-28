@@ -240,11 +240,12 @@ def entry_from_materialisation(asset: McpAsset) -> McpManifestEntry:
             not isinstance(command_value, str)
             or not isinstance(args_value, list)
             or not all(isinstance(arg, str) for arg in args_value)
-            or not args_value
         ):
             raise ValueError("MCP materialisation cannot be reconstructed losslessly")
         command = command_value
         args = tuple(args_value)
+        if method in {"npx", "uvx", "docker"} and not args:
+            raise ValueError("MCP materialisation cannot be reconstructed losslessly")
         if method == "npx":
             source = _npx_source(args[-1])
         elif method == "uvx":
@@ -372,18 +373,22 @@ def _validate_entry(entry: McpManifestEntry) -> None:
             raise ValueError("malformed MCP library manifest entry")
         return
 
-    if entry.transport != "stdio" or not entry.command or not entry.args:
+    if entry.transport != "stdio" or not entry.command:
         raise ValueError("malformed MCP library manifest entry")
     if entry.install_method == "npx" and (
-        entry.command != "npx" or _npx_source(entry.args[-1]) != entry.source
+        not entry.args
+        or entry.command != "npx"
+        or _npx_source(entry.args[-1]) != entry.source
     ):
         raise ValueError("malformed MCP library manifest entry")
     if entry.install_method == "uvx" and (
-        entry.command != "uvx" or entry.args[-1].split("==", 1)[0] != entry.source
+        not entry.args
+        or entry.command != "uvx"
+        or entry.args[-1].split("==", 1)[0] != entry.source
     ):
         raise ValueError("malformed MCP library manifest entry")
     if entry.install_method == "docker" and (
-        entry.command != "docker" or entry.args[-1] != entry.source
+        not entry.args or entry.command != "docker" or entry.args[-1] != entry.source
     ):
         raise ValueError("malformed MCP library manifest entry")
     if entry.install_method == "local" and not Path(entry.source).is_absolute():
