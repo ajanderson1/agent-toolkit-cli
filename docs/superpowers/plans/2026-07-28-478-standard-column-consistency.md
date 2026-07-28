@@ -28,7 +28,7 @@
 - Create: `tests/test_tui/test_standard_column_rule.py`
 - Read for idiom: `tests/test_tui/test_composition.py`, `tests/test_tui/test_agent_grid_standard.py`, `tests/test_tui/test_display_names.py`
 
-- [ ] **Step 1: Write the rule-level invariant test**
+- [x] **Step 1: Write the rule-level invariant test**
 
 Create `tests/test_tui/test_standard_column_rule.py`:
 
@@ -91,7 +91,7 @@ def test_agents_count_differs_by_scope():
     )
 ```
 
-- [ ] **Step 2: Run and confirm it fails for the right reason**
+- [x] **Step 2: Run and confirm it fails for the right reason**
 
 ```bash
 uv run pytest tests/test_tui/test_standard_column_rule.py -q
@@ -99,7 +99,7 @@ uv run pytest tests/test_tui/test_standard_column_rule.py -q
 
 Expected: collection-time `ImportError` — `standard_column_header` does not exist yet. That is the correct red.
 
-- [ ] **Step 3: Confirm the scope-asymmetry premise before building on it**
+- [x] **Step 3: Confirm the scope-asymmetry premise before building on it**
 
 ```bash
 uv run python -c "from agent_toolkit_cli.agent_adapters.standard import agents_standard_covered as c; print(len(c('global')), len(c('project')))"
@@ -113,7 +113,7 @@ Expected: two different numbers (`5` and `6` at time of writing — `devin` is p
 - Modify: `src/agent_toolkit_tui/display_names.py`
 - Modify: `tests/test_tui/test_display_names.py`
 
-- [ ] **Step 1: Add the count resolver and the header helper**
+- [x] **Step 1: Add the count resolver and the header helper**
 
 Append to `src/agent_toolkit_tui/display_names.py`:
 
@@ -174,7 +174,7 @@ def standard_column_header(asset_type: str, scope: str) -> str | None:
     return standard_label(count)
 ```
 
-- [ ] **Step 2: Verify the helper against the rule test**
+- [x] **Step 2: Verify the helper against the rule test**
 
 ```bash
 uv run pytest tests/test_tui/test_standard_column_rule.py tests/test_tui/test_display_names.py -q
@@ -182,7 +182,7 @@ uv run pytest tests/test_tui/test_standard_column_rule.py tests/test_tui/test_di
 
 Expected: PASS. If `instructions_matrix_rows` or `mcp_standard` import paths differ, fix the import — do not inline a literal count.
 
-- [ ] **Step 3: Commit the helper**
+- [x] **Step 3: Commit the helper**
 
 ```bash
 git add src/agent_toolkit_tui/display_names.py tests/test_tui/test_standard_column_rule.py
@@ -199,7 +199,7 @@ Include the `Device:` trailer.
 - Modify: `src/agent_toolkit_tui/widgets/agent_grid.py`
 - Modify: `src/agent_toolkit_tui/widgets/mcp_grid.py`
 
-- [ ] **Step 1: Skills**
+- [x] **Step 1: Skills**
 
 In `_rebuild` (`skill_grid.py:591-593`), replace:
 
@@ -231,7 +231,7 @@ Update the import line to bring in `standard_column_header`. Drop the now-unused
 `get_standard_agents` import **only if** nothing else in the file uses it —
 check with `rg -n "get_standard_agents" src/agent_toolkit_tui/widgets/skill_grid.py`.
 
-- [ ] **Step 2: Agents**
+- [x] **Step 2: Agents**
 
 In `agent_grid.py:423-429`, replace the inline
 `standard_label(len(agents_standard_covered(self._scope)))` block with
@@ -240,7 +240,7 @@ In `agent_grid.py:423-429`, replace the inline
 import **from that call site only** — `_context_for` (`agent_grid.py:372-377`)
 still needs it to enumerate names for the info panel. Do not remove that one.
 
-- [ ] **Step 3: MCPs**
+- [x] **Step 3: MCPs**
 
 In `mcp_grid.py:429-435`, replace the `if harness == "standard":` block with
 `standard_column_header("mcp", self._scope)`. The helper returns `None` at
@@ -256,7 +256,7 @@ branch is unreachable at global scope — assert rather than silently fall back:
                 )
 ```
 
-- [ ] **Step 4: Instructions**
+- [x] **Step 4: Instructions**
 
 In `instruction_grid.py:480-482`, replace `standard_label(_standard_count())`
 with `standard_column_header("instruction", self._scope)`. Delete the now-dead
@@ -267,7 +267,7 @@ into the resolver. Confirm nothing else calls it:
 rg -n "_standard_count" src/ tests/
 ```
 
-- [ ] **Step 5: Run the grid suites**
+- [x] **Step 5: Run the grid suites**
 
 ```bash
 uv run pytest tests/test_tui -q
@@ -278,7 +278,7 @@ Expected: PASS. `test_agent_grid_standard.py`, `test_skill_grid_new_columns.py`,
 if one fails on exact text, the *header* is the thing under test; confirm the
 new text is identical to the old before editing any assertion.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/agent_toolkit_tui/widgets tests/test_tui
@@ -291,7 +291,7 @@ git commit -m "refactor(tui): grids share the Standard column header rule"
 - Modify: `src/agent_toolkit_tui/widgets/command_grid.py`
 - Modify: `tests/test_tui/test_command_grid.py`
 
-- [ ] **Step 1: Write the failing label test**
+- [x] **Step 1: Write the failing label test**
 
 Add to `tests/test_tui/test_command_grid.py`:
 
@@ -318,7 +318,7 @@ uv run pytest tests/test_tui/test_command_grid.py -q
 
 Expected: the new test FAILS.
 
-- [ ] **Step 2: Use display labels**
+- [x] **Step 2: Use display labels**
 
 In `command_grid.py:404-405`, replace:
 
@@ -343,7 +343,7 @@ Check `_HARNESS_COL_WIDTH` still fits the longest label (`OpenCode` is 8 chars;
 `Gemini` 6) — if a label truncates, widen the constant here rather than
 reverting to raw keys.
 
-- [ ] **Step 3: Correct the docstrings**
+- [x] **Step 3: Correct the docstrings**
 
 Replace the module docstring's first line (`command_grid.py:3`):
 
@@ -370,7 +370,7 @@ Annotate the dormant branch in `_column_key_for_index`:
             return "standard"
 ```
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 ```bash
 uv run pytest tests/test_tui/test_command_grid.py -q
@@ -378,7 +378,7 @@ uv run pytest tests/test_tui/test_command_grid.py -q
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/agent_toolkit_tui/widgets/command_grid.py tests/test_tui/test_command_grid.py
@@ -387,7 +387,7 @@ git commit -m "fix(tui): command headers use display labels, not catalog keys"
 
 ## Task 5: Regression sweep and visual check
 
-- [ ] **Step 1: Full suite**
+- [x] **Step 1: Full suite**
 
 ```bash
 uv run pytest -q
@@ -395,7 +395,7 @@ uv run pytest -q
 
 Expected: PASS.
 
-- [ ] **Step 2: Scan for surviving copies of the rule**
+- [x] **Step 2: Scan for surviving copies of the rule**
 
 ```bash
 rg -n "standard_label\(" src/agent_toolkit_tui
@@ -411,7 +411,7 @@ rg -n 'harness == "standard"' src/agent_toolkit_tui
 Expected: only info-panel/context branches and the annotated dormant Commands
 branch — no header-building branches.
 
-- [ ] **Step 3: Manual visual check**
+- [x] **Step 3: Manual visual check**
 
 ```bash
 uv run agent-toolkit-tui
@@ -431,7 +431,7 @@ Capture a screenshot per asset type into `assets/verification/issue-478/` and
 write a one-line visual verdict in the PR body, per
 `~/.conventions/conventions/testing.md`.
 
-- [ ] **Step 4: Final commit if the sweep changed anything**
+- [x] **Step 4: Final commit if the sweep changed anything**
 
 ```bash
 git add src/agent_toolkit_tui tests/test_tui
