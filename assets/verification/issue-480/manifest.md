@@ -22,4 +22,8 @@
 - PNG evidence: palette, settings, theme, Pi-removal, empty-selection, malformed/unknown-settings, and contact-sheet PNGs in this directory.
 - Unknown-key retention: `ghost-settings-after-theme-save.json`.
 
+## PR #487 data-steward follow-up
+
+`pr-487-data-steward-follow-up.md` records the compatibility remediation at `4ccc573dab60e1169bb6a13220ce105a9e3a71cb`: focused regressions, the complete TUI suite, and the full gate all passed.
+
 **Overall verdict: PASS.**
