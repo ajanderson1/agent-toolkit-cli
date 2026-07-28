@@ -1,7 +1,8 @@
 # Verification manifest — issue #480
 
-- **Code under test:** `2ad1bfa71ea1d58cdeea60fcc14bf294c1b73bd0`
-- **Baseline full suite:** `fe67861` — `2142 passed, 2 skipped`; `full-suite.txt`.
+- **Source code under test:** `2ad1bfa71ea1d58cdeea60fcc14bf294c1b73bd0`
+- **Final verification head:** `93fd8e140fbb4876a8963f2026deaf045d6466ad` (no source-code change after the source commit).
+- **Final full suite:** `uv run --frozen --no-sync pytest -q` — `2143 passed, 2 skipped`; `full-suite-final.txt`.
 - **Required rung:** no project `TESTING.md` or issue gate declares one. Evidence is local Textual in-process verification (R1) plus manual visual judgment.
 
 | Check | Command / evidence | Exit | Result |
