@@ -29,7 +29,8 @@ first and then materialise it. `mcp migrate` is the only backfill writer, while
 - `mcp doctor` never writes. `install`, `uninstall`, and `remove` never write
   the manifest. `mcp remove` remains projection-only.
 - Manifest data and diagnostics must never include literal secrets. Use only
-  field paths and the literal word `redacted` in output.
+  field paths and the literal word `redacted` in output. Quarantine every legacy
+  config `env` map because v1 cannot losslessly recreate its values.
 - No new runtime dependency, no `mcps-lock.json` schema change, no import/export,
   no bundle work, and no standard-harness change.
 - Use explicit pathspec-limited commits only. Each authored commit includes
@@ -141,7 +142,9 @@ Then validate every required key and type, require the entry slug to equal its
 map key, reject unknown entry keys, call `assert_safe_entry`, and return a
 `dict[str, McpManifestEntry]`. A missing file returns `{}` only at this low-level
 reader; callers distinguish an absent file from an empty manifest with
-`path.is_file()`.
+`path.is_file()`. `entry_from_materialisation` must reject a legacy inner
+`env` map before conversion, because retaining names while silently dropping its
+values would violate the lossless-migration contract.
 
 `write_manifest` must sort slugs, emit every record field (including nulls and
 empty lists), and call `atomic_write_text(path, json.dumps(body, indent=2) + "\n")`.
@@ -154,15 +157,28 @@ def test_url_entry_materialises_from_source_only():
     entry = McpManifestEntry("remote", "url", "http", "https://host/sse", None, (), (), None, None)
     assert entry_to_inner_config(entry) == {"type": "http", "url": "https://host/sse"}
 
-@pytest.mark.parametrize("entry", [
-    McpManifestEntry("bad-url", "url", "http", "https://u:pw@host/sse", None, (), (), None, None),
-    McpManifestEntry("bad-arg", "local", "stdio", "/srv/mcp", "python", ("server.py", "--token=real-secret"), (), None, None),
-])
-def test_unsafe_entry_error_redacts_literal(entry):
+@pytest.mark.parametrize(
+    ("entry", "literal"),
+    [
+        (McpManifestEntry("bad-url", "url", "http", "https://u:pw@host/sse", None, (), (), None, None), "pw"),
+        (McpManifestEntry("bad-arg", "local", "stdio", "/srv/mcp", "python", ("server.py", "--token=real-secret"), (), None, None), "real-secret"),
+    ],
+)
+def test_unsafe_entry_error_redacts_literal(entry, literal):
     with pytest.raises(UnsafeMcpSpecError) as raised:
         assert_safe_entry(entry)
-    assert "real-secret" not in str(raised.value)
+    assert literal not in str(raised.value)
     assert "redacted" in str(raised.value)
+
+@pytest.mark.parametrize("entry", [
+    McpManifestEntry("uv", "uvx", "stdio", "uv-server", "uvx", ("uv-server==1.0.0",), (), None, "1.0.0"),
+    McpManifestEntry("docker", "docker", "stdio", "ghcr.io/org/server:latest", "docker", ("run", "--rm", "-i", "ghcr.io/org/server:latest"), (), None, "latest"),
+    McpManifestEntry("local", "local", "stdio", "/srv/server", "python", ("server.py",), ("API_TOKEN",), None, "abc123"),
+])
+def test_method_records_materialise_without_losing_authoring_fields(entry):
+    inner = entry_to_inner_config(entry)
+    metadata = entry_to_metadata(entry)
+    assert entry_from_materialisation(McpAsset(entry.slug, inner, metadata)) == entry
 ```
 
 Implement a field-aware high-confidence detector: URL userinfo and
@@ -380,12 +396,13 @@ def _seed_credentialed_url_entry(home: Path, *, slug: str) -> None:
 
 ```python
 def test_mcp_migrate_adopts_legacy_library(tmp_path, monkeypatch):
-    _seed(tmp_path, slug="context7")
+    _seed(tmp_path, slug="context7", env=["API_TOKEN"])
     monkeypatch.setenv("HOME", str(tmp_path))
     result = CliRunner().invoke(main, ["mcp", "migrate"])
     assert result.exit_code == 0, result.output
     manifest = json.loads((tmp_path / ".agent-toolkit" / "mcps-library.json").read_text())
     assert manifest["mcps"]["context7"]["source"] == "ctx7"
+    assert manifest["mcps"]["context7"]["env"] == ["API_TOKEN"]
     assert "adopted context7" in result.output
 
 def test_mcp_migrate_is_idempotent_and_preserves_existing_manifest_record(tmp_path, monkeypatch):
@@ -425,10 +442,13 @@ Define a Click `migrate` command with no `-g`/`-p` flags. It:
 2. Reads existing manifest when the file exists; otherwise starts with `{}`.
 3. Iterates `scan_entry_files(library)` in slug order.
 4. Skips existing manifest slugs without reading or overwriting their pair.
-5. For absent slugs, accepts only a complete pair, `load_mcp_asset` success,
-   lossless `entry_from_materialisation` success, and `assert_safe_entry` success.
+5. For absent slugs, accepts only a complete pair, raw-materialisation safety
+   inspection success, `load_mcp_asset` success, lossless
+   `entry_from_materialisation` success, and `assert_safe_entry` success. A
+   legacy inner `env` map fails the lossless conversion and reports no values.
 6. Accumulates all successful records, then makes exactly one `write_manifest`
-   call if the merged mapping differs from the original.
+   call whenever the manifest path is absent or the merged mapping differs from
+   the original.
 7. Prints `adopted ` followed by each actual adopted slug, `skipped ` followed
    by each rejected slug and a redacted reason, then `summary: N adopted, M skipped`.
 
@@ -437,14 +457,49 @@ Register the command after `add_cmd` in `commands/mcp/__init__.py`.
 - [ ] **Step 4: Add edge-case tests**
 
 ```python
-def test_mcp_migrate_skips_half_pair_and_doctor_can_later_diagnose(tmp_path, monkeypatch):
+def test_mcp_migrate_creates_empty_manifest_when_only_half_pair_exists(tmp_path, monkeypatch):
     library = tmp_path / ".agent-toolkit" / "mcps"
     (library / "half").mkdir(parents=True)
     (library / "half" / "config.json").write_text('{"type":"stdio","command":"npx"}\n')
     monkeypatch.setenv("HOME", str(tmp_path))
     result = CliRunner().invoke(main, ["mcp", "migrate"])
-    assert result.exit_code == 0
-    assert "half" not in _read_manifest(tmp_path)
+    assert result.exit_code == 0, result.output
+    assert _read_manifest(tmp_path) == {}
+    assert "half" in result.output
+
+def test_mcp_migrate_adopts_uvx_docker_and_url_entries(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    library = tmp_path / ".agent-toolkit" / "mcps"
+    fixtures = {
+        "uv": ('{"type":"stdio","command":"uvx","args":["uv-server==1.0.0"]}\n', "name: uv\ninstall_method: uvx\ntransport: stdio\nresolved_version: 1.0.0\n"),
+        "docker": ('{"type":"stdio","command":"docker","args":["run","--rm","-i","ghcr.io/org/server:latest"]}\n', "name: docker\ninstall_method: docker\ntransport: stdio\nresolved_version: latest\n"),
+        "remote": ('{"type":"http","url":"https://host/sse"}\n', "name: remote\ninstall_method: url\ntransport: http\n"),
+    }
+    for slug, (config, sidecar) in fixtures.items():
+        (library / slug).mkdir(parents=True)
+        (library / slug / "config.json").write_text(config)
+        (library / f"{slug}.toolkit.yaml").write_text(sidecar)
+    result = CliRunner().invoke(main, ["mcp", "migrate"])
+    manifest = _read_manifest(tmp_path)
+    assert result.exit_code == 0, result.output
+    assert manifest["uv"]["source"] == "uv-server"
+    assert manifest["docker"]["source"] == "ghcr.io/org/server:latest"
+    assert manifest["remote"]["source"] == "https://host/sse"
+
+def test_mcp_migrate_quarantines_config_env_without_echoing_value(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    library = tmp_path / ".agent-toolkit" / "mcps"
+    (library / "legacy-env").mkdir(parents=True)
+    (library / "legacy-env" / "config.json").write_text(
+        '{"type":"stdio","command":"npx","args":["-y","ctx7@9.9.9"],"env":{"API_TOKEN":"credential-value"}}\n'
+    )
+    (library / "legacy-env.toolkit.yaml").write_text(
+        "name: legacy-env\ninstall_method: npx\ntransport: stdio\nresolved_version: 9.9.9\n"
+    )
+    result = CliRunner().invoke(main, ["mcp", "migrate"])
+    assert result.exit_code == 0, result.output
+    assert "legacy-env" not in _read_manifest(tmp_path)
+    assert "credential-value" not in result.output
 
 def test_mcp_migrate_adopts_local_entry_with_source_dir(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
@@ -506,8 +561,15 @@ def test_mcp_add_writes_manifest_before_materialisation(tmp_path, monkeypatch):
     assert manifest["pkg"]["source"] == "pkg"
     assert manifest["pkg"]["env"] == ["API_TOKEN"]
 
-def test_mcp_add_refuses_to_implicitly_backfill_nonempty_library(tmp_path, monkeypatch):
-    _seed(tmp_path, slug="legacy")
+@pytest.mark.parametrize("legacy_shape", ["config", "sidecar"])
+def test_mcp_add_refuses_to_implicitly_backfill_any_legacy_shape(tmp_path, monkeypatch, legacy_shape):
+    library = tmp_path / ".agent-toolkit" / "mcps"
+    if legacy_shape == "config":
+        (library / "legacy").mkdir(parents=True)
+        (library / "legacy" / "config.json").write_text('{"type":"stdio","command":"npx"}\n')
+    else:
+        library.mkdir(parents=True)
+        (library / "legacy.toolkit.yaml").write_text("name: legacy\n")
     monkeypatch.setenv("HOME", str(tmp_path))
     result = CliRunner().invoke(main, ["mcp", "add", "--url", "https://new/sse"])
     assert result.exit_code != 0
@@ -527,7 +589,8 @@ requiring migration.
 Keep current Click validation, slug derivation, version resolution, and output.
 Immediately after determining all values, build one `McpManifestEntry` using:
 
-- raw source flag as `source` (resolved absolute path for `--local`),
+- normalized source token as `source`: versionless package for npx/uvx,
+  effective-tag image for docker, direct URL, or resolved absolute local path,
 - actual generated stdio command/args or URL null-command shape,
 - `tuple(env_vars)`, `description`, and resolved version.
 
@@ -536,7 +599,7 @@ Call `assert_safe_entry` before any write. Then:
 ```python
 path = manifest_path(Path.home())
 library = library_root(Path.home())
-if not path.is_file() and list_library(library):
+if not path.is_file() and scan_entry_files(library):
     raise click.ClickException("MCP library manifest is missing; run: agent-toolkit-cli mcp migrate")
 manifest = read_manifest(path)
 if final_slug in manifest or (library / final_slug / "config.json").exists():
@@ -641,7 +704,12 @@ def _library_asset(slug: str, *, library_root: Path, home: Path) -> McpAsset:
     path = manifest_path(home)
     if not path.is_file():
         return load_mcp_asset(library_root, slug)  # legacy compatibility only
-    entry = read_manifest(path)[slug]
+    entries = read_manifest(path)
+    if slug not in entries:
+        raise FileNotFoundError(
+            f"MCP '{slug}' is not in the library manifest; run: agent-toolkit-cli mcp doctor -g"
+        )
+    entry = entries[slug]
     return McpAsset(slug=slug, inner_config=entry_to_inner_config(entry), metadata=entry_to_metadata(entry))
 ```
 
@@ -649,22 +717,26 @@ Use it only as the library source for `apply`; do not write or repair either
 manifest or materialisation. Convert an absent manifest slug into the existing
 Click-facing not-found error style.
 
-In `list_cmd.py`, list manifest slugs when it exists and use their metadata for
-version/env display. Before migration, retain `list_library` behavior and print
-a concise `mcp migrate` advisory once; do not write.
+In `list_cmd.py`, list manifest slugs when it exists and derive version/env
+columns directly from each manifest record, never by reloading a physical pair.
+Before migration, retain `list_library` behavior and print a concise `mcp migrate`
+advisory once; do not write.
 
 - [ ] **Step 4: Add regression tests**
 
 ```python
-def test_mcp_update_manifest_first_then_doctor_sees_interrupted_pair(tmp_path, monkeypatch):
+def test_mcp_update_manifest_first_then_doctor_reports_drift(tmp_path, monkeypatch):
     _migrate_seeded_library(tmp_path, monkeypatch)
     monkeypatch.setattr(
         "agent_toolkit_cli.commands.mcp._resolve.resolve_npm_version", lambda _: "10.0.0"
     )
     _fail_sidecar_write(monkeypatch)
     result = CliRunner().invoke(main, ["mcp", "update", "context7"])
+    doctor = CliRunner().invoke(main, ["mcp", "doctor", "-g"])
     assert result.exit_code != 0
     assert _read_manifest(tmp_path)["context7"]["resolved_version"] == "10.0.0"
+    assert doctor.exit_code == 1
+    assert "library-entry-drift" in doctor.output
 
 def test_mcp_remove_preserves_manifest_and_library_entry(tmp_path, monkeypatch):
     _migrate_seeded_library(tmp_path, monkeypatch)

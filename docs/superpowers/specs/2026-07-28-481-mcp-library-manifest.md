@@ -58,12 +58,13 @@ arrays when absent. `slug` must equal its map key. Only v1 and its declared
 fields are accepted; malformed, unsupported-version, duplicate, or unsafe
 records fail loud without printing sensitive values.
 
-`source` preserves the authoring token accepted by `mcp add`:
+`source` is the normalized authoring token used for future updates. It preserves
+source behavior rather than a user's original syntactic spelling:
 
 | Method | `source` | Materialised config / sidecar |
 |---|---|---|
-| `npx`, `uvx` | package token | stdio `command` + `args` from the record |
-| `docker` | image token supplied to `--docker` | stdio `command` + normalized image argument |
+| `npx`, `uvx` | versionless package token | stdio `command` + `args` from the record |
+| `docker` | image including its effective tag | stdio `command` + normalized image argument |
 | `url` | URL supplied to `--url` | `{ "type": "http", "url": source }`; `command: null`, `args: []` |
 | `local` | resolved absolute directory | stdio `command` + `args`; sidecar `source_dir: source` |
 
@@ -88,9 +89,10 @@ therefore leaves one authoritative record and either no pair, a half pair, or a
 drifted pair; `mcp doctor` reports the resulting state. This is preferable to
 silently losing the intended library record.
 
-For a fresh empty library, `mcp add` writes its one-entry manifest first. If a
-non-empty legacy library has no manifest, `mcp add` and `mcp update` fail with
-the explicit migration command rather than creating an incomplete inventory.
+For a fresh empty library, `mcp add` writes its one-entry manifest first. If any
+legacy physical entry exists (config-only, sidecar-only, or complete) and there
+is no manifest, `mcp add` and `mcp update` fail with the explicit migration
+command rather than creating an incomplete inventory.
 
 Once a manifest exists, `mcp list`, `mcp update`, and projection reads use its
 records as the source. A manually changed materialisation cannot change the
@@ -107,14 +109,17 @@ record only when the historical fields are losslessly knowable, and atomically
 merges those records into the manifest.
 
 - It never edits, moves, deletes, or repairs library files.
-- With no manifest, it creates one containing every valid, safe pair it can
-  reconstruct.
+- With no manifest, it always creates an envelope, including an empty one when
+  every candidate is skipped; otherwise it contains every valid, safe pair it
+  can reconstruct.
 - With a manifest, it preserves every manifest record unchanged and adopts only
   valid materialisations whose slug is absent. This resumes a prior partial
   migration without treating disk as a peer authority.
-- Config-only, sidecar-only, malformed, unknown-shape, or unsafe entries are
-  logically quarantined: left untouched and omitted. Output reports adopted and
-  skipped slugs/counts without source values.
+- Config-only, sidecar-only, malformed, unknown-shape, unsafe, or non-lossless
+  entries are logically quarantined: left untouched and omitted. A legacy
+  `config.json` containing an `env` map is non-lossless because v1 stores only
+  declared names, not its values, so it is quarantined even when no value looks
+  secret. Output reports adopted and skipped slugs/counts without source values.
 - A re-run after convergence writes no changed state and reports zero adoptions.
 
 ## Doctor reconciliation
@@ -132,8 +137,9 @@ Use one highest-signal finding per slug, in this precedence order:
 
 1. `library-entry-half-written` — exactly one of config/sidecar exists.
 2. `library-entry-missing` — a manifest record has neither materialisation file.
-3. `library-entry-orphan` — a complete, safe physical pair has no manifest
-   record (including a skipped migration candidate).
+3. `library-entry-orphan` — a complete physical pair has no manifest record,
+   including a skipped unsafe or non-lossless migration candidate; unsafe details
+   name only the field path and say `value redacted`.
 4. `library-entry-drift` — a complete pair and manifest record exist but their
    reconstructed authoring records differ.
 
@@ -149,7 +155,9 @@ materialisations before persistence, migration, or diagnostics. It treats as
 unsafe: URL userinfo or sensitive query parameters; non-reference values for
 secret-named environment variables; secret-named CLI assignments/options or
 Bearer credentials; and high-confidence provider-token prefixes. `$NAME` and
-`${NAME}` references are safe references, not literals.
+`${NAME}` references are safe references, not literals. Independently, migration
+quarantines every legacy config `env` map because no v1 record can losslessly
+recreate its values.
 
 - `mcp add` rejects an unsafe requested authoring spec before writing any file.
 - `mcp migrate` quarantines unsafe historical entries as described above.
@@ -162,11 +170,12 @@ Bearer credentials; and high-confidence provider-token prefixes. `$NAME` and
 ## Test and documentation requirements
 
 Tests must cover strict manifest serialization/read failure; fresh add;
-explicit migration of all source methods including `--local`; no implicit
-migration; idempotent and partial-manifest migration; config-only and
-sidecar-only migration inputs; manifest-first failure between pair writes;
-each doctor library finding; manifest-over-materialisation authority; safe
-redaction; and unchanged projection-only `mcp remove` behavior.
+explicit migration of npx, uvx, docker, URL, and `--local` entries; empty,
+idempotent, and partial-manifest migration; no implicit migration when either
+physical side of a legacy entry exists; config-only, sidecar-only, and config
+`env` migration inputs; manifest-first failure between pair writes; each doctor
+library finding; manifest-over-materialisation authority; safe redaction; and
+unchanged projection-only `mcp remove` behavior.
 
 Update the CLI reference and MCP asset-type page with the manifest path,
 authority boundary, explicit migration command, doctor remediation, and the
