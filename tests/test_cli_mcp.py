@@ -148,6 +148,15 @@ def _setup_manifest_entry_with_config_only(home: Path) -> None:
     _write_manifest(home, {"half": _manifest_entry("half")})
 
 
+def _setup_manifest_entry_with_sidecar_only(home: Path) -> None:
+    library = home / ".agent-toolkit" / "mcps"
+    library.mkdir(parents=True)
+    (library / "half.toolkit.yaml").write_text(
+        "name: half\ninstall_method: npx\ntransport: stdio\n"
+    )
+    _write_manifest(home, {"half": _manifest_entry("half")})
+
+
 def _setup_manifest_entry_with_tampered_pair(home: Path) -> None:
     _seed(home)
     _write_manifest(home, {"context7": _manifest_entry("context7")})
@@ -609,9 +618,125 @@ def test_mcp_add_npx_resolution_pins(tmp_path, monkeypatch):
     assert cfg["args"] == ["-y", "some-pkg@1.2.3"]
 
 
+@pytest.mark.parametrize(
+    ("setup", "finding"),
+    [
+        (_setup_complete_pair_without_manifest, "library-entry-orphan"),
+        (_setup_manifest_entry_without_pair, "library-entry-missing"),
+        (_setup_manifest_entry_with_config_only, "library-entry-half-written"),
+        (_setup_manifest_entry_with_sidecar_only, "library-entry-half-written"),
+        (_setup_manifest_entry_with_tampered_pair, "library-entry-drift"),
+    ],
+)
+def test_mcp_doctor_reports_library_findings_read_only(
+    tmp_path, monkeypatch, setup, finding
+):
+    setup(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    before = _snapshot_library(tmp_path)
+
+    result = CliRunner().invoke(main, ["mcp", "doctor", "-g"])
+
+    assert result.exit_code == 1
+    assert finding in result.output
+    assert _snapshot_library(tmp_path) == before
+
+
+def test_mcp_doctor_half_written_precedes_missing(tmp_path, monkeypatch):
+    _setup_manifest_entry_with_config_only(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    result = CliRunner().invoke(main, ["mcp", "doctor", "-g"])
+
+    assert result.output.count("library-entry-half-written") == 1
+    assert "library-entry-missing" not in result.output
+
+
+def test_mcp_doctor_missing_manifest_prints_exact_migration_remediation(
+    tmp_path, monkeypatch
+):
+    _seed(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    result = CliRunner().invoke(main, ["mcp", "doctor", "-g"])
+
+    assert result.exit_code == 1
+    assert "remediation: agent-toolkit-cli mcp migrate" in result.output
+    assert not _manifest_file(tmp_path).exists()
+
+
+def test_mcp_doctor_empty_missing_manifest_still_requests_migration(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    result = CliRunner().invoke(main, ["mcp", "doctor", "-g"])
+
+    assert result.exit_code == 1
+    assert "remediation: agent-toolkit-cli mcp migrate" in result.output
+    assert "all clean" not in result.output
+
+
+def test_mcp_doctor_redacts_secret_in_orphaned_legacy_entry(
+    tmp_path, monkeypatch
+):
+    _seed_credentialed_url_entry(tmp_path, slug="unsafe")
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    result = CliRunner().invoke(main, ["mcp", "doctor", "-g"])
+
+    assert result.exit_code == 1
+    assert "unsafe literal" in result.output
+    assert "value redacted" in result.output
+    assert "credential-value" not in result.output
+
+
+def test_mcp_doctor_reports_quarantined_entry_as_redacted_orphan(
+    tmp_path, monkeypatch
+):
+    _seed_credentialed_url_entry(tmp_path, slug="unsafe")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    migrated = CliRunner().invoke(main, ["mcp", "migrate"])
+
+    result = CliRunner().invoke(main, ["mcp", "doctor", "-g"])
+
+    assert migrated.exit_code == 0, migrated.output
+    assert result.exit_code == 1
+    assert "library-entry-orphan" in result.output
+    assert "unsafe literal" in result.output
+    assert "credential-value" not in result.output
+    assert "remediation: agent-toolkit-cli mcp migrate" not in result.output
+
+
+def test_mcp_doctor_clean_manifest_and_pair_is_clean(tmp_path, monkeypatch):
+    _migrate_seeded_library(tmp_path, monkeypatch)
+
+    result = CliRunner().invoke(main, ["mcp", "doctor", "-g"])
+
+    assert result.exit_code == 0, result.output
+    assert "all clean" in result.output
+
+
+def test_mcp_doctor_reports_interrupted_update_as_drift(tmp_path, monkeypatch):
+    _migrate_seeded_library(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        "agent_toolkit_cli.commands.mcp._resolve.resolve_npm_version",
+        lambda _: "10.0.0",
+    )
+    _fail_sidecar_write(monkeypatch)
+    updated = CliRunner().invoke(main, ["mcp", "update", "context7"])
+
+    result = CliRunner().invoke(main, ["mcp", "doctor", "-g"])
+
+    assert updated.exit_code != 0
+    assert result.exit_code == 1
+    assert "library-entry-drift" in result.output
+
+
 def test_mcp_doctor_env_name_only_no_value_leak(tmp_path, monkeypatch):
     """doctor warns with the env var NAME; a seeded VALUE must never appear."""
     _seed(tmp_path, slug="hasenv", env=["DATABASE_URL"])
+    _migrate_existing_library(tmp_path, monkeypatch)
     project = tmp_path / "proj"
     project.mkdir()
     monkeypatch.setenv("HOME", str(tmp_path))
@@ -627,6 +752,7 @@ def test_mcp_doctor_env_name_only_no_value_leak(tmp_path, monkeypatch):
 def test_mcp_doctor_env_value_never_leaks(tmp_path, monkeypatch):
     """If the var IS set, doctor must not warn AND must never print its value."""
     _seed(tmp_path, slug="hasenv2", env=["SECRET_TOKEN"])
+    _migrate_existing_library(tmp_path, monkeypatch)
     project = tmp_path / "proj"
     project.mkdir()
     monkeypatch.setenv("HOME", str(tmp_path))
@@ -639,6 +765,7 @@ def test_mcp_doctor_env_value_never_leaks(tmp_path, monkeypatch):
 
 def test_mcp_doctor_clean(tmp_path, monkeypatch):
     _seed(tmp_path)
+    _migrate_existing_library(tmp_path, monkeypatch)
     project = tmp_path / "proj"
     project.mkdir()
     monkeypatch.setenv("HOME", str(tmp_path))
@@ -652,6 +779,7 @@ def test_mcp_doctor_clean(tmp_path, monkeypatch):
 def test_mcp_doctor_missing_projection(tmp_path, monkeypatch):
     """A lock entry with no live config projection is reported `missing` (exit 1)."""
     _seed(tmp_path)
+    _migrate_existing_library(tmp_path, monkeypatch)
     project = tmp_path / "proj"
     project.mkdir()
     monkeypatch.setenv("HOME", str(tmp_path))
@@ -1361,6 +1489,7 @@ def test_mcp_status_standard_row_annotated(tmp_path, monkeypatch):
 def test_mcp_doctor_flags_legacy_standard_dedup(tmp_path, monkeypatch):
     """A project lock with claude-code + pi rows is flagged for collapse. Read-only."""
     _seed(tmp_path)
+    _migrate_existing_library(tmp_path, monkeypatch)
     project = tmp_path / "proj"
     project.mkdir()
     monkeypatch.setenv("HOME", str(tmp_path))
@@ -1386,6 +1515,7 @@ def test_mcp_doctor_flags_partially_collapsed_standard_plus_pi(tmp_path, monkeyp
     """The orphan-row shape {standard, pi} also fires the finding (so an orphan
     pi row left by a non-normalized uninstall is surfaced, not hidden)."""
     _seed(tmp_path)
+    _migrate_existing_library(tmp_path, monkeypatch)
     project = tmp_path / "proj"
     project.mkdir()
     monkeypatch.setenv("HOME", str(tmp_path))
@@ -1406,6 +1536,7 @@ def test_mcp_doctor_flags_partially_collapsed_standard_plus_pi(tmp_path, monkeyp
 def test_mcp_doctor_clean_on_standard_install(tmp_path, monkeypatch):
     """A clean standard install passes doctor — no missing/drifted on the standard row."""
     _seed(tmp_path)
+    _migrate_existing_library(tmp_path, monkeypatch)
     project = tmp_path / "proj"
     project.mkdir()
     monkeypatch.setenv("HOME", str(tmp_path))
