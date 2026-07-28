@@ -20,6 +20,8 @@ These docs are the reference and the per-asset-type mental models.
 ## Reference
 
 - [CLI reference](agent-toolkit/cli.md) — every command group and verb.
+- [TUI reference](agent-toolkit/tui.md) — layout, controls, and settings workflow.
+- [TUI settings schema](agent-toolkit/tui-settings.md) — persisted theme and column preferences.
 - [Compatibility matrix](matrix.md) — which harness supports which asset type.
 - [Bundles](agent-toolkit/bundles.md) — install several assets together.
 - [Skill lock management](agent-toolkit/skill-lock.md) — skill lock-file format.
