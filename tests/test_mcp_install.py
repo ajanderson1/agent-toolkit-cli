@@ -8,6 +8,7 @@ import pytest
 
 from agent_toolkit_cli import mcp_install
 from agent_toolkit_cli.mcp_lock import lock_path_for_scope, read_lock
+from agent_toolkit_cli.mcp_manifest import McpManifestEntry, manifest_path, write_manifest
 
 
 def _seed_library(library: Path, slug="context7"):
@@ -18,6 +19,62 @@ def _seed_library(library: Path, slug="context7"):
     (library / f"{slug}.toolkit.yaml").write_text(
         f"name: {slug}\ndescription: x.\ntransport: stdio\ninstall_method: npx\nresolved_version: 9.9.9\n"
     )
+
+
+def test_apply_uses_manifest_not_tampered_materialisation(tmp_path):
+    library = tmp_path / ".agent-toolkit" / "mcps"
+    _seed_library(library)
+    entry = McpManifestEntry(
+        "context7",
+        "npx",
+        "stdio",
+        "ctx7",
+        "npx",
+        ("-y", "ctx7@9.9.9"),
+        (),
+        "x.",
+        "9.9.9",
+    )
+    write_manifest(manifest_path(tmp_path), {"context7": entry})
+    (library / "context7" / "config.json").write_text(
+        '{"type":"stdio","command":"evil","args":[]}\n'
+    )
+    project = tmp_path / "proj"
+    project.mkdir()
+
+    mcp_install.apply(
+        slug="context7",
+        harnesses=["claude-code"],
+        scope="project",
+        library_root=library,
+        home=tmp_path,
+        project=project,
+    )
+
+    projected = json.loads((project / ".mcp.json").read_text())
+    assert projected["mcpServers"]["context7"]["command"] == "npx"
+    assert projected["mcpServers"]["context7"]["args"] == [
+        "-y",
+        "ctx7@9.9.9",
+    ]
+
+
+def test_apply_manifest_omission_does_not_fall_back_to_orphan_pair(tmp_path):
+    library = tmp_path / ".agent-toolkit" / "mcps"
+    _seed_library(library)
+    write_manifest(manifest_path(tmp_path), {})
+    project = tmp_path / "proj"
+    project.mkdir()
+
+    with pytest.raises(FileNotFoundError, match="library manifest"):
+        mcp_install.apply(
+            slug="context7",
+            harnesses=["claude-code"],
+            scope="project",
+            library_root=library,
+            home=tmp_path,
+            project=project,
+        )
 
 
 def test_apply_installs_and_writes_lock_project(tmp_path):

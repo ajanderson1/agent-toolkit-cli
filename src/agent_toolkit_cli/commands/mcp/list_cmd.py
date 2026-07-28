@@ -20,8 +20,14 @@ from agent_toolkit_cli.commands.mcp._common import (
     scope_banner,
 )
 from agent_toolkit_cli.mcp_adapters import get_adapter
-from agent_toolkit_cli.mcp_library import library_root, list_library, load_mcp_asset
+from agent_toolkit_cli.mcp_library import (
+    library_root,
+    list_library,
+    load_mcp_asset,
+    scan_entry_files,
+)
 from agent_toolkit_cli.mcp_lock import lock_path_for_scope, read_lock
+from agent_toolkit_cli.mcp_manifest import manifest_path, read_manifest
 from agent_toolkit_cli.mcp_standard import STANDARD_MCP_READERS, mcp_standard_covered
 
 
@@ -90,19 +96,39 @@ def list_cmd(
     lock = read_lock(lock_path)
     scope_banner(scope, implicit=implicit, lock_path=lock_path, count=len(lock))
 
-    slugs = list_library(library)
+    path = manifest_path(Path.home())
+    manifest_entries = None
+    if path.is_file():
+        try:
+            manifest_entries = read_manifest(path)
+        except (OSError, ValueError) as exc:
+            raise click.ClickException(str(exc)) from exc
+        slugs = sorted(manifest_entries)
+    else:
+        slugs = list_library(library)
+        if scan_entry_files(library):
+            click.echo(
+                "note: adopt this legacy library with "
+                "agent-toolkit-cli mcp migrate",
+                err=True,
+            )
+
     if not slugs and not lock:
         click.echo("no MCP servers in the library")
         # Still fall through to the unmanaged scan below — a user may have
         # hand-rolled entries with an empty library.
 
     for slug in slugs:
-        try:
-            asset = load_mcp_asset(library, slug)
-        except (FileNotFoundError, ValueError):
-            click.echo(f"{slug}\t(library entry unreadable)")
-            continue
-        version = asset.resolved_version or "floating"
+        if manifest_entries is not None:
+            library_version = manifest_entries[slug].resolved_version
+        else:
+            try:
+                asset = load_mcp_asset(library, slug)
+            except (FileNotFoundError, ValueError):
+                click.echo(f"{slug}\t(library entry unreadable)")
+                continue
+            library_version = asset.resolved_version
+        version = library_version or "floating"
         click.echo(f"{slug}\t{version}")
         locked = {e.harness: e for e in lock.get(slug, [])}
         for harness in _HARNESSES:
@@ -115,14 +141,17 @@ def list_cmd(
                 installed = False
             mark = "✔" if installed else "☐"
             note = ""
-            entry = locked.get(harness)
+            lock_entry = locked.get(harness)
             if (
-                entry is not None
-                and entry.pin is not None
-                and asset.resolved_version is not None
-                and entry.pin != asset.resolved_version
+                lock_entry is not None
+                and lock_entry.pin is not None
+                and library_version is not None
+                and lock_entry.pin != library_version
             ):
-                note = f"  {entry.pin} (library: {asset.resolved_version} — stale)"
+                note = (
+                    f"  {lock_entry.pin} "
+                    f"(library: {library_version} — stale)"
+                )
             click.echo(f"  {mark} {harness}{note}")
         if "standard" in locked and scope in STANDARD_MCP_READERS:
             covered = ", ".join(sorted(mcp_standard_covered(scope)))

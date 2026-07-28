@@ -98,11 +98,15 @@ def _write_manifest(home: Path, entries: dict[str, dict]) -> None:
     path.write_text(json.dumps({"version": 1, "mcps": entries}, indent=2) + "\n")
 
 
-def _migrate_seeded_library(home: Path, monkeypatch) -> None:
-    _seed(home)
+def _migrate_existing_library(home: Path, monkeypatch) -> None:
     monkeypatch.setenv("HOME", str(home))
     result = CliRunner().invoke(main, ["mcp", "migrate"])
     assert result.exit_code == 0, result.output
+
+
+def _migrate_seeded_library(home: Path, monkeypatch) -> None:
+    _seed(home)
+    _migrate_existing_library(home, monkeypatch)
 
 
 def _snapshot_library(home: Path) -> dict[str, bytes]:
@@ -789,9 +793,77 @@ def test_mcp_remove_global_claude_running_guard(tmp_path, monkeypatch):
     assert "context7" not in json.loads((tmp_path / ".claude.json").read_text())["mcpServers"]
 
 
+def test_mcp_update_requires_explicit_migration_for_legacy_library(
+    tmp_path, monkeypatch
+):
+    _seed(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    result = CliRunner().invoke(main, ["mcp", "update", "context7"])
+
+    assert result.exit_code != 0
+    assert "agent-toolkit-cli mcp migrate" in result.output
+    assert not _manifest_file(tmp_path).exists()
+
+
+def test_mcp_list_uses_manifest_not_tampered_materialisation(tmp_path, monkeypatch):
+    _migrate_seeded_library(tmp_path, monkeypatch)
+    config = tmp_path / ".agent-toolkit" / "mcps" / "context7" / "config.json"
+    config.write_text('{"type":"stdio","command":"evil","args":[]}\n')
+    sidecar = tmp_path / ".agent-toolkit" / "mcps" / "context7.toolkit.yaml"
+    sidecar.write_text(
+        "name: context7\ninstall_method: npx\ntransport: stdio\n"
+        "resolved_version: 666.0.0\n"
+    )
+
+    result = CliRunner().invoke(main, ["mcp", "list", "-g"])
+
+    assert result.exit_code == 0, result.output
+    assert "9.9.9" in result.output
+    assert "666.0.0" not in result.output
+    assert "library entry unreadable" not in result.output
+
+
+def test_mcp_update_keeps_new_manifest_if_sidecar_write_fails(
+    tmp_path, monkeypatch
+):
+    _migrate_seeded_library(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        "agent_toolkit_cli.commands.mcp._resolve.resolve_npm_version",
+        lambda _: "10.0.0",
+    )
+    _fail_sidecar_write(monkeypatch)
+
+    result = CliRunner().invoke(main, ["mcp", "update", "context7"])
+
+    assert result.exit_code != 0
+    assert _read_manifest(tmp_path)["context7"]["resolved_version"] == "10.0.0"
+
+
+def test_mcp_remove_preserves_manifest_and_library_entry(tmp_path, monkeypatch):
+    _migrate_seeded_library(tmp_path, monkeypatch)
+    project = tmp_path / "proj"
+    project.mkdir()
+    monkeypatch.chdir(project)
+    installed = CliRunner().invoke(
+        main,
+        ["mcp", "install", "context7", "--harness", "claude-code", "-p"],
+    )
+
+    removed = CliRunner().invoke(main, ["mcp", "remove", "context7", "-p"])
+
+    assert installed.exit_code == 0, installed.output
+    assert removed.exit_code == 0, removed.output
+    assert "context7" in _read_manifest(tmp_path)
+    assert (
+        tmp_path / ".agent-toolkit" / "mcps" / "context7" / "config.json"
+    ).is_file()
+
+
 def test_mcp_update_repins_and_reprojects(tmp_path, monkeypatch):
     """update re-resolves a moved version, rewrites the library, re-projects."""
     _seed(tmp_path)
+    _migrate_existing_library(tmp_path, monkeypatch)
     project = tmp_path / "proj"
     project.mkdir()
     monkeypatch.setenv("HOME", str(tmp_path))
@@ -878,12 +950,12 @@ def test_mcp_update_local_refreshes_head_sha(tmp_path, monkeypatch):
     assert second_sha in pins
 
 
-def test_mcp_update_local_without_source_dir_is_honest(tmp_path, monkeypatch):
-    """A --local entry with no recorded source_dir reports honestly, never crashes
-    and never prints a false 'up to date'."""
+def test_mcp_update_rejects_unmigrated_local_without_source_dir(
+    tmp_path, monkeypatch
+):
+    """A legacy local entry without source_dir cannot enter manifest authority."""
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.chdir(tmp_path)
-    # Author a local-method entry by hand WITHOUT a source_dir (pre-fix shape).
     library = tmp_path / ".agent-toolkit" / "mcps"
     (library / "legacy").mkdir(parents=True)
     (library / "legacy" / "config.json").write_text(
@@ -892,10 +964,13 @@ def test_mcp_update_local_without_source_dir_is_honest(tmp_path, monkeypatch):
     (library / "legacy.toolkit.yaml").write_text(
         "name: legacy\ninstall_method: local\ntransport: stdio\n"
     )
+    migrated = CliRunner().invoke(main, ["mcp", "migrate"])
     result = CliRunner().invoke(main, ["mcp", "update", "legacy"])
-    assert result.exit_code == 0, result.output
-    assert "no recorded source_dir" in result.output
-    assert "up to date" not in result.output
+
+    assert migrated.exit_code == 0, migrated.output
+    assert "skipped legacy" in migrated.output
+    assert result.exit_code != 0
+    assert "not in the library manifest" in result.output
 
 
 # ---------------------------------------------------------------------------
@@ -1007,6 +1082,7 @@ def test_mcp_update_bump_rewrites_library_sidecar_lock_and_reports(tmp_path, mon
     resolved_version rewritten, the locked harness shows the new version, the
     lock pin is refreshed, and output carries the `old → new` transparency."""
     _seed(tmp_path)
+    _migrate_existing_library(tmp_path, monkeypatch)
     project = tmp_path / "proj"
     project.mkdir()
     monkeypatch.setenv("HOME", str(tmp_path))
@@ -1041,6 +1117,7 @@ def test_mcp_update_bump_rewrites_library_sidecar_lock_and_reports(tmp_path, mon
 def test_mcp_update_up_to_date_no_false_bump(tmp_path, monkeypatch):
     """update when the resolver returns the SAME version: no false bump, says `up to date`."""
     _seed(tmp_path)
+    _migrate_existing_library(tmp_path, monkeypatch)
     project = tmp_path / "proj"
     project.mkdir()
     monkeypatch.setenv("HOME", str(tmp_path))
@@ -1066,6 +1143,7 @@ def test_mcp_update_greedy_cross_scope_refreshes_both(tmp_path, monkeypatch):
     """One flagless `mcp update` from inside a project re-projects + re-pins BOTH
     the global and the current-project projections (greedy cross-scope)."""
     _seed(tmp_path)
+    _migrate_existing_library(tmp_path, monkeypatch)
     project = tmp_path / "proj"
     project.mkdir()
     monkeypatch.setenv("HOME", str(tmp_path))
@@ -1113,6 +1191,7 @@ def test_mcp_unmanaged_sibling_survives_managed_update(tmp_path, monkeypatch):
     """A hand-rolled (unmanaged) entry stays listed and intact through an update
     of a managed sibling in the same harness config."""
     _seed(tmp_path)
+    _migrate_existing_library(tmp_path, monkeypatch)
     project = tmp_path / "proj"
     project.mkdir()
     monkeypatch.setenv("HOME", str(tmp_path))
@@ -1342,6 +1421,7 @@ def test_mcp_update_heals_legacy_project_lock(tmp_path, monkeypatch):
     """`mcp update` on a LEGACY {claude-code, pi} project lock heals it to one
     `standard` row (update is a converging path, not a re-blesser)."""
     _seed(tmp_path)
+    _migrate_existing_library(tmp_path, monkeypatch)
     project = tmp_path / "proj"
     project.mkdir()
     monkeypatch.setenv("HOME", str(tmp_path))
@@ -1383,6 +1463,7 @@ def test_mcp_update_standard_reprojects(tmp_path, monkeypatch):
     projection) re-projects a clean post-#399 project `standard` row without
     crashing on the synthetic harness, and the row stays `standard`."""
     _seed(tmp_path)
+    _migrate_existing_library(tmp_path, monkeypatch)
     project = tmp_path / "proj"
     project.mkdir()
     monkeypatch.setenv("HOME", str(tmp_path))

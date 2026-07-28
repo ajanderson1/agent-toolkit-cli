@@ -25,7 +25,7 @@ from pathlib import Path
 
 from agent_toolkit_cli._install_core import InstallError
 from agent_toolkit_cli.mcp_adapters import get_adapter
-from agent_toolkit_cli.mcp_library import load_mcp_asset
+from agent_toolkit_cli.mcp_library import McpAsset, load_mcp_asset
 from agent_toolkit_cli.mcp_lock import (
     McpLockEntry,
     collapse_covered,
@@ -34,6 +34,12 @@ from agent_toolkit_cli.mcp_lock import (
     remove_entry,
     upsert_entry,
     write_lock,
+)
+from agent_toolkit_cli.mcp_manifest import (
+    entry_to_inner_config,
+    entry_to_metadata,
+    manifest_path,
+    read_manifest,
 )
 from agent_toolkit_cli.mcp_standard import mcp_standard_covered
 
@@ -100,6 +106,25 @@ def _claude_is_running() -> bool:
     return result.returncode == 0
 
 
+def _library_asset(slug: str, *, library_root: Path, home: Path) -> McpAsset:
+    """Load manifest authority when present; otherwise retain legacy fallback."""
+    path = manifest_path(home)
+    if not path.is_file():
+        return load_mcp_asset(library_root, slug)
+    entries = read_manifest(path)
+    if slug not in entries:
+        raise FileNotFoundError(
+            f"MCP '{slug}' is not in the library manifest; run: "
+            "agent-toolkit-cli mcp doctor -g"
+        )
+    entry = entries[slug]
+    return McpAsset(
+        slug=slug,
+        inner_config=entry_to_inner_config(entry),
+        metadata=entry_to_metadata(entry),
+    )
+
+
 def apply(
     *,
     slug: str,
@@ -120,7 +145,7 @@ def apply(
     Returns an ApplyResult on the success path; the failure path rolls back and
     re-raises (returns nothing).
     """
-    asset = load_mcp_asset(library_root, slug)
+    asset = _library_asset(slug, library_root=library_root, home=home)
     lock_path = lock_path_for_scope(scope, home=home, project=project)
     lock = read_lock(lock_path)
 
