@@ -5,7 +5,7 @@ import pytest
 
 from agent_toolkit_tui.app import (
     ConfirmDiscardScreen,
-    HarnessCommandProvider,
+    MainHarnessSelectScreen,
     PersistentThemeProvider,
     TUIApp,
 )
@@ -53,30 +53,116 @@ async def test_theme_provider_persists_choice(temp_settings_path: Path):
 
 
 @pytest.mark.asyncio
-async def test_harness_command_provider_candidates_and_search(temp_settings_path: Path):
+async def test_main_harness_screen_candidates_and_preselection(temp_settings_path: Path):
     app = TUIApp()
-    async with app.run_test():
-        provider = HarnessCommandProvider(app.screen)
-        items = provider.commands
+    async with app.run_test() as pilot:
+        app.search_main_harnesses()
+        await pilot.pause()
 
-        keys = [key for key, _disp, _lbl, _cb in items]
-        assert "claude-code" in keys
-        assert "aider-desk" in keys
-        assert "standard" not in keys
-        assert "standard-skill" not in keys
-        assert "standard-agent" not in keys
+        screen = app.screen
+        assert isinstance(screen, MainHarnessSelectScreen)
 
-        claude_item = next(item for item in items if item[0] == "claude-code")
-        assert "[x]" in claude_item[2]
+        candidates = list(screen._candidates)
+        assert "claude-code" in candidates
+        assert "aider-desk" in candidates
+        assert "standard" not in candidates
+        assert "standard-skill" not in candidates
+        assert "standard-agent" not in candidates
 
-        aider_item = next(item for item in items if item[0] == "aider-desk")
-        assert "[ ]" in aider_item[2]
+        # Claude Code ships selected by default; Aider does not.
+        assert "claude-code" in screen._selected
+        assert "aider-desk" not in screen._selected
 
-        hits_key = [hit async for hit in provider.search("aider-desk")]
-        assert len(hits_key) > 0
 
-        hits_display = [hit async for hit in provider.search("Claude Code")]
-        assert len(hits_display) > 0
+@pytest.mark.asyncio
+async def test_main_harness_screen_filter_narrows_options(temp_settings_path: Path):
+    from textual.widgets import Input, SelectionList
+
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        app.search_main_harnesses()
+        await pilot.pause()
+
+        screen = app.screen
+        assert isinstance(screen, MainHarnessSelectScreen)
+
+        screen.query_one("#mh-filter", Input).value = "aider"
+        await pilot.pause()
+
+        sl = screen.query_one("#mh-list", SelectionList)
+        values = [sl.get_option_at_index(i).value for i in range(sl.option_count)]
+        assert values == ["aider-desk"]
+
+
+@pytest.mark.asyncio
+async def test_main_harness_screen_space_toggle_updates_selection(temp_settings_path: Path):
+    from textual.widgets import SelectionList
+
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        app.search_main_harnesses()
+        await pilot.pause()
+
+        screen = app.screen
+        assert isinstance(screen, MainHarnessSelectScreen)
+
+        # Highlight the first (aider-desk) row and toggle it via the space action.
+        sl = screen.query_one("#mh-list", SelectionList)
+        sl.highlighted = 0
+        assert "aider-desk" not in screen._selected
+
+        screen.action_toggle_harness()
+        await pilot.pause()
+
+        # The screen stays open and the selection now includes the toggled row.
+        assert isinstance(app.screen, MainHarnessSelectScreen)
+        assert "aider-desk" in screen._selected
+
+        screen.action_toggle_harness()
+        await pilot.pause()
+        assert "aider-desk" not in screen._selected
+
+
+@pytest.mark.asyncio
+async def test_main_harness_screen_multi_toggle_applies_once(temp_settings_path: Path):
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        app.search_main_harnesses()
+        await pilot.pause()
+
+        screen = app.screen
+        assert isinstance(screen, MainHarnessSelectScreen)
+
+        # Toggle two harnesses on without the screen closing, then apply.
+        screen._selected.add("aider-desk")
+        screen._selected.add("amp")
+        screen.action_apply()
+        await pilot.pause()
+
+        assert not isinstance(app.screen, MainHarnessSelectScreen)
+        assert "aider-desk" in app.tui_settings.harnesses
+        assert "amp" in app.tui_settings.harnesses
+
+        loaded = load_settings()
+        assert "aider-desk" in loaded.harnesses
+        assert "amp" in loaded.harnesses
+
+
+@pytest.mark.asyncio
+async def test_main_harness_screen_cancel_changes_nothing(temp_settings_path: Path):
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        initial = app.tui_settings.harnesses
+        app.search_main_harnesses()
+        await pilot.pause()
+
+        screen = app.screen
+        assert isinstance(screen, MainHarnessSelectScreen)
+        screen._selected.add("aider-desk")
+        screen.action_cancel()
+        await pilot.pause()
+
+        assert app.tui_settings.harnesses == initial
 
 
 @pytest.mark.asyncio

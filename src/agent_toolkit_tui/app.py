@@ -35,9 +35,10 @@ from textual.containers import Horizontal, Vertical
 from textual.css.query import NoMatches
 from textual.screen import ModalScreen, Screen
 from textual.widgets import (
-    Button, Footer, Header, Input, Label, OptionList, Static,
+    Button, Footer, Header, Input, Label, OptionList, SelectionList, Static,
 )
 from textual.widgets.option_list import Option, OptionDoesNotExist
+from textual.widgets.selection_list import Selection
 from rich.markup import escape
 from rich.text import Text
 
@@ -167,6 +168,136 @@ class ConfirmDiscardScreen(ModalScreen[bool]):
         self.dismiss(False)
 
 
+class MainHarnessSelectScreen(ModalScreen["tuple[str, ...] | None"]):
+    """Multi-select modal for choosing which main harnesses get grid columns.
+
+    Focus stays in the filter box; priority bindings drive the SelectionList so
+    ``space`` toggles the highlighted harness in place (the palette no longer
+    closes on every toggle), arrows move the cursor, and ``enter`` applies the
+    whole selection at once. Dismisses with the chosen keys ordered by
+    ``MAIN_HARNESS_CANDIDATES``, or ``None`` on cancel.
+    """
+
+    DEFAULT_CSS = """
+    MainHarnessSelectScreen {
+        align: center middle;
+    }
+    MainHarnessSelectScreen > Vertical {
+        background: $panel;
+        border: round $primary;
+        padding: 1 2;
+        width: 60;
+        height: auto;
+        max-height: 80%;
+    }
+    MainHarnessSelectScreen #mh-title {
+        width: 100%;
+        content-align: center middle;
+        text-style: bold;
+        color: $primary;
+        margin-bottom: 1;
+    }
+    MainHarnessSelectScreen #mh-filter {
+        margin-bottom: 1;
+    }
+    MainHarnessSelectScreen SelectionList {
+        height: auto;
+        max-height: 18;
+        background: $panel;
+        border: none;
+        padding: 0;
+    }
+    MainHarnessSelectScreen #mh-hint {
+        width: 100%;
+        content-align: center middle;
+        color: $text-muted;
+        margin-top: 1;
+    }
+    """
+
+    BINDINGS = [
+        Binding("escape", "cancel", "Cancel"),
+        Binding("enter", "apply", "Apply", priority=True),
+        Binding("space", "toggle_harness", "Toggle", priority=True),
+        Binding("up", "cursor_up", "Up", priority=True, show=False),
+        Binding("down", "cursor_down", "Down", priority=True, show=False),
+    ]
+
+    def __init__(
+        self,
+        candidates: tuple[str, ...],
+        display_names: dict[str, str],
+        selected: tuple[str, ...],
+    ) -> None:
+        super().__init__()
+        self._candidates = candidates
+        self._display_names = display_names
+        self._selected: set[str] = set(selected)
+        self._filter = ""
+
+    def compose(self) -> ComposeResult:
+        with Vertical():
+            yield Static("Main harnesses", id="mh-title")
+            yield Input(placeholder="Search for main harnesses…", id="mh-filter")
+            yield SelectionList[str](id="mh-list")
+            yield Static("space toggle · enter apply · esc cancel", id="mh-hint")
+
+    def on_mount(self) -> None:
+        self._rebuild_options()
+        self.query_one("#mh-filter", Input).focus()
+
+    def _visible_keys(self) -> list[str]:
+        needle = self._filter.strip().lower()
+        if not needle:
+            return list(self._candidates)
+        return [
+            key
+            for key in self._candidates
+            if needle in self._display_names[key].lower() or needle in key.lower()
+        ]
+
+    def _rebuild_options(self) -> None:
+        sl = self.query_one("#mh-list", SelectionList)
+        sl.clear_options()
+        sl.add_options(
+            [
+                Selection(
+                    self._display_names[key], key, initial_state=key in self._selected
+                )
+                for key in self._visible_keys()
+            ]
+        )
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        self._filter = event.value
+        self._rebuild_options()
+
+    def on_selection_list_selected_changed(
+        self, event: SelectionList.SelectedChanged
+    ) -> None:
+        visible = set(self._visible_keys())
+        chosen = set(event.selection_list.selected)
+        # Keep selections made under previous filters; only the currently
+        # visible keys can change state here.
+        self._selected = (self._selected - visible) | (chosen & visible)
+
+    def action_toggle_harness(self) -> None:
+        self.query_one("#mh-list", SelectionList).action_select()
+
+    def action_cursor_up(self) -> None:
+        self.query_one("#mh-list", SelectionList).action_cursor_up()
+
+    def action_cursor_down(self) -> None:
+        self.query_one("#mh-list", SelectionList).action_cursor_down()
+
+    def action_apply(self) -> None:
+        ordered = tuple(k for k in self._candidates if k in self._selected)
+        self.dismiss(ordered)
+
+    def action_cancel(self) -> None:
+        self.dismiss(None)
+
+
 class SidebarOptionList(OptionList):
     """Sidebar specifically to capture 1-6 bindings when focused."""
 
@@ -215,51 +346,6 @@ class PersistentThemeProvider(Provider):
                     matcher.highlight(name),
                     callback,
                     help=f"Set theme to {name}",
-                )
-
-
-class HarnessCommandProvider(Provider):
-    """Command palette provider for selecting main harness columns."""
-
-    @property
-    def commands(self) -> list[tuple[str, str, str, Callable[[], None]]]:
-        app = cast("TUIApp", self.app)
-        current_selection = set(app.tui_settings.harnesses)
-
-        items: list[tuple[str, str, str, Callable[[], None]]] = []
-        for key in MAIN_HARNESS_CANDIDATES:
-            config = AGENTS.get(key)
-            display_name = config.display_name if config else key
-            is_selected = key in current_selection
-            marker = "[x]" if is_selected else "[ ]"
-            label = f"{marker} {display_name}"
-
-            def make_callback(harness_key: str) -> Callable[[], None]:
-                def callback() -> None:
-                    app.toggle_main_harness(harness_key)
-
-                return callback
-
-            items.append((key, display_name, label, make_callback(key)))
-        return items
-
-    async def discover(self) -> Hits:
-        for _key, _display_name, label, callback in self.commands:
-            yield DiscoveryHit(label, callback, help="Toggle main harness column")
-
-    async def search(self, query: str) -> Hits:
-        matcher = self.matcher(query)
-        for key, display_name, label, callback in self.commands:
-            score_key = matcher.match(key)
-            score_display = matcher.match(display_name)
-            score_label = matcher.match(label)
-            best_score = max(score_key, score_display, score_label)
-            if best_score > 0:
-                yield Hit(
-                    best_score,
-                    matcher.highlight(label),
-                    callback,
-                    help="Toggle main harness column",
                 )
 
 
@@ -804,25 +890,28 @@ class TUIApp(App):
         self.search_main_harnesses()
 
     def search_main_harnesses(self) -> None:
-        from textual.command import CommandPalette
+        display_names = {
+            key: (config.display_name if (config := AGENTS.get(key)) else key)
+            for key in MAIN_HARNESS_CANDIDATES
+        }
+
+        def _on_close(result: tuple[str, ...] | None) -> None:
+            if result is not None:
+                self._commit_harness_selection(result)
 
         self.push_screen(
-            CommandPalette(
-                providers=[HarnessCommandProvider],
-                placeholder="Search for main harnesses…",
-            )
+            MainHarnessSelectScreen(
+                candidates=MAIN_HARNESS_CANDIDATES,
+                display_names=display_names,
+                selected=self._tui_settings.harnesses,
+            ),
+            _on_close,
         )
 
-    def toggle_main_harness(self, harness: str) -> None:
-        """Toggle a main harness selection, prompting if pending edits exist."""
-        current = self._tui_settings.harnesses
-        if harness in current:
-            new_selection = tuple(h for h in current if h != harness)
-        else:
-            new_set = set(current) | {harness}
-            new_selection = tuple(
-                h for h in MAIN_HARNESS_CANDIDATES if h in new_set
-            )
+    def _commit_harness_selection(self, new_selection: tuple[str, ...]) -> None:
+        """Apply a harness selection, prompting once if pending edits exist."""
+        if new_selection == self._tui_settings.harnesses:
+            return
 
         n_pending = len(self._get_all_pending_edits())
         if n_pending == 0:
@@ -835,6 +924,18 @@ class TUIApp(App):
 
         msg = f"Discard {n_pending} pending change(s) and update main harnesses?"
         self.push_screen(ConfirmDiscardScreen(n_pending, message=msg), _on_confirm)
+
+    def toggle_main_harness(self, harness: str) -> None:
+        """Toggle a single main harness, prompting if pending edits exist."""
+        current = self._tui_settings.harnesses
+        if harness in current:
+            new_selection = tuple(h for h in current if h != harness)
+        else:
+            new_set = set(current) | {harness}
+            new_selection = tuple(
+                h for h in MAIN_HARNESS_CANDIDATES if h in new_set
+            )
+        self._commit_harness_selection(new_selection)
 
     def apply_theme_setting(self, theme: str) -> bool:
         """Atomically persist and then apply a theme, preserving harness state."""
