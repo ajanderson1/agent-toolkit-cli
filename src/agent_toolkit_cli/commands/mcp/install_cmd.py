@@ -79,6 +79,9 @@ def install_cmd(
     except FileNotFoundError as exc:
         # Absent library slug (load_mcp_asset raises with a remediation hint).
         raise click.ClickException(str(exc)) from exc
+    except ValueError as exc:
+        # Strict/unsafe manifest failures already carry redacted diagnostics.
+        raise click.ClickException(str(exc)) from exc
 
     if result.installed:
         click.echo(

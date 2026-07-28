@@ -89,23 +89,26 @@ Default install targets are `claude-code,pi,gemini-cli`. `codex` is explicit bec
 
 ### `mcp`
 
-Manage MCP servers via config-injection adapters + a `mcps-lock.json` lock file. The group has the plural alias `mcps`; `mcp list` aliases to `ls`. See the [MCP asset-type page](../asset-types/mcp.md) for the mechanism, paths, and the `standard` projection.
+Manage MCP servers through an authoritative global library manifest and config-injection adapters. The group has the plural alias `mcps`; `mcp list` aliases to `ls`. See the [MCP asset-type page](../asset-types/mcp.md) for the mechanism, paths, and the `standard` projection.
 
 ```text
 agent-toolkit-cli mcp add --npx|--uvx|--docker|--url|--local <source> [--slug <slug>]   # author into the library from flags
+agent-toolkit-cli mcp migrate                                  # explicitly adopt a legacy library
 agent-toolkit-cli mcp install <slug>   [--harness <h>]... [-g|-p] [--force]
 agent-toolkit-cli mcp uninstall <slug> [--harness <h>]... [-g|-p] [--force]
-agent-toolkit-cli mcp remove <slug>    [-g|-p] [--force]   # full undo: every locked harness
-agent-toolkit-cli mcp update <slug>                        # re-resolve + re-project
-agent-toolkit-cli mcp list   [-g|-p]                       # alias: ls
+agent-toolkit-cli mcp remove <slug>    [-g|-p] [--force]       # remove every locked projection
+agent-toolkit-cli mcp update <slug>                            # re-resolve + re-project
+agent-toolkit-cli mcp list   [-g|-p]                           # alias: ls
 agent-toolkit-cli mcp status [<slug>...] [-g|-p]
 agent-toolkit-cli mcp doctor [-g|-p]
 ```
 
-- `mcp add` authors an MCP server into the global library from flags: a source (`--npx`, `--uvx`, `--docker`, `--url`, or `--local` paired with `--command`), plus optional `--command`, `--env` (repeatable), `--description`, and `--slug`.
+- Global MCP library inventory lives at `~/.agent-toolkit/mcps-library.json`. It is authoritative; each `~/.agent-toolkit/mcps/<slug>/config.json` plus `<slug>.toolkit.yaml` pair is a materialisation.
+- `mcp migrate` explicitly adopts a legacy on-disk library into that manifest. It is global-only, idempotent, and non-destructive. Run it before `add` or `update` when physical entries predate the manifest.
+- `mcp add` authors an MCP server into the global manifest from flags: a source (`--npx`, `--uvx`, `--docker`, `--url`, or `--local` paired with `--command`), plus optional `--command`, `--env` (repeatable), `--description`, and `--slug`.
 - `mcp install` projects a library MCP into the chosen scope's harnesses; `--harness` (repeatable) selects from `claude-code`, `codex`, `opencode`, `pi`, or `standard`. `--force` bypasses the running-claude guard for `~/.claude.json` writes.
-- `mcp uninstall` removes a MCP's projections from the chosen scope (default: every harness in the lock). `mcp remove` removes them from **every** harness recorded in the lock — full undo, no `--harness`.
-- `mcp update` re-resolves a library MCP and re-projects every reachable locked harness. `mcp doctor` diagnoses projection drift read-only — it never writes.
+- `mcps-lock.json` records per-scope harness projections, not library membership. `mcp uninstall` removes projections from one scope; `mcp remove` removes every locked projection but keeps the library files and manifest record.
+- `mcp update` re-resolves manifest authority and re-projects every reachable locked harness. `mcp doctor` diagnoses library and projection drift read-only—it never writes. A missing manifest is remediated with exactly `agent-toolkit-cli mcp migrate`.
 - There is **no `mcp import`** — MCP cross-machine sync is tracked separately ([#429](https://github.com/ajanderson1/agent-toolkit-cli/issues/429)). (The `instructions` asset type likewise has no `import`: it has no per-machine library to reconstruct.)
 
 ### `pi-extension`

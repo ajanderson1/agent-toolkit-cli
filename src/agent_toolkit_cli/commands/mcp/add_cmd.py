@@ -1,14 +1,8 @@
-"""`mcp add` — author a library entry from flags. GLOBAL-ONLY (no -p).
+"""`mcp add` — author a manifest-first global library entry from flags.
 
-Exactly ONE source flag is required (--npx/--uvx/--docker/--url/--local). The
-inner MCP config is derived per-method; a version is resolved best-effort
-(npm view / PyPI JSON / git HEAD) and recorded as `resolved_version` for
-transparency. Resolution failure is NOT an error — the entry is stored
-floating and a note is printed to stderr. Re-adding an existing slug errors
-(use `mcp update`).
-
-Env var NAMES (not values) may be declared via repeatable --env; they are
-stored in the sidecar so `mcp doctor` can warn when they are unset.
+Exactly one source flag is required. The complete authoring record is committed
+to ``mcps-library.json`` before its config/sidecar materialisation is written.
+Legacy physical libraries require an explicit ``mcp migrate`` first.
 """
 from __future__ import annotations
 
@@ -18,29 +12,59 @@ from pathlib import Path
 import click
 
 from agent_toolkit_cli.commands.mcp import _resolve
-from agent_toolkit_cli.mcp_library import library_root, write_entry
+from agent_toolkit_cli.mcp_library import (
+    library_root,
+    materialize_entry,
+    scan_entry_files,
+)
+from agent_toolkit_cli.mcp_manifest import (
+    McpManifestEntry,
+    UnsafeMcpSpecError,
+    assert_safe_entry,
+    manifest_path,
+    read_manifest,
+    write_manifest,
+)
 
 
-def _derive_slug_npm(pkg: str) -> str:
-    """`@scope/name` → `name`; `name` → `name`. Strip any version suffix."""
-    base = pkg.split("@")[-1] if pkg.startswith("@") else pkg.split("@")[0]
-    # `@scope/name` splits oddly on '@'; re-handle the scoped form explicitly.
-    if pkg.startswith("@") and "/" in pkg:
-        base = pkg.split("/", 1)[1]
-    return base.rsplit("/", 1)[-1]
+def _normalise_npm_package(package: str) -> str:
+    """Drop a trailing npm version while preserving a leading scope."""
+    if package.startswith("@"):
+        name, separator, _version = package.rpartition("@")
+        return name if separator and name else package
+    return package.split("@", 1)[0]
+
+
+def _normalise_pypi_package(package: str) -> str:
+    """Drop a pinned ``==version`` from a uvx source token."""
+    return package.split("==", 1)[0]
+
+
+def _derive_slug_npm(package: str) -> str:
+    """``@scope/name`` → ``name``; ``name`` → ``name``."""
+    return package.rsplit("/", 1)[-1]
 
 
 def _derive_slug_image(image: str) -> str:
-    """`registry/owner/name:tag` → `name`."""
-    no_tag = image.split(":", 1)[0]
-    return no_tag.rsplit("/", 1)[-1]
+    """``registry:port/owner/name:tag`` → ``name``."""
+    leaf = image.rsplit("/", 1)[-1]
+    return leaf.split("@", 1)[0].split(":", 1)[0]
+
+
+def _effective_docker_image(image: str) -> tuple[str, str]:
+    """Return an image with an effective tag/digest and its version token."""
+    if "@" in image:
+        return image, image.rsplit("@", 1)[-1]
+    leaf = image.rsplit("/", 1)[-1]
+    if ":" in leaf:
+        return image, leaf.rsplit(":", 1)[-1]
+    return f"{image}:latest", "latest"
 
 
 def _derive_slug_url(url: str) -> str:
-    """`https://host/path/name` → last non-empty path segment, else host."""
+    """``https://host/path/name`` → final path segment, else host."""
     stripped = url.rstrip("/")
     tail = stripped.rsplit("/", 1)[-1]
-    # A bare https://host has no path segment to use; fall back to the host.
     if "//" in stripped and tail == stripped.split("//", 1)[1]:
         return tail.split("/", 1)[0]
     return tail or stripped
@@ -85,100 +109,126 @@ def add_cmd(
         "--local": local_dir,
     }
     given = [flag for flag, value in sources.items() if value is not None]
-    if len(given) == 0:
+    if not given:
         raise click.UsageError(
-            "exactly one source flag is required: --npx / --uvx / --docker / --url / --local"
+            "exactly one source flag is required: "
+            "--npx / --uvx / --docker / --url / --local"
         )
     if len(given) > 1:
         raise click.UsageError(
             f"only one source flag may be given; got {', '.join(given)}"
         )
 
-    inner: dict
     install_method: str
     transport: str
+    source: str
+    authored_command: str | None
+    args: tuple[str, ...]
     resolved_version: str | None = None
-    derived_slug: str
-    floating_pkg: str | None = None  # name printed in the floating note, if any
-    local_source_dir: str | None = None  # absolute --local dir, for `mcp update`
+    floating_pkg: str | None = None
 
     if npx_pkg is not None:
         install_method = "npx"
         transport = "stdio"
-        derived_slug = _derive_slug_npm(npx_pkg)
-        resolved_version = _resolve.resolve_npm_version(npx_pkg)
-        pinned = f"{npx_pkg}@{resolved_version}" if resolved_version else npx_pkg
-        inner = {"type": "stdio", "command": "npx", "args": ["-y", pinned]}
+        source = _normalise_npm_package(npx_pkg)
+        derived_slug = _derive_slug_npm(source)
+        resolved_version = _resolve.resolve_npm_version(source)
+        pinned = f"{source}@{resolved_version}" if resolved_version else source
+        authored_command = "npx"
+        args = ("-y", pinned)
         if resolved_version is None:
-            floating_pkg = npx_pkg
+            floating_pkg = source
     elif uvx_pkg is not None:
         install_method = "uvx"
         transport = "stdio"
-        derived_slug = uvx_pkg.rsplit("/", 1)[-1]
-        resolved_version = _resolve.resolve_pypi_version(uvx_pkg)
-        pinned = f"{uvx_pkg}=={resolved_version}" if resolved_version else uvx_pkg
-        inner = {"type": "stdio", "command": "uvx", "args": [pinned]}
+        source = _normalise_pypi_package(uvx_pkg)
+        derived_slug = source.rsplit("/", 1)[-1]
+        resolved_version = _resolve.resolve_pypi_version(source)
+        pinned = f"{source}=={resolved_version}" if resolved_version else source
+        authored_command = "uvx"
+        args = (pinned,)
         if resolved_version is None:
-            floating_pkg = uvx_pkg
+            floating_pkg = source
     elif docker_image is not None:
         install_method = "docker"
         transport = "stdio"
-        derived_slug = _derive_slug_image(docker_image)
-        image = docker_image if ":" in docker_image else f"{docker_image}:latest"
-        # resolved_version is the tag as given; docker tags are the version authority.
-        resolved_version = image.rsplit(":", 1)[-1]
-        inner = {"type": "stdio", "command": "docker", "args": ["run", "--rm", "-i", image]}
+        source, resolved_version = _effective_docker_image(docker_image)
+        derived_slug = _derive_slug_image(source)
+        authored_command = "docker"
+        args = ("run", "--rm", "-i", source)
     elif url is not None:
         install_method = "url"
         transport = "http"
+        source = url
         derived_slug = _derive_slug_url(url)
-        inner = {"type": "http", "url": url}
-        # Nothing to resolve for a URL source.
-    else:  # local_dir is not None
+        authored_command = None
+        args = ()
+    else:
         if not command:
             raise click.UsageError("--local requires --command")
         install_method = "local"
         transport = "stdio"
         directory = Path(local_dir).expanduser().resolve()  # type: ignore[arg-type]
+        source = str(directory)
         derived_slug = directory.name or "local-mcp"
         parts = shlex.split(command)
         if not parts:
             raise click.UsageError("--command must contain at least the command name")
-        inner = {"type": "stdio", "command": parts[0], "args": parts[1:]}
+        authored_command = parts[0]
+        args = tuple(parts[1:])
         resolved_version = _resolve.resolve_git_head_sha(directory)
-        # Persist the absolute source dir so `mcp update` can refresh the HEAD
-        # SHA later from any cwd (inner_config records only the command, not the
-        # dir). A non-repo local dir simply has no version — stored floating, no
-        # note (the user gave a path, not a package; "could not resolve" misleads).
-        local_source_dir = str(directory)
 
     final_slug = slug or derived_slug
     if not final_slug:
         raise click.ClickException("could not derive a slug; pass --slug explicitly")
 
-    library = library_root(Path.home())
+    entry = McpManifestEntry(
+        slug=final_slug,
+        install_method=install_method,
+        transport=transport,
+        source=source,
+        command=authored_command,
+        args=args,
+        env=tuple(env_vars),
+        description=description,
+        resolved_version=resolved_version,
+    )
+    try:
+        assert_safe_entry(entry)
+    except UnsafeMcpSpecError as exc:
+        raise click.ClickException(str(exc)) from exc
 
-    metadata: dict = {
-        "name": final_slug,
-        "install_method": install_method,
-        "transport": transport,
-    }
-    if resolved_version is not None:
-        metadata["resolved_version"] = resolved_version
-    if local_source_dir is not None:
-        metadata["source_dir"] = local_source_dir
-    if env_vars:
-        metadata["env"] = list(env_vars)
-    if description is not None:
-        metadata["description"] = description
+    home = Path.home()
+    library = library_root(home)
+    path = manifest_path(home)
+    physical = scan_entry_files(library)
+    if not path.is_file() and physical:
+        raise click.ClickException(
+            "MCP library manifest is missing; run: agent-toolkit-cli mcp migrate"
+        )
+    try:
+        manifest = read_manifest(path)
+    except (OSError, ValueError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    if final_slug in manifest or final_slug in physical:
+        raise click.ClickException(
+            f"{final_slug} already in the library; use 'mcp update {final_slug}'"
+        )
 
     try:
-        entry_dir = write_entry(
-            library, final_slug, inner_config=inner, metadata=metadata
-        )
+        write_manifest(path, {**manifest, final_slug: entry})
+    except (OSError, ValueError) as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    try:
+        entry_dir = materialize_entry(library, entry, overwrite=False)
     except FileExistsError as exc:
         raise click.ClickException(
             f"{final_slug} already in the library; use 'mcp update {final_slug}'"
+        ) from exc
+    except OSError as exc:
+        raise click.ClickException(
+            f"manifest committed but {final_slug} materialisation failed"
         ) from exc
 
     if floating_pkg is not None:

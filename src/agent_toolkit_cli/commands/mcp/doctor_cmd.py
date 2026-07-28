@@ -1,16 +1,4 @@
-"""`mcp doctor [-g/-p]` — diagnose MCP projection drift. READ-ONLY, never writes.
-
-Per lock entry, three checks:
-  1. Orphans / missing — lock entry vs is_installed: a lock entry with no live
-     projection is `missing`; a live projection... (orphan entries in the
-     config with no lock are surfaced by `mcp list`, not here).
-  2. Structural drift — render the library asset through the adapter's
-     translate and compare (parsed equality) against the installed entry;
-     report `drifted` per (slug, harness).
-  3. Env presence — warn on declared env vars (asset.env) absent from
-     os.environ. Prints the variable NAME ONLY, never the value (hard security
-     constraint).
-"""
+"""`mcp doctor [-g/-p]` — read-only library and projection diagnosis."""
 from __future__ import annotations
 
 import json
@@ -19,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import click
+import yaml  # type: ignore[import-untyped]
 
 from agent_toolkit_cli.commands.mcp._common import scope_and_roots, scope_banner
 from agent_toolkit_cli.mcp_adapters import get_adapter
@@ -26,8 +15,18 @@ from agent_toolkit_cli.mcp_library import (
     McpAsset,
     library_root,
     load_mcp_asset,
+    scan_entry_files,
 )
 from agent_toolkit_cli.mcp_lock import lock_path_for_scope, read_lock
+from agent_toolkit_cli.mcp_manifest import (
+    McpManifestEntry,
+    UnsafeMcpSpecError,
+    entry_from_materialisation,
+    entry_to_inner_config,
+    entry_to_metadata,
+    manifest_path,
+    read_manifest,
+)
 from agent_toolkit_cli.mcp_standard import mcp_standard_covered
 
 
@@ -40,24 +39,18 @@ class Finding:
 
 
 def _rendered_entry(harness: str, inner_config: dict) -> dict | None:
-    """The harness-native entry the adapter WOULD write for this inner config.
-
-    Re-derives the adapter's translate without writing anything (read-only).
-    Returns None if the translate raises (e.g. opencode url source) — the
-    caller treats an un-renderable entry as not-drift-checkable.
-    """
+    """Return the harness-native entry an adapter would write, without writing."""
     from agent_toolkit_cli._install_core import InstallError
 
     if harness == "codex":
         from agent_toolkit_cli.mcp_adapters.toml_config import _CodexAdapter
-        # Symmetry with the JSON branch: codex's _translate cannot raise today,
-        # but a future shape-rejecting translate must not crash a read-only
-        # doctor — treat an un-renderable entry as not-drift-checkable.
+
         try:
             return _CodexAdapter()._translate(inner_config)
         except InstallError:
             return None
     from agent_toolkit_cli.mcp_adapters.json_config import CELLS
+
     cell = CELLS.get(harness)
     if cell is None:
         return None
@@ -67,8 +60,14 @@ def _rendered_entry(harness: str, inner_config: dict) -> dict | None:
         return None
 
 
-def _installed_entry(harness: str, slug: str, scope: str, home: Path, project: Path | None) -> dict | None:
-    """Read the live installed entry for (slug, harness), parsed. None if absent."""
+def _installed_entry(
+    harness: str,
+    slug: str,
+    scope: str,
+    home: Path,
+    project: Path | None,
+) -> dict | None:
+    """Read one live installed entry, parsed, or return None when absent."""
     adapter = get_adapter(harness)
     try:
         target = adapter.config_target(scope=scope, home=home, project=project)
@@ -79,6 +78,7 @@ def _installed_entry(harness: str, slug: str, scope: str, home: Path, project: P
     text = target.read_text(encoding="utf-8")
     if harness == "codex":
         import tomlkit
+
         try:
             doc = tomlkit.parse(text)
         except Exception:
@@ -86,7 +86,6 @@ def _installed_entry(harness: str, slug: str, scope: str, home: Path, project: P
         servers = doc.get("mcp_servers")
         if servers is None or slug not in servers:
             return None
-        # Unwrap tomlkit items to plain Python for structural comparison.
         return json.loads(json.dumps(servers[slug]))
     try:
         doc = json.loads(text or "{}")
@@ -101,60 +100,146 @@ def _installed_entry(harness: str, slug: str, scope: str, home: Path, project: P
     return servers[slug]
 
 
-def _diagnose(
-    *, scope: str, home: Path, project: Path | None,
-) -> tuple[list[Finding], list[str]]:
-    """Return (findings, env_warnings). env_warnings carry NAMES only."""
+def _read_materialisation(
+    library: Path, slug: str
+) -> tuple[McpManifestEntry | None, str | None]:
+    """Reconstruct one pair, returning only redacted failure details."""
+    try:
+        asset = load_mcp_asset(library, slug)
+        return entry_from_materialisation(asset), None
+    except UnsafeMcpSpecError as exc:
+        return None, f"unsafe literal at {exc.field_path}; value redacted"
+    except (OSError, ValueError, yaml.YAMLError):
+        return None, "materialisation cannot be reconstructed; value redacted"
+
+
+def _diagnose_library(
+    home: Path,
+) -> tuple[list[Finding], bool, dict[str, McpManifestEntry] | None]:
+    """Return library findings, missing-manifest remediation, and authority."""
+    library = library_root(home)
+    physical = scan_entry_files(library)
+    path = manifest_path(home)
+    manifest_missing = not path.is_file()
+    manifest = None if manifest_missing else read_manifest(path)
     findings: list[Finding] = []
+
+    slugs = sorted(set(physical) | (set(manifest) if manifest is not None else set()))
+    for slug in slugs:
+        config_path, sidecar_path = physical.get(slug, (None, None))
+        has_config = config_path is not None
+        has_sidecar = sidecar_path is not None
+        in_manifest = manifest is not None and slug in manifest
+
+        # Highest-signal precedence is intentional and one-finding-per-slug.
+        if has_config != has_sidecar:
+            findings.append(
+                Finding(
+                    slug,
+                    "library",
+                    "library-entry-half-written",
+                    "exactly one of config.json and sidecar exists",
+                )
+            )
+            continue
+        if in_manifest and not has_config and not has_sidecar:
+            findings.append(
+                Finding(
+                    slug,
+                    "library",
+                    "library-entry-missing",
+                    "manifest record has no materialisation files",
+                )
+            )
+            continue
+        if not in_manifest and has_config and has_sidecar:
+            _actual, error = _read_materialisation(library, slug)
+            findings.append(
+                Finding(
+                    slug,
+                    "library",
+                    "library-entry-orphan",
+                    error or "complete materialisation has no manifest record",
+                )
+            )
+            continue
+        if in_manifest and has_config and has_sidecar:
+            actual, error = _read_materialisation(library, slug)
+            if error is not None or actual != manifest[slug]:
+                findings.append(
+                    Finding(
+                        slug,
+                        "library",
+                        "library-entry-drift",
+                        error or "materialisation differs from manifest",
+                    )
+                )
+
+    return findings, manifest_missing, manifest
+
+
+def _asset_from_authority(
+    slug: str,
+    *,
+    manifest: dict[str, McpManifestEntry] | None,
+    library: Path,
+) -> McpAsset | None:
+    if manifest is None:
+        try:
+            return load_mcp_asset(library, slug)
+        except (FileNotFoundError, ValueError, yaml.YAMLError):
+            return None
+    entry = manifest.get(slug)
+    if entry is None:
+        return None
+    return McpAsset(
+        slug=slug,
+        inner_config=entry_to_inner_config(entry),
+        metadata=entry_to_metadata(entry),
+    )
+
+
+def _diagnose(
+    *, scope: str, home: Path, project: Path | None
+) -> tuple[list[Finding], list[str], bool]:
+    """Return findings, name-only env warnings, and migration remediation."""
+    library_findings, remediation, manifest = _diagnose_library(home)
+    findings = list(library_findings)
     env_warnings: list[str] = []
     library = library_root(home)
     lock = read_lock(lock_path_for_scope(scope, home=home, project=project))
-
-    # Track which slugs we've env-checked so a slug projected into N harnesses
-    # warns once per missing var, not N times.
     env_checked: set[str] = set()
 
     for slug in sorted(lock):
         entries = lock[slug]
-
-        # #399: legacy/partially-collapsed standard de-dup. At project scope, if a
-        # slug's rows intersect the covered set {claude-code, pi}, those rows
-        # project the same .mcp.json the `standard` row owns (or should own) and
-        # must collapse to one `standard` row. Fires on the pure 2-row legacy
-        # shape AND the partially-collapsed {standard, pi}/{standard, claude-code}
-        # shape (so an orphan covered row is surfaced, not hidden). Read-only:
-        # remediation is `mcp install <slug> -p` (collapse-on-install converges it).
         if scope == "project":
-            row_harnesses = {e.harness for e in entries}
+            row_harnesses = {entry.harness for entry in entries}
             if row_harnesses & mcp_standard_covered("project"):
-                findings.append(Finding(
-                    slug=slug, harness="standard",
-                    finding_type="legacy-standard-dedup",
-                    detail=(
-                        "project lock has claude-code/pi rows for the shared "
-                        f".mcp.json; collapse to one `standard` row with "
-                        f"`mcp install {slug} -p`"
-                    ),
-                ))
+                findings.append(
+                    Finding(
+                        slug=slug,
+                        harness="standard",
+                        finding_type="legacy-standard-dedup",
+                        detail=(
+                            "project lock has claude-code/pi rows for the shared "
+                            f".mcp.json; collapse to one `standard` row with "
+                            f"`mcp install {slug} -p`"
+                        ),
+                    )
+                )
 
-        try:
-            asset: McpAsset | None = load_mcp_asset(library, slug)
-        except (FileNotFoundError, ValueError):
-            asset = None
-
-        # 3. Env presence (name-only). Declared on the library asset.
+        asset = _asset_from_authority(slug, manifest=manifest, library=library)
         if asset is not None and slug not in env_checked:
             env_checked.add(slug)
-            for var in asset.env:
-                if var not in os.environ:
-                    env_warnings.append(f"env var {var} (declared by {slug}) is not set")
+            for variable in asset.env:
+                if variable not in os.environ:
+                    env_warnings.append(
+                        f"env var {variable} (declared by {slug}) is not set"
+                    )
 
-        for entry in sorted(entries, key=lambda e: e.harness):
-            harness = entry.harness
+        for lock_entry in sorted(entries, key=lambda item: item.harness):
+            harness = lock_entry.harness
             if harness == "standard" and scope != "project":
-                # A `standard` row at global scope is structurally invalid (no
-                # global standard target); skip the per-entry checks rather than
-                # emit a misleading `missing` when config_target raises.
                 continue
             adapter = get_adapter(harness)
             try:
@@ -163,40 +248,45 @@ def _diagnose(
                 )
             except ValueError:
                 installed = False
-
-            # 1. Missing projection: lock says installed, config does not.
             if not installed:
-                findings.append(Finding(
-                    slug=slug, harness=harness, finding_type="missing",
-                    detail="lock entry exists but no live projection in the harness config",
-                ))
+                findings.append(
+                    Finding(
+                        slug,
+                        harness,
+                        "missing",
+                        "lock entry exists but no live projection in the harness config",
+                    )
+                )
                 continue
-
-            # 2. Structural drift: rendered library entry vs installed entry.
             if asset is None:
-                findings.append(Finding(
-                    slug=slug, harness=harness, finding_type="orphan-library",
-                    detail="projected + locked but the library entry is missing/unreadable",
-                ))
+                findings.append(
+                    Finding(
+                        slug,
+                        harness,
+                        "orphan-library",
+                        "projected + locked but the manifest entry is absent/unreadable",
+                    )
+                )
                 continue
             rendered = _rendered_entry(harness, asset.inner_config)
-            installed_entry = _installed_entry(harness, slug, scope, home, project)
-            if rendered is None or installed_entry is None:
-                # Cannot compare (un-renderable, e.g. opencode url) — skip drift,
-                # best-effort per the spec's pragmatic allowance.
+            installed = _installed_entry(harness, slug, scope, home, project)
+            if rendered is None or installed is None:
                 continue
-            if _normalise(rendered) != _normalise(installed_entry):
-                findings.append(Finding(
-                    slug=slug, harness=harness, finding_type="drifted",
-                    detail="installed entry differs structurally from the library source",
-                ))
+            if _normalise(rendered) != _normalise(installed):
+                findings.append(
+                    Finding(
+                        slug,
+                        harness,
+                        "drifted",
+                        "installed entry differs structurally from library authority",
+                    )
+                )
 
-    return findings, env_warnings
+    return findings, env_warnings, remediation
 
 
 def _normalise(value: object) -> object:
-    """Round-trip through JSON to strip tomlkit/ordering artifacts for an
-    order-insensitive structural comparison of dict values."""
+    """Strip ordering and tomlkit artifacts for structural comparison."""
     return json.loads(json.dumps(value, sort_keys=True))
 
 
@@ -209,40 +299,51 @@ def doctor_cmd(
     global_: bool,
     project_flag: bool,
 ) -> None:
-    """Diagnose MCP projection drift (read-only — never writes)."""
+    """Diagnose MCP library and projection drift without writing."""
     scope, home, project_root, implicit = scope_and_roots(
-        global_, project_flag,
+        global_,
+        project_flag,
         ctx.obj.get("project_root") if ctx.obj else None,
         read_only=True,
     )
     effective_home = home if home is not None else Path.home()
-    # doctor has no body-level lock read (the lock is read inside _diagnose), so
-    # read it here purely for the banner count, mirroring agent/skill doctor.
-    # mcp_lock.read_lock returns {} on a missing file (safe at implicit-global)
-    # and raises only on a malformed lock; on the implicit-project path the lock
-    # is toolkit-written and well-formed.
     lock_path = lock_path_for_scope(scope, home=effective_home, project=project_root)
     scope_banner(
-        scope, implicit=implicit, lock_path=lock_path, count=len(read_lock(lock_path))
+        scope,
+        implicit=implicit,
+        lock_path=lock_path,
+        count=len(read_lock(lock_path)),
     )
-    findings, env_warnings = _diagnose(
-        scope=scope, home=effective_home, project=project_root,
-    )
+    try:
+        findings, env_warnings, remediation = _diagnose(
+            scope=scope, home=effective_home, project=project_root
+        )
+    except (OSError, ValueError) as exc:
+        raise click.ClickException(str(exc)) from exc
 
-    for w in env_warnings:
-        click.echo(f"WARNING: {w}")
+    for warning in env_warnings:
+        click.echo(f"WARNING: {warning}")
 
-    if not findings:
+    if not findings and not remediation:
         if env_warnings:
             click.echo(f"no projection drift ({len(env_warnings)} env warning(s))")
         else:
             click.echo("all clean")
         return
 
-    for f in findings:
-        click.echo(f"{f.slug} · {f.harness} · {f.finding_type} ({scope})")
-        click.echo(f"  detail: {f.detail}")
+    for finding in findings:
+        locus = "global library" if finding.harness == "library" else scope
+        click.echo(
+            f"{finding.slug} · {finding.harness} · "
+            f"{finding.finding_type} ({locus})"
+        )
+        click.echo(f"  detail: {finding.detail}")
 
+    if remediation:
+        click.echo("remediation: agent-toolkit-cli mcp migrate")
     click.echo("")
-    click.echo(f"summary: {len(findings)} finding(s), {len(env_warnings)} env warning(s)")
+    click.echo(
+        f"summary: {len(findings)} finding(s), "
+        f"{len(env_warnings)} env warning(s)"
+    )
     ctx.exit(1)
