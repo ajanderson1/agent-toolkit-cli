@@ -1,6 +1,9 @@
 """Tests for `skill import` — additive cross-machine library sync."""
 import json
+import subprocess
 from pathlib import Path
+
+from tests.conftest import scrub_git_env
 
 from click.testing import CliRunner
 
@@ -474,6 +477,192 @@ def test_import_monorepo_clone_is_shallow(tmp_path, monkeypatch):
     owner, repo = f"local/{parent.name}".split("/", 1)
     parent_dir = parent_clone_path(owner, repo, ref=None, env=None)
     assert _is_shallow(parent_dir) is True
+
+
+def _commit_parent_change(parent: Path, path: str, content: str) -> str:
+    """Commit a parent change and return its new HEAD SHA."""
+    from agent_toolkit_cli import skill_git
+
+    (parent / path).write_text(content)
+    env = scrub_git_env()
+    for command in (
+        ["git", "add", "-A"],
+        ["git", "-c", "user.email=t@t", "-c", "user.name=t",
+         "commit", "-q", "-m", "advance parent"],
+    ):
+        subprocess.run(command, cwd=parent, check=True, env=env)
+    return skill_git.head_sha(parent, env=None)
+
+
+def _write_monorepo_incoming(
+    parent: Path, entries: dict[str, str], dest: Path,
+) -> Path:
+    """Write lock entries for fixture subpaths pinned to their given SHAs."""
+    dest.write_text(json.dumps({
+        "version": 1,
+        "skills": {
+            slug: {
+                "source": f"local/{parent.name}",
+                "sourceType": "git",
+                "skillPath": slug,
+                "parentUrl": f"file://{parent}",
+                "readOnly": True,
+                "upstreamSha": sha,
+                "localSha": sha,
+            }
+            for slug, sha in entries.items()
+        },
+    }))
+    return dest
+
+
+def _monorepo_parent_clone(library_root: Path) -> Path:
+    parents = list((library_root / "_parents").glob("*/*"))
+    assert len(parents) == 1, parents
+    return parents[0]
+
+
+def test_import_monorepo_pinned_old_sha_lands_and_records_exact_commit(
+    tmp_path, monkeypatch,
+):
+    """Default monorepo import must land the incoming pin, not ref HEAD."""
+    from agent_toolkit_cli import skill_git
+    from tests.test_cli.test_skill_update_monorepo import _init_parent
+
+    parent = _init_parent(tmp_path)
+    old_sha = skill_git.head_sha(parent, env=None)
+    new_sha = _commit_parent_change(parent, "mkdocs/UPSTREAM.md", "new\n")
+    library_root = tmp_path / "lib" / "skills"
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    incoming = _write_monorepo_incoming(
+        parent, {"mkdocs": old_sha}, tmp_path / "incoming.json",
+    )
+
+    result = CliRunner().invoke(main, ["skill", "import", str(incoming)])
+
+    assert result.exit_code == 0, result.output
+    parent_clone = _monorepo_parent_clone(library_root)
+    assert skill_git.head_sha(parent_clone, env=None) == old_sha
+    assert not (library_root / "mkdocs" / "UPSTREAM.md").exists()
+    entry = json.loads((library_root.parent / "skills-lock.json").read_text())["skills"]["mkdocs"]
+    assert entry["upstreamSha"] == old_sha
+    assert entry["upstreamSha"] != new_sha
+
+
+def test_import_monorepo_latest_lands_current_ref_head(tmp_path, monkeypatch):
+    """--latest preserves the current parent-ref refresh behavior."""
+    from agent_toolkit_cli import skill_git
+    from tests.test_cli.test_skill_update_monorepo import _init_parent
+
+    parent = _init_parent(tmp_path)
+    old_sha = skill_git.head_sha(parent, env=None)
+    new_sha = _commit_parent_change(parent, "mkdocs/UPSTREAM.md", "new\n")
+    library_root = tmp_path / "lib" / "skills"
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    incoming = _write_monorepo_incoming(
+        parent, {"mkdocs": old_sha}, tmp_path / "incoming.json",
+    )
+
+    result = CliRunner().invoke(
+        main, ["skill", "import", str(incoming), "--latest"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert skill_git.head_sha(_monorepo_parent_clone(library_root), env=None) == new_sha
+    assert (library_root / "mkdocs" / "UPSTREAM.md").exists()
+
+
+def test_import_monorepo_sibling_reuses_matching_pinned_parent(
+    tmp_path, monkeypatch,
+):
+    """Sibling imports at one pin share the parent without moving it."""
+    from agent_toolkit_cli import skill_git
+    from tests.test_cli.test_skill_update_monorepo import _init_parent
+
+    parent = _init_parent(tmp_path)
+    old_sha = skill_git.head_sha(parent, env=None)
+    _commit_parent_change(parent, "mkdocs/UPSTREAM.md", "new\n")
+    library_root = tmp_path / "lib" / "skills"
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+
+    first = _write_monorepo_incoming(
+        parent, {"mkdocs": old_sha}, tmp_path / "first.json",
+    )
+    second = _write_monorepo_incoming(
+        parent, {"docker": old_sha}, tmp_path / "second.json",
+    )
+    runner = CliRunner()
+    assert runner.invoke(main, ["skill", "import", str(first)]).exit_code == 0
+    result = runner.invoke(main, ["skill", "import", str(second)])
+
+    assert result.exit_code == 0, result.output
+    assert skill_git.head_sha(_monorepo_parent_clone(library_root), env=None) == old_sha
+    assert (library_root / "mkdocs" / "SKILL.md").exists()
+    assert (library_root / "docker" / "SKILL.md").exists()
+
+
+def test_import_monorepo_conflicting_pin_refuses_without_moving_parent(
+    tmp_path, monkeypatch,
+):
+    """A shared parent cannot silently switch a first sibling to another pin."""
+    from agent_toolkit_cli import skill_git
+    from tests.test_cli.test_skill_update_monorepo import _init_parent
+
+    parent = _init_parent(tmp_path)
+    old_sha = skill_git.head_sha(parent, env=None)
+    new_sha = _commit_parent_change(parent, "mkdocs/UPSTREAM.md", "new\n")
+    library_root = tmp_path / "lib" / "skills"
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    runner = CliRunner()
+    first = _write_monorepo_incoming(
+        parent, {"mkdocs": old_sha}, tmp_path / "first.json",
+    )
+    assert runner.invoke(main, ["skill", "import", str(first)]).exit_code == 0
+    before_lock = (library_root.parent / "skills-lock.json").read_text()
+
+    second = _write_monorepo_incoming(
+        parent, {"docker": new_sha}, tmp_path / "second.json",
+    )
+    result = runner.invoke(main, ["skill", "import", str(second)])
+
+    assert result.exit_code == 1, result.output
+    assert "failed" in result.output
+    assert skill_git.head_sha(_monorepo_parent_clone(library_root), env=None) == old_sha
+    assert (library_root / "mkdocs" / "SKILL.md").exists()
+    assert not (library_root / "docker").exists()
+    assert (library_root.parent / "skills-lock.json").read_text() == before_lock
+
+
+def test_import_monorepo_dirty_parent_refuses_before_movement(tmp_path, monkeypatch):
+    """Import never hard-resets a dirty shared parent, even at its same pin."""
+    from agent_toolkit_cli import skill_git
+    from tests.test_cli.test_skill_update_monorepo import _init_parent
+
+    parent = _init_parent(tmp_path)
+    old_sha = skill_git.head_sha(parent, env=None)
+    _commit_parent_change(parent, "mkdocs/UPSTREAM.md", "new\n")
+    library_root = tmp_path / "lib" / "skills"
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    runner = CliRunner()
+    first = _write_monorepo_incoming(
+        parent, {"mkdocs": old_sha}, tmp_path / "first.json",
+    )
+    assert runner.invoke(main, ["skill", "import", str(first)]).exit_code == 0
+    parent_clone = _monorepo_parent_clone(library_root)
+    (parent_clone / "mkdocs" / "DIRTY.md").write_text("keep me\n")
+    before_lock = (library_root.parent / "skills-lock.json").read_text()
+
+    second = _write_monorepo_incoming(
+        parent, {"docker": old_sha}, tmp_path / "second.json",
+    )
+    result = runner.invoke(main, ["skill", "import", str(second)])
+
+    assert result.exit_code == 1, result.output
+    assert "dirty" in result.output.lower()
+    assert skill_git.head_sha(parent_clone, env=None) == old_sha
+    assert (parent_clone / "mkdocs" / "DIRTY.md").exists()
+    assert not (library_root / "docker").exists()
+    assert (library_root.parent / "skills-lock.json").read_text() == before_lock
 
 
 def test_import_appears_in_skill_help():
