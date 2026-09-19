@@ -27,7 +27,13 @@ from agent_toolkit_cli.skill_install import (
     ensure_project_canonical,
     validate_projection_context,
 )
-from agent_toolkit_cli.skill_lock import LockFile, read_lock, remove_entry, write_lock
+from agent_toolkit_cli.skill_lock import (
+    LockFile,
+    looks_like_sha,
+    read_lock,
+    remove_entry,
+    write_lock,
+)
 from agent_toolkit_cli.skill_paths import (
     is_skill_projection_available,
     library_lock_path,
@@ -112,14 +118,22 @@ def _reconstruct_monorepo(
     parent_dir = parent_clone_path(owner, repo, ref=parsed.ref, env=None)
     if not parent_dir.exists():
         parent_dir.parent.mkdir(parents=True, exist_ok=True)
-        # Shallow — import only needs one subpath tree. A recorded pin may be
-        # older than the ref tip, so fetch it explicitly before checkout.
-        skill_git.clone(
-            parsed.url, parent_dir, ref=parsed.ref, env=None, depth=1,
+        # `git clone --branch` accepts branches/tags, not commit SHAs. Clone
+        # SHA-ref imports at the remote default, then fetch and check out the
+        # effective pin just as we do for a recorded older pin.
+        ref_is_full_sha = (
+            parsed.ref is not None
+            and len(parsed.ref) == 40
+            and looks_like_sha(parsed.ref)
         )
-        if pin_sha:
-            skill_git.fetch_ref(parent_dir, ref=pin_sha, env=None, depth=1)
-            skill_git.checkout(parent_dir, ref=pin_sha, env=None)
+        clone_ref = None if ref_is_full_sha else parsed.ref
+        skill_git.clone(
+            parsed.url, parent_dir, ref=clone_ref, env=None, depth=1,
+        )
+        effective_pin = pin_sha or (parsed.ref if ref_is_full_sha else None)
+        if effective_pin:
+            skill_git.fetch_ref(parent_dir, ref=effective_pin, env=None, depth=1)
+            skill_git.checkout(parent_dir, ref=effective_pin, env=None)
     else:
         if not skill_git.is_git_repo(parent_dir):
             raise click.ClickException(

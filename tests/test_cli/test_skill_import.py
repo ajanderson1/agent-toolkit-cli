@@ -495,7 +495,7 @@ def _commit_parent_change(parent: Path, path: str, content: str) -> str:
 
 
 def _write_monorepo_incoming(
-    parent: Path, entries: dict[str, str], dest: Path,
+    parent: Path, entries: dict[str, str], dest: Path, *, ref: str | None = None,
 ) -> Path:
     """Write lock entries for fixture subpaths pinned to their given SHAs."""
     dest.write_text(json.dumps({
@@ -509,6 +509,7 @@ def _write_monorepo_incoming(
                 "readOnly": True,
                 "upstreamSha": sha,
                 "localSha": sha,
+                **({"ref": ref} if ref is not None else {}),
             }
             for slug, sha in entries.items()
         },
@@ -547,6 +548,31 @@ def test_import_monorepo_pinned_old_sha_lands_and_records_exact_commit(
     entry = json.loads((library_root.parent / "skills-lock.json").read_text())["skills"]["mkdocs"]
     assert entry["upstreamSha"] == old_sha
     assert entry["upstreamSha"] != new_sha
+
+
+def test_import_monorepo_full_sha_ref_clones_then_checks_out_pin(
+    tmp_path, monkeypatch,
+):
+    """A SHA ref cannot be passed to clone --branch during import."""
+    from agent_toolkit_cli import skill_git
+    from tests.test_cli.test_skill_update_monorepo import _init_parent
+
+    parent = _init_parent(tmp_path)
+    sha = skill_git.head_sha(parent, env=None)
+    library_root = tmp_path / "lib" / "skills"
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    incoming = _write_monorepo_incoming(
+        parent, {"mkdocs": sha}, tmp_path / "incoming.json", ref=sha,
+    )
+
+    result = CliRunner().invoke(main, ["skill", "import", str(incoming)])
+
+    assert result.exit_code == 0, result.output
+    assert skill_git.head_sha(_monorepo_parent_clone(library_root), env=None) == sha
+    lock = json.loads((library_root.parent / "skills-lock.json").read_text())
+    entry = lock["skills"]["mkdocs"]
+    assert entry["ref"] == sha
+    assert entry["upstreamSha"] == sha
 
 
 def test_import_monorepo_latest_lands_current_ref_head(tmp_path, monkeypatch):
