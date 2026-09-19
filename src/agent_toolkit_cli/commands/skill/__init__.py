@@ -27,7 +27,13 @@ from agent_toolkit_cli.skill_install import (
     ensure_project_canonical,
     validate_projection_context,
 )
-from agent_toolkit_cli.skill_lock import LockFile, read_lock, remove_entry, write_lock
+from agent_toolkit_cli.skill_lock import (
+    LockFile,
+    looks_like_sha,
+    read_lock,
+    remove_entry,
+    write_lock,
+)
 from agent_toolkit_cli.skill_paths import (
     is_skill_projection_available,
     library_lock_path,
@@ -59,11 +65,11 @@ def reconstruct_skill_into_library(
     """Clone `parsed` into the library at `slug`; return (upstream_sha, local_sha).
 
     Single-repo: clone at parsed.ref, optionally checkout pin_sha, record SHAs.
-    Monorepo: parent clone + subpath symlink (pin_sha ignored; parent-HEAD pinned).
+    Monorepo: parent clone + subpath symlink, pinned when pin_sha is supplied.
     Does not touch the lock file — the caller owns lock mutation.
     """
     if parsed.subpath or parsed.skill_name:
-        return _reconstruct_monorepo(parsed, slug)
+        return _reconstruct_monorepo(parsed, slug, pin_sha=pin_sha)
     return _reconstruct_single(parsed, slug, pin_sha=pin_sha)
 
 
@@ -101,7 +107,7 @@ def _reconstruct_single(
 
 
 def _reconstruct_monorepo(
-    parsed: ParsedSource, slug: str,
+    parsed: ParsedSource, slug: str, *, pin_sha: str | None,
 ) -> tuple[str | None, str | None]:
     from agent_toolkit_cli.skill_install import _symlink_or_copy
     from agent_toolkit_cli.skill_paths import parent_clone_path
@@ -112,27 +118,51 @@ def _reconstruct_monorepo(
     parent_dir = parent_clone_path(owner, repo, ref=parsed.ref, env=None)
     if not parent_dir.exists():
         parent_dir.parent.mkdir(parents=True, exist_ok=True)
-        # Shallow — the monorepo skill pins to parent HEAD and we only symlink
-        # one subpath's tree, so the parent's full history is pure waste (#259).
-        skill_git.clone(
-            parsed.url, parent_dir, ref=parsed.ref, env=None, depth=1,
+        # `git clone --branch` accepts branches/tags, not commit SHAs. Clone
+        # SHA-ref imports at the remote default, then fetch and check out the
+        # effective pin just as we do for a recorded older pin.
+        ref_is_full_sha = (
+            parsed.ref is not None
+            and len(parsed.ref) == 40
+            and looks_like_sha(parsed.ref)
         )
+        clone_ref = None if ref_is_full_sha else parsed.ref
+        skill_git.clone(
+            parsed.url, parent_dir, ref=clone_ref, env=None, depth=1,
+        )
+        effective_pin = pin_sha or (parsed.ref if ref_is_full_sha else None)
+        if effective_pin:
+            skill_git.fetch_ref(parent_dir, ref=effective_pin, env=None, depth=1)
+            skill_git.checkout(parent_dir, ref=effective_pin, env=None)
     else:
-        # Refresh the cached parent so a *growing* monorepo resolves later-added
-        # skills. The cache is a depth-1 shallow clone (line 105), so we must
-        # fetch the specific ref's current tip (fetch_ref advances even a shallow
-        # clone) and then hard-reset the working tree onto it. Without this, the
-        # tree stays pinned at the first add's commit and the subpath read below
-        # fails "SKILL.md not found" for any skill pushed after this cache was
-        # first cloned (#276). The parent is a read-only cache, so the reset is
-        # safe. Best-effort: a fetch failure (offline) falls back to the cached
-        # tree, which still resolves already-present skills.
-        ref = skill_git.resolve_ref(parsed.ref, parent_dir)
-        try:
-            skill_git.fetch_ref(parent_dir, ref=ref, env=None)
-            skill_git.reset_hard(parent_dir, ref=ref, env=None)
-        except Exception:
-            pass
+        if not skill_git.is_git_repo(parent_dir):
+            raise click.ClickException(
+                f"parent cache is not a git repository: {parent_dir}"
+            )
+        if (
+            skill_git.status(parent_dir, env=None)
+            is skill_git.GitWorkingTreeStatus.DIRTY
+        ):
+            raise click.ClickException(
+                f"parent cache is dirty; refusing to move it: {parent_dir}"
+            )
+        existing_parent_sha = skill_git.head_sha(parent_dir, env=None)
+        if pin_sha:
+            # One shared parent working tree cannot represent two pins. Never
+            # move it for an import: doing so changes already-imported siblings.
+            if not existing_parent_sha.startswith(pin_sha):
+                raise click.ClickException(
+                    f"parent cache is at {existing_parent_sha}, not requested pin {pin_sha}; "
+                    f"refusing to move shared parent {parent_dir}"
+                )
+        else:
+            # --latest / add flow retains the existing ref-head refresh.
+            ref = skill_git.resolve_ref(parsed.ref, parent_dir)
+            try:
+                skill_git.fetch_ref(parent_dir, ref=ref, env=None)
+                skill_git.reset_hard(parent_dir, ref=ref, env=None)
+            except Exception:
+                pass
     if parsed.subpath:
         subpath = parsed.subpath
     else:
