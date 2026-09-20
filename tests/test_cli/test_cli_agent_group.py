@@ -900,6 +900,195 @@ def test_import_nonexistent_file_errors(
     assert r.exit_code != 0
 
 
+def test_import_github_shorthand_uses_canonical_url_and_exact_pin(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, git_sandbox: object,
+) -> None:
+    """#502: shorthand default import lands on an older recorded pin."""
+    import subprocess
+
+    from agent_toolkit_cli import skill_git
+    from agent_toolkit_cli.agent_lock import LockEntry, LockFile, read_lock, write_lock
+    from agent_toolkit_cli.agent_paths import canonical_agent_dir, library_lock_path
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for key, value in git_sandbox.env.items():  # type: ignore[union-attr]
+        monkeypatch.setenv(key, value)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    pin = subprocess.run(
+        ["git", "--git-dir", str(git_sandbox.upstream), "rev-parse", "refs/heads/main"],  # type: ignore[union-attr]
+        text=True, capture_output=True, check=True, env=git_sandbox.env,  # type: ignore[union-attr]
+    ).stdout.strip()
+    advance = tmp_path / "advance-default"
+    subprocess.run(
+        ["git", "clone", str(git_sandbox.upstream), str(advance)],  # type: ignore[union-attr]
+        capture_output=True, check=True, env=git_sandbox.env,  # type: ignore[union-attr]
+    )
+    (advance / "new-tip.txt").write_text("newer than recorded pin\n")
+    subprocess.run(["git", "-C", str(advance), "add", "new-tip.txt"], check=True, env=git_sandbox.env)  # type: ignore[union-attr]
+    subprocess.run(["git", "-C", str(advance), "commit", "-m", "advance tip"], capture_output=True, check=True, env=git_sandbox.env)  # type: ignore[union-attr]
+    subprocess.run(["git", "-C", str(advance), "push", "origin", "main"], capture_output=True, check=True, env=git_sandbox.env)  # type: ignore[union-attr]
+    latest = subprocess.run(
+        ["git", "--git-dir", str(git_sandbox.upstream), "rev-parse", "refs/heads/main"],  # type: ignore[union-attr]
+        text=True, capture_output=True, check=True, env=git_sandbox.env,  # type: ignore[union-attr]
+    ).stdout.strip()
+    assert latest != pin
+    incoming = tmp_path / "incoming-agents-lock.json"
+    write_lock(incoming, LockFile(version=1, skills={
+        "demo-agent": LockEntry(
+            source="test/demo-agent",
+            source_type="github",
+            agent_path="demo-agent.md",
+            upstream_sha=pin,
+        ),
+    }))
+    original_clone = skill_git.clone
+    observed: dict[str, object] = {}
+
+    def clone(url, dest, *, ref, env, depth=None):
+        observed.update(url=url, ref=ref)
+        return original_clone(
+            str(git_sandbox.upstream), dest, ref=ref, env=env, depth=depth,  # type: ignore[union-attr]
+        )
+
+    monkeypatch.setattr(skill_git, "clone", clone)
+    result = CliRunner().invoke(main, ["agent", "import", str(incoming)])
+
+    assert result.exit_code == 0, result.output
+    assert observed == {"url": "https://github.com/test/demo-agent.git", "ref": None}
+    canonical = canonical_agent_dir("demo-agent", scope="global")
+    assert skill_git.head_sha(canonical, env=None) == pin
+    assert skill_git.head_sha(canonical, env=None) != latest
+    assert skill_git.current_branch(canonical, env=None) == "HEAD"
+    entry = read_lock(library_lock_path()).skills["demo-agent"]
+    assert entry.source == "test/demo-agent"
+    assert entry.local_sha == pin
+
+
+def test_import_latest_ignores_older_recorded_pin(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, git_sandbox: object,
+) -> None:
+    """#502: --latest follows the ref tip instead of the recorded SHA."""
+    import subprocess
+
+    from agent_toolkit_cli import skill_git
+    from agent_toolkit_cli.agent_lock import LockEntry, LockFile, write_lock
+    from agent_toolkit_cli.agent_paths import canonical_agent_dir
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for key, value in git_sandbox.env.items():  # type: ignore[union-attr]
+        monkeypatch.setenv(key, value)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    recorded = subprocess.run(
+        ["git", "--git-dir", str(git_sandbox.upstream), "rev-parse", "refs/heads/main"],  # type: ignore[union-attr]
+        text=True, capture_output=True, check=True, env=git_sandbox.env,  # type: ignore[union-attr]
+    ).stdout.strip()
+    advance = tmp_path / "advance-latest"
+    subprocess.run(
+        ["git", "clone", str(git_sandbox.upstream), str(advance)],  # type: ignore[union-attr]
+        capture_output=True, check=True, env=git_sandbox.env,  # type: ignore[union-attr]
+    )
+    (advance / "new-tip.txt").write_text("latest\n")
+    subprocess.run(["git", "-C", str(advance), "add", "new-tip.txt"], check=True, env=git_sandbox.env)  # type: ignore[union-attr]
+    subprocess.run(["git", "-C", str(advance), "commit", "-m", "advance tip"], capture_output=True, check=True, env=git_sandbox.env)  # type: ignore[union-attr]
+    subprocess.run(["git", "-C", str(advance), "push", "origin", "main"], capture_output=True, check=True, env=git_sandbox.env)  # type: ignore[union-attr]
+    latest = subprocess.run(
+        ["git", "--git-dir", str(git_sandbox.upstream), "rev-parse", "refs/heads/main"],  # type: ignore[union-attr]
+        text=True, capture_output=True, check=True, env=git_sandbox.env,  # type: ignore[union-attr]
+    ).stdout.strip()
+    assert latest != recorded
+    incoming = tmp_path / "incoming-agents-lock.json"
+    write_lock(incoming, LockFile(version=1, skills={
+        "demo-agent": LockEntry(
+            source=str(git_sandbox.upstream),  # type: ignore[union-attr]
+            source_type="git",
+            ref="main",
+            agent_path="demo-agent.md",
+            upstream_sha=recorded,
+        ),
+    }))
+
+    result = CliRunner().invoke(
+        main, ["agent", "import", str(incoming), "--latest"],
+    )
+
+    assert result.exit_code == 0, result.output
+    canonical = canonical_agent_dir("demo-agent", scope="global")
+    assert skill_git.head_sha(canonical, env=None) == latest
+    assert skill_git.head_sha(canonical, env=None) != recorded
+
+
+def test_import_pin_failure_removes_canonical_and_writes_no_lock(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, git_sandbox: object,
+) -> None:
+    """#502: an unavailable reviewed pin must fail loudly, not use ref HEAD."""
+    from agent_toolkit_cli.agent_lock import LockEntry, LockFile, read_lock, write_lock
+    from agent_toolkit_cli.agent_paths import canonical_agent_dir, library_lock_path
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for key, value in git_sandbox.env.items():  # type: ignore[union-attr]
+        monkeypatch.setenv(key, value)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    incoming = tmp_path / "incoming-agents-lock.json"
+    write_lock(incoming, LockFile(version=1, skills={
+        "demo-agent": LockEntry(
+            source=str(git_sandbox.upstream),  # type: ignore[union-attr]
+            source_type="git",
+            agent_path="demo-agent.md",
+            upstream_sha="f" * 40,
+        ),
+    }))
+
+    result = CliRunner().invoke(main, ["agent", "import", str(incoming)])
+
+    assert result.exit_code == 1, result.output
+    assert "failed" in result.output
+    assert not canonical_agent_dir("demo-agent", scope="global").exists()
+    assert "demo-agent" not in read_lock(library_lock_path()).skills
+
+
+def test_import_full_sha_ref_is_not_passed_to_clone_branch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, git_sandbox: object,
+) -> None:
+    """#502: full-SHA refs clone at default HEAD, then check out the pin."""
+    import subprocess
+
+    from agent_toolkit_cli import skill_git
+    from agent_toolkit_cli.agent_lock import LockEntry, LockFile, write_lock
+    from agent_toolkit_cli.agent_paths import canonical_agent_dir
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for key, value in git_sandbox.env.items():  # type: ignore[union-attr]
+        monkeypatch.setenv(key, value)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    pin = subprocess.run(
+        ["git", "--git-dir", str(git_sandbox.upstream), "rev-parse", "refs/heads/main"],  # type: ignore[union-attr]
+        text=True, capture_output=True, check=True, env=git_sandbox.env,  # type: ignore[union-attr]
+    ).stdout.strip()
+    incoming = tmp_path / "incoming-agents-lock.json"
+    write_lock(incoming, LockFile(version=1, skills={
+        "demo-agent": LockEntry(
+            source=str(git_sandbox.upstream),  # type: ignore[union-attr]
+            source_type="git",
+            ref=pin,
+            agent_path="demo-agent.md",
+            upstream_sha=pin,
+        ),
+    }))
+    original_clone = skill_git.clone
+    observed: list[str | None] = []
+
+    def clone(url, dest, *, ref, env, depth=None):
+        observed.append(ref)
+        return original_clone(url, dest, ref=ref, env=env, depth=depth)
+
+    monkeypatch.setattr(skill_git, "clone", clone)
+    result = CliRunner().invoke(main, ["agent", "import", str(incoming)])
+
+    assert result.exit_code == 0, result.output
+    assert observed == [None]
+    assert skill_git.head_sha(canonical_agent_dir("demo-agent", scope="global"), env=None) == pin
+
+
 def test_import_skips_already_present(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
