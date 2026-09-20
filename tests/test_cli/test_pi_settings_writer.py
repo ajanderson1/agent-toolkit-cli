@@ -36,6 +36,19 @@ def test_add_package_preserves_all_other_keys(tmp_path):
     assert body["packages"] == ["npm:existing", "npm:@scope/new"]
 
 
+def test_add_package_preserves_current_pi_object_representation(tmp_path):
+    p = _global(tmp_path)
+    _seed(p, {"model": "x", "packages": [{"source": "npm:existing"}]})
+
+    ps.add_package("npm:new", scope="global", home=tmp_path)
+    ps.add_package("npm:new", scope="global", home=tmp_path)
+
+    assert json.loads(p.read_text()) == {
+        "model": "x",
+        "packages": [{"source": "npm:existing"}, {"source": "npm:new"}],
+    }
+
+
 def test_add_package_is_idempotent(tmp_path):
     p = _global(tmp_path)
     _seed(p, {"packages": ["npm:foo"]})
@@ -67,6 +80,20 @@ def test_remove_package_preserves_other_keys(tmp_path):
     body = json.loads(p.read_text())
     assert body["model"] == "x"
     assert body["packages"] == ["npm:bar"]
+
+
+def test_remove_package_preserves_current_pi_object_representation(tmp_path):
+    p = _global(tmp_path)
+    _seed(p, {
+        "model": "x",
+        "packages": [{"source": "npm:foo"}, {"source": "npm:bar"}],
+    })
+
+    ps.remove_package("npm:foo", scope="global", home=tmp_path)
+
+    assert json.loads(p.read_text()) == {
+        "model": "x", "packages": [{"source": "npm:bar"}],
+    }
 
 
 def test_remove_package_absent_is_noop(tmp_path):

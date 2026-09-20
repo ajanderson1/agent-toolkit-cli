@@ -46,6 +46,20 @@ def test_remove_by_identity_strips_version_pinned_drift(tmp_path):
     assert body["packages"] == ["npm:keep"]  # the foo variant is gone
 
 
+def test_remove_by_identity_preserves_current_pi_object_representation(tmp_path):
+    p = _global(tmp_path)
+    _seed(p, {
+        "packages": [
+            {"source": "foo@1.2.3"},
+            {"source": "npm:keep"},
+        ],
+    })
+
+    ps.remove_package_by_identity("npm:foo", scope="global", home=tmp_path)
+
+    assert json.loads(p.read_text())["packages"] == [{"source": "npm:keep"}]
+
+
 def test_remove_by_identity_removes_all_matching_variants(tmp_path):
     p = _global(tmp_path)
     _seed(p, {"packages": ["npm:foo", "foo@2", "npm:other"]})

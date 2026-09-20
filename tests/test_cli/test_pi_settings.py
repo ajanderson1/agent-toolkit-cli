@@ -31,6 +31,31 @@ def test_read_packages_global(tmp_path):
     ]
 
 
+def test_read_packages_accepts_current_pi_source_objects(tmp_path):
+    _write(
+        tmp_path / ".pi" / "agent" / "settings.json",
+        {"packages": [{"source": "npm:foo"}, {"source": "git:github.com/o/r"}]},
+    )
+    assert ps.read_packages(scope="global", home=tmp_path) == [
+        "npm:foo", "git:github.com/o/r",
+    ]
+
+
+@pytest.mark.parametrize(
+    "packages",
+    [
+        ["npm:foo", {"source": "npm:bar"}],
+        [{"source": "npm:foo", "token": "secret"}],
+        [{"source": 42}],
+        [{}],
+    ],
+)
+def test_read_packages_rejects_mixed_or_malformed_objects(tmp_path, packages):
+    _write(tmp_path / ".pi" / "agent" / "settings.json", {"packages": packages})
+    with pytest.raises(ps.PiSettingsError):
+        ps.read_packages(scope="global", home=tmp_path)
+
+
 def test_read_extensions_paths(tmp_path):
     _write(tmp_path / ".pi" / "agent" / "settings.json",
            {"extensions": ["./local-ext", "/abs/ext"]})

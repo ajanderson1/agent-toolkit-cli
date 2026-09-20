@@ -141,6 +141,39 @@ def test_npm_install_uninstall_global_round_trip(tmp_path, monkeypatch):
     assert "npm:@scope/foo" not in _pi_settings.read_packages(scope="global", home=tmp_path)
 
 
+def test_npm_install_uninstall_preserves_current_pi_package_objects(
+    tmp_path, monkeypatch,
+):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    settings = tmp_path / ".pi" / "agent" / "settings.json"
+    settings.parent.mkdir(parents=True)
+    settings.write_text(json.dumps({
+        "theme": "dark",
+        "packages": [{"source": "npm:existing"}],
+    }))
+    CliRunner().invoke(main, ["pi-extension", "add", "npm:@scope/foo"])
+
+    installed = CliRunner().invoke(
+        main, ["pi-extension", "install", "@scope/foo", "-g"],
+    )
+    assert installed.exit_code == 0, installed.output
+    assert json.loads(settings.read_text()) == {
+        "theme": "dark",
+        "packages": [
+            {"source": "npm:existing"},
+            {"source": "npm:@scope/foo"},
+        ],
+    }
+
+    removed = CliRunner().invoke(
+        main, ["pi-extension", "uninstall", "@scope/foo", "-g"],
+    )
+    assert removed.exit_code == 0, removed.output
+    assert json.loads(settings.read_text()) == {
+        "theme": "dark", "packages": [{"source": "npm:existing"}],
+    }
+
+
 def test_npm_install_project_scope(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     CliRunner().invoke(main, ["pi-extension", "add", "npm:bar"])

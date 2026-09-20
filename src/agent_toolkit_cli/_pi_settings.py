@@ -59,6 +59,37 @@ def _string_list(data: dict[str, object], key: str, path: Path) -> list[str]:
     return value
 
 
+def _package_sources(
+    data: dict[str, object], path: Path,
+) -> tuple[list[str], Literal["strings", "objects"]]:
+    """Decode legacy strings or Pi 0.86 exact ``{source}`` objects."""
+    value = data.get("packages", [])
+    if not isinstance(value, list):
+        raise PiSettingsError(
+            f"{path}: `packages` is not a list of strings or source objects"
+        )
+    if all(isinstance(item, str) for item in value):
+        return list(value), "strings"
+    if all(
+        isinstance(item, dict)
+        and set(item) == {"source"}
+        and isinstance(item["source"], str)
+        for item in value
+    ):
+        return [item["source"] for item in value], "objects"
+    raise PiSettingsError(
+        f"{path}: `packages` is not a uniform list of strings or source objects"
+    )
+
+
+def _encode_packages(
+    packages: list[str], style: Literal["strings", "objects"],
+) -> list[object]:
+    if style == "objects":
+        return [{"source": package} for package in packages]
+    return list(packages)
+
+
 def read_packages(
     *,
     scope: Scope,
@@ -66,7 +97,8 @@ def read_packages(
     project: Path | None = None,
 ) -> list[str]:
     path = settings_path(scope=scope, home=home, project=project)
-    return _string_list(_load(path), "packages", path)
+    packages, _ = _package_sources(_load(path), path)
+    return packages
 
 
 def has_package_identity(
@@ -130,10 +162,10 @@ def add_package(
     existing settings.json is unparseable."""
     path = settings_path(scope=scope, home=home, project=project)
     data = _load(path)  # {} if missing; raises PiSettingsError on malformed/non-dict
-    packages = _string_list(data, "packages", path)  # raises if present & not list[str]
+    packages, style = _package_sources(data, path)
     if spec in packages:
         return
-    data["packages"] = [*packages, spec]
+    data["packages"] = _encode_packages([*packages, spec], style)
     _write_atomic(path, data)
 
 
@@ -152,10 +184,12 @@ def remove_package(
     if not path.exists():
         return
     data = _load(path)
-    packages = _string_list(data, "packages", path)
+    packages, style = _package_sources(data, path)
     if spec not in packages:
         return
-    data["packages"] = [p for p in packages if p != spec]
+    data["packages"] = _encode_packages(
+        [package for package in packages if package != spec], style,
+    )
     _write_atomic(path, data)
 
 
@@ -202,10 +236,10 @@ def remove_package_by_identity(
     if not path.exists():
         return
     data = _load(path)
-    packages = _string_list(data, "packages", path)
+    packages, style = _package_sources(data, path)
     target = npm_identity(spec_or_slug)
-    kept = [p for p in packages if npm_identity(p) != target]
+    kept = [package for package in packages if npm_identity(package) != target]
     if len(kept) == len(packages):
         return
-    data["packages"] = kept
+    data["packages"] = _encode_packages(kept, style)
     _write_atomic(path, data)
