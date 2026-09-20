@@ -66,6 +66,34 @@ def _write_global_lock(tmp_path: Path, slug: str = "demo-agent") -> None:
     write_lock(lock_path, add_entry(lock, slug, entry))
 
 
+def _commit_agent_files(git_sandbox: object, files: dict[str, str], message: str) -> str:
+    """Commit agent fixtures to the sandbox remote and return the new HEAD."""
+    import subprocess
+
+    clone = git_sandbox.clone  # type: ignore[union-attr]
+    env = git_sandbox.env  # type: ignore[union-attr]
+    for relative, content in files.items():
+        path = clone / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content)
+    subprocess.run(
+        ["git", "-C", str(clone), "add", *files],
+        check=True, env=env, capture_output=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(clone), "commit", "-m", message],
+        check=True, env=env, capture_output=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(clone), "push", "origin", "main"],
+        check=True, env=env, capture_output=True,
+    )
+    return subprocess.run(
+        ["git", "-C", str(clone), "rev-parse", "HEAD"],
+        check=True, env=env, text=True, capture_output=True,
+    ).stdout.strip()
+
+
 def _cc_dest(tmp_path: Path, slug: str = "demo-agent") -> Path:
     """claude-code destination for the slug under tmp_path HOME."""
     return tmp_path / ".claude" / "agents" / f"{slug}.md"
@@ -914,6 +942,9 @@ def test_import_github_shorthand_uses_canonical_url_and_exact_pin(
     for key, value in git_sandbox.env.items():  # type: ignore[union-attr]
         monkeypatch.setenv(key, value)
     monkeypatch.setenv("HOME", str(tmp_path))
+    _commit_agent_files(
+        git_sandbox, {"demo-agent.md": _CONTENT}, "add demo agent",
+    )
     pin = subprocess.run(
         ["git", "--git-dir", str(git_sandbox.upstream), "rev-parse", "refs/heads/main"],  # type: ignore[union-attr]
         text=True, capture_output=True, check=True, env=git_sandbox.env,  # type: ignore[union-attr]
@@ -978,6 +1009,9 @@ def test_import_latest_ignores_older_recorded_pin(
     for key, value in git_sandbox.env.items():  # type: ignore[union-attr]
         monkeypatch.setenv(key, value)
     monkeypatch.setenv("HOME", str(tmp_path))
+    _commit_agent_files(
+        git_sandbox, {"demo-agent.md": _CONTENT}, "add demo agent",
+    )
     recorded = subprocess.run(
         ["git", "--git-dir", str(git_sandbox.upstream), "rev-parse", "refs/heads/main"],  # type: ignore[union-attr]
         text=True, capture_output=True, check=True, env=git_sandbox.env,  # type: ignore[union-attr]
@@ -1050,8 +1084,6 @@ def test_import_full_sha_ref_is_not_passed_to_clone_branch(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, git_sandbox: object,
 ) -> None:
     """#502: full-SHA refs clone at default HEAD, then check out the pin."""
-    import subprocess
-
     from agent_toolkit_cli import skill_git
     from agent_toolkit_cli.agent_lock import LockEntry, LockFile, write_lock
     from agent_toolkit_cli.agent_paths import canonical_agent_dir
@@ -1060,10 +1092,9 @@ def test_import_full_sha_ref_is_not_passed_to_clone_branch(
     for key, value in git_sandbox.env.items():  # type: ignore[union-attr]
         monkeypatch.setenv(key, value)
     monkeypatch.setenv("HOME", str(tmp_path))
-    pin = subprocess.run(
-        ["git", "--git-dir", str(git_sandbox.upstream), "rev-parse", "refs/heads/main"],  # type: ignore[union-attr]
-        text=True, capture_output=True, check=True, env=git_sandbox.env,  # type: ignore[union-attr]
-    ).stdout.strip()
+    pin = _commit_agent_files(
+        git_sandbox, {"demo-agent.md": _CONTENT}, "add demo agent",
+    )
     incoming = tmp_path / "incoming-agents-lock.json"
     write_lock(incoming, LockFile(version=1, skills={
         "demo-agent": LockEntry(
@@ -1087,6 +1118,556 @@ def test_import_full_sha_ref_is_not_passed_to_clone_branch(
     assert result.exit_code == 0, result.output
     assert observed == [None]
     assert skill_git.head_sha(canonical_agent_dir("demo-agent", scope="global"), env=None) == pin
+
+
+def test_import_category_repo_reuses_exact_parent_and_projects_agents(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, git_sandbox: object,
+) -> None:
+    """#505: agentPath reconstructs shared-parent symlink topology."""
+    from agent_toolkit_cli import skill_git
+    from agent_toolkit_cli.agent_lock import LockEntry, LockFile, read_lock, write_lock
+    from agent_toolkit_cli.agent_paths import (
+        agent_parent_clone_path,
+        canonical_agent_dir,
+        library_lock_path,
+    )
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for key, value in git_sandbox.env.items():  # type: ignore[union-attr]
+        monkeypatch.setenv(key, value)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    alpha = "---\nname: alpha\ndescription: Alpha agent\n---\n\nAlpha.\n"
+    beta = "---\nname: beta\ndescription: Beta agent\n---\n\nBeta.\n"
+    pin = _commit_agent_files(
+        git_sandbox,
+        {
+            "agents/alpha/alpha.md": alpha,
+            "agents/nested/beta/beta.md": beta,
+        },
+        "add category agents",
+    )
+    incoming = tmp_path / "incoming-agents-lock.json"
+    write_lock(incoming, LockFile(version=1, skills={
+        "alpha": LockEntry(
+            source="test/agent-bundle", source_type="github",
+            agent_path="agents/alpha/alpha.md", upstream_sha=pin,
+            parent_url="https://github.com/test/agent-bundle", read_only=True,
+        ),
+        "beta": LockEntry(
+            source="test/agent-bundle", source_type="github",
+            agent_path="agents/nested/beta/beta.md", upstream_sha=pin,
+            parent_url="https://github.com/test/agent-bundle", read_only=True,
+        ),
+    }))
+    original_clone = skill_git.clone
+    clones: list[Path] = []
+
+    def clone(url, dest, *, ref, env, depth=None):
+        clones.append(dest)
+        return original_clone(
+            str(git_sandbox.upstream), dest, ref=ref, env=env, depth=depth,  # type: ignore[union-attr]
+        )
+
+    monkeypatch.setattr(skill_git, "clone", clone)
+    monkeypatch.setattr(skill_git, "remote_matches", lambda *args, **kwargs: True)
+    result = CliRunner().invoke(main, ["agent", "import", str(incoming)])
+
+    assert result.exit_code == 0, result.output
+    parent = agent_parent_clone_path("test", "agent-bundle", ref=None)
+    assert clones == [parent]
+    assert skill_git.head_sha(parent, env=None) == pin
+    for slug, relative in {
+        "alpha": "agents/alpha",
+        "beta": "agents/nested/beta",
+    }.items():
+        canonical = canonical_agent_dir(slug, scope="global")
+        assert canonical.is_symlink()
+        assert canonical.resolve() == (parent / relative).resolve()
+        assert (canonical / f"{slug}.md").is_file()
+    lock = read_lock(library_lock_path())
+    assert lock.skills["alpha"].agent_path == "agents/alpha/alpha.md"
+    assert lock.skills["alpha"].parent_url == "https://github.com/test/agent-bundle"
+    assert lock.skills["alpha"].read_only is True
+    assert lock.skills["alpha"].upstream_sha == pin
+    assert lock.skills["alpha"].local_sha is None
+
+    installed = CliRunner().invoke(
+        main, ["agent", "install", "alpha", "-g", "--harnesses", "claude-code"],
+    )
+    assert installed.exit_code == 0, installed.output
+    assert (tmp_path / ".claude/agents/alpha.md").is_file()
+
+
+def test_import_category_repo_refuses_conflicting_shared_pin_without_removing_first(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, git_sandbox: object,
+) -> None:
+    from agent_toolkit_cli import skill_git
+    from agent_toolkit_cli.agent_lock import LockEntry, LockFile, read_lock, write_lock
+    from agent_toolkit_cli.agent_paths import canonical_agent_dir, library_lock_path
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for key, value in git_sandbox.env.items():  # type: ignore[union-attr]
+        monkeypatch.setenv(key, value)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    pin = _commit_agent_files(
+        git_sandbox,
+        {
+            "agents/alpha/alpha.md": "---\nname: alpha\ndescription: Alpha\n---\n",
+            "agents/beta/beta.md": "---\nname: beta\ndescription: Beta\n---\n",
+        },
+        "add conflicting-pin fixtures",
+    )
+    incoming = tmp_path / "incoming-agents-lock.json"
+    write_lock(incoming, LockFile(version=1, skills={
+        "alpha": LockEntry(
+            source="test/agent-bundle", source_type="github",
+            agent_path="agents/alpha/alpha.md", upstream_sha=pin,
+        ),
+        "beta": LockEntry(
+            source="test/agent-bundle", source_type="github",
+            agent_path="agents/beta/beta.md", upstream_sha="f" * 40,
+        ),
+    }))
+    original_clone = skill_git.clone
+
+    def clone(url, dest, *, ref, env, depth=None):
+        return original_clone(
+            str(git_sandbox.upstream), dest, ref=ref, env=env, depth=depth,  # type: ignore[union-attr]
+        )
+
+    monkeypatch.setattr(skill_git, "clone", clone)
+    monkeypatch.setattr(skill_git, "remote_matches", lambda *args, **kwargs: True)
+    result = CliRunner().invoke(main, ["agent", "import", str(incoming)])
+
+    assert result.exit_code == 1, result.output
+    assert canonical_agent_dir("alpha", scope="global").is_symlink()
+    assert not canonical_agent_dir("beta", scope="global").exists()
+    assert set(read_lock(library_lock_path()).skills) == {"alpha"}
+
+
+def test_import_root_agent_requires_content_and_cleans_failed_clone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, git_sandbox: object,
+) -> None:
+    from agent_toolkit_cli.agent_lock import LockEntry, LockFile, read_lock, write_lock
+    from agent_toolkit_cli.agent_paths import canonical_agent_dir, library_lock_path
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for key, value in git_sandbox.env.items():  # type: ignore[union-attr]
+        monkeypatch.setenv(key, value)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    incoming = tmp_path / "incoming-agents-lock.json"
+    write_lock(incoming, LockFile(version=1, skills={
+        "demo-agent": LockEntry(
+            source=str(git_sandbox.upstream),  # type: ignore[union-attr]
+            source_type="git", agent_path="demo-agent.md",
+        ),
+    }))
+
+    result = CliRunner().invoke(main, ["agent", "import", str(incoming)])
+
+    assert result.exit_code == 1, result.output
+    assert "canonical content file missing" in result.output
+    assert not canonical_agent_dir("demo-agent", scope="global").exists()
+    assert "demo-agent" not in read_lock(library_lock_path()).skills
+
+
+def test_import_latest_refuses_stale_shared_parent_without_mutating_sibling(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, git_sandbox: object,
+) -> None:
+    from agent_toolkit_cli import skill_git
+    from agent_toolkit_cli.agent_lock import LockEntry, LockFile, read_lock, write_lock
+    from agent_toolkit_cli.agent_paths import canonical_agent_dir, library_lock_path
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for key, value in git_sandbox.env.items():  # type: ignore[union-attr]
+        monkeypatch.setenv(key, value)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    pin = _commit_agent_files(
+        git_sandbox,
+        {
+            "agents/alpha/alpha.md": "---\nname: alpha\ndescription: Alpha\n---\n",
+            "agents/beta/beta.md": "---\nname: beta\ndescription: Beta\n---\n",
+        },
+        "add latest fixtures",
+    )
+    first = tmp_path / "first-agents-lock.json"
+    write_lock(first, LockFile(version=1, skills={
+        "alpha": LockEntry(
+            source="test/agent-bundle", source_type="github", ref="main",
+            agent_path="agents/alpha/alpha.md", upstream_sha=pin,
+        ),
+    }))
+    original_clone = skill_git.clone
+
+    def clone(url, dest, *, ref, env, depth=None):
+        return original_clone(
+            str(git_sandbox.upstream), dest, ref=ref, env=env, depth=depth,  # type: ignore[union-attr]
+        )
+
+    monkeypatch.setattr(skill_git, "clone", clone)
+    monkeypatch.setattr(skill_git, "remote_matches", lambda *args, **kwargs: True)
+    added = CliRunner().invoke(
+        main, ["agent", "import", str(first), "--latest"],
+    )
+    assert added.exit_code == 0, added.output
+    alpha = canonical_agent_dir("alpha", scope="global")
+    parent = alpha.resolve().parents[1]
+    assert skill_git.current_branch(parent, env=None) == "main"
+    latest = _commit_agent_files(
+        git_sandbox, {"new-tip.txt": "newer\n"}, "advance shared parent",
+    )
+    assert latest != pin
+    second = tmp_path / "second-agents-lock.json"
+    write_lock(second, LockFile(version=1, skills={
+        "beta": LockEntry(
+            source="test/agent-bundle", source_type="github", ref="main",
+            agent_path="agents/beta/beta.md", upstream_sha=pin,
+        ),
+    }))
+
+    result = CliRunner().invoke(
+        main, ["agent", "import", str(second), "--latest"],
+    )
+
+    assert result.exit_code == 1, result.output
+    assert "shared parent" in result.output
+    assert canonical_agent_dir("alpha", scope="global").is_symlink()
+    assert not canonical_agent_dir("beta", scope="global").exists()
+    assert set(read_lock(library_lock_path()).skills) == {"alpha"}
+
+
+def test_import_latest_ref_none_uses_live_default_without_mutating_origin_head(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, git_sandbox: object,
+) -> None:
+    import subprocess
+
+    from agent_toolkit_cli import skill_git
+    from agent_toolkit_cli.agent_lock import LockEntry, LockFile, read_lock, write_lock
+    from agent_toolkit_cli.agent_paths import (
+        agent_parent_clone_path,
+        canonical_agent_dir,
+        library_lock_path,
+    )
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for key, value in git_sandbox.env.items():  # type: ignore[union-attr]
+        monkeypatch.setenv(key, value)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _commit_agent_files(
+        git_sandbox,
+        {
+            "agents/alpha/alpha.md": "---\nname: alpha\ndescription: Alpha\n---\n",
+            "agents/beta/beta.md": "---\nname: beta\ndescription: Beta\n---\n",
+        },
+        "add default-head fixtures",
+    )
+    first = tmp_path / "first-agents-lock.json"
+    write_lock(first, LockFile(version=1, skills={
+        "alpha": LockEntry(
+            source="test/agent-bundle", source_type="github",
+            agent_path="agents/alpha/alpha.md",
+        ),
+    }))
+    original_clone = skill_git.clone
+
+    def clone(url, dest, *, ref, env, depth=None):
+        return original_clone(
+            str(git_sandbox.upstream), dest, ref=ref, env=env, depth=depth,  # type: ignore[union-attr]
+        )
+
+    monkeypatch.setattr(skill_git, "clone", clone)
+    monkeypatch.setattr(skill_git, "remote_matches", lambda *args, **kwargs: True)
+    added = CliRunner().invoke(
+        main, ["agent", "import", str(first), "--latest"],
+    )
+    assert added.exit_code == 0, added.output
+    parent = agent_parent_clone_path("test", "agent-bundle", ref=None)
+    assert skill_git.current_branch(parent, env=None) == "main"
+    subprocess.run(
+        ["git", "-C", str(parent), "symbolic-ref", "--delete", "refs/remotes/origin/HEAD"],
+        check=True, env=git_sandbox.env, capture_output=True,  # type: ignore[union-attr]
+    )
+
+    clone_path = git_sandbox.clone  # type: ignore[union-attr]
+    env = git_sandbox.env  # type: ignore[union-attr]
+    subprocess.run(
+        ["git", "-C", str(clone_path), "checkout", "-b", "next"],
+        check=True, env=env, capture_output=True,
+    )
+    (clone_path / "next.txt").write_text("next default\n")
+    subprocess.run(
+        ["git", "-C", str(clone_path), "add", "next.txt"],
+        check=True, env=env, capture_output=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(clone_path), "commit", "-m", "next default"],
+        check=True, env=env, capture_output=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(clone_path), "push", "origin", "next"],
+        check=True, env=env, capture_output=True,
+    )
+    subprocess.run(
+        ["git", "--git-dir", str(git_sandbox.upstream), "symbolic-ref", "HEAD", "refs/heads/next"],  # type: ignore[union-attr]
+        check=True, env=env, capture_output=True,
+    )
+    second = tmp_path / "second-agents-lock.json"
+    write_lock(second, LockFile(version=1, skills={
+        "beta": LockEntry(
+            source="test/agent-bundle", source_type="github",
+            agent_path="agents/beta/beta.md",
+        ),
+    }))
+
+    result = CliRunner().invoke(
+        main, ["agent", "import", str(second), "--latest"],
+    )
+
+    assert result.exit_code == 1, result.output
+    assert "expected next" in result.output
+    assert canonical_agent_dir("alpha", scope="global").is_symlink()
+    assert not canonical_agent_dir("beta", scope="global").exists()
+    assert set(read_lock(library_lock_path()).skills) == {"alpha"}
+    origin_head = subprocess.run(
+        ["git", "-C", str(parent), "symbolic-ref", "refs/remotes/origin/HEAD"],
+        env=env, capture_output=True,
+    )
+    assert origin_head.returncode != 0
+
+
+def test_import_copy_failure_removes_partial_canonical_and_new_parent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, git_sandbox: object,
+) -> None:
+    import importlib
+
+    from agent_toolkit_cli import skill_git
+    from agent_toolkit_cli.agent_lock import LockEntry, LockFile, read_lock, write_lock
+    from agent_toolkit_cli.agent_paths import (
+        agent_parent_clone_path,
+        canonical_agent_dir,
+        library_lock_path,
+    )
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for key, value in git_sandbox.env.items():  # type: ignore[union-attr]
+        monkeypatch.setenv(key, value)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    pin = _commit_agent_files(
+        git_sandbox,
+        {"agents/demo-agent/demo-agent.md": _CONTENT},
+        "add copy failure fixture",
+    )
+    incoming = tmp_path / "incoming-agents-lock.json"
+    write_lock(incoming, LockFile(version=1, skills={
+        "demo-agent": LockEntry(
+            source="test/agent-bundle", source_type="github",
+            agent_path="agents/demo-agent/demo-agent.md", upstream_sha=pin,
+        ),
+    }))
+    original_clone = skill_git.clone
+
+    def clone(url, dest, *, ref, env, depth=None):
+        return original_clone(
+            str(git_sandbox.upstream), dest, ref=ref, env=env, depth=depth,  # type: ignore[union-attr]
+        )
+
+    def partial_copy(_source, destination):
+        destination.mkdir(parents=True)
+        (destination / "partial.md").write_text("partial\n")
+        raise OSError("simulated copy failure")
+
+    module = importlib.import_module(
+        "agent_toolkit_cli.commands.agent.import_cmd"
+    )
+    monkeypatch.setattr(skill_git, "clone", clone)
+    monkeypatch.setattr(module, "_symlink_or_copy", partial_copy)
+    result = CliRunner().invoke(main, ["agent", "import", str(incoming)])
+
+    canonical = canonical_agent_dir("demo-agent", scope="global")
+    parent = agent_parent_clone_path("test", "agent-bundle", ref=None)
+    assert result.exit_code == 1, result.output
+    assert not canonical.exists() and not canonical.is_symlink()
+    assert not parent.exists()
+    assert "demo-agent" not in read_lock(library_lock_path()).skills
+
+
+def test_import_preserves_preexisting_dangling_canonical_symlink(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from agent_toolkit_cli import skill_git
+    from agent_toolkit_cli.agent_lock import LockEntry, LockFile, read_lock, write_lock
+    from agent_toolkit_cli.agent_paths import canonical_agent_dir, library_lock_path
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    canonical = canonical_agent_dir("demo-agent", scope="global")
+    canonical.parent.mkdir(parents=True)
+    target = tmp_path / "missing-agent-root"
+    canonical.symlink_to(target, target_is_directory=True)
+    incoming = tmp_path / "incoming-agents-lock.json"
+    write_lock(incoming, LockFile(version=1, skills={
+        "demo-agent": LockEntry(
+            source="test/demo-agent", source_type="github",
+            agent_path="demo-agent.md",
+        ),
+    }))
+    clone_calls: list[object] = []
+
+    def unexpected_clone(*args, **kwargs):
+        clone_calls.append((args, kwargs))
+        raise AssertionError("occupied canonical reached clone")
+
+    monkeypatch.setattr(skill_git, "clone", unexpected_clone)
+    result = CliRunner().invoke(main, ["agent", "import", str(incoming)])
+
+    assert result.exit_code == 0, result.output
+    assert "skipped" in result.output
+    assert clone_calls == []
+    assert canonical.is_symlink() and canonical.readlink() == target
+    assert "demo-agent" not in read_lock(library_lock_path()).skills
+
+
+def test_import_generic_category_uses_matching_parent_url(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, git_sandbox: object,
+) -> None:
+    from agent_toolkit_cli import skill_git
+    from agent_toolkit_cli.agent_lock import LockEntry, LockFile, read_lock, write_lock
+    from agent_toolkit_cli.agent_paths import (
+        agent_parent_clone_path,
+        canonical_agent_dir,
+        library_lock_path,
+    )
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for key, value in git_sandbox.env.items():  # type: ignore[union-attr]
+        monkeypatch.setenv(key, value)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    pin = _commit_agent_files(
+        git_sandbox,
+        {"agents/demo-agent/demo-agent.md": _CONTENT},
+        "add generic category fixture",
+    )
+    parent_url = f"file://{git_sandbox.upstream}"  # type: ignore[union-attr]
+    incoming = tmp_path / "incoming-agents-lock.json"
+    write_lock(incoming, LockFile(version=1, skills={
+        "demo-agent": LockEntry(
+            source="local/upstream", source_type="git",
+            agent_path="agents/demo-agent/demo-agent.md",
+            upstream_sha=pin, parent_url=parent_url, read_only=True,
+        ),
+    }))
+
+    result = CliRunner().invoke(main, ["agent", "import", str(incoming)])
+
+    assert result.exit_code == 0, result.output
+    parent = agent_parent_clone_path("local", "upstream", ref=None)
+    canonical = canonical_agent_dir("demo-agent", scope="global")
+    assert skill_git.head_sha(parent, env=None) == pin
+    assert canonical.is_symlink()
+    entry = read_lock(library_lock_path()).skills["demo-agent"]
+    assert entry.parent_url == parent_url
+    assert entry.source == "local/upstream"
+
+
+def test_import_rejects_parent_url_source_identity_mismatch_before_clone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from agent_toolkit_cli import skill_git
+    from agent_toolkit_cli.agent_lock import LockEntry, LockFile, read_lock, write_lock
+    from agent_toolkit_cli.agent_paths import library_lock_path
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    incoming = tmp_path / "incoming-agents-lock.json"
+    write_lock(incoming, LockFile(version=1, skills={
+        "demo-agent": LockEntry(
+            source="test/agent-bundle", source_type="github",
+            agent_path="agents/demo-agent/demo-agent.md",
+            upstream_sha="a" * 40,
+            parent_url="https://github.com/other/different-bundle",
+        ),
+    }))
+    clone_calls: list[object] = []
+
+    def unexpected_clone(*args, **kwargs):
+        clone_calls.append((args, kwargs))
+        raise AssertionError("mismatched parentUrl reached clone")
+
+    monkeypatch.setattr(skill_git, "clone", unexpected_clone)
+    result = CliRunner().invoke(main, ["agent", "import", str(incoming)])
+
+    assert result.exit_code == 1, result.output
+    assert clone_calls == []
+    assert "demo-agent" not in read_lock(library_lock_path()).skills
+
+
+@pytest.mark.parametrize(
+    "agent_path",
+    ["../escape/demo-agent.md", "/absolute/demo-agent.md", "nested/not-demo-agent.md"],
+)
+def test_import_rejects_unsafe_or_mismatched_agent_path_before_clone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, agent_path: str,
+) -> None:
+    from agent_toolkit_cli import skill_git
+    from agent_toolkit_cli.agent_lock import LockEntry, LockFile, read_lock, write_lock
+    from agent_toolkit_cli.agent_paths import library_lock_path
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    incoming = tmp_path / "incoming-agents-lock.json"
+    write_lock(incoming, LockFile(version=1, skills={
+        "demo-agent": LockEntry(
+            source="test/agent-bundle", source_type="github",
+            agent_path=agent_path, upstream_sha="a" * 40,
+        ),
+    }))
+    clone_calls: list[object] = []
+
+    def unexpected_clone(*args, **kwargs):
+        clone_calls.append((args, kwargs))
+        raise AssertionError("unsafe agentPath reached clone")
+
+    monkeypatch.setattr(skill_git, "clone", unexpected_clone)
+
+    result = CliRunner().invoke(main, ["agent", "import", str(incoming)])
+
+    assert result.exit_code == 1, result.output
+    assert "failed" in result.output
+    assert clone_calls == []
+    assert "demo-agent" not in read_lock(library_lock_path()).skills
+
+
+@pytest.mark.parametrize(
+    "source,ref",
+    [("../escape", None), ("test/agent-bundle", "../../escape")],
+)
+def test_import_rejects_unsafe_category_cache_identity_before_clone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    source: str, ref: str | None,
+) -> None:
+    from agent_toolkit_cli import skill_git
+    from agent_toolkit_cli.agent_lock import LockEntry, LockFile, read_lock, write_lock
+    from agent_toolkit_cli.agent_paths import library_lock_path
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    incoming = tmp_path / "incoming-agents-lock.json"
+    write_lock(incoming, LockFile(version=1, skills={
+        "demo-agent": LockEntry(
+            source=source, source_type="github", ref=ref,
+            agent_path="agents/demo-agent/demo-agent.md",
+            upstream_sha="a" * 40,
+        ),
+    }))
+    clone_calls: list[object] = []
+
+    def unexpected_clone(*args, **kwargs):
+        clone_calls.append((args, kwargs))
+        raise AssertionError("unsafe cache identity reached clone")
+
+    monkeypatch.setattr(skill_git, "clone", unexpected_clone)
+    result = CliRunner().invoke(main, ["agent", "import", str(incoming)])
+
+    assert result.exit_code == 1, result.output
+    assert clone_calls == []
+    assert "demo-agent" not in read_lock(library_lock_path()).skills
+    assert not (tmp_path / "escape").exists()
 
 
 def test_import_skips_already_present(

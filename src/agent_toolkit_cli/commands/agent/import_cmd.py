@@ -7,11 +7,14 @@ Lock is written ONLY after a successful clone (lock honesty, #283 class of bug).
 """
 from __future__ import annotations
 
-from pathlib import Path
+import re
+import shutil
+from pathlib import Path, PurePosixPath
 
 import click
 
 from agent_toolkit_cli import skill_git
+from agent_toolkit_cli._install_core import _symlink_or_copy
 from agent_toolkit_cli.agent_lock import (
     LockEntry,
     add_entry,
@@ -20,7 +23,9 @@ from agent_toolkit_cli.agent_lock import (
     write_lock,
 )
 from agent_toolkit_cli.skill_lock import looks_like_sha
+from agent_toolkit_cli.skill_source import parse_source, sanitize_ref
 from agent_toolkit_cli.agent_paths import (
+    agent_parent_clone_path,
     library_agent_path,
     library_lock_path,
 )
@@ -38,6 +43,132 @@ def _print_notes() -> None:
     click.echo("\nNotes:")
     for note in _NOTES:
         click.echo(note)
+
+
+def _validated_agent_path(slug: str, value: str | None) -> PurePosixPath:
+    """Return a safe portable content path ending in the canonical filename."""
+    raw = value or f"{slug}.md"
+    if "\\" in raw:
+        raise ValueError(f"{slug}: invalid agentPath {raw!r}")
+    parts = raw.split("/")
+    if not parts or any(part in {"", ".", ".."} for part in parts):
+        raise ValueError(f"{slug}: invalid agentPath {raw!r}")
+    path = PurePosixPath(raw)
+    if path.is_absolute() or path.name != f"{slug}.md":
+        raise ValueError(
+            f"{slug}: agentPath must end with {slug}.md, got {raw!r}"
+        )
+    return path
+
+
+def _category_identity(
+    entry: LockEntry, slug: str,
+) -> tuple[str, str, str]:
+    """Resolve a safe cache identity and authoritative clone transport."""
+    source = entry.source[:-4] if entry.source.lower().endswith(".git") else entry.source
+    parts = source.split("/")
+    safe = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+    if (
+        entry.source_type not in {"github", "gitlab", "git"}
+        or len(parts) < 2
+        or not all(safe.fullmatch(part) and part not in {".", ".."} for part in parts)
+    ):
+        raise ValueError(
+            f"{slug}: category agent source must be portable owner/repo shorthand"
+        )
+    owner_repo = "/".join(parts)
+    if entry.parent_url:
+        parsed = parse_source(entry.parent_url)
+        if parsed.owner_repo != owner_repo or parsed.subpath is not None:
+            raise ValueError(f"{slug}: parentUrl does not match source identity")
+        source_url = parsed.url
+    elif entry.source_type in {"github", "gitlab"}:
+        source_url = clone_url_from_entry(entry)
+    else:
+        raise ValueError(f"{slug}: generic category source requires parentUrl")
+    return parts[0], "/".join(parts[1:]), source_url
+
+
+def _clone_at_requested_revision(
+    source_url: str,
+    destination: Path,
+    *,
+    ref: str | None,
+    pin: str | None,
+) -> str:
+    """Clone one repository and return its exact landed commit."""
+    ref_is_sha = looks_like_sha(ref)
+    skill_git.clone(
+        source_url, destination, ref=None if ref_is_sha else ref,
+        env=None, depth=1,
+    )
+    effective_pin = pin or (ref if ref_is_sha else None)
+    if effective_pin:
+        skill_git.fetch_ref(destination, ref=effective_pin, env=None, depth=1)
+        skill_git.checkout(destination, ref=effective_pin, env=None)
+    return skill_git.head_sha(destination, env=None)
+
+
+def _assert_safe_parent(
+    parent: Path,
+    *,
+    source_url: str,
+    expected_head: str | None,
+    ref: str | None,
+    slug: str,
+) -> str:
+    """Fail closed before reusing a shared parent clone."""
+    if not skill_git.is_git_repo(parent):
+        raise ValueError(f"{slug}: shared parent is not a Git checkout")
+    if skill_git.status(parent, env=None) is not skill_git.GitWorkingTreeStatus.CLEAN:
+        raise ValueError(f"{slug}: shared parent is dirty")
+    if not skill_git.remote_matches(parent, source_url, env=None):
+        raise ValueError(f"{slug}: shared parent source does not match lock")
+    head = skill_git.head_sha(parent, env=None)
+    if expected_head:
+        if head != expected_head:
+            raise ValueError(
+                f"{slug}: shared parent is at {head}, expected {expected_head}"
+            )
+        return head
+    if ref is None:
+        resolved_ref, remote_head = skill_git.live_remote_default_head(
+            parent, env=None,
+        )
+    else:
+        resolved_ref = ref
+        remote_head = skill_git.live_remote_head_sha(
+            parent, ref=resolved_ref, env=None,
+        )
+    branch = skill_git.current_branch(parent, env=None)
+    if branch != resolved_ref:
+        raise ValueError(
+            f"{slug}: shared parent is on {branch}, expected {resolved_ref}"
+        )
+    if head != remote_head:
+        raise ValueError(
+            f"{slug}: shared parent is stale at {head}, latest is {remote_head}"
+        )
+    return head
+
+
+def _assert_category_content(
+    parent: Path, agent_path: PurePosixPath, slug: str,
+) -> Path:
+    """Validate the category content path without following foreign symlinks."""
+    current = parent
+    for component in agent_path.parts:
+        current = current / component
+        if current.is_symlink():
+            raise ValueError(f"{slug}: agentPath contains a symlink")
+    content = parent.joinpath(*agent_path.parts)
+    if not content.is_file():
+        raise ValueError(f"{slug}: canonical content file missing: {agent_path}")
+    try:
+        content.resolve(strict=True).relative_to(parent.resolve(strict=True))
+    except (OSError, ValueError) as exc:
+        raise ValueError(f"{slug}: agentPath escapes shared parent") from exc
+    return content.parent
 
 
 @click.command("import", epilog="""\
@@ -76,72 +207,88 @@ def import_cmd(ctx: click.Context, file: Path, latest: bool) -> None:
             continue
 
         canonical = library_agent_path(slug)
-        if canonical.exists():
+        if canonical.exists() or canonical.is_symlink():
             skipped.append(slug)
             click.echo(f"  skipped  {slug}  (store copy already exists)")
             continue
 
         source_url = clone_url_from_entry(entry)
         ref = entry.ref
-        ref_is_sha = looks_like_sha(ref)
         pin_sha = None if latest else entry.upstream_sha
-        effective_pin = pin_sha or (ref if ref_is_sha else None)
+        effective_pin = pin_sha or (ref if looks_like_sha(ref) else None)
+        created_path: Path | None = None
+        created_parent: Path | None = None
 
         try:
+            if ref is not None:
+                ref = sanitize_ref(ref)
+            agent_path = _validated_agent_path(slug, entry.agent_path)
             canonical.parent.mkdir(parents=True, exist_ok=True)
-            # Git rejects `clone --branch <sha>`. Clone the default branch for
-            # SHA refs, then fetch and detach at the exact recorded commit.
-            skill_git.clone(
-                source_url, canonical, ref=None if ref_is_sha else ref,
-                env=None, depth=1,
-            )
-
-            if effective_pin and skill_git.is_git_repo(canonical):
-                # Default import is reconstructive: an unavailable reviewed pin
-                # must fail rather than silently leaving the current ref tip.
-                skill_git.fetch_ref(canonical, ref=effective_pin, env=None, depth=1)
-                skill_git.checkout(canonical, ref=effective_pin, env=None)
-
-            if skill_git.is_git_repo(canonical):
-                try:
-                    local_sha: str | None = skill_git.head_sha(canonical, env=None)
-                except skill_git.GitError:
-                    local_sha = None
-                if ref_is_sha:
-                    upstream_sha: str | None = local_sha
-                else:
-                    try:
-                        upstream_sha = skill_git.remote_head_sha(
-                            canonical, ref=skill_git.resolve_ref(ref, canonical), env=None,
-                        )
-                    except skill_git.GitError:
-                        upstream_sha = None
+            if agent_path.parent == PurePosixPath("."):
+                created_path = canonical
+                local_sha = _clone_at_requested_revision(
+                    source_url, canonical, ref=ref, pin=pin_sha,
+                )
+                _assert_category_content(canonical, agent_path, slug)
+                upstream_sha = effective_pin or local_sha
+                new_entry = LockEntry(
+                    source=entry.source,
+                    source_type=entry.source_type,
+                    ref=entry.ref,
+                    agent_path=agent_path.as_posix(),
+                    upstream_sha=upstream_sha,
+                    local_sha=local_sha,
+                    parent_url=entry.parent_url,
+                    read_only=entry.read_only,
+                )
             else:
-                upstream_sha = None
-                local_sha = None
+                owner, repo, parent_source_url = _category_identity(entry, slug)
+                parent = agent_parent_clone_path(owner, repo, ref=ref, env=None)
+                if parent.exists() or parent.is_symlink():
+                    landed = _assert_safe_parent(
+                        parent, source_url=parent_source_url,
+                        expected_head=effective_pin, ref=ref, slug=slug,
+                    )
+                else:
+                    parent.parent.mkdir(parents=True, exist_ok=True)
+                    created_parent = parent
+                    landed = _clone_at_requested_revision(
+                        parent_source_url, parent, ref=ref, pin=pin_sha,
+                    )
+                agent_root = _assert_category_content(parent, agent_path, slug)
+                created_path = canonical
+                materialised = _symlink_or_copy(agent_root, canonical)
+                new_entry = LockEntry(
+                    source=entry.source,
+                    source_type=entry.source_type,
+                    ref=entry.ref,
+                    agent_path=agent_path.as_posix(),
+                    upstream_sha=landed,
+                    local_sha=None,
+                    parent_url=entry.parent_url or parent_source_url,
+                    read_only=entry.read_only,
+                    extras={"materialised": "copy"} if materialised == "copy" else {},
+                )
+            next_current = add_entry(current, slug, new_entry)
+            # Persist after EACH added agent. Keeping the write inside the
+            # owned-path transaction lets failure cleanup preserve lock honesty.
+            write_lock(library_lock_path(), next_current)
 
         except Exception as exc:  # noqa: BLE001 — report, don't abort
             failed.append((slug, str(exc)))
             click.echo(f"  failed   {slug}  ({exc})")
-            # Lock honesty (#283): never write a lock entry for a failed clone.
-            if canonical.exists():
-                import shutil
-                shutil.rmtree(canonical, ignore_errors=True)
+            # Lock honesty (#283): never retain a failed canonical or a parent
+            # clone created solely for the failed entry.
+            if created_path is not None:
+                if created_path.is_symlink():
+                    created_path.unlink(missing_ok=True)
+                elif created_path.exists():
+                    shutil.rmtree(created_path, ignore_errors=True)
+            if created_parent is not None and created_parent.exists():
+                shutil.rmtree(created_parent, ignore_errors=True)
             continue
-
-        new_entry = LockEntry(
-            source=entry.source,
-            source_type=entry.source_type,
-            ref=entry.ref,
-            agent_path=entry.agent_path or f"{slug}.md",
-            upstream_sha=upstream_sha,
-            local_sha=local_sha,
-        )
-        current = add_entry(current, slug, new_entry)
-        # Persist after EACH added agent (a ^C mid-run leaves the lock
-        # reflecting exactly what landed on disk — same as skill/pi-extension import).
-        write_lock(library_lock_path(), current)
-        landed = (local_sha or upstream_sha or "")[:7]
+        current = next_current
+        landed = (new_entry.local_sha or new_entry.upstream_sha or "")[:7]
         suffix = f"(latest: {landed})" if latest else f"@ {landed}"
         click.echo(f"  added    {slug}  <- {entry.source} {suffix}")
         added.append(slug)

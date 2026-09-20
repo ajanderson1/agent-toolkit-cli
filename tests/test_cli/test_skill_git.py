@@ -1,8 +1,10 @@
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
+from agent_toolkit_cli import skill_git
 from agent_toolkit_cli.skill_git import (
     Divergence,
     GitError,
@@ -192,6 +194,24 @@ def test_remote_head_sha_matches_head_initially(git_sandbox):
     assert remote_head_sha(
         git_sandbox.clone, ref="main", env=git_sandbox.env
     ) == head_sha(git_sandbox.clone, env=git_sandbox.env)
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        lambda repo: skill_git.live_remote_head_sha(repo, ref="main", env=None),
+        lambda repo: skill_git.live_remote_default_head(repo, env=None),
+    ],
+)
+def test_live_remote_queries_reject_malformed_output(
+    tmp_path, monkeypatch, query,
+):
+    monkeypatch.setattr(
+        skill_git, "_run", lambda *args, **kwargs: SimpleNamespace(stdout="malformed\n"),
+    )
+
+    with pytest.raises(ValueError, match="unexpected live remote response"):
+        query(tmp_path)
 
 
 def test_merge_fast_forwards_when_clean(git_sandbox):

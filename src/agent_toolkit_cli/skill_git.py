@@ -646,6 +646,64 @@ def remote_head_sha(
     return proc.stdout.strip()
 
 
+def live_remote_head_sha(
+    repo: Path, *, ref: str, env: dict[str, str] | None
+) -> str:
+    """Query one live branch tip without mutating the local object database."""
+    safe_ref = _guard_ref(ref)
+    proc = _run(
+        [
+            "git", "-C", str(repo), "ls-remote", "--exit-code",
+            "origin", f"refs/heads/{safe_ref}",
+        ],
+        env=env,
+    )
+    lines = [line.split() for line in proc.stdout.splitlines() if line.strip()]
+    if (
+        len(lines) != 1
+        or len(lines[0]) != 2
+        or lines[0][1] != f"refs/heads/{safe_ref}"
+        or re.fullmatch(r"[0-9a-fA-F]{40}", lines[0][0]) is None
+    ):
+        raise ValueError(
+            f"unexpected live remote response for branch {safe_ref!r}"
+        )
+    return lines[0][0].lower()
+
+
+def live_remote_default_head(
+    repo: Path, *, env: dict[str, str] | None
+) -> tuple[str, str]:
+    """Return the live default branch and SHA without changing local refs."""
+    proc = _run(
+        ["git", "-C", str(repo), "ls-remote", "--symref", "origin", "HEAD"],
+        env=env,
+    )
+    branch: str | None = None
+    sha: str | None = None
+    for line in proc.stdout.splitlines():
+        fields = line.split()
+        if (
+            len(fields) == 3
+            and fields[0] == "ref:"
+            and fields[1].startswith("refs/heads/")
+            and fields[2] == "HEAD"
+        ):
+            candidate = fields[1][len("refs/heads/"):]
+            branch = _guard_ref(candidate)
+        elif (
+            len(fields) == 2
+            and fields[1] == "HEAD"
+            and re.fullmatch(r"[0-9a-fA-F]{40}", fields[0]) is not None
+        ):
+            sha = fields[0].lower()
+        elif fields:
+            raise ValueError("unexpected live remote response for default HEAD")
+    if branch is None or sha is None:
+        raise ValueError("unexpected live remote response for default HEAD")
+    return branch, sha
+
+
 def divergence(
     repo: Path, *, ref: str, env: dict[str, str] | None
 ) -> Divergence:
