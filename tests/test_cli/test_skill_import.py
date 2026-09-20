@@ -3,6 +3,9 @@ import json
 import subprocess
 from pathlib import Path
 
+import click
+import pytest
+
 from tests.conftest import scrub_git_env
 
 from click.testing import CliRunner
@@ -689,6 +692,96 @@ def test_import_monorepo_dirty_parent_refuses_before_movement(tmp_path, monkeypa
     assert (parent_clone / "mkdocs" / "DIRTY.md").exists()
     assert not (library_root / "docker").exists()
     assert (library_root.parent / "skills-lock.json").read_text() == before_lock
+
+
+def test_import_direct_package_skill_path_ignores_parent_url(tmp_path, monkeypatch):
+    """A direct package lock entry clones its source instead of a parent cache."""
+    from agent_toolkit_cli import skill_git
+    from tests.test_cli.test_skill_update_monorepo import _init_parent
+
+    package_root = _init_parent(tmp_path)
+    (package_root / "package.json").write_text('{"name": "direct-package"}\n')
+    nested_skill = package_root / "skills" / "direct" / "SKILL.md"
+    nested_skill.parent.mkdir(parents=True)
+    nested_skill.write_text("---\nname: direct\n---\nbody\n")
+    subprocess.run(["git", "add", "package.json", "skills"], cwd=package_root, check=True)
+    subprocess.run(
+        ["git", "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "package skill"],
+        cwd=package_root,
+        check=True,
+    )
+    assert not (package_root / "SKILL.md").exists()
+
+    library_root = tmp_path / "lib" / "skills"
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    sha = skill_git.head_sha(package_root, env=None)
+    package_url = f"file://{package_root}"
+    incoming = tmp_path / "incoming.json"
+    incoming.write_text(json.dumps({
+        "version": 1,
+        "skills": {
+            "direct": {
+                "source": package_url,
+                "sourceType": "git",
+                "ref": sha,
+                "skillPath": "SKILL.md",
+                "parentUrl": package_url,
+                "upstreamSha": sha,
+            }
+        },
+    }))
+
+    result = CliRunner().invoke(main, ["skill", "import", str(incoming)])
+
+    assert result.exit_code == 0, result.output
+    assert (library_root / "direct" / "package.json").exists()
+    assert (library_root / "direct" / "skills" / "direct" / "SKILL.md").exists()
+    assert not (library_root / "_parents").exists()
+    assert json.loads((library_root.parent / "skills-lock.json").read_text()) == {
+        "version": 1,
+        "skills": {
+            "direct": {
+                "source": package_url,
+                "sourceType": "git",
+                "ref": sha,
+                "skillPath": "SKILL.md",
+                "upstreamSha": sha,
+                "localSha": sha,
+                "parentUrl": package_url,
+            }
+        },
+    }
+
+
+def test_entry_to_parsed_keeps_directory_skill_path_as_monorepo():
+    """A directory skillPath is still a monorepo subpath when parentUrl exists."""
+    from agent_toolkit_cli.commands.skill.import_cmd import _entry_to_parsed
+    from agent_toolkit_cli.skill_lock import LockEntry
+
+    parsed = _entry_to_parsed(LockEntry(
+        source="owner/repo",
+        source_type="github",
+        skill_path="skills/example",
+        parent_url="https://github.com/owner/repo.git",
+    ))
+
+    assert parsed.url == "https://github.com/owner/repo.git"
+    assert parsed.subpath == "skills/example"
+
+
+def test_entry_to_parsed_refuses_parent_url_without_skill_path():
+    """Missing skillPath cannot safely be inferred from parentUrl alone."""
+    from agent_toolkit_cli.commands.skill.import_cmd import _entry_to_parsed
+    from agent_toolkit_cli.skill_lock import LockEntry
+
+    entry = LockEntry(
+        source="owner/repo",
+        source_type="github",
+        parent_url="https://github.com/owner/repo.git",
+    )
+
+    with pytest.raises(click.ClickException, match="parentUrl.*skillPath"):
+        _entry_to_parsed(entry)
 
 
 def test_import_appears_in_skill_help():

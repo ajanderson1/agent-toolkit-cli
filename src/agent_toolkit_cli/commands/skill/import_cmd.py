@@ -42,20 +42,29 @@ def _print_notes() -> None:
 def _entry_to_parsed(entry: LockEntry) -> ParsedSource:
     """Map a lock entry back to a ParsedSource the reconstruction helper accepts.
 
-    A monorepo entry carries a directory skillPath (not "SKILL.md"), a
-    parent_url, and read_only=True; its skillPath IS the subpath. A single
-    entry's skillPath is "SKILL.md" and has no subpath.
+    A monorepo entry carries a directory skillPath (not "SKILL.md") and a
+    parent_url; its skillPath IS the subpath. A normalized direct entry can
+    retain parent_url for canonical identity, but skillPath="SKILL.md" still
+    reconstructs from its own source without a subpath.
     """
     from agent_toolkit_cli.skill_lock import clone_url_from_entry
 
-    is_monorepo = bool(entry.parent_url) or (
-        entry.skill_path not in (None, "SKILL.md")
-    )
-    if is_monorepo and entry.parent_url:
+    if entry.skill_path == "SKILL.md":
+        # K2 normalizes direct entries to SKILL.md while retaining parentUrl
+        # as canonical identity metadata. The path, not parentUrl, determines
+        # reconstruction: treating this as a monorepo looks for SKILL.md/SKILL.md.
+        url = clone_url_from_entry(entry)
+        subpath = None
+    elif entry.parent_url:
+        if not entry.skill_path:
+            raise click.ClickException(
+                "lock entry has parentUrl but no skillPath; refusing to infer a subpath"
+            )
         url = entry.parent_url
+        subpath = entry.skill_path
     else:
         url = clone_url_from_entry(entry)
-    subpath = entry.skill_path if is_monorepo else None
+        subpath = entry.skill_path
     return ParsedSource(
         type=entry.source_type or "git",
         url=url,
@@ -101,9 +110,9 @@ def import_cmd(ctx: click.Context, file: Path, latest: bool) -> None:
             click.echo(f"  skipped  {slug}  (already present)")
             continue
 
-        parsed = _entry_to_parsed(entry)
-        pin_sha = None if latest else entry.upstream_sha
         try:
+            parsed = _entry_to_parsed(entry)
+            pin_sha = None if latest else entry.upstream_sha
             up_sha, local_sha = reconstruct_skill_into_library(
                 parsed, slug, pin_sha=pin_sha,
             )

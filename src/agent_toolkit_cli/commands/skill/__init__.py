@@ -77,6 +77,11 @@ def _reconstruct_single(
     parsed: ParsedSource, slug: str, *, pin_sha: str | None,
 ) -> tuple[str | None, str | None]:
     library_dir = library_skill_path(slug)
+    ref_is_full_sha = (
+        parsed.ref is not None
+        and len(parsed.ref) == 40
+        and looks_like_sha(parsed.ref)
+    )
     if not library_dir.exists():
         library_dir.parent.mkdir(parents=True, exist_ok=True)
         # Shallow clone — import only ever needs one commit's tree, never the
@@ -84,22 +89,31 @@ def _reconstruct_single(
         # otherwise dominate the whole run. `depth=1` no-ops to a full clone
         # for plain-local-path sources (git ignores --depth there) — harmless,
         # since real sources are https://github.com/... remotes.
+        # `git clone --branch` cannot accept a SHA, so clone the default ref
+        # before fetching and checking out that exact commit below.
         skill_git.clone(
-            parsed.url, library_dir, ref=parsed.ref, env=None, depth=1,
+            parsed.url,
+            library_dir,
+            ref=None if ref_is_full_sha else parsed.ref,
+            env=None,
+            depth=1,
         )
-    if pin_sha and skill_git.is_git_repo(library_dir):
+    effective_pin = pin_sha or (parsed.ref if ref_is_full_sha else None)
+    if effective_pin and skill_git.is_git_repo(library_dir):
         # The depth-1 clone only holds branch HEAD's tree, so the pinned
         # (possibly older) commit must be fetched before it can be checked
         # out. fetch_ref of a SHA git already has is a cheap no-op.
-        skill_git.fetch_ref(library_dir, ref=pin_sha, env=None, depth=1)
-        skill_git.checkout(library_dir, ref=pin_sha, env=None)
+        skill_git.fetch_ref(library_dir, ref=effective_pin, env=None, depth=1)
+        skill_git.checkout(library_dir, ref=effective_pin, env=None)
     if skill_git.is_git_repo(library_dir):
-        upstream_sha = skill_git.remote_head_sha(
-            library_dir,
-            ref=skill_git.resolve_ref(parsed.ref, library_dir),
-            env=None,
-        )
         local_sha = skill_git.head_sha(library_dir, env=None)
+        upstream_sha = (
+            local_sha if ref_is_full_sha else skill_git.remote_head_sha(
+                library_dir,
+                ref=skill_git.resolve_ref(parsed.ref, library_dir),
+                env=None,
+            )
+        )
     else:
         upstream_sha = None
         local_sha = None
