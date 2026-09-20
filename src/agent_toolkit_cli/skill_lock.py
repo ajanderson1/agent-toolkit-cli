@@ -236,10 +236,15 @@ def clone_url_from_entry(e: LockEntry) -> str:
     url_from_extras = e.extras.get("sourceUrl")
     if isinstance(url_from_extras, str) and url_from_extras:
         return url_from_extras
-    if e.source_type == "github" and "/" in e.source:
-        return _apply_insteadof(f"https://github.com/{e.source}.git")
-    if e.source_type == "gitlab" and "/" in e.source:
-        return _apply_insteadof(f"https://gitlab.com/{e.source}.git")
+    if re.match(r"^[A-Za-z][A-Za-z0-9+.-]*://", e.source) or re.match(
+        r"^[^/\s]+@[^/\s]+:", e.source
+    ):
+        return e.source
+    shorthand = e.source[:-4] if e.source.lower().endswith(".git") else e.source
+    if e.source_type == "github" and "/" in shorthand:
+        return _apply_insteadof(f"https://github.com/{shorthand}.git")
+    if e.source_type == "gitlab" and "/" in shorthand:
+        return _apply_insteadof(f"https://gitlab.com/{shorthand}.git")
     return e.source
 
 

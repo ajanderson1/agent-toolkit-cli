@@ -237,6 +237,35 @@ def test_clone_url_from_entry_gitlab_short_form():
     assert clone_url_from_entry(e) == "https://gitlab.com/foo/bar.git"
 
 
+@pytest.mark.parametrize(
+    "source_type,source,expected",
+    [
+        ("github", "foo/bar.git", "https://github.com/foo/bar.git"),
+        ("github", "foo/bar.GIT", "https://github.com/foo/bar.git"),
+        ("gitlab", "foo/bar.git", "https://gitlab.com/foo/bar.git"),
+        ("gitlab", "foo/bar.GIT", "https://gitlab.com/foo/bar.git"),
+    ],
+)
+def test_clone_url_from_entry_normalizes_existing_git_suffix(
+    source_type, source, expected,
+):
+    e = LockEntry(source=source, source_type=source_type)
+    assert clone_url_from_entry(e) == expected
+
+
+@pytest.mark.parametrize(
+    "source_type,url",
+    [
+        ("github", "https://github.com/foo/bar.git"),
+        ("github", "git@github.com:foo/bar.git"),
+        ("gitlab", "ssh://git@gitlab.com/foo/bar.git"),
+    ],
+)
+def test_clone_url_from_entry_explicit_urls_are_passthrough(source_type, url):
+    e = LockEntry(source=url, source_type=source_type)
+    assert clone_url_from_entry(e) == url
+
+
 def test_clone_url_from_entry_extras_override_wins():
     e = LockEntry(
         source="foo/bar",
