@@ -602,6 +602,58 @@ def test_mcp_add_url_authors_entry(tmp_path, monkeypatch):
     assert cfg == {"type": "http", "url": "https://mcp.example.com/sse"}
 
 
+def test_mcp_add_url_bearer_env_authors_convergent_pi_config(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / ".pi/agent/npm/node_modules/pi-mcp-adapter").mkdir(parents=True)
+    result = CliRunner().invoke(main, [
+        "mcp", "add", "--url", "https://mcp.example.com/private",
+        "--bearer-token-env", "MCP_TOKEN", "--slug", "private",
+    ])
+    installed = CliRunner().invoke(
+        main, ["mcp", "install", "private", "--global", "--harness", "pi"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert installed.exit_code == 0, installed.output
+    entry = _read_manifest(tmp_path)["private"]
+    assert entry["bearer_token_env"] == "MCP_TOKEN"
+    assert entry["env"] == ["MCP_TOKEN"]
+    projected = json.loads((tmp_path / ".pi/agent/mcp.json").read_text())
+    assert projected["mcpServers"]["private"] == {
+        "type": "http", "url": "https://mcp.example.com/private",
+        "auth": "bearer", "bearerTokenEnv": "MCP_TOKEN",
+    }
+    monkeypatch.setenv("MCP_TOKEN", "literal-value-must-not-appear")
+    doctor = CliRunner().invoke(main, ["mcp", "doctor", "--global"])
+    assert doctor.exit_code == 0, doctor.output
+    assert "literal-value-must-not-appear" not in doctor.output
+
+
+def test_mcp_add_bearer_env_rejects_non_url_source_without_writing(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    result = CliRunner().invoke(
+        main, ["mcp", "add", "--npx", "demo", "--bearer-token-env", "MCP_TOKEN"],
+    )
+    assert result.exit_code != 0
+    assert "requires --url" in result.output
+    assert not _manifest_file(tmp_path).exists()
+
+
+def test_mcp_add_bearer_env_rejects_malformed_name_without_echoing_it(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    unsafe = "MCP_TOKEN=literal-secret-value"
+    result = CliRunner().invoke(main, [
+        "mcp", "add", "--url", "https://mcp.example.com/private",
+        "--bearer-token-env", unsafe, "--slug", "private",
+    ])
+    assert result.exit_code != 0
+    assert unsafe not in result.output
+    assert "malformed MCP library manifest entry" in result.output
+    assert not _manifest_file(tmp_path).exists()
+
+
 def test_mcp_add_reauthor_errors(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.chdir(tmp_path)
@@ -1237,6 +1289,31 @@ def test_uninstall_preserves_hand_rolled_neighbour(tmp_path, monkeypatch, scope_
     doc = json.loads(target.read_text())
     assert doc["mcpServers"]["handrolled"] == {"command": "x"}
     assert "context7" not in doc["mcpServers"]
+
+
+def test_mcp_update_adds_bearer_env_and_reprojects_locked_pi(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / ".pi/agent/npm/node_modules/pi-mcp-adapter").mkdir(parents=True)
+    runner = CliRunner()
+    added = runner.invoke(main, [
+        "mcp", "add", "--url", "https://mcp.example.com/private",
+        "--slug", "private",
+    ])
+    installed = runner.invoke(
+        main, ["mcp", "install", "private", "--global", "--harness", "pi"],
+    )
+    updated = runner.invoke(
+        main, ["mcp", "update", "private", "--bearer-token-env", "MCP_TOKEN"],
+    )
+
+    assert added.exit_code == 0, added.output
+    assert installed.exit_code == 0, installed.output
+    assert updated.exit_code == 0, updated.output
+    entry = _read_manifest(tmp_path)["private"]
+    assert entry["bearer_token_env"] == "MCP_TOKEN"
+    assert entry["env"] == ["MCP_TOKEN"]
+    projected = json.loads((tmp_path / ".pi/agent/mcp.json").read_text())
+    assert projected["mcpServers"]["private"]["bearerTokenEnv"] == "MCP_TOKEN"
 
 
 def test_mcp_update_bump_rewrites_library_sidecar_lock_and_reports(tmp_path, monkeypatch):

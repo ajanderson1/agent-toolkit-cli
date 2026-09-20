@@ -26,7 +26,17 @@ class _Cell:
 
 
 def _passthrough(inner: dict) -> dict:
-    """Claude/Pi accept the library inner config verbatim."""
+    """Pi accepts the library inner config verbatim."""
+    return dict(inner)
+
+
+def _non_pi_passthrough(inner: dict) -> dict:
+    """Reject Pi-native bearer auth rather than silently mistranslating it."""
+    if "bearerTokenEnv" in inner:
+        raise InstallError(
+            "bearer-token environment authentication is currently only supported "
+            "by pi; skip this harness"
+        )
     return dict(inner)
 
 
@@ -91,7 +101,7 @@ CELLS: dict[str, _Cell] = {
         user_target=lambda home: home / ".claude.json",
         project_target=lambda proj: proj / ".mcp.json",
         servers_key="mcpServers",
-        translate=_passthrough,
+        translate=_non_pi_passthrough,
     ),
     "pi": _Cell(
         name="pi",
@@ -108,7 +118,7 @@ CELLS: dict[str, _Cell] = {
         user_target=_no_global_standard,
         project_target=lambda proj: proj / ".mcp.json",
         servers_key="mcpServers",
-        translate=_passthrough,
+        translate=_non_pi_passthrough,
     ),
     "opencode": _Cell(
         name="opencode",

@@ -66,10 +66,18 @@ Examples:
 
 \b
   agent-toolkit-cli mcp update context7
+  agent-toolkit-cli mcp update private-http --bearer-token-env MCP_TOKEN
 """)
 @click.argument("slug")
+@click.option(
+    "--bearer-token-env",
+    default=None,
+    help="Environment variable NAME containing the bearer token for a URL MCP.",
+)
 @click.pass_context
-def update_cmd(ctx: click.Context, slug: str) -> None:
+def update_cmd(
+    ctx: click.Context, slug: str, bearer_token_env: str | None
+) -> None:
     """Re-resolve a library MCP and re-project every reachable locked harness."""
     home = Path.home()
     library = library_root(home)
@@ -95,6 +103,17 @@ def update_cmd(ctx: click.Context, slug: str) -> None:
         )
 
     entry = manifest[slug]
+    if bearer_token_env is not None:
+        if entry.install_method != "url":
+            raise click.UsageError("--bearer-token-env requires a URL MCP")
+        declared_env = entry.env
+        if bearer_token_env not in declared_env:
+            declared_env = (*declared_env, bearer_token_env)
+        entry = replace(
+            entry,
+            env=declared_env,
+            bearer_token_env=bearer_token_env,
+        )
     old_version = entry.resolved_version
     updated_entry, note = _reresolve(entry, slug)
     if note:

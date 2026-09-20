@@ -152,6 +152,22 @@ def test_pi_project_scope_target_is_shared_mcp_json(tmp_path):
     assert target == project / ".mcp.json"
 
 
+@pytest.mark.parametrize("harness", ["claude-code", "standard"])
+def test_non_pi_json_adapters_reject_pi_bearer_env_shape(tmp_path, harness):
+    project = tmp_path / "proj"
+    project.mkdir()
+    inner = {
+        "type": "http", "url": "https://example.com/mcp",
+        "auth": "bearer", "bearerTokenEnv": "MCP_TOKEN",
+    }
+
+    with pytest.raises(InstallError, match="only supported by pi"):
+        get_adapter(harness).install(
+            "private", inner, scope="project", home=tmp_path, project=project,
+        )
+    assert not (project / ".mcp.json").exists()
+
+
 def _opencode_install(tmp_path, inner):
     project = tmp_path / "proj"
     project.mkdir()

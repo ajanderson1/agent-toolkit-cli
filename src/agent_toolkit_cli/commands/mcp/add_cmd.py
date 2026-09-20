@@ -78,6 +78,7 @@ Examples:
   agent-toolkit-cli mcp add --uvx some-mcp-server
   agent-toolkit-cli mcp add --docker ghcr.io/owner/mcp:latest
   agent-toolkit-cli mcp add --url https://mcp.example.com/sse
+  agent-toolkit-cli mcp add --url https://mcp.example.com/private --bearer-token-env MCP_TOKEN
   agent-toolkit-cli mcp add --local ./my-server --command "python server.py"
 """)
 @click.option("--npx", "npx_pkg", default=None, help="npm package (resolved via `npm view`).")
@@ -87,6 +88,11 @@ Examples:
 @click.option("--local", "local_dir", default=None, help="Local dir; pair with --command.")
 @click.option("--command", "command", default=None, help="Command for --local (split into command+args).")
 @click.option("--env", "env_vars", multiple=True, help="Declared env var NAME (repeatable; stored in sidecar).")
+@click.option(
+    "--bearer-token-env",
+    default=None,
+    help="Environment variable NAME containing the bearer token for --url.",
+)
 @click.option("--description", "description", default=None, help="Human description for the sidecar.")
 @click.option("--slug", "slug", default=None, help="Override the derived slug.")
 def add_cmd(
@@ -97,6 +103,7 @@ def add_cmd(
     local_dir: str | None,
     command: str | None,
     env_vars: tuple[str, ...],
+    bearer_token_env: str | None,
     description: str | None,
     slug: str | None,
 ) -> None:
@@ -118,6 +125,8 @@ def add_cmd(
         raise click.UsageError(
             f"only one source flag may be given; got {', '.join(given)}"
         )
+    if bearer_token_env is not None and url is None:
+        raise click.UsageError("--bearer-token-env requires --url")
 
     install_method: str
     transport: str
@@ -182,6 +191,10 @@ def add_cmd(
     if not final_slug:
         raise click.ClickException("could not derive a slug; pass --slug explicitly")
 
+    declared_env = env_vars
+    if bearer_token_env is not None and bearer_token_env not in declared_env:
+        declared_env = (*declared_env, bearer_token_env)
+
     entry = McpManifestEntry(
         slug=final_slug,
         install_method=install_method,
@@ -189,9 +202,10 @@ def add_cmd(
         source=source,
         command=authored_command,
         args=args,
-        env=tuple(env_vars),
+        env=tuple(declared_env),
         description=description,
         resolved_version=resolved_version,
+        bearer_token_env=bearer_token_env,
     )
     try:
         assert_safe_entry(entry)

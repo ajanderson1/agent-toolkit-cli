@@ -34,6 +34,7 @@ _ENTRY_FIELDS = (
     "resolved_version",
 )
 _ENTRY_FIELD_SET = frozenset(_ENTRY_FIELDS)
+_OPTIONAL_ENTRY_FIELDS = frozenset({"bearer_token_env"})
 _METADATA_FIELDS = frozenset(
     {
         "name",
@@ -86,6 +87,7 @@ class McpManifestEntry:
     env: tuple[str, ...]
     description: str | None
     resolved_version: str | None
+    bearer_token_env: str | None = None
 
 
 class UnsafeMcpSpecError(ValueError):
@@ -154,7 +156,10 @@ def entry_to_inner_config(entry: McpManifestEntry) -> dict[str, object]:
     _validate_entry(entry)
     assert_safe_entry(entry)
     if entry.install_method == "url":
-        return {"type": "http", "url": entry.source}
+        config: dict[str, object] = {"type": "http", "url": entry.source}
+        if entry.bearer_token_env is not None:
+            config.update(auth="bearer", bearerTokenEnv=entry.bearer_token_env)
+        return config
     return {
         "type": "stdio",
         "command": entry.command,
@@ -175,8 +180,11 @@ def entry_to_metadata(entry: McpManifestEntry) -> dict[str, object]:
         metadata["resolved_version"] = entry.resolved_version
     if entry.install_method == "local":
         metadata["source_dir"] = entry.source
-    if entry.env:
-        metadata["env"] = list(entry.env)
+    declared_env = list(entry.env)
+    if entry.bearer_token_env is not None and entry.bearer_token_env not in declared_env:
+        declared_env.append(entry.bearer_token_env)
+    if declared_env:
+        metadata["env"] = declared_env
     if entry.description is not None:
         metadata["description"] = entry.description
     return metadata
@@ -224,12 +232,27 @@ def entry_from_materialisation(asset: McpAsset) -> McpManifestEntry:
     source: str
     command: str | None
     args: tuple[str, ...]
+    bearer_token_env: str | None = None
     if method == "url":
-        if set(inner) != {"type", "url"} or inner.get("type") != "http":
+        unauthenticated = frozenset({"type", "url"})
+        bearer_authenticated = frozenset({"type", "url", "auth", "bearerTokenEnv"})
+        inner_fields = frozenset(inner)
+        if inner_fields not in {unauthenticated, bearer_authenticated}:
+            raise ValueError("MCP materialisation cannot be reconstructed losslessly")
+        if inner.get("type") != "http":
             raise ValueError("MCP materialisation cannot be reconstructed losslessly")
         source_value = inner.get("url")
         if not isinstance(source_value, str):
             raise ValueError("MCP materialisation cannot be reconstructed losslessly")
+        if inner_fields == bearer_authenticated:
+            bearer_value = inner.get("bearerTokenEnv")
+            if (
+                inner.get("auth") != "bearer"
+                or not isinstance(bearer_value, str)
+                or bearer_value not in env
+            ):
+                raise ValueError("MCP materialisation cannot be reconstructed losslessly")
+            bearer_token_env = bearer_value
         source = source_value
         command = None
         args = ()
@@ -281,6 +304,7 @@ def entry_from_materialisation(asset: McpAsset) -> McpManifestEntry:
         env=tuple(env),
         description=description,
         resolved_version=resolved_version,
+        bearer_token_env=bearer_token_env,
     )
     _validate_entry(entry)
     assert_safe_entry(entry)
@@ -299,7 +323,11 @@ def assert_safe_entry(entry: McpManifestEntry) -> None:
 
 
 def _entry_from_raw(raw: dict[str, Any], *, path: Path) -> McpManifestEntry:
-    if set(raw) != _ENTRY_FIELD_SET:
+    fields = set(raw)
+    if (
+        not _ENTRY_FIELD_SET.issubset(fields)
+        or not fields.issubset(_ENTRY_FIELD_SET | _OPTIONAL_ENTRY_FIELDS)
+    ):
         raise ValueError(f"{path}: malformed MCP library manifest entry")
     args = raw.get("args")
     env = raw.get("env")
@@ -315,6 +343,7 @@ def _entry_from_raw(raw: dict[str, Any], *, path: Path) -> McpManifestEntry:
         env=tuple(env),
         description=raw.get("description"),
         resolved_version=raw.get("resolved_version"),
+        bearer_token_env=raw.get("bearer_token_env"),
     )
     try:
         _validate_entry(entry)
@@ -327,7 +356,7 @@ def _entry_from_raw(raw: dict[str, Any], *, path: Path) -> McpManifestEntry:
 
 
 def _entry_to_raw(entry: McpManifestEntry) -> dict[str, object]:
-    return {
+    raw: dict[str, object] = {
         "slug": entry.slug,
         "install_method": entry.install_method,
         "transport": entry.transport,
@@ -338,6 +367,9 @@ def _entry_to_raw(entry: McpManifestEntry) -> dict[str, object]:
         "description": entry.description,
         "resolved_version": entry.resolved_version,
     }
+    if entry.bearer_token_env is not None:
+        raw["bearer_token_env"] = entry.bearer_token_env
+    return raw
 
 
 def _validate_entry_types(entry: McpManifestEntry) -> None:
@@ -356,6 +388,10 @@ def _validate_entry_types(entry: McpManifestEntry) -> None:
             entry.resolved_version is not None
             and not isinstance(entry.resolved_version, str)
         )
+        or (
+            entry.bearer_token_env is not None
+            and not isinstance(entry.bearer_token_env, str)
+        )
     ):
         raise ValueError("malformed MCP library manifest entry")
 
@@ -369,6 +405,13 @@ def _validate_entry(entry: McpManifestEntry) -> None:
         or not entry.source
         or len(set(entry.env)) != len(entry.env)
         or any(not _ENV_NAME_RE.fullmatch(name) for name in entry.env)
+        or (
+            entry.bearer_token_env is not None
+            and (
+                not _ENV_NAME_RE.fullmatch(entry.bearer_token_env)
+                or entry.bearer_token_env not in entry.env
+            )
+        )
     ):
         raise ValueError("malformed MCP library manifest entry")
 
@@ -384,6 +427,8 @@ def _validate_entry(entry: McpManifestEntry) -> None:
             raise ValueError("malformed MCP library manifest entry")
         return
 
+    if entry.bearer_token_env is not None:
+        raise ValueError("malformed MCP library manifest entry")
     if entry.transport != "stdio" or not entry.command:
         raise ValueError("malformed MCP library manifest entry")
     if entry.install_method == "npx" and (

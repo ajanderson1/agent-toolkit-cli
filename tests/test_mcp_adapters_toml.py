@@ -1,8 +1,10 @@
 """Tests for the Codex TOML-family MCP adapter."""
 from __future__ import annotations
 
+import pytest
 import tomlkit
 
+from agent_toolkit_cli._install_core import InstallError
 from agent_toolkit_cli.mcp_adapters import get_adapter
 
 INNER = {"type": "stdio", "command": "npx", "args": ["-y", "ctx7"]}
@@ -70,6 +72,16 @@ def test_codex_uninstall_removes_only_named_table(tmp_path):
     doc = tomlkit.parse((tmp_path / ".codex" / "config.toml").read_text())
     assert "context7" not in doc["mcp_servers"]
     assert doc["mcp_servers"]["other"]["command"] == "y"
+
+
+def test_codex_rejects_pi_bearer_env_shape(tmp_path):
+    inner = {
+        "type": "http", "url": "https://example.com/mcp",
+        "auth": "bearer", "bearerTokenEnv": "MCP_TOKEN",
+    }
+    with pytest.raises(InstallError, match="only supported by pi"):
+        get_adapter("codex").install("private", inner, scope="global", home=tmp_path)
+    assert not (tmp_path / ".codex/config.toml").exists()
 
 
 def test_codex_install_idempotent(tmp_path):

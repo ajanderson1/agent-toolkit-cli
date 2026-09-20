@@ -43,6 +43,10 @@ to backfill legacy entries implicitly.
 `agent-toolkit-cli mcp migrate`; it never creates or repairs state. `mcp remove`
 removes projections only and retains both the manifest record and library pair.
 
+## Authenticated URL servers
+
+Use `--bearer-token-env <NAME>` with `mcp add --url` or `mcp update` to keep an HTTP bearer credential out of toolkit state. The manifest and sidecar retain only the validated environment-variable name; Pi receives `auth: "bearer"` plus `bearerTokenEnv: <NAME>` and resolves the value at runtime. This authentication form currently supports Pi only. Other harness projections are refused rather than silently dropping authentication.
+
 ## Supported harnesses
 
 Four harnesses have MCP adapters: **claude-code, codex, opencode, pi**. The
@@ -70,12 +74,12 @@ detected; pass `--force` to override. Project-scope writes are not gated.
 ## CLI
 
 ```bash
-agent-toolkit-cli mcp add --npx|--uvx|--docker|--url|--local <source> [--slug <slug>]
+agent-toolkit-cli mcp add --npx|--uvx|--docker|--url|--local <source> [--slug <slug>] [--bearer-token-env <NAME>]
 agent-toolkit-cli mcp migrate                    # adopt a legacy global library
 agent-toolkit-cli mcp install <slug>   [--harness <name>]... [-g|-p] [--force]
 agent-toolkit-cli mcp uninstall <slug> [--harness <name>]... [-g|-p]
 agent-toolkit-cli mcp remove <slug>    [-g|-p]   # remove every locked projection
-agent-toolkit-cli mcp update <slug>             # re-resolve + re-project
+agent-toolkit-cli mcp update <slug> [--bearer-token-env <NAME>] # re-resolve + re-project
 agent-toolkit-cli mcp list   [-g|-p]            # alias: ls
 agent-toolkit-cli mcp status [<slug>...] [-g|-p]
 agent-toolkit-cli mcp doctor [-g|-p]            # read-only library + projection report

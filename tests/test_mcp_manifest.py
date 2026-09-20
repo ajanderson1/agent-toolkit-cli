@@ -103,6 +103,36 @@ def test_url_entry_materialises_from_source_only():
     }
 
 
+def test_url_bearer_env_round_trips_and_materialises_without_a_secret(tmp_path):
+    entry = McpManifestEntry(
+        "private", "url", "http", "https://host/mcp", None, (),
+        ("MCP_TOKEN",), None, None, bearer_token_env="MCP_TOKEN",
+    )
+    path = manifest_path(tmp_path)
+
+    write_manifest(path, {entry.slug: entry})
+
+    assert read_manifest(path) == {entry.slug: entry}
+    assert entry_to_inner_config(entry) == {
+        "type": "http",
+        "url": "https://host/mcp",
+        "auth": "bearer",
+        "bearerTokenEnv": "MCP_TOKEN",
+    }
+    assert entry_to_metadata(entry)["env"] == ["MCP_TOKEN"]
+    assert "MCP_TOKEN" in path.read_text()
+
+
+def test_url_bearer_env_must_also_be_declared_in_entry_env(tmp_path):
+    entry = McpManifestEntry(
+        "private", "url", "http", "https://host/mcp", None, (), (), None, None,
+        bearer_token_env="MCP_TOKEN",
+    )
+
+    with pytest.raises(ValueError, match="malformed MCP library manifest entry"):
+        write_manifest(manifest_path(tmp_path), {entry.slug: entry})
+
+
 @pytest.mark.parametrize(
     ("entry", "literal"),
     [
@@ -289,6 +319,19 @@ def test_npx_scoped_package_round_trips_from_materialisation():
             entry_to_metadata(entry),
         )
     ) == entry
+
+
+def test_url_bearer_env_materialisation_reconstructs_losslessly():
+    entry = McpManifestEntry(
+        "private", "url", "http", "https://host/mcp", None, (),
+        ("MCP_TOKEN",), None, None, bearer_token_env="MCP_TOKEN",
+    )
+
+    reconstructed = entry_from_materialisation(
+        McpAsset(entry.slug, entry_to_inner_config(entry), entry_to_metadata(entry))
+    )
+
+    assert reconstructed == entry
 
 
 def test_materialisation_with_config_env_map_is_not_lossless():

@@ -158,13 +158,13 @@ agent-toolkit-cli mcp add --npx|--uvx|--docker|--url|--local <source> [--slug <s
 agent-toolkit-cli mcp install <slug>   [--harness <name>]... [-g|-p] [--force]
 agent-toolkit-cli mcp uninstall <slug> [--harness <name>]... [-g|-p] [--force]
 agent-toolkit-cli mcp remove <slug>    [-g|-p] [--force]
-agent-toolkit-cli mcp update <slug>
+agent-toolkit-cli mcp update <slug> [--bearer-token-env <NAME>]
 agent-toolkit-cli mcp list   [-g|-p]
 agent-toolkit-cli mcp status [<slug>...] [-g|-p]
 agent-toolkit-cli mcp doctor [-g|-p]
 ```
 
-`mcp add` authors a library entry from a package, image, URL, or local path. `mcp install` projects it into Claude Code, Codex, OpenCode, Pi, or the `standard` target by editing native config by server name. Writes are atomic; doctor is diagnostic.
+`mcp add` authors a library entry from a package, image, URL, or local path. Authenticated URL entries can use `--bearer-token-env <NAME>`; only the environment-variable name is stored, and this authentication form currently projects to Pi only. `mcp install` projects entries by editing native config by server name. Writes are atomic; doctor is diagnostic.
 
 ### Bundles — install several assets together
 

@@ -12,6 +12,7 @@ import tomlkit
 from tomlkit import TOMLDocument
 from tomlkit.items import Table
 
+from agent_toolkit_cli._install_core import InstallError
 from agent_toolkit_cli.mcp_adapters import atomic_write_text
 
 
@@ -39,6 +40,11 @@ class _CodexAdapter:
         http_headers, env_http_headers) are NOT yet forwarded — url sources are
         not authored until a later task; add them to the passthrough when url
         library entries go live (#329 follow-up)."""
+        if "bearerTokenEnv" in inner:
+            raise InstallError(
+                "bearer-token environment authentication is currently only supported "
+                "by pi; skip this harness"
+            )
         out: dict = {}
         if "command" in inner:
             out["command"] = inner["command"]
