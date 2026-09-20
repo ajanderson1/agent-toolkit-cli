@@ -311,6 +311,192 @@ def test_push_pinned_skips_even_when_dirty(tmp_path, monkeypatch, git_sandbox):
 # ---------------------------------------------------------------------------
 
 
+def _upstream_main(git_sandbox) -> str:
+    return subprocess.run(
+        ["git", "--git-dir", str(git_sandbox.upstream), "rev-parse", "refs/heads/main"],
+        text=True, capture_output=True, check=True, env=git_sandbox.env,
+    ).stdout.strip()
+
+
+def _advance_upstream(tmp_path, git_sandbox, name: str) -> str:
+    clone = tmp_path / name
+    subprocess.run(
+        ["git", "clone", str(git_sandbox.upstream), str(clone)],
+        capture_output=True, check=True, env=git_sandbox.env,
+    )
+    (clone / f"{name}.txt").write_text(f"{name}\n")
+    subprocess.run(
+        ["git", "-C", str(clone), "add", f"{name}.txt"],
+        capture_output=True, check=True, env=git_sandbox.env,
+    )
+    subprocess.run(
+        ["git", "-C", str(clone), "commit", "-m", name],
+        capture_output=True, check=True, env=git_sandbox.env,
+    )
+    subprocess.run(
+        ["git", "-C", str(clone), "push", "origin", "main"],
+        capture_output=True, check=True, env=git_sandbox.env,
+    )
+    return _upstream_main(git_sandbox)
+
+
+def test_import_github_shorthand_reconstructs_older_exact_pin(
+    tmp_path, monkeypatch, git_sandbox,
+):
+    """#503: shorthand is normalized and default import honors the old pin."""
+    from agent_toolkit_cli import skill_git
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for key, value in git_sandbox.env.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    recorded = _upstream_main(git_sandbox)
+    latest = _advance_upstream(tmp_path, git_sandbox, "advance-default")
+    assert latest != recorded
+    incoming = tmp_path / "incoming.json"
+    write_lock(incoming, LockFile(version=1, skills={
+        "demo": LockEntry(
+            source="test/pi-extension",
+            source_type="github",
+            pi_extension_path="demo",
+            upstream_sha=recorded,
+        ),
+    }))
+    original_clone = skill_git.clone
+    observed = {}
+
+    def clone(url, dest, *, ref, env, depth=None):
+        observed.update(url=url, ref=ref)
+        return original_clone(
+            str(git_sandbox.upstream), dest, ref=ref, env=env, depth=depth,
+        )
+
+    monkeypatch.setattr(skill_git, "clone", clone)
+    result = CliRunner().invoke(main, ["pi-extension", "import", str(incoming)])
+
+    assert result.exit_code == 0, result.output
+    assert observed == {"url": "https://github.com/test/pi-extension.git", "ref": None}
+    canonical = pep.library_pi_extension_path("demo", env={})
+    assert skill_git.head_sha(canonical, env=None) == recorded
+    assert skill_git.head_sha(canonical, env=None) != latest
+    assert skill_git.current_branch(canonical, env=None) == "HEAD"
+
+
+def test_import_latest_ignores_older_recorded_pin(
+    tmp_path, monkeypatch, git_sandbox,
+):
+    """#503: --latest follows the branch tip rather than the recorded SHA."""
+    from agent_toolkit_cli import skill_git
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for key, value in git_sandbox.env.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    recorded = _upstream_main(git_sandbox)
+    latest = _advance_upstream(tmp_path, git_sandbox, "advance-latest")
+    incoming = tmp_path / "incoming.json"
+    write_lock(incoming, LockFile(version=1, skills={
+        "demo": LockEntry(
+            source=str(git_sandbox.upstream), source_type="local", ref="main",
+            pi_extension_path="demo", upstream_sha=recorded,
+        ),
+    }))
+
+    result = CliRunner().invoke(
+        main, ["pi-extension", "import", str(incoming), "--latest"],
+    )
+
+    assert result.exit_code == 0, result.output
+    canonical = pep.library_pi_extension_path("demo", env={})
+    assert skill_git.head_sha(canonical, env=None) == latest
+    assert latest != recorded
+
+
+def test_import_expands_tilde_only_for_local_source(
+    tmp_path, monkeypatch, git_sandbox,
+):
+    """#503: the portable K2 local-source shape resolves under destination HOME."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for key, value in git_sandbox.env.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    local_source = tmp_path / "GitHub/agent-toolkit/pi-extensions/pi-recap-why"
+    local_source.parent.mkdir(parents=True)
+    local_source.symlink_to(git_sandbox.upstream, target_is_directory=True)
+    incoming = tmp_path / "incoming.json"
+    write_lock(incoming, LockFile(version=1, skills={
+        "pi-recap-why": LockEntry(
+            source="~/GitHub/agent-toolkit/pi-extensions/pi-recap-why",
+            source_type="local",
+            pi_extension_path="pi-recap-why",
+            upstream_sha=_upstream_main(git_sandbox),
+        ),
+    }))
+
+    result = CliRunner().invoke(main, ["pi-extension", "import", str(incoming)])
+
+    assert result.exit_code == 0, result.output
+    assert pep.library_pi_extension_path("pi-recap-why", env={}).exists()
+
+
+def test_import_unavailable_pin_cleans_up_without_lock_entry(
+    tmp_path, monkeypatch, git_sandbox,
+):
+    """#503: an unavailable reviewed pin never degrades to current HEAD."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for key, value in git_sandbox.env.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    incoming = tmp_path / "incoming.json"
+    write_lock(incoming, LockFile(version=1, skills={
+        "demo": LockEntry(
+            source=str(git_sandbox.upstream), source_type="local",
+            pi_extension_path="demo", upstream_sha="f" * 40,
+        ),
+    }))
+
+    result = CliRunner().invoke(main, ["pi-extension", "import", str(incoming)])
+
+    assert result.exit_code == 1, result.output
+    assert not pep.library_pi_extension_path("demo", env={}).exists()
+    assert "demo" not in read_lock(pep.library_lock_path(env={})).skills
+
+
+def test_import_full_sha_ref_is_not_passed_to_clone_branch(
+    tmp_path, monkeypatch, git_sandbox,
+):
+    """#503: full-SHA refs clone default HEAD before exact checkout."""
+    from agent_toolkit_cli import skill_git
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for key, value in git_sandbox.env.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    pin = _upstream_main(git_sandbox)
+    incoming = tmp_path / "incoming.json"
+    write_lock(incoming, LockFile(version=1, skills={
+        "demo": LockEntry(
+            source=str(git_sandbox.upstream), source_type="local", ref=pin,
+            pi_extension_path="demo", upstream_sha=pin,
+        ),
+    }))
+    original_clone = skill_git.clone
+    observed = []
+
+    def clone(url, dest, *, ref, env, depth=None):
+        observed.append(ref)
+        return original_clone(url, dest, ref=ref, env=env, depth=depth)
+
+    monkeypatch.setattr(skill_git, "clone", clone)
+    result = CliRunner().invoke(main, ["pi-extension", "import", str(incoming)])
+
+    assert result.exit_code == 0, result.output
+    assert observed == [None]
+    assert skill_git.head_sha(
+        pep.library_pi_extension_path("demo", env={}), env=None,
+    ) == pin
+
+
 def test_import_from_lock_file_adds_missing(tmp_path, monkeypatch, git_sandbox):
     """import reconstructs extensions present in a lock file but not locally."""
     monkeypatch.setenv("HOME", str(tmp_path))

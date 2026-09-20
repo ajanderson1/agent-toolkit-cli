@@ -30,6 +30,7 @@ from agent_toolkit_cli.pi_extension_lock import (
     read_lock,
     write_lock,
 )
+from agent_toolkit_cli.skill_lock import clone_url_from_entry, looks_like_sha
 from agent_toolkit_cli.pi_extension_paths import (
     library_lock_path,
     library_pi_extension_path,
@@ -106,32 +107,43 @@ def import_cmd(ctx: click.Context, file: Path, latest: bool) -> None:
             click.echo(f"  skipped  {slug}  (store copy already exists)")
             continue
 
-        source_url = entry.source
+        source_url = clone_url_from_entry(entry)
+        if entry.source_type == "local":
+            source_url = str(Path(source_url).expanduser())
         ref = entry.ref
+        ref_is_sha = looks_like_sha(ref)
         pin_sha = None if latest else entry.upstream_sha
+        effective_pin = pin_sha or (ref if ref_is_sha else None)
 
         try:
             canonical.parent.mkdir(parents=True, exist_ok=True)
-            skill_git.clone(source_url, canonical, ref=ref, env=None, depth=1)
+            # Git rejects `clone --branch <sha>`. Clone default HEAD for SHA
+            # refs, then fetch and detach at the exact recorded commit.
+            skill_git.clone(
+                source_url, canonical, ref=None if ref_is_sha else ref,
+                env=None, depth=1,
+            )
 
-            if pin_sha and skill_git.is_git_repo(canonical):
-                try:
-                    skill_git.fetch_ref(canonical, ref=pin_sha, env=None, depth=1)
-                    skill_git.checkout(canonical, ref=pin_sha, env=None)
-                except skill_git.GitError:
-                    pass  # pin not available; stay at HEAD
+            if effective_pin and skill_git.is_git_repo(canonical):
+                # Default import is reconstructive: never degrade an
+                # unavailable reviewed pin to the current ref tip.
+                skill_git.fetch_ref(canonical, ref=effective_pin, env=None, depth=1)
+                skill_git.checkout(canonical, ref=effective_pin, env=None)
 
             if skill_git.is_git_repo(canonical):
-                try:
-                    upstream_sha: str | None = skill_git.remote_head_sha(
-                        canonical, ref=skill_git.resolve_ref(ref, canonical), env=None,
-                    )
-                except skill_git.GitError:
-                    upstream_sha = None
                 try:
                     local_sha: str | None = skill_git.head_sha(canonical, env=None)
                 except skill_git.GitError:
                     local_sha = None
+                if ref_is_sha:
+                    upstream_sha: str | None = local_sha
+                else:
+                    try:
+                        upstream_sha = skill_git.remote_head_sha(
+                            canonical, ref=skill_git.resolve_ref(ref, canonical), env=None,
+                        )
+                    except skill_git.GitError:
+                        upstream_sha = None
             else:
                 upstream_sha = None
                 local_sha = None
