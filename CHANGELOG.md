@@ -1,5 +1,20 @@
 # Changelog
 
+## [5.8.1](https://github.com/ajanderson1/agent-toolkit-cli/compare/v5.8.0...v5.8.1) (2026-09-21)
+
+
+### Bug Fixes
+
+* **agent import:** reconstruct category topology ([#505](https://github.com/ajanderson1/agent-toolkit-cli/issues/505)) ([9088299](https://github.com/ajanderson1/agent-toolkit-cli/commit/90882994331fff3db26ed13bb089944b14f8d71f))
+* **agent import:** reconstruct GitHub sources ([#502](https://github.com/ajanderson1/agent-toolkit-cli/issues/502)) ([37f4e7f](https://github.com/ajanderson1/agent-toolkit-cli/commit/37f4e7fc08e33f791a8126f0b792dd225bbf93f9))
+* clone SHA-pinned monorepo imports ([2b3d892](https://github.com/ajanderson1/agent-toolkit-cli/commit/2b3d892106828c5fad5c70c94585cde4721132b8))
+* **lock:** normalize shorthand Git suffix ([#504](https://github.com/ajanderson1/agent-toolkit-cli/issues/504)) ([988d886](https://github.com/ajanderson1/agent-toolkit-cli/commit/988d88634f0ac609a5ddb56cbae1270543654e9e))
+* **mcp:** support bearer token environment auth ([e645666](https://github.com/ajanderson1/agent-toolkit-cli/commit/e6456666aff9a57532d0c92a4debbb3ad12712e5))
+* **pi settings:** support package source objects ([#506](https://github.com/ajanderson1/agent-toolkit-cli/issues/506)) ([6e27181](https://github.com/ajanderson1/agent-toolkit-cli/commit/6e27181f323efbc6855e35b1e82af5a24e6a7c4f))
+* **pi-extension import:** reconstruct Git sources ([#503](https://github.com/ajanderson1/agent-toolkit-cli/issues/503)) ([ef32a57](https://github.com/ajanderson1/agent-toolkit-cli/commit/ef32a5737ef2736f00bebc41c2c4bdf1e4e8c6bb))
+* preserve pinned monorepo imports ([2ea9fa6](https://github.com/ajanderson1/agent-toolkit-cli/commit/2ea9fa69c2998b565aef06b6859ca952c98cbc70))
+* **skill import:** reconstruct direct root entries ([#501](https://github.com/ajanderson1/agent-toolkit-cli/issues/501)) ([041b010](https://github.com/ajanderson1/agent-toolkit-cli/commit/041b0107bdf16d0de75371e7cd5f0b5991c7ba17))
+
 ## [5.8.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v5.7.0...v5.8.0) (2026-07-28)
 
 
