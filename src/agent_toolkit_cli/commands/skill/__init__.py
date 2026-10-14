@@ -296,7 +296,9 @@ Examples:
   agent-toolkit-cli skill add anthropics/skills --ref v1.2.0
   agent-toolkit-cli skill add ajanderson1/journal-skill --slug journal
 """)
-@click.argument("source", required=True)
+@click.argument("source", required=False)
+@click.option("--source", "source_option", default=None,
+              help="Add every skill from an exact owner/repo source.")
 @click.option("--slug", default=None,
               help="Override the local slug.")
 @click.option("--ref", default=None, help="Branch or tag to clone.")
@@ -307,14 +309,16 @@ Examples:
                    "for known owned owners; this forces it for any parent.")
 @click.pass_context
 def add(
-    ctx: click.Context, source: str, slug: str | None,
-    ref: str | None, skill_name_flag: str | None, owned: bool,
+    ctx: click.Context, source: str | None, source_option: str | None,
+    slug: str | None, ref: str | None, skill_name_flag: str | None, owned: bool,
 ) -> None:
-    """Add SOURCE to the library.
-
-    Monorepo: pass --skill <name>, owner/repo/<subpath>, or a
-    https://www.skills.sh/<owner>/<repo>/<skill> URL.
-    """
+    """Add SOURCE to the library, or batch-add with --source owner/repo."""
+    if bool(source) == bool(source_option):
+        raise click.UsageError("provide SOURCE or --source, but not both")
+    if source_option is not None:
+        _add_source_batch(source_option, ref, owned=owned)
+        return
+    assert source is not None
     try:
         parsed = parse_source(source)
     except SourceParseError as exc:
@@ -350,6 +354,63 @@ def add(
                 "pushed via its own remote."
             )
         _add_single(parsed, slug)
+
+
+def _add_source_batch(source: str, ref: str | None, *, owned: bool) -> None:
+    """Register every skill directory from an exact owner/repo source."""
+    try:
+        parsed = parse_source(source)
+    except SourceParseError as exc:
+        raise click.UsageError(str(exc)) from exc
+    if parsed.owner_repo != source or parsed.subpath or parsed.skill_name:
+        raise click.UsageError("--source must be an exact owner/repo")
+    if ref is not None:
+        try:
+            parsed = dataclasses.replace(parsed, ref=sanitize_ref(ref))
+        except SourceParseError as exc:
+            raise click.UsageError(str(exc)) from exc
+
+    from agent_toolkit_cli.skill_paths import parent_clone_path
+    owner, repo = parsed.owner_repo.split("/", 1)
+    parent = parent_clone_path(owner, repo, ref=parsed.ref, env=None)
+    if not parent.exists():
+        parent.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            skill_git.clone_pinned_or_branch(parsed.url, parent, ref=parsed.ref, env=None)
+        except Exception as exc:
+            raise click.ClickException(f"parent clone failed: {exc}") from exc
+    else:
+        try:
+            resolved_ref = skill_git.resolve_ref(parsed.ref, parent)
+            skill_git.fetch_ref(parent, ref=resolved_ref, env=None)
+            skill_git.reset_hard(parent, ref=resolved_ref, env=None)
+        except Exception as exc:
+            raise click.ClickException(f"parent refresh failed: {exc}") from exc
+
+    skill_dirs = sorted(
+        skill_md.parent
+        for skill_md in parent.rglob("SKILL.md")
+        if skill_md.parent != parent
+    )
+    if not skill_dirs:
+        click.echo(f"{source}: no SKILL.md files found")
+        return
+    from agent_toolkit_cli.skill_lock import read_lock
+    existing_entries = read_lock(library_lock_path()).skills
+    for skill_dir in skill_dirs:
+        subpath = skill_dir.relative_to(parent).as_posix()
+        slug = skill_dir.name
+        existing = existing_entries.get(slug)
+        if existing is not None and (
+            existing.source != parsed.owner_repo or existing.skill_path != subpath
+        ):
+            click.echo(
+                f"skipped {slug}: already registered from {existing.source!r} "
+                f"at {existing.skill_path!r}"
+            )
+            continue
+        item = dataclasses.replace(parsed, subpath=subpath, skill_name=None)
+        _add_monorepo(item, None, owned=owned)
 
 
 def _add_single(parsed: ParsedSource, slug: str | None) -> None:
@@ -576,7 +637,9 @@ Examples:
   agent-toolkit-cli skill install journal --agents standard
   agent-toolkit-cli skill install journal --agents claude-code -p
 """)
-@click.argument("slug", required=True)
+@click.argument("slug", required=False)
+@click.option("--source", "source_filter", default=None,
+              help="Install skills recorded from exact owner/repo.")
 @click.option("--agents", "agents_str", default="standard", show_default=True,
               help="Comma-separated agent names, 'standard', or 'all'. "
                    "Defaults to the standard bundle.")
@@ -588,15 +651,17 @@ Examples:
               help="Shorthand for --scope project.")
 @click.pass_context
 def install_cmd(
-    ctx: click.Context, slug: str, agents_str: str,
-    scope: str | None, project_flag: bool,
+    ctx: click.Context, slug: str | None, source_filter: str | None,
+    agents_str: str, scope: str | None, project_flag: bool,
 ) -> None:
-    """Create agent-visibility symlinks for a library skill.
+    """Create agent-visibility symlinks for one skill or a source family.
 
     The skill must already be in the library (run `skill add` first).
     For --scope project, the project canonical is cloned from the global
     library's recorded source if not already present.
     """
+    if bool(slug) == bool(source_filter):
+        raise click.UsageError("provide SLUG or --source, but not both")
     candidate = (
         (ctx.obj.get("project_root") if ctx.obj else None) or Path.cwd()
     )
@@ -613,6 +678,24 @@ def install_cmd(
         target_agents = _resolve_agents(agents_str, scope, project=project_root)
     except click.UsageError:
         raise
+
+    if source_filter is not None:
+        from agent_toolkit_cli.skill_lock import read_lock
+        batch_lock = read_lock(library_lock_path())
+        batch_slugs = sorted(
+            name for name, entry in batch_lock.skills.items()
+            if entry.source == source_filter
+        )
+        if not batch_slugs:
+            click.echo(f"{source_filter}: no skills found in {scope} scope")
+            return
+        for batch_slug in batch_slugs:
+            ctx.invoke(
+                install_cmd, slug=batch_slug, source_filter=None,
+                agents_str=agents_str, scope=scope, project_flag=False,
+            )
+        return
+    assert slug is not None
 
     if not target_agents:
         click.echo(f"{slug}: no agents specified; nothing to do")
@@ -701,7 +784,9 @@ Examples:
   agent-toolkit-cli skill uninstall journal --agents claude-code
   agent-toolkit-cli skill uninstall journal --agents all
 """)
-@click.argument("slug", required=True)
+@click.argument("slug", required=False)
+@click.option("--source", "source_filter", default=None,
+              help="Uninstall skills recorded from exact owner/repo.")
 @click.option("--agents", "agents_str", default=None,
               help="Comma-separated agent names, 'standard', or 'all'. "
                    "Default (omitted): remove everywhere — the standard bundle "
@@ -714,10 +799,12 @@ Examples:
               help="Shorthand for --scope project.")
 @click.pass_context
 def uninstall_cmd(
-    ctx: click.Context, slug: str, agents_str: str | None,
-    scope: str | None, project_flag: bool,
+    ctx: click.Context, slug: str | None, source_filter: str | None,
+    agents_str: str | None, scope: str | None, project_flag: bool,
 ) -> None:
-    """Remove agent-visibility symlinks. Library/project canonical untouched."""
+    """Remove visibility symlinks for one skill or a source family."""
+    if bool(slug) == bool(source_filter):
+        raise click.UsageError("provide SLUG or --source, but not both")
     candidate = (
         (ctx.obj.get("project_root") if ctx.obj else None) or Path.cwd()
     )
@@ -729,6 +816,24 @@ def uninstall_cmd(
     project_root = (
         normalize_skill_project_root(candidate) if scope == "project" else None
     )
+
+    if source_filter is not None:
+        batch_lock_path = library_lock_path()
+        batch_lock = read_lock(batch_lock_path)
+        batch_slugs = sorted(
+            name for name, entry in batch_lock.skills.items()
+            if entry.source == source_filter
+        )
+        if not batch_slugs:
+            click.echo(f"{source_filter}: no skills found in {scope} scope")
+            return
+        for batch_slug in batch_slugs:
+            ctx.invoke(
+                uninstall_cmd, slug=batch_slug, source_filter=None,
+                agents_str=agents_str, scope=scope, project_flag=False,
+            )
+        return
+    assert slug is not None
 
     if agents_str is None:
         # Maximal default — deliberately asymmetric with install's `standard`.
@@ -810,14 +915,27 @@ Examples:
   agent-toolkit-cli skill remove journal --force    # discard dirty changes
 """)
 @click.argument("slugs", nargs=-1, required=False)
+@click.option("--source", "source_filter", default=None,
+              help="Remove library skills recorded from exact owner/repo.")
 @click.option("--force", is_flag=True, help="Remove even if working tree is dirty.")
 @click.pass_context
 def remove_cmd(
-    ctx: click.Context, slugs: tuple[str, ...], force: bool,
+    ctx: click.Context, slugs: tuple[str, ...], source_filter: str | None,
+    force: bool,
 ) -> None:
-    """Remove a skill from the library (all symlinks + lock entry + library dir)."""
+    """Remove selected skills from the library."""
+    if source_filter is not None and slugs:
+        raise click.UsageError("provide slugs or --source, but not both")
     lock_path = library_lock_path()
     lock = read_lock(lock_path)
+    if source_filter is not None:
+        slugs = tuple(sorted(
+            name for name, entry in lock.skills.items()
+            if entry.source == source_filter
+        ))
+        if not slugs:
+            click.echo(f"{source_filter}: no skills found in library")
+            return
 
     if not slugs:
         from . import wizard as _wizard

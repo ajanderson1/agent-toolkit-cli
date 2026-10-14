@@ -40,6 +40,38 @@ def test_remove_clears_library_and_lock(git_sandbox, tmp_path: Path, monkeypatch
     assert "demo" not in lock["skills"]
 
 
+def test_remove_source_removes_all_matching_library_skills(
+    git_sandbox, tmp_path: Path, monkeypatch,
+):
+    library_root = tmp_path / "lib" / "skills"
+    for key, value in git_sandbox.env.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    runner = CliRunner()
+    for slug in ("alpha", "beta", "other"):
+        result = runner.invoke(main, [
+            "skill", "add", str(git_sandbox.upstream), "--slug", slug,
+        ])
+        assert result.exit_code == 0, result.output
+    from agent_toolkit_cli.skill_lock import read_lock, write_lock
+    from agent_toolkit_cli.skill_paths import library_lock_path
+    lock_path = library_lock_path()
+    lock = read_lock(lock_path)
+    lock.skills["alpha"].source = "owner/repo"
+    lock.skills["beta"].source = "owner/repo"
+    write_lock(lock_path, lock)
+
+    result = runner.invoke(main, [
+        "skill", "remove", "--source", "owner/repo", "--force",
+    ])
+    assert result.exit_code == 0, result.output
+    updated = json.loads(lock_path.read_text())
+    assert set(updated["skills"]) == {"other"}
+    assert not (library_root / "alpha").exists()
+    assert not (library_root / "beta").exists()
+    assert (library_root / "other").exists()
+
+
 def test_remove_without_force_skips_when_no_tty(
     git_sandbox, tmp_path: Path, monkeypatch,
 ):
@@ -53,7 +85,7 @@ def test_remove_without_force_skips_when_no_tty(
     _add_demo(runner, git_sandbox.upstream, library_root)
     library_dir = library_root / "demo"
 
-    result = runner.invoke(main, [
+    runner.invoke(main, [
         "skill", "remove", "demo",
     ])
     # Wizard returns None on non-TTY => "skipped" message, library intact.

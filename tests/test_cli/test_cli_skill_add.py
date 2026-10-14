@@ -4,6 +4,7 @@ v2.2: `skill add <source> [--slug ...] [--ref ...]` clones into the library
 and writes the global lock. No symlinks are created.
 """
 import json
+import subprocess
 from pathlib import Path
 
 from click.testing import CliRunner
@@ -43,6 +44,65 @@ def test_skill_add_creates_library_entry_and_no_symlinks(
     entry = lock["skills"]["demo"]
     assert entry["source"] == str(git_sandbox.upstream)
     assert entry["sourceType"] in {"git", "local"}
+
+
+def test_skill_add_source_registers_all_repo_skills_and_skips_conflicts(
+    git_sandbox, tmp_path: Path, monkeypatch,
+):
+    """--source adds repository skills by directory slug, skipping conflicts."""
+    repo = git_sandbox.clone
+    skills = repo / "skills"
+    (skills / "alpha").mkdir(parents=True)
+    (repo / "SKILL.md").unlink()
+    (skills / "alpha" / "SKILL.md").write_text("---\nname: Alpha\n---\n")
+    (skills / "beta").mkdir()
+    (skills / "beta" / "SKILL.md").write_text("---\nname: Beta\n---\n")
+    subprocess.run(
+        ["git", "-C", str(repo), "add", "-A"],
+        check=True, env=git_sandbox.env,
+    )
+    subprocess.run(
+        ["git", "-C", str(repo), "commit", "-m", "Add skills"],
+        check=True, env=git_sandbox.env, capture_output=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(repo), "push", "origin", "main"],
+        check=True, env=git_sandbox.env, capture_output=True,
+    )
+
+    library_root = tmp_path / "lib" / "skills"
+    for key, value in git_sandbox.env.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    runner = CliRunner()
+    existing = runner.invoke(main, [
+        "skill", "add", str(git_sandbox.upstream), "--slug", "alpha",
+    ])
+    assert existing.exit_code == 0, existing.output
+    from agent_toolkit_cli.skill_lock import read_lock, write_lock
+    from agent_toolkit_cli.skill_paths import library_lock_path
+    lock_path = library_lock_path()
+    lock = read_lock(lock_path)
+    lock.skills["alpha"].source = "different/repo"
+    write_lock(lock_path, lock)
+
+    from agent_toolkit_cli.commands import skill as skill_commands
+    from agent_toolkit_cli.skill_source import ParsedSource
+    monkeypatch.setattr(
+        skill_commands, "parse_source",
+        lambda _: ParsedSource(
+            type="git", url=str(git_sandbox.upstream), owner_repo="owner/repo",
+            ref=None, subpath=None, skill_name=None,
+        ),
+    )
+    result = runner.invoke(main, ["skill", "add", "--source", "owner/repo"])
+    assert result.exit_code == 0, result.output
+    assert "skipped alpha" in result.output
+    lock = read_lock(lock_path)
+    assert set(lock.skills) == {"alpha", "beta"}
+    assert lock.skills["alpha"].source == "different/repo"
+    assert "beta" in lock.skills
+    assert (library_root / "beta" / "SKILL.md").exists()
 
 
 def test_skill_add_is_non_interactive(git_sandbox, tmp_path: Path, monkeypatch):
