@@ -344,11 +344,12 @@ def _scan_legacy_pi_symlinks(
             if any(link == runtime_home / p.path for p in registry):
                 return
             try:
-                if link.resolve() == target == canonical.resolve():
-                    link.unlink()
+                still_owned = link.resolve() == target == canonical.resolve()
             except (OSError, RuntimeError):
                 # An unreadable or concurrently replaced path proves no ownership.
                 return
+            if still_owned:
+                link.unlink()
 
         findings.append(Finding(
             finding_type="stray_symlink", slug=link.name, scope=scope, path=link,

@@ -179,6 +179,33 @@ def test_legacy_pi_fix_revalidates_canonical_target(legacy_pi, tmp_path):
     assert link.resolve() == old_target
 
 
+def test_legacy_pi_cli_reports_unlink_failure(legacy_pi, monkeypatch):
+    from click.testing import CliRunner
+
+    from agent_toolkit_cli.cli import main
+
+    scope, _, project, root, canonical = legacy_pi
+    link = root / "demo"
+    link.symlink_to(canonical)
+    original_unlink = Path.unlink
+
+    def deny_legacy_unlink(path, *args, **kwargs):
+        if path == link:
+            raise PermissionError("legacy directory is read-only")
+        return original_unlink(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "unlink", deny_legacy_unlink)
+    result = CliRunner().invoke(main, [
+        "--project", str(project), "skill", "doctor", "demo",
+        "-g" if scope == "global" else "-p",
+    ], input="y\n")
+
+    assert result.exit_code == 1, result.output
+    assert "fix failed: legacy directory is read-only" in result.output
+    assert "0 fixed, 1 skipped" in result.output
+    assert link.is_symlink()
+
+
 def test_legacy_pi_broken_owned_link_is_fixable(legacy_pi):
     _, _, _, root, canonical = legacy_pi
     canonical.rmdir()
