@@ -33,11 +33,11 @@ def test_main_harnesses_members():
 
 
 def test_skills_nonstandard_main_today():
-    # gemini-cli / codex / opencode / cursor read .agents/skills → standard;
+    # gemini-cli / codex / opencode / pi / cursor read .agents/skills → standard;
     # paperclip is a non-standard, company-scoped skills column (issue #474).
     # Returns members in catalog order (MAIN_HARNESS_CANDIDATES).
     assert set(skills_nonstandard_main()) == {
-        "claude-code", "pi", "hermes-agent", "paperclip",
+        "claude-code", "hermes-agent", "paperclip",
     }
 
 

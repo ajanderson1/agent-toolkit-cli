@@ -9,8 +9,8 @@ from agent_toolkit_tui.column_info import get_column_info, registered_pairs
 # Derived in Task 0; pinned here so composition changes fail loudly rather than
 # silently dropping a panel.
 EXPECTED = {
-    ("skill", "global"): ("standard", "claude-code", "hermes-agent", "paperclip", "pi", "state"),
-    ("skill", "project"): ("standard", "claude-code", "hermes-agent", "paperclip", "pi", "state"),
+    ("skill", "global"): ("standard", "claude-code", "hermes-agent", "paperclip", "state"),
+    ("skill", "project"): ("standard", "claude-code", "hermes-agent", "paperclip", "state"),
     ("instruction", "global"): ("standard", "claude-code", "gemini-cli"),
     ("instruction", "project"): ("standard", "claude-code", "gemini-cli"),
     ("agent", "global"): ("standard", "gemini-cli", "opencode", "pi", "state"),

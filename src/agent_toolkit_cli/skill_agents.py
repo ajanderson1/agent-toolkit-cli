@@ -396,9 +396,10 @@ AGENTS: dict[str, AgentConfig] = {
     "pi": AgentConfig(
         name="pi",
         display_name="Pi",
-        skills_dir=".pi/skills",
-        global_skills_dir=HOME / ".pi/agent/skills",
-        detect_installed=lambda: (HOME / ".pi/agent").exists(),
+        skills_dir=".agents/skills",
+        global_skills_dir=HOME / ".agents/skills",
+        detect_installed=lambda: (HOME / ".pi/agent").exists()
+        or (HOME / ".pi").exists(),
         subagent_mechanism="symlink",
     ),
     "qoder": AgentConfig(

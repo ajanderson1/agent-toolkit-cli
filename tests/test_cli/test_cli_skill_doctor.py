@@ -369,8 +369,9 @@ def test_diagnose_ignores_matching_external_projection(tmp_path: Path, monkeypat
         slugs=None, scope="global", home=fake_home, project=None,
     )
     strays = [f for f in findings if f.finding_type == "stray_symlink"]
-    assert len(strays) == 1
-    assert strays[0].path == projection
+    # A stale declaration does not establish toolkit ownership of a foreign target.
+    assert not strays
+    assert projection.resolve() == mismatched_target
 
 
 def test_doctor_rejects_malformed_external_projection_registry(

@@ -20,6 +20,44 @@ def _add_demo(runner, upstream_path, library_root):
     ])
 
 
+@pytest.mark.parametrize("scope", ["global", "project"])
+def test_install_explicit_pi_uses_standard_skill_root(
+    scope, git_sandbox, tmp_path, monkeypatch
+):
+    from dataclasses import replace
+
+    from agent_toolkit_cli.skill_agents import AGENTS
+
+    home = Path(git_sandbox.env["HOME"])
+    project = tmp_path / "pi-project"
+    project.mkdir()
+    library = tmp_path / "library" / "skills"
+    for key, value in git_sandbox.env.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library))
+    monkeypatch.setitem(
+        AGENTS, "pi", replace(AGENTS["pi"], global_skills_dir=home / ".agents/skills")
+    )
+    runner = CliRunner()
+    added = _add_demo(runner, git_sandbox.upstream, library)
+    assert added.exit_code == 0, added.output
+
+    result = runner.invoke(main, [
+        "--project", str(project), "skill", "install", "demo",
+        "--scope", scope, "--agents", "pi",
+    ])
+    assert result.exit_code == 0, result.output
+    root = home if scope == "global" else project
+    projection = root / ".agents/skills/demo"
+    assert projection.is_symlink()
+    assert projection.resolve() == canonical_skill_dir(
+        "demo", scope=scope, home=home, project=project,
+    ).resolve()
+    assert not (project / ".pi/skills").exists()
+    assert not (home / ".pi/agent/skills").exists()
+
+
 # ── global scope ──────────────────────────────────────────────────────────
 
 

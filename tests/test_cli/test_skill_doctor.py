@@ -672,6 +672,71 @@ def test_stray_scan_skipped_when_slugs_provided(
     assert not any(f.finding_type == "stray_symlink" for f in findings)
 
 
+def test_diagnose_legacy_pi_symlinks_global(git_sandbox, tmp_path, monkeypatch):
+    """Doctor reports and safely unlinks legacy global Pi skill symlinks."""
+    library_root = tmp_path / "lib" / "skills"
+    for key, value in git_sandbox.env.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    monkeypatch.setenv("HOME", str(fake_home))
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: fake_home))
+    runner = CliRunner()
+    _seed_library(runner, git_sandbox.upstream)
+
+    legacy_dir = fake_home / ".pi" / "agent" / "skills"
+    legacy_dir.mkdir(parents=True)
+    legacy_target = library_root / "demo"
+    legacy_link = legacy_dir / "demo"
+    legacy_link.symlink_to(legacy_target)
+    ordinary_dir = legacy_dir / "keep-me"
+    ordinary_dir.mkdir()
+    ordinary_file = legacy_dir / "keep-file"
+    ordinary_file.write_text("user data")
+
+    from agent_toolkit_cli.skill_doctor import diagnose
+    findings = diagnose(slugs=None, scope="global", home=fake_home, project=None)
+    finding = next(f for f in findings if f.path == legacy_link)
+    assert finding.finding_type == "stray_symlink"
+    assert finding.fix_action is not None
+    finding.fix_action.apply()
+    assert not legacy_link.is_symlink()
+    assert ordinary_dir.is_dir()
+    assert ordinary_file.read_text() == "user data"
+
+
+def test_diagnose_legacy_pi_symlinks_project(git_sandbox, tmp_path, monkeypatch):
+    """Doctor reports and safely unlinks legacy project Pi skill symlinks."""
+    for key, value in git_sandbox.env.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(tmp_path / "lib" / "skills"))
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    monkeypatch.setenv("HOME", str(fake_home))
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: fake_home))
+    project = tmp_path / "proj"
+    project.mkdir()
+    legacy_dir = project / ".pi" / "skills"
+    legacy_dir.mkdir(parents=True)
+    from agent_toolkit_cli.skill_paths import project_store_root
+    legacy_target = project_store_root(project) / "old-skill"
+    legacy_target.mkdir(parents=True)
+    legacy_link = legacy_dir / "old-skill"
+    legacy_link.symlink_to(legacy_target)
+    ordinary_file = legacy_dir / "keep-file"
+    ordinary_file.write_text("user data")
+
+    from agent_toolkit_cli.skill_doctor import diagnose
+    findings = diagnose(slugs=None, scope="project", home=None, project=project)
+    finding = next(f for f in findings if f.path == legacy_link)
+    assert finding.finding_type == "stray_symlink"
+    assert finding.fix_action is not None
+    finding.fix_action.apply()
+    assert not legacy_link.is_symlink()
+    assert ordinary_file.read_text() == "user data"
+
+
 def test_diagnose_stray_symlink_project(git_sandbox, tmp_path: Path, monkeypatch):
     """Project-scope stray scan finds legacy .claude/skills/* not in project lock."""
     library_root = tmp_path / "lib" / "skills"
