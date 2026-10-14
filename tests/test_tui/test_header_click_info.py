@@ -138,7 +138,7 @@ CASES = (
         "global",
         "skill-table",
         _skill_grid,
-        ("standard", "claude-code", "hermes-agent", "paperclip", "pi", "state"),
+        ("standard", "claude-code", "hermes-agent", "paperclip", "state"),
     ),
     _Case(
         "instructions",

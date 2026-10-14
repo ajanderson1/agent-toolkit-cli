@@ -106,6 +106,15 @@ def test_agent_projection_dir_global_uses_catalog(tmp_path: Path):
     assert p == claude_agent.global_skills_dir / "demo"
 
 
+def test_agent_projection_dir_pi_is_standard(tmp_path: Path):
+    proj = tmp_path / "myproj"
+    proj_link = agent_projection_dir("pi", "demo", scope="project", home=tmp_path, project=proj)
+    assert proj_link == proj / ".agents" / "skills" / "demo"
+
+    glob_link = agent_projection_dir("pi", "demo", scope="global", home=tmp_path, project=None)
+    assert glob_link == Path.home() / ".agents" / "skills" / "demo"
+
+
 def test_supported_harnesses_includes_known():
     for h in ("claude", "codex", "opencode", "gemini", "pi"):
         assert h in SUPPORTED_HARNESSES

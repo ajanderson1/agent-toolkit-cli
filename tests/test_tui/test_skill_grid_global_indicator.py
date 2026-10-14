@@ -55,7 +55,7 @@ async def test_project_scope_globally_linked_cell_shows_marker():
         global_cells={
             "standard": _unlinked(),
             "claude-code": _linked(),
-            "pi": _unlinked(),
+            "hermes-agent": _unlinked(),
         },
     )
 
@@ -78,11 +78,11 @@ async def test_project_scope_globally_linked_cell_shows_marker():
         row_key = rendered_rows[0]
         cols = list(table.columns.keys())
         cc_col_key = cols[1 + interactive_agents().index("claude-code")]
-        pi_col_key = cols[1 + interactive_agents().index("pi")]
+        hermes_col_key = cols[1 + interactive_agents().index("hermes-agent")]
         cc_plain = Text.from_markup(str(table.get_cell(row_key, cc_col_key))).plain
-        pi_plain = Text.from_markup(str(table.get_cell(row_key, pi_col_key))).plain
+        hermes_plain = Text.from_markup(str(table.get_cell(row_key, hermes_col_key))).plain
         assert "🌐" in cc_plain, f"claude-code cell missing marker: {cc_plain!r}"
-        assert "🌐" not in pi_plain, f"pi cell unexpectedly shows marker: {pi_plain!r}"
+        assert "🌐" not in hermes_plain, f"Hermes cell unexpectedly shows marker: {hermes_plain!r}"
 
 
 @pytest.mark.asyncio
@@ -94,7 +94,7 @@ async def test_global_scope_view_does_not_show_marker():
         global_cells={
             "standard": _linked(),
             "claude-code": _linked(),
-            "pi": _linked(),
+            "hermes-agent": _linked(),
         },
     )
 
@@ -129,7 +129,7 @@ async def test_drifted_global_cell_does_not_show_marker():
         global_cells={
             "standard": _unlinked(),
             "claude-code": _drifted(),
-            "pi": _unlinked(),
+            "hermes-agent": _unlinked(),
         },
     )
 
@@ -161,7 +161,7 @@ async def test_skipped_global_cell_does_not_show_marker():
         global_cells={
             "standard": _skipped(),
             "claude-code": _unlinked(),
-            "pi": _unlinked(),
+            "hermes-agent": _unlinked(),
         },
     )
 
@@ -185,15 +185,15 @@ async def test_skipped_global_cell_does_not_show_marker():
 
 @pytest.mark.asyncio
 async def test_per_agent_independence():
-    """A row that is globally linked for universal but not pi shows the
-    marker only on the universal cell."""
+    """A row that is globally linked for standard but not Hermes shows the
+    marker only on the standard cell."""
     row = _row_with(
         "alpha",
         project_cells={agent: _unlinked() for agent in interactive_agents()},
         global_cells={
             "standard": _linked(),
             "claude-code": _unlinked(),
-            "pi": _unlinked(),
+            "hermes-agent": _unlinked(),
         },
     )
 
@@ -215,11 +215,11 @@ async def test_per_agent_independence():
             row_key, cols[1 + interactive_agents().index("standard")]))).plain
         cc_plain = Text.from_markup(str(table.get_cell(
             row_key, cols[1 + interactive_agents().index("claude-code")]))).plain
-        pi_plain = Text.from_markup(str(table.get_cell(
-            row_key, cols[1 + interactive_agents().index("pi")]))).plain
-        assert "🌐" in u_plain, f"universal cell missing marker: {u_plain!r}"
+        hermes_plain = Text.from_markup(str(table.get_cell(
+            row_key, cols[1 + interactive_agents().index("hermes-agent")]))).plain
+        assert "🌐" in u_plain, f"standard cell missing marker: {u_plain!r}"
         assert "🌐" not in cc_plain, f"claude-code cell has marker: {cc_plain!r}"
-        assert "🌐" not in pi_plain, f"pi cell has marker: {pi_plain!r}"
+        assert "🌐" not in hermes_plain, f"Hermes cell has marker: {hermes_plain!r}"
 
 
 @pytest.mark.asyncio

@@ -33,10 +33,6 @@ _HARNESS_SENTENCES: dict[tuple[str, str], str] = {
         "Reads skills from `~/.claude/skills/`, its own directory rather than "
         "the shared `.agents/skills` slot, so it needs a separate install."
     ),
-    ("skill", "pi"): (
-        "Reads skills from `~/.pi/agent/skills/`, its own directory rather "
-        "than the shared `.agents/skills` slot."
-    ),
     ("skill", "hermes-agent"): (
         "Reads skills from `~/.hermes/skills/`, its own directory outside the "
         "standard slot."
@@ -289,7 +285,6 @@ def _pi_extension_origin(_context: dict[str, object]) -> ColumnInfo:
 COLUMN_INFO: dict[tuple[str, str], Factory] = {
     ("skill", "standard"): _standard_skills,
     ("skill", "claude-code"): lambda context: _harness_info("skill", "claude-code", context),
-    ("skill", "pi"): lambda context: _harness_info("skill", "pi", context),
     ("skill", "hermes-agent"): lambda context: _harness_info("skill", "hermes-agent", context),
     ("skill", "paperclip"): lambda context: _harness_info("skill", "paperclip", context),
     ("skill", "state"): _skill_state,

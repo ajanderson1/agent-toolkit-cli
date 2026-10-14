@@ -66,7 +66,15 @@ def test_universal_list_excludes_replit():
 def test_is_standard_matches_skills_dir():
     assert is_standard("codex") is True
     assert is_standard("claude-code") is False
-    assert is_standard("pi") is False
+    assert is_standard("pi") is True
+
+
+def test_pi_standard_skills_dirs():
+    from agent_toolkit_cli.skill_agents import HOME
+    cfg = AGENTS["pi"]
+    assert cfg.skills_dir == ".agents/skills"
+    assert cfg.global_skills_dir == HOME / ".agents/skills"
+    assert cfg.is_standard is True
 
 
 def test_get_agent_returns_config():
@@ -88,12 +96,12 @@ def test_well_known_agents_present():
 
 def test_well_known_universality():
     """Of our 5 v2.0.0 shortlist:
-    codex, opencode, gemini-cli are universal; claude-code, pi are not."""
+    codex, opencode, gemini-cli, pi are universal; claude-code is not."""
     assert is_standard("codex") is True
     assert is_standard("opencode") is True
     assert is_standard("gemini-cli") is True
+    assert is_standard("pi") is True
     assert is_standard("claude-code") is False
-    assert is_standard("pi") is False
 
 
 def test_general_skill_entry_exists_and_resolves_to_dotagents_skills():

@@ -129,12 +129,6 @@ def test_standard_project_marker_is_present_only_for_a_globally_linked_asset(
         ),
         (
             "skill",
-            "pi",
-            "Reads skills from `~/.pi/agent/skills/`, its own directory rather "
-            "than the shared `.agents/skills` slot.",
-        ),
-        (
-            "skill",
             "hermes-agent",
             "Reads skills from `~/.hermes/skills/`, its own directory outside the "
             "standard slot.",

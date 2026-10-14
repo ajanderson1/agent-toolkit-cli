@@ -9,7 +9,7 @@ Columns: Skill | Standard ⓘ | non-standard main harnesses ⓘ | State ⓘ | So
 
 The long tail of harnesses is managed via the CLI; the TUI grid only shows
 the standard column plus the non-standard main harnesses derived from
-`skills_nonstandard_main()` (currently Claude, Pi, Hermes). The `Source`
+`skills_nonstandard_main()` (currently Claude, Hermes, and Paperclip). The `Source`
 column is passive (no toggle / no info popup); the SKILL slug-cell info
 modal surfaces the skill description when present.
 """

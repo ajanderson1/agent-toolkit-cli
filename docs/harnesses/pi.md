@@ -5,7 +5,7 @@
 | Asset type | Support | How |
 |---|:-:|---|
 | [Instructions](../asset-types/instructions.md) | [✅](#instructions) | native `AGENTS.md` reader |
-| [Skills](../asset-types/skills.md) | [✅](#skills) | `.pi/skills` |
+| [Skills](../asset-types/skills.md) | [✅](#skills) | shared `.agents/skills` |
 | [Agents (subagents)](../asset-types/agents.md) | [✅](#agents) | dual-symlink |
 | [Commands](../asset-types/commands.md) | [✅](#commands) | prompt templates (`.pi/agent/prompts`, `.pi/prompts`) |
 | [MCP servers](../asset-types/mcp.md) | [✅](#mcp-servers) | config-injection by name |
@@ -25,10 +25,13 @@ Reads the canonical `AGENTS.md` natively — no pointer needed; the [instruction
 
 Supported — every harness in the catalog has a skills directory the [skills asset type](../asset-types/skills.md) projects into.
 
-- **Project dir:** `.pi/skills`
-- **Global dir:** `~/.pi/agent/skills`
-- **[General-dir](../glossary.md#general) (`.agents/skills`) reader:** no — gets its own projection
-- **Source:** [vercel-labs/skills · `src/agents.ts`](https://github.com/vercel-labs/skills/blob/main/src/agents.ts) — the upstream per-harness catalog these directories come from (ported as `skill_agents.py`, parity-tested)
+- **Project dir:** `.agents/skills`
+- **Global dir:** `~/.agents/skills`
+- **[General-dir](../glossary.md#general) (`.agents/skills`) reader:** yes
+- **TUI:** included in the shared Standard Skills column, not a separate Pi column.
+- **Source:** Pi native Agent Skills discovery. This deliberately differs from the vendored upstream directory catalog.
+
+`skill doctor` offers cleanup of legacy `.pi/skills` and `~/.pi/agent/skills` symlinks only when they point to the same scope's toolkit canonical skill. Foreign links, real files/directories, symlinked legacy roots, and declared external projections remain untouched. Other Pi asset paths do not change.
 
 ## Agents (subagents) { #agents }
 

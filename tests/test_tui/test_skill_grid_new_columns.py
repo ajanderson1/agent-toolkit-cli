@@ -51,7 +51,7 @@ async def test_source_column_is_last():
         assert not any("SKILL" in label for label in labels)
         assert any(label.startswith("Standard (") for label in labels)
         assert any(label.startswith("Claude ") for label in labels)
-        assert any(label.startswith("Pi ") for label in labels)
+        assert not any(label.startswith("Pi ") for label in labels)
         assert any(label.startswith("Hermes ") for label in labels)
         assert not any("Claude Code" in label for label in labels)
         assert not any("Gemini CLI" in label for label in labels)

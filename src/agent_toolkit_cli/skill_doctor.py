@@ -79,7 +79,9 @@ def diagnose(
 
     slugs=None scans every slug in the lock AND every projection dir for
     stray symlinks (links whose basename isn't in the scope's lock).
-    Otherwise scans only the named slugs and skips the stray scan.
+    Otherwise scans only the named slugs and skips the general stray scan.
+    Legacy toolkit-owned Pi links are checked in both modes, even without a
+    lock entry, so targeted cleanup can retire already-uninstalled skills.
     """
     lock = read_lock(lock_file_path(scope=scope, home=home, project=project))
     targets = (
@@ -100,6 +102,10 @@ def diagnose(
             entry=lock.skills[slug], lock=lock,
             repair_foreign=repair_foreign,
         ))
+    findings.extend(_scan_legacy_pi_symlinks(
+        slugs=slugs, scope=scope, home=home, project=project,
+        runtime_home=runtime_home, external_projections=external_projections,
+    ))
     if slugs is None:
         findings.extend(_scan_stray_symlinks(
             scope=scope, home=home, project=project, lock=lock,
@@ -281,6 +287,78 @@ def _scan_stray_symlinks(
                 ),
                 fix_action=_make_unlink_action(link=link),
             ))
+
+    return findings
+
+
+def _scan_legacy_pi_symlinks(
+    *, slugs: tuple[str, ...] | None, scope: Scope, home: Path | None,
+    project: Path | None, runtime_home: Path,
+    external_projections: tuple[ExternalProjection, ...],
+) -> list[Finding]:
+    """Retire only links to this scope's canonical skill, never foreign data."""
+    if scope == "global":
+        base = runtime_home
+        root = base / ".pi" / "agent" / "skills"
+    else:
+        assert project is not None
+        base = project
+        root = base / ".pi" / "skills"
+
+    def safe_root() -> bool:
+        # Do not traverse a user-managed symlink at any legacy path component.
+        return root.is_dir() and not any(
+            parent.is_symlink()
+            for parent in (root, *root.parents)
+            if parent == base or base in parent.parents
+        )
+
+    if not safe_root():
+        return []
+    findings: list[Finding] = []
+    for link in sorted(root.iterdir()):
+        if slugs is not None and link.name not in slugs:
+            continue
+        if not link.is_symlink():
+            continue
+        canonical = canonical_skill_dir(
+            link.name, scope=scope, home=home, project=project,
+        )
+        try:
+            target = link.resolve()
+            if target != canonical.resolve():
+                continue
+        except (OSError, RuntimeError):
+            continue
+        # Legacy retirement is conservative: registration reserves the path,
+        # even when the external target is temporarily missing or has drifted.
+        if any(link == runtime_home / p.path for p in external_projections):
+            continue
+
+        def apply(link=link, target=target, canonical=canonical) -> None:
+            if not safe_root() or not link.is_symlink():
+                return
+            # A diagnostic is a snapshot: refuse to remove a replaced link or
+            # a projection registered to another owner since diagnosis.
+            registry = _read_external_projections(runtime_home) if scope == "global" else ()
+            if any(link == runtime_home / p.path for p in registry):
+                return
+            try:
+                still_owned = link.resolve() == target == canonical.resolve()
+            except (OSError, RuntimeError):
+                # An unreadable or concurrently replaced path proves no ownership.
+                return
+            if still_owned:
+                link.unlink()
+
+        findings.append(Finding(
+            finding_type="stray_symlink", slug=link.name, scope=scope, path=link,
+            detail=f"{link} -> {target}: legacy Pi skill projection; use .agents/skills",
+            fix_action=FixAction(
+                description=f"Unlink legacy Pi skill projection {link}",
+                shell_preview=f"rm {link}", apply=apply,
+            ),
+        ))
     return findings
 
 

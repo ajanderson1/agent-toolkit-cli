@@ -2,7 +2,9 @@
 skip rules."""
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 
@@ -111,16 +113,14 @@ def test_apply_project_claude_creates_symlink_when_dir_exists(git_sandbox, tmp_p
     assert "claude-code" not in result.skipped
 
 
-def test_project_install_auto_creates_agent_root(git_sandbox, tmp_path):
-    """Project install + pi (non-universal); no .pi/ → .pi/ and symlink auto-created.
-
-    v2.2: --agents pi is explicit consent; apply() calls mkdir(parents=True).
-    """
+def test_project_pi_uses_standard_projection(git_sandbox, tmp_path):
+    """Explicit Pi target shares .agents/skills and creates no .pi skills root."""
     home = Path(git_sandbox.env["HOME"])
     src = _src(git_sandbox.upstream)
     project = tmp_path / "myproj"
     project.mkdir()
-    assert not (project / ".pi").exists()
+    assert not (project / ".pi" / "skills").exists()
+
     p = InstallPlan(
         slug="demo", scope="project", source=src, ref=None,
         add_agents=("pi",), remove_agents=(),
@@ -129,29 +129,34 @@ def test_project_install_auto_creates_agent_root(git_sandbox, tmp_path):
     link = agent_projection_dir(
         "pi", "demo", scope="project", home=home, project=project,
     )
-    assert link.is_symlink(), ".pi/skills/demo symlink must be created"
-    assert (project / ".pi").is_dir(), ".pi/ dir must be auto-created"
-    assert "pi" not in result.skipped
-
-
-def test_project_install_works_with_existing_agent_root(git_sandbox, tmp_path):
-    """Regression: project install + pi when .pi/ already exists → symlink created."""
-    home = Path(git_sandbox.env["HOME"])
-    src = _src(git_sandbox.upstream)
-    project = tmp_path / "myproj"
-    project.mkdir()
-    (project / ".pi").mkdir()
-    p = InstallPlan(
-        slug="demo", scope="project", source=src, ref=None,
-        add_agents=("pi",), remove_agents=(),
-    )
-    result = apply(p, home=home, project=project, env=git_sandbox.env)
-    link = agent_projection_dir(
-        "pi", "demo", scope="project", home=home, project=project,
-    )
+    assert link == project / ".agents" / "skills" / "demo"
     assert link.is_symlink()
+    assert not (project / ".pi" / "skills").exists()
     assert "pi" not in result.skipped
 
+
+def test_global_pi_uses_standard_projection(git_sandbox, tmp_path, monkeypatch):
+    """Explicit Pi target shares ~/.agents/skills and creates no .pi skills root."""
+    home = Path(git_sandbox.env["HOME"])
+    from agent_toolkit_cli.skill_agents import AGENTS
+    monkeypatch.setitem(
+        AGENTS, "pi", replace(AGENTS["pi"], global_skills_dir=home / ".agents" / "skills"),
+    )
+    src = _src(git_sandbox.upstream)
+    assert not (home / ".pi" / "agent" / "skills").exists()
+
+    p = InstallPlan(
+        slug=f"pi-global-{uuid4().hex[:12]}", scope="global", source=src, ref=None,
+        add_agents=("pi",), remove_agents=(),
+    )
+    result = apply(p, home=home, env=git_sandbox.env)
+    link = agent_projection_dir(
+        "pi", p.slug, scope="global", home=home, project=None,
+    )
+    assert link == home / ".agents" / "skills" / p.slug
+    assert link.is_symlink()
+    assert not (home / ".pi" / "agent" / "skills").exists()
+    assert "pi" not in result.skipped
 
 def test_apply_project_windsurf_creates_symlink_when_dir_absent(git_sandbox, tmp_path):
     """Project install + windsurf (non-universal); no .windsurf/ → symlink and dir auto-created.

@@ -27,7 +27,7 @@ The defining behaviour: **`update` is a merge-aware operation.** Local edits to 
 ~/.codex/skills/<slug>               → symlink
 ~/.config/opencode/skills/<slug>     → symlink
 ~/.gemini/skills/<slug>              → symlink
-~/.pi/skills/<slug>                  → symlink
+~/.agents/skills/<slug>              → shared standard symlink (including Pi)
 ```
 
 The library root is `~/.agent-toolkit/skills/` by default, overridable via
