@@ -79,6 +79,43 @@ def test_uninstall_idempotent(
     assert result.exit_code == 0, result.output
 
 
+def test_uninstall_source_removes_matching_projections_only(
+    git_sandbox, tmp_path: Path, monkeypatch,
+):
+    library_root = tmp_path / "lib" / "skills"
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    for key, value in git_sandbox.env.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    monkeypatch.setenv("HOME", str(fake_home))
+    runner = CliRunner()
+    for slug in ("alpha", "beta", "other"):
+        result = runner.invoke(main, [
+            "skill", "add", str(git_sandbox.upstream), "--slug", slug,
+        ])
+        assert result.exit_code == 0, result.output
+        result = runner.invoke(main, [
+            "skill", "install", slug, "--agents", "standard",
+        ])
+        assert result.exit_code == 0, result.output
+    from agent_toolkit_cli.skill_lock import read_lock, write_lock
+    from agent_toolkit_cli.skill_paths import library_lock_path
+    lock_path = library_lock_path()
+    lock = read_lock(lock_path)
+    lock.skills["alpha"].source = "owner/repo"
+    lock.skills["beta"].source = "owner/repo"
+    write_lock(lock_path, lock)
+
+    result = runner.invoke(main, [
+        "skill", "uninstall", "--source", "owner/repo",
+    ])
+    assert result.exit_code == 0, result.output
+    assert not (fake_home / ".agents/skills/alpha").exists()
+    assert not (fake_home / ".agents/skills/beta").exists()
+    assert (fake_home / ".agents/skills/other").is_symlink()
+
+
 def test_uninstall_project_preserves_canonical(
     git_sandbox, tmp_path: Path, monkeypatch
 ):

@@ -49,6 +49,39 @@ def test_install_global_universal_creates_agents_skills_symlink(
     assert bundle_link.resolve() == (library_root / "demo").resolve()
 
 
+def test_install_source_installs_all_library_skills_from_exact_source(
+    git_sandbox, tmp_path: Path, monkeypatch,
+):
+    library_root = tmp_path / "lib" / "skills"
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    for key, value in git_sandbox.env.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library_root))
+    monkeypatch.setenv("HOME", str(fake_home))
+    runner = CliRunner()
+    for slug in ("alpha", "beta", "other"):
+        result = runner.invoke(main, [
+            "skill", "add", str(git_sandbox.upstream), "--slug", slug,
+        ])
+        assert result.exit_code == 0, result.output
+    from agent_toolkit_cli.skill_lock import read_lock, write_lock
+    from agent_toolkit_cli.skill_paths import library_lock_path
+    lock_path = library_lock_path()
+    lock = read_lock(lock_path)
+    lock.skills["alpha"].source = "owner/repo"
+    lock.skills["beta"].source = "owner/repo"
+    write_lock(lock_path, lock)
+
+    result = runner.invoke(main, [
+        "skill", "install", "--source", "owner/repo", "--agents", "standard",
+    ])
+    assert result.exit_code == 0, result.output
+    assert (fake_home / ".agents/skills/alpha").is_symlink()
+    assert (fake_home / ".agents/skills/beta").is_symlink()
+    assert not (fake_home / ".agents/skills/other").exists()
+
+
 def test_install_global_claude_code_creates_claude_symlink(
     git_sandbox, tmp_path: Path, monkeypatch
 ):
