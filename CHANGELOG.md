@@ -1,5 +1,12 @@
 # Changelog
 
+## [5.9.1](https://github.com/ajanderson1/agent-toolkit-cli/compare/v5.9.0...v5.9.1) (2026-10-15)
+
+
+### Bug Fixes
+
+* **pi:** preserve package resource filters in settings ([#511](https://github.com/ajanderson1/agent-toolkit-cli/issues/511)) ([33643ca](https://github.com/ajanderson1/agent-toolkit-cli/commit/33643cae3425688dedbf5b2efe0e541d8bc6f58e))
+
 ## [5.9.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v5.8.0...v5.9.0) (2026-10-14)
 
 
