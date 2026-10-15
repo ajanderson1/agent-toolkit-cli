@@ -42,10 +42,48 @@ def test_read_packages_accepts_current_pi_source_objects(tmp_path):
 
 
 @pytest.mark.parametrize(
+    "invalid_entry",
+    [
+        {"source": "npm:foo", "skills": "not-a-list"},
+        {"source": "npm:foo", "skills": [123]},
+        {"source": "npm:foo", "extensions": "not-a-list"},
+        {"source": "npm:foo", "prompts": "not-a-list"},
+        {"source": "npm:foo", "themes": "not-a-list"},
+        {"source": "npm:foo", "autoload": "not-a-bool"},
+    ],
+)
+def test_read_packages_rejects_invalid_filter_types(tmp_path, invalid_entry):
+    _write(tmp_path / ".pi" / "agent" / "settings.json", {"packages": [invalid_entry]})
+    with pytest.raises(ps.PiSettingsError):
+        ps.read_packages(scope="global", home=tmp_path)
+
+
+def test_read_packages_accepts_package_objects_with_resource_filters(tmp_path):
+    _write(
+        tmp_path / ".pi" / "agent" / "settings.json",
+        {
+            "packages": [
+                {"source": "git:github.com/ajanderson1/pi-superpowers", "skills": []},
+                {
+                    "source": "npm:pi-web-access",
+                    "extensions": ["ext.ts"],
+                    "autoload": False,
+                },
+            ]
+        },
+    )
+    assert ps.read_packages(scope="global", home=tmp_path) == [
+        "git:github.com/ajanderson1/pi-superpowers",
+        "npm:pi-web-access",
+    ]
+
+
+@pytest.mark.parametrize(
     "packages",
     [
         ["npm:foo", {"source": "npm:bar"}],
         [{"source": "npm:foo", "token": "secret"}],
+        [{"source": "npm:foo", "unknown": True}],
         [{"source": 42}],
         [{}],
     ],

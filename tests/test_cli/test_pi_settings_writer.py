@@ -49,6 +49,31 @@ def test_add_package_preserves_current_pi_object_representation(tmp_path):
     }
 
 
+def test_add_package_preserves_package_resource_filters(tmp_path):
+    p = _global(tmp_path)
+    _seed(
+        p,
+        {
+            "model": "x",
+            "packages": [
+                {"source": "git:github.com/ajanderson1/pi-superpowers", "skills": []},
+                {"source": "npm:pi-web-access", "skills": ["web"], "autoload": False},
+            ],
+        },
+    )
+
+    ps.add_package("npm:pi-chrome", scope="global", home=tmp_path)
+
+    assert json.loads(p.read_text()) == {
+        "model": "x",
+        "packages": [
+            {"source": "git:github.com/ajanderson1/pi-superpowers", "skills": []},
+            {"source": "npm:pi-web-access", "skills": ["web"], "autoload": False},
+            {"source": "npm:pi-chrome"},
+        ],
+    }
+
+
 def test_add_package_is_idempotent(tmp_path):
     p = _global(tmp_path)
     _seed(p, {"packages": ["npm:foo"]})
@@ -93,6 +118,29 @@ def test_remove_package_preserves_current_pi_object_representation(tmp_path):
 
     assert json.loads(p.read_text()) == {
         "model": "x", "packages": [{"source": "npm:bar"}],
+    }
+
+
+def test_remove_package_preserves_package_resource_filters(tmp_path):
+    p = _global(tmp_path)
+    _seed(
+        p,
+        {
+            "model": "x",
+            "packages": [
+                {"source": "git:github.com/ajanderson1/pi-superpowers", "skills": []},
+                {"source": "npm:pi-web-access", "skills": []},
+            ],
+        },
+    )
+
+    ps.remove_package("npm:pi-web-access", scope="global", home=tmp_path)
+
+    assert json.loads(p.read_text()) == {
+        "model": "x",
+        "packages": [
+            {"source": "git:github.com/ajanderson1/pi-superpowers", "skills": []},
+        ],
     }
 
 
