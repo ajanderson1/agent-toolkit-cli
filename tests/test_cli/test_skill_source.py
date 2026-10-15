@@ -213,3 +213,63 @@ def test_file_url_tree_ref_option_injection_rejected():
     is the transport where `--upload-pack` is actually executed (#434)."""
     with pytest.raises(SourceParseError, match="must not start with '-'"):
         parse_source("file:///tmp/parent-src/tree/--upload-pack=evil")
+
+
+def test_github_https_with_subpath_no_tree():
+    s = parse_source("https://github.com/ajanderson1/skills-managers/agent-toolkit-mgr")
+    assert s == ParsedSource(
+        type="github",
+        url="https://github.com/ajanderson1/skills-managers",
+        owner_repo="ajanderson1/skills-managers",
+        ref=None,
+        subpath="agent-toolkit-mgr",
+        skill_name=None,
+    )
+
+
+def test_github_https_with_blob_ref_and_subpath():
+    s = parse_source("https://github.com/ajanderson1/skills-managers/blob/main/agent-toolkit-mgr/SKILL.md")
+    assert s == ParsedSource(
+        type="github",
+        url="https://github.com/ajanderson1/skills-managers",
+        owner_repo="ajanderson1/skills-managers",
+        ref="main",
+        subpath="agent-toolkit-mgr",
+        skill_name=None,
+    )
+
+
+def test_github_https_with_trailing_skill_md():
+    s = parse_source("https://github.com/ajanderson1/skills-managers/agent-toolkit-mgr/SKILL.md")
+    assert s == ParsedSource(
+        type="github",
+        url="https://github.com/ajanderson1/skills-managers",
+        owner_repo="ajanderson1/skills-managers",
+        ref=None,
+        subpath="agent-toolkit-mgr",
+        skill_name=None,
+    )
+
+
+def test_github_ssh_url_with_subpath():
+    s = parse_source("git@github.com:ajanderson1/skills-managers/agent-toolkit-mgr")
+    assert s == ParsedSource(
+        type="github",
+        url="git@github.com:ajanderson1/skills-managers.git",
+        owner_repo="ajanderson1/skills-managers",
+        ref=None,
+        subpath="agent-toolkit-mgr",
+        skill_name=None,
+    )
+
+
+def test_github_ssh_protocol_url_with_subpath():
+    s = parse_source("ssh://git@github.com/ajanderson1/skills-managers/agent-toolkit-mgr")
+    assert s == ParsedSource(
+        type="github",
+        url="ssh://git@github.com/ajanderson1/skills-managers.git",
+        owner_repo="ajanderson1/skills-managers",
+        ref=None,
+        subpath="agent-toolkit-mgr",
+        skill_name=None,
+    )
