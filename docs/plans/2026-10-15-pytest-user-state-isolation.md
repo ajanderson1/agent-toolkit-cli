@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3.13, pytest, pytest fixtures, `tempfile`, `pathlib`, existing toolkit path helpers.
 
-**Spec:** `/tmp/pytest-user-state-isolation-spec.md` (issue #513)
+**Spec:** `docs/specs/2026-10-15-pytest-user-state-isolation.md` (issue #513)
 
 ## Global Constraints
 
