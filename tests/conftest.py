@@ -1,10 +1,98 @@
-"""Shared fixtures across the test suite."""
+"""Shared fixtures across the test suite.
+
+Isolation guarantee (Issue #513):
+Pytest startup automatically provisions an isolated sandbox root in a temporary
+directory. This sandbox isolates:
+- User home: Path.home(), HOME, USERPROFILE
+- XDG config: XDG_CONFIG_HOME (~/.config)
+- Harness configs: CODEX_HOME (~/.codex), CLAUDE_CONFIG_DIR (~/.claude),
+  VIBE_HOME (~/.vibe), PI_CODING_AGENT_DIR (~/.pi/agent)
+- Universal agent skills: ~/.agents/skills
+- Toolkit global library/locks/stores: ~/.agent-toolkit/
+- Inherited escape variables: AGENT_TOOLKIT_SKILLS_ROOT, AGENT_TOOLKIT_TUI_SETTINGS
+"""
 from __future__ import annotations
 
+import atexit
 import os
+import shutil
 import subprocess
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+
+# ---------------------------------------------------------------------------
+# Global test isolation sandbox (Issue #513)
+# ---------------------------------------------------------------------------
+# Initialized immediately on conftest load, BEFORE any agent_toolkit_* imports,
+# ensuring import-time module state (such as skill_agents.HOME) binds to the
+# isolated sandbox rather than the real user's environment.
+
+_ORIGINAL_ENV = os.environ.copy()
+_SANDBOX_DIR: Path | None = None
+
+
+def _setup_sandbox() -> Path:
+    global _SANDBOX_DIR
+    if _SANDBOX_DIR is not None and _SANDBOX_DIR.exists():
+        return _SANDBOX_DIR
+
+    sandbox = Path(tempfile.mkdtemp(prefix="agent-toolkit-pytest-sandbox-")).resolve()
+    _SANDBOX_DIR = sandbox
+
+    fake_home = sandbox / "home"
+    fake_home.mkdir(parents=True, exist_ok=True)
+    (fake_home / ".config").mkdir(parents=True, exist_ok=True)
+    (fake_home / ".claude").mkdir(parents=True, exist_ok=True)
+    (fake_home / ".codex").mkdir(parents=True, exist_ok=True)
+    (fake_home / ".vibe").mkdir(parents=True, exist_ok=True)
+    (fake_home / ".pi" / "agent").mkdir(parents=True, exist_ok=True)
+    (fake_home / ".agents" / "skills").mkdir(parents=True, exist_ok=True)
+    (fake_home / ".agent-toolkit").mkdir(parents=True, exist_ok=True)
+
+    os.environ["HOME"] = str(fake_home)
+    os.environ["USERPROFILE"] = str(fake_home)
+    os.environ["XDG_CONFIG_HOME"] = str(fake_home / ".config")
+    os.environ["CODEX_HOME"] = str(fake_home / ".codex")
+    os.environ["CLAUDE_CONFIG_DIR"] = str(fake_home / ".claude")
+    os.environ["VIBE_HOME"] = str(fake_home / ".vibe")
+    os.environ["PI_CODING_AGENT_DIR"] = str(fake_home / ".pi" / "agent")
+
+    # Strip potential escaping overrides from inherited host environment
+    for var in (
+        "AGENT_TOOLKIT_SKILLS_ROOT",
+        "AGENT_TOOLKIT_TUI_SETTINGS",
+    ):
+        os.environ.pop(var, None)
+
+    return sandbox
+
+
+def _teardown_sandbox() -> None:
+    global _SANDBOX_DIR
+    if _SANDBOX_DIR is None:
+        return
+    sandbox = _SANDBOX_DIR
+    _SANDBOX_DIR = None
+
+    # Restore original environment
+    os.environ.clear()
+    os.environ.update(_ORIGINAL_ENV)
+
+    # Remove only the exact allocated directory
+    if sandbox.exists():
+        shutil.rmtree(sandbox, ignore_errors=True)
+
+
+# Initialize immediately on conftest load
+_setup_sandbox()
+atexit.register(_teardown_sandbox)
+
+
+def pytest_unconfigure(config: pytest.Config) -> None:
+    """Restore original environment and clean up test sandbox root."""
+    _teardown_sandbox()
+
 
 import pytest
 

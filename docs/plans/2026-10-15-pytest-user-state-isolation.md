@@ -39,12 +39,12 @@
 - Produces a private startup helper which allocates and configures sandbox paths before application imports.
 - Preserves explicit per-test environment changes made later through pytest monkeypatch.
 
-- [ ] **Step 1: Write failing startup-isolation test.** In a subprocess with a synthetic outer `HOME`, run pytest against a minimal probe test and a temporary conftest/plugin bootstrap entrypoint. Assert `Path.home()`, toolkit global roots for all supported kinds, and supported harness configuration roots resolve under the newly allocated test sandbox, not the outer home. Seed sentinel settings/library data and assert bytes are unchanged. Avoid directly importing the repository's conftest in the probe because its current top-level CLI import can cache home-derived paths before the helper runs.
-- [ ] **Step 2: Run the focused test and verify it fails** because startup currently leaves process home and configuration roots unchanged.
-- [ ] **Step 3: Inventory root variables and home-derived module state.** Search path facades, catalogs, adapters, and config modules for `Path.home()`, `HOME`, XDG, and harness-specific overrides; record exact variables in the helper's tests/docstring. Move `from agent_toolkit_cli.cli import main` and any other home-sensitive imports below sandbox initialization, or lazily import them in fixtures/functions, so no project import precedes the boundary.
-- [ ] **Step 4: Implement startup sandbox.** Allocate one `tempfile.mkdtemp` root per pytest process; set `HOME`, `XDG_CONFIG_HOME`, supported harness-home overrides, and each supported toolkit root to isolated descendants; remove/replace inherited overrides that escape. Register a pytest shutdown hook to restore the original environment and remove only this root. Do not share writable roots across workers if xdist is supported/configured.
-- [ ] **Step 5: Run focused tests and verify pass.** Run `uv run pytest -q tests/test_test_home_isolation.py`; verify sentinels unchanged, roots isolated, environment restoration and exact-root cleanup asserted.
-- [ ] **Step 6: Commit** the sandbox and regression test.
+- [x] **Step 1: Write failing startup-isolation test.** In a subprocess with a synthetic outer `HOME`, run pytest against a minimal probe test and a temporary conftest/plugin bootstrap entrypoint. Assert `Path.home()`, toolkit global roots for all supported kinds, and supported harness configuration roots resolve under the newly allocated test sandbox, not the outer home. Seed sentinel settings/library data and assert bytes are unchanged. Avoid directly importing the repository's conftest in the probe because its current top-level CLI import can cache home-derived paths before the helper runs.
+- [x] **Step 2: Run the focused test and verify it fails** because startup currently leaves process home and configuration roots unchanged.
+- [x] **Step 3: Inventory root variables and home-derived module state.** Search path facades, catalogs, adapters, and config modules for `Path.home()`, `HOME`, XDG, and harness-specific overrides; record exact variables in the helper's tests/docstring. Move `from agent_toolkit_cli.cli import main` and any other home-sensitive imports below sandbox initialization, or lazily import them in fixtures/functions, so no project import precedes the boundary.
+- [x] **Step 4: Implement startup sandbox.** Allocate one `tempfile.mkdtemp` root per pytest process; set `HOME`, `XDG_CONFIG_HOME`, supported harness-home overrides, and each supported toolkit root to isolated descendants; remove/replace inherited overrides that escape. Register a pytest shutdown hook to restore the original environment and remove only this root. Do not share writable roots across workers if xdist is supported/configured.
+- [x] **Step 5: Run focused tests and verify pass.** Run `uv run pytest -q tests/test_test_home_isolation.py`; verify sentinels unchanged, roots isolated, environment restoration and exact-root cleanup asserted.
+- [x] **Step 6: Commit** the sandbox and regression test.
 
 ### Task 2: Cover the original global Pi install leak
 
@@ -56,12 +56,12 @@
 - Consumes the default startup sandbox from Task 1.
 - Keeps `test_global_pi_uses_standard_projection` behavior and assertion names where practical.
 
-- [ ] **Step 1: Strengthen regression assertions.** Assert the global canonical asset directory and global skills lock are under the test sandbox, as is the `.agents/skills` projection, and assert the lock contains only the expected test slug/source.
-- [ ] **Step 2: Run that test and verify it passes** under isolated roots; additionally run it in a subprocess with a synthetic outer-home sentinel and verify outer state unchanged.
-- [ ] **Step 3: Remove redundant per-test workaround only if safe.** Keep the explicit projection catalog patch needed by the test, but do not rely on it as library isolation.
-- [ ] **Step 4: Document default isolation and safe test-local overrides** in conftest docstring/comments.
-- [ ] **Step 5: Run focused checks.** Run `uv run pytest -q tests/test_test_home_isolation.py tests/test_cli/test_skill_install_engine.py` and inspect test-created outputs for correct roots.
-- [ ] **Step 6: Commit** the regression assertions and documentation.
+- [x] **Step 1: Strengthen regression assertions.** Assert the global canonical asset directory and global skills lock are under the test sandbox, as is the `.agents/skills` projection, and assert the lock contains only the expected test slug/source.
+- [x] **Step 2: Run that test and verify it passes** under isolated roots; additionally run it in a subprocess with a synthetic outer-home sentinel and verify outer state unchanged.
+- [x] **Step 3: Remove redundant per-test workaround only if safe.** Keep the explicit projection catalog patch needed by the test, but do not rely on it as library isolation.
+- [x] **Step 4: Document default isolation and safe test-local overrides** in conftest docstring/comments.
+- [x] **Step 5: Run focused checks.** Run `uv run pytest -q tests/test_test_home_isolation.py tests/test_cli/test_skill_install_engine.py` and inspect test-created outputs for correct roots.
+- [x] **Step 6: Commit** the regression assertions and documentation.
 
 ### Task 3: Verify whole suite and issue gate
 
@@ -71,11 +71,11 @@
 **Interfaces:**
 - Consumes the startup sandbox and global Pi regression test.
 
-- [ ] **Step 1: Audit home-sensitive tests** against the new default and update tests that expected the host home to instead assert the sandbox home or use explicit synthetic homes.
-- [ ] **Step 2: Run focused regression tests** and verify no test-created state appears outside the sandbox.
-- [ ] **Step 3: Run full suite** with `uv run pytest -q`; verify exit 0 and no tests access real agent settings/assets. If host contamination is observed, stop and report without cleanup.
-- [ ] **Step 4: Verify preservation.** Compare outer synthetic-home sentinel tree before/after, ensure bootstrap cleanup removes only its own path, and run `git status --short` to check for accidental artifacts.
-- [ ] **Step 5: Commit any remaining targeted fixes** and report exact verification results.
+- [x] **Step 1: Audit home-sensitive tests** against the new default and update tests that expected the host home to instead assert the sandbox home or use explicit synthetic homes.
+- [x] **Step 2: Run focused regression tests** and verify no test-created state appears outside the sandbox.
+- [x] **Step 3: Run full suite** with `uv run pytest -q`; verify exit 0 and no tests access real agent settings/assets. If host contamination is observed, stop and report without cleanup.
+- [x] **Step 4: Verify preservation.** Compare outer synthetic-home sentinel tree before/after, ensure bootstrap cleanup removes only its own path, and run `git status --short` to check for accidental artifacts.
+- [x] **Step 5: Commit any remaining targeted fixes** and report exact verification results.
 
 ## Execution Notes
 
