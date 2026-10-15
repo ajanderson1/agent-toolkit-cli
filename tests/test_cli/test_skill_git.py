@@ -85,6 +85,56 @@ def test_clone_disables_prompt_and_batches_ssh(git_sandbox, tmp_path, monkeypatc
     assert "BatchMode=yes" in env["GIT_SSH_COMMAND"]
 
 
+def test_clone_https_fallback_to_ssh(tmp_path: Path, monkeypatch):
+    """If HTTPS clone of a github repo fails, fallback to SSH (for private repos)."""
+    from agent_toolkit_cli import skill_git
+
+    calls: list[list[str]] = []
+
+    def mock_run(cmd, *, env=None):
+        calls.append(list(cmd))
+        if "https://github.com/foo/bar" in cmd:
+            proc = subprocess.CompletedProcess(
+                cmd, returncode=128, stdout="", stderr="remote: Not Found"
+            )
+            raise GitError(cmd, proc)
+        dest = Path(cmd[-1])
+        dest.mkdir(parents=True, exist_ok=True)
+        return subprocess.CompletedProcess(cmd, returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(skill_git, "_run", mock_run)
+    dest = tmp_path / "cloned"
+    result = clone("https://github.com/foo/bar", dest, ref=None, env=None)
+    assert len(calls) == 2
+    assert "https://github.com/foo/bar" in calls[0]
+    assert "git@github.com:foo/bar.git" in calls[1]
+    assert result.stdout == ""
+
+
+
+@pytest.mark.parametrize("existing,error", [
+    (True, "remote: Not Found"),
+    (False, "fatal: disk full"),
+])
+def test_clone_fallback_preserves_destination(tmp_path, monkeypatch, existing, error):
+    dest = tmp_path / "destination"
+    if existing:
+        dest.mkdir()
+        (dest / "keep").write_text("important")
+    calls = []
+
+    def fail(cmd, *, env=None):
+        calls.append(cmd)
+        raise GitError(cmd, subprocess.CompletedProcess(cmd, 128, "", error))
+
+    monkeypatch.setattr(skill_git, "_run", fail)
+    with pytest.raises(GitError):
+        clone("https://github.com/foo/bar", dest, ref=None, env={})
+    assert len(calls) == 1
+    if existing:
+        assert (dest / "keep").read_text() == "important"
+
+
 def test_clone_depth_makes_shallow_repo(git_sandbox, tmp_path: Path):
     """`depth=1` produces a shallow clone; the default stays full history (#259)."""
     # Needs >1 commit upstream, else depth-1 already covers all history and

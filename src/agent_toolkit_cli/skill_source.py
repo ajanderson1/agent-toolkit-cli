@@ -30,6 +30,7 @@ class ParsedSource:
 
 _LOCAL_PREFIXES = ("./", "../")
 _SSH_RE = re.compile(r"^git@([^:]+):(.+)$")
+_SSH_PROTOCOL_RE = re.compile(r"^ssh://(?:([^@]+)@)?([^/:]+)(?::\d+)?/(.+)$")
 
 
 def _is_local(input_: str) -> bool:
@@ -108,26 +109,47 @@ def _parse_https(url: str) -> ParsedSource:
 
     ref: str | None = None
     subpath: str | None = None
-    if "/tree/" in path:
-        head, _, rest = path.partition("/tree/")
+    if "/tree/" in path or "/blob/" in path:
+        delimiter = "/tree/" if "/tree/" in path else "/blob/"
+        head, _, rest = path.partition(delimiter)
         parts = rest.split("/", 1)
         ref = _sanitize_ref(parts[0]) if parts[0] else None
         if len(parts) == 2 and parts[1]:
-            subpath = _sanitize_subpath(parts[1])
+            raw_subpath = parts[1]
+            if raw_subpath.endswith("/SKILL.md"):
+                raw_subpath = raw_subpath[:-9]
+            elif raw_subpath == "SKILL.md":
+                raw_subpath = ""
+            if raw_subpath:
+                subpath = _sanitize_subpath(raw_subpath)
         path = head
 
     if "/" not in path:
         raise SourceParseError(f"URL missing owner/repo: {url}")
 
-    owner, repo = path.split("/", 1)
-    owner_repo = f"{owner}/{repo}"
-
-    if "github.com" in host:
+    if host == "github.com":
         source_type: SourceType = "github"
+        segments = [p for p in path.split("/") if p]
+        if len(segments) < 2:
+            raise SourceParseError(f"URL missing owner/repo: {url}")
+        owner, repo = segments[0], segments[1].removesuffix(".git")
+        owner_repo = f"{owner}/{repo}"
+        if subpath is None and len(segments) > 2:
+            raw_subpath = "/".join(segments[2:])
+            if raw_subpath.endswith("/SKILL.md"):
+                raw_subpath = raw_subpath[:-9]
+            elif raw_subpath == "SKILL.md":
+                raw_subpath = ""
+            if raw_subpath:
+                subpath = _sanitize_subpath(raw_subpath)
     elif "gitlab" in host:
         source_type = "gitlab"
+        owner, repo = path.split("/", 1)
+        owner_repo = f"{owner}/{repo}"
     else:
         source_type = "git"
+        owner, repo = path.split("/", 1)
+        owner_repo = f"{owner}/{repo}"
 
     canonical_url = f"https://{host}/{owner_repo}"
     return ParsedSource(
@@ -185,23 +207,58 @@ def parse_source(input_: str) -> ParsedSource:
         )
 
     ssh = _SSH_RE.match(input_)
-    if ssh:
-        host, path = ssh.group(1), ssh.group(2).removesuffix(".git")
+    ssh_proto = _SSH_PROTOCOL_RE.match(input_) if not ssh else None
+    if ssh or ssh_proto:
+        if ssh:
+            host = ssh.group(1)
+            raw_path = ssh.group(2)
+            is_protocol = False
+        else:
+            assert ssh_proto is not None
+            host = ssh_proto.group(2)
+            raw_path = ssh_proto.group(3)
+            is_protocol = True
+
+        path = raw_path.removesuffix(".git")
         if "/" not in path:
             raise SourceParseError(f"SSH URL missing owner/repo: {input_}")
-        owner_repo = path
-        if "github.com" in host:
+
+        subpath: str | None = None
+        if host == "github.com":
             source_type: SourceType = "github"
+            segments = [p for p in path.split("/") if p]
+            if len(segments) < 2:
+                raise SourceParseError(f"SSH URL missing owner/repo: {input_}")
+            owner, repo = segments[0], segments[1].removesuffix(".git")
+            owner_repo = f"{owner}/{repo}"
+            if len(segments) > 2:
+                raw_sub = "/".join(segments[2:])
+                if raw_sub.endswith("/SKILL.md"):
+                    raw_sub = raw_sub[:-9]
+                elif raw_sub == "SKILL.md":
+                    raw_sub = ""
+                if raw_sub:
+                    subpath = _sanitize_subpath(raw_sub)
+            if is_protocol:
+                authority = urlparse(input_).netloc
+                url = f"ssh://{authority}/{owner_repo}.git"
+            else:
+                url = f"git@{host}:{owner_repo}.git"
         elif "gitlab" in host:
             source_type = "gitlab"
+            owner_repo = path
+            url = input_
         else:
             source_type = "git"
+            owner_repo = path
+            url = input_
+
         return ParsedSource(
             type=source_type,
-            url=input_,
+            url=url,
             owner_repo=owner_repo,
             ref=None,
-            subpath=None,
+            subpath=subpath,
         )
 
     if input_.startswith(("http://", "https://")):
