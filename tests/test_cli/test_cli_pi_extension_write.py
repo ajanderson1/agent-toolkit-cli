@@ -142,35 +142,43 @@ def test_npm_install_uninstall_global_round_trip(tmp_path, monkeypatch):
 
 
 def test_npm_install_uninstall_preserves_current_pi_package_objects(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     monkeypatch.setenv("HOME", str(tmp_path))
     settings = tmp_path / ".pi" / "agent" / "settings.json"
     settings.parent.mkdir(parents=True)
-    settings.write_text(json.dumps({
-        "theme": "dark",
-        "packages": [{"source": "npm:existing"}],
-    }))
+    settings.write_text(
+        json.dumps(
+            {
+                "theme": "dark",
+                "packages": [{"source": "npm:existing", "skills": []}],
+            }
+        )
+    )
     CliRunner().invoke(main, ["pi-extension", "add", "npm:@scope/foo"])
 
     installed = CliRunner().invoke(
-        main, ["pi-extension", "install", "@scope/foo", "-g"],
+        main,
+        ["pi-extension", "install", "@scope/foo", "-g"],
     )
     assert installed.exit_code == 0, installed.output
     assert json.loads(settings.read_text()) == {
         "theme": "dark",
         "packages": [
-            {"source": "npm:existing"},
+            {"source": "npm:existing", "skills": []},
             {"source": "npm:@scope/foo"},
         ],
     }
 
     removed = CliRunner().invoke(
-        main, ["pi-extension", "uninstall", "@scope/foo", "-g"],
+        main,
+        ["pi-extension", "uninstall", "@scope/foo", "-g"],
     )
     assert removed.exit_code == 0, removed.output
     assert json.loads(settings.read_text()) == {
-        "theme": "dark", "packages": [{"source": "npm:existing"}],
+        "theme": "dark",
+        "packages": [{"source": "npm:existing", "skills": []}],
     }
 
 

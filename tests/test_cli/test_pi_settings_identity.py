@@ -60,6 +60,25 @@ def test_remove_by_identity_preserves_current_pi_object_representation(tmp_path)
     assert json.loads(p.read_text())["packages"] == [{"source": "npm:keep"}]
 
 
+def test_remove_by_identity_preserves_package_resource_filters(tmp_path):
+    p = _global(tmp_path)
+    _seed(
+        p,
+        {
+            "packages": [
+                {"source": "git:github.com/ajanderson1/pi-superpowers", "skills": []},
+                {"source": "npm:pi-web-access@1.2.3", "skills": []},
+            ]
+        },
+    )
+
+    ps.remove_package_by_identity("pi-web-access", scope="global", home=tmp_path)
+
+    assert json.loads(p.read_text())["packages"] == [
+        {"source": "git:github.com/ajanderson1/pi-superpowers", "skills": []},
+    ]
+
+
 def test_remove_by_identity_removes_all_matching_variants(tmp_path):
     p = _global(tmp_path)
     _seed(p, {"packages": ["npm:foo", "foo@2", "npm:other"]})

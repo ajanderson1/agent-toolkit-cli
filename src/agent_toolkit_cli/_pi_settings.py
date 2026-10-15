@@ -1,13 +1,5 @@
-"""Pi per-scope settings.json reader (PR1) and packages[] writer (PR2).
+"""Pi per-scope settings reader/writer that preserves package resource filters."""
 
-Verified against @earendil-works/pi-coding-agent@0.77.0:
-  global  settings: ~/.pi/agent/settings.json
-  project settings: <project>/.pi/settings.json
-Both carry independent `packages` (registry refs) and `extensions`
-(explicit local paths) arrays. PR1 reads only; PR2 adds add_package /
-remove_package. Fails loud on malformed JSON rather than silently treating
-it as empty. Writer is atomic (temp + os.replace) and preserves every key
-it does not own."""
 from __future__ import annotations
 
 import json
@@ -60,34 +52,55 @@ def _string_list(data: dict[str, object], key: str, path: Path) -> list[str]:
 
 
 def _package_sources(
-    data: dict[str, object], path: Path,
-) -> tuple[list[str], Literal["strings", "objects"]]:
-    """Decode legacy strings or Pi 0.86 exact ``{source}`` objects."""
+    data: dict[str, object],
+    path: Path,
+) -> tuple[list[dict[str, object]], Literal["strings", "objects"]]:
+    """Decode package declarations while retaining object resource filters."""
     value = data.get("packages", [])
     if not isinstance(value, list):
         raise PiSettingsError(
             f"{path}: `packages` is not a list of strings or source objects"
         )
     if all(isinstance(item, str) for item in value):
-        return list(value), "strings"
+        return [{"source": item} for item in value], "strings"
+
+    # Pi's current package schema supports these resource selectors.
+    allowed_keys = {"source", "extensions", "skills", "prompts", "themes", "autoload"}
     if all(
         isinstance(item, dict)
-        and set(item) == {"source"}
-        and isinstance(item["source"], str)
+        and set(item) <= allowed_keys
+        and isinstance(item.get("source"), str)
+        and all(
+            isinstance(item.get(key), list)
+            and all(isinstance(resource, str) for resource in item[key])
+            for key in ("extensions", "skills", "prompts", "themes")
+            if key in item
+        )
+        and ("autoload" not in item or isinstance(item["autoload"], bool))
         for item in value
     ):
-        return [item["source"] for item in value], "objects"
+        return [dict(item) for item in value], "objects"
+
     raise PiSettingsError(
         f"{path}: `packages` is not a uniform list of strings or source objects"
     )
 
 
 def _encode_packages(
-    packages: list[str], style: Literal["strings", "objects"],
+    packages: list[dict[str, object]],
+    style: Literal["strings", "objects"],
 ) -> list[object]:
     if style == "objects":
-        return [{"source": package} for package in packages]
-    return list(packages)
+        encoded: list[object] = []
+        encoded.extend(packages)
+        return encoded
+    return [package["source"] for package in packages]
+
+
+def _package_specs(packages: list[dict[str, object]]) -> list[str]:
+    return [
+        package["source"] for package in packages if isinstance(package["source"], str)
+    ]
 
 
 def read_packages(
@@ -98,7 +111,7 @@ def read_packages(
 ) -> list[str]:
     path = settings_path(scope=scope, home=home, project=project)
     packages, _ = _package_sources(_load(path), path)
-    return packages
+    return _package_specs(packages)
 
 
 def has_package_identity(
@@ -163,9 +176,10 @@ def add_package(
     path = settings_path(scope=scope, home=home, project=project)
     data = _load(path)  # {} if missing; raises PiSettingsError on malformed/non-dict
     packages, style = _package_sources(data, path)
-    if spec in packages:
+    specs = _package_specs(packages)
+    if spec in specs:
         return
-    data["packages"] = _encode_packages([*packages, spec], style)
+    data["packages"] = _encode_packages([*packages, {"source": spec}], style)
     _write_atomic(path, data)
 
 
@@ -185,10 +199,11 @@ def remove_package(
         return
     data = _load(path)
     packages, style = _package_sources(data, path)
-    if spec not in packages:
+    if spec not in _package_specs(packages):
         return
     data["packages"] = _encode_packages(
-        [package for package in packages if package != spec], style,
+        [package for package in packages if package["source"] != spec],
+        style,
     )
     _write_atomic(path, data)
 
@@ -238,7 +253,11 @@ def remove_package_by_identity(
     data = _load(path)
     packages, style = _package_sources(data, path)
     target = npm_identity(spec_or_slug)
-    kept = [package for package in packages if npm_identity(package) != target]
+    kept = [
+        package
+        for package in packages
+        if npm_identity(str(package["source"])) != target
+    ]
     if len(kept) == len(packages):
         return
     data["packages"] = _encode_packages(kept, style)

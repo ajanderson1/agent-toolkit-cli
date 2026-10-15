@@ -961,9 +961,17 @@ async def test_asset_type_sidebar_lists_both_asset_types():
 
 
 @pytest.mark.asyncio
-async def test_switch_to_pi_shows_pi_grid():
-    """Switching to pi-extension asset type makes PiGrid visible and SkillGrid hidden."""
+async def test_switch_to_pi_shows_pi_grid(monkeypatch, tmp_path):
+    """Pi asset navigation tolerates valid package filters in user settings."""
+    import json
+
     from agent_toolkit_tui.app import TUIApp
+
+    settings = tmp_path / ".pi" / "agent" / "settings.json"
+    settings.parent.mkdir(parents=True)
+    settings.write_text(json.dumps({"packages": [{"source": "npm:foo", "skills": []}]}))
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    monkeypatch.chdir(tmp_path)
 
     app = TUIApp()
     async with app.run_test() as pilot:
