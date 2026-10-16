@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import click
 
+from agent_toolkit_cli._group import AliasedGroup
 from agent_toolkit_cli.commands.mcp.add_cmd import add_cmd
 from agent_toolkit_cli.commands.mcp.import_cmd import import_cmd
 from agent_toolkit_cli.commands.mcp.doctor_cmd import doctor_cmd
@@ -22,7 +23,7 @@ from agent_toolkit_cli.commands.mcp.uninstall_cmd import uninstall_cmd
 from agent_toolkit_cli.commands.mcp.update_cmd import update_cmd
 
 
-@click.group(name="mcp")
+@click.group(name="mcp", cls=AliasedGroup)
 def mcp() -> None:
     """Manage MCP servers via config-injection adapters + mcps-lock.json."""
 

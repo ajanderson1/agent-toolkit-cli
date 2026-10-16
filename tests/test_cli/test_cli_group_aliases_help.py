@@ -5,6 +5,7 @@ import click
 from click.testing import CliRunner
 
 from agent_toolkit_cli._group import AliasedGroup
+from agent_toolkit_cli.cli import main
 
 
 def test_aliased_group_collapses_same_command_object() -> None:
@@ -150,3 +151,83 @@ def test_aliased_group_empty() -> None:
     res = runner.invoke(grp, ["--help"])
     assert res.exit_code == 0
     assert "Commands:" not in res.output
+
+
+def test_cli_help_pi_extension_collapses_list_and_ls() -> None:
+    """pi-extension --help and pi-extensions --help collapse list and ls into a single row."""
+    runner = CliRunner()
+    for name in ("pi-extension", "pi-extensions"):
+        res = runner.invoke(main, [name, "--help"])
+        assert res.exit_code == 0
+        assert "list, ls" in res.output
+        lines = [line.strip() for line in res.output.splitlines()]
+        ls_rows = [line for line in lines if line.startswith("ls ") or line == "ls"]
+        assert ls_rows == [], f"Found standalone ls row in {name} --help"
+
+
+def test_cli_help_skill_collapses_list_and_remove() -> None:
+    """skill --help and skills --help collapse list, ls and remove, rm into single rows."""
+    runner = CliRunner()
+    for name in ("skill", "skills"):
+        res = runner.invoke(main, [name, "--help"])
+        assert res.exit_code == 0
+        assert "list, ls" in res.output
+        assert "remove, rm" in res.output
+        lines = [line.strip() for line in res.output.splitlines()]
+        ls_rows = [line for line in lines if line.startswith("ls ") or line == "ls"]
+        rm_rows = [line for line in lines if line.startswith("rm ") or line == "rm"]
+        assert ls_rows == [], f"Found standalone ls row in {name} --help"
+        assert rm_rows == [], f"Found standalone rm row in {name} --help"
+
+
+def test_cli_help_agent_mcp_command_collapse_list_and_ls() -> None:
+    """agent, mcp, and command help menus collapse list and ls into a single row."""
+    runner = CliRunner()
+    for kind, plural in [("agent", "agents"), ("mcp", "mcps"), ("command", "commands")]:
+        for name in (kind, plural):
+            res = runner.invoke(main, [name, "--help"])
+            assert res.exit_code == 0, f"Failed for {name} --help: {res.output}"
+            assert "list, ls" in res.output, f"Missing 'list, ls' in {name} --help"
+            lines = [line.strip() for line in res.output.splitlines()]
+            ls_rows = [line for line in lines if line.startswith("ls ") or line == "ls"]
+            assert ls_rows == [], f"Found standalone ls row in {name} --help"
+
+
+def test_cli_help_unaliased_groups_remain_normal() -> None:
+    """Groups without aliases (bundle, instructions) render normal Click help."""
+    runner = CliRunner()
+    res_b = runner.invoke(main, ["bundle", "--help"])
+    assert res_b.exit_code == 0
+    assert "install" in res_b.output
+    assert "validate" in res_b.output
+
+    res_i = runner.invoke(main, ["instructions", "--help"])
+    assert res_i.exit_code == 0
+    assert "install" in res_i.output
+    assert "list" in res_i.output
+
+
+def test_cli_top_level_help_unchanged() -> None:
+    """Top-level agent-toolkit-cli --help lists canonical plural groups unchanged."""
+    runner = CliRunner()
+    res = runner.invoke(main, ["--help"])
+    assert res.exit_code == 0
+    assert "skills" in res.output
+    assert "agents" in res.output
+    assert "commands" in res.output
+    assert "mcps" in res.output
+    assert "pi-extensions" in res.output
+    assert "bundles" in res.output
+    assert "instructions" in res.output
+
+
+def test_cli_individual_alias_help() -> None:
+    """Individual alias help (e.g. pi-extension ls --help) exits 0 and displays help."""
+    runner = CliRunner()
+    res1 = runner.invoke(main, ["pi-extension", "ls", "--help"])
+    assert res1.exit_code == 0
+    assert "pi-extension ls [OPTIONS]" in res1.output
+
+    res2 = runner.invoke(main, ["skill", "rm", "--help"])
+    assert res2.exit_code == 0
+    assert "skill rm [OPTIONS]" in res2.output
