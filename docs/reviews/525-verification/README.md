@@ -11,7 +11,9 @@ capture code revision. All data is disposable: a project/home beneath the
 controlled `/tmp/atk-525-visual-44-fixtures` root, synthetic canonical text, a real
 Claude symlink and a foreign Gemini regular file. No operator HOME/configuration,
 private content or transcripts are included. PNGs were newly rendered from these
-SVGs with `rsvg-convert`; no previous author's image was reused.
+SVGs with `rsvg-convert`; no previous author's image was reused. Curated SVGs
+only remove a whitespace-only line's trailing spaces for diff hygiene; raw
+exports are retained locally and the PNG rendering is unchanged.
 
 **Capture checks:** 4 passed, 15 deselected. All four PNGs were visually inspected.
 Gitleaks directory scan passed; each SVG also passed an explicit stdin scan
