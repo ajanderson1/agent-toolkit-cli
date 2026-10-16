@@ -78,26 +78,26 @@ These are implementation risks with testable mitigations, not unresolved product
 
 ### Task 5: Skill doctor audit and safe repair
 
-- [ ] Add failing doctor tests for unmanaged library skills, bundle sub-skills, report-only mode, declined prompt, explicit confirmed import, repeat repair, and lock-write failure without source mutation.
-- [ ] Run focused doctor tests and verify missing findings/repair behavior.
-- [ ] Extend skill doctor findings to report high-visibility unmanaged entries and attach an additive local-import fix action that preserves source content and existing bundle layout.
-- [ ] Wire the explicit `--repair` option while retaining interactive confirmation and `--no-fix` precedence.
-- [ ] Run skill doctor CLI and unit tests.
+- [x] Add failing doctor tests for unmanaged library skills, bundle sub-skills, report-only mode, declined prompt, explicit confirmed import, repeat repair, and lock-write failure without source mutation.
+- [x] Run focused doctor tests and verify missing findings/repair behavior.
+- [x] Extend skill doctor findings to report high-visibility unmanaged entries and attach an additive local-import fix action that preserves source content and existing bundle layout.
+- [x] Wire the explicit `--repair` option while retaining interactive confirmation and `--no-fix` precedence.
+- [x] Run skill doctor CLI and unit tests.
 
 ### Task 6: Pi-extension doctor audit and safe repair
 
-- [ ] Write tests for on-disk local packages absent from lock, settings-only entries, `--no-fix`, repair without confirmation, decline, confirmed local import, repeat repair, collision, and lock-write failure.
-- [ ] Verify each report-only/decline path leaves lock, source, and settings bytes unchanged; failure must not adopt an unrepresentable entry.
-- [ ] Extend diagnosis to union supported on-disk local package records with lock entries; identify settings-only values but leave them unmanaged when lossless lock representation is unavailable.
-- [ ] Add explicit `--repair` and separate confirmation for supported local imports; do not rewrite Pi settings or external assets.
-- [ ] Run focused Pi-extension doctor/inventory tests in isolated runtime roots.
+- [x] Write tests for on-disk local packages absent from lock, settings-only entries, `--no-fix`, repair without confirmation, decline, confirmed local import, repeat repair, collision, and lock-write failure.
+- [x] Verify each report-only/decline path leaves lock, source, and settings bytes unchanged; failure must not adopt an unrepresentable entry.
+- [x] Extend diagnosis to union supported on-disk local package records with lock entries; identify settings-only values but leave them unmanaged when lossless lock representation is unavailable.
+- [x] Add explicit `--repair` and separate confirmation for supported local imports; do not rewrite Pi settings or external assets.
+- [x] Run focused Pi-extension doctor/inventory tests in isolated runtime roots.
 
 ### Task 7: Documentation and full verification
 
-- [ ] Document `unlisted` / local-package badges, discovery boundaries, and doctor report/repair behavior in skill, Pi-extension, CLI, and TUI references without touching instructions sections or `harness-matrix.md`.
-- [ ] Run focused paths, inventory, state/grid, and doctor tests in isolated HOME/config/toolkit roots; run formatting/lint/type checks required for touched files.
+- [x] Document `unlisted` / local-package badges, discovery boundaries, and doctor report/repair behavior in skill, Pi-extension, CLI, and TUI references without touching instructions sections or `harness-matrix.md`.
+- [x] Run focused paths, inventory, state/grid, and doctor tests in isolated HOME/config/toolkit roots; run formatting/lint/type checks required for touched files.
 - [ ] Re-read the issue, spec, plan, and #514 isolation changes. Run full `uv run pytest -q` only after #514 is merged and rebased; set disposable `HOME`, `XDG_CONFIG_HOME`, and agent/toolkit settings roots, seed sentinels inside the sandbox and outside it, then verify real user files unchanged and cleanup removes only allocated temporary roots.
-- [ ] Keep automated headless Textual visible-state assertions as the TUI evidence gate (row IDs plus actual rendered unlisted/local-package cells); manual screenshot is unnecessary if the automated pilot proves visible cells.
+- [x] Keep automated headless Textual visible-state assertions as the TUI evidence gate (row IDs plus actual rendered unlisted/local-package cells); manual screenshot is unnecessary if the automated pilot proves visible cells.
 - [ ] Record observed outputs under `assets/verification/515/`; do not merge or release from this issue PR.
 
 ## Self-review

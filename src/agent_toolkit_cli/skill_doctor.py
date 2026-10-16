@@ -28,6 +28,7 @@ from agent_toolkit_cli.skill_paths import (
     Scope, agent_projection_dir, canonical_skill_dir,
     is_skill_projection_available, library_lock_path,
     library_root as _library_root_fn, lock_file_path,
+    project_store_root,
 )
 
 FindingType = Literal[
@@ -35,7 +36,7 @@ FindingType = Literal[
     "wrong_type_bundle", "orphan_symlink", "foreign_symlink",
     "dirty_tree", "lock_source_mismatch", "stray_symlink",
     "orphan_canonical", "stray_bundle_dir", "unlisted",
-    "legacy_bare_parent",
+    "legacy_bare_parent", "unmanaged",
 ]
 
 
@@ -74,6 +75,7 @@ def diagnose(
     home: Path | None,
     project: Path | None,
     repair_foreign: bool = False,
+    repair: bool = False,
 ) -> list[Finding]:
     """Return all findings for the requested scope.
 
@@ -120,6 +122,10 @@ def diagnose(
         findings.extend(_scan_unlisted_entries(
             scope=scope, home=home, project=project, lock=lock,
         ))
+    findings.extend(_scan_unmanaged_skills(
+        scope=scope, home=home, project=project, lock=lock,
+        repair=repair, slugs=slugs,
+    ))
     return findings
 
 
@@ -1026,3 +1032,173 @@ def _check_slug(
                     fix_action=_make_legacy_bare_alias_action(suffixed, bare),
                 ))
     return findings
+
+
+def _is_inside(child: Path, parent: Path) -> bool:
+    try:
+        child.resolve().relative_to(parent.resolve())
+        return True
+    except (ValueError, OSError):
+        return False
+
+
+def discover_unmanaged_skills(root: Path) -> list[tuple[str, Path]]:
+    """Bounded filesystem discovery of skills and bundle sub-skills under root.
+
+    Discovers:
+    - Standalone skills: <root>/<slug>/SKILL.md -> slug
+    - Bundle containers: <root>/<bundle>/SKILL.md -> bundle
+    - Nested bundle skills: <root>/<bundle>/skills/<subskill>/SKILL.md
+      or <root>/<bundle>/<subskill>/SKILL.md -> f"{bundle}:{subskill}"
+
+    Does not follow escaping symlinks or crash on dangling symlinks.
+    Ignores _parents, hidden directories, and *.bak-* leftovers.
+    """
+    if not root.is_dir():
+        return []
+    results: list[tuple[str, Path]] = []
+    seen_slugs: set[str] = set()
+    try:
+        children = sorted(root.iterdir())
+    except OSError:
+        return []
+
+    for top in children:
+        if top.name.startswith(".") or top.name == "_parents" or ".bak-" in top.name:
+            continue
+        try:
+            if not top.exists() or not top.is_dir():
+                continue
+        except OSError:
+            continue
+
+        if top.is_symlink():
+            try:
+                target = top.resolve()
+                if not target.exists() or not target.is_dir():
+                    continue
+            except OSError:
+                continue
+
+        # Check top-level SKILL.md
+        top_skill = top / "SKILL.md"
+        if top_skill.is_file():
+            results.append((top.name, top))
+            seen_slugs.add(top.name)
+
+        # Bounded scan for nested skills inside top
+        try:
+            subdirs = sorted(top.iterdir())
+        except OSError:
+            subdirs = []
+
+        for sub in subdirs:
+            if sub.name.startswith(".") or sub.name == "_parents" or ".bak-" in sub.name:
+                continue
+            if sub.is_symlink() and not _is_inside(sub, top):
+                continue
+            try:
+                if not sub.exists() or not sub.is_dir():
+                    continue
+            except OSError:
+                continue
+
+            if sub.name == "skills":
+                try:
+                    nested_dirs = sorted(sub.iterdir())
+                except OSError:
+                    nested_dirs = []
+                for nested in nested_dirs:
+                    if nested.name.startswith(".") or ".bak-" in nested.name:
+                        continue
+                    if nested.is_symlink() and not _is_inside(nested, top):
+                        continue
+                    try:
+                        if not nested.exists() or not nested.is_dir():
+                            continue
+                    except OSError:
+                        continue
+                    if (nested / "SKILL.md").is_file():
+                        slug = f"{top.name}:{nested.name}"
+                        if slug not in seen_slugs:
+                            results.append((slug, nested))
+                            seen_slugs.add(slug)
+            else:
+                if (sub / "SKILL.md").is_file():
+                    slug = f"{top.name}:{sub.name}"
+                    if slug not in seen_slugs:
+                        results.append((slug, sub))
+                        seen_slugs.add(slug)
+
+    return results
+
+
+def _scan_unmanaged_skills(
+    *,
+    scope: Scope,
+    home: Path | None,
+    project: Path | None,
+    lock: LockFile,
+    repair: bool = False,
+    slugs: tuple[str, ...] | None = None,
+) -> list[Finding]:
+    scan_root = (
+        _library_root_fn(home=home)
+        if scope == "global"
+        else (project_store_root(project) if project is not None else None)
+    )
+    if scan_root is None or not scan_root.is_dir():
+        return []
+    discovered = discover_unmanaged_skills(scan_root)
+    findings: list[Finding] = []
+    for slug, skill_dir in discovered:
+        if slugs is not None and slug not in slugs:
+            continue
+        if slug in lock.skills:
+            continue
+        findings.append(Finding(
+            finding_type="unmanaged",
+            slug=slug,
+            scope=scope,
+            path=skill_dir,
+            detail=f"on-disk skill directory '{skill_dir.name}' has no lock entry",
+            fix_action=_make_import_skill_action(
+                slug=slug, path=skill_dir, scope=scope, home=home, project=project,
+            ) if repair else None,
+        ))
+    return findings
+
+
+def _make_import_skill_action(
+    *, slug: str, path: Path, scope: Scope, home: Path | None, project: Path | None,
+) -> FixAction:
+    lock_path = lock_file_path(scope=scope, home=home, project=project)
+
+    def _apply() -> None:
+        cur_lock = read_lock(lock_path)
+        if slug in cur_lock.skills:
+            return
+        skill_path = None
+        if ":" in slug:
+            bundle_name, _ = slug.split(":", 1)
+            cur = path.parent
+            while cur.name != bundle_name and cur != cur.parent:
+                cur = cur.parent
+            if cur.name == bundle_name:
+                try:
+                    skill_path = str(path.relative_to(cur))
+                except Exception:
+                    skill_path = None
+        entry = LockEntry(
+            source=str(path),
+            source_type="local",
+            skill_path=skill_path,
+            ref="(default)",
+        )
+        write_lock(lock_path, add_entry(cur_lock, slug, entry))
+
+    return FixAction(
+        description=f"Import unmanaged skill '{slug}' into {lock_path.name}",
+        shell_preview=f"agent-toolkit-cli skill add {path} --slug {slug}",
+        apply=_apply,
+    )

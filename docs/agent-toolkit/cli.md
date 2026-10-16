@@ -23,7 +23,13 @@ agent-toolkit-cli skill doctor [<slug>...] [-g|-p] [--no-fix]
 
 `skill import <file>` rebuilds the global library from another machine's `skills-lock.json` — an additive, skip-if-exists merge that clones each absent skill at the lock's recorded SHA (or `--latest` for each ref's current HEAD); per-skill clone failures are non-fatal (exit 1 if any failed). See [Moving to a new machine](#moving-to-a-new-machine-cross-machine-sync).
 
-`skill doctor` reports and, with confirmation, repairs library/projection drift. It normally treats a symlink outside `skills-lock.json` as stale. If another system actively owns a global projection, declare that exact link and its permitted resolved target glob in `~/.agent-toolkit/external-skill-projections.json` instead of adding it to the lock:
+`skill doctor` reports and, with confirmation, repairs library/projection drift. It also reports unmanaged on-disk skills. Discovery recognizes standalone `SKILL.md` directories and bounded bundle sub-skills, assigning bundle members stable `bundle:skill` identifiers. Escaping and dangling symlinks are ignored. Use `--repair` to enable import fix actions; each still requires a separate `y` confirmation. Imports record the local path and do not copy or rewrite source files. `--no-fix` always disables repairs. Without `--repair`, unmanaged findings are report-only.
+
+```text
+agent-toolkit-cli skill doctor -g --repair
+```
+
+If another system actively owns a global projection, declare that exact link and its permitted resolved target glob in `~/.agent-toolkit/external-skill-projections.json` instead of adding it to the lock:
 
 ```json
 {
@@ -121,6 +127,15 @@ agent-toolkit-cli pi-extension import <file> [--latest]   # cross-machine sync �
 ```
 
 `pi-extension import <file>` rebuilds the global library from another machine's `pi-extensions-lock.json` (additive, skip-if-exists; `--latest` clones at each ref's current HEAD; per-slug failures non-fatal). See [Moving to a new machine](#moving-to-a-new-machine-cross-machine-sync).
+
+`pi-extension doctor` reports local filesystem packages declared in `settings.json` but not tracked by the toolkit. It never edits `settings.json` or package source. Use `--repair` to enable a local lock import, then confirm each finding separately; this records the original path and leaves the package in place. `--no-fix` always disables repair. Registry packages and settings values that cannot be represented losslessly remain report-only.
+
+```text
+agent-toolkit-cli pi-extension doctor -g --repair
+```
+
+Pi inventory identifies local packages with the `local package · untracked` origin; they are visible but are not managed or toggleable until explicitly imported.
+
 
 ### `bundle`
 

@@ -22,6 +22,7 @@ import yaml
 
 from agent_toolkit_cli import skill_git
 from agent_toolkit_cli.paperclip_paths import detect_paperclip_company
+from agent_toolkit_cli.skill_doctor import discover_unmanaged_skills as _discover_unmanaged_skills
 from agent_toolkit_cli.skill_install import _should_skip_symlink
 from agent_toolkit_cli.skill_lock import read_lock
 from agent_toolkit_cli.skill_paths import (
@@ -187,103 +188,7 @@ def _cell_for(
     return SkillCell(linked=False, drift=True, skipped=False)
 
 
-def _is_inside(child: Path, parent: Path) -> bool:
-    try:
-        child.resolve().relative_to(parent.resolve())
-        return True
-    except (ValueError, OSError):
-        return False
 
-
-def _discover_unmanaged_skills(root: Path) -> list[tuple[str, Path]]:
-    """Bounded filesystem discovery of skills and bundle sub-skills under root.
-
-    Discovers:
-    - Standalone skills: <root>/<slug>/SKILL.md -> slug
-    - Bundle containers: <root>/<bundle>/SKILL.md -> bundle
-    - Nested bundle skills: <root>/<bundle>/skills/<subskill>/SKILL.md
-      or <root>/<bundle>/<subskill>/SKILL.md -> f"{bundle}:{subskill}"
-
-    Does not follow escaping symlinks or crash on dangling symlinks.
-    Ignores _parents, hidden directories, and *.bak-* leftovers.
-    """
-    if not root.is_dir():
-        return []
-    results: list[tuple[str, Path]] = []
-    seen_slugs: set[str] = set()
-    try:
-        children = sorted(root.iterdir())
-    except OSError:
-        return []
-
-    for top in children:
-        if top.name.startswith(".") or top.name == "_parents" or ".bak-" in top.name:
-            continue
-        try:
-            if not top.exists() or not top.is_dir():
-                continue
-        except OSError:
-            continue
-
-        if top.is_symlink():
-            try:
-                target = top.resolve()
-                if not target.exists() or not target.is_dir():
-                    continue
-            except OSError:
-                continue
-
-        # Check top-level SKILL.md
-        top_skill = top / "SKILL.md"
-        if top_skill.is_file():
-            results.append((top.name, top))
-            seen_slugs.add(top.name)
-
-        # Bounded scan for nested skills inside top
-        try:
-            subdirs = sorted(top.iterdir())
-        except OSError:
-            subdirs = []
-
-        for sub in subdirs:
-            if sub.name.startswith(".") or sub.name == "_parents" or ".bak-" in sub.name:
-                continue
-            if sub.is_symlink() and not _is_inside(sub, top):
-                continue
-            try:
-                if not sub.exists() or not sub.is_dir():
-                    continue
-            except OSError:
-                continue
-
-            if sub.name == "skills":
-                try:
-                    nested_dirs = sorted(sub.iterdir())
-                except OSError:
-                    nested_dirs = []
-                for nested in nested_dirs:
-                    if nested.name.startswith(".") or ".bak-" in nested.name:
-                        continue
-                    if nested.is_symlink() and not _is_inside(nested, top):
-                        continue
-                    try:
-                        if not nested.exists() or not nested.is_dir():
-                            continue
-                    except OSError:
-                        continue
-                    if (nested / "SKILL.md").is_file():
-                        slug = f"{top.name}:{nested.name}"
-                        if slug not in seen_slugs:
-                            results.append((slug, nested))
-                            seen_slugs.add(slug)
-            else:
-                if (sub / "SKILL.md").is_file():
-                    slug = f"{top.name}:{sub.name}"
-                    if slug not in seen_slugs:
-                        results.append((slug, sub))
-                        seen_slugs.add(slug)
-
-    return results
 
 
 def build_skill_rows(
