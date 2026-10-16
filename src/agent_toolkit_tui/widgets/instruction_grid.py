@@ -72,7 +72,7 @@ Op = Literal["link", "unlink"]
 
 
 class InstructionGrid(Vertical):
-    """One row per locked slug; interactive cells for the active harness columns."""
+    """One canonical row; filesystem-backed cells for the active harness columns."""
 
     class PendingChanged(Message):
         """Posted whenever the pending toggle set changes.

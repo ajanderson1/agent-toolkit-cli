@@ -20,7 +20,7 @@ It exists for two jobs:
 1. Make it easy to see which [skills](docs/asset-types/skills.md), [agents](docs/asset-types/agents.md), [commands](docs/asset-types/commands.md), [instructions](docs/asset-types/instructions.md), [Pi extensions](docs/asset-types/pi-extensions.md), and [MCP servers](docs/asset-types/mcp.md) each harness can use.
 2. Keep one git-versioned source of truth for first-party and third-party assets.
 
-[`agent-toolkit-cli`](docs/agent-toolkit/cli.md) keeps one canonical library copy per asset, records it in a lock file, then projects it into each harness by the simplest safe mechanism that harness supports: symlink, translated file, or config injection. `add`/`remove` manage library membership; `install`/`uninstall` manage harness visibility.
+[`agent-toolkit-cli`](docs/agent-toolkit/cli.md) keeps canonical assets and projects them into each harness by the simplest safe mechanism that harness supports: symlink, translated file, or config injection. `add`/`remove` manage library membership; `install`/`uninstall` manage harness visibility.
 
 [`agent-toolkit-tui`](docs/agent-toolkit/tui.md) is the visual frontend: it makes cross-harness coverage visible and lets you manage assets at a glance.
 
@@ -132,7 +132,7 @@ agent-toolkit-cli instructions status    [--scope project|global]
 agent-toolkit-cli instructions doctor    [--scope project|global]
 ```
 
-Most harnesses read `AGENTS.md` natively. Harnesses that expect their own filename get a pointer symlink to the canonical file. Installs never clobber real files or foreign symlinks. Per-harness verdicts live in [`docs/agent-toolkit/harness-matrix.md`](docs/agent-toolkit/harness-matrix.md).
+Most harnesses read project `AGENTS.md` natively; supported compatibility and global slots get symlinks to the scope's canonical file. Instructions has **no installation lock**: actual symlinks determine status, including manually created links. Canonical content remains user-owned (project `AGENTS.md` or global `~/.agent-toolkit/AGENTS.md`), and may itself point to a versioned source. Install/uninstall never clobber regular files or foreign symlinks. Uninstall refuses the whole batch if a requested link participates in canonical's source chain. Legacy Instructions locks are ignored and left untouched. Per-harness verdicts live in [`docs/agent-toolkit/harness-matrix.md`](docs/agent-toolkit/harness-matrix.md).
 
 ### Pi extensions — Pi-only extension assets
 
