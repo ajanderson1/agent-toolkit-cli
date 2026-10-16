@@ -144,12 +144,23 @@ def inspect_pointer(pointer: Path, canonical: Path) -> PointerState:
         return PointerState(conflict=True, error=str(exc))
 
 
-def canonical_chain(canonical: Path) -> set[Path]:
-    """Collect symlink hops, including directory components, without losing intermediates."""
+def link_snapshot(pointer: Path) -> tuple[int, int, str] | None:
+    """Identify the symlink node itself, never its final resolved source file."""
+    try:
+        info = pointer.lstat()
+    except FileNotFoundError:
+        return None
+    if not stat.S_ISLNK(info.st_mode):
+        return None
+    return info.st_dev, info.st_ino, os.readlink(pointer)
+
+
+def canonical_chain(canonical: Path) -> set[tuple[int, int]]:
+    """Collect physical symlink-node identities, including directory-component hops."""
     path = canonical.absolute()
     pending = deque(path.parts[1:])
     resolved = Path(path.anchor)
-    links: set[Path] = set()
+    links: set[tuple[int, int]] = set()
     hops = 0
     while pending:
         part = pending.popleft()
@@ -160,11 +171,11 @@ def canonical_chain(canonical: Path) -> set[Path]:
             continue
         candidate = resolved / part
         try:
-            mode = candidate.lstat().st_mode
+            info = candidate.lstat()
         except FileNotFoundError:
-            mode = 0
-        if stat.S_ISLNK(mode):
-            links.add(candidate)
+            info = None
+        if info is not None and stat.S_ISLNK(info.st_mode):
+            links.add((info.st_dev, info.st_ino))
             hops += 1
             if hops > 40:
                 raise CanonicalChainError(f'cannot inspect canonical chain at {canonical}: symlink loop or too many hops')
@@ -186,8 +197,8 @@ def preflight_removals(canonical: Path, pointers: list[Path]) -> None:
     try:
         chain = canonical_chain(canonical)
         for pointer in pointers:
-            physical = pointer.parent.resolve() / pointer.name
-            if physical in chain:
+            node = link_snapshot(pointer)
+            if node is not None and node[:2] in chain:
                 raise CanonicalChainError(
                     f'refused removal batch: {pointer} participates in canonical '
                     f'AGENTS.md symlink chain ({canonical}). Reorganize your source '
@@ -232,17 +243,23 @@ class Adapter:
         project_root: Path | None,
         canonical: Path,
         home: Path | None,
+        expected_link: tuple[int, int, str] | None = None,
     ) -> None:
-        """Remove only our exact pointer. Real files and foreign symlinks untouched."""
+        """Remove only the prevalidated symlink; protect canonical's physical source chain."""
         pointer = _pointer_path(self.harness, scope, project_root, home)
+        original = link_snapshot(pointer)
+        if expected_link is not None and original != expected_link:
+            raise PointerConflictError(f'{pointer} changed since removal planning; inspect it before retrying')
         state = inspect_pointer(pointer, canonical)
         if state.error:
             raise PointerConflictError(f'cannot inspect {pointer}: {state.error}')
         if not state.linked:
+            if expected_link is not None:
+                raise PointerConflictError(f'{pointer} no longer resolves to canonical; requested removal was not completed')
             return
         preflight_removals(canonical, [pointer])
         current = inspect_pointer(pointer, canonical)
-        if not current.linked or current.error:
+        if not current.linked or current.error or link_snapshot(pointer) != original:
             raise PointerConflictError(f'{pointer} changed during removal; inspect it before retrying')
         pointer.unlink()
 

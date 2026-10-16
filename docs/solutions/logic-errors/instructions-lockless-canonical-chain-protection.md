@@ -37,8 +37,13 @@ not permission to remove `CLAUDE.md`: deletion breaks canonical readability.
 - Pass explicit link/unlink intent to the shared API. Never infer a pruning set
   from an absent record. Leave legacy files unchanged, even if malformed.
 - Before batch mutations, walk canonical's symlink chain, including directory
-  components. Refuse the entire removal batch if any requested slot participates;
-  fail closed if the chain cannot be safely inspected. Recheck before unlink.
+  components, comparing physical symlink-node device/inode identities. Spelled
+  paths miss case/Unicode aliases; final resolved source identities conflate
+  distinct pointers. Refuse the entire removal batch if any requested slot participates;
+  fail closed if the chain cannot be safely inspected. Order requested dependent
+  pointers before requested referents and recheck exact device/inode/raw-target
+  snapshots before unlink, so an earlier removal cannot strand a requested link.
+  Never prune or rewrite an unrequested dependent to make a batch look successful.
 - Separate pointer ownership from canonical usability: an owned dangling link is
   still visible/removable, while missing source content is reported unhealthy.
 - Preserve doctor adoption as a separate opt-in transaction with backups and
@@ -51,5 +56,15 @@ not permission to remove `CLAUDE.md`: deletion breaks canonical readability.
 `tests/test_tui/test_instruction_lockless.py` exercise direct/multi-hop canonical
 source chains, whole-batch refusal, unchanged links/bytes, canonical readability,
 manual installs, malformed legacy records, scope isolation and partial retry.
+`test_instructions_pointer_identity.py` and `test_instruction_pointer_identity.py`
+add native case/Unicode alias and portable simulated-node-identity regressions,
+directory-component protection, requested pointer dependency ordering and partial
+removal retries. Native alias checks skip explicitly where the filesystem does not
+support those aliases; portable emulation is not native-filesystem proof.
+
+Fresh review `w3D:pX` of `1510c36` reproduced both identity and ordering gaps after
+the initial suite passed; neither finding was waived. Worker red/green checks do
+not replace the required corrected-head independent recheck/full gate.
+
 Other Instructions tests cover adoption, relative/dangling/cyclic pointers and
 source-backed asset architecture remaining intact. All homes/projects are disposable.

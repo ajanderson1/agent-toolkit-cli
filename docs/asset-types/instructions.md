@@ -22,12 +22,17 @@ managed **global** pointer slots. See the [scope-aware matrix](../matrix.md).
 Install creates only selected pointers (all supported slots by default), without
 pruning other existing links. Correct links are idempotent. Real files,
 directories and foreign symlinks are never overwritten. Uninstall removes owned
-pointers at the selected scope, even when canonical is missing.
+pointers at the selected scope, even when canonical is missing. Requested dependent
+pointers are removed before their requested referents so the batch completes
+without stranding a requested link. Each link's node identity and raw target are
+rechecked before removal. Unrequested links are never removed or rewired; removing
+only their intermediate may leave them dangling.
 
 **Source-chain protection:** if canonical routes through a requested pointer —
 for example `AGENTS.md → CLAUDE.md → user-source.md` — uninstall refuses the
-whole batch before changing anything. The same guard covers multi-hop chains and
-TUI removals. Reorganize the source chain manually before uninstalling; the
+whole batch before changing anything. The guard compares physical symlink-node
+identities (not path spelling or final source identity), covering case/Unicode
+aliases, multi-hop chains, directory components and TUI removals. Reorganize the source chain manually before uninstalling; the
 toolkit never rewrites it to make removal possible.
 
 Legacy `instructions-lock.json` / `instructions.lock` files are ignored and left

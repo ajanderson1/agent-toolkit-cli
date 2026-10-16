@@ -13,7 +13,9 @@ from agent_toolkit_cli.instructions_adapters.symlink import (
     PointerConflictError,
     _pointer_path,
     canonical_usable,
+    canonical_chain,
     inspect_pointer,
+    link_snapshot,
     preflight_removals,
 )
 
@@ -29,6 +31,7 @@ class PointerAction:
     harness: str
     pointer: Path
     action: Literal['create', 'remove', 'noop-already-correct', 'skip-foreign']
+    expected_link: tuple[int, int, str] | None = None
 
 
 @dataclass
@@ -69,12 +72,13 @@ def plan(*, scope: Scope, project_root: Path | None, home: Path | None,
          add_harnesses: Iterable[str] = (), remove_harnesses: Iterable[str] = ()) -> Plan:
     """Preflight the entire explicit batch; never prune unrequested pointers."""
     canonical = _resolve_canonical(scope, project_root)
-    intents: dict[Path, tuple[str, str, Path]] = {}
+    intents: dict[tuple, tuple[str, str, Path]] = {}
     for operation, harnesses in [('create', add_harnesses), ('remove', remove_harnesses)]:
         for harness in sorted(set(harnesses)):
             get_adapter(harness)
             pointer = _pointer_path(harness, scope, project_root, home)
-            physical = pointer.parent.resolve() / pointer.name
+            node = link_snapshot(pointer)
+            physical = ('node', *node[:2]) if node is not None else ('path', pointer.parent.resolve(), pointer.name)
             if physical in intents and intents[physical][1] != operation:
                 raise PointerConflictError(f'opposing requests for shared pointer {pointer}; refused batch')
             intents[physical] = (harness, operation, pointer)
@@ -92,8 +96,31 @@ def plan(*, scope: Scope, project_root: Path | None, home: Path | None,
             action = 'noop-already-correct' if state.linked else 'create'
         else:
             action = 'remove' if state.linked else 'skip-foreign'
-        actions.append(PointerAction(harness, pointer, action))
-    return Plan(canonical, actions)
+        expected_link = link_snapshot(pointer) if action == 'remove' else None
+        if action == 'remove' and expected_link is None:
+            raise PointerConflictError(f'{pointer} changed during removal planning; refused batch')
+        actions.append(PointerAction(harness, pointer, action, expected_link))
+    return Plan(canonical, _dependent_first(actions))
+
+
+def _dependent_first(actions: list[PointerAction]) -> list[PointerAction]:
+    """Remove dependents while their referents still exist and ownership is provable."""
+    remaining = [a for a in actions if a.action == 'remove']
+    chains = {a.expected_link[:2]: canonical_chain(a.pointer) for a in remaining}
+    ordered = [a for a in actions if a.action != 'remove']
+    while remaining:
+        ready = [
+            a for a in remaining
+            if not any(
+                a.expected_link[:2] in chains[other.expected_link[:2]]
+                for other in remaining if other is not a
+            )
+        ]
+        if not ready:
+            raise PointerConflictError('cannot safely order dependent pointer removals; refused batch')
+        ordered.extend(ready)
+        remaining = [a for a in remaining if a not in ready]
+    return ordered
 
 
 def apply(*, scope: Scope, project_root: Path | None, home: Path | None,
@@ -105,7 +132,8 @@ def apply(*, scope: Scope, project_root: Path | None, home: Path | None,
         if action.action == 'create':
             adapter.install(scope=scope, project_root=project_root, canonical=p.canonical, home=home)
         elif action.action == 'remove':
-            adapter.uninstall(scope=scope, project_root=project_root, canonical=p.canonical, home=home)
+            adapter.uninstall(scope=scope, project_root=project_root, canonical=p.canonical, home=home,
+                              expected_link=action.expected_link)
     return p
 
 
