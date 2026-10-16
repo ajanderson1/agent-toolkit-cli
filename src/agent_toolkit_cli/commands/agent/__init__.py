@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import click
 
+from agent_toolkit_cli._group import AliasedGroup
 from agent_toolkit_cli.commands.agent.add_cmd import add_cmd
 from agent_toolkit_cli.commands.agent.doctor_cmd import doctor_cmd
 from agent_toolkit_cli.commands.agent.import_cmd import import_cmd
@@ -25,7 +26,7 @@ from agent_toolkit_cli.commands.agent.uninstall_cmd import uninstall_cmd
 from agent_toolkit_cli.commands.agent.update_cmd import update_cmd
 
 
-@click.group(name="agent")
+@click.group(name="agent", cls=AliasedGroup)
 def agent() -> None:
     """Manage agents via owned git repos + agents-lock.json."""
 

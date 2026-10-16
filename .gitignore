@@ -21,8 +21,6 @@ assets/verification/
 
 # uv
 .uv-cache/
-.claude/
-.mcp.json
 
 # Audit run artifacts
 audit/.last-run.tsv
@@ -32,11 +30,6 @@ audit/.*.log
 .agents/
 .pi/
 
-# cmux-pm overseer runtime state
-.cmux-pm/
-
-# aj-pm foreman runtime state
-.aj-pm/
 
 # MkDocs build output
 site/

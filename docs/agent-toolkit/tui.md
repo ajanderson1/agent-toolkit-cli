@@ -47,6 +47,11 @@ Footer (key hints)
     The skill grid with several rows, a per-harness cell column, and a row
     selected — showing what a populated grid looks like in practice.
 
+| `unlisted` | Discovered on disk but absent from the active lock; visible for audit, not yet managed. |
+| `local package · untracked` | Pi package declared by local filesystem path; read-only until explicitly imported by confirmed doctor repair. |
+
+Skill, agent, and command grids union lock entries with bounded on-disk discovery. Skill bundles have separate stable `bundle:skill` rows. Filesystem discovery itself is observational; row cells retain existing per-harness behavior. For Pi, local-package rows carry `local package · untracked` and are non-interactive until managed.
+
 ## Key bindings
 
 | Key | Action | Notes |

@@ -15,13 +15,19 @@ from agent_toolkit_cli.table import render_table
 
 @click.command(help="Per-harness verdict for the instructions asset type.")
 @click.option(
+    "--scope",
+    type=click.Choice(["project", "global"]),
+    default="project",
+    show_default=True,
+)
+@click.option(
     "--format",
     "fmt",
     type=click.Choice(["table", "json"]),
     default="table",
 )
-def list_cmd(fmt: str) -> None:
-    rows = instructions_matrix_rows()
+def list_cmd(scope: str, fmt: str) -> None:
+    rows = instructions_matrix_rows(scope)
     if fmt == "json":
         click.echo(_json.dumps(rows, indent=2))
         return

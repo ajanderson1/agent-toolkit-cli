@@ -34,8 +34,16 @@ def test_canonical_skill_dir_project(tmp_path: Path, monkeypatch):
     assert p == project_store_root(project) / "journal"
 
 
+def test_lock_file_path_global_honors_explicit_home(tmp_path: Path, monkeypatch):
+    """v2.3: global lock honors explicit home when no env override is set."""
+    monkeypatch.delenv("AGENT_TOOLKIT_SKILLS_ROOT", raising=False)
+    custom_home = tmp_path / "custom_home"
+    p = lock_file_path(scope="global", home=custom_home)
+    assert p == custom_home / ".agent-toolkit" / "skills-lock.json"
+
+
 def test_lock_file_path_global_is_library_lock(tmp_path: Path, monkeypatch):
-    """v2.2: global lock delegates to library_lock_path (ignores home)."""
+    """v2.2: global lock delegates to library_lock_path (honors env override over home)."""
     lib = tmp_path / "mylib" / "skills"
     monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(lib))
     home = tmp_path / "home"

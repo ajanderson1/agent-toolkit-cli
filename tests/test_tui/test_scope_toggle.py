@@ -283,24 +283,35 @@ async def test_footer_pending_label_scope_tagged_when_spanning():
         pi_grid._pending[("global", "beta")] = "link"
         pi_grid._pending[("global", "gamma")] = "unlink"
         app._refresh_pending_label()
+        app._refresh_status_bar()
         label = str(app.query_one("#footer-pending", Static).render())
-        assert "Pending: 3 (2 global, 1 project)" in label
+        assert "Pending:" not in label
+        bar = str(app.query_one("#status-bar", Static).render())
+        assert "3 pending" in bar
+        from agent_toolkit_tui.app import _scope_tag
+        assert _scope_tag(pi_grid._pending.keys()) == " (2 global, 1 project)"
 
 
 @pytest.mark.asyncio
 async def test_footer_pending_label_plain_when_single_scope():
     from textual.widgets import Static
     from agent_toolkit_tui.widgets import PiGrid
+    from agent_toolkit_tui.app import _scope_tag
 
     app = TUIApp()
     async with app.run_test() as pilot:
         await pilot.pause()
+        app.action_asset_type("pi-extension")
+        await pilot.pause()
         pi_grid = app.query_one("#pi-grid", PiGrid)
         pi_grid._pending[("global", "beta")] = "link"
         app._refresh_pending_label()
+        app._refresh_status_bar()
         label = str(app.query_one("#footer-pending", Static).render())
-        assert "Pending: 1" in label
-        assert "(" not in label.split("Pending: 1")[1][:2]
+        assert "Pending:" not in label
+        bar = str(app.query_one("#status-bar", Static).render())
+        assert "1 pending" in bar
+        assert _scope_tag(pi_grid._pending.keys()) == ""
 
 
 @pytest.mark.asyncio

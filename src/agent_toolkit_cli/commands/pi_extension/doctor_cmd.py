@@ -33,6 +33,7 @@ from agent_toolkit_cli.pi_extension_paths import lock_file_path
 @click.option("-g", "--global", "global_", is_flag=True)
 @click.option("-p", "--project", "project_flag", is_flag=True)
 @click.option("--no-fix", is_flag=True, help="Report only; do not prompt or mutate.")
+@click.option("--repair", is_flag=True, help="Prompt to repair fixable findings (required for unmanaged package import).")
 @click.pass_context
 def doctor_cmd(
     ctx: click.Context,
@@ -40,6 +41,7 @@ def doctor_cmd(
     global_: bool,
     project_flag: bool,
     no_fix: bool,
+    repair: bool,
 ) -> None:
     """Diagnose and (optionally) repair pi-extension installation drift.
 
@@ -63,6 +65,7 @@ def doctor_cmd(
     findings = diagnose(
         slugs=slugs or None,
         scope=scope, home=home, project=project_root,
+        repair=repair,
     )
 
     if not findings:

@@ -121,3 +121,21 @@ def test_project_scope_home_none_skips_global_probe(tmp_path: Path, monkeypatch)
 
     rows = build_agent_rows(scope="project", home=None, project=project)
     assert all(scope != "global" for (_, scope) in rows[0].cells)
+
+
+def test_build_agent_rows_discovers_unmanaged_filesystem_agents(tmp_path: Path, monkeypatch):
+    """#515: Unmanaged on-disk agent files surface as unlisted rows with active cells."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    slot = tmp_path / ".claude" / "agents"
+    slot.mkdir(parents=True)
+    (slot / "custom-agent.md").write_text("# custom agent\n")
+
+    rows = build_agent_rows(scope="global", home=tmp_path, project=None)
+    slugs = {r.slug for r in rows}
+    assert "custom-agent" in slugs
+    row = next(r for r in rows if r.slug == "custom-agent")
+    assert row.state == "unlisted"
+    assert row.source == "untracked"
+    assert row.ref == "(untracked)"
+    assert row.cells[("standard", "global")].linked is True
+

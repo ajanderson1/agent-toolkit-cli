@@ -133,3 +133,34 @@ def test_list_json_includes_npm_managed_fields(tmp_path, monkeypatch):
     assert row["managed"] is False
     assert row["globalConfigPath"].endswith(".pi/agent/settings.json")
     assert row["globalPackageSpec"] == "npm:pi-title-renamer"
+
+
+def test_list_json_includes_local_package_fields(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    package = tmp_path / ".pi" / "local-pkg"
+    package.mkdir(parents=True)
+    (package / "package.json").write_text('{"name": "my-local-tool"}')
+    settings = tmp_path / ".pi" / "agent" / "settings.json"
+    settings.parent.mkdir(parents=True)
+    settings.write_text('{"packages": ["../local-pkg"]}')
+
+    monkeypatch.chdir(tmp_path)
+    result = CliRunner().invoke(
+        main, ["pi-extension", "list", "--json"], catch_exceptions=False
+    )
+    assert result.exit_code == 0
+    out = result.output
+    if "Operating on project scope" in out:
+        out = out.split("\n", 1)[1]
+    rows = _json.loads(out)
+    row = next(r for r in rows if r["slug"] == "../local-pkg")
+    assert row["origin"] == "local-package"
+    assert row["displayOrigin"] == "local-package untracked"
+    assert row["managed"] is False
+    assert row["globalConfigPath"].endswith(".pi/agent/settings.json")
+    assert row["globalPackageSpec"] == "../local-pkg"
+    assert row["globalPackageMetadata"] == {"name": "my-local-tool"}
+
+    status = CliRunner().invoke(main, ["pi-extension", "status", "-g"], catch_exceptions=False)
+    assert status.exit_code == 0
+    assert "local-package untracked" in status.output

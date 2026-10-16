@@ -60,14 +60,18 @@ def skills_nonstandard_main(
 
 def instructions_nonstandard_main(
     selection: tuple[str, ...] | None = None,
+    *,
+    scope: str = "project",
 ) -> tuple[str, ...]:
-    """Selected main harnesses needing an instructions pointer column."""
+    """Selected main harnesses with an actionable instructions pointer at scope."""
+    from agent_toolkit_cli.instructions_matrix import instructions_matrix_rows
+
+    supported = {
+        row["harness"] for row in instructions_matrix_rows(scope)
+        if row["verdict"] == "symlink"
+    }
     chosen = effective_main_harnesses(selection)
-    return tuple(
-        harness
-        for harness in chosen
-        if harness in SUPPORTED_HARNESSES
-    )
+    return tuple(harness for harness in chosen if harness in SUPPORTED_HARNESSES & supported)
 
 
 def agents_nonstandard_main(

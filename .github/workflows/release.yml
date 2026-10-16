@@ -3,15 +3,102 @@ name: release
 on:
   push:
     tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing version tag to build
+        required: true
+        type: string
+      expected_sha:
+        description: Immutable commit SHA the tag must resolve to
+        required: true
+        type: string
 
 permissions:
+  actions: read
   contents: write
 
 jobs:
   github-release:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout repository for tag resolution
+        uses: actions/checkout@v4
+
+      - name: Resolve and validate release target
+        id: target
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          DISPATCH_TAG: ${{ inputs.release_tag }}
+          DISPATCH_SHA: ${{ inputs.expected_sha }}
+          PUSH_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            tag="$DISPATCH_TAG"
+            expected_sha="$DISPATCH_SHA"
+            [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+            [[ "$expected_sha" =~ ^[0-9a-f]{40}$ ]]
+          else
+            tag="$PUSH_TAG"
+            expected_sha="$(git rev-parse "${GITHUB_SHA}^{commit}")"
+          fi
+          git fetch --no-tags origin "refs/tags/${tag}:refs/tags/${tag}"
+          resolved="$(git rev-parse "refs/tags/${tag}^{commit}")"
+          [[ "$resolved" == "$expected_sha" ]]
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "sha=$expected_sha" >> "$GITHUB_OUTPUT"
+
       - uses: actions/checkout@v4
-      - uses: softprops/action-gh-release@v2
+        with:
+          ref: ${{ steps.target.outputs.sha }}
+
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Require successful prior CI for exact release commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_SHA: ${{ steps.target.outputs.sha }}
+        run: |
+          set -euo pipefail
+          for workflow in test.yml docs.yml; do
+            runs="$(gh run list --workflow "$workflow" --commit "$EXPECTED_SHA" --json databaseId,headSha,headBranch,event,status,conclusion,createdAt --limit 100)"
+            latest="$(jq -c --arg sha "$EXPECTED_SHA" '
+              [.[] | select(
+                .headSha == $sha and
+                .headBranch == "main" and
+                .event == "push"
+              )] | sort_by(.createdAt) | last // empty
+            ' <<< "$runs")"
+            if [[ -z "$latest" ]] || ! jq -e '
+              .status == "completed" and .conclusion == "success"
+            ' <<< "$latest" >/dev/null; then
+              echo "Latest qualifying $workflow run for $EXPECTED_SHA is missing, running, or unsuccessful" >&2
+              exit 1
+            fi
+          done
+
+      - name: Pre-release verification gate
+        run: uv run pytest -q
+
+      - name: Build, validate, and smoke test release artifacts
+        id: build
+        env:
+          RELEASE_TAG: ${{ steps.target.outputs.tag }}
+          EXPECTED_SHA: ${{ steps.target.outputs.sha }}
+        run: uv run python scripts/build_and_verify_release.py --tag "$RELEASE_TAG" --expected-sha "$EXPECTED_SHA" --dist-dir dist
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@c062e08bd532815e2082a85e87e3ef29c3e6d191 # v2.0.8
         with:
           generate_release_notes: true
+          tag_name: ${{ steps.target.outputs.tag }}
+          files: |
+            ${{ steps.build.outputs.wheel }}
+            ${{ steps.build.outputs.sdist }}
+            ${{ steps.build.outputs.receipt }}
+            ${{ steps.build.outputs.sums }}
+          fail_on_unmatched_files: true

@@ -7,7 +7,12 @@ from typing import Literal
 
 from agent_toolkit_cli.command_adapters import get_adapter
 from agent_toolkit_cli.command_lock import read_lock
-from agent_toolkit_cli.command_paths import library_lock_path, lock_file_path
+from agent_toolkit_cli.command_paths import (
+    library_lock_path,
+    library_root,
+    lock_file_path,
+    project_store_root,
+)
 from agent_toolkit_tui.composition import commands_main
 
 Scope = Literal["global", "project"]
@@ -89,4 +94,51 @@ def build_command_rows(
                 if cell is not None:
                     cells[(harness, "global")] = cell
         rows.append(CommandRow(slug=slug, source=entry.source, ref=entry.ref or "(default)", state=state, cells=cells))
+
+    # Bounded filesystem discovery for unmanaged commands
+    discovered_slugs: set[str] = set()
+    scan_root = library_root() if scope == "global" else (project_store_root(project) if project is not None else None)
+    if scan_root is not None and scan_root.is_dir():
+        for child in sorted(scan_root.iterdir()):
+            if child.name.startswith(".") or child.name == "_parents" or ".bak-" in child.name:
+                continue
+            if not child.is_dir() and not child.is_symlink():
+                continue
+            cmd = child / "COMMAND.md"
+            if cmd.is_file() and not cmd.is_symlink():
+                discovered_slugs.add(child.name)
+
+    try:
+        adapter = get_adapter("standard")
+        dest = adapter.destination("__probe__", scope=scope, home=home, project=project).parent
+        if dest.is_dir():
+            for f in sorted(dest.glob("*.md")):
+                if f.name.startswith(".") or ".bak-" in f.name:
+                    continue
+                discovered_slugs.add(f.stem)
+    except Exception:
+        pass
+
+    for disc_slug in sorted(discovered_slugs):
+        if disc_slug in universe:
+            continue
+        cells = {}
+        for harness in harnesses:
+            cell = _cell_for(disc_slug, harness, scope=scope, home=home, project=project)
+            if cell is not None:
+                cells[(harness, scope)] = cell
+        if scope == "project" and home is not None:
+            global_harnesses = interactive_harnesses("global", selection)
+            for harness in global_harnesses:
+                cell = _cell_for(disc_slug, harness, scope="global", home=home, project=None)
+                if cell is not None:
+                    cells[(harness, "global")] = cell
+        rows.append(CommandRow(
+            slug=disc_slug,
+            source="untracked",
+            ref="(untracked)",
+            state="unlisted",
+            cells=cells,
+        ))
+
     return rows

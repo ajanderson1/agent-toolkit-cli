@@ -395,8 +395,9 @@ class TUIApp(App):
             self.action_main_harnesses,
         )
 
-    def __init__(self) -> None:
+    def __init__(self, cwd: Path | None = None) -> None:
         super().__init__()
+        self._cwd_override: Path | None = cwd
         self._scope: str = "project"
         self._active_asset_type: AssetType = "skill"
         self._last_ctrl_c_quit_at: float | None = None
@@ -460,6 +461,7 @@ class TUIApp(App):
                 yield PiGrid([], id="pi-grid")
                 yield AgentGrid([], id="agent-grid")
                 yield McpGrid([], id="mcp-grid")
+        yield Static(self._build_proj_path_markup(), id="proj-path")
         yield Static("", id="status-bar")
         yield Static("", id="footer-pending")
         yield Footer()
@@ -482,6 +484,7 @@ class TUIApp(App):
         self._show_asset_type("skill")
         self._refresh_skill_view()
         self._refresh_content_header()
+        self._refresh_proj_path()
         self._refresh_pending_label()
         self._refresh_status_bar()
         # Focus the filter box on open (#249) via the same path as every
@@ -1079,6 +1082,7 @@ class TUIApp(App):
 
     def action_refresh(self) -> None:
         self._refresh_active_view()
+        self._refresh_proj_path()
         self._refresh_pending_label()
         self._refresh_content_header()
         self._refresh_status_bar()
@@ -1948,12 +1952,29 @@ class TUIApp(App):
         except Exception:
             pass
 
-    def _refresh_pending_label(self) -> None:
-        pending = self._get_all_pending_edits()
+    def _build_proj_path_markup(self, cwd: Path | str | None = None) -> str:
+        if cwd is None:
+            cwd = getattr(self, "_cwd_override", None) or Path.cwd()
+        else:
+            cwd = Path(cwd)
+        from agent_toolkit_cli.skill_git import is_git_repo
+
+        escaped = escape(str(cwd))
+        if not is_git_repo(cwd):
+            return f"[red]⚠️  {escaped}[/]"
+        return escaped
+
+    def _refresh_proj_path(self, cwd: Path | str | None = None) -> None:
         try:
-            self.query_one("#footer-pending", Static).update(
-                f"Pending: {len(pending)}{_scope_tag(pending.keys())}"
+            self.query_one("#proj-path", Static).update(
+                self._build_proj_path_markup(cwd)
             )
+        except Exception:
+            pass
+
+    def _refresh_pending_label(self) -> None:
+        try:
+            self.query_one("#footer-pending", Static).update("")
         except Exception:
             pass
 

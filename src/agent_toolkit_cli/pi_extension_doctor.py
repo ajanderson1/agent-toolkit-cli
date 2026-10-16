@@ -22,13 +22,20 @@ Fact-check finding (0.77.0 package-manager.js):
 """
 from __future__ import annotations
 
+import json
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Literal
 
 from agent_toolkit_cli import _pi_settings, skill_git
-from agent_toolkit_cli.pi_extension_lock import LockEntry, LockFile, read_lock
+from agent_toolkit_cli.pi_extension_lock import (
+    LockEntry,
+    LockFile,
+    add_entry,
+    read_lock,
+    write_lock,
+)
 from agent_toolkit_cli.pi_extension_paths import (
     Scope,
     library_pi_extension_path,
@@ -45,6 +52,7 @@ FindingType = Literal[
     "dirty_tree",
     "orphaned_override",    # extensions[] entry whose path is missing on disk
     "squatted_projection",  # projection slot occupied by a foreign non-symlink entry
+    "unmanaged",
 ]
 
 
@@ -76,6 +84,7 @@ def diagnose(
     scope: Scope,
     home: Path | None,
     project: Path | None,
+    repair: bool = False,
 ) -> list[Finding]:
     """Return all findings for the requested scope.
 
@@ -84,7 +93,6 @@ def diagnose(
     """
     # Determine the home for global-scope settings lookup.
     effective_home = home or Path.home()
-
     lock = read_lock(lock_file_path(scope=scope, home=home, project=project))
     targets = (
         tuple(sorted(lock.skills))
@@ -108,6 +116,11 @@ def diagnose(
             scope=scope, home=effective_home, project=project,
         ))
 
+    findings.extend(_scan_unmanaged_packages(
+        scope=scope, home=effective_home, project=project, lock=lock,
+        repair=repair, slugs=slugs,
+    ))
+
     return findings
 
 
@@ -121,6 +134,20 @@ def _check_slug(
     entry: LockEntry, lock: LockFile,
 ) -> list[Finding]:
     findings: list[Finding] = []
+    if entry.source_type != "npm" and entry.pi_extension_path is None:
+        local_path = Path(entry.source)
+        if not local_path.is_absolute():
+            base = (home or Path.home()) / ".pi" / "agent" if scope == "global" else (project / ".pi" if project else Path.cwd())
+            local_path = base / local_path
+        if not local_path.exists():
+            findings.append(Finding(
+                finding_type="missing_canonical", slug=slug, scope=scope,
+                path=local_path,
+                detail=f"lock has local package '{slug}' but source directory is gone: {local_path}",
+                fix_action=None,
+            ))
+        return findings
+
     # All store-owned rows have a store copy in the global library.
     if entry.source_type != "npm":
         canonical = library_pi_extension_path(slug)
@@ -167,9 +194,7 @@ def _check_slug(
     except ValueError:
         return findings  # scope params incomplete
 
-    # Hoist canonical_path so both the is_symlink and elif arms can reference it.
     canonical_path = library_pi_extension_path(slug)
-
     if link.is_symlink():
         target = link.resolve()
         if target != canonical_path.resolve():
@@ -393,3 +418,95 @@ def _make_reclone_action(*, slug: str, entry: LockEntry, force: bool = False) ->
     )
 
 
+def _scan_unmanaged_packages(
+    *,
+    scope: Scope,
+    home: Path,
+    project: Path | None,
+    lock: LockFile,
+    repair: bool = False,
+    slugs: tuple[str, ...] | None = None,
+) -> list[Finding]:
+    """Find local filesystem packages in settings.json that are not tracked in lock."""
+    try:
+        packages = _pi_settings.read_package_records(
+            scope=scope,
+            home=home if scope == "global" else None,
+            project=project,
+        )
+    except Exception:
+        return []
+
+    settings_path = _pi_settings.settings_path(
+        scope=scope,
+        home=home if scope == "global" else None,
+        project=project,
+    )
+
+    findings: list[Finding] = []
+    for package in packages:
+        source = str(package.get("source", ""))
+        if not source or source.startswith("npm:"):
+            continue
+        candidate = Path(source).expanduser()
+        if not candidate.is_absolute():
+            candidate = settings_path.parent / candidate
+        if not candidate.is_dir():
+            continue
+        pkg_json = candidate / "package.json"
+        pkg_name = candidate.name
+        if pkg_json.is_file():
+            try:
+                data = json.loads(pkg_json.read_text())
+                if isinstance(data, dict) and data.get("name"):
+                    pkg_name = str(data["name"])
+            except Exception:
+                pass
+
+        if slugs is not None and pkg_name not in slugs:
+            continue
+        if pkg_name in lock.skills:
+            continue
+
+        findings.append(Finding(
+            finding_type="unmanaged",
+            slug=pkg_name,
+            scope=scope,
+            path=candidate,
+            detail=(
+                f"local filesystem package '{pkg_name}' in settings.json "
+                f"is not tracked in the lockfile"
+            ),
+            fix_action=_make_import_package_action(
+                slug=pkg_name,
+                source=source,
+                scope=scope,
+                home=home,
+                project=project,
+            ) if repair else None,
+        ))
+    return findings
+
+
+def _make_import_package_action(
+    *, slug: str, source: str, scope: Scope, home: Path, project: Path | None,
+) -> FixAction:
+    lock_path = lock_file_path(scope=scope, home=home, project=project)
+
+    def _apply() -> None:
+        cur_lock = read_lock(lock_path)
+        if slug in cur_lock.skills:
+            return  # idempotent
+        entry = LockEntry(
+            source=source,
+            source_type="local",
+            ref="(default)",
+            read_only=False,
+        )
+        write_lock(lock_path, add_entry(cur_lock, slug, entry))
+
+    return FixAction(
+        description=f"Import unmanaged package '{slug}' into {lock_path.name}",
+        shell_preview=f"agent-toolkit-cli pi-extension add {source} --slug {slug}",
+        apply=_apply,
+    )

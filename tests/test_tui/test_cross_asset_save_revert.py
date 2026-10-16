@@ -43,7 +43,9 @@ async def test_pending_survives_asset_type_tab_switching() -> None:
         await pilot.pause()
 
         assert ("project", "claude", "myskill") in skill_grid.pending_entries()
-        assert "Pending: 1" in str(app.query_one("#footer-pending", Static).render())
+        app._refresh_status_bar()
+        assert "1 pending" in str(app.query_one("#status-bar", Static).render())
+        assert "Pending:" not in str(app.query_one("#footer-pending", Static).render())
 
         # Switch to instruction tab and queue another pending edit
         app.action_asset_type("instruction")
@@ -63,10 +65,9 @@ async def test_pending_survives_asset_type_tab_switching() -> None:
         app._refresh_pending_label()
         await pilot.pause()
 
-        # Both edits should be counted in footer
-        footer = str(app.query_one("#footer-pending", Static).render())
-        assert "Pending: 2" in footer
-        assert "1 global, 1 project" in footer
+        assert len(app._get_all_pending_edits()) == 2
+        app._refresh_status_bar()
+        assert "1 pending" in str(app.query_one("#status-bar", Static).render())
 
         # Switch back to skill tab: skill pending must still be preserved
         app.action_asset_type("skill")
@@ -74,8 +75,8 @@ async def test_pending_survives_asset_type_tab_switching() -> None:
 
         assert ("project", "claude", "myskill") in skill_grid.pending_entries()
         assert ("global", "cursor", "AGENTS.md") in instruction_grid.pending_entries()
-        footer = str(app.query_one("#footer-pending", Static).render())
-        assert "Pending: 2" in footer
+        assert len(app._get_all_pending_edits()) == 2
+        assert "1 pending" in str(app.query_one("#status-bar", Static).render())
 
 
 @pytest.mark.asyncio

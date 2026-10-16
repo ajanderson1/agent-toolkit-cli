@@ -1,0 +1,111 @@
+{
+  "screen_size": [
+    132,
+    36
+  ],
+  "rendered_rows": {
+    "skills": {
+      "row_keys": [
+        "skill:standalone-skill",
+        "skill:superpowers:brainstorming"
+      ],
+      "columns": [
+        "Skill",
+        "Standard (14) \u24d8",
+        "Claude \u24d8",
+        "Hermes \u24d8",
+        "Paperclip \u24d8",
+        "State \u24d8",
+        "Source"
+      ],
+      "visible_rows": [
+        [
+          "standalone-skill",
+          " ",
+          " ",
+          " ",
+          " ",
+          "[yellow]unlisted[/]",
+          "untracked"
+        ],
+        [
+          "superpowers:brainstorming",
+          " ",
+          " ",
+          " ",
+          " ",
+          "[yellow]unlisted[/]",
+          "untracked"
+        ]
+      ]
+    },
+    "agents": {
+      "row_keys": [
+        "agent:local-agent"
+      ],
+      "columns": [
+        "Agent",
+        "Standard (5) \u24d8",
+        "Gemini \u24d8",
+        "OpenCode \u24d8",
+        "Pi \u24d8",
+        "State \u24d8",
+        "Source"
+      ],
+      "visible_rows": [
+        [
+          "local-agent",
+          "[dim]\u2014[/]",
+          "[dim]\u2014[/]",
+          "[dim]\u2014[/]",
+          "[dim]\u2014[/]",
+          "[yellow]unlisted[/]",
+          "untracked"
+        ]
+      ]
+    },
+    "commands": {
+      "row_keys": [
+        "command:local-command"
+      ],
+      "columns": [
+        "Command",
+        "Standard (2) \u24d8",
+        "Pi \u24d8",
+        "Gemini \u24d8",
+        "State \u24d8",
+        "Source"
+      ],
+      "visible_rows": [
+        [
+          "local-command",
+          "[dim]\u2014[/]",
+          "[dim]\u2014[/]",
+          "[dim]\u2014[/]",
+          "[yellow]unlisted[/]",
+          "untracked"
+        ]
+      ]
+    },
+    "pi": {
+      "row_keys": [
+        "pi:local-package"
+      ],
+      "columns": [
+        "Pi Extension",
+        "Pi \u24d8",
+        "Origin \u24d8",
+        "Source"
+      ],
+      "visible_rows": [
+        [
+          "local-package",
+          "[dim]\u2014[/]",
+          "[yellow]local package \u00b7 untracked[/]",
+          "../local-package"
+        ]
+      ]
+    }
+  },
+  "artifact": "inventory.svg"
+}

@@ -139,14 +139,16 @@ def test_global_pi_uses_standard_projection(git_sandbox, tmp_path, monkeypatch):
     """Explicit Pi target shares ~/.agents/skills and creates no .pi skills root."""
     home = Path(git_sandbox.env["HOME"])
     from agent_toolkit_cli.skill_agents import AGENTS
+    from agent_toolkit_cli.skill_paths import library_lock_path, library_root
     monkeypatch.setitem(
         AGENTS, "pi", replace(AGENTS["pi"], global_skills_dir=home / ".agents" / "skills"),
     )
     src = _src(git_sandbox.upstream)
     assert not (home / ".pi" / "agent" / "skills").exists()
 
+    slug = f"pi-global-{uuid4().hex[:12]}"
     p = InstallPlan(
-        slug=f"pi-global-{uuid4().hex[:12]}", scope="global", source=src, ref=None,
+        slug=slug, scope="global", source=src, ref=None,
         add_agents=("pi",), remove_agents=(),
     )
     result = apply(p, home=home, env=git_sandbox.env)
@@ -155,8 +157,16 @@ def test_global_pi_uses_standard_projection(git_sandbox, tmp_path, monkeypatch):
     )
     assert link == home / ".agents" / "skills" / p.slug
     assert link.is_symlink()
+    assert link.resolve() == result.canonical_path.resolve()
     assert not (home / ".pi" / "agent" / "skills").exists()
     assert "pi" not in result.skipped
+
+    # Verify canonical skill and lockfile live in isolated sandbox library
+    assert result.canonical_path == library_root(home=home) / slug
+    assert result.canonical_path.exists()
+    lock_file = library_lock_path(home=home)
+    assert lock_file.exists()
+    assert slug in lock_file.read_text()
 
 def test_apply_project_windsurf_creates_symlink_when_dir_absent(git_sandbox, tmp_path):
     """Project install + windsurf (non-universal); no .windsurf/ → symlink and dir auto-created.

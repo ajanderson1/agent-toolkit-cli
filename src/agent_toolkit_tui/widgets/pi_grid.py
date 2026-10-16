@@ -60,6 +60,7 @@ _GLOBAL_GLYPH    = "🌐"
 _ORIGIN_MARKUP = {
     "store-owned": "[blue]library[/]",
     "untracked":   "[dim]untracked[/]",
+    "local-package": "[yellow]local package · untracked[/]",
 }
 
 # Column indices (single scope column; the active scope is self._scope).
@@ -225,7 +226,7 @@ class PiGrid(Vertical):
             if self._scope == "global"
             else row.project_cell.project_loaded
         )
-        state = "untracked" if row.origin == "untracked" else "loaded" if loaded else "not loaded"
+        state = "untracked" if row.origin in ("untracked", "local-package") else "loaded" if loaded else "not loaded"
         self.app.push_screen(
             CellInfoScreen(
                 title=f"{row.slug} · {asset_type_label('pi-extension')}",
@@ -288,6 +289,8 @@ class PiGrid(Vertical):
             "  managed via pi-extension install (scope toggle).\n"
             "[b]npm unmanaged[/]: registry package Pi loads from settings.json,\n"
             "  but agent-toolkit did not add it; remove manually from packages[].\n"
+            "[b]local package (untracked)[/]: local filesystem package in Pi\n"
+            "  settings.json packages[]; not in asset lock.\n"
             "[b]untracked[/]: found in Pi's extensions/ dir but not in\n"
             "  the asset-type lock. Use pi-extension import to adopt."
         )
@@ -305,6 +308,23 @@ class PiGrid(Vertical):
                 f"This extension is not in the asset-type lock and cannot be\n"
                 f"toggled here. To adopt it, run:\n"
                 f"  [b]agent-toolkit-cli pi-extension import {row.slug}[/]"
+            )
+
+        if row.origin == "local-package":
+            path = (
+                row.global_config_path
+                if scope == "global"
+                else row.project_config_path
+            ) or row.global_config_path or row.project_config_path or "Pi settings.json"
+            spec = (
+                row.global_package_spec
+                if scope == "global"
+                else row.project_package_spec
+            ) or row.source
+            return (
+                "[dim]untracked local filesystem package.[/]\n\n"
+                "agent-toolkit-cli does not manage local filesystem package declarations.\n"
+                f"Configured in {path} as \"{spec}\"."
             )
 
         home = Path.home()
@@ -392,7 +412,7 @@ class PiGrid(Vertical):
         row = visible[coord.row]
 
         # Untracked rows are non-interactive — no lock entry to act on.
-        if row.origin == "untracked":
+        if row.origin in ("untracked", "local-package"):
             return
 
         if row.origin == "npm" and not row.managed:
@@ -492,7 +512,7 @@ class PiGrid(Vertical):
 
     def _cell_glyph(self, *, row: PiExtensionRow, scope: str) -> str:
         """Return the display glyph for a scope cell. Never named _render_*."""
-        if row.origin == "untracked":
+        if row.origin in ("untracked", "local-package"):
             return _UNTRACKED_GLYPH
 
         loaded = (

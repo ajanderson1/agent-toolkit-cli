@@ -17,6 +17,8 @@ def _origin_label(record: InventoryRecord) -> str:
         return "library"
     if record.origin == "npm":
         return "npm managed" if record.managed else "npm unmanaged"
+    if record.origin == "local-package":
+        return "local-package untracked"
     return record.origin
 
 

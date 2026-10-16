@@ -59,6 +59,13 @@ def test_instructions_nonstandard_main_today():
     assert instructions_nonstandard_main() == ("claude-code", "gemini-cli")
 
 
+def test_instructions_nonstandard_main_is_scope_aware():
+    assert instructions_nonstandard_main(scope="project") == ("claude-code", "gemini-cli")
+    assert instructions_nonstandard_main(scope="global") == (
+        "claude-code", "codex", "gemini-cli", "opencode", "pi",
+    )
+
+
 def test_skills_coverage_guard():
     """Every main harness is standard-covered or has its own skills column."""
     standard = {n for n, c in AGENTS.items() if c.is_standard}
