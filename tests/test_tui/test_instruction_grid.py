@@ -132,7 +132,7 @@ async def test_instruction_grid_mounts_with_correct_columns():
         table = app.query_one("#instruction-table", DataTable)
         labels = [str(c.label) for c in table.columns.values()]
         # Slug + standard + N harness cols + Source
-        assert len(labels) == len(interactive_harnesses()) + 3
+        assert len(labels) == len(interactive_harnesses(scope="global")) + 3
         assert "Instruction" in labels
         assert "Instruction ⓘ" not in labels
         assert not any("INSTRUCTION" in lbl for lbl in labels)

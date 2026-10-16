@@ -152,6 +152,16 @@ def test_list_json_format():
     assert by_harness["codex"]["verdict"] == "native"
 
 
+def test_list_global_reports_managed_native_reader_pointers():
+    runner = CliRunner()
+    result = runner.invoke(main, ["instructions", "list", "--scope", "global", "--format", "json"])
+    assert result.exit_code == 0, result.output
+    rows = {row["harness"]: row for row in json.loads(result.output)}
+    assert {name: rows[name]["verdict"] for name in ("codex", "opencode", "pi")} == {
+        "codex": "symlink", "opencode": "symlink", "pi": "symlink",
+    }
+
+
 def test_status_reports_present_and_missing(tmp_path, monkeypatch):
     project = tmp_path / "proj"
     project.mkdir()
@@ -253,6 +263,40 @@ def _global_home(tmp_path, monkeypatch):
     toolkit.mkdir(parents=True)
     (toolkit / "AGENTS.md").write_text("# global canon\n")
     return home
+
+
+def test_install_global_native_readers_create_their_global_pointers(tmp_path, monkeypatch):
+    home = _global_home(tmp_path, monkeypatch)
+    runner = CliRunner()
+    expected = {
+        "codex": home / ".codex" / "AGENTS.md",
+        "opencode": home / ".config" / "opencode" / "AGENTS.md",
+        "pi": home / ".pi" / "agent" / "AGENTS.md",
+    }
+    for harness, pointer in expected.items():
+        result = runner.invoke(main, ["instructions", "install", "--scope", "global", "--harness", harness])
+        assert result.exit_code == 0, result.output
+        assert pointer.is_symlink()
+        assert pointer.resolve() == home / ".agent-toolkit" / "AGENTS.md"
+
+
+def test_doctor_reports_stale_unmanaged_global_conventions_pointer_without_fix(tmp_path, monkeypatch):
+    home = _global_home(tmp_path, monkeypatch)
+    stale = home / ".conventions" / "CONVENTIONS.md"
+    stale.parent.mkdir()
+    stale.write_text("legacy\n")
+    pointer = home / ".codex" / "AGENTS.md"
+    pointer.parent.mkdir()
+    pointer.symlink_to(stale)
+
+    result = CliRunner().invoke(main, ["instructions", "doctor", "--scope", "global"])
+    assert result.exit_code == 1
+    assert "stale conventions pointer" in result.output
+    assert "report-only" in result.output
+    assert "apply?" not in result.output
+    assert pointer.is_symlink()
+    assert pointer.resolve() == stale
+    assert not (home / ".agent-toolkit" / "instructions-lock.json").exists()
 
 
 def test_install_global_creates_pointer_and_truthful_lock(tmp_path, monkeypatch):

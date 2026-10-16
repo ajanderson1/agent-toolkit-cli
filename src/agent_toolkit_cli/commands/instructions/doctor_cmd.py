@@ -296,6 +296,24 @@ def doctor_cmd(ctx: click.Context, scope: str, no_fix: bool) -> None:
                 )
             ))
 
+    # Known-bad legacy global links to conventions are report-only. They are not
+    # ours, so never offer adoption/replacement or mutate the lock. resolve()
+    # intentionally follows chains and returns a lexical target for dangling links.
+    if scope == "global":
+        stale_target = Path.home() / ".conventions" / "CONVENTIONS.md"
+        for harness in sorted(SUPPORTED_HARNESSES - wanted):
+            try:
+                pointer = _pointer_path(harness, scope, project_root, home)
+            except ValueError:
+                continue
+            if pointer.is_symlink() and pointer.resolve() == stale_target.resolve():
+                findings.append(Finding(
+                    message=(
+                        f"unmanaged stale conventions pointer: {harness} at {pointer} "
+                        f"→ {stale_target}; report-only"
+                    )
+                ))
+
     # Unmanaged: a real file (not a symlink) at a known pointer slot that the
     # lock doesn't record. A real file at a *wanted* slot is already a conflict
     # (above), so exclude conflict_paths. Several harnesses share a slot

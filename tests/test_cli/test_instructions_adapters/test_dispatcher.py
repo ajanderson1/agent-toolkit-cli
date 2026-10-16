@@ -18,6 +18,9 @@ _SECTION_HEADING = "## Instruction-file (`instructions` asset type) support — 
 _ROW_RE = re.compile(
     r"^\|\s*`(?P<harness>[a-z][a-z0-9-]*)`\s*\|"
     r"(?P<verdict>[^|]+)\|"
+    r"(?P<default>[^|]*)\|"
+    r"(?P<paths>[^|]*)\|"
+    r"(?P<global_verdict>[^|]*)\|"
 )
 
 
@@ -30,7 +33,10 @@ def _matrix_symlink_set() -> set[str]:
         m = _ROW_RE.match(line.strip())
         if not m:
             continue
-        if m.group("verdict").strip().lower().startswith("symlink"):
+        if any(
+            verdict.strip().lower().startswith("symlink")
+            for verdict in (m.group("verdict"), m.group("global_verdict"))
+        ):
             out.add(m.group("harness"))
     return out
 
@@ -38,6 +44,21 @@ def _matrix_symlink_set() -> set[str]:
 def test_supported_harnesses_matches_matrix_symlink_set():
     """The adapter table is the implementation; the matrix is the contract."""
     assert SUPPORTED_HARNESSES == _matrix_symlink_set()
+
+
+def test_global_only_native_readers_have_no_project_pointer(tmp_path):
+    """#499: global AGENTS.md slots do not turn project readers into pointers."""
+    from agent_toolkit_cli.instructions_adapters.symlink import _pointer_path
+    import pytest
+
+    for harness, expected in {
+        "codex": tmp_path / ".codex" / "AGENTS.md",
+        "opencode": tmp_path / ".config" / "opencode" / "AGENTS.md",
+        "pi": tmp_path / ".pi" / "agent" / "AGENTS.md",
+    }.items():
+        assert _pointer_path(harness, "global", None, tmp_path) == expected
+        with pytest.raises(ValueError, match="no project pointer slot"):
+            _pointer_path(harness, "project", tmp_path / "project", tmp_path)
 
 
 def test_get_adapter_returns_adapter_instance():

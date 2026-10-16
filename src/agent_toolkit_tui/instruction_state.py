@@ -33,9 +33,11 @@ Scope = Literal["global", "project"]
 
 def interactive_harnesses(
     selection: tuple[str, ...] | None = None,
+    *,
+    scope: Scope = "project",
 ) -> tuple[str, ...]:
-    """Rendered instruction cells, derived at call time from the selection."""
-    return instructions_nonstandard_main(selection)
+    """Rendered instruction cells, derived at call time from selection and scope."""
+    return instructions_nonstandard_main(selection, scope=scope)
 
 
 @dataclass(frozen=True)
@@ -162,7 +164,7 @@ def build_instruction_rows(
         lock_path = instructions_paths.lock_file_path("project", project)
 
     canonical_exists = canonical.exists()
-    harnesses = interactive_harnesses(selection)
+    harnesses = interactive_harnesses(selection, scope=scope)
 
     # Read lock (returns empty lock if file absent).
     lock = read_lock(lock_path)
