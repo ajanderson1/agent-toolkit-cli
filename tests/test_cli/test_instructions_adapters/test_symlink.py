@@ -11,10 +11,10 @@ from agent_toolkit_cli.instructions_adapters import symlink
 
 
 def test_cells_match_phase_a_symlink_verdict_set():
-    """The 7 cells must exactly match the symlink-verdict set in the matrix."""
+    """Cells cover project symlinks plus the three global-only native readers."""
     expected = {
-        "augment", "claude-code", "codebuddy",
-        "gemini-cli", "iflow-cli", "replit", "tabnine-cli",
+        "augment", "claude-code", "codebuddy", "codex",
+        "gemini-cli", "iflow-cli", "opencode", "pi", "replit", "tabnine-cli",
     }
     assert set(symlink.CELLS) == expected
 
@@ -23,9 +23,8 @@ def test_each_cell_has_global_and_project_template():
     for harness, cell in symlink.CELLS.items():
         assert "global" in cell, f"{harness}: missing 'global' template"
         assert "project" in cell, f"{harness}: missing 'project' template"
-        assert "{POINTER_NAME}" in (cell["global"] + cell["project"]), (
-            f"{harness}: at least one template must use {{POINTER_NAME}}"
-        )
+        assert cell["global"] or cell["project"], f"{harness}: no pointer slot"
+        assert cell["pointer_name"], f"{harness}: missing pointer name"
 
 
 def test_install_creates_project_pointer_symlink(tmp_path):

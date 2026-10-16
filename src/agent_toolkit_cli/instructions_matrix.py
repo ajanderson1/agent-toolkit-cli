@@ -25,6 +25,7 @@ _ROW_RE = re.compile(
     r"(?P<verdict>[^|]+)\|"
     r"(?P<default>[^|]*)\|"
     r"(?P<paths>[^|]*)\|"
+    r"(?P<global_verdict>[^|]*)\|"
 )
 
 
@@ -51,8 +52,10 @@ def _read_matrix_text() -> str:
     )
 
 
-def instructions_matrix_rows() -> list[dict[str, str]]:
-    """Parse the instructions-asset-type section into per-harness verdict rows."""
+def instructions_matrix_rows(scope: str = "project") -> list[dict[str, str]]:
+    """Parse per-harness verdict rows for the requested scope."""
+    if scope not in {"project", "global"}:
+        raise ValueError(f"unknown scope: {scope!r}")
     text = _read_matrix_text()
     section = text.split(_SECTION_HEADING, 1)[1]
     section = re.split(r"^## ", section, maxsplit=1, flags=re.MULTILINE)[0]
@@ -63,7 +66,7 @@ def instructions_matrix_rows() -> list[dict[str, str]]:
             continue
         rows.append({
             "harness": m.group("harness"),
-            "verdict": m.group("verdict").strip(),
+            "verdict": (m.group("global_verdict").strip() if scope == "global" else m.group("verdict").strip()),
             "default_file": m.group("default").strip(),
             "paths": m.group("paths").strip(),
         })

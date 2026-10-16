@@ -43,6 +43,7 @@ _ROW_RE = re.compile(
     r"(?P<verdict>[^|]+)\|"
     r"(?P<default>[^|]*)\|"
     r"(?P<paths>[^|]*)\|"
+    r"(?P<global_verdict>[^|]*)\|"
     r"(?P<native>[^|]*)\|"
     r"(?P<mechanism>[^|]*)\|"
     r"(?P<citation>[^|]*)\|"
@@ -77,6 +78,7 @@ def _parse_section() -> dict[str, dict[str, str]]:
             "verdict": m.group("verdict").strip(),
             "default": m.group("default").strip(),
             "paths": m.group("paths").strip(),
+            "global_verdict": m.group("global_verdict").strip(),
             "native": m.group("native").strip(),
             "mechanism": m.group("mechanism").strip(),
             "citation": m.group("citation").strip(),
@@ -93,6 +95,24 @@ def rows() -> dict[str, dict[str, str]]:
         "Phase A table must be assembled before this test can pass."
     )
     return parsed
+
+
+def test_global_matrix_rows_distinguish_native_from_managed_pointers():
+    """Global-only pointers do not change project-native reader verdicts."""
+    from agent_toolkit_cli.instructions_matrix import instructions_matrix_rows
+
+    project = {row["harness"]: row for row in instructions_matrix_rows()}
+    global_rows = {
+        row["harness"]: row for row in instructions_matrix_rows(scope="global")
+    }
+    for harness, path in {
+        "codex": "~/.codex/AGENTS.md",
+        "opencode": "~/.config/opencode/AGENTS.md",
+        "pi": "~/.pi/agent/AGENTS.md",
+    }.items():
+        assert project[harness]["verdict"] == "native"
+        assert global_rows[harness]["verdict"] == "symlink"
+        assert path in global_rows[harness]["paths"]
 
 
 def test_all_catalog_harnesses_present(rows):

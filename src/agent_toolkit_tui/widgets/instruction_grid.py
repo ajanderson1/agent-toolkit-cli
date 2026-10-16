@@ -108,7 +108,7 @@ class InstructionGrid(Vertical):
     def _active_harnesses(self) -> tuple[str, ...]:
         # Standard column + non-covered main harnesses. The long tail is
         # CLI-only (#351 post-demo decision).
-        return instructions_nonstandard_main(self._selection)
+        return instructions_nonstandard_main(self._selection, scope=self._scope)
 
     def set_harness_selection(self, selection: tuple[str, ...]) -> None:
         """Apply a presentation-only harness filter and rebuild columns."""

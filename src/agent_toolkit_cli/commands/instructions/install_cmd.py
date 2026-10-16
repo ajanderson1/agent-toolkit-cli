@@ -8,6 +8,7 @@ import click
 from agent_toolkit_cli import instructions_install, instructions_paths
 from agent_toolkit_cli.instructions_adapters import SUPPORTED_HARNESSES
 from agent_toolkit_cli.instructions_adapters.symlink import PointerConflictError
+from agent_toolkit_cli.instructions_matrix import instructions_matrix_rows
 from agent_toolkit_cli.instructions_lock import (
     InstructionsLockEntry,
     add_entry,
@@ -34,16 +35,21 @@ from agent_toolkit_cli.skill_agents import AGENTS
 @click.pass_context
 def install_cmd(ctx: click.Context, scope: str, harnesses: tuple[str, ...]) -> None:
     project_root = _resolve_project_root(ctx, scope)
-    targets = list(harnesses) or sorted(SUPPORTED_HARNESSES)
+    verdicts = {row["harness"]: row["verdict"] for row in instructions_matrix_rows(scope)}
+    available = {
+        harness for harness in SUPPORTED_HARNESSES
+        if verdicts.get(harness, "").lower().startswith("symlink")
+    }
+    targets = list(harnesses) or sorted(available)
 
     # Validate every requested harness BEFORE writing the lock.
     for h in targets:
-        if h in SUPPORTED_HARNESSES:
+        if h in available:
             continue
         if h in AGENTS:
-            # In catalog but not symlink-verdict → tell them why.
+            verdict = verdicts.get(h, "native")
             raise click.ClickException(
-                f"{h!r}: this harness is `native` (reads AGENTS.md by default) — "
+                f"{h!r}: this harness is `{verdict}` at {scope} scope — "
                 "no pointer needed. See harness-matrix.md."
             )
         raise click.ClickException(f"{h!r}: not in the harness catalog")

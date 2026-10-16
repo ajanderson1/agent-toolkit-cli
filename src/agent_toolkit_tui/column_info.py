@@ -199,7 +199,7 @@ def _standard_instructions(context: dict[str, object]) -> ColumnInfo:
 
     names = tuple(
         row["harness"]
-        for row in instructions_matrix_rows()
+        for row in instructions_matrix_rows(_scope(context, default="project"))
         if row["verdict"] == "native"
     )
     return _standard_info("instruction", names, context)

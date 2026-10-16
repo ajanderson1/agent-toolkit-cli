@@ -146,7 +146,7 @@ CASES = (
         "global",
         "instruction-table",
         _instruction_grid,
-        ("standard", "claude-code", "gemini-cli"),
+        ("standard", "claude-code", "codex", "gemini-cli", "opencode", "pi"),
     ),
     _Case(
         "agents",

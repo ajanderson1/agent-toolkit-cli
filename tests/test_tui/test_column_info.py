@@ -86,7 +86,10 @@ def test_standard_instruction_panel_uses_live_native_readers() -> None:
 
     info = _info("standard", "instruction", global_linked=False)
     text = "\n".join(info.lines)
-    native = [row["harness"] for row in instructions_matrix_rows() if row["verdict"] == "native"]
+    native = [
+        row["harness"] for row in instructions_matrix_rows("global")
+        if row["verdict"] == "native"
+    ]
     assert f"Covered harnesses ({len(native)}):" in text
     for name in native:
         assert harness_label(name) in text

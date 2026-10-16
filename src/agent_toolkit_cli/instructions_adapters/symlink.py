@@ -48,6 +48,10 @@ CELLS: dict[str, dict[str, str]] = {
     "codebuddy":   {"pointer_name": "CODEBUDDY.md",
                     "global":  "{HOME}/.codebuddy/{POINTER_NAME}",
                     "project": "{PROJECT}/{POINTER_NAME}"},
+    # Native in repositories; managed pointer only at the global reader slot.
+    "codex":       {"pointer_name": "AGENTS.md",
+                    "global":  "{HOME}/.codex/AGENTS.md",
+                    "project": ""},
     # google-gemini/gemini-cli memoryTool.ts DEFAULT_CONTEXT_FILENAME = 'GEMINI.md'.
     "gemini-cli":  {"pointer_name": "GEMINI.md",
                     "global":  "{HOME}/.gemini/{POINTER_NAME}",
@@ -56,6 +60,12 @@ CELLS: dict[str, dict[str, str]] = {
                     "global":  "{HOME}/.iflow/{POINTER_NAME}",
                     "project": "{PROJECT}/{POINTER_NAME}"},
     # Replit Agent auto-creates and reads replit.md at project root only.
+    "opencode":    {"pointer_name": "AGENTS.md",
+                    "global":  "{HOME}/.config/opencode/AGENTS.md",
+                    "project": ""},
+    "pi":          {"pointer_name": "AGENTS.md",
+                    "global":  "{HOME}/.pi/agent/AGENTS.md",
+                    "project": ""},
     "replit":      {"pointer_name": "replit.md",
                     "global":  "",  # no global
                     "project": "{PROJECT}/{POINTER_NAME}"},

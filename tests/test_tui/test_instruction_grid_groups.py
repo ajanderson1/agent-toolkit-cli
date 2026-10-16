@@ -19,7 +19,7 @@ from agent_toolkit_tui.widgets.instruction_grid import InstructionGrid
 def _full_row(slug: str = "AGENTS.md", *, scope: str = "global") -> InstructionRow:
     cells = {
         (h, scope): InstructionCell(linked=False, conflict=False)
-        for h in instructions_nonstandard_main()
+        for h in instructions_nonstandard_main(scope=scope)
     }
     return InstructionRow(
         slug=slug, source="AGENTS.md", canonical_exists=True, cells=cells,
@@ -59,7 +59,7 @@ async def test_columns_are_standard_plus_noncovered_main():
         # No pseudo-column, no group tags, single-line labels only.
         assert not any("… +" in l or "STANDARD" in l or "NON-STD" in l
                        or "\n" in l for l in labels), labels
-        assert len(labels) == len(instructions_nonstandard_main()) + 3
+        assert len(labels) == len(instructions_nonstandard_main(scope="global")) + 3
 
 
 @pytest.mark.asyncio
@@ -75,5 +75,5 @@ async def test_click_standard_header_opens_registry_modal():
         await pilot.pause()
         assert isinstance(app.screen, ColumnInfoModal)
         body = str(app.screen.query_one("#column-info-body").render())
-        assert "Covered harnesses (39)" in body
+        assert "Covered harnesses (36)" in body
         assert "Adal" in body  # a native reader, enumerated exhaustively
