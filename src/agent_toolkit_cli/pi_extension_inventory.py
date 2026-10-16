@@ -5,6 +5,7 @@ extension Pi could load, across three surfaces — the asset-type lock
 not a gate. Read-only; PR2 adds projection/state."""
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -18,7 +19,7 @@ from agent_toolkit_cli.pi_extension_paths import (
     pi_extension_dir,
 )
 
-Origin = Literal["store-owned", "untracked", "npm"]
+Origin = Literal["store-owned", "untracked", "npm", "local-package"]
 
 # Pi loads dirs with index.ts/.js or a pi.extensions manifest, plus loose
 # .ts/.js files. We classify discovered entries by these rules (0.77.0).
@@ -38,6 +39,8 @@ class InventoryRecord:
     project_package_spec: str | None = None
     global_config_path: Path | None = None
     project_config_path: Path | None = None
+    global_package_metadata: dict[str, object] | None = None
+    project_package_metadata: dict[str, object] | None = None
 
 
 def _extensions_root(*, scope: Scope, home: Path | None, project: Path | None) -> Path:
@@ -83,6 +86,32 @@ def _is_store_owned_symlink(slug: str, path: Path, rec: InventoryRecord) -> bool
         return path.resolve() == library_pi_extension_path(slug).resolve()
     except Exception:
         return False
+
+
+def _package_slug(spec: str) -> str:
+    """Return a stable inventory key without pretending local paths are npm names."""
+    if spec.startswith("npm:"):
+        return _npm_slug(spec)
+    return spec
+
+
+def _is_npm_spec(spec: str) -> bool:
+    return spec.startswith("npm:")
+
+
+def _package_metadata(spec: str, *, settings_path: Path) -> dict[str, object] | None:
+    """Return local package.json metadata without mutating the package."""
+    candidate = Path(spec).expanduser()
+    if not candidate.is_absolute():
+        candidate = settings_path.parent / candidate
+    manifest = candidate / "package.json" if candidate.is_dir() else None
+    if manifest is None or not manifest.is_file():
+        return None
+    try:
+        value = json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return value if isinstance(value, dict) else None
 
 
 def _npm_slug(spec: str) -> str:
@@ -155,23 +184,30 @@ def build_inventory(
     # flag). npm does upgrade a slug first seen as loose/untracked.
     for scope, _ in scopes:
         config_path = _pi_settings.settings_path(scope=scope, home=home, project=project)
-        for spec in _pi_settings.read_packages(scope=scope, home=home, project=project):
-            if not spec.startswith("npm:"):
-                continue
-            slug = _npm_slug(spec)
+        packages = _pi_settings.read_package_records(scope=scope, home=home, project=project)
+        for package in packages:
+            spec = package["source"]
+            is_npm = _is_npm_spec(spec)
+            slug = _package_slug(spec)
+            metadata = None if is_npm else _package_metadata(spec, settings_path=config_path)
+            origin: Origin = "npm" if is_npm else "local-package"
+            source = spec
             rec = by_slug.setdefault(
-                slug, InventoryRecord(slug=slug, origin="npm", source=spec, managed=False)
+                slug,
+                InventoryRecord(slug=slug, origin=origin, source=source, managed=False),
             )
-            if rec.origin != "store-owned":
-                rec.origin = "npm"
-                rec.source = spec
+            if rec.origin != "store-owned" and (rec.origin != "npm" or is_npm):
+                rec.origin = origin
+                rec.source = source
             if scope == "global":
                 rec.global_loaded = True
                 rec.global_package_spec = spec
                 rec.global_config_path = config_path
+                rec.global_package_metadata = metadata
             else:
                 rec.project_loaded = True
                 rec.project_package_spec = spec
                 rec.project_config_path = config_path
+                rec.project_package_metadata = metadata
 
     return [by_slug[k] for k in sorted(by_slug)]

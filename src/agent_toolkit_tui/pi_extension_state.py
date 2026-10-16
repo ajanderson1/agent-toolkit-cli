@@ -15,7 +15,7 @@ from typing import Literal
 
 from agent_toolkit_cli.pi_extension_inventory import InventoryRecord, build_inventory
 
-Origin = Literal["store-owned", "npm", "untracked"]
+Origin = Literal["store-owned", "npm", "untracked", "local-package"]
 
 
 @dataclass(frozen=True)
@@ -44,6 +44,8 @@ class PiExtensionRow:
     project_package_spec: str | None = None
     global_config_path: str | None = None
     project_config_path: str | None = None
+    global_package_metadata: dict[str, object] | None = None
+    project_package_metadata: dict[str, object] | None = None
 
 
 def _row_from_record(rec: InventoryRecord) -> PiExtensionRow:
@@ -74,6 +76,8 @@ def _row_from_record(rec: InventoryRecord) -> PiExtensionRow:
         project_package_spec=rec.project_package_spec,
         global_config_path=str(rec.global_config_path) if rec.global_config_path else None,
         project_config_path=str(rec.project_config_path) if rec.project_config_path else None,
+        global_package_metadata=rec.global_package_metadata,
+        project_package_metadata=rec.project_package_metadata,
     )
 
 

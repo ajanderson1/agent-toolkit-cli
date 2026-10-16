@@ -109,9 +109,22 @@ def read_packages(
     home: Path | None = None,
     project: Path | None = None,
 ) -> list[str]:
+    return [
+        package["source"]
+        for package in read_package_records(scope=scope, home=home, project=project)
+    ]
+
+
+def read_package_records(
+    *,
+    scope: Scope,
+    home: Path | None = None,
+    project: Path | None = None,
+) -> list[dict[str, object]]:
+    """Read package declarations without discarding resource filters/metadata."""
     path = settings_path(scope=scope, home=home, project=project)
     packages, _ = _package_sources(_load(path), path)
-    return _package_specs(packages)
+    return packages
 
 
 def has_package_identity(

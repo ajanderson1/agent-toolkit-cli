@@ -38,6 +38,7 @@ _PI_EXTENSION_ORIGINS: dict[str, str] = {
     "store-owned": "library",
     "npm": "npm",
     "untracked": "untracked",
+    "local-package": "local package (untracked)",
 }
 
 
