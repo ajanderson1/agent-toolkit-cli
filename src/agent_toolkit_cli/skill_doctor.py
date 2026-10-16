@@ -398,6 +398,11 @@ def _scan_orphan_canonicals(
         is_bak = ".bak-" in name
         if name in known and not is_bak:
             continue  # referenced canonical — keep
+        if not is_bak and any(
+            canonical_skill_dir(s, scope=scope, home=home, project=project).resolve().is_relative_to(path.resolve())
+            for s in known
+        ):
+            continue  # preserved backing checkout still owns managed children
         slug = name.split(".bak-")[0] if is_bak else name
         detail = (
             f"{path}: migration backup, safe to remove"
@@ -1151,10 +1156,14 @@ def _scan_unmanaged_skills(
         return []
     discovered = discover_unmanaged_skills(scan_root)
     findings: list[Finding] = []
+    managed = {canonical_skill_dir(s, scope=scope, home=home, project=project).resolve() for s in lock.skills}
+    from agent_toolkit_cli.skill_collections import catalog
+    for group in catalog(scope=scope, home=home, project=project):
+        managed.update(c.path.resolve() for c in group.children.values())
     for slug, skill_dir in discovered:
         if slugs is not None and slug not in slugs:
             continue
-        if slug in lock.skills:
+        if slug in lock.skills or skill_dir.resolve() in managed:
             continue
         findings.append(Finding(
             finding_type="unmanaged",

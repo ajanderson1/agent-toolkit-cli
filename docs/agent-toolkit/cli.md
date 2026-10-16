@@ -178,6 +178,7 @@ Usage: agent-toolkit-cli skill add <source> [--ref <ref>] [--slug <slug>] [--ski
 | `--ref <ref>` | Git ref to pin (branch, tag, or SHA). Shorthand `owner/repo@<ref>` is equivalent for refs without `/`; refs containing `/` (e.g. `feature/branch`) must use this flag. |
 | `--slug <slug>` | Override the slug used for the canonical directory and lock-file entry |
 | `--skill <name>` | Select one skill by `name:` frontmatter when `<source>` is a monorepo |
+| `--source owner/repo` | Register all supported skills from that exact source; use instead of the positional source |
 
 ### Monorepo skills
 
@@ -189,7 +190,19 @@ agent-toolkit-cli skill add vamseeachanta/workspace-hub/mkdocs
 agent-toolkit-cli skill add https://www.skills.sh/vamseeachanta/workspace-hub/mkdocs
 ```
 
-The parent repo is cloned once under `$AGENT_TOOLKIT_SKILLS_ROOT/_parents/<owner>/<repo>/` (or `~/.agent-toolkit/skills/_parents/<owner>/<repo>/` by default). The library canonical at `<library>/<slug>/` is a symlink into the parent's subfolder; on platforms where symlinks fail, the CLI falls back to a recursive copy and records `materialised: "copy"` in the lock entry.
+A repository-wide add discovers and registers all real skills, including a genuine root skill. Explicit `--skill` or subpath requests still select one child. A collection is a derived source/ref group, not another lock entry or asset kind.
+
+```bash
+agent-toolkit-cli skill add owner/repo
+agent-toolkit-cli skill add --source owner/repo --ref main
+agent-toolkit-cli skill install --source owner/repo --agents standard
+```
+
+Adding registers library entries; installing creates projections only for the requested scope/harnesses. `install --source` selects every registered ref group of that exact source, whereas a TUI collection checkbox controls one source/ref group. It does not discover and activate new upstream skills.
+
+The parent repo is cloned once under `$AGENT_TOOLKIT_SKILLS_ROOT/_parents/<owner>/<repo>[@<ref>]/`. Child canonicals are symlinks into it. Registration preflights the complete batch and refuses collisions instead of partially registering siblings. Existing custom slugs, checkout HEAD, staged/unstaged/untracked files and local commits are preserved. Repeating add does not advance a shared checkout; run `skill update` explicitly before adding a child that exists only upstream. An unsupported/conflicting projection fails rather than reporting an installation that did not happen.
+
+An older rootless whole-repo installation is reconciled automatically inside the requested install or selection-changing Apply, with no conversion command or extra confirmation. Its preserved checkout remains in place; only the targeted wrapper projection is retired after all desired child links can commit. Other legacy harnesses retain their wrapper until separately changed. Source-install never reactivates the fake wrapper. A genuine root skill plus nested skills may not support independent disabling for every reader: root-on/nested-off combinations whose isolation cannot be proven are refused before writes. Errors retain requested changes; a recovery conflict reports remaining ownership rather than overwriting another writer's records or links.
 
 `skill update <slug>` for monorepo entries runs `git fetch` + `git merge` against the parent clone, so local commits merge with upstream cleanly. On conflict the command exits 1 and names the parent clone path (`<library>/_parents/<owner>/<repo>/`); resolve there and re-run `skill update`.
 

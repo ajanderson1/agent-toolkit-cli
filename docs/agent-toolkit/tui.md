@@ -87,6 +87,16 @@ Standard coverage, and it cannot render a harness an asset type does not support
 See [TUI settings schema](tui-settings.md) for the JSON fields, environment
 override, failure handling, and the explicit CLI boundary.
 
+## Skill collections
+
+Multi-skill repositories appear as an expandable **collection** with short child names. The header counts real skills and collections, not extra parent rows. Click the parent name (or press Space/Enter there) to expand/collapse; Info retains full source/ref/path identity.
+
+Each available parent cell summarizes effective selection: unchecked = none, checked = all, **cyan `−` = mixed**. A mixed parent selects all when toggled. Child cells remain independent. The **yellow `-` on a child means pending removal**, not mixed selection. Parent actions include every member, even collapsed or filter-hidden children, and stay within that source/ref, harness and scope. A child filter keeps the parent visible for context. Column-wide toggles visit children once.
+
+Legacy whole-repo exposure is recognized without writing. The first selection-changing Apply targeting it replaces the owned wrapper with the complete desired set of child links, preserving active checkout contents and history. This happens inside normal Apply: there is no conversion button, setup step or extra confirmation. Read/refresh, filters, expansion, toggles, Revert, no-op Apply and unrelated Apply do not reconcile assets. Other harnesses/scopes remain unchanged. A real root skill can make independent nested isolation uncertain; unsupported root-on/nested-off selections fail before writes rather than pretending a nested skill is disabled.
+
+Conflicts leave failed edits queued. A collection failure restores only its affected links/records against fresh locks, preserving unrelated work; failed recovery stays prominent with the remaining ownership conflict. Correct the conflict and retry, or Revert the queued request. Referenced backing checkouts remain preserved even after the final fake wrapper record is retired.
+
 ## How edits flow
 
 Toggling a cell **queues** a pending edit; nothing touches disk until you
@@ -95,9 +105,11 @@ Toggling a cell **queues** a pending edit; nothing touches disk until you
 1. Toggle cells across rows, across scopes, and across asset types to build a pending queue.
 2. ++ctrl+d++ to preview, or ++ctrl+z++ to throw the queue away.
 3. ++ctrl+s++ to apply — the TUI calls the same install/uninstall facades the
-   CLI uses, with the same lock-write-then-project-then-roll-back-on-failure
-   contract across all modified asset types. A failed apply rolls the lock back
-   rather than leaving it lying about disk, and retains failed pending edits for retry.
+   CLI uses across all queued asset types. Failed operations retain pending edits
+   for retry; completed unrelated operations remain completed. A legacy collection
+   reconciles its complete sibling selection before ordinary per-skill work,
+   with targeted rollback on failure. Apply is not one atomic transaction across
+   different asset types.
 
 Same-named assets in different asset types remain separate edits in Diff,
 Revert, and the quit-confirmation count. Each queued edit keeps its own scope

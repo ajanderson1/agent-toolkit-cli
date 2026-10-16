@@ -117,10 +117,7 @@ def test_skill_add_same_parent_twice_reuses_clone(
 def test_skill_add_second_skill_added_after_first_clone(
     tmp_path, monkeypatch, isolated_library,
 ):
-    """#276: adding a skill that was pushed to the monorepo *after* the parent
-    cache was first cloned must succeed. The cache is refreshed (fetch + reset)
-    before resolving the subpath, so a growing monorepo doesn't fail with
-    'SKILL.md not found in parent'."""
+    """#529: registration preserves HEAD; explicit update discovers upstream growth."""
     parent_src = tmp_path / "parent-src"
     subprocess.run(["cp", "-R", str(FIXTURE), str(parent_src)], check=True)
     env = scrub_git_env()
@@ -151,12 +148,16 @@ def test_skill_add_second_skill_added_after_first_clone(
     ):
         subprocess.run(cmd, cwd=parent_src, check=True, env=env)
 
-    # Second add of the *new* skill must succeed despite the stale cache.
-    r2 = runner.invoke(cli, ["skill", "add", parent_url, "--skill", "fresh"])
-    assert r2.exit_code == 0, r2.output
-    assert "not found in parent" not in r2.output
     parents = list((isolated_library / "skills" / "_parents").glob("*/*"))
-    assert len(parents) == 1  # same reused cache, now refreshed
+    before = subprocess.check_output(["git", "-C", str(parents[0]), "rev-parse", "HEAD"])
+    r2 = runner.invoke(cli, ["skill", "add", parent_url, "--skill", "fresh"])
+    assert r2.exit_code != 0
+    assert subprocess.check_output(["git", "-C", str(parents[0]), "rev-parse", "HEAD"]) == before
+    updated = runner.invoke(cli, ["skill", "update", "mkdocs", "-g"])
+    assert updated.exit_code == 0, updated.output
+    r3 = runner.invoke(cli, ["skill", "add", parent_url, "--skill", "fresh"])
+    assert r3.exit_code == 0, r3.output
+    assert len(list((isolated_library / "skills" / "_parents").glob("*/*"))) == 1
 
 
 def test_skill_add_ambiguous_subpath_and_skill_flag_rejected(

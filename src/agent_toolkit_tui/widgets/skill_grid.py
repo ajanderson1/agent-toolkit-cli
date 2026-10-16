@@ -104,6 +104,7 @@ class SkillGrid(Vertical):
         self._selection: tuple[str, ...] | None = None
         # Case-insensitive substring filter on slug (#249). "" = show all.
         self._filter: str = ""
+        self._collapsed: set[tuple[str, str | None]] = set()
 
     def _active_agents(self) -> tuple[str, ...]:
         # Standard column + non-covered main harnesses. The long tail is
@@ -121,6 +122,10 @@ class SkillGrid(Vertical):
     @property
     def row_count(self) -> int:
         return len(self._rows)
+
+    @property
+    def collection_count(self) -> int:
+        return len({r.collection_key for r in self._rows if r.collection_key is not None})
 
     @property
     def row_slugs(self) -> list[str]:
@@ -193,7 +198,8 @@ class SkillGrid(Vertical):
 
     def compose(self) -> ComposeResult:
         # Filter box on top, table below — mirrors the v1 layout (#249).
-        yield GridFilterInput(table_selector="#skill-table", id="skill-filter")
+        yield GridFilterInput(table_selector="#skill-table", id="skill-filter",
+                              placeholder="Filter · parent affects ALL children · mixed − ≠ pending -")
         table = DataTable(id="skill-table", cursor_type="cell", zebra_stripes=True)
         yield table
 
@@ -207,16 +213,43 @@ class SkillGrid(Vertical):
             return
         self._rebuild(table)
 
-    def _visible_rows(self) -> list[SkillRow]:
-        """Rows after applying the active filter (case-insensitive substring).
+    def _members(self, parent: SkillRow) -> list[SkillRow]:
+        return [r for r in self._rows if r.collection_key == parent.collection_key]
 
-        The filter is purely a view over `self._rows`: it never changes the
-        full row set, the pending toggle state, or the apply/status math —
-        only what the table renders and what the cursor can land on.
-        """
-        if self._filter:
-            return [r for r in self._rows if self._filter in r.slug.lower()]
-        return list(self._rows)
+    def _visible_rows(self) -> list[SkillRow]:
+        visible = []
+        seen = set()
+        for row in self._rows:
+            key = row.collection_key
+            if key is None:
+                if not self._filter or self._filter in row.slug.lower():
+                    visible.append(row)
+                continue
+            if key in seen:
+                continue
+            seen.add(key)
+            members = self._members(row)
+            parent_match = self._filter in row.collection_label.lower()
+            matching = [r for r in members if not self._filter or parent_match
+                        or self._filter in (r.slug + ' ' + r.display_name).lower()]
+            if not matching:
+                continue
+            parent = SkillRow(
+                slug=f"collection:{key!r}", source=row.source, ref=row.ref,
+                state="clean", collection_key=key, collection_label=row.collection_label,
+                display_name=row.collection_label, is_collection=True,
+                collection_error=row.collection_error,
+                description="Collection controls affect every child, including collapsed/filter-hidden skills. "
+                            "Mixed (cyan −) means some selected; yellow - means pending removal. "
+                            "Click the name or press Space/Enter there to expand/collapse. " + row.collection_error,
+            )
+            visible.append(parent)
+            if key not in self._collapsed or self._filter:
+                visible.extend(matching)
+        return visible
+
+    def on_data_table_cell_selected(self, event: DataTable.CellSelected) -> None:
+        self._toggle_at(event.coordinate)
 
     def on_input_changed(self, event: Input.Changed) -> None:
         if event.input.id == "skill-filter":
@@ -275,7 +308,7 @@ class SkillGrid(Vertical):
                     ref=row.ref,
                     state=row.state,
                     scope=self._scope,
-                ),
+                ) + (f"\n\nSkill path: {row.skill_path}" if row.skill_path else ""),
             )
         )
 
@@ -297,6 +330,8 @@ class SkillGrid(Vertical):
             canonical_skill_dir,
         )
 
+        if getattr(cell, "exposure_reason", ""):
+            return f"[yellow]Exposure uncertain.[/]\n{cell.exposure_reason}"
         # Unavailable cells (e.g. company-only Paperclip outside a company)
         # have no projection to describe; explain the context requirement
         # before any path resolver that would raise.
@@ -473,13 +508,39 @@ class SkillGrid(Vertical):
         except Exception:
             return
         agent = self._agent_for_column(coord.column)
-        if agent is None:
-            return
         # Cursor indexes the *visible* (filtered) rows, not the full set (#249).
         visible = self._visible_rows()
         if coord.row >= len(visible):
             return
         row = visible[coord.row]
+        if row.is_collection:
+            if coord.column == 0:
+                if row.collection_key in self._collapsed:
+                    self._collapsed.remove(row.collection_key)
+                else:
+                    self._collapsed.add(row.collection_key)
+                self._rebuild(table)
+                return
+            if agent is None:
+                return
+            members = self._members(row)
+            available = [r for r in members if (c := r.cells.get((agent, self._scope)))
+                         and c.available and not c.skipped]
+            if not available:
+                return
+            all_selected = all(self._effective(r, agent) for r in available)
+            target = not all_selected
+            for member in available:
+                key = (self._scope, agent, member.slug)
+                if member.cells[(agent, self._scope)].linked == target:
+                    self._pending.pop(key, None)
+                else:
+                    self._pending[key] = "link" if target else "unlink"
+            self._rebuild(table)
+            self._notify_pending()
+            return
+        if agent is None:
+            return
         cell = row.cells.get((agent, self._scope))
         if cell is None or cell.skipped or not cell.available:
             return
@@ -530,7 +591,7 @@ class SkillGrid(Vertical):
 
         # ID (20) + State (10) = 30. Plus agent cols (14 each).
         # We also account for padding in `adjust_source_column_width`
-        fixed_width = 20 + 10 + (len(self._active_agents()) * 14)
+        fixed_width = self._source_column_fixed_width()
         adjust_source_column_width(table, event, fixed_width)
 
     def _rebuild(self, table: DataTable) -> None:
@@ -548,7 +609,7 @@ class SkillGrid(Vertical):
         source_width = current_source_column_width(table)
         table.clear(columns=True)
         # The asset column is explained by `i`, not header click (#479).
-        table.add_column(asset_type_label("skill"), width=20)
+        table.add_column(asset_type_label("skill"), width=self._name_width())
         active = self._active_agents()
         standard_header = standard_column_header("skill", self._scope)
         assert standard_header is not None, "skills always have a standard slot"
@@ -561,7 +622,9 @@ class SkillGrid(Vertical):
             # column leads; everything after it is implicitly non-standard
             # (group-tag header row removed per AJ demo feedback, #351).
             base = headers.get(agent, harness_label(agent))
-            table.add_column(f"{base} {_INFO_GLYPH}", width=14)
+            if agent == "standard" and self._harness_width() < 14:
+                base = "Standard"
+            table.add_column(f"{base} {_INFO_GLYPH}", width=self._harness_width())
         # State has a column-info modal → glyph it.
         table.add_column(f"State {_INFO_GLYPH}", width=10)
         # Source is passive — no info panel, no glyph.
@@ -569,11 +632,16 @@ class SkillGrid(Vertical):
         self._adjust_source_column_width(table)
         visible = self._visible_rows()
         for row in visible:
-            cells: list[str | Text] = [row.slug]
+            if row.is_collection:
+                disclosure = "▸" if row.collection_key in self._collapsed else "▾"
+                name = f"{disclosure} {row.source.rsplit('/', 1)[-1]} · collection"
+            else:
+                name = ("  ↳ " if row.collection_key else "") + (row.display_name or row.slug)
+            cells: list[str | Text] = [Text(name, no_wrap=True, overflow="ellipsis")]
             for agent in active:
                 cells.append(self._cell_glyph(row=row, agent=agent))
-            cells.append(_STATE_MARKUP.get(row.state, row.state))
-            cells.append(Text(row.source, no_wrap=True, overflow="ellipsis"))
+            cells.append("collection" if row.is_collection else _STATE_MARKUP.get(row.state, row.state))
+            cells.append(Text(row.collection_label if row.is_collection else row.source, no_wrap=True, overflow="ellipsis"))
             table.add_row(*cells, key=f"skill:{row.slug}")
         if visible:
             max_row = len(visible) - 1
@@ -589,7 +657,7 @@ class SkillGrid(Vertical):
         )
 
     def _source_column_fixed_width(self) -> int:
-        return 20 + (14 * len(self._active_agents())) + 10
+        return self._name_width() + (self._harness_width() * len(self._active_agents())) + 10
 
     def _adjust_source_column_width(self, table: DataTable) -> None:
         if self.size.width > 0:
@@ -599,12 +667,41 @@ class SkillGrid(Vertical):
                 self._source_column_fixed_width(),
             )
 
+    def _harness_width(self) -> int:
+        return 11 if self.collection_count and self.size.width < 120 else 14
+
+    def _name_width(self) -> int:
+        if not self.collection_count:
+            return 20
+        longest = max((len(r.display_name or r.slug) + 2 for r in self._rows), default=26)
+        return min(40, max(28, longest))
+
+    def _effective(self, row: SkillRow, agent: str) -> bool:
+        cell = row.cells.get((agent, self._scope))
+        if cell is None or not cell.available or cell.drift or cell.stray or cell.exposure_reason or row.state == "missing":
+            return False
+        pending = self._pending.get((self._scope, agent, row.slug))
+        return pending == "link" or (cell.linked and pending != "unlink")
+
     def _cell_glyph(self, *, row: SkillRow, agent: str) -> str:
+        if row.is_collection:
+            if row.collection_error:
+                return _DRIFT_GLYPH
+            members = self._members(row)
+            cells = [r.cells.get((agent, self._scope)) for r in members]
+            if not any(c and c.available for c in cells):
+                return _UNAVAIL_GLYPH
+            if any(c and (c.drift or c.stray or c.exposure_reason) for c in cells) or any(r.state == "missing" for r in members):
+                return _DRIFT_GLYPH
+            n = sum(self._effective(r, agent) for r in members)
+            return _LINKED_GLYPH if n == len(members) else ("[cyan]−[/]" if n else _UNLINKED_GLYPH)
         cell = row.cells.get((agent, self._scope))
         if cell is None:
             base = " "
         elif not cell.available:
             base = _UNAVAIL_GLYPH
+        elif cell.exposure_reason:
+            base = "[yellow]?[/]"
         elif cell.skipped:
             base = _SKIPPED_GLYPH
         else:

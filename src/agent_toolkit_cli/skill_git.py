@@ -277,7 +277,7 @@ def is_git_repo(repo: Path) -> bool:
 
 
 def status(repo: Path, *, env: dict[str, str] | None) -> GitWorkingTreeStatus:
-    proc = _run(["git", "-C", str(repo), "status", "--porcelain"], env=env)
+    proc = _run(["git", "--no-optional-locks", "-C", str(repo), "status", "--porcelain"], env=env)
     return (
         GitWorkingTreeStatus.CLEAN if not proc.stdout.strip()
         else GitWorkingTreeStatus.DIRTY

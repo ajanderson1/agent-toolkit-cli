@@ -349,6 +349,9 @@ def add(
     if parsed.subpath or parsed.skill_name:
         _add_monorepo(parsed, slug, owned=owned)
     else:
+        from agent_toolkit_cli.skill_collection_register import register
+        if parsed.owner_repo is not None and register(parsed, slug, owned=owned):
+            return
         if owned:
             raise click.UsageError(
                 "--owned only applies to a monorepo add (use --skill, a "
@@ -372,47 +375,11 @@ def _add_source_batch(source: str, ref: str | None, *, owned: bool) -> None:
         except SourceParseError as exc:
             raise click.UsageError(str(exc)) from exc
 
-    from agent_toolkit_cli.skill_paths import parent_clone_path
-    owner, repo = parsed.owner_repo.split("/", 1)
-    parent = parent_clone_path(owner, repo, ref=parsed.ref, env=None)
-    if not parent.exists():
-        parent.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            skill_git.clone_pinned_or_branch(parsed.url, parent, ref=parsed.ref, env=None)
-        except Exception as exc:
-            raise click.ClickException(f"parent clone failed: {exc}") from exc
-    else:
-        try:
-            resolved_ref = skill_git.resolve_ref(parsed.ref, parent)
-            skill_git.fetch_ref(parent, ref=resolved_ref, env=None)
-            skill_git.reset_hard(parent, ref=resolved_ref, env=None)
-        except Exception as exc:
-            raise click.ClickException(f"parent refresh failed: {exc}") from exc
-
-    skill_dirs = sorted(
-        skill_md.parent
-        for skill_md in parent.rglob("SKILL.md")
-        if skill_md.parent != parent
-    )
-    if not skill_dirs:
-        click.echo(f"{source}: no SKILL.md files found")
-        return
-    from agent_toolkit_cli.skill_lock import read_lock
-    existing_entries = read_lock(library_lock_path()).skills
-    for skill_dir in skill_dirs:
-        subpath = skill_dir.relative_to(parent).as_posix()
-        slug = skill_dir.name
-        existing = existing_entries.get(slug)
-        if existing is not None and (
-            existing.source != parsed.owner_repo or existing.skill_path != subpath
-        ):
-            click.echo(
-                f"skipped {slug}: already registered from {existing.source!r} "
-                f"at {existing.skill_path!r}"
-            )
-            continue
-        item = dataclasses.replace(parsed, subpath=subpath, skill_name=None)
-        _add_monorepo(item, None, owned=owned)
+    from agent_toolkit_cli.skill_collection_register import register
+    if not register(parsed, None, owned=owned):
+        if owned:
+            raise click.UsageError("--owned only applies to a monorepo child")
+        _add_single(parsed, None)
 
 
 def _add_single(parsed: ParsedSource, slug: str | None) -> None:
@@ -433,9 +400,9 @@ def _add_single(parsed: ParsedSource, slug: str | None) -> None:
 
     if existing_entry is not None:
         requested = parsed.owner_repo or parsed.url
-        if existing_entry.source != requested:
+        if existing_entry.source != requested or existing_entry.ref != parsed.ref:
             raise click.ClickException(
-                f"{slug}: library entry exists with source {existing_entry.source!r}; "
+                f"{slug}: library entry exists with source {existing_entry.source!r} ref={existing_entry.ref!r}; "
                 f"refusing to overwrite with {requested!r}. "
                 f"Run `skill remove {slug}` first."
             )
@@ -473,97 +440,9 @@ def _add_single(parsed: ParsedSource, slug: str | None) -> None:
 
 
 def _add_monorepo(parsed: ParsedSource, slug: str | None, *, owned: bool = False) -> None:
-    """Clone parent, resolve subpath, symlink library canonical into it."""
-    from agent_toolkit_cli.skill_install import _symlink_or_copy
-    from agent_toolkit_cli.skill_lock import LockEntry, add_entry, read_lock, write_lock
-    from agent_toolkit_cli.skill_ownership import is_owned_owner
-    from agent_toolkit_cli.skill_paths import parent_clone_path
-
-    if parsed.owner_repo is None:
-        raise click.UsageError("monorepo source must resolve to owner/repo")
-    owner, repo = parsed.owner_repo.split("/", 1)
-    owned_flag = owned or is_owned_owner(owner)
-
-    parent_dir = parent_clone_path(owner, repo, ref=parsed.ref, env=None)
-    if not parent_dir.exists():
-        parent_dir.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            skill_git.clone_pinned_or_branch(
-                parsed.url, parent_dir, ref=parsed.ref, env=None,
-            )
-        except Exception as exc:
-            raise click.ClickException(f"parent clone failed: {exc}") from exc
-    else:
-        # Refresh the existing parent cache so a *growing* monorepo resolves
-        # skills added after this cache was first cloned. fetch() alone advances
-        # the remote-tracking ref but leaves the working tree pinned at the old
-        # commit, so the subpath resolution below would not see the new skill
-        # (#276). fetch_ref advances even a shallow clone; the hard reset moves
-        # the working tree onto it. The parent is a read-only cache, so the
-        # reset is safe.
-        ref = skill_git.resolve_ref(parsed.ref, parent_dir)
-        try:
-            skill_git.fetch_ref(parent_dir, ref=ref, env=None)
-            skill_git.reset_hard(parent_dir, ref=ref, env=None)
-        except Exception as exc:
-            click.echo(
-                f"warning: parent refresh failed for {parent_dir}: {exc}",
-                err=True,
-            )
-
-    if parsed.subpath:
-        subpath = parsed.subpath
-    else:
-        # Reaching here without a subpath means the caller routed on
-        # parsed.skill_name being set (see add_cmd's `subpath or skill_name`).
-        assert parsed.skill_name is not None
-        subpath = _resolve_skill_name_to_subpath(
-            parent_dir, parsed.skill_name, source=parsed.owner_repo,
-        )
-
-    skill_root = parent_dir / subpath
-    if not (skill_root / "SKILL.md").exists():
-        raise click.ClickException(
-            f"{subpath}/SKILL.md not found in parent {parsed.owner_repo}"
-        )
-
-    final_slug = slug or parsed.skill_name or Path(subpath).name
-    library_dir = library_skill_path(final_slug)
-    lock_path = library_lock_path()
-    lock = read_lock(lock_path)
-
-    if final_slug in lock.skills:
-        existing = lock.skills[final_slug]
-        requested = parsed.owner_repo
-        if existing.source != requested or existing.skill_path != subpath:
-            raise click.ClickException(
-                f"{final_slug}: library entry exists with source "
-                f"{existing.source!r} skillPath={existing.skill_path!r}; "
-                f"refusing to overwrite with {requested!r} skillPath={subpath!r}. "
-                f"Run `skill remove {final_slug}` first."
-            )
-
-    materialised = "symlink"
-    if not library_dir.exists() and not library_dir.is_symlink():
-        materialised = _symlink_or_copy(skill_root, library_dir)
-
-    parent_sha = (
-        skill_git.head_sha(parent_dir, env=None)
-        if skill_git.is_git_repo(parent_dir) else None
-    )
-    entry = LockEntry(
-        source=parsed.owner_repo,
-        source_type=parsed.type,
-        ref=parsed.ref,
-        skill_path=subpath,
-        upstream_sha=parent_sha,
-        local_sha=None,
-        parent_url=parsed.url,
-        read_only=not owned_flag,
-        extras={"materialised": materialised} if materialised == "copy" else {},
-    )
-    write_lock(lock_path, add_entry(lock, final_slug, entry))
-    click.echo(f"added {final_slug} to library <- {parsed.url}/{subpath}")
+    """Register one child without moving a shared backing checkout."""
+    from agent_toolkit_cli.skill_collection_register import register
+    register(parsed, slug, owned=owned, single=True)
 
 
 def _resolve_skill_name_to_subpath(
@@ -683,14 +562,27 @@ def install_cmd(
 
     if source_filter is not None:
         from agent_toolkit_cli.skill_lock import read_lock
+        from agent_toolkit_cli.skill_collections import catalog
+        from agent_toolkit_cli.skill_install import apply_collection_selection as apply_selection
+        handled = set()
+        try:
+            for group in catalog(scope=scope, home=Path.home(), project=project_root):
+                if group.source != source_filter:
+                    continue
+                apply_selection(group, {a: set(group.children) for a in target_agents},
+                                scope=scope, home=Path.home(), project=project_root)
+                handled.update(group.children)
+                handled.add(group.wrapper)
+                click.echo(f"installed collection {group.label}")
+        except (InstallError, OSError) as exc:
+            raise click.ClickException(str(exc)) from exc
         batch_lock = read_lock(library_lock_path())
         batch_slugs = sorted(
             name for name, entry in batch_lock.skills.items()
-            if entry.source == source_filter
+            if entry.source == source_filter and name not in handled
         )
-        if not batch_slugs:
+        if not batch_slugs and not handled:
             click.echo(f"{source_filter}: no skills found in {scope} scope")
-            return
         for batch_slug in batch_slugs:
             ctx.invoke(
                 install_cmd, slug=batch_slug, source_filter=None,
@@ -714,6 +606,23 @@ def install_cmd(
     except InstallError as exc:
         raise click.ClickException(str(exc)) from exc
 
+    from agent_toolkit_cli.skill_collections import catalog, exposed
+    from agent_toolkit_cli.skill_install import apply_collection_selection as apply_selection
+    try:
+        for group in catalog(scope=scope, home=Path.home(), project=project_root):
+            if slug not in group.children and slug != group.wrapper:
+                continue
+            selections = {}
+            for agent in target_agents:
+                selected = {n for n, c in group.children.items() if exposed(
+                    c, group, agent, scope=scope, home=Path.home(), project=project_root)}
+                selected.update(group.children if slug == group.wrapper else (slug,))
+                selections[agent] = selected
+            apply_selection(group, selections, scope=scope, home=Path.home(), project=project_root)
+            click.echo(f"installed {slug} for {agents_str}")
+            return
+    except (InstallError, OSError) as exc:
+        raise click.ClickException(str(exc)) from exc
     global_lock_path = library_lock_path()
 
     if scope == "global":
