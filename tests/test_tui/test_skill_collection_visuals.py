@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 from textual.coordinate import Coordinate
+from textual.widgets import Static
 
 from agent_toolkit_tui.app import TUIApp
 from agent_toolkit_tui.widgets.skill_grid import SkillGrid
@@ -117,8 +118,10 @@ async def test_visual_matrix(legacy, size):
         await capture("13-all-idempotent-retry")
         payload = legacy / "aj-bootstrap/SKILL.md"
         payload.unlink()
-        app._refresh_skill_view()
+        app.action_refresh()
         assert "!" in grid._cell_glyph(row=grid._visible_rows()[0], agent="standard")
+        bar = str(app.query_one("#status-bar", Static).render())
+        assert "10 linked" in bar and "1 broken" in bar
         await capture("14-missing-document-not-healthy")
         grid._toggle_at(Coordinate(0, 1))
         app.action_apply()
