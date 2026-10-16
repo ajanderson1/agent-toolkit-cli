@@ -27,12 +27,17 @@ while acceptance used a different acquisition path.
   root documents must not be hidden.
 - Project children are exempt from ordinary library-inclusion warnings only when
   the retained library/project legacy backings, source/ref/path, unique child
-  identity and canonical target prove their derivation. Missing payloads and
+  identity and canonical target prove their derivation. A surviving unregistered
+  wrapper projection is still a visible exposure conflict, including at the
+  project Standard slot; collection changes refuse rather than silently retire
+  it or imply only the direct children remain exposed. Missing payloads and
   identity/ownership conflicts remain diagnostic. Neither reader writes a lock.
 - Optional library registration previews and accepted actions invoke the same
   `skills add` command. `--path` selects the exact recorded directory separately
   from frontmatter name/custom slug; `--ref` retains branches, tags or SHA pins.
-  Add remains library-only and has no `-g` option. Registration checks existing
+  A recorded standalone real root explicitly selects `--path .` rather than
+  discovering siblings that may now exist upstream. Add remains library-only
+  and has no `-g` option. Registration checks existing
   canonical ownership instead of treating existence as identity proof.
 - Existing distinct global clones are retained, not deduplicated or reset.
   Their conservative physical-identity ambiguity is not a cleanup instruction.

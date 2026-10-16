@@ -327,9 +327,12 @@ def test_container_presentation_does_not_hide_real_damage(project_collection, da
         git(backings[1], "commit", "-qm", "real root")
         (backings[1] / "SKILL.md").unlink()
     wrapper = next(r for r in rows(project_collection) if r.slug == "wrapper")
-    assert wrapper.state == "missing"
     if damage == "foreign-projection":
-        assert wrapper.cells[("standard", "project")].drift
+        cell = wrapper.cells[("standard", "project")]
+        assert cell.drift and cell.stray and cell.exposure_reason
+        assert not cell.payload_missing
+    else:
+        assert wrapper.state == "missing"
 
 
 def test_library_container_identity_is_not_scoped_mutation_authority(project_collection):
@@ -405,3 +408,64 @@ def test_recorded_custom_slug_is_not_silently_replaced_by_library_alias(project_
         action.apply()
     assert library_lock_path().read_bytes() == before
     assert not library_skill_path("custom-child").exists()
+
+
+@pytest.mark.parametrize("agent", ["standard", "claude-code"])
+def test_unrecorded_matching_wrapper_projection_is_visible_and_diagnosed(project_collection, agent):
+    home, project, backings, _ = project_collection
+    convert(project_collection)
+    link = projection("wrapper", agent, scope="project", home=home, project=project)
+    link.parent.mkdir(parents=True, exist_ok=True)
+    link.symlink_to(backings[1])
+    before = [snapshot(b) for b in backings]
+    project_lock = lock_file_path(scope="project", project=project).read_bytes()
+    library = library_lock_path().read_bytes()
+    wrapper = next(r for r in rows(project_collection) if r.slug == "wrapper")
+    cell = wrapper.cells[(agent, "project")]
+    assert cell.stray and cell.exposure_reason and not cell.payload_missing
+    found = findings(project_collection)
+    assert any(f.slug == "wrapper" and f.finding_type == "stray_symlink" and f.path == link for f in found)
+    group = catalog(scope="project", home=home, project=project)[0]
+    with pytest.raises(skill_collections.InstallError, match="wrapper"):
+        apply_selection(group, {"standard": SELECTED}, scope="project", home=home, project=project)
+    assert link.resolve() == backings[1]
+    assert lock_file_path(scope="project", project=project).read_bytes() == project_lock
+    assert library_lock_path().read_bytes() == library
+    assert [snapshot(b) for b in backings] == before
+
+
+def test_standalone_real_root_readd_with_nested_siblings_selects_only_root(project_collection):
+    home, project, backings, upstream = project_collection
+    (upstream / "SKILL.md").write_text("---\nname: root-name\n---\ngenuine root\n")
+    git(upstream, "add", "SKILL.md")
+    git(upstream, "commit", "-qm", "genuine root")
+    entry = LockEntry(source="local/upstream", source_type="git", skill_path="SKILL.md",
+                      extras={"sourceUrl": upstream.as_uri()})
+    root_canonical = canonical_skill_dir("custom-root", scope="project", home=home, project=project)
+    git(project, "clone", "-q", upstream.as_uri(), str(root_canonical))
+    lock_path = lock_file_path(scope="project", project=project)
+    lock = read_lock(lock_path)
+    lock.skills["custom-root"] = entry
+    write_lock(lock_path, lock)
+    action = skill_doctor._make_readd_library_action(slug="custom-root", entry=entry)
+    args = shlex.split(action.shell_preview)[1:]
+    before = [snapshot(b) for b in backings]
+    project_lock = lock_file_path(scope="project", project=project).read_bytes()
+    preview = CliRunner().invoke(main, args)
+    assert preview.exit_code == 0, preview.output
+    assert set(read_lock(library_lock_path()).skills) == {"wrapper", "custom-root"}
+    assert (library_skill_path("custom-root") / "SKILL.md").read_bytes() == (upstream / "SKILL.md").read_bytes()
+    assert not [f for f in findings(project_collection) if f.slug == "custom-root"]
+    old = os.environ["AGENT_TOOLKIT_SKILLS_ROOT"]
+    try:
+        os.environ["AGENT_TOOLKIT_SKILLS_ROOT"] = str(home / "root-action-library/skills")
+        action.apply()
+        action.apply()
+        assert set(read_lock(library_lock_path()).skills) == {"custom-root"}
+        assert read_lock(library_lock_path()).skills["custom-root"].skill_path == "."
+        assert (library_skill_path("custom-root") / "SKILL.md").read_bytes() == (upstream / "SKILL.md").read_bytes()
+        assert not (home / ".agents/skills/custom-root").exists()
+    finally:
+        os.environ["AGENT_TOOLKIT_SKILLS_ROOT"] = old
+    assert lock_file_path(scope="project", project=project).read_bytes() == project_lock
+    assert [snapshot(b) for b in backings] == before

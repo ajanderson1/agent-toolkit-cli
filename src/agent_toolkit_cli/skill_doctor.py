@@ -237,6 +237,7 @@ def _scan_stray_symlinks(
     findings: list[Finding] = []
     known = set(lock.skills)
     seen: set[Path] = set()
+    projection_dirs = [project / ".agents/skills"] if scope == "project" and project is not None else []
     for agent_name, cfg in AGENTS.items():
         if cfg.is_standard:
             continue
@@ -261,6 +262,8 @@ def _scan_stray_symlinks(
         else:
             assert project is not None
             parent = project / cfg.skills_dir
+        projection_dirs.append(parent)
+    for parent in projection_dirs:
         if parent in seen:
             continue
         seen.add(parent)
@@ -659,6 +662,16 @@ def _make_monorepo_reclone_action(
     )
 
 
+def _library_identity(entry: LockEntry) -> tuple:
+    path = entry.skill_path
+    if entry.parent_url is None and path in (None, "SKILL.md", "."):
+        path = "."
+    return (
+        entry.source, entry.ref, path,
+        _normalise_git_url(entry.parent_url or clone_url_from_entry(entry)),
+    )
+
+
 def _scan_unlisted_entries(
     *, scope: Scope, home: Path | None, project: Path | None, lock: LockFile,
 ) -> list[Finding]:
@@ -675,13 +688,7 @@ def _scan_unlisted_entries(
     for slug, entry in sorted(lock.skills.items()):
         library_entry = lib_lock.skills.get(slug)
         if library_entry is not None:
-            library_url = library_entry.parent_url or clone_url_from_entry(library_entry)
-            project_url = entry.parent_url or clone_url_from_entry(entry)
-            if (
-                (library_entry.source, library_entry.ref, library_entry.skill_path)
-                != (entry.source, entry.ref, entry.skill_path)
-                or _normalise_git_url(library_url) != _normalise_git_url(project_url)
-            ):
+            if _library_identity(library_entry) != _library_identity(entry):
                 findings.append(Finding(
                     finding_type="lock_source_mismatch", slug=slug, scope=scope,
                     path=library_lock_path(home=home),
@@ -723,6 +730,10 @@ def _make_readd_library_action(*, slug: str, entry: LockEntry) -> FixAction | No
         if not entry.skill_path:
             return None
         args += ["--path", entry.skill_path]
+        if not entry.read_only:
+            args.append("--owned")
+    elif parsed.owner_repo is not None and entry.skill_path in (None, "SKILL.md", "."):
+        args += ["--path", "."]
         if not entry.read_only:
             args.append("--owned")
 

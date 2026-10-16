@@ -45,6 +45,7 @@ class Collection:
     wrapper: str | None = None
     backing: Path | None = None
     containers: set[str] = field(default_factory=set)
+    container_conflicts: set[str] = field(default_factory=set)
     error: str = ""
 
     @property
@@ -90,14 +91,21 @@ def catalog(*, scope: str, home: Path | None, project: Path | None) -> list[Coll
             if not roots:
                 continue
             group = groups.setdefault(key, Collection(*key))
-            if _legacy_container(canonical, entry) and all(
-                not (p.exists() or p.is_symlink())
-                or (p.is_symlink() and p.resolve() == canonical.resolve())
-                for agent in ("standard", *(a for a in AGENTS if not AGENTS[a].is_standard))
-                if is_skill_projection_available(agent, scope=scope, project=project)
-                for p in [projection(slug, agent, scope=scope, home=home, project=project)]
-            ):
-                group.containers.add(slug)
+            if _legacy_container(canonical, entry):
+                if all(
+                    not (p.exists() or p.is_symlink())
+                    or (slug in scoped.skills and p.is_symlink() and p.resolve() == canonical.resolve())
+                    for agent in ("standard", *(a for a in AGENTS if not AGENTS[a].is_standard))
+                    if is_skill_projection_available(agent, scope=scope, project=project)
+                    for p in [projection(slug, agent, scope=scope, home=home, project=project)]
+                ):
+                    group.containers.add(slug)
+                else:
+                    group.container_conflicts.add(slug)
+                    group.error = (
+                        f"Conflicting or unregistered wrapper projection {slug} may expose the whole collection. "
+                        "Inspect scoped projections with skills doctor --no-fix; selection cannot safely retire this wrapper."
+                    )
             if slug in scoped.skills:
                 group.wrapper, group.backing = slug, canonical.resolve()
             for root in roots:
@@ -122,7 +130,7 @@ def catalog(*, scope: str, home: Path | None, project: Path | None) -> list[Coll
                     )
     return [
         g for g in groups.values()
-        if len(g.children) > 1 or g.wrapper is not None or g.containers
+        if len(g.children) > 1 or g.wrapper is not None or g.containers or g.container_conflicts
     ]
 
 

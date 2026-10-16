@@ -9,8 +9,9 @@ the row universe is the UNION of the library lock and the scope lock. At
 global scope the two are the same file, so the union is a no-op. At project
 scope: library-only slugs render as `library` (dim, available), slugs in both
 locks render their installed state, and project-lock-only slugs render as
-`unlisted` (warning) — installed and functional, but no longer tracked by the
-library.
+`unlisted` (warning) — installed and functional, but not individually tracked by
+the library. Proven children derived from a retained library collection are an
+exception: their backing ownership supplies the library association.
 """
 from __future__ import annotations
 
@@ -228,6 +229,7 @@ def build_skill_rows(
     groups = catalog(scope=scope, home=home, project=project)
     membership = {}
     managed_paths = set()
+    container_conflicts = {slug: g.error for g in groups for slug in g.container_conflicts}
     for group in groups:
         for container in group.containers:
             universe.pop(container, None)
@@ -291,7 +293,12 @@ def build_skill_rows(
                 else "clean"
             )
         payload = membership[slug][1].path if slug in membership and membership[slug][0].backing is not None else canonical
-        missing_payload = payload.exists() and not (payload / "SKILL.md").is_file()
+        missing_payload = (
+            slug not in container_conflicts
+            and payload.exists() and not (payload / "SKILL.md").is_file()
+        )
+        if slug in container_conflicts:
+            state = "unlisted"
         if missing_payload:
             state = "missing"
         cells: dict[tuple[str, str], SkillCell] = {}
@@ -313,6 +320,12 @@ def build_skill_rows(
                             root_child, group, agent, scope=scope, home=home, project=project,
                         ):
                             cells[(agent, scope)] = replace(cell, exposure_reason="Root projection is active; independent nested isolation is unproven for this target. Apply refuses root-on/nested-off before writes.")
+        if slug in container_conflicts:
+            cells = {
+                k: replace(c, linked=False, stray=c.linked or c.drift or c.stray,
+                           available=False, exposure_reason=container_conflicts[slug])
+                for k, c in cells.items()
+            }
         if missing_payload:
             cells = {k: replace(c, linked=False, payload_missing=True) for k, c in cells.items()}
         if slug in membership and membership[slug][0].error:
