@@ -11,6 +11,7 @@ from agent_toolkit_cli import instructions_install as ii
 from agent_toolkit_cli.cli import main
 from agent_toolkit_cli.instructions_adapters import symlink
 from tests.test_cli.test_instructions_lockless import snapshot
+from tests.test_cli.test_instructions_pointer_identity import seed_dependent_pointers
 
 
 @pytest.fixture(params=['project', 'global'])
@@ -160,6 +161,42 @@ def test_entry_spelling_exact_wins_and_ambiguous_alias_fails_closed(tmp_path, mo
     assert symlink.pointer_slot(first, node=node) != symlink.pointer_slot(second, node=node)
     with pytest.raises(symlink.PointerConflictError, match='cannot identify directory entry'):
         symlink.pointer_slot(alternate, node=node)
+
+
+def seed_stored_lowercase_chain(root, scope, lowercase_dependent=False):
+    project, home, canonical, pointers = seed_dependent_pointers(root, scope)
+    actuals = []
+    for index, (_, documented) in enumerate(pointers):
+        if index == 0 or lowercase_dependent:
+            target = documented.readlink()
+            documented.unlink()
+            actual = documented.with_name(documented.name.lower())
+            actual.symlink_to(target)
+            if not documented.is_symlink():
+                pytest.skip('filesystem does not alias lowercase stored leaf')
+            assert symlink.link_snapshot(actual) == symlink.link_snapshot(documented)
+        else:
+            actual = documented
+        actuals.append(actual)
+    return project, home, canonical, actuals
+
+
+@pytest.mark.parametrize('scope', ['project', 'global'])
+@pytest.mark.parametrize('surface', ['api', 'cli'])
+@pytest.mark.parametrize('lowercase_dependent', [False, True])
+def test_stored_lowercase_chain_removes_dependents_first(tmp_path, monkeypatch, scope, surface, lowercase_dependent):
+    project, home, canonical, actuals = seed_stored_lowercase_chain(tmp_path, scope, lowercase_dependent)
+    monkeypatch.setenv('HOME', str(home))
+    if surface == 'api':
+        for requested in [('claude-code', 'gemini-cli'), ('gemini-cli', 'claude-code')]:
+            plan = ii.plan(scope=scope, project_root=project, home=home, remove_harnesses=requested)
+            assert [a.harness for a in plan.actions] == ['gemini-cli', 'claude-code']
+        ii.apply(scope=scope, project_root=project, home=home, remove_harnesses=requested)
+    else:
+        result = CliRunner().invoke(main, ['--project', str(project), 'instructions', 'uninstall', '--scope', scope])
+        assert result.exit_code == 0, result.output
+    assert all(not pointer.is_symlink() for pointer in actuals)
+    assert canonical.read_text() == 'canonical source\n'
 
 
 def test_missing_parent_planning_is_read_only(tmp_path, monkeypatch):

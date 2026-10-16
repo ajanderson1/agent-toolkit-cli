@@ -163,6 +163,13 @@ def pointer_slot(pointer: Path, *, node: tuple[int, int] | None = None) -> tuple
         parent = pointer.parent.stat()
     except FileNotFoundError:
         return ('path', pointer.parent.resolve(), pointer.name)
+    if node is None:
+        try:
+            info = pointer.lstat()
+        except FileNotFoundError:
+            pass
+        else:
+            node = info.st_dev, info.st_ino
     name = pointer.name
     if node is not None:
         entries = list(pointer.parent.iterdir())

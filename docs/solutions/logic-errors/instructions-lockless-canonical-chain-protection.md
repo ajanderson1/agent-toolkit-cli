@@ -49,6 +49,9 @@ not permission to remove `CLAUDE.md`: deletion breaks canonical readability.
   parent device/inode plus the fixed matrix leaf, and order dependencies using
   traversed entries. For alternate traversal spellings, bounded parent lookup
   prefers exact names, validates node identity and refuses ambiguous matches.
+  Existing action slots must use that same actual-entry lookup: a literal
+  `CLAUDE.md` key misses a dependency through an actual stored `claude.md` entry
+  on case-insensitive filesystems. Only absent slots retain literal leaves.
   Planning absent parents uses resolved paths without creating directories.
   Canonical protection intentionally remains conservative: it may refuse a
   distinct hardlinked sibling sharing a source-chain inode. This safe over-refusal
@@ -78,8 +81,8 @@ not replace the required corrected-head independent recheck/full gate.
 `test_instructions_directory_slots.py` and `test_instruction_directory_slots.py`
 cover native hardlinked symlink entries through API/CLI/TUI in both scopes,
 independent and genuinely dependent removals, distinct-entry opposing intents,
-actual shared-slot coalescing/refusal, parent case aliases and read-only missing
-parents. Portable ambiguous-spelling emulation is explicitly not native filesystem
+actual shared-slot coalescing/refusal, parent case aliases, stored-lowercase
+requested chains (both caller orders), and read-only missing parents. Portable ambiguous-spelling emulation is explicitly not native filesystem
 proof. Fresh b93 review found inode-based deduplication lost an action and also
 manufactured dependency cycles; both must be corrected together.
 
