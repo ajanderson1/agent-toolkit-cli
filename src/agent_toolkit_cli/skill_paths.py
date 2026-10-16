@@ -11,9 +11,9 @@ v2.2 model — library vs install:
   the project tree (see project_store_root).  Project lock at
   <project>/skills-lock.json.
 
-  canonical_skill_dir(slug, scope='global') now delegates to library_skill_path.
+  canonical_skill_dir(slug, scope='global') delegates to library_skill_path.
   canonical_skill_dir(slug, scope='project') is unchanged.
-  The `home` parameter is accepted but IGNORED at global scope (legacy callers).
+  The `home` parameter is honored at global scope when provided.
 
 Public symbols (`canonical_skill_dir`, `lock_file_path`, `library_root`,
 `library_skill_path`, `library_lock_path`, `project_id`,
