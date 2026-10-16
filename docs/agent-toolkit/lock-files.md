@@ -17,13 +17,13 @@ are its installation truth, with no installation record.
 > `skills`, not `agents` / `pi-extensions`.** Their lock module re-exports the
 > skill writer verbatim (`agent_lock.py` and `pi_extension_lock.py` import
 > compatible serializers), which hard-code `"skills"`. The schema is
-> asset-type-blind: the same envelope serves all three, distinguished only by
+> asset-type-blind: the same envelope serves all four source-backed kinds, distinguished by
 > which path field each entry populates. Don't be surprised reading the raw
 > JSON.
 
 ## Scope and location
 
-Each lock file exists at most twice — once per [scope](../glossary.md#scope):
+Locks are scoped: one global library/user record and a separate project record in each consumer repository ([scope](../glossary.md#scope)):
 
 - **Global lock:** `~/.agent-toolkit/<name>-lock.json` (e.g.
   `~/.agent-toolkit/agents-lock.json`).
@@ -36,7 +36,7 @@ lands at `~/.agents/.skill-lock.json` for compatibility with that tool. See
 
 ## Shared envelope (skill, agent, command, pi-extension)
 
-These three share one serializer (`skill_lock.py`), so they have an identical
+These four share a serializer (`skill_lock.py`), so they have a compatible
 structure. The top-level key is always `skills` regardless of asset type:
 
 ```json
@@ -61,20 +61,19 @@ structure. The top-level key is always `skills` regardless of asset type:
 | Field | Type | Meaning |
 |---|---|---|
 | `source` | string | Repo identifier (`owner/repo`), URL, or local path |
-| `sourceType` | string | `github`, `gitlab`, `npm`, or `local` |
+| `sourceType` | string | Source category, including `github`, `gitlab`, `git`, `npm`, or `local` as supported by the kind. |
 | `ref` | string \| null | Git ref pinned at add time (branch, tag, or SHA) |
 | `skillPath` | string \| null | Path within the repo to the skill (populated for skills) |
 | `agentPath` | string \| null | Path within the repo to the agent (populated for agents) |
 | `commandPath` | string \| null | Relative path ending in `COMMAND.md` (populated for commands) |
 | `piExtensionPath` | string \| null | Path within the repo to the pi-extension (populated for pi-extensions) |
 | `upstreamSha` | string \| null | Upstream commit SHA observed at add time — **not** a user pin (see [pin-vs-observed](skill-lock.md)) |
-| `localSha` | string \| null | Local commit SHA (v1 skills only) |
+| `localSha` | string \| null | Recorded local commit SHA where available; inspect live Git for current state. |
 | `parentUrl` | string \| null | Monorepo parent URL when the canonical is a subpath import |
 | `readOnly` | boolean | Whether the entry is read-only (e.g. a public third-party skill) |
 
-What distinguishes an agent entry from a skill or pi-extension entry is **which
-path field is populated** — `skillPath`, `agentPath`, `commandPath`, or `piExtensionPath`. The
-other two are `null`.
+What distinguishes entries across the four kinds is **which
+path field is populated** — `skillPath`, `agentPath`, `commandPath`, or `piExtensionPath`. Unused path fields may be absent or null.
 
 Unknown JSON keys are preserved on round-trip (kept in an `extras` map), so a
 lock file written by a newer version of the tool — or by `npx skills` — is never
@@ -90,6 +89,8 @@ and never downgrades**. New files are written as v1 (clean VCS diffs). Full
 detail in [`skill-lock.md`](skill-lock.md).
 
 ## `mcps-lock.json`
+
+MCP library authority is the **global `mcps-library.json` manifest**, not this lock. Each `mcps/<slug>/config.json` and `mcps/<slug>.toolkit.yaml` pair is materialized output. `mcps migrate` explicitly adopts safe legacy entries; doctor is read-only. Remove retracts locked projections in the selected scope but retains library membership/files.
 
 The MCP lock is the odd one out: a slug maps to a **list** of entries, one per
 harness the server is projected into. This mirrors the fact that one MCP can be
@@ -131,8 +132,8 @@ after checking that no older toolkit version still uses them.
 - **Source-backed kinds use locks.** `doctor` reconciles recorded and actual
   state. Instructions instead inventories actual pointers and protects any
   pointer participating in canonical's source chain.
-- **Atomic writes.** skill / agent / pi-extension / mcp locks write to a temp
-  file and `os.replace()` so a crash mid-write can't corrupt the lock.
+- **A lock is not observed installation truth.** Source metadata may outlive missing or foreign projections; status/doctor and the TUI inspect actual paths/configs. Commands additionally records optional `harnesses` metadata only after successful mutations; reads do not backfill it.
+- **Atomic file replacement is not a global transaction.** Lock writers use temporary-file replacement where implemented; it does not make all projections, manifests, sidecars or cross-kind Apply succeed/roll back together.
 - **Sorted, newline-terminated JSON.** Keys are sorted and a trailing newline is
   written, for clean, stable VCS diffs.
 - **Forward-compatible.** The shared envelope preserves unknown keys; the MCP

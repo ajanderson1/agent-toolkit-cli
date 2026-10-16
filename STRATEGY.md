@@ -26,7 +26,7 @@ is a glance-and-click, not a CLI incantation.
 ## Who it's for
 
 **Primary:** A multi-harness agent power-user managing a personal library of assets
-(skills, agents, instructions, pi-extensions, MCP servers) across many projects. They're
+(skills, agents, commands, instructions, pi-extensions, MCP servers) across many projects. They're
 hiring agent-toolkit to decide exactly which assets are active in a given project before
 turning an agent loose, and to safely keep their own edits to upstream third-party skills
 — without hand-managing symlinks or risking cross-project contamination.
@@ -46,8 +46,8 @@ adoption.
   Qualitative, observed during agent runs.
 - **Time-to-scope** - how long it takes to get a project to exactly the intended asset
   set (TUI glance-and-click vs. fighting symlinks). Qualitative / felt today.
-- **Asset-kind × harness parity** - how many of the six asset kinds (skill, agent,
-  instructions, pi-extension, mcp, bundle) have full verb support across each supported
+- **Asset-kind × harness parity** - how many of the six asset kinds (skill, agent, command,
+  instructions, pi-extension, mcp) have full verb support across each supported
   harness. Measurable from the projection/adapter matrix; regresses when a new kind or
   harness ships with partial coverage.
 
@@ -56,8 +56,8 @@ adoption.
 ### Git-native ownership
 
 Every skill is a real owned repo: merge-aware `update`, `push`-back-upstream, monorepo
-parent clones, SHA-pin-vs-observed-tip in the lockfile, and the lock as single source of
-truth driving projection to disk.
+parent clones, SHA-pin-vs-observed-tip in source metadata, and explicit projection
+control verified against actual files/configuration.
 
 _Why it serves the approach:_ It **is** the bet — durable local edits and granular
 control both fall out of treating skills as owned repos.
@@ -65,7 +65,7 @@ control both fall out of treating skills as owned repos.
 ### TUI control surface
 
 The visual asset grid that makes scoping and toggling instant across harnesses — one tab
-per asset kind (skills, agents, instructions, pi-extensions, MCP).
+per asset kind (skills, agents, commands, instructions, pi-extensions, MCP).
 
 _Why it serves the approach:_ Granular control is only valuable if it's a
 glance-and-click — the TUI is the access half of the approach.
@@ -77,7 +77,7 @@ stranger's machine survives the edge cases the author's never hits. The least-in
 corner historically, and the load-bearing work standing between today and a public release.
 
 _Why it serves the approach:_ Ownership and scoping are only trustworthy if the
-projection on disk provably matches the lock — robustness is what makes the bet safe to
+projection on disk provably matches intended state (with lockless Instructions) — robustness is what makes the bet safe to
 hand to someone else.
 
 ### Cross-harness reach
@@ -95,5 +95,5 @@ reach a second person, not just a second machine.
   toolkit-native bundle manifest (install/validate), and the kinds→asset-types rename.
 - **v4.1.0 (2026-06-14)** - MCP "standard" projection (canonical `.mcp.json`/`mcpServers`)
   and the MCP tab in the TUI asset-types sidebar.
-- **Public release** - PyPI distribution + docs so someone who isn't the author can adopt
+- **Public release goal** - PyPI distribution + docs (PyPI publication is not currently configured; verified package assets ship through GitHub Releases) so someone who isn't the author can adopt
   it. Gated on the Robustness & projection integrity track, not a calendar date.

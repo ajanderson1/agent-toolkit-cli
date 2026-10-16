@@ -15,11 +15,18 @@
 
 Not applicable — no root instruction-file concept at all.
 
-- **Verdict:** unsupported (by design)
+- **Project research verdict:** unsupported (by design)
+- **Global research verdict:** unsupported (by design)
+- **Installation truth:** actual filesystem pointers, no Instructions lock.
 - **Default file:** none
 - **Project / global path:** none / none
 - **Reads `AGENTS.md` natively:** no
 - **Source:** Paperclip company integration in Agent Toolkit is intentionally Skills-only; issue #474
+
+Research verdicts/paths above are preserved evidence, not enabled mutation targets. The shipped `instructions_install.pointer_slots` contract determines actual scope support (native discovery is separate):
+
+- **Toolkit project pointer:** unavailable — no managed pointer slot at this scope
+- **Toolkit global pointer:** unavailable — no managed pointer slot at this scope
 
 ## Skills { #skills }
 

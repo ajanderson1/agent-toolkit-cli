@@ -4,7 +4,7 @@
 
 | Asset type | Support | How |
 |---|:-:|---|
-| [Instructions](../asset-types/instructions.md) | [✅](#instructions) | pointer symlink (`CLAUDE.md` (with `AGENTS.md` as documented fallback) → `AGENTS.md`) |
+| [Instructions](../asset-types/instructions.md) | [✅](#instructions) | research: symlink; toolkit pointer scopes: project, global |
 | [Skills](../asset-types/skills.md) | [✅](#skills) | `.augment/skills` |
 | [Agents (subagents)](../asset-types/agents.md) | [✅](#agents) | symlink |
 | [Commands](../asset-types/commands.md) | [?](#commands) | unknown — no public evidence found |
@@ -13,17 +13,26 @@
 
 ## Instructions { #instructions }
 
-Reads a fixed own-name file (`CLAUDE.md` (with `AGENTS.md` as documented fallback)) instead of `AGENTS.md`. The [instructions asset type](../asset-types/instructions.md) creates a same-name pointer symlink → `AGENTS.md`.
+Reads a fixed own-name file (`CLAUDE.md` (with `AGENTS.md` as documented fallback)) instead of `AGENTS.md`. This is a research classification, not a scope-support promise. The [instructions asset type](../asset-types/instructions.md) creates pointers only at the enabled toolkit slots listed below.
 
-- **Verdict:** symlink
+- **Project research verdict:** symlink
+- **Global research verdict:** symlink
+- **Installation truth:** actual filesystem pointers, no Instructions lock.
 - **Default file:** `CLAUDE.md` (with `AGENTS.md` as documented fallback)
 - **Project / global path:** `./CLAUDE.md` (workspace root) / `~/.augment/rules/` (directory loader; no fixed root file at user scope)
 - **Reads `AGENTS.md` natively:** no (CLAUDE.md takes precedence over AGENTS.md per official rule chain)
 - **Source:** [docs.augmentcode.com/cli/rules](https://docs.augmentcode.com/cli/rules)
 
+Research verdicts/paths above are preserved evidence, not enabled mutation targets. The shipped `instructions_install.pointer_slots` contract determines actual scope support (native discovery is separate):
+
+- **Toolkit project pointer:** `<project>/CLAUDE.md`
+- **Toolkit global pointer:** `~/.augment/CLAUDE.md`
+
+The enabled global pointer links to user-authored `~/.agent-toolkit/AGENTS.md`. Only requested slots change; install never authors canonical content.
+
 ## Skills { #skills }
 
-Supported — every harness in the catalog has a skills directory the [skills asset type](../asset-types/skills.md) projects into.
+The catalog supplies a skills placement for this harness. The [skills asset type](../asset-types/skills.md) uses the shared Standard slot where covered, otherwise its own projection.
 
 - **Project dir:** `.augment/skills`
 - **Global dir:** `~/.augment/skills`
@@ -32,7 +41,7 @@ Supported — every harness in the catalog has a skills directory the [skills as
 
 ## Agents (subagents) { #agents }
 
-Supported via the **symlink** mechanism — see the [agents asset type](../asset-types/agents.md) for what each mechanism means.
+Researched support via **symlink**; check the enabled adapter below — see the [agents asset type](../asset-types/agents.md) for what each mechanism means.
 
 - **Mechanism:** symlink
 - **User / project path:** `~/.augment/agents/<slug>.md` / `.augment/agents/<slug>.md`

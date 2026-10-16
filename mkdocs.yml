@@ -1,6 +1,6 @@
 # Requires the `docs` dependency group: uv sync (mkdocs-material)
 site_name: agent-toolkit-cli
-site_description: Python CLI and Textual TUI for managing AI-agent skills across harnesses
+site_description: Python CLI and Textual TUI for scoped skills, agents, commands, instructions, Pi extensions and MCP servers
 site_url: https://ajanderson1.github.io/agent-toolkit-cli/
 repo_url: https://github.com/ajanderson1/agent-toolkit-cli
 

@@ -15,15 +15,22 @@
 
 Not supported (gap) — no default root instruction file a pointer symlink could satisfy.
 
-- **Verdict:** unsupported (gap)
+- **Project research verdict:** unsupported (gap)
+- **Global research verdict:** unsupported (gap)
+- **Installation truth:** actual filesystem pointers, no Instructions lock.
 - **Default file:** none (rule files toggled via UI / External Rules extension)
 - **Project / global path:** n/a — rule files live under user-chosen folders, enabled per-profile via UI
 - **Reads `AGENTS.md` natively:** no
 - **Source:** [hotovo/aider-desk README](https://github.com/hotovo/aider-desk#readme) — "Rule Files" / "External Rules extension"; no auto-loaded root file documented in README or main `AGENTS.md`
 
+Research verdicts/paths above are preserved evidence, not enabled mutation targets. The shipped `instructions_install.pointer_slots` contract determines actual scope support (native discovery is separate):
+
+- **Toolkit project pointer:** unavailable — no managed pointer slot at this scope
+- **Toolkit global pointer:** unavailable — no managed pointer slot at this scope
+
 ## Skills { #skills }
 
-Supported — every harness in the catalog has a skills directory the [skills asset type](../asset-types/skills.md) projects into.
+The catalog supplies a skills placement for this harness. The [skills asset type](../asset-types/skills.md) uses the shared Standard slot where covered, otherwise its own projection.
 
 - **Project dir:** `.aider-desk/skills`
 - **Global dir:** `~/.aider-desk/skills`
@@ -32,7 +39,7 @@ Supported — every harness in the catalog has a skills directory the [skills as
 
 ## Agents (subagents) { #agents }
 
-Supported via the **config_file+folder** mechanism — see the [agents asset type](../asset-types/agents.md) for what each mechanism means.
+Researched support via **config_file+folder**; check the enabled adapter below — see the [agents asset type](../asset-types/agents.md) for what each mechanism means.
 
 - **Mechanism:** config_file+folder
 - **User / project path:** `~/.aider-desk/agents/<slug>/config.json` / `.aider-desk/agents/<slug>/config.json`

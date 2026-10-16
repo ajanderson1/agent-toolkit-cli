@@ -4,7 +4,7 @@
 
 | Asset type | Support | How |
 |---|:-:|---|
-| [Instructions](../asset-types/instructions.md) | [✅](#instructions) | pointer symlink (`GEMINI.md` → `AGENTS.md`) |
+| [Instructions](../asset-types/instructions.md) | [✅](#instructions) | research: symlink; toolkit pointer scopes: project, global |
 | [Skills](../asset-types/skills.md) | [✅](#skills) | `.agents/skills` |
 | [Agents (subagents)](../asset-types/agents.md) | [✅](#agents) | translate |
 | [Commands](../asset-types/commands.md) | [✅](#commands) | TOML custom commands (`.gemini/commands`) |
@@ -13,17 +13,26 @@
 
 ## Instructions { #instructions }
 
-Reads a fixed own-name file (`GEMINI.md`) instead of `AGENTS.md`. The [instructions asset type](../asset-types/instructions.md) creates a same-name pointer symlink → `AGENTS.md`.
+Reads a fixed own-name file (`GEMINI.md`) instead of `AGENTS.md`. This is a research classification, not a scope-support promise. The [instructions asset type](../asset-types/instructions.md) creates pointers only at the enabled toolkit slots listed below.
 
-- **Verdict:** symlink
+- **Project research verdict:** symlink
+- **Global research verdict:** symlink
+- **Installation truth:** actual filesystem pointers, no Instructions lock.
 - **Default file:** `GEMINI.md`
 - **Project / global path:** `./GEMINI.md` / `~/.gemini/GEMINI.md`
 - **Reads `AGENTS.md` natively:** no
 - **Source:** [`packages/core/src/tools/memoryTool.ts`](https://github.com/google-gemini/gemini-cli/blob/main/packages/core/src/tools/memoryTool.ts) — `export const DEFAULT_CONTEXT_FILENAME = 'GEMINI.md';` + [`docs/cli/gemini-md.md`](https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/gemini-md.md)
 
+Research verdicts/paths above are preserved evidence, not enabled mutation targets. The shipped `instructions_install.pointer_slots` contract determines actual scope support (native discovery is separate):
+
+- **Toolkit project pointer:** `<project>/GEMINI.md`
+- **Toolkit global pointer:** `~/.gemini/GEMINI.md`
+
+The enabled global pointer links to user-authored `~/.agent-toolkit/AGENTS.md`. Only requested slots change; install never authors canonical content.
+
 ## Skills { #skills }
 
-Supported — every harness in the catalog has a skills directory the [skills asset type](../asset-types/skills.md) projects into.
+The catalog supplies a skills placement for this harness. The [skills asset type](../asset-types/skills.md) uses the shared Standard slot where covered, otherwise its own projection.
 
 - **Project dir:** `.agents/skills`
 - **Global dir:** `~/.gemini/skills`
@@ -32,7 +41,7 @@ Supported — every harness in the catalog has a skills directory the [skills as
 
 ## Agents (subagents) { #agents }
 
-Supported via the **translate** mechanism — see the [agents asset type](../asset-types/agents.md) for what each mechanism means.
+Researched support via **translate**; check the enabled adapter below — see the [agents asset type](../asset-types/agents.md) for what each mechanism means.
 
 - **Mechanism:** translate
 - **User / project path:** `~/.gemini/agents/<slug>.md` / `.gemini/agents/<slug>.md`

@@ -15,15 +15,22 @@
 
 Unknown — bounded search surfaced no public evidence.
 
-- **Verdict:** unknown — no public evidence found
+- **Project research verdict:** unknown — no public evidence found
+- **Global research verdict:** unknown — no public evidence found
+- **Installation truth:** actual filesystem pointers, no Instructions lock.
 - **Default file:** none
 - **Project / global path:** none / none
 - **Reads `AGENTS.md` natively:** no
 - **Source:** (exhaustive search: ByteDance/Trae, Alibaba/Qoder, Baidu/Comate, Tencent/CodeBuddy, Volcano Engine — no product literally named "codestudio" found)
 
+Research verdicts/paths above are preserved evidence, not enabled mutation targets. The shipped `instructions_install.pointer_slots` contract determines actual scope support (native discovery is separate):
+
+- **Toolkit project pointer:** unavailable — no managed pointer slot at this scope
+- **Toolkit global pointer:** unavailable — no managed pointer slot at this scope
+
 ## Skills { #skills }
 
-Supported — every harness in the catalog has a skills directory the [skills asset type](../asset-types/skills.md) projects into.
+The catalog supplies a skills placement for this harness. The [skills asset type](../asset-types/skills.md) uses the shared Standard slot where covered, otherwise its own projection.
 
 - **Project dir:** `.codestudio/skills`
 - **Global dir:** `~/.codestudio/skills`

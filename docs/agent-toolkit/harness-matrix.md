@@ -8,15 +8,18 @@ human-friendly [matrix](../matrix.md) and per-harness pages are generated from
 
 ## What this file covers
 
-The toolkit has five [asset types](../glossary.md#asset-type). Three are
-trivial to place and don't need a per-harness research table, so they are
-**not** encoded here:
+The toolkit has six [asset types](../glossary.md#asset-type). Four use
+catalog/maintained generator support data rather than the two research tables
+below:
 
 - **skills** — every harness in the catalog has a skills directory; the set
   lives in `src/agent_toolkit_cli/skill_agents.py`.
 - **MCP servers** — config-injection into four harnesses (`claude-code`,
   `codex`, `opencode`, `pi`); the set lives in `gen_harness_docs.py::MCP_ADAPTERS`.
-- **pi extensions** — Pi-only by definition.
+- **pi extensions** — this toolkit kind targets Pi only.
+- **commands** — `gen_harness_docs.py::COMMAND_SUPPORT`, including shared
+  Standard readers, separate Pi/Gemini projections and explicit global-only
+  deprecated Codex prompts. These are not interchangeable with skill support.
 
 The remaining two asset types **vary per harness** and each carries its own
 researched support table here, in its own section. Both sections follow the
@@ -45,25 +48,29 @@ translated/reshaped file, or its own slot) to be satisfied. This is the
 "how much converges for free vs how much we adapt" view; the supported/gap/
 unknown verdicts are in the two per-asset-type tables below.
 
-Only three asset types have a *shared* convention to comply with. **MCP servers**
-(config-injection into each harness's own config, by name) and **pi extensions**
-(Pi-only) have no cross-harness canonical placement, so compliance doesn't apply.
+Shared placement is kind- and scope-specific. Commands also has a Standard
+`.claude/commands` slot (Claude Code/Neovate; plus Devin in projects as imported
+skills). MCP Standard is **project-only** `.mcp.json` for Claude Code + Pi;
+other MCP targets use concrete config adapters. Pi extensions has no cross-harness
+slot. Catalog presence does not enable every kind or adapter.
 
 | Asset type | Our convention (canonical placement) | Complies natively | Needs adapter work |
 |---|---|--:|--:|
 | `instructions` | canonical `AGENTS.md` at the root | **39 / 55** | 16 (7 pointer-symlink + 9 unsupported) |
-| `skills` | the [general dir](../glossary.md#general) `.agents/skills` | **14 / 55** | 41 (own skills dir each; Paperclip projects to its company library) |
+| `skills` | the [Standard dir](../glossary.md#standard) `.agents/skills` | **15 / 55** | 40 (own skills dir each; Paperclip is company/project-only) |
 | `agents` | the shared [standard slot](#notes-agent-subagent) `.claude/agents/` | **6 / 55** | 22 supported via own slot + 27 unsupported |
 
 **`instructions` — 39 compliant.** The `native` set in the
 [instructions table](#instruction-file-instructions-asset-type-support-all-harnesses).
-The 15 non-compliant split into 7 that need a same-name pointer symlink
-(`augment`, `claude-code`, `codebuddy`, `gemini-cli`, `iflow-cli`, `replit`,
-`tabnine-cli`) and 8 with no pointer-satisfiable root file at all.
+The remaining 16 split into 7 symlink classifications and 9 unsupported/unknown.
+These are research buckets, not a guarantee that a pointer exists at both scopes.
+Global verdicts differ for Codex, OpenCode and Pi, whose supported global slots
+link to user-owned `~/.agent-toolkit/AGENTS.md`. Native classification at one
+scope does not establish global canonical placement at another.
 
-**`skills` — 14 compliant** (read `.agents/skills` directly):
+**`skills` — 15 compliant** (`is_standard` catalog classification):
 `amp`, `antigravity`, `cline`, `codex`, `cursor`, `deepagents`, `dexto`,
-`firebender`, `gemini-cli`, `github-copilot`, `kimi-cli`, `opencode`, `replit`,
+`firebender`, `gemini-cli`, `github-copilot`, `kimi-cli`, `opencode`, `pi`, `replit`,
 `warp`. Source: `is_standard` (skills_dir == `.agents/skills`) in
 `skill_agents.py`. Every other catalog harness gets its own skills directory.
 
@@ -91,11 +98,14 @@ per-harness pointer symlink to a canonical `AGENTS.md` satisfy it? Each
 Per-harness "what I checked" evidence trails live in
 `docs/agent-toolkit/research/instructions-fragments/`.
 
-**Summary:** 39 native · 7 symlink · 4 unsupported (gap) · 2 unsupported (by design) · 2 unknown.
+**Project-classification summary:** 39 native · 7 symlink · 4 unsupported (gap) · 3 unsupported (by design) · 2 unknown.
+Global classifications are recorded separately in the table (36 native, 10 symlink,
+4 gaps, 3 by design, 2 unknown). Actual mutation also requires a supported pointer
+path. Installation is lockless filesystem truth; no legacy lock grants ownership.
 
-The 39 `native` readers cost zero adapter work — the canonical `AGENTS.md`
-satisfies them as-is. The 7 `symlink` harnesses (alphabetical) are the only
-ones needing a pointer: `augment`, `claude-code`, `codebuddy`, `gemini-cli`,
+Native readers need no toolkit project pointer, but may use scope-specific
+workspace/discovery paths rather than our root canonical. The 7 project `symlink`
+classifications (alphabetical) are: `augment`, `claude-code`, `codebuddy`, `gemini-cli`,
 `iflow-cli`, `replit`, `tabnine-cli`.
 
 ### Mechanisms (instructions)
@@ -181,8 +191,9 @@ This asset type has **one supported mechanism** (pointer symlinks only — no
 
 - **Massively native-skewed result.** 39/55 harnesses (71%) read `AGENTS.md`
   natively at one or both scopes. The `AGENTS.md` standard has become the
-  cross-harness default — the implementation surface is just the 7
-  `symlink`-verdict harnesses.
+  cross-harness default. Pointer mutation is separately bounded by supported
+  paths/scope; Codex, OpenCode and Pi have managed global slots despite native
+  project classifications.
 - **Project-only natives.** Several `native` harnesses (e.g. `command-code`,
   `kode`) read `AGENTS.md` at project scope but have no documented global/user
   instruction-file path. Availability is scope-specific; native project readers
@@ -199,8 +210,9 @@ This asset type has **one supported mechanism** (pointer symlinks only — no
   `.continue/rules/*.md` directories but no single root file → file-vs-directory
   rule → `gap`.
 - **The "standard" set is large.** The 39 `native` readers ARE the "standard"
-  column for this asset type — rendered in the TUI as informational (always
-  satisfied, no toggle).
+  project classification set — informational rather than a mutable pointer.
+  A native classification is not proof canonical content exists or that every
+  global path is managed.
 
 Tracked in #269.
 
@@ -215,7 +227,7 @@ one adapter behaviour (`src/agent_toolkit_cli/skill_agents.py`, excluding the
 synthetic `standard` entry). Per-harness "what I checked" evidence trails and v1
 baseline deltas live in `docs/agent-toolkit/research/subagent-fragments/`.
 
-**Summary:** 28 supported · 11 unsupported (gap) · 10 unsupported (by design) · 5 unknown.
+**Research summary:** 28 supported mechanisms · 11 unsupported (gap) · 11 unsupported (by design) · 5 unknown. Codex and Firebender adapters remain disabled; researched mechanism support is not enabled installation support.
 
 The 28 supported harnesses, by mechanism:
 
