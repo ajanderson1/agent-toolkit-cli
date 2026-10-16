@@ -11,9 +11,14 @@ Templates use {HOME}, {PROJECT}, {POINTER_NAME} placeholders.
 """
 from __future__ import annotations
 
+from collections import deque
+from collections.abc import Iterator
 from dataclasses import dataclass
+import os
 from pathlib import Path
+import stat
 from typing import Literal
+import unicodedata
 
 
 class PointerConflictError(RuntimeError):
@@ -103,6 +108,151 @@ def _pointer_path(
     return _expand(template, home=home, project=project_root, pointer_name=cell["pointer_name"])
 
 
+class CanonicalChainError(RuntimeError):
+    """A removal would break (or cannot safely inspect) canonical's source chain."""
+
+
+@dataclass(frozen=True)
+class PointerState:
+    linked: bool = False
+    conflict: bool = False
+    error: str = ""
+
+
+def canonical_usable(canonical: Path) -> bool:
+    try:
+        if not canonical.is_file():
+            return False
+        with canonical.open('rb'):
+            return True
+    except (OSError, RuntimeError):
+        return False
+
+
+def inspect_pointer(pointer: Path, canonical: Path) -> PointerState:
+    """Read installation truth without creating or repairing anything."""
+    try:
+        try:
+            mode = pointer.lstat().st_mode
+        except FileNotFoundError:
+            return PointerState()
+        if stat.S_ISLNK(mode):
+            canonical_chain(pointer)
+            canonical_chain(canonical)
+            linked = pointer.resolve() == canonical.resolve()
+            return PointerState(linked=linked, conflict=not linked)
+        return PointerState(conflict=True)
+    except (OSError, RuntimeError) as exc:
+        return PointerState(conflict=True, error=str(exc))
+
+
+def link_snapshot(pointer: Path) -> tuple[int, int, str] | None:
+    """Identify the symlink node itself, never its final resolved source file."""
+    try:
+        info = pointer.lstat()
+    except FileNotFoundError:
+        return None
+    if not stat.S_ISLNK(info.st_mode):
+        return None
+    return info.st_dev, info.st_ino, os.readlink(pointer)
+
+
+def pointer_slot(pointer: Path, *, node: tuple[int, int] | None = None) -> tuple:
+    """Identify a fixed-name slot, disambiguating alternate chain spellings if needed."""
+    try:
+        parent = pointer.parent.stat()
+    except FileNotFoundError:
+        return ('path', pointer.parent.resolve(), pointer.name)
+    if node is None:
+        try:
+            info = pointer.lstat()
+        except FileNotFoundError:
+            pass
+        else:
+            node = info.st_dev, info.st_ino
+    name = pointer.name
+    if node is not None:
+        entries = list(pointer.parent.iterdir())
+        exact = [entry for entry in entries if entry.name == name]
+        if exact:
+            matches = exact
+        else:
+            normalized = unicodedata.normalize('NFC', name).casefold()
+            matches = [entry for entry in entries
+                       if unicodedata.normalize('NFC', entry.name).casefold() == normalized]
+        validated = []
+        for entry in matches:
+            info = entry.lstat()
+            if (info.st_dev, info.st_ino) == node:
+                validated.append(entry)
+        if len(validated) != 1:
+            raise PointerConflictError(f'cannot identify directory entry for {pointer}; refused batch')
+        name = validated[0].name
+    return ('directory', parent.st_dev, parent.st_ino, name)
+
+
+def canonical_chain(canonical: Path) -> set[tuple[int, int]]:
+    """Collect physical symlink-node identities, including directory-component hops."""
+    return {node for _, node in _symlink_chain(canonical)}
+
+
+def pointer_chain(pointer: Path) -> set[tuple]:
+    """Collect traversed entries, not every hardlink sharing a traversed node."""
+    return {pointer_slot(path, node=node) for path, node in _symlink_chain(pointer)}
+
+
+def _symlink_chain(canonical: Path) -> Iterator[tuple[Path, tuple[int, int]]]:
+    path = canonical.absolute()
+    pending = deque(path.parts[1:])
+    resolved = Path(path.anchor)
+    hops = 0
+    while pending:
+        part = pending.popleft()
+        if part == '..':
+            resolved = resolved.parent
+            continue
+        if part == '.':
+            continue
+        candidate = resolved / part
+        try:
+            info = candidate.lstat()
+        except FileNotFoundError:
+            info = None
+        if info is not None and stat.S_ISLNK(info.st_mode):
+            hops += 1
+            if hops > 40:
+                raise CanonicalChainError(f'cannot inspect canonical chain at {canonical}: symlink loop or too many hops')
+            yield candidate, (info.st_dev, info.st_ino)
+            target = Path(os.readlink(candidate))
+            if target.is_absolute():
+                resolved = Path(target.anchor)
+                parts = target.parts[1:]
+            else:
+                parts = target.parts
+            pending.extendleft(reversed(parts))
+        else:
+            resolved = candidate
+
+
+def preflight_removals(canonical: Path, pointers: list[Path]) -> None:
+    if not pointers:
+        return
+    try:
+        chain = canonical_chain(canonical)
+        for pointer in pointers:
+            node = link_snapshot(pointer)
+            if node is not None and node[:2] in chain:
+                raise CanonicalChainError(
+                    f'refused removal batch: {pointer} participates in canonical '
+                    f'AGENTS.md symlink chain ({canonical}). Reorganize your source '
+                    'chain manually before uninstalling; no chain links were changed.'
+                )
+    except (OSError, RuntimeError) as exc:
+        if isinstance(exc, CanonicalChainError):
+            raise
+        raise CanonicalChainError(f'cannot safely inspect canonical chain at {canonical}: {exc}') from exc
+
+
 @dataclass(frozen=True)
 class Adapter:
     """Per-harness install/uninstall closure."""
@@ -118,21 +268,16 @@ class Adapter:
     ) -> None:
         """Create the pointer symlink → canonical. Refuse on conflict."""
         pointer = _pointer_path(self.harness, scope, project_root, home)
+        state = inspect_pointer(pointer, canonical)
+        if state.linked:
+            return
+        if state.conflict:
+            raise PointerConflictError(
+                f'{pointer} is a real file or foreign/unresolvable symlink; refused. '
+                f'Move it manually and re-run install. {state.error}'
+            )
         pointer.parent.mkdir(parents=True, exist_ok=True)
-        if pointer.is_symlink():
-            current = pointer.resolve()
-            if current == canonical.resolve():
-                return  # idempotent no-op
-            raise PointerConflictError(
-                f"{pointer.name} points elsewhere ({current}); refused. "
-                "Remove it manually and re-run install."
-            )
-        if pointer.exists():
-            raise PointerConflictError(
-                f"{pointer.name} is a real file at {pointer}; refused. "
-                "Move or delete it manually and re-run install."
-            )
-        pointer.symlink_to(canonical)
+        pointer.symlink_to(canonical.absolute())
 
     def uninstall(
         self,
@@ -141,13 +286,24 @@ class Adapter:
         project_root: Path | None,
         canonical: Path,
         home: Path | None,
+        expected_link: tuple[int, int, str] | None = None,
     ) -> None:
-        """Remove only our exact pointer. Real files and foreign symlinks untouched."""
+        """Remove only the prevalidated symlink; protect canonical's physical source chain."""
         pointer = _pointer_path(self.harness, scope, project_root, home)
-        if not pointer.is_symlink():
-            return  # real file or absent — leave alone
-        if pointer.resolve() != canonical.resolve():
-            return  # foreign symlink — not ours
+        original = link_snapshot(pointer)
+        if expected_link is not None and original != expected_link:
+            raise PointerConflictError(f'{pointer} changed since removal planning; inspect it before retrying')
+        state = inspect_pointer(pointer, canonical)
+        if state.error:
+            raise PointerConflictError(f'cannot inspect {pointer}: {state.error}')
+        if not state.linked:
+            if expected_link is not None:
+                raise PointerConflictError(f'{pointer} no longer resolves to canonical; requested removal was not completed')
+            return
+        preflight_removals(canonical, [pointer])
+        current = inspect_pointer(pointer, canonical)
+        if not current.linked or current.error or link_snapshot(pointer) != original:
+            raise PointerConflictError(f'{pointer} changed during removal; inspect it before retrying')
         pointer.unlink()
 
 

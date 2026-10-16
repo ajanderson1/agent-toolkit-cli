@@ -4,6 +4,29 @@
 
 ## Commands
 
+### `instructions`
+
+Instructions manages assistant pointers to a user-authored canonical `AGENTS.md`,
+not an upstream clone or installation registry. Actual symlinks determine status;
+legacy Instructions locks are ignored and preserved.
+
+```text
+agent-toolkit-cli instructions install [--scope project|global] [--harness NAME]...
+agent-toolkit-cli instructions uninstall [--scope project|global]
+agent-toolkit-cli instructions status [--scope project|global]
+agent-toolkit-cli instructions doctor [--scope project|global] [--no-fix]
+agent-toolkit-cli instructions list [--scope project|global] [--format table|json]
+```
+
+Scope defaults to project. Canonical is `<project>/AGENTS.md` or global
+`~/.agent-toolkit/AGENTS.md`; the content may be a symlink to a versioned source.
+Install never prunes unrequested pointers or overwrites foreign files. Uninstall
+preflights the whole removal batch and refuses any canonical-source-chain
+participant, including multi-hop chains. `status` distinguishes `ok`, `missing`,
+`broken` and `conflict`; correct manual links are clean in doctor. Only explicitly
+confirmed regular-file adoption changes content location; `--no-fix` is read-only.
+See [Instructions](../asset-types/instructions.md) for safety and TUI behavior.
+
 ### `skill`
 
 Manage skills via per-skill upstream git repos + a per-scope lock file. The group has the plural alias `skills`; `skill list` aliases to `ls` and `skill remove` to `rm`.

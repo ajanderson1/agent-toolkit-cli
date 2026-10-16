@@ -1,14 +1,14 @@
 # `skill` subcommand — lock-file-driven skill management
 
 > For the schema of **all five** lock files at a glance — and how the agent,
-> mcp, pi-extension, and instructions locks differ from this one — see
+> command, mcp, and pi-extension locks differ from this one — see
 > [Lock files](lock-files.md). This page is the skills-specific deep dive.
 
 ## Overview
 
 The `skill` subgroup manages skills using a **per-skill upstream git repo + lock file** model, mirroring the on-disk layout and lock-file schema of [`vercel-labs/skills`](https://github.com/vercel-labs/skills). Lock files written by this CLI are readable by `npx skills`, and skills installed by either tool live in the same canonical directory.
 
-The skill path keeps no metadata in the monorepo: each skill is a standalone git repository and the lock file is the SSOT for installation state. The other first-class asset types — agent, mcp, pi-extension, instructions — each have their own built install machinery and lock file (`agents-lock.json`, `mcps-lock.json`, etc.); see the [CLI reference](cli.md).
+The skill path keeps no metadata in the monorepo: each skill is a standalone git repository and the lock file is the SSOT for installation state. Agent, command, mcp and pi-extension have their own install machinery and lock files (`agents-lock.json`, `mcps-lock.json`, etc.); Instructions uses actual symlinks without a lock; see the [CLI reference](cli.md).
 
 The defining behaviour: **`update` is a merge-aware operation.** Local edits to a skill (the "self-improvement" case) survive a pull from upstream when there is no overlap, and surface as real `git` merge conflicts when there is.
 
@@ -178,7 +178,7 @@ The reverse also holds: a skill installed via `npx skills add owner/repo` lands 
 ## What this design intentionally does **not** do
 
 - **Auto-push** of self-improvements. There is no session-end hook that pushes for you. Run `skill push` manually (or wire it into your own workflow). A follow-on design will revisit auto-push once the manual flow is proven.
-- **Other asset types in this lock.** This page covers skills only. Agent, mcp, pi-extension, and instructions are first-class built asset types now, each with its own install machinery and lock file (`agents-lock.json`, `mcps-lock.json`, …) — see the [CLI reference](cli.md). They are not recorded in `skills-lock.json`.
+- **Other asset types in this lock.** This page covers skills only. Agent, command, mcp and pi-extension have their own install machinery and locks (`agents-lock.json`, `mcps-lock.json`, …); Instructions has lockless pointer operations — see the [CLI reference](cli.md). They are not recorded in `skills-lock.json`.
 - **Submitting to the public skills.sh catalogue.** Your repos can be private; we use the same lock format and addressing scheme without depending on the catalogue.
 
 ## Where to look next

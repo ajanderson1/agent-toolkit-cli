@@ -16,7 +16,7 @@ shipped PARALLEL MODULES PER ASSET TYPE, now fact across four asset types:
 
   skills       → skill_install.py / skill_lock.py / skill_paths.py
   agents       → agent_install.py / agent_lock.py / agent_paths.py   (PR #268)
-  instructions → instructions_install.py / instructions_lock.py / instructions_paths.py
+  instructions → instructions_install.py / instructions_paths.py (lockless pointers)
   pi-extension → pi_extension_install.py / pi_extension_lock.py / pi_extension_paths.py
 
 The shared seam is a asset-type-agnostic core (_install_core.py) that each facade binds

@@ -1,4 +1,4 @@
-"""`instructions uninstall` — remove our pointers, clear lock entry."""
+"""`instructions uninstall` — remove owned scoped pointers, protecting source chains."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -13,7 +13,7 @@ from agent_toolkit_cli import instructions_install
     "--scope",
     type=click.Choice(["project", "global"]),
     default="project",
-    help="Lock scope.",
+    help="Pointer scope.",
 )
 @click.pass_context
 def uninstall_cmd(ctx: click.Context, scope: str) -> None:
@@ -25,7 +25,10 @@ def uninstall_cmd(ctx: click.Context, scope: str) -> None:
     else:
         home = Path.home()
 
-    instructions_install.uninstall(
-        scope=scope, project_root=project_root, home=home
-    )
+    try:
+        instructions_install.uninstall(
+            scope=scope, project_root=project_root, home=home
+        )
+    except (OSError, RuntimeError) as exc:
+        raise click.ClickException(f'{exc}; inspect status before retrying') from exc
     click.echo(f"uninstalled instructions pointers at {scope} scope")
