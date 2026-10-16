@@ -116,6 +116,27 @@ def _untracked_row(slug: str) -> PiExtensionRow:
     )
 
 
+def _local_package_row(slug: str, *, spec: str = "../local-pkg") -> PiExtensionRow:
+    cell = PiCell(
+        global_loaded=True,
+        project_loaded=False,
+        origin="local-package",
+        managed=False,
+        package_spec=spec,
+        config_path="/tmp/home/.pi/agent/settings.json",
+    )
+    return PiExtensionRow(
+        slug=slug,
+        origin="local-package",
+        source=spec,
+        global_cell=cell,
+        project_cell=cell,
+        managed=False,
+        global_config_path="/tmp/home/.pi/agent/settings.json",
+        global_package_spec=spec,
+    )
+
+
 # ---------------------------------------------------------------------------
 # PiGrid unit tests (widget-level)
 # ---------------------------------------------------------------------------
@@ -522,6 +543,38 @@ async def test_untracked_row_is_non_interactive():
         await pilot.press("space")
         # Must remain empty
         assert g.pending_entries() == {}
+
+
+@pytest.mark.asyncio
+async def test_local_package_row_is_non_interactive_and_explains_untracked():
+    """Local package rows cannot be toggled; info body explains untracked local filesystem package."""
+
+    class _A(App):
+        def compose(self) -> ComposeResult:
+            yield PiGrid([_local_package_row("local-ext")], id="g")
+
+    app = _A()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        g = app.query_one("#g", PiGrid)
+        table = app.query_one("#pi-table", DataTable)
+
+        # Origin markup and label
+        row = g._visible_rows()[0]
+        assert g._origin_label(row) == "local package (untracked)"
+        assert "local package · untracked" in g._origin_glyph(row)
+
+        # Non-interactive toggle
+        table.cursor_coordinate = table.cursor_coordinate.__class__(row=0, column=1)
+        table.focus()
+        await pilot.pause()
+        await pilot.press("space")
+        assert g.pending_entries() == {}
+
+        # Info body explains untracked local package
+        info = g._info_body(row=row, scope="global")
+        assert "untracked local filesystem package" in info
+        assert "../local-pkg" in info
 
 
 def test_pending_changed_message_carries_count():

@@ -19,6 +19,8 @@ from ._common import scope_and_roots, scope_banner
 @click.option("-p", "--project", "project_flag", is_flag=True)
 @click.option("--no-fix", is_flag=True,
               help="Report only; do not prompt or mutate.")
+@click.option("--repair", is_flag=True,
+              help="Prompt to repair fixable findings (required for unmanaged asset import).")
 @click.option("--repair-foreign", is_flag=True,
               help="Allow fixing foreign symlinks (off by default).")
 @click.pass_context
@@ -26,6 +28,7 @@ def doctor_cmd(
     ctx: click.Context, slugs: tuple[str, ...],
     global_: bool, project_flag: bool,
     no_fix: bool, repair_foreign: bool,
+    repair: bool,
 ) -> None:
     """Diagnose and (optionally) repair skill-installation drift."""
     scope, home, project_root, implicit = scope_and_roots(
@@ -43,6 +46,7 @@ def doctor_cmd(
             slugs=slugs or None,
             scope=scope, home=home, project=project_root,
             repair_foreign=repair_foreign,
+            repair=repair,
         )
     except ExternalProjectionRegistryError as exc:
         raise click.ClickException(

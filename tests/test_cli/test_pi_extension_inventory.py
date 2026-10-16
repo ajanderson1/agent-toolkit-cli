@@ -32,6 +32,24 @@ def test_loose_file_extension(tmp_path):
     assert {r.slug: r for r in records}["hooks"].origin == "untracked"
 
 
+def test_local_package_is_visible_and_not_npm_managed(tmp_path, monkeypatch):
+    package = tmp_path / ".pi" / "local-package"
+    package.mkdir(parents=True)
+    (package / "package.json").write_text('{"name":"local-package"}')
+    settings = tmp_path / ".pi" / "agent" / "settings.json"
+    _seed_packages(settings, "../local-package")
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    rec = {r.slug: r for r in build_inventory(home=tmp_path)}["../local-package"]
+
+    assert rec.origin == "local-package"
+    assert rec.source == "../local-package"
+    assert rec.managed is False
+    assert rec.global_loaded is True
+    assert rec.global_package_spec == "../local-package"
+    assert rec.global_config_path == settings
+
+
 def test_npm_package_is_tracked_registry(tmp_path):
     s = tmp_path / ".pi" / "agent" / "settings.json"
     s.parent.mkdir(parents=True)

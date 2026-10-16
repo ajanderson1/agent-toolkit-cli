@@ -731,3 +731,68 @@ def test_unlisted_without_canonical_is_missing(git_sandbox, tmp_path: Path, monk
     demo = [row for row in rows if row.slug == "demo"]
     assert len(demo) == 1
     assert demo[0].state == "missing"
+
+
+def test_filesystem_discovery_unmanaged_standalone_and_bundle(tmp_path: Path, monkeypatch):
+    """#515: Unmanaged on-disk skill directories and bundles surface as unlisted rows."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    lib = tmp_path / ".agent-toolkit" / "skills"
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(lib))
+
+    # 1. Standalone unmanaged skill
+    standalone = lib / "standalone-skill"
+    standalone.mkdir(parents=True)
+    (standalone / "SKILL.md").write_text("---\ndescription: Standalone unmanaged skill\n---\n")
+
+    # 2. Bundle with container and nested skills
+    bundle = lib / "superpowers"
+    (bundle / "skills" / "brainstorming").mkdir(parents=True)
+    (bundle / "skills" / "brainstorming" / "SKILL.md").write_text(
+        "---\ndescription: Brainstorming skill\n---\n"
+    )
+    (bundle / "SKILL.md").write_text("---\ndescription: Superpowers bundle\n---\n")
+
+    # 3. Dangling symlink (must not crash or appear)
+    dangling = lib / "dangling-link"
+    dangling.symlink_to(tmp_path / "does-not-exist")
+
+    rows = build_skill_rows(scope="global", home=tmp_path, project=None)
+    slugs = {r.slug for r in rows}
+    assert "standalone-skill" in slugs
+    assert "superpowers" in slugs
+    assert "superpowers:brainstorming" in slugs
+    assert "dangling-link" not in slugs
+
+    by_slug = {r.slug: r for r in rows}
+    assert by_slug["standalone-skill"].state == "unlisted"
+    assert by_slug["standalone-skill"].source == "untracked"
+    assert by_slug["standalone-skill"].description == "Standalone unmanaged skill"
+
+    assert by_slug["superpowers:brainstorming"].state == "unlisted"
+    assert by_slug["superpowers:brainstorming"].source == "untracked"
+    assert by_slug["superpowers:brainstorming"].description == "Brainstorming skill"
+
+
+def test_filesystem_discovery_escaping_symlink_ignored(tmp_path: Path, monkeypatch):
+    """#515: Symlinks escaping the library root are not traversed."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    lib = tmp_path / ".agent-toolkit" / "skills"
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(lib))
+
+    # Outside skill directory
+    outside = tmp_path / "outside_secret"
+    outside.mkdir(parents=True)
+    (outside / "SKILL.md").write_text("---\ndescription: Outside secret skill\n---\n")
+
+    # Inside bundle with an escaping symlink
+    bundle = lib / "sneaky-bundle"
+    bundle.mkdir(parents=True)
+    (bundle / "SKILL.md").write_text("---\ndescription: Sneaky bundle\n---\n")
+    (bundle / "escaped").symlink_to(outside)
+
+    rows = build_skill_rows(scope="global", home=tmp_path, project=None)
+    slugs = {r.slug for r in rows}
+    assert "sneaky-bundle" in slugs
+    assert "sneaky-bundle:escaped" not in slugs
+
+
