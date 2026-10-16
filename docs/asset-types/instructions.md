@@ -13,7 +13,9 @@ Manual links are recognized just like toolkit-created links.
   elsewhere. Install/uninstall never author or delete that content.
 - **Pointer:** an assistant's expected file (for example `CLAUDE.md`) symlinked
   to canonical. Relative and chained links with the same resolved target count;
-  matching text in a regular file does not.
+  matching text in a regular file does not. Directory-entry aliases are checked
+  by actual symlink-node identity, including case/Unicode aliases where the
+  filesystem aliases them, rather than by string spelling alone.
 
 Most assistants read project `AGENTS.md` natively. Compatibility readers get
 own-name pointers. Codex, OpenCode and Pi remain native project readers but have

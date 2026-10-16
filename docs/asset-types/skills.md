@@ -1,82 +1,33 @@
 # Skills
 
-The `skill` [asset type](../glossary.md#asset-type) manages reusable skill folders (a
-`SKILL.md` plus supporting files) and projects them into every harness you
-use. The lock file and layout are byte-compatible with
-[`vercel-labs/skills`](https://github.com/vercel-labs/skills).
+Skills are `SKILL.md` folders with optional references, scripts and supporting files. **Add registers library content; install makes it visible.** Canonicals are standalone Git checkouts or symlinks into shared parent checkouts; harness projections point to those canonicals.
 
-## How it works
+- Global library: `~/.agent-toolkit/skills/`; global lock: `~/.agent-toolkit/skills-lock.json`.
+- Project backing store: `~/.agent-toolkit/projects/<id>/skills/`, outside the consumer repo; project lock: `<project>/skills-lock.json`.
+- Standard visibility: `.agents/skills/<slug>` (project), `~/.agents/skills/<slug>` (global). Other harnesses use their catalog-specific slots.
+- `AGENT_TOOLKIT_SKILLS_ROOT` relocates the skills library and associated state; it is not an override for every kind.
 
-Skills live once in the [library](../glossary.md#library)
-(`~/.agent-toolkit/skills/<slug>`, a git clone of the skill's source repo) and
-are [projected](../glossary.md#projection) by symlink into each harness's
-skills directory — `.claude/skills/`, `.gemini/skills/`, and so on. Harnesses
-that read the [general](../glossary.md#general) directory (`.agents/skills`)
-need no per-harness symlink at all.
-
-- **Lock file:** `skills-lock.json` (project) / `~/.agent-toolkit/skills-lock.json` (global)
-- **Source pinning:** each entry records repo, `skillPath`, `ref`, and the
-  resolved SHA
-- **Scope:** all verbs default to global outside a project; `skill add` is
-  global-only by construction
-
-### Monorepo skills
-
-A source can name *one skill inside a larger repo* rather than a repo whose
-root is the skill — see [monorepo skill](../glossary.md#monorepo-skill). You
-reach one three ways:
+## Use
 
 ```bash
-agent-toolkit-cli skill add owner/repo/path/to/skill   # explicit subpath
-agent-toolkit-cli skill add owner/repo --skill <name>  # match SKILL.md name:
+agent-toolkit-cli skills add owner/repo --skill my-skill
+agent-toolkit-cli skills install my-skill --scope project --agents standard
+agent-toolkit-cli skills status my-skill -p
+agent-toolkit-cli skills uninstall my-skill --scope project --agents standard
 ```
 
-These take a different path from a single-repo add:
+Scope defaults differ by verb; add/remove/import are library-only. Read/update/push/reset/doctor scope depends on the skills project lock; install/uninstall default global except for detected Paperclip companies. [Exact flags and defaults](../agent-toolkit/cli.md#scope-and-target-selection).
 
-- **Shared parent clone.** The parent repo is cloned **shallow** (only one
-  subpath's tree is used, so its full history is waste) into the
-  [`_parents/` cache](../glossary.md#parents-cache) —
-  `~/.agent-toolkit/_parents/<owner>/<repo>[@<ref>]/`. Every skill from the
-  same parent reuses that one clone.
-- **Symlinked canonical.** The library canonical
-  `~/.agent-toolkit/skills/<slug>` is a **symlink** into `parent/<subpath>`,
-  not its own clone (it falls back to a copy only if symlinking fails).
-- **Pinned to parent HEAD.** The lock entry records `parentUrl`, the
-  `skillPath` subpath, and the parent's HEAD as `upstreamSha`; a SHA pin is
-  ignored for monorepo adds.
-- **Project scope re-clones the parent** into a project-local `_parents/`
-  cache so removing a project skill never touches the global cache or the
-  project tree.
+## Collections and ownership
 
-**Ownership decides whether `skill push` works.** The parent is
-[*owned*](../glossary.md#owned) (writable) when its owner is a known owned
-owner or you pass `--owned`; otherwise the lock entry is marked `readOnly`.
-`skill push` opens a PR against the parent for an owned skill — committing only
-that skill's subpath, so a dirty sibling in the shared clone is left alone —
-and **refuses** for a read-only one.
+Repository-wide add registers all real children (including a genuine root); explicit subpaths or `--skill` select one. Parent checkouts are shared by source/ref under `skills/_parents/`. A TUI collection groups these real entries rather than introducing another kind or lock schema. Source-batch install uses persisted membership, not future upstream discovery.
 
-## Support across harnesses
+Owned monorepo push commits only the selected child subpath and opens a PR by default; third-party read-only parents refuse push. Update merges upstream; reset is explicitly destructive. Repeated add preserves local work and does not advance the shared checkout. Legacy rootless wrappers reconcile only during targeted install/selection-changing Apply. Missing `SKILL.md` is unhealthy; unsafe root+nested exposure combinations refuse before writes. [Storage/Git deep dive](../agent-toolkit/skill-lock.md) · [Collection controls and recovery](../agent-toolkit/tui.md#skill-collections).
 
-Universal — every harness in the catalog has a skills directory, so the
-[compatibility matrix](../matrix.md) shows a full ✅ column. 14 harnesses read
-the general `.agents/skills` directory directly (including
-[Codex](../harnesses/codex.md), [Cursor](../harnesses/cursor.md),
-[Gemini CLI](../harnesses/gemini-cli.md), [OpenCode](../harnesses/opencode.md)).
+## Support and unmanaged inventory
 
-## CLI
+The catalog supplies skill paths, not proof that every harness supports every other kind. Standard readers share a slot; `--agents all` selects detected harnesses, not all catalog rows. Paperclip is **company/project-only** and requires a detected company; global Paperclip is unavailable. Hermes profile homes use their profile-local skill directory. See the [generated harness pages](../matrix.md) for placement.
 
-```bash
-agent-toolkit-cli skill add <source>     # clone into the library + lock
-agent-toolkit-cli skill install          # project into harnesses
-agent-toolkit-cli skill update           # fetch + fast-forward
-agent-toolkit-cli skill push             # publish local edits upstream
-agent-toolkit-cli skill doctor           # reconcile projections
-```
+Bounded unmanaged discovery is observational. Doctor can import supported local entries only with `--repair` and explicit per-finding confirmation; `--no-fix` does not write. Foreign destinations are not silently replaced. Explicit single-child copy fallback remains supported, but collections do not promise filtered copies or independent exposure for every loader.
 
-See also: [Instructions](instructions.md) · [Agents](agents.md) ·
-[Glossary](../glossary.md)
-
-
-## Commands relationship
-
-Use [commands](commands.md) for lightweight slash-command prompts. Use skills when the workflow needs richer instructions, references, or tool code.
+Use [Commands](commands.md) for a lightweight reusable prompt; use a skill for a workflow needing richer content or support files.

@@ -4,7 +4,7 @@
 
 | Asset type | Support | How |
 |---|:-:|---|
-| [Instructions](../asset-types/instructions.md) | [✅](#instructions) | native `AGENTS.md` reader |
+| [Instructions](../asset-types/instructions.md) | [✅](#instructions) | research: native; toolkit pointer scopes: none |
 | [Skills](../asset-types/skills.md) | [✅](#skills) | `skills` |
 | [Agents (subagents)](../asset-types/agents.md) | [—](#agents) | no file-drop convention |
 | [Commands](../asset-types/commands.md) | [?](#commands) | unknown — no public evidence found |
@@ -13,17 +13,24 @@
 
 ## Instructions { #instructions }
 
-Reads the canonical `AGENTS.md` natively — no pointer needed; the [instructions asset type](../asset-types/instructions.md) is satisfied as-is.
+Classified as a native `AGENTS.md` reader; no project pointer is created. Check the discovery paths below: some readers are workspace-only or do not load the root canonical at every scope.
 
-- **Verdict:** native
+- **Project research verdict:** native
+- **Global research verdict:** native
+- **Installation truth:** actual filesystem pointers, no Instructions lock.
 - **Default file:** `AGENTS.md`
 - **Project / global path:** none (global/workspace-only) / `~/.openclaw/workspace/AGENTS.md`
 - **Reads `AGENTS.md` natively:** yes
 - **Source:** [docs.openclaw.ai/concepts/system-prompt](https://docs.openclaw.ai/concepts/system-prompt) + [github.com/openclaw/openclaw](https://github.com/openclaw/openclaw) README ("Injected prompt files: `AGENTS.md`, `SOUL.md`, `TOOLS.md`"; "Workspace root: `~/.openclaw/workspace`")
 
+Research verdicts/paths above are preserved evidence, not enabled mutation targets. The shipped `instructions_install.pointer_slots` contract determines actual scope support (native discovery is separate):
+
+- **Toolkit project pointer:** unavailable — no managed pointer slot at this scope
+- **Toolkit global pointer:** unavailable — no managed pointer slot at this scope
+
 ## Skills { #skills }
 
-Supported — every harness in the catalog has a skills directory the [skills asset type](../asset-types/skills.md) projects into.
+The catalog supplies a skills placement for this harness. The [skills asset type](../asset-types/skills.md) uses the shared Standard slot where covered, otherwise its own projection.
 
 - **Project dir:** `skills`
 - **Global dir:** `~/.openclaw/skills`

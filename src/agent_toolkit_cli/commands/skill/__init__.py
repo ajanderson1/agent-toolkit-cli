@@ -224,12 +224,12 @@ Examples:
   $ agent-toolkit-cli skill install journal --agents all
 
 \b
-  # Project-scope install (canonical lives under <project>/.agents/skills/)
+  # Project install (canonical lives in the external project store)
   $ agent-toolkit-cli skill install journal --agents claude-code -p
 
 \b
   # List, status, update, push
-  $ agent-toolkit-cli skill list                  # global by default
+  $ agent-toolkit-cli skill list                  # global unless a project lock exists
   $ agent-toolkit-cli skill list -p               # project scope
   $ agent-toolkit-cli skill status                # clean / dirty / missing per skill
   $ agent-toolkit-cli skill update                # fetch + merge upstream for all

@@ -1,81 +1,70 @@
 # Roadmap
 
-Where `agent-toolkit-cli` and `agent-toolkit-tui` are headed after v2.0.0. Items are listed in rough priority order, not strict chronology.
+This page separates **shipped capabilities** from **unshipped ideas**. It is not a
+release promise; the [CLI](cli.md), [TUI](tui.md) and [six asset guides](../index.md#asset-types)
+describe current behavior. Historical specs, plans and research retain their
+original context rather than being rewritten as current reference.
 
-The v2.0.0 release stripped the TUI down to the skill asset type and adopted the [`vercel-labs/skills`](https://github.com/vercel-labs/skills) lock-file model end-to-end for skills. Everything below is work that the v2.0.0 release **explicitly defers** — the README is the source of truth for what's actually shipped today.
+## Shipped baseline
 
-## v2.x (additive)
+- Source-backed Skills, Agents, Commands and Pi extensions, with distinct
+  library/projection operations and per-kind support limits.
+- Lockless Instructions: user-owned canonical content, actual filesystem pointer
+  truth, source-chain guards and opt-in doctor adoption.
+- MCP global library manifest, four concrete config adapters, project-only
+  Standard, explicit legacy migration and cross-machine import. Bearer-token
+  environment-name authentication is Pi-only.
+- Local bundle manifests for Skills, Agents and Pi extensions, structural
+  validation and rollback attempts; no durable bundle membership.
+- TUI queues across six kinds and both scopes, aggregate Apply/Diff/Revert,
+  source/ref skill collections of real children, guarded legacy exposure
+  reconciliation, clean plural sidebar and emphasized repository path.
+
+These do not imply every adapter is enabled, every scope is supported, or Apply
+is a global transaction. See [compatibility](../matrix.md) and recovery limits.
+
+## Unshipped ideas
 
 ### Auto-push of self-improvements
 
-End-of-session hook that runs `agent-toolkit-cli skill push` for any dirty canonical clones, so the agent's in-place edits flow back to upstream without manual `push`. Opt-in via per-skill `autoPush: true` in the lock entry.
+A possible opt-in session-end hook for owned-source improvements. No such hook or
+`autoPush` behavior ships today. Hook placement and failure reporting remain open;
+manual `skills push` is the supported publishing path.
 
-Open questions: where the hook installs (Claude Code session-end? generic shell exit?), how to surface push failures without interrupting the next session.
+### skills.sh global write-through
 
-### Real-skill extraction sweep
+New toolkit locks use v1; existing v3 locks retain their schema/metadata. Default
+v3 emission and interoperability beyond tested serializer behavior remain ideas,
+not a promise that both installers share identical paths or ownership semantics.
 
-The monorepo `~/GitHub/agent-toolkit/skills/` still contains ~30 first-party skills. Each needs extracting to its own GitHub repo via `git filter-repo --path skills/<slug>` to preserve history, then `agent-toolkit-cli skill add ajanderson1/<slug> -g`.
+### Hooks, plugins and durable bundles
 
-Worth doing one skill at a time, validating self-improvement flow on each, before bulk migrating. The mechanism is proven; only the manual extraction labour remains.
-
-### skills.sh v3 global write-through
-
-Today, `agent-toolkit-cli skill add -g` against a fresh `$HOME` writes a v1 lock. If `npx skills` is the dominant tool on the same machine, it expects v3. The reader handles both, the writer preserves an existing v3 file's version — but a brand-new global lock our CLI creates won't be readable by `npx skills` until they bump their reader to accept v1 (or we default to v3 for global scope).
-
-Decision pending: default `-g` to v3 entry shape, or stay on v1 and document the asymmetry.
-
-## v3.x (the other six asset types)
-
-### Phase 2: revisit agent, command, hook, plugin, pi-extension
-
-For each asset type, decide whether the lock-file model applies. Status as of 2026-06-10:
-
-| Asset type | Model | Status |
-|---|---|---|
-| agent | Per-agent repo + lock — same shape as skills. | **Delivered** (v3.4.0, #252 SAFE slice) |
-| pi-extension | Per-extension repo + lock — same shape as skills. | **Delivered** (v3.3.0) |
-| instructions | Managed AGENTS.md/CLAUDE.md slots + lock. | **Delivered** (v3.5.x, #283/#305/#337) |
-| mcp | Local library at `~/.agent-toolkit/mcps/` (`add` authors from `--npx`/`--uvx`/`--docker`/`--url`/`--local`) + config-injection adapters across four harnesses + `mcps-lock.json`. | **Delivered** (foundations slice, #329 — `add`/`install`/`uninstall`/`remove`/`update`/`list`/`status`/read-only `doctor`; `fix`/`diff`/TUI/library-sync deferred) |
-| command | Per-command repo + lock — same shape as skills. | Pending |
-| plugin | Per-plugin repo; CLI drives `installed_plugins.json` / local-path marketplace. | Pending — see the bundle ADR (`docs/solutions/architecture-patterns/`, 2026-06-10) |
-| hook | Per-hook repo; CLI does the `settings.json` injection. | Pending |
-
-The structural-shape constraint (folder-with-markdown vs. config-injection) is the determinant. Skills, agents, commands, and pi-extensions are folder-shaped → easy. MCPs, hooks, and plugins are config-injection → need an adapter layer that translates `<slug>/manifest.toml` to the target config file.
-
-Each asset type will land in its own spec + plan, not a single bulk PR.
+Standalone hook/plugin kinds remain unshipped. Bundle uninstall, durable group
+membership/drift diagnosis, remote manifest fetching and source/ref reachability
+checks during validate remain deferred. Commands, Instructions and MCP are not
+installable bundle members today. See [bundle limits](bundles.md).
 
 ### Verb remap: `enable`/`disable` for projection { #verb-remap-enable-disable-for-projection }
 
-**Status: idea, not committed.** The lifecycle verbs split across [two axes](../glossary.md#verb-model): `add`/`remove` change [library](../glossary.md#library) membership (destructive), while `install`/`uninstall` change [projection](../glossary.md#projection) into a harness/scope (non-destructive). The friction is that all four read as generic "put / take away" words, so nothing in the verb tells you which axis you're on — the glossary has to spell it out.
+**Idea, not committed or implemented.** The proposal would rename the projection
+axis from install/uninstall to enable/disable while retaining add/remove for
+library membership. Compatibility aliases, clarity and migration cost would need
+a separate decision. Current scripts must continue using shipped verbs.
 
-Proposal: rename the Axis-2 pair from `install`/`uninstall` to **`enable`/`disable`**, keeping `add`/`remove` for Axis 1. This makes the two axes use *different verb families* — the legible pattern every clean two-axis tool follows (`systemctl enable`/`start`; VS Code `install`/`enable`; Claude Code `plugin install`/`enable`). It also matches the harness we live closest to: the Claude Code plugin flow is `marketplace add` → `plugin install` → `plugin enable`/`disable`, where `enable`/`disable` is exactly the per-context activation axis we call `install`/`uninstall`.
+### Other open questions
 
-Resulting surface, per asset type and scope (project / global):
+- Surface dirty owned content at session end without obscuring more urgent state.
+- A convenience skill diff command (not currently shipped).
+- Explicit handling of other installers' copied assets beyond supported bounded
+  unmanaged discovery/confirmed import.
+- Additional harness adapters only when placement, ownership and verification
+  evidence justify them; researched support alone does not enable an adapter.
 
-| Today | Proposed | Axis |
-|---|---|---|
-| `add` / `remove` | `add` / `remove` (unchanged) | 1 — library membership |
-| `install` / `uninstall` | `enable` / `disable` | 2 — projection into a harness/scope |
+## Existing non-goals
 
-Open questions before this is worth committing:
+- No automatic submission of private sources to the public skills.sh catalog.
+- No subprocess wrapper around `npx skills`; the toolkit implements its own path.
+- No automatic team-wide propagation of local self-improvements.
 
-- **Breaking-change cost.** `install`/`uninstall` are load-bearing across every asset-type CLI namespace, the TUI, tests, skills, docs, and lock-adjacent tooling. A remap is a major-version surface change; likely shipped with `install`/`uninstall` kept as hidden aliases for one or more releases.
-- **`enable` vs `disable` connotations.** `enable` could read as "toggle on in place" rather than "render into this scope"; verify it doesn't blur into a config-flag mental model. Alternatives considered: `apply`/`unapply` (chezmoi-style), `link`/`unlink` (Homebrew-style, but inaccurate for non-symlink mechanisms).
-- **Interop.** The skills lock format is byte-compatible with `vercel-labs/skills`; confirm the verb rename touches only our CLI surface, not the persisted lock shape, so interop is unaffected.
-
-If adopted, the glossary's two-axis callout and every asset-type page's verb table update in the same change.
-
-## Not on the roadmap (explicit non-goals)
-
-- **Submitting to the public skills.sh catalogue.** Private repos remain private; we use the addressing scheme and lock format without depending on or appearing in the public index.
-- **Wrapping `npx skills` as a subprocess.** We re-implement in Python so we are not exposed to upstream breakage. The interop test (`tests/test_cli/test_skill_interop.py`) verifies bit-compatibility, but the CLI does not depend on `npx skills` being installed.
-- **Multi-user / team sync of self-improvements.** Self-improvements flow per-user via the user's own forks; team-wide propagation is out of scope.
-- **Shallow clones / disk-cost optimisation.** Full `.git/` per skill is acceptable (~few hundred KB each); revisit if disk becomes a real problem.
-
-## Open questions
-
-- How to surface "you have N dirty skills" prominently when the agent is about to end a session — a quiet TUI hint vs. a hard prompt vs. nothing at all.
-- Whether to add a `skill diff` verb that runs `git diff` against upstream for a given slug (cheap convenience but adds surface area).
-- What happens when a user runs `skill add` against a slug that's already installed by `npx skills` in copy-mode — overwrite? error? prompt to convert?
-
-Suggestions / pushback welcome in PRs against this file or in GitHub issues.
+Distribution/versioning remains the repository's release workflow responsibility;
+this roadmap does not announce an unverified publication or replace release notes.

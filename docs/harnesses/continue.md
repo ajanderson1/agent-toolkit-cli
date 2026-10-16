@@ -15,15 +15,22 @@
 
 Not supported (gap) — no default root instruction file a pointer symlink could satisfy.
 
-- **Verdict:** unsupported (gap)
+- **Project research verdict:** unsupported (gap)
+- **Global research verdict:** unsupported (gap)
+- **Installation truth:** actual filesystem pointers, no Instructions lock.
 - **Default file:** none (uses `.continue/rules/` directory)
 - **Project / global path:** `./.continue/rules/` / `~/.continue/rules/`
 - **Reads `AGENTS.md` natively:** no
 - **Source:** [docs.continue.dev/customize/deep-dives/rules](https://docs.continue.dev/customize/deep-dives/rules) ; [github.com/continuedev/continue/issues/6716](https://github.com/continuedev/continue/issues/6716)
 
+Research verdicts/paths above are preserved evidence, not enabled mutation targets. The shipped `instructions_install.pointer_slots` contract determines actual scope support (native discovery is separate):
+
+- **Toolkit project pointer:** unavailable — no managed pointer slot at this scope
+- **Toolkit global pointer:** unavailable — no managed pointer slot at this scope
+
 ## Skills { #skills }
 
-Supported — every harness in the catalog has a skills directory the [skills asset type](../asset-types/skills.md) projects into.
+The catalog supplies a skills placement for this harness. The [skills asset type](../asset-types/skills.md) uses the shared Standard slot where covered, otherwise its own projection.
 
 - **Project dir:** `.continue/skills`
 - **Global dir:** `~/.continue/skills`

@@ -1,10 +1,10 @@
 # agent-toolkit-cli
 
-A Python CLI and Textual TUI for managing AI-agent assets — skills, agents,
-instructions, Pi extensions, and MCP servers — across many harnesses. Each asset
-type keeps one canonical definition and a lock file, and projects it into every
-harness you use by the cheapest mechanism that harness accepts (symlink,
-translate, or config-injection).
+A Python CLI and Textual TUI for managing six kinds of AI-agent assets:
+skills, agents, commands, instructions, Pi extensions and MCP servers.
+Libraries and harness visibility are separate. Support varies by kind and scope;
+Instructions uses user-owned canonical content and filesystem pointers, without
+an installation lock. Start with the [verb model](glossary.md#verb-model).
 
 Install and quickstart live in the [README](https://github.com/ajanderson1/agent-toolkit-cli#readme).
 These docs are the reference and the per-asset-type mental models.
@@ -13,6 +13,7 @@ These docs are the reference and the per-asset-type mental models.
 
 - [Skills](asset-types/skills.md) — reusable skill folders, library + lockfile.
 - [Agents](asset-types/agents.md) — subagent definitions, projected per harness.
+- [Commands](asset-types/commands.md) — reusable prompts, with Standard/Pi/Gemini defaults.
 - [Instructions](asset-types/instructions.md) — harness-aware pointers to a canonical `AGENTS.md`.
 - [Pi extensions](asset-types/pi-extensions.md) — Pi extension inventory.
 - [MCP servers](asset-types/mcp.md) — config-injection of MCP server registrations.

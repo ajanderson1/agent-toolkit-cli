@@ -1,17 +1,17 @@
 # MCP servers
 
-The `mcp` [asset type](../glossary.md#asset-type) manages MCP (Model Context
-Protocol) server registrations — authoring each server once into a local library,
+The `mcps` group (`mcp` alias) manages MCP (Model Context Protocol) server
+registrations as an [asset type](../glossary.md#asset-type) — authoring each server once into a local library,
 then projecting it into the harnesses that read MCP config.
 
 ## How it works
 
 Unlike skills and agents (which project by symlink), MCP uses
 **config-injection by name**: each adapter surgically upserts a single named
-entry inside the harness's own native config file, preserving every other byte.
-Hand-rolled neighbours and unmanaged entries survive untouched. There is no file
-ownership — the toolkit manages the `mcpServers.<slug>` / `[mcp_servers.<slug>]`
-key, nothing else.
+entry inside the harness's native config file. Unrelated entries are retained,
+but JSON serialization can change formatting: this is not byte-preserving editing.
+The toolkit manages a named key (`mcpServers.<slug>`, OpenCode `mcp.<slug>`, or
+Codex `[mcp_servers.<slug>]`), not ownership of the entire config file.
 
 - **Library:** `~/.agent-toolkit/mcps/` — a plain local store (not a git clone).
   Each entry materialises as `<library>/<slug>/config.json` plus
@@ -34,14 +34,14 @@ the pair one file at a time. If a write is interrupted, the manifest still says
 what should exist and `mcp doctor` reports the missing, half-written, orphaned,
 or drifted materialisation.
 
-Run `agent-toolkit-cli mcp migrate` once to adopt a legacy physical library. It
+Run `agent-toolkit-cli mcps migrate` once to adopt a legacy physical library. It
 is explicit, global-only, idempotent, and non-destructive; unsafe or
 non-lossless entries stay untouched and are omitted. `add` and `update` refuse
 to backfill legacy entries implicitly.
 
 `mcp doctor` is read-only. When the manifest is absent it prints the remediation
-`agent-toolkit-cli mcp migrate`; it never creates or repairs state. `mcp remove`
-removes projections only and retains both the manifest record and library pair.
+`agent-toolkit-cli mcps migrate`; it never creates or repairs state. `mcps remove`
+removes all locked projections at the selected scope only and retains both the manifest record and library pair.
 
 ## Authenticated URL servers
 
@@ -50,8 +50,9 @@ Use `--bearer-token-env <NAME>` with `mcp add --url` or `mcp update` to keep an 
 ## Supported harnesses
 
 Four harnesses have MCP adapters: **claude-code, codex, opencode, pi**. The
-adapters split by config format — `claude-code`, `pi`, and `opencode` write
-`mcpServers.<slug>` into a JSON document; `codex` writes `[mcp_servers.<slug>]`
+adapters split by config format — `claude-code` and `pi` write
+`mcpServers.<slug>` into JSON, OpenCode translates to native `mcp.<slug>`;
+`codex` writes `[mcp_servers.<slug>]`
 into `~/.codex/config.toml`. No other harness has an MCP adapter.
 
 ### The `standard` projection
@@ -74,15 +75,16 @@ detected; pass `--force` to override. Project-scope writes are not gated.
 ## CLI
 
 ```bash
-agent-toolkit-cli mcp add --npx|--uvx|--docker|--url|--local <source> [--slug <slug>] [--bearer-token-env <NAME>]
-agent-toolkit-cli mcp migrate                    # adopt a legacy global library
-agent-toolkit-cli mcp install <slug>   [--harness <name>]... [-g|-p] [--force]
-agent-toolkit-cli mcp uninstall <slug> [--harness <name>]... [-g|-p]
-agent-toolkit-cli mcp remove <slug>    [-g|-p]   # remove every locked projection
-agent-toolkit-cli mcp update <slug> [--bearer-token-env <NAME>] # re-resolve + re-project
-agent-toolkit-cli mcp list   [-g|-p]            # alias: ls
-agent-toolkit-cli mcp status [<slug>...] [-g|-p]
-agent-toolkit-cli mcp doctor [-g|-p]            # read-only library + projection report
+agent-toolkit-cli mcps add --npx|--uvx|--docker|--url|--local <source> [--slug <slug>] [--bearer-token-env <NAME>]
+agent-toolkit-cli mcps migrate                    # adopt a legacy global library
+agent-toolkit-cli mcps install <slug>   [--harness <name>]... [-g|-p] [--force]
+agent-toolkit-cli mcps uninstall <slug> [--harness <name>]... [-g|-p]
+agent-toolkit-cli mcps remove <slug>    [-g|-p]   # all locked projections at this scope
+agent-toolkit-cli mcps update <slug> [--bearer-token-env <NAME>] # re-resolve + re-project
+agent-toolkit-cli mcps list   [-g|-p]            # alias: ls
+agent-toolkit-cli mcps status [<slug>...] [-g|-p]
+agent-toolkit-cli mcps import <file> [--latest] # global manifest import, skips local entries
+agent-toolkit-cli mcps doctor [-g|-p]           # read-only library + projection report
 ```
 
 See also: [Skills](skills.md) · [Agents](agents.md) ·

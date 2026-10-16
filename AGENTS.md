@@ -1,60 +1,49 @@
 # AGENTS.md — agent-toolkit-cli
 
-The Python CLI (`src/agent_toolkit_cli`) and the Textual TUI (`src/agent_toolkit_tui`) for managing AI-agent assets across harnesses. v2.3.0 removed the pre-v2 surface (`check`, `link`, `doctor`, ...); the v3 per-kind architecture has since re-introduced four kinds — `skill`, `agent`, `instructions`, `pi-extension` (each with its own `commands/<kind>/` verb group, `<kind>_install.py` facade, adapters package, and source-backed kinds' lockfiles; Instructions instead derives installation from canonical AGENTS.md symlinks); the `mcp` kind is being re-ported (#329). The frozen v1 surface is pinned at the `v1.0.0` tag — see `README.md` for the install command.
+Python Click CLI and Textual TUI for managing six asset kinds across coding
+harnesses: Skills, Agents, Commands, Instructions, Pi extensions and MCP servers.
+Bundles is a separate installation utility, not a seventh kind. Canonical CLI
+groups are plural; singular aliases remain accepted.
 
-## Agent operation
+## Operation
 
-- **Project-default trust level: L3 (Conditional)** — raise on plan divergence, out-of-scope blast radius, or low confidence (see `~/.conventions/conventions/aj-workflow.md` § Trust ladder).
-- **L4+ raise timeout: 30 minutes** — on timeout the worker parks and escalates to AJ on the next watch cycle.
-- `main` has no branch protection; squash-merges land immediately. Re-check `git branch --show-current` after long sessions — releases move `main` underneath you.
+- Project-default trust: **L3 (Conditional)**; raise on plan divergence,
+  out-of-scope blast radius or low confidence (shared aj-workflow trust ladder).
+- L4+ raise timeout: **30 minutes**; park and escalate to AJ on timeout.
+- `main` has no branch protection; squash merges land immediately. Recheck branch
+  and base after long sessions; release work may move main.
+- ReleasePlease owns package version/CHANGELOG; do not hand-author release bumps.
+
+## Commands
+
+- dev: `uv run agent-toolkit-tui` (local terminal interface, not a web server).
+- build: `uv build`; docs: `make docs-build` (strict).
+- test: `uv run pytest -q`; bootstrap: `uv sync --all-extras`.
+- lint/format/typecheck: no dedicated project script configured.
+- deploy: n/a for local CLI/TUI; GitHub workflows own release assets/docs publication.
+- `lefthook.yml` runs the full pytest suite on **pre-push**.
 
 ## Code map
 
-```
-src/agent_toolkit_cli/             Python package: skill command + lockfile machinery.
-  cli.py                           Click group; only `skill` is registered.
-  commands/skill/                  `skill add | list | status | update | push | remove`.
-  skill_agents.py                  55-agent catalog (ported from vercel-labs/skills).
-  skill_git.py                     Git operations against per-skill upstream repos.
-  skill_install.py                 Install/uninstall a skill into a harness home.
-  skill_lock.py                    Read/write the `skill-lock.toml` lockfile.
-  skill_paths.py                   Canonical paths for skills, lockfiles, projections.
-  skill_source.py                  Parse `<owner/repo>` / URL / SSH / local-path sources.
-  _repo_resolution.py              Resolve toolkit-repo root (used by TUI).
-  _support.py                      Status constants used by TUI.
-src/agent_toolkit_tui/             Textual TUI across all built asset types.
-  settings.py                      `tui-settings.json` schema, validation, atomic persistence.
-  screens/settings.py              Palette-only settings screen.
-docs/agent-toolkit/                Human-readable reference (CLI, TUI, lock/settings schemas).
-docs/solutions/                    Documented decisions & fixes (bugs, trade-offs, patterns) by category, with YAML frontmatter (module, tags, problem_type).
-tests/                             pytest. TUI tests live in tests/test_tui/.
-```
+- `src/agent_toolkit_cli/cli.py`: plural group registration and singular aliases.
+- `commands/{skill,agent,command,instructions,pi_extension,mcp,bundle}/`: actual verb surfaces.
+- `<kind>_install.py`, adapter packages and source/path/lock modules: per-kind facades.
+- Skills/Agents/Commands/Pi extensions use source-backed locks; Instructions uses
+  actual canonical-file pointers, **no installation lock**. MCP library authority
+  is `mcps-library.json`; its per-scope locks record projections.
+- `src/agent_toolkit_tui/`: inventory, six grids, cross-kind pending queues;
+  `settings.py` persists presentation only, never CLI targets.
+- `docs/agent-toolkit/`, `docs/asset-types/`: current public reference.
+- `docs/agent-toolkit/harness-matrix.md`: packaged machine-read data;
+  `scripts/gen_harness_docs.py` generates matrix/harness views/nav. Never hand-edit outputs.
+- `docs/solutions/`: historical decisions/fixes; specs/plans/reviews are not current reference.
+- `tests/`: pytest; TUI behavior in `tests/test_tui/`.
 
-## Development workflow
+## Testing and maintenance
 
-```bash
-uv sync --all-extras
-uv run pytest -q
-uv run agent-toolkit-cli skill list
-```
-
-`lefthook.yml` runs `uv run pytest -q` on pre-push.
-
-## Testing
-
-`tests/conftest.py` includes an autouse fixture that strips `GIT_*` env vars from `os.environ` before every test runs. This closes the lefthook-leak trap (#209): a test that shells out to `git` without an explicit `env=` argument no longer inherits `GIT_DIR` / `GIT_INDEX_FILE` from a parent hook and cannot accidentally write commits into the outer repo.
-
-For most tests this means `subprocess.run(["git", ...], cwd=tmp_path)` is safe by default. Pass an explicit `env=` only when the test needs to **set** identity vars (e.g. `GIT_AUTHOR_NAME` for a deterministic commit) — not when it merely needs to **prevent leakage**.
-
-## Adding a new `skill` subcommand
-
-1. Add a new module under `src/agent_toolkit_cli/commands/skill/<name>_cmd.py`.
-2. Define a Click command; import shared helpers from `_common.py`.
-3. Register the command in `src/agent_toolkit_cli/commands/skill/__init__.py`.
-4. Add a test under `tests/test_cli/test_cli_skill_<name>.py`.
-
-## What lives elsewhere
-
-- **Skill content** (the actual skill markdown / source) lives in each skill's upstream git repo; this CLI clones into a canonical lockfile-driven directory.
-- **Schema** for skill-lock entries: see `docs/agent-toolkit/skill-lock.md`.
-- **Agent catalog** (which harnesses are universal vs. per-harness): ported from `vercel-labs/skills` at the v2.1.0 cut; lives in `skill_agents.py`.
+`tests/conftest.py` strips inherited `GIT_*` variables before each test to prevent
+hook subprocesses writing into the outer repository. Set identity variables only
+when a test needs them. Use disposable HOME/config/assets for CLI/TUI tests or media;
+`scripts/capture_docs_tui.py` captures the real source-asserted documentation UI.
+Register new verbs in their per-kind group and add behavior/help coverage. Update
+the current docs with behavior changes; preserve historical reports and release notes.

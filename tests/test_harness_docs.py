@@ -32,6 +32,82 @@ def _gen_module():
     return module
 
 
+def test_instructions_scope_verdicts_are_parsed_and_rendered():
+    gen = _gen_module()
+    _, instructions = gen.parse_ssot()
+    for slug in ("codex", "opencode", "pi"):
+        row = instructions[slug]
+        assert row.verdict == "native"
+        assert row.global_verdict == "symlink"
+        rendered = gen.instr_section(slug, row)
+        assert "**Project research verdict:** native" in rendered
+        assert "**Global research verdict:** symlink" in rendered
+        assert "**Toolkit global pointer:** `" in rendered
+
+
+def test_all_instruction_scope_claims_match_actual_slot_contract():
+    from agent_toolkit_cli.instructions_install import pointer_slots
+
+    gen = _gen_module()
+    _, rows = gen.parse_ssot()
+    for slug, row in rows.items():
+        rendered = gen.instr_section(slug, row)
+        for scope in ("project", "global"):
+            actual = pointer_slots(scope=scope, project_root=Path("<project>"), home=Path("~"))
+            expected = f"`{actual[slug]}`" if slug in actual else "unavailable — no managed pointer slot at this scope"
+            assert f"**Toolkit {scope} pointer:** {expected}" in rendered, (slug, scope)
+
+
+def test_replit_research_verdict_does_not_promise_global_install(tmp_path, monkeypatch):
+    from click.testing import CliRunner
+    from agent_toolkit_cli.cli import main
+
+    gen = _gen_module()
+    _, rows = gen.parse_ssot()
+    assert rows["replit"].global_verdict == "symlink", "preserve raw research data"
+    rendered = gen.instr_section("replit", rows["replit"])
+    assert "**Toolkit global pointer:** unavailable" in rendered
+    assert "A global pointer slot is managed" not in rendered
+    monkeypatch.setenv("HOME", str(tmp_path))
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "AGENTS.md").write_text("User-owned project instructions\n")
+    global_root = tmp_path / ".agent-toolkit"
+    global_root.mkdir()
+    (global_root / "AGENTS.md").write_text("User-owned global instructions\n")
+    runner = CliRunner()
+    before = {p.relative_to(tmp_path): p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()}
+    refused = runner.invoke(main, ["--project", str(project), "instructions", "install", "--scope", "global", "--harness", "replit"])
+    assert refused.exit_code != 0 and "no supported pointer" in refused.output
+    assert {p.relative_to(tmp_path): p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()} == before
+    assert not (tmp_path / "replit.md").exists()
+    installed = runner.invoke(main, ["--project", str(project), "instructions", "install", "--scope", "project", "--harness", "replit"])
+    assert installed.exit_code == 0, installed.output
+    assert (project / "replit.md").is_symlink()
+    assert (project / "replit.md").resolve() == project / "AGENTS.md"
+
+
+def test_command_shared_readers_are_not_unknown():
+    gen = _gen_module()
+    for slug in ("neovate", "devin"):
+        assert gen.sym_command(slug) == "✅"
+        assert "Standard" in gen.command_section(slug)
+    assert "project" in gen.command_section("devin")
+
+
+def test_all_generated_pages_and_nav_match_sources(tmp_path, monkeypatch):
+    gen = _gen_module()
+    monkeypatch.setattr(gen, "DOCS", tmp_path)
+    monkeypatch.setattr(gen, "HARNESS_DIR", tmp_path / "harnesses")
+    config = tmp_path / "mkdocs.yml"
+    config.write_bytes((REPO_ROOT / "mkdocs.yml").read_bytes())
+    monkeypatch.setattr(gen, "MKDOCS_YML", config)
+    gen.main()
+    for generated in [tmp_path / "matrix.md", *sorted((tmp_path / "harnesses").glob("*.md"))]:
+        assert generated.read_bytes() == (REPO_ROOT / "docs" / generated.relative_to(tmp_path)).read_bytes()
+    assert config.read_bytes() == (REPO_ROOT / "mkdocs.yml").read_bytes()
+
+
 def test_paperclip_is_a_headline_harness():
     gen = _gen_module()
     assert "paperclip" in gen.MAIN

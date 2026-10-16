@@ -15,15 +15,22 @@
 
 Not applicable — no root instruction-file concept at all.
 
-- **Verdict:** unsupported (by design)
+- **Project research verdict:** unsupported (by design)
+- **Global research verdict:** unsupported (by design)
+- **Installation truth:** actual filesystem pointers, no Instructions lock.
 - **Default file:** none
 - **Project / global path:** none / none
 - **Reads `AGENTS.md` natively:** no
 - **Source:** [www.mcpjam.com/](https://www.mcpjam.com/) ; [github.com/MCPJam/inspector](https://github.com/MCPJam/inspector)
 
+Research verdicts/paths above are preserved evidence, not enabled mutation targets. The shipped `instructions_install.pointer_slots` contract determines actual scope support (native discovery is separate):
+
+- **Toolkit project pointer:** unavailable — no managed pointer slot at this scope
+- **Toolkit global pointer:** unavailable — no managed pointer slot at this scope
+
 ## Skills { #skills }
 
-Supported — every harness in the catalog has a skills directory the [skills asset type](../asset-types/skills.md) projects into.
+The catalog supplies a skills placement for this harness. The [skills asset type](../asset-types/skills.md) uses the shared Standard slot where covered, otherwise its own projection.
 
 - **Project dir:** `.mcpjam/skills`
 - **Global dir:** `~/.mcpjam/skills`

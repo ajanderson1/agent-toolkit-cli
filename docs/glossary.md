@@ -1,187 +1,88 @@
 # Glossary
 
-The shared vocabulary of the [compatibility matrix](matrix.md), the
-per-harness pages, and the asset-type pages — grouped for skimming, highest-level
-terms first.
+Vocabulary shared by the [matrix](matrix.md), harness pages and asset guides.
 
-<a id="verb-model"></a>
+## Verb model { #verb-model }
 
-!!! abstract "The two-axis verb model — read this first"
+For **source-backed kinds**, two separate axes matter:
 
-    Every lifecycle verb in the toolkit moves an asset along **one of two
-    independent axes**. The single most common point of confusion is treating
-    all four verbs as interchangeable "put it there / take it away" words. They
-    are not — each verb belongs to exactly one axis, and the axes are
-    orthogonal.
+| Axis | Add | Take away | Effect |
+|---|---|---|---|
+| Library membership | `add` | `remove` | Register/delete canonical source and its library record; removal can destroy local work. |
+| Harness visibility | `install` | `uninstall` | Project/retract an asset in a selected harness/scope; uninstall keeps the library source. |
 
-    | Axis | Question it answers | Add it | Take it away | Reversible? |
-    |---|---|---|---|---|
-    | **1 — Library membership** | Is this asset in my [library](#library) at all? | `add` | `remove` | **Destructive.** `remove` deletes the canonical clone + [lock](#lock-file) entry — a full undo of `add`. |
-    | **2 — Projection into a harness** | Is a library asset rendered into *this* harness/[scope](#scope)? | `install` | `uninstall` | **Non-destructive.** `uninstall` drops only the [projection](#projection); the library copy stays. Re-`install` rebuilds it. |
+**Exceptions:** Instructions has no source library or installation lock, only user-owned canonical content and pointer operations. MCP add authors a global manifest entry; MCP remove removes locked projections at the selected scope but **keeps library membership/files**. Bundles is a utility with install/validate, not a seventh kind. Verbs and flags are not uniform: see the [CLI reference](agent-toolkit/cli.md).
 
-    Read it as a sequence: **`add` once** to register a source in the library,
-    then **`install` per harness/scope** to project it where you want it.
-    `uninstall` retracts a projection but leaves the asset available to
-    re-install; `remove` is the only verb that truly forgets the asset.
-
-    Mnemonic: *`add`/`remove` change what you **have**; `install`/`uninstall`
-    change where it's **rendered**.* This split mirrors the Claude Code plugin
-    ecosystem (`marketplace add` → `plugin install`). A future
-    [roadmap](agent-toolkit/roadmap.md#verb-remap-enable-disable-for-projection)
-    item proposes renaming the Axis-2 pair to `enable`/`disable` so the word
-    itself tells you which axis you're on.
-
-    Supporting verbs: `update` (re-fetch the source, re-project),
-    `push` (send local canonical edits back upstream),
-    `status` / `doctor` (inspect, reconcile), `reset` (rebuild projections
-    from the lock).
+`update` refreshes source (merge-aware for skills/agents/Git Pi extensions; Commands has its own update behavior; MCP re-resolves and re-projects). `push` publishes owned source edits, normally through a PR. `reset` can discard local Git work; it is **not** a synonym for rebuilding visibility. `status` inspects; doctor behavior depends on kind. A proposed enable/disable naming scheme is [unshipped](agent-toolkit/roadmap.md#verb-remap-enable-disable-for-projection).
 
 ## Core model
 
 **Harness** { #harness }
-:   A coding agent / AI dev tool the toolkit can target — Claude Code, Codex,
-    Gemini CLI, Pi, … 54 catalogued in the [matrix](matrix.md). (The upstream
-    `vercel-labs/skills` catalog calls these "agents"; this toolkit reserves
-    *agent* for the subagent asset type.)
+:   A coding assistant/tool in the catalog. Catalog membership supplies metadata, not every-kind/every-scope support or proof an adapter is enabled.
 
 **Asset type** { #asset-type }
-:   The toolkit's central organising concept: a category of installable asset
-    that harnesses consume in structurally the same way, so one set of verbs
-    can manage it across all of them. Each asset type owns its own
-    [adopted convention](#adopted-convention), [lock file](#lock-file),
-    [doctor](#doctor), projection [mechanisms](#mechanism), and CLI namespace.
-    Five asset types: [instructions](asset-types/instructions.md) (always-loaded context),
-    [skills](asset-types/skills.md) (on-demand instruction folders),
-    [agents](asset-types/agents.md) (delegable subagents),
-    [pi extensions](asset-types/pi-extensions.md) (Pi-only packages), and (planned)
-    [MCP servers](asset-types/mcp.md). The [matrix](matrix.md) has one column — and
-    every harness page one section — per asset type.
+:   One of six managed categories: [Skills](asset-types/skills.md), [Agents](asset-types/agents.md), [Commands](asset-types/commands.md), [Instructions](asset-types/instructions.md), [Pi extensions](asset-types/pi-extensions.md), [MCP servers](asset-types/mcp.md). Each has its own supported operations and storage model.
 
 **Asset** { #asset }
-:   One installable thing of an asset type — a skill folder, a subagent definition,
-    the canonical `AGENTS.md`.
+:   One real managed item: a skill folder, agent definition, command prompt, canonical instruction file, extension or MCP registration.
 
 **Kind** { #kind }
-:   Former name for [asset type](#asset-type).
+:   Code/internal shorthand for asset type.
 
-## Conventions & conformance
+**Collection** { #collection }
+:   A derived source/ref group of real skill children. The TUI parent is not an installable skill or extra lock entry; controls include full membership even when children are collapsed/filter-hidden.
+
+## Conventions and storage
 
 **Adopted convention** { #adopted-convention }
-:   The cross-harness standard the toolkit converges on for an asset type —
-    `AGENTS.md` for instructions, `SKILL.md` folders for skills, the
-    [general](#general) directory layout. The canonical copy always follows
-    the convention; everything else is projected from it.
+:   The placement/format shared where possible: e.g. `AGENTS.md`, `SKILL.md` folders or a common harness slot.
 
 **Standard (conforming)** { #standard }
-:   A harness that follows the adopted convention for an asset type natively — reads
-    `AGENTS.md` or the general directory directly. Zero projection work.
+:   A shared projection slot and its verified reader set, specific to asset type and scope. Skills uses `.agents/skills`; Agents/Commands share `.claude/agents` / `.claude/commands`. MCP Standard is project-only `.mcp.json` for Claude Code + Pi. It is not an extra harness.
 
 **Non-standard (non-conforming)** { #non-standard }
-:   A harness with its own equivalent surface that diverges from the adopted
-    convention — an own-name file (`CLAUDE.md`), a different format, or a
-    config registry. Still supported, via a pointer, translate, or config
-    [mechanism](#mechanism).
-
-## On disk
+:   A harness requiring its own slot, translation or config entry rather than a shared placement. Not a judgment about product quality.
 
 **Canonical** { #canonical }
-:   The single authoritative copy of an asset that all projections point back
-    to — the library clone of a skill, `AGENTS.md` for instructions.
+:   Authoritative asset content. For Instructions it is user-owned project `AGENTS.md` or global `~/.agent-toolkit/AGENTS.md`, possibly linked to a versioned source. Installation never authors those bytes.
 
 **Library** { #library }
-:   The store of canonical sources at `~/.agent-toolkit/` (e.g.
-    `~/.agent-toolkit/skills/<slug>`, a git clone of the skill repo).
+:   Source-backed canonical content, normally under `~/.agent-toolkit/<kind>/`. MCP instead has an authoritative global `mcps-library.json` manifest and materialized config/sidecar pairs. Instructions has no source-library membership workflow.
 
 **Monorepo skill** { #monorepo-skill }
-:   A skill whose source is *one subpath inside a larger repo* rather than a
-    repo whose root is the skill. Added by naming the subpath
-    (`owner/repo/<path>`), passing `--skill <name>` (matched against each
-    `SKILL.md`'s frontmatter `name:`), or an explicit subpath. The shared
-    parent is cloned once into the [`_parents/` cache](#parents-cache); the
-    library [canonical](#canonical) is then a **symlink** into
-    `parent/<subpath>` (not a standalone clone). The lock entry records
-    `parentUrl`, the `skillPath` subpath, and the parent's HEAD as
-    `upstreamSha` — a monorepo skill pins to **parent HEAD**, not a SHA.
+:   A real skill subpath in a shared repository checkout. `parentUrl`/`skillPath` locate it; canonical usually symlinks into the parent. Ref and observed upstream SHA are different metadata, not interchangeable pins. [Details](agent-toolkit/skill-lock.md).
 
 **`_parents/` cache** { #parents-cache }
-:   Where [monorepo](#monorepo-skill) parent repos are cloned, shared across
-    every skill drawn from the same parent so siblings never re-clone it:
-    `~/.agent-toolkit/_parents/<owner>/<repo>[@<ref>]/` (global) or
-    `<store>/projects/<id>/skills/_parents/...` (project). Cloned **shallow**
-    — only one subpath's tree is symlinked, so the parent's full history is
-    pure waste.
+:   Shared source/ref backing checkouts, normally `~/.agent-toolkit/skills/_parents/<owner>/<repo>[@<ref>]/`; projects use their separate external backing store. Referenced checkout history/index/local work is not disposable cache noise.
 
 **Owned / read-only (monorepo)** { #owned }
-:   Whether a [monorepo skill](#monorepo-skill)'s parent is writable. A parent
-    is *owned* when its owner is a known owned owner or you pass `--owned` to
-    `skill add`; otherwise the lock entry is marked **`readOnly`**. `skill
-    push` opens a PR against the parent for an owned skill (committing only
-    that skill's subpath, isolating dirty siblings in the shared clone) and
-    **refuses** for a read-only one.
+:   Publishing permission classification: recognized owned owner or explicit `--owned` allows subpath-only PR publishing; `readOnly: true` refuses push. Update still merges rather than intentionally discarding local work.
 
 **Scope** { #scope }
-:   Where an asset is installed: **project** (committed paths inside one
-    repo) or **global** (per-user, under `~`). Most verbs take `-p`/`-g`.
+:   Global user-level visibility versus one consumer project's visibility. Defaults vary by verb; [scope rules](agent-toolkit/cli.md#scope-and-target-selection). A Git repository alone does not establish the default.
 
 **General** { #general }
-:   The per-asset-type convergence directory many harnesses read directly —
-    `.agents/skills` for skills, `.agents/agents` for agents. Its readers
-    need no per-harness projection. (Successor of the legacy skills-only
-    "universal" model.)
+:   Older terminology for shared convergence placement. The CLI token is `standard`, not `general` or `universal`.
 
 **Projection** { #projection }
-:   Making an asset visible to one harness — usually a symlink into its slot
-    directory, sometimes a translated file or a registry entry. Derived
-    state for source-backed kinds. An Instructions pointer that supports the canonical source chain must not be deleted.
+:   Actual harness-visible link, translated file or named config entry. It can be missing/conflicted despite recorded metadata. Instructions installation truth is the actual pointer; canonical-source-chain participants are protected from removal.
 
 **Mechanism** { #mechanism }
-:   *How* an asset type projects into a particular harness:
+:   Native discovery (no projection), symlink, Instructions pointer, translated managed file, config entry + artifact, or dual symlink. Individual guarded writes do not imply cross-kind atomicity or universal rollback.
 
-    - **native** — already reads the canonical file/dir; zero work.
-    - **symlink** — per-asset symlink into an auto-scanned directory.
-    - **pointer** — same-name symlink (`CLAUDE.md → AGENTS.md`);
-      instructions-asset-type only.
-    - **translate** — per-harness flavored copy in a managed cache, then a
-      symlink to it.
-    - **config_file / config_file+folder** — registers the asset in a named
-      config file, optionally with a managed artefact folder; commits and
-      rolls back together.
-    - **dual-symlink** — two slot directories mirroring one source (Pi).
-
-## State & repair
+## State and compatibility
 
 **Lock file** { #lock-file }
-:   The per-asset-type, per-scope JSON record of what is installed and from where
-    (`skills-lock.json`, `agents-lock.json`, …). The source of truth for source-backed kinds;
-    projections are derived. Instructions is the exception: actual canonical-file symlinks determine installation, without a lock.
+:   Source-backed per-scope source/ref/SHA and optional projection metadata, or MCP's per-scope projection records. Not proof that files/config entries exist. Instructions has no installation lock; old locks are ignored/preserved. [Formats](agent-toolkit/lock-files.md).
 
 **Doctor** { #doctor }
-:   The per-asset-type reconciler: compares lock ↔ canonical ↔ projections, reports
-    findings (missing, foreign, drifted, unmanaged), offers fixes. Instructions instead diagnoses filesystem pointers directly, with explicitly confirmed regular-file adoption.
-
-## Compatibility data
+:   Kind-specific diagnostics. MCP/Commands doctors are read-only. Other kinds offer only supported, explicitly confirmed repairs; Instructions regular-file adoption is opt-in, never content merging.
 
 **Verdict** { #verdict }
-:   A harness's classification for one asset type in the [SSOT](#ssot): a supported
-    mechanism (✅ in the [matrix](matrix.md)), **unsupported (gap)** (could be
-    filled, isn't yet — rendered —), **unsupported (by design)** (the harness
-    has no such concept — rendered N/A), or **unknown** (no public evidence
-    found — rendered ?).
+:   A researched per-kind classification: native/supported mechanism, toolkit gap, not applicable, or unknown. Scope and enabled adapter status still matter.
 
 **SSOT** { #ssot }
-:   Single source of truth for harness compatibility:
-    [`harness-matrix.md`](agent-toolkit/harness-matrix.md) — machine-read by
-    the CLI (shipped in the wheel), guarded by parity tests, and published
-    here as part of the site. The [matrix](matrix.md) and harness pages are
-    generated views of it.
+:   Single source of truth. [`harness-matrix.md`](agent-toolkit/harness-matrix.md) contains machine-read Instructions/subagent verdicts and is packaged in the wheel. Skills catalog and maintained generator constants supply other generated views; run `scripts/gen_harness_docs.py`, never hand-edit generated pages.
 
 **Adapter** { #adapter }
-:   The per-(asset type × harness) code implementing a supported verdict — writes
-    the projection, guards foreign files, rolls back on failure. A verdict
-    can be *supported* while the adapter is *disabled* (e.g. Codex subagents,
-    pending the shared-config decision).
-
-
-## Command asset
-
-A source-backed reusable slash-command prompt. In agent-toolkit, commands use canonical `COMMAND.md` folders, `commands-lock.json`, and per-harness projection adapters.
+:   Code implementing a kind/harness projection and its ownership guards. A researched supported mechanism can have a disabled adapter (e.g. Codex/Firebender subagents). Check the generated harness page rather than inferring enabled support from a tick.

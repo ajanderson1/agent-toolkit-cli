@@ -15,15 +15,22 @@
 
 Not supported (gap) — no default root instruction file a pointer symlink could satisfy.
 
-- **Verdict:** unsupported (gap)
+- **Project research verdict:** unsupported (gap)
+- **Global research verdict:** unsupported (gap)
+- **Installation truth:** actual filesystem pointers, no Instructions lock.
 - **Default file:** `project_rules.md` (in `.trae/rules/` directory)
 - **Project / global path:** `./.trae/rules/project_rules.md` / `./.trae/rules/user_rules.md` (workspace-level "user rules", not OS-global)
 - **Reads `AGENTS.md` natively:** no
 - **Source:** [docs.trae.ai/ide/rules?_lang=en](https://docs.trae.ai/ide/rules?_lang=en) ; [github.com/Trae-AI/Trae/issues/1911](https://github.com/Trae-AI/Trae/issues/1911)
 
+Research verdicts/paths above are preserved evidence, not enabled mutation targets. The shipped `instructions_install.pointer_slots` contract determines actual scope support (native discovery is separate):
+
+- **Toolkit project pointer:** unavailable — no managed pointer slot at this scope
+- **Toolkit global pointer:** unavailable — no managed pointer slot at this scope
+
 ## Skills { #skills }
 
-Supported — every harness in the catalog has a skills directory the [skills asset type](../asset-types/skills.md) projects into.
+The catalog supplies a skills placement for this harness. The [skills asset type](../asset-types/skills.md) uses the shared Standard slot where covered, otherwise its own projection.
 
 - **Project dir:** `.trae/skills`
 - **Global dir:** `~/.trae/skills`

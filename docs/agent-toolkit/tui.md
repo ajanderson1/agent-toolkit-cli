@@ -3,8 +3,8 @@
 `agent-toolkit-tui` is the interactive [Textual](https://textual.textualize.io/)
 cockpit over the same surface the [CLI](cli.md) drives. It reads the lock files
 and filesystem directly (Instructions uses filesystem pointers only) and applies your edits by calling the shipped CLI
-facades in-process — so the TUI and CLI can never disagree about what is
-installed.
+facades in-process. Inventories are snapshots, not a guarantee against later
+filesystem changes or partially failed operations; reload actual state after errors.
 
 It ships alongside the CLI from the same `uv tool install`, as a separate
 binary:
@@ -13,11 +13,11 @@ binary:
 agent-toolkit-tui
 ```
 
-!!! note "📸 Screenshot — `tui-overview.png`"
+![Current TUI: expanded skill collection and queued changes in an isolated fixture](../assets/screenshots/tui-overview.png)
 
-    The full cockpit on launch: the **asset-type sidebar** on the left, the
-    active grid filling the content pane, the scope toggle top-right, and the
-    status / pending / footer rows along the bottom.
+Seven real skills, one collection, mixed parent selection, two pending changes,
+and global scope. Captured from the current source with disposable local Git/HOME;
+[reproduction and visual verdict](https://github.com/ajanderson1/agent-toolkit-cli/blob/main/docs/assets/screenshots/README.md).
 
 ## Layout
 
@@ -51,15 +51,12 @@ Footer (key hints)
   [scope](../glossary.md#scope). The grid re-reads at the new scope; pending
   edits queued in the other scope are kept, not discarded.
 
-!!! note "📸 Screenshot — `tui-skill-grid.png`"
-
-    The skill grid with several rows, a per-harness cell column, and a row
-    selected — showing what a populated grid looks like in practice.
-
+| Inventory state | Meaning |
+|---|---|
 | `unlisted` | Discovered on disk but absent from the active lock; visible for audit, not yet managed. |
 | `local package · untracked` | Pi package declared by local filesystem path; read-only until explicitly imported by confirmed doctor repair. |
 
-Skill, agent, and command grids union lock entries with bounded on-disk discovery. Skill bundles have separate stable `bundle:skill` rows. Filesystem discovery itself is observational; row cells retain existing per-harness behavior. For Pi, local-package rows carry `local package · untracked` and are non-interactive until managed.
+Skill, agent, and command grids union lock entries with bounded on-disk discovery. Registered multi-skill sources group real children into collections; bounded unmanaged discovery may also expose legacy members without making them managed. Inventory itself is observational, not a conversion/import. For Pi, local-package rows are non-interactive until explicitly managed.
 
 ## Key bindings
 
@@ -67,7 +64,7 @@ Skill, agent, and command grids union lock entries with bounded on-disk discover
 |---|---|---|
 | ++ctrl+s++ | **Apply** | Run pending edits across all asset types through the CLI facade. |
 | ++ctrl+d++ | **Diff** | Preview the pending queue (`N would-link, M would-unlink`) across all asset types without applying. |
-| ++ctrl+r++ | **Refresh** | Re-read locks + filesystem for the active view. |
+| ++ctrl+r++ | **Refresh** | Clear the active grid's pending edits (both scopes), then re-read its inventory; other kinds' queues survive. |
 | ++ctrl+z++ | **Revert** | Clear the pending queue across all asset types — both scopes. |
 | ++slash++ | **Filter** | Focus the fuzzy filter box over the grid. |
 | ++ctrl+g++ | **Scope toggle** | Switch project ⇄ global. |
@@ -75,10 +72,7 @@ Skill, agent, and command grids union lock entries with bounded on-disk discover
 | ++i++ | **Info** | Open information for the selected asset, regardless of column. |
 | ++q++ | **Quit** | Prompts to confirm if you have unapplied pending edits. |
 
-!!! note "📸 Screenshot — `tui-pending-apply.png`"
-
-    A grid with queued edits and the pending line populated, just before
-    ++ctrl+s++ — the moment the TUI's edit-then-apply model is clearest.
+Press ++space++ to toggle a cell, ++a++ for a column, and ++ctrl+w++ to focus the sidebar. Number shortcuts apply only when the sidebar has focus. Filters match asset identity; they do not narrow a collection parent's membership.
 
 ## Theme and Main Harness Preferences
 
@@ -101,6 +95,8 @@ override, failure handling, and the explicit CLI boundary.
 Multi-skill repositories appear as an expandable **collection** with short child names. The header counts real skills and collections, not extra parent rows. Click the parent name (or press Space/Enter there) to expand/collapse; Info retains full source/ref/path identity.
 
 Each available parent cell summarizes effective selection: unchecked = none, checked = all, **cyan `−` = mixed**. A mixed parent selects all when toggled. Child cells remain independent. The **yellow `-` on a child means pending removal**, not mixed selection. Parent actions include every member, even collapsed or filter-hidden children, and stay within that source/ref, harness and scope. A child filter keeps the parent visible for context. Column-wide toggles visit children once.
+
+Linked/broken counts reflect actual real-child payload health, not just link presence; pending controls represent desired selection. A missing referenced `SKILL.md` is unhealthy, and Apply refuses it instead of creating a false clean state.
 
 Legacy whole-repo exposure is recognized without writing. The first selection-changing Apply targeting it replaces the owned wrapper with the complete desired set of child links, preserving active checkout contents and history. This happens inside normal Apply: there is no conversion button, setup step or extra confirmation. Read/refresh, filters, expansion, toggles, Revert, no-op Apply and unrelated Apply do not reconcile assets. Other harnesses/scopes remain unchanged. A real root skill can make independent nested isolation uncertain; unsupported root-on/nested-off selections fail before writes rather than pretending a nested skill is disabled.
 
@@ -131,10 +127,14 @@ when applied, even if another asset type or the global scope is visible.
 
 Quitting with unapplied edits raises a confirm-discard prompt.
 
-!!! note "📸 Screenshot — `tui-scope-toggle.png`"
+## Limits and recovery
 
-    The scope toggle mid-switch (or the `(N global, M project)` tag in the
-    pending line) demonstrating that a single queue can span both scopes.
+- Apply runs queued kinds in order: Instructions, Commands, Skills, Agents, MCPs, Pi Extensions. Completed work is not globally rolled back when another kind fails.
+- Per-kind retry handling differs: Instructions retains only unsatisfied pointer intents; some source-backed grids retain a failed batch's queue, including already completed idempotent operations. Inspect actual state and diagnostics before retrying.
+- Switching kinds/scopes uses internal queue-preserving refreshes. User **Refresh** explicitly discards the active grid's queue; it is not equivalent to switching tabs. Revert clears all kinds/both scopes without undoing already applied filesystem work.
+- Main-harness preference changes require confirmed discard of all queued edits; changing theme preserves them. Presentation preferences do not install adapters or change Standard coverage.
+- Long paths retain existing single-row clipping; bold final directory is not a new truncation feature. Use Info for full source/ref/path identity.
+- The grid shows supported main-harness columns; use the CLI for the long tail. Unavailable cells cannot be toggled. Collection control is bounded by actual harness/scope exposure, not a universal loader guarantee.
 
 See also: [CLI reference](cli.md) · [TUI settings schema](tui-settings.md) ·
 [Glossary](../glossary.md) · [Roadmap](roadmap.md)

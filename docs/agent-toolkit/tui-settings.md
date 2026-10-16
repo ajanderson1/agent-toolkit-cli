@@ -40,7 +40,8 @@ Theme selection and harness selection apply directly via the command palette (`c
   the active main-harness list;
 - toggling a harness in **Main harnesses** immediately adds or removes it from your
   selection, saves to disk, and rebuilds every grid;
-- if any grid has queued edits, a confirmation prompt asks before discarding them.
+- a main-harness change asks before discarding **all kinds/both scopes** of queued edits; declining leaves both preferences and queues unchanged;
+- theme changes preserve pending queues. These are not the same as explicit Refresh, which clears only the active grid's queue before reloading.
 
 Supported v1 writes use a temporary sibling file followed by `os.replace`.
 Unknown top-level v1 fields, unknown harness names, and an unavailable persisted
