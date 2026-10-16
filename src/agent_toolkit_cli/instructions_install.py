@@ -13,9 +13,10 @@ from agent_toolkit_cli.instructions_adapters.symlink import (
     PointerConflictError,
     _pointer_path,
     canonical_usable,
-    canonical_chain,
     inspect_pointer,
     link_snapshot,
+    pointer_chain,
+    pointer_slot,
     preflight_removals,
 )
 
@@ -77,8 +78,7 @@ def plan(*, scope: Scope, project_root: Path | None, home: Path | None,
         for harness in sorted(set(harnesses)):
             get_adapter(harness)
             pointer = _pointer_path(harness, scope, project_root, home)
-            node = link_snapshot(pointer)
-            physical = ('node', *node[:2]) if node is not None else ('path', pointer.parent.resolve(), pointer.name)
+            physical = pointer_slot(pointer)
             if physical in intents and intents[physical][1] != operation:
                 raise PointerConflictError(f'opposing requests for shared pointer {pointer}; refused batch')
             intents[physical] = (harness, operation, pointer)
@@ -105,21 +105,17 @@ def plan(*, scope: Scope, project_root: Path | None, home: Path | None,
 
 def _dependent_first(actions: list[PointerAction]) -> list[PointerAction]:
     """Remove dependents while their referents still exist and ownership is provable."""
-    remaining = [a for a in actions if a.action == 'remove']
-    chains = {a.expected_link[:2]: canonical_chain(a.pointer) for a in remaining}
+    remaining = {pointer_slot(a.pointer): a for a in actions if a.action == 'remove'}
+    chains = {slot: pointer_chain(a.pointer) for slot, a in remaining.items()}
     ordered = [a for a in actions if a.action != 'remove']
     while remaining:
         ready = [
-            a for a in remaining
-            if not any(
-                a.expected_link[:2] in chains[other.expected_link[:2]]
-                for other in remaining if other is not a
-            )
+            slot for slot in remaining
+            if not any(slot in chains[other] for other in remaining if other != slot)
         ]
         if not ready:
             raise PointerConflictError('cannot safely order dependent pointer removals; refused batch')
-        ordered.extend(ready)
-        remaining = [a for a in remaining if a not in ready]
+        ordered.extend(remaining.pop(slot) for slot in ready)
     return ordered
 
 

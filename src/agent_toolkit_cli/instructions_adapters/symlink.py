@@ -12,11 +12,13 @@ Templates use {HOME}, {PROJECT}, {POINTER_NAME} placeholders.
 from __future__ import annotations
 
 from collections import deque
+from collections.abc import Iterator
 from dataclasses import dataclass
 import os
 from pathlib import Path
 import stat
 from typing import Literal
+import unicodedata
 
 
 class PointerConflictError(RuntimeError):
@@ -155,12 +157,47 @@ def link_snapshot(pointer: Path) -> tuple[int, int, str] | None:
     return info.st_dev, info.st_ino, os.readlink(pointer)
 
 
+def pointer_slot(pointer: Path, *, node: tuple[int, int] | None = None) -> tuple:
+    """Identify a fixed-name slot, disambiguating alternate chain spellings if needed."""
+    try:
+        parent = pointer.parent.stat()
+    except FileNotFoundError:
+        return ('path', pointer.parent.resolve(), pointer.name)
+    name = pointer.name
+    if node is not None:
+        entries = list(pointer.parent.iterdir())
+        exact = [entry for entry in entries if entry.name == name]
+        if exact:
+            matches = exact
+        else:
+            normalized = unicodedata.normalize('NFC', name).casefold()
+            matches = [entry for entry in entries
+                       if unicodedata.normalize('NFC', entry.name).casefold() == normalized]
+        validated = []
+        for entry in matches:
+            info = entry.lstat()
+            if (info.st_dev, info.st_ino) == node:
+                validated.append(entry)
+        if len(validated) != 1:
+            raise PointerConflictError(f'cannot identify directory entry for {pointer}; refused batch')
+        name = validated[0].name
+    return ('directory', parent.st_dev, parent.st_ino, name)
+
+
 def canonical_chain(canonical: Path) -> set[tuple[int, int]]:
     """Collect physical symlink-node identities, including directory-component hops."""
+    return {node for _, node in _symlink_chain(canonical)}
+
+
+def pointer_chain(pointer: Path) -> set[tuple]:
+    """Collect traversed entries, not every hardlink sharing a traversed node."""
+    return {pointer_slot(path, node=node) for path, node in _symlink_chain(pointer)}
+
+
+def _symlink_chain(canonical: Path) -> Iterator[tuple[Path, tuple[int, int]]]:
     path = canonical.absolute()
     pending = deque(path.parts[1:])
     resolved = Path(path.anchor)
-    links: set[tuple[int, int]] = set()
     hops = 0
     while pending:
         part = pending.popleft()
@@ -175,10 +212,10 @@ def canonical_chain(canonical: Path) -> set[tuple[int, int]]:
         except FileNotFoundError:
             info = None
         if info is not None and stat.S_ISLNK(info.st_mode):
-            links.add((info.st_dev, info.st_ino))
             hops += 1
             if hops > 40:
                 raise CanonicalChainError(f'cannot inspect canonical chain at {canonical}: symlink loop or too many hops')
+            yield candidate, (info.st_dev, info.st_ino)
             target = Path(os.readlink(candidate))
             if target.is_absolute():
                 resolved = Path(target.anchor)
@@ -188,7 +225,6 @@ def canonical_chain(canonical: Path) -> set[tuple[int, int]]:
             pending.extendleft(reversed(parts))
         else:
             resolved = candidate
-    return links
 
 
 def preflight_removals(canonical: Path, pointers: list[Path]) -> None:

@@ -44,6 +44,15 @@ not permission to remove `CLAUDE.md`: deletion breaks canonical readability.
   pointers before requested referents and recheck exact device/inode/raw-target
   snapshots before unlink, so an earlier removal cannot strand a requested link.
   Never prune or rewrite an unrequested dependent to make a batch look successful.
+- Keep directory-slot identity separate from node identity. Distinct directory
+  entries can hardlink the same symlink inode: deduplicate intent using physical
+  parent device/inode plus the fixed matrix leaf, and order dependencies using
+  traversed entries. For alternate traversal spellings, bounded parent lookup
+  prefers exact names, validates node identity and refuses ambiguous matches.
+  Planning absent parents uses resolved paths without creating directories.
+  Canonical protection intentionally remains conservative: it may refuse a
+  distinct hardlinked sibling sharing a source-chain inode. This safe over-refusal
+  is not authority to weaken the source guard or mutate an unrequested link.
 - Separate pointer ownership from canonical usability: an owned dangling link is
   still visible/removable, while missing source content is reported unhealthy.
 - Preserve doctor adoption as a separate opt-in transaction with backups and
@@ -65,6 +74,14 @@ support those aliases; portable emulation is not native-filesystem proof.
 Fresh review `w3D:pX` of `1510c36` reproduced both identity and ordering gaps after
 the initial suite passed; neither finding was waived. Worker red/green checks do
 not replace the required corrected-head independent recheck/full gate.
+
+`test_instructions_directory_slots.py` and `test_instruction_directory_slots.py`
+cover native hardlinked symlink entries through API/CLI/TUI in both scopes,
+independent and genuinely dependent removals, distinct-entry opposing intents,
+actual shared-slot coalescing/refusal, parent case aliases and read-only missing
+parents. Portable ambiguous-spelling emulation is explicitly not native filesystem
+proof. Fresh b93 review found inode-based deduplication lost an action and also
+manufactured dependency cycles; both must be corrected together.
 
 Other Instructions tests cover adoption, relative/dangling/cyclic pointers and
 source-backed asset architecture remaining intact. All homes/projects are disposable.
