@@ -4,7 +4,7 @@
 
 | Asset type | Support | How |
 |---|:-:|---|
-| [Instructions](../asset-types/instructions.md) | [✅](#instructions) | native classification; check discovery paths |
+| [Instructions](../asset-types/instructions.md) | [✅](#instructions) | research: native; toolkit pointer scopes: none |
 | [Skills](../asset-types/skills.md) | [✅](#skills) | `.goose/skills` |
 | [Agents (subagents)](../asset-types/agents.md) | N/A | no subagent concept |
 | [Commands](../asset-types/commands.md) | [?](#commands) | unknown — no public evidence found |
@@ -15,13 +15,18 @@
 
 Classified as a native `AGENTS.md` reader; no project pointer is created. Check the discovery paths below: some readers are workspace-only or do not load the root canonical at every scope.
 
-- **Project verdict:** native
-- **Global verdict:** native
+- **Project research verdict:** native
+- **Global research verdict:** native
 - **Installation truth:** actual filesystem pointers, no Instructions lock.
 - **Default file:** `.goosehints` (and `AGENTS.md`)
 - **Project / global path:** `./.goosehints` and `./AGENTS.md` / `~/.config/goose/.goosehints` and `~/.config/goose/AGENTS.md` (XDG; on macOS `~/Library/Application Support/Block/goose/`)
 - **Reads `AGENTS.md` natively:** yes
 - **Source:** [block/goose `crates/goose/src/hints/load_hints.rs`](https://github.com/block/goose/blob/main/crates/goose/src/hints/load_hints.rs) — `get_context_filenames()` defaults to `[".goosehints", "AGENTS.md"]`; `load_hints_from_directory` reads both project-cwd and `Paths::in_config_dir(...)`
+
+Research verdicts/paths above are preserved evidence, not enabled mutation targets. The shipped `instructions_install.pointer_slots` contract determines actual scope support (native discovery is separate):
+
+- **Toolkit project pointer:** unavailable — no managed pointer slot at this scope
+- **Toolkit global pointer:** unavailable — no managed pointer slot at this scope
 
 ## Skills { #skills }
 

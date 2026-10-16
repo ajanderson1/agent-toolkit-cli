@@ -4,7 +4,7 @@
 
 | Asset type | Support | How |
 |---|:-:|---|
-| [Instructions](../asset-types/instructions.md) | [✅](#instructions) | pointer symlink (`CODEBUDDY.md` → `AGENTS.md`); global pointer slot |
+| [Instructions](../asset-types/instructions.md) | [✅](#instructions) | research: symlink; toolkit pointer scopes: project, global |
 | [Skills](../asset-types/skills.md) | [✅](#skills) | `.codebuddy/skills` |
 | [Agents (subagents)](../asset-types/agents.md) | [✅](#agents) | symlink |
 | [Commands](../asset-types/commands.md) | [?](#commands) | unknown — no public evidence found |
@@ -13,17 +13,22 @@
 
 ## Instructions { #instructions }
 
-Reads a fixed own-name file (`CODEBUDDY.md`) instead of `AGENTS.md`. The [instructions asset type](../asset-types/instructions.md) creates a same-name pointer symlink → `AGENTS.md`.
+Reads a fixed own-name file (`CODEBUDDY.md`) instead of `AGENTS.md`. This is a research classification, not a scope-support promise. The [instructions asset type](../asset-types/instructions.md) creates pointers only at the enabled toolkit slots listed below.
 
-- **Project verdict:** symlink
-- **Global verdict:** symlink
+- **Project research verdict:** symlink
+- **Global research verdict:** symlink
 - **Installation truth:** actual filesystem pointers, no Instructions lock.
 - **Default file:** `CODEBUDDY.md`
 - **Project / global path:** `./CODEBUDDY.md` (recursive up from cwd) / `~/.codebuddy/CODEBUDDY.md`
 - **Reads `AGENTS.md` natively:** no (own-name preferred; AGENTS.md only as fallback when CODEBUDDY.md absent)
 - **Source:** [www.codebuddy.ai/docs/cli/memory](https://www.codebuddy.ai/docs/cli/memory)
 
-A global pointer slot is managed separately from project native reading; install links it to user-authored `~/.agent-toolkit/AGENTS.md`. Only supported/requested slots change; install never authors canonical content.
+Research verdicts/paths above are preserved evidence, not enabled mutation targets. The shipped `instructions_install.pointer_slots` contract determines actual scope support (native discovery is separate):
+
+- **Toolkit project pointer:** `<project>/CODEBUDDY.md`
+- **Toolkit global pointer:** `~/.codebuddy/CODEBUDDY.md`
+
+The enabled global pointer links to user-authored `~/.agent-toolkit/AGENTS.md`. Only requested slots change; install never authors canonical content.
 
 ## Skills { #skills }
 

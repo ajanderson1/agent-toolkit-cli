@@ -4,7 +4,7 @@
 
 | Asset type | Support | How |
 |---|:-:|---|
-| [Instructions](../asset-types/instructions.md) | [✅](#instructions) | native classification; check discovery paths |
+| [Instructions](../asset-types/instructions.md) | [✅](#instructions) | research: native; toolkit pointer scopes: none |
 | [Skills](../asset-types/skills.md) | [✅](#skills) | `.devin/skills` |
 | [Agents (subagents)](../asset-types/agents.md) | [✅](#agents) | translate |
 | [Commands](../asset-types/commands.md) | [✅](#commands) | project Standard slot (`.claude/commands`), imported as skills; no global command adapter |
@@ -15,13 +15,18 @@
 
 Classified as a native `AGENTS.md` reader; no project pointer is created. Check the discovery paths below: some readers are workspace-only or do not load the root canonical at every scope.
 
-- **Project verdict:** native
-- **Global verdict:** native
+- **Project research verdict:** native
+- **Global research verdict:** native
 - **Installation truth:** actual filesystem pointers, no Instructions lock.
 - **Default file:** `AGENTS.md`
 - **Project / global path:** `./AGENTS.md` / none (project-only)
 - **Reads `AGENTS.md` natively:** yes
 - **Source:** [docs.devin.ai/onboard-devin/agents-md](https://docs.devin.ai/onboard-devin/agents-md) ("Just put an `AGENTS.md` file in your project root … Devin will look for the file before it starts coding") and [docs.devin.ai/onboard-devin/knowledge-onboarding](https://docs.devin.ai/onboard-devin/knowledge-onboarding) (Knowledge is the user/global-scope mechanism, separate from `AGENTS.md`)
+
+Research verdicts/paths above are preserved evidence, not enabled mutation targets. The shipped `instructions_install.pointer_slots` contract determines actual scope support (native discovery is separate):
+
+- **Toolkit project pointer:** unavailable — no managed pointer slot at this scope
+- **Toolkit global pointer:** unavailable — no managed pointer slot at this scope
 
 ## Skills { #skills }
 

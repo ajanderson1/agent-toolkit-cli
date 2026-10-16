@@ -4,7 +4,7 @@
 
 | Asset type | Support | How |
 |---|:-:|---|
-| [Instructions](../asset-types/instructions.md) | [✅](#instructions) | native classification; check discovery paths |
+| [Instructions](../asset-types/instructions.md) | [✅](#instructions) | research: native; toolkit pointer scopes: none |
 | [Skills](../asset-types/skills.md) | [✅](#skills) | `.agents/skills` |
 | [Agents (subagents)](../asset-types/agents.md) | [✅](#agents) | config_file+folder |
 | [Commands](../asset-types/commands.md) | [?](#commands) | unknown — no public evidence found |
@@ -15,13 +15,18 @@
 
 Classified as a native `AGENTS.md` reader; no project pointer is created. Check the discovery paths below: some readers are workspace-only or do not load the root canonical at every scope.
 
-- **Project verdict:** native
-- **Global verdict:** native
+- **Project research verdict:** native
+- **Global research verdict:** native
 - **Installation truth:** actual filesystem pointers, no Instructions lock.
 - **Default file:** `AGENTS.md` (priority over `CLAUDE.md`, then `GEMINI.md`)
 - **Project / global path:** `<workspaceRoot>/AGENTS.md` / none (global-only AGENTS.md not auto-loaded; only `~/.dexto/commands/` is global)
 - **Reads `AGENTS.md` natively:** yes
 - **Source:** [github.com/truffle-ai/dexto/blob/main/packages/agent-management/src/config/discover-prompts.ts](https://github.com/truffle-ai/dexto/blob/main/packages/agent-management/src/config/discover-prompts.ts) (`AGENT_INSTRUCTION_FILES = ['agents.md', 'claude.md', 'gemini.md']`, `discoverAgentInstructionFile`)
+
+Research verdicts/paths above are preserved evidence, not enabled mutation targets. The shipped `instructions_install.pointer_slots` contract determines actual scope support (native discovery is separate):
+
+- **Toolkit project pointer:** unavailable — no managed pointer slot at this scope
+- **Toolkit global pointer:** unavailable — no managed pointer slot at this scope
 
 ## Skills { #skills }
 

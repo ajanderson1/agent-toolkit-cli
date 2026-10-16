@@ -15,13 +15,18 @@
 
 Unknown — bounded search surfaced no public evidence.
 
-- **Project verdict:** unknown — no public evidence found
-- **Global verdict:** unknown — no public evidence found
+- **Project research verdict:** unknown — no public evidence found
+- **Global research verdict:** unknown — no public evidence found
 - **Installation truth:** actual filesystem pointers, no Instructions lock.
 - **Default file:** none
 - **Project / global path:** none / none
 - **Reads `AGENTS.md` natively:** no
 - **Source:** Searched `support.huaweicloud.com` CodeArts docs, JetBrains Marketplace listing, Pandaily/Tiger Brokers public-beta coverage, Baidu-wiki entries — no documented default root instruction-file convention
+
+Research verdicts/paths above are preserved evidence, not enabled mutation targets. The shipped `instructions_install.pointer_slots` contract determines actual scope support (native discovery is separate):
+
+- **Toolkit project pointer:** unavailable — no managed pointer slot at this scope
+- **Toolkit global pointer:** unavailable — no managed pointer slot at this scope
 
 ## Skills { #skills }
 

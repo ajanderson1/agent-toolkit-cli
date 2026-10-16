@@ -4,7 +4,7 @@
 
 | Asset type | Support | How |
 |---|:-:|---|
-| [Instructions](../asset-types/instructions.md) | [✅](#instructions) | pointer symlink (`TABNINE.md` → `AGENTS.md`); global pointer slot |
+| [Instructions](../asset-types/instructions.md) | [✅](#instructions) | research: symlink; toolkit pointer scopes: project, global |
 | [Skills](../asset-types/skills.md) | [✅](#skills) | `.tabnine/agent/skills` |
 | [Agents (subagents)](../asset-types/agents.md) | N/A | no subagent concept |
 | [Commands](../asset-types/commands.md) | [?](#commands) | unknown — no public evidence found |
@@ -13,17 +13,22 @@
 
 ## Instructions { #instructions }
 
-Reads a fixed own-name file (`TABNINE.md`) instead of `AGENTS.md`. The [instructions asset type](../asset-types/instructions.md) creates a same-name pointer symlink → `AGENTS.md`.
+Reads a fixed own-name file (`TABNINE.md`) instead of `AGENTS.md`. This is a research classification, not a scope-support promise. The [instructions asset type](../asset-types/instructions.md) creates pointers only at the enabled toolkit slots listed below.
 
-- **Project verdict:** symlink
-- **Global verdict:** symlink
+- **Project research verdict:** symlink
+- **Global research verdict:** symlink
 - **Installation truth:** actual filesystem pointers, no Instructions lock.
 - **Default file:** `TABNINE.md`
 - **Project / global path:** `./TABNINE.md` / unclear (no documented global `TABNINE.md` path; `~/.tabnine/guidelines/*.md` is a *directory* of guidelines, not the same file)
 - **Reads `AGENTS.md` natively:** no
 - **Source:** [docs.tabnine.com/main/getting-started/tabnine-cli/getting-started/quickstart](https://docs.tabnine.com/main/getting-started/tabnine-cli/getting-started/quickstart) ("Add project context with a `TABNINE.md` file in your project root") and [docs.tabnine.com/main/getting-started/tabnine-cli/features/agent-skills](https://docs.tabnine.com/main/getting-started/tabnine-cli/features/agent-skills) ("Unlike `TABNINE.md` project instructions (which load automatically on every session), skills load only when relevant")
 
-A global pointer slot is managed separately from project native reading; install links it to user-authored `~/.agent-toolkit/AGENTS.md`. Only supported/requested slots change; install never authors canonical content.
+Research verdicts/paths above are preserved evidence, not enabled mutation targets. The shipped `instructions_install.pointer_slots` contract determines actual scope support (native discovery is separate):
+
+- **Toolkit project pointer:** `<project>/TABNINE.md`
+- **Toolkit global pointer:** `~/.tabnine/TABNINE.md`
+
+The enabled global pointer links to user-authored `~/.agent-toolkit/AGENTS.md`. Only requested slots change; install never authors canonical content.
 
 ## Skills { #skills }
 

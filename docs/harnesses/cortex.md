@@ -4,7 +4,7 @@
 
 | Asset type | Support | How |
 |---|:-:|---|
-| [Instructions](../asset-types/instructions.md) | [✅](#instructions) | native classification; check discovery paths |
+| [Instructions](../asset-types/instructions.md) | [✅](#instructions) | research: native; toolkit pointer scopes: none |
 | [Skills](../asset-types/skills.md) | [✅](#skills) | `.cortex/skills` |
 | [Agents (subagents)](../asset-types/agents.md) | [✅](#agents) | symlink |
 | [Commands](../asset-types/commands.md) | [?](#commands) | unknown — no public evidence found |
@@ -15,13 +15,18 @@
 
 Classified as a native `AGENTS.md` reader; no project pointer is created. Check the discovery paths below: some readers are workspace-only or do not load the root canonical at every scope.
 
-- **Project verdict:** native
-- **Global verdict:** native
+- **Project research verdict:** native
+- **Global research verdict:** native
 - **Installation truth:** actual filesystem pointers, no Instructions lock.
 - **Default file:** `AGENTS.md`
 - **Project / global path:** `./AGENTS.md` / none (project-only)
 - **Reads `AGENTS.md` natively:** yes
 - **Source:** [docs.snowflake.com/en/user-guide/cortex-code/cortex-code-snowsight](https://docs.snowflake.com/en/user-guide/cortex-code/cortex-code-snowsight) ("Create an `AGENTS.md` file … Cortex Code will automatically include in every conversation. Copy it to the root directory of your workspace"); `~/.snowflake/cortex/` CLI-config tree documents `skills/`, `agents/`, `commands/` but no global `AGENTS.md`
+
+Research verdicts/paths above are preserved evidence, not enabled mutation targets. The shipped `instructions_install.pointer_slots` contract determines actual scope support (native discovery is separate):
+
+- **Toolkit project pointer:** unavailable — no managed pointer slot at this scope
+- **Toolkit global pointer:** unavailable — no managed pointer slot at this scope
 
 ## Skills { #skills }
 

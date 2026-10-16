@@ -26,6 +26,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from agent_toolkit_cli.skill_agents import AGENTS  # noqa: E402
+from agent_toolkit_cli.instructions_install import pointer_slots  # noqa: E402
 
 MATRIX_SSOT = ROOT / "docs/agent-toolkit/harness-matrix.md"
 DOCS = ROOT / "docs"
@@ -302,7 +303,9 @@ this page by hand.
 Ticks are not a promise of every-kind, every-scope availability. Instructions
 verdicts in this overview are project classifications; native may mean a
 harness-specific discovery path, not a global pointer managed by the toolkit.
-Agent adapters can be disabled despite a researched mechanism. Paperclip Skills
+Instructions pointer scope availability comes from the shipped adapter-slot
+contract, not the research verdict alone. Agent adapters can be disabled despite
+a researched mechanism. Paperclip Skills
 is company/project-only; Codex Commands is deprecated, explicit and global-only.
 
 <div class="harness-matrix" markdown>
@@ -340,7 +343,19 @@ is company/project-only; Codex Commands is deprecated, explicit and global-only.
     (DOCS / "matrix.md").write_text(out)
 
 
-def instr_section(row: InstrRow) -> str:
+def instruction_pointer_slots(slug: str) -> dict[str, Path]:
+    """Use the shipped scope/slot contract, not research verdicts, for mutations."""
+    return {
+        scope: slots[slug]
+        for scope in ("project", "global")
+        if slug in (slots := pointer_slots(
+            scope=scope, project_root=Path("<project>"), home=Path("~")
+        ))
+    }
+
+
+def instr_section(slug: str, row: InstrRow) -> str:
+    slots = instruction_pointer_slots(slug)
     lines = ["## Instructions { #instructions }", ""]
     if row.verdict == "native":
         lines.append(
@@ -351,8 +366,9 @@ def instr_section(row: InstrRow) -> str:
     elif row.verdict == "symlink":
         lines.append(
             f"Reads a fixed own-name file ({row.default_file}) instead of "
-            "`AGENTS.md`. The [instructions asset type](../asset-types/instructions.md) "
-            "creates a same-name pointer symlink → `AGENTS.md`."
+            "`AGENTS.md`. This is a research classification, not a scope-support promise. "
+            "The [instructions asset type](../asset-types/instructions.md) creates "
+            "pointers only at the enabled toolkit slots listed below."
         )
     elif row.verdict == "unsupported (gap)":
         lines.append(
@@ -365,20 +381,29 @@ def instr_section(row: InstrRow) -> str:
         lines.append("Unknown — bounded search surfaced no public evidence.")
     lines += [
         "",
-        f"- **Project verdict:** {row.verdict}",
-        f"- **Global verdict:** {row.global_verdict}",
+        f"- **Project research verdict:** {row.verdict}",
+        f"- **Global research verdict:** {row.global_verdict}",
         "- **Installation truth:** actual filesystem pointers, no Instructions lock.",
         f"- **Default file:** {row.default_file or '—'}",
         f"- **Project / global path:** {row.paths or '—'}",
         f"- **Reads `AGENTS.md` natively:** {row.native or '—'}",
         f"- **Source:** {linkify(row.citation)}",
     ]
-    if row.global_verdict == "symlink":
+    lines += [
+        "",
+        "Research verdicts/paths above are preserved evidence, not enabled mutation targets. "
+        "The shipped `instructions_install.pointer_slots` contract determines actual "
+        "scope support (native discovery is separate):",
+        "",
+    ]
+    for scope in ("project", "global"):
+        target = f"`{slots[scope]}`" if scope in slots else "unavailable — no managed pointer slot at this scope"
+        lines.append(f"- **Toolkit {scope} pointer:** {target}")
+    if "global" in slots:
         lines += [
             "",
-            "A global pointer slot is managed separately from project native reading; "
-            "install links it to user-authored `~/.agent-toolkit/AGENTS.md`. "
-            "Only supported/requested slots change; install never authors canonical content.",
+            "The enabled global pointer links to user-authored `~/.agent-toolkit/AGENTS.md`. "
+            "Only requested slots change; install never authors canonical content.",
         ]
     return "\n".join(lines)
 
@@ -529,10 +554,10 @@ def write_harness_page(slug: str, agents: dict[str, AgentRow], instrs: dict[str,
     cfg = AGENTS[slug]
     a, i = agents[slug], instrs[slug]
     instr_s, agent_s = sym_instr(i.verdict), sym_agent(a.verdict)
+    slots = instruction_pointer_slots(slug)
+    enabled_scopes = ", ".join(slots) or "none"
     instr_how = {
-        "✅": ("native classification; check discovery paths" if i.verdict == "native"
-        else f"pointer symlink ({i.default_file} → `AGENTS.md`)")
-        + ("; global pointer slot" if i.global_verdict == "symlink" else ""),
+        "✅": f"research: {i.verdict}; toolkit pointer scopes: {enabled_scopes}",
         "—": "no pointer-satisfiable root file",
         "N/A": "no instruction-file concept",
         "?": "no public evidence",
@@ -565,7 +590,7 @@ def write_harness_page(slug: str, agents: dict[str, AgentRow], instrs: dict[str,
     instr_cell = f"[{instr_s}](#instructions)" if instr_s != "N/A" else "N/A"
     agent_cell = f"[{agent_s}](#agents)" if agent_s != "N/A" else "N/A"
     sections = [
-        instr_section(i),
+        instr_section(slug, i),
         skills_section(slug),
         agent_section(slug, a),
         command_section(slug),

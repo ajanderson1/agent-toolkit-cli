@@ -129,4 +129,12 @@ Capture/check tests/scripts only: source-asserted isolated fixture rendering, lo
 - `git diff --check` and authored diff/SVG leak checks: passed. Complete committed-range leak scan is a delivery check after commit.
 - Full suite rewrote tracked historical `assets/verification/515/inventory.svg`. Preserved generated SVG/patch outside repository; exact test replay produced identical bytes after Rich ID normalization. Differences versus historical tracked output were final-source collection filter hint/ellipsis plus render IDs; only that proven task-generated artifact was restored. No blanket reset/clean.
 
+## Independent-review correction: research is not an enabled scope slot
+
+The first candidate `338c6aaca8f57f08afffbbdef3b1553a8d5b541d` passed its normal pre-push suite (2643 passed, 10 skipped, 229.87s) and exact-head CI, but independent review found a documentation blocker: Replit's raw global research verdict says `symlink` while its shipped global adapter slot is empty. The old generator falsely turned that classification into an installation promise. Those old-head checks do not approve the corrected candidate.
+
+The generator now derives **every harness's project/global pointer claims** from actual `instructions_install.pointer_slots` (7 project, 9 global slots), displays raw research classifications separately with an explicit caveat, and renders unavailable scopes without promising a pointer. No runtime behavior, raw SSOT verdict, help-only source delta or image bytes changed. Replit remains project-only in the enabled contract; global CLI install is refused without writes, while project install creates the actual pointer.
+
+New regression coverage checks both scopes across all 55 harnesses, plus real isolated Replit global refusal/project installation. All generated pages/nav are regenerated and byte-compared to generator output. Selected repair checks: **81 passed in 15.22s**, strict docs/link/anchor/image checks passed, all 75 help invocations passed, 57-output repeat generation was byte-identical. New-head full suite/hook/CI and fresh review are required separately.
+
 Normal mandatory pre-push full suite, remote push/PR, **fresh independent exact-head review and actual exact-head green CI remain separate delivery gates**; this author audit is not approval. PM owns merge/release.

@@ -4,7 +4,7 @@
 
 | Asset type | Support | How |
 |---|:-:|---|
-| [Instructions](../asset-types/instructions.md) | [✅](#instructions) | native classification; check discovery paths |
+| [Instructions](../asset-types/instructions.md) | [✅](#instructions) | research: native; toolkit pointer scopes: none |
 | [Skills](../asset-types/skills.md) | [✅](#skills) | `.rovodev/skills` |
 | [Agents (subagents)](../asset-types/agents.md) | [✅](#agents) | symlink |
 | [Commands](../asset-types/commands.md) | [?](#commands) | unknown — no public evidence found |
@@ -15,13 +15,18 @@
 
 Classified as a native `AGENTS.md` reader; no project pointer is created. Check the discovery paths below: some readers are workspace-only or do not load the root canonical at every scope.
 
-- **Project verdict:** native
-- **Global verdict:** native
+- **Project research verdict:** native
+- **Global research verdict:** native
 - **Installation truth:** actual filesystem pointers, no Instructions lock.
 - **Default file:** `AGENTS.md`
 - **Project / global path:** `./AGENTS.md` / `~/.rovodev/AGENTS.md`
 - **Reads `AGENTS.md` natively:** yes
 - **Source:** [paul-hackenberger.medium.com/atlassian-rovodev-the-king-of-kontext-6bd7a77b5b37](https://paul-hackenberger.medium.com/atlassian-rovodev-the-king-of-kontext-6bd7a77b5b37) ("Place an `AGENTS.md` file in your repository root … Rovo Dev reads this automatically" and "Create an `AGENTS.md` file in your `~/.rovodev` folder … Rovo Dev reads these files automatically, giving every interaction team-specific context")
+
+Research verdicts/paths above are preserved evidence, not enabled mutation targets. The shipped `instructions_install.pointer_slots` contract determines actual scope support (native discovery is separate):
+
+- **Toolkit project pointer:** unavailable — no managed pointer slot at this scope
+- **Toolkit global pointer:** unavailable — no managed pointer slot at this scope
 
 ## Skills { #skills }
 

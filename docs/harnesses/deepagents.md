@@ -15,13 +15,18 @@
 
 Not supported (gap) — no default root instruction file a pointer symlink could satisfy.
 
-- **Project verdict:** unsupported (gap)
-- **Global verdict:** unsupported (gap)
+- **Project research verdict:** unsupported (gap)
+- **Global research verdict:** unsupported (gap)
 - **Installation truth:** actual filesystem pointers, no Instructions lock.
 - **Default file:** none (memory middleware requires explicit `agentId` + source paths)
 - **Project / global path:** none (no auto-load) / none (no auto-load)
 - **Reads `AGENTS.md` natively:** no
 - **Source:** [deepagentsdk.dev/docs/guides/agent-memory](https://deepagentsdk.dev/docs/guides/agent-memory) ("Create memory middleware" requires `createAgentMemoryMiddleware({ agentId })`; project memory only loads via `requestProjectApproval`)
+
+Research verdicts/paths above are preserved evidence, not enabled mutation targets. The shipped `instructions_install.pointer_slots` contract determines actual scope support (native discovery is separate):
+
+- **Toolkit project pointer:** unavailable — no managed pointer slot at this scope
+- **Toolkit global pointer:** unavailable — no managed pointer slot at this scope
 
 ## Skills { #skills }
 

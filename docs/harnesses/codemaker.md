@@ -15,13 +15,18 @@
 
 Not applicable — no root instruction-file concept at all.
 
-- **Project verdict:** unsupported (by design)
-- **Global verdict:** unsupported (by design)
+- **Project research verdict:** unsupported (by design)
+- **Global research verdict:** unsupported (by design)
 - **Installation truth:** actual filesystem pointers, no Instructions lock.
 - **Default file:** none
 - **Project / global path:** none / none
 - **Reads `AGENTS.md` natively:** no
 - **Source:** [github.com/codemakerai/codemaker-cli](https://github.com/codemakerai/codemaker-cli) README ("Context-aware source code generation … Generating source code documentation … Fixing syntax"; usage is `codemaker generate docs **/*.java`)
+
+Research verdicts/paths above are preserved evidence, not enabled mutation targets. The shipped `instructions_install.pointer_slots` contract determines actual scope support (native discovery is separate):
+
+- **Toolkit project pointer:** unavailable — no managed pointer slot at this scope
+- **Toolkit global pointer:** unavailable — no managed pointer slot at this scope
 
 ## Skills { #skills }
 

@@ -15,13 +15,18 @@
 
 Not supported (gap) — no default root instruction file a pointer symlink could satisfy.
 
-- **Project verdict:** unsupported (gap)
-- **Global verdict:** unsupported (gap)
+- **Project research verdict:** unsupported (gap)
+- **Global research verdict:** unsupported (gap)
 - **Installation truth:** actual filesystem pointers, no Instructions lock.
 - **Default file:** none (rule files toggled via UI / External Rules extension)
 - **Project / global path:** n/a — rule files live under user-chosen folders, enabled per-profile via UI
 - **Reads `AGENTS.md` natively:** no
 - **Source:** [hotovo/aider-desk README](https://github.com/hotovo/aider-desk#readme) — "Rule Files" / "External Rules extension"; no auto-loaded root file documented in README or main `AGENTS.md`
+
+Research verdicts/paths above are preserved evidence, not enabled mutation targets. The shipped `instructions_install.pointer_slots` contract determines actual scope support (native discovery is separate):
+
+- **Toolkit project pointer:** unavailable — no managed pointer slot at this scope
+- **Toolkit global pointer:** unavailable — no managed pointer slot at this scope
 
 ## Skills { #skills }
 

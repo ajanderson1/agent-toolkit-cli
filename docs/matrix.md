@@ -15,7 +15,9 @@ this page by hand.
 Ticks are not a promise of every-kind, every-scope availability. Instructions
 verdicts in this overview are project classifications; native may mean a
 harness-specific discovery path, not a global pointer managed by the toolkit.
-Agent adapters can be disabled despite a researched mechanism. Paperclip Skills
+Instructions pointer scope availability comes from the shipped adapter-slot
+contract, not the research verdict alone. Agent adapters can be disabled despite
+a researched mechanism. Paperclip Skills
 is company/project-only; Codex Commands is deprecated, explicit and global-only.
 
 <div class="harness-matrix" markdown>

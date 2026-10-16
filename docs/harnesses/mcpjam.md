@@ -15,13 +15,18 @@
 
 Not applicable — no root instruction-file concept at all.
 
-- **Project verdict:** unsupported (by design)
-- **Global verdict:** unsupported (by design)
+- **Project research verdict:** unsupported (by design)
+- **Global research verdict:** unsupported (by design)
 - **Installation truth:** actual filesystem pointers, no Instructions lock.
 - **Default file:** none
 - **Project / global path:** none / none
 - **Reads `AGENTS.md` natively:** no
 - **Source:** [www.mcpjam.com/](https://www.mcpjam.com/) ; [github.com/MCPJam/inspector](https://github.com/MCPJam/inspector)
+
+Research verdicts/paths above are preserved evidence, not enabled mutation targets. The shipped `instructions_install.pointer_slots` contract determines actual scope support (native discovery is separate):
+
+- **Toolkit project pointer:** unavailable — no managed pointer slot at this scope
+- **Toolkit global pointer:** unavailable — no managed pointer slot at this scope
 
 ## Skills { #skills }
 
