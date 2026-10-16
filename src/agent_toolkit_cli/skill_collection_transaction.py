@@ -139,6 +139,19 @@ class Journal:
                 patch(path, after, before)
             except (OSError, InstallError) as exc:
                 errors.append(str(exc))
+        try:
+            for path, expected in self.guards:
+                lock = checked_lock(path)
+                if any(lock.skills.get(k) != v for k, v in expected.items()):
+                    raise InstallError(f"affected record recovery conflict: {path}")
+        except (OSError, InstallError) as exc:
+            errors.append(str(exc))
+        if errors:
+            errors.append(
+                "links preserved pending record recovery: "
+                + ", ".join(str(p) for p, _, _ in self.links)
+            )
+            return errors
         for path, before, after in reversed(self.links):
             try:
                 current = link_state(path)
@@ -146,7 +159,10 @@ class Journal:
                     continue
                 if current != after:
                     raise InstallError(f"link recovery conflict: {path} -> {current}")
-                Journal().link(path, current, before)
+                recovery = Journal()
+                recovery.guards = self.guards
+                recovery.parents = self.parents
+                recovery.link(path, current, before)
             except (OSError, InstallError) as exc:
                 errors.append(str(exc))
         return errors

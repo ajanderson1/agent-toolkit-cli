@@ -560,6 +560,9 @@ def install_cmd(
     except click.UsageError:
         raise
 
+    if not target_agents:
+        click.echo(f"{slug or source_filter}: no agents specified; nothing to do")
+        return
     if source_filter is not None:
         from agent_toolkit_cli.skill_lock import read_lock
         from agent_toolkit_cli.skill_collections import catalog

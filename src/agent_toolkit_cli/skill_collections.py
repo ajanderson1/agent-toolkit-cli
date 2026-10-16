@@ -168,6 +168,8 @@ def apply_selection(
     project: Path | None,
 ) -> None:
     """Commit complete desired sibling sets for the requested harnesses only."""
+    if not selections:
+        return
     if group.error:
         raise InstallError(group.error)
     lock_path = lock_file_path(scope=scope, home=home, project=project)

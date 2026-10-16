@@ -634,7 +634,11 @@ class SkillGrid(Vertical):
         for row in visible:
             if row.is_collection:
                 disclosure = "▸" if row.collection_key in self._collapsed else "▾"
-                name = f"{disclosure} {row.source.rsplit('/', 1)[-1]} · collection"
+                base = row.source.rsplit("/", 1)[-1]
+                identities = {r.collection_key for r in self._rows if r.collection_key and r.source.rsplit("/", 1)[-1] == base}
+                if len(identities) > 1:
+                    base = f"{row.source}@{row.collection_key[1] or 'default'}"
+                name = f"{disclosure} {base} · collection"
             else:
                 name = ("  ↳ " if row.collection_key else "") + (row.display_name or row.slug)
             cells: list[str | Text] = [Text(name, no_wrap=True, overflow="ellipsis")]
