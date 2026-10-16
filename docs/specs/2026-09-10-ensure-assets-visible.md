@@ -22,6 +22,7 @@ Every active asset found in supported configuration or on-disk inventory locatio
 - Unknown upstreams are recorded as local sources; never infer or invent a remote.
 - Repair must preserve the source directory/config entry and be safe to repeat.
 - Continue existing schemas and per-kind architecture; no broad refactor or new dependency.
+- If an asset cannot be imported without changing its contents or unrelated configuration, report it and leave it unmanaged.
 
 ## Acceptance
 
