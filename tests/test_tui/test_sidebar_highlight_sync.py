@@ -18,6 +18,9 @@ from textual.widgets import OptionList
 from agent_toolkit_tui.app import TUIApp
 
 
+ASSET_TYPES = ("instruction", "command", "skill", "agent", "mcp", "pi-extension")
+
+
 def _index_of(option_list: OptionList, asset_type: str) -> int:
     return option_list.get_option_index(f"asset-type-{asset_type}")
 
@@ -45,10 +48,37 @@ async def test_action_asset_type_syncs_highlight():
         await pilot.pause()
         asset_types_list = app.query_one("#asset-types-list", OptionList)
 
-        for asset_type in ("instruction", "pi-extension", "agent", "skill"):
+        for asset_type in ASSET_TYPES:
             app.action_asset_type(asset_type)
             await pilot.pause()
             assert asset_types_list.highlighted == _index_of(asset_types_list, asset_type), (
                 f"after action_asset_type({asset_type!r}) the highlight is "
                 f"{asset_types_list.highlighted}, expected {_index_of(asset_types_list, asset_type)}"
             )
+
+
+@pytest.mark.asyncio
+async def test_sidebar_number_keys_switch_all_asset_types():
+    app = TUIApp()
+    async with app.run_test(size=(120, 40)) as pilot:
+        sidebar = app.query_one("#asset-types-list", OptionList)
+        for key, asset_type in enumerate(ASSET_TYPES, start=1):
+            sidebar.focus()
+            await pilot.press(str(key))
+            await pilot.pause()
+            assert app._active_asset_type == asset_type
+            assert sidebar.highlighted == _index_of(sidebar, asset_type)
+
+
+@pytest.mark.asyncio
+async def test_sidebar_selection_switches_all_asset_types():
+    app = TUIApp()
+    async with app.run_test(size=(120, 40)) as pilot:
+        sidebar = app.query_one("#asset-types-list", OptionList)
+        for asset_type in ASSET_TYPES:
+            sidebar.focus()
+            sidebar.highlighted = _index_of(sidebar, asset_type)
+            await pilot.press("enter")
+            await pilot.pause()
+            assert app._active_asset_type == asset_type
+            assert sidebar.highlighted == _index_of(sidebar, asset_type)

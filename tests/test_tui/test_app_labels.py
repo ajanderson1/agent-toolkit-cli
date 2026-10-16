@@ -13,13 +13,10 @@ async def test_sidebar_uses_plural_title_case_asset_labels():
     async with app.run_test() as pilot:
         await pilot.pause()
         sidebar = app.query_one("#asset-types-list", OptionList)
-        labels = [str(option.prompt) for option in sidebar.options if not option.disabled]
-        assert any("Instructions" in l for l in labels)
-        assert any("Skills" in l for l in labels)
-        assert any("Commands" in l for l in labels)
-        assert any("Pi Extensions" in l for l in labels)
-        assert any("Agents" in l for l in labels)
-        assert any("MCPs" in l for l in labels)
+        labels = [str(option.prompt) for option in sidebar.options]
+        assert labels == [
+            "Instructions", "Commands", "Skills", "Agents", "MCPs", "Pi Extensions",
+        ]
 
 
 @pytest.mark.asyncio

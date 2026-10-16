@@ -23,21 +23,30 @@ agent-toolkit-tui
 
 ```text
 Header
-├─ Asset-type sidebar        instruction · skill · command · pi-extension · agent · mcp
+├─ Asset-type sidebar        Instructions · Commands · Skills · Agents · MCPs · Pi Extensions
 └─ Content
    ├─ Content header + Scope toggle   (project ⇄ global)
    └─ One grid per asset type         (swapped as you change asset type)
+Repository path
 Status bar
 Pending line
 Footer (key hints)
 ```
 
 - **Asset-type sidebar** — pick which [asset type](../glossary.md#asset-type)
-  you're managing. `instruction` sits above a separator (it is whole-scope, not
-  per-slug); `skill`, `command`, `pi-extension`, `agent`, and `mcp` follow.
+  you're managing: Instructions, Commands, Skills, Agents, MCPs, or Pi Extensions.
+  Labels have no number prefixes or separators. With the sidebar focused, keys
+  **1–6** still select these types in order.
 - **Grid** — one row per asset, columns vary by type (slug, source, ref, state,
   per-harness cells). Press ++i++ for the selected asset; click a glyphed column
   header for column-level information.
+- **Repository path** — the row above the status bar shows a bold **REPO:**
+  label, a regular-weight parent path, and a bold final displayed directory.
+  It shows the launch directory (including a repository subdirectory), not a
+  substituted Git root. Spaces and markup characters remain literal. A warning
+  triangle and red text still indicate a directory that is not itself a Git
+  root; linked worktree roots do not warn. Filesystem root is shown once, in
+  bold. Narrow terminals retain the existing single-row clipping behavior.
 - **Scope toggle** — flips the whole view between **project** and **global**
   [scope](../glossary.md#scope). The grid re-reads at the new scope; pending
   edits queued in the other scope are kept, not discarded.
