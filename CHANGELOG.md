@@ -1,5 +1,23 @@
 # Changelog
 
+## [5.10.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v5.9.1...v5.10.0) (2026-10-16)
+
+
+### Features
+
+* **inventory:** surface untracked assets and offer safe repair ([#522](https://github.com/ajanderson1/agent-toolkit-cli/issues/522)) ([12636bd](https://github.com/ajanderson1/agent-toolkit-cli/commit/12636bdf321b1a9697ef0d1f4a589f3d71e5ddee))
+* **release:** build, validate, smoke-test and upload release artifacts ([#519](https://github.com/ajanderson1/agent-toolkit-cli/issues/519)) ([67e0913](https://github.com/ajanderson1/agent-toolkit-cli/commit/67e09130926e8588affa6d5118b643b8ddc604c9))
+* **tui:** display working directory and remove duplicate pending footer ([#517](https://github.com/ajanderson1/agent-toolkit-cli/issues/517)) ([3299dd2](https://github.com/ajanderson1/agent-toolkit-cli/commit/3299dd217b1d701504c126f81c4f33aa9e7206ca))
+
+
+### Bug Fixes
+
+* **cli:** collapse command aliases into single help entries ([#516](https://github.com/ajanderson1/agent-toolkit-cli/issues/516)) ([#520](https://github.com/ajanderson1/agent-toolkit-cli/issues/520)) ([28dc353](https://github.com/ajanderson1/agent-toolkit-cli/commit/28dc3536eee9346d85b101c3e2eb10085275efbb))
+* **docs:** exclude internal specs, plans, and reviews from site build ([#523](https://github.com/ajanderson1/agent-toolkit-cli/issues/523)) ([3794b97](https://github.com/ajanderson1/agent-toolkit-cli/commit/3794b97f95b7337cb39fc40f0015435980afade4))
+* **instructions:** manage global native reader pointers ([#521](https://github.com/ajanderson1/agent-toolkit-cli/issues/521)) ([8ad3e9d](https://github.com/ajanderson1/agent-toolkit-cli/commit/8ad3e9d8ee8ff219e485615016e4e827f0b06e7d))
+* **release:** guard manual artifact delivery ([#524](https://github.com/ajanderson1/agent-toolkit-cli/issues/524)) ([dae729c](https://github.com/ajanderson1/agent-toolkit-cli/commit/dae729cfd632fca2ab00744e31953c7fd6f00d04))
+* **tests:** pytest runs pollute real user library ([#514](https://github.com/ajanderson1/agent-toolkit-cli/issues/514)) ([7bbc30a](https://github.com/ajanderson1/agent-toolkit-cli/commit/7bbc30a4938e6698fdaa49f875bfbf0e99998a6e))
+
 ## [5.9.1](https://github.com/ajanderson1/agent-toolkit-cli/compare/v5.9.0...v5.9.1) (2026-10-15)
 
 
