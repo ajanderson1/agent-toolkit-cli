@@ -162,9 +162,9 @@ def test_global_pi_uses_standard_projection(git_sandbox, tmp_path, monkeypatch):
     assert "pi" not in result.skipped
 
     # Verify canonical skill and lockfile live in isolated sandbox library
-    assert result.canonical_path == library_root() / slug
+    assert result.canonical_path == library_root(home=home) / slug
     assert result.canonical_path.exists()
-    lock_file = library_lock_path()
+    lock_file = library_lock_path(home=home)
     assert lock_file.exists()
     assert slug in lock_file.read_text()
 
