@@ -92,7 +92,9 @@ def default_scope(cwd: Path) -> str:
 
 
 def library_root_for_asset_type(
-    binding: AssetTypeBinding, env: dict[str, str] | None = None
+    binding: AssetTypeBinding,
+    env: dict[str, str] | None = None,
+    home: Path | None = None,
 ) -> Path:
     """Return the library root for a given asset type.
 
@@ -100,25 +102,26 @@ def library_root_for_asset_type(
     `$AGENT_TOOLKIT_SKILLS_ROOT` override; for other asset types the env
     override does not apply (intentional — other asset types get their own
     override variable in their own PR if needed).
-    Falls back to ~/.agent-toolkit/<binding.library_subdir>/.
+    Falls back to <home>/.agent-toolkit/<binding.library_subdir>/, defaulting
+    to Path.home() if home is not supplied.
     """
     resolved_env = env if env is not None else os.environ
     if binding.asset_type == "skill":
         override = resolved_env.get("AGENT_TOOLKIT_SKILLS_ROOT", "").strip()
         if override:
             return Path(override)
-    # Use Path.home() to match the existing skill_paths.library_root() exactly.
-    # monkeypatch.setenv("HOME", ...) is honoured because Path.home() reads
-    # $HOME from os.environ, which monkeypatch updates.
-    return Path.home() / ".agent-toolkit" / binding.library_subdir
+    base_home = home if home is not None else Path.home()
+    return base_home / ".agent-toolkit" / binding.library_subdir
 
 
 def library_lock_path_for_asset_type(
-    binding: AssetTypeBinding, env: dict[str, str] | None = None
+    binding: AssetTypeBinding,
+    env: dict[str, str] | None = None,
+    home: Path | None = None,
 ) -> Path:
     """Return the global lock-file path for a given asset type.
 
     Lives at <library_root>.parent / <binding.lock_filename>, e.g.
     ~/.agent-toolkit/skills-lock.json by default.
     """
-    return library_root_for_asset_type(binding, env).parent / binding.lock_filename
+    return library_root_for_asset_type(binding, env, home).parent / binding.lock_filename

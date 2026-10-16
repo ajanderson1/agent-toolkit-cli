@@ -70,27 +70,34 @@ def _root(scope: Scope, home: Path | None, project: Path | None) -> Path:
     return project
 
 
-def library_root(env: dict[str, str] | None = None) -> Path:
+def library_root(
+    env: dict[str, str] | None = None, home: Path | None = None,
+) -> Path:
     """Return the root of the global skill library.
 
     Thin shim over `_paths_core.library_root_for_asset_type(SKILL_BINDING, …)`.
     Honors $AGENT_TOOLKIT_SKILLS_ROOT for backward compatibility.
+    Falls back to <home>/.agent-toolkit/skills/ or Path.home()/.agent-toolkit/skills/.
     """
-    return library_root_for_asset_type(SKILL_BINDING, env)
+    return library_root_for_asset_type(SKILL_BINDING, env, home=home)
 
 
-def library_skill_path(slug: str, *, env: dict[str, str] | None = None) -> Path:
+def library_skill_path(
+    slug: str, *, env: dict[str, str] | None = None, home: Path | None = None,
+) -> Path:
     """Return the canonical library path for a single skill slug."""
-    return library_root(env) / slug
+    return library_root(env, home=home) / slug
 
 
-def library_lock_path(env: dict[str, str] | None = None) -> Path:
+def library_lock_path(
+    env: dict[str, str] | None = None, home: Path | None = None,
+) -> Path:
     """Return the path of the global skills-lock.json for v2.2+.
 
     Thin shim over `_paths_core.library_lock_path_for_asset_type(SKILL_BINDING, …)`.
     Lives at <library_root>.parent / "skills-lock.json" by default.
     """
-    return library_lock_path_for_asset_type(SKILL_BINDING, env)
+    return library_lock_path_for_asset_type(SKILL_BINDING, env, home=home)
 
 
 def canonical_skill_dir(
@@ -102,14 +109,14 @@ def canonical_skill_dir(
 ) -> Path:
     """Return the canonical on-disk path for a skill at the given scope.
 
-    Global scope: delegates to library_skill_path(slug). The `home` parameter
-    is accepted for backward compatibility but ignored — the library root is
-    always determined by $AGENT_TOOLKIT_SKILLS_ROOT.
+    Global scope: delegates to library_skill_path(slug, home=home).
+    The library root is determined by $AGENT_TOOLKIT_SKILLS_ROOT if set;
+    otherwise honors `home` when provided, falling back to Path.home().
 
     Project scope: <store_root>/<slug> (external store; see project_store_root).
     """
     if scope == "global":
-        return library_skill_path(slug)
+        return library_skill_path(slug, home=home)
     if project is None:
         raise ValueError("project scope requires project")
     return project_store_root(project) / slug
@@ -123,15 +130,14 @@ def lock_file_path(
 ) -> Path:
     """Return the lock file path for the given scope.
 
-    Global scope: delegates to library_lock_path(). The `home` parameter is
-    accepted for backward compatibility but ignored.
+    Global scope: delegates to library_lock_path(home=home).
 
     Project scope: <project>/<binding.lock_filename> — uses the binding so
     PR2's agent lock at project scope lands at <project>/agents-lock.json
     automatically.
     """
     if scope == "global":
-        return library_lock_path()
+        return library_lock_path(home=home)
     if project is None:
         raise ValueError("project scope requires project")
     return project / SKILL_BINDING.lock_filename
