@@ -32,13 +32,22 @@ projections before a deselected child is actually disabled.
   recovery against a freshly read document and revalidate ownership at writes.
   Serializing an entire v3 lock with `write_lock` would refresh unrelated entry
   timestamps; targeted raw-record patches preserve those records and wrapper
-  metadata exactly. Atomic file replacement alone is not stale-rollback protection.
+  metadata exactly. Validate the same raw snapshot against the original affected
+  expectations before it becomes the journal baseline: a later read cannot adopt
+  a third party\'s changed affected value as transaction-owned. Atomic file
+  replacement alone is not stale-rollback protection.
 - Report recovery conflicts rather than overwrite changed links/records. A
   partially recovered preserved backing must not be replaced with a new upstream
   clone merely because normal parent-cache paths are absent.
 - Internal collection rebuilds preserve pending edits. Explicit Refresh still
   clears the active queue, and a confirmed harness-settings discard clears every
   queue, preserving the existing public interaction contract without asset writes.
+- A matching detached tag is verified by its peeled commit without reset;
+  another checked-out branch is not adopted merely for sharing that commit.
+- Real child health requires its `SKILL.md`, not only a matching directory/link.
+  A locally deleted document remains missing and visible; Apply does not recreate
+  it from upstream or count it as a healthy all-selected collection. Rootless
+  legacy containers remain a separate, non-installable backing representation.
 - Existing explicit single-child copy fallback remains supported. Recovery removes
   a newly copied snapshot only when its identity and complete content/mode snapshot
   still match; changed copies remain visible recovery conflicts. This is not a

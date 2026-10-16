@@ -129,6 +129,7 @@ def exposed(
         direct.is_symlink()
         and canonical.exists()
         and direct.resolve() == canonical.resolve()
+        and (canonical / "SKILL.md").is_file()
     ):
         return True
     if group.wrapper is not None:

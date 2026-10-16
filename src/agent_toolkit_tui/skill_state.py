@@ -58,6 +58,7 @@ class SkillCell:
     available: bool = True  # False → the harness cannot be toggled in this context
     unavailable_reason: str = ""  # human-facing explanation when not available
     exposure_reason: str = ""
+    payload_missing: bool = False
 
 
 @dataclass
@@ -285,6 +286,10 @@ def build_skill_rows(
                 "dirty" if wt == skill_git.GitWorkingTreeStatus.DIRTY
                 else "clean"
             )
+        payload = membership[slug][1].path if slug in membership and membership[slug][0].backing is not None else canonical
+        missing_payload = payload.exists() and not (payload / "SKILL.md").is_file()
+        if missing_payload:
+            state = "missing"
         cells: dict[tuple[str, str], SkillCell] = {}
         for agent in harnesses:
             cells[(agent, scope)] = _cell_for(
@@ -304,6 +309,8 @@ def build_skill_rows(
                             root_child, group, agent, scope=scope, home=home, project=project,
                         ):
                             cells[(agent, scope)] = replace(cell, exposure_reason="Root projection is active; independent nested isolation is unproven for this target. Apply refuses root-on/nested-off before writes.")
+        if missing_payload:
+            cells = {k: replace(c, linked=False, payload_missing=True) for k, c in cells.items()}
         if slug in membership and membership[slug][0].error:
             cells = {k: replace(c, linked=False, available=False, unavailable_reason=membership[slug][0].error) for k, c in cells.items()}
         # In project scope, also probe global so the SkillGrid can render
@@ -314,6 +321,11 @@ def build_skill_rows(
                 cells[(agent, "global")] = _cell_for(
                     slug, agent, scope="global", home=home, project=None,
                 )
+        if scope == "project" and home is not None:
+            global_payload = library_skill_path(slug, home=home)
+            if global_payload.exists() and not (global_payload / "SKILL.md").is_file():
+                for agent in harnesses:
+                    cells[(agent, "global")] = replace(cells[(agent, "global")], linked=False, payload_missing=True)
         description = _read_skill_description(membership[slug][1].path if slug in membership else canonical)
         if not description and scope == "project":
             # Project canonical may be absent (state == "library") or missing

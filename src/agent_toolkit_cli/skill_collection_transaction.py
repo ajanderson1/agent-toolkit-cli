@@ -143,12 +143,23 @@ class Journal:
             raise InstallError(f"Copy contents changed during registration: {path}")
 
     def write(self, path: Path, before: dict, after: dict) -> None:
-        lock = checked_lock(path)
-        if any(lock.skills.get(k) != v for k, v in before.items()):
-            raise InstallError(f"Affected record ownership changed: {path}")
+        if before.keys() != after.keys():
+            raise InstallError(f"Affected record expectations are incomplete: {path}")
+        raw = document(path)
+        parse = (
+            skill_lock._entry_from_dict_v3
+            if raw["version"] == 3
+            else skill_lock._entry_from_dict_v1
+        )
+        for key, expected in before.items():
+            value = raw["skills"].get(key)
+            if key in raw["skills"] and not isinstance(value, dict):
+                raise InstallError(f"Invalid affected record: {path}/{key}")
+            actual = parse(value) if value is not None else None
+            if actual != expected:
+                raise InstallError(f"Affected record ownership changed: {path}/{key}")
         if before == after:
             return
-        raw = document(path)
         serialize = (
             skill_lock._entry_to_dict_v3
             if raw["version"] == 3

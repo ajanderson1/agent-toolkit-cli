@@ -330,6 +330,8 @@ class SkillGrid(Vertical):
             canonical_skill_dir,
         )
 
+        if getattr(cell, "payload_missing", False):
+            return "[red]Missing SKILL.md.[/]\nA matching directory or projection is not a usable skill without its document. Restore SKILL.md in the preserved checkout before retrying; no missing document is counted as a healthy selection."
         if getattr(cell, "exposure_reason", ""):
             return f"[yellow]Exposure uncertain.[/]\n{cell.exposure_reason}"
         # Unavailable cells (e.g. company-only Paperclip outside a company)
@@ -704,6 +706,8 @@ class SkillGrid(Vertical):
             base = " "
         elif not cell.available:
             base = _UNAVAIL_GLYPH
+        elif cell.payload_missing:
+            base = _DRIFT_GLYPH
         elif cell.exposure_reason:
             base = "[yellow]?[/]"
         elif cell.skipped:

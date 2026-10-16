@@ -115,3 +115,17 @@ async def test_visual_matrix(legacy, size):
         app.action_apply()
         assert len(list((Path.home() / ".agents/skills").iterdir())) == 11
         await capture("13-all-idempotent-retry")
+        payload = legacy / "aj-bootstrap/SKILL.md"
+        payload.unlink()
+        app._refresh_skill_view()
+        assert "!" in grid._cell_glyph(row=grid._visible_rows()[0], agent="standard")
+        await capture("14-missing-document-not-healthy")
+        grid._toggle_at(Coordinate(0, 1))
+        app.action_apply()
+        assert grid.pending_entries() == {
+            ("global", "standard", "aj-bootstrap"): "link"
+        }
+        assert not payload.exists()
+        await capture("15-missing-document-apply-refused")
+        app.action_revert()
+        assert not payload.exists()
