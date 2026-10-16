@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import shutil
+import stat
 import tempfile
 from pathlib import Path
 
@@ -68,12 +71,31 @@ def patch(path: Path, expected: dict, values: dict) -> None:
     commit_document(path, raw)
 
 
+def copy_fingerprint(root: Path) -> tuple:
+    entries = [("", "directory", stat.S_IMODE(root.stat().st_mode))]
+    for path in sorted(root.rglob("*")):
+        name = path.relative_to(root).as_posix()
+        mode = stat.S_IMODE(path.lstat().st_mode)
+        if path.is_symlink():
+            entries.append((name, "link", mode, str(path.readlink())))
+        elif path.is_dir():
+            entries.append((name, "directory", mode))
+        elif path.is_file():
+            entries.append(
+                (name, "file", mode, hashlib.sha256(path.read_bytes()).hexdigest())
+            )
+        else:
+            raise InstallError(f"Unsupported entry in copy fallback: {path}")
+    return tuple(entries)
+
+
 class Journal:
     def __init__(self) -> None:
         self.links: list[tuple[Path, Path | None, Path | None]] = []
         self.records: list[tuple[Path, dict, dict]] = []
         self.guards: list[tuple[Path, dict]] = []
         self.parents: dict[Path, Path] = {}
+        self.copies: list[tuple[Path, tuple, tuple[int, int]]] = []
 
     def expect(self, path: Path, records: dict) -> None:
         self.guards.append((path, records))
@@ -108,6 +130,17 @@ class Journal:
                     f"Ownership changed immediately before create: {path}"
                 )
             path.symlink_to(after)
+
+    def copy(self, path: Path, source: Path) -> None:
+        expected = copy_fingerprint(source)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        self.link(path, None, None)
+        path.mkdir()
+        identity = path.stat()
+        self.copies.append((path, expected, (identity.st_dev, identity.st_ino)))
+        shutil.copytree(source, path, dirs_exist_ok=True, symlinks=True)
+        if copy_fingerprint(path) != expected:
+            raise InstallError(f"Copy contents changed during registration: {path}")
 
     def write(self, path: Path, before: dict, after: dict) -> None:
         lock = checked_lock(path)
@@ -149,9 +182,29 @@ class Journal:
         if errors:
             errors.append(
                 "links preserved pending record recovery: "
-                + ", ".join(str(p) for p, _, _ in self.links)
+                + ", ".join(str(p) for p, _, _ in [*self.links, *self.copies])
             )
             return errors
+        for path, expected, identity in reversed(self.copies):
+            try:
+                if path in self.parents and path.parent.resolve() != self.parents[path]:
+                    raise InstallError(f"copy parent recovery conflict: {path.parent}")
+                if path.is_symlink() or not path.is_dir():
+                    raise InstallError(f"copy recovery conflict: {path}")
+                actual = path.stat()
+                if (actual.st_dev, actual.st_ino) != identity or copy_fingerprint(
+                    path
+                ) != expected:
+                    raise InstallError(f"copy content recovery conflict: {path}")
+                for lock_path, records in self.guards:
+                    lock = checked_lock(lock_path)
+                    if any(lock.skills.get(k) != v for k, v in records.items()):
+                        raise InstallError(
+                            f"copy record recovery conflict: {lock_path}"
+                        )
+                shutil.rmtree(path)
+            except (OSError, InstallError) as exc:
+                errors.append(str(exc))
         for path, before, after in reversed(self.links):
             try:
                 current = link_state(path)

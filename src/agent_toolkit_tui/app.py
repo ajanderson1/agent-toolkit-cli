@@ -1045,6 +1045,8 @@ class TUIApp(App):
 
         self._tui_settings = updated
         self._set_grid_harness_selection(harnesses)
+        for grid in self._all_grids():
+            grid.clear_pending()
         # set_rows clears pending queues by the existing grid contract. This is
         # intentionally disclosed in the PR rather than hidden behind new v1
         # persistence semantics (#480 plan Task 3 Step 5).
@@ -1055,6 +1057,9 @@ class TUIApp(App):
         return True
 
     def action_refresh(self) -> None:
+        grid = self._active_grid()
+        if grid is not None:
+            grid.clear_pending()
         self._refresh_active_view()
         self._refresh_proj_path()
         self._refresh_pending_label()

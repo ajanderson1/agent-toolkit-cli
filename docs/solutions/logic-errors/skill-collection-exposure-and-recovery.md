@@ -36,6 +36,13 @@ projections before a deselected child is actually disabled.
 - Report recovery conflicts rather than overwrite changed links/records. A
   partially recovered preserved backing must not be replaced with a new upstream
   clone merely because normal parent-cache paths are absent.
+- Internal collection rebuilds preserve pending edits. Explicit Refresh still
+  clears the active queue, and a confirmed harness-settings discard clears every
+  queue, preserving the existing public interaction contract without asset writes.
+- Existing explicit single-child copy fallback remains supported. Recovery removes
+  a newly copied snapshot only when its identity and complete content/mode snapshot
+  still match; changed copies remain visible recovery conflicts. This is not a
+  filtered-root conversion path for collection reconciliation.
 - Git inventory uses `--no-optional-locks` so even read-time status probing does
   not refresh the operator's index. Reads, toggles, Revert, no-op Apply and
   unrelated Apply never reconcile legacy assets.

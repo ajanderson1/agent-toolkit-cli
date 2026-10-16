@@ -109,6 +109,7 @@ def _register(
         lock_path = library_lock_path()
         lock = checked_lock(lock_path)
         before, after, targets = {}, {}, {}
+        preserved_copies = set()
         for root in roots:
             if (
                 not root.resolve().is_relative_to(discovery_root.resolve())
@@ -135,6 +136,8 @@ def _register(
                 if matching
                 else (slug or parsed.skill_name or (repo if path == "." else root.name))
             )
+            if not name or Path(name).name != name or name in (".", ".."):
+                raise click.ClickException(f"Unsafe child slug: {name!r}")
             if name in after:
                 raise click.ClickException(
                     f"Duplicate skill slug {name!r}; select an explicit path/slug"
@@ -150,7 +153,16 @@ def _register(
                 )
             target = parent / path
             canonical = library_skill_path(name)
-            current = link_state(canonical)
+            if (
+                existing is not None
+                and existing.extras.get("materialised") == "copy"
+                and canonical.is_dir()
+                and not canonical.is_symlink()
+            ):
+                preserved_copies.add(canonical)
+                current = None
+            else:
+                current = link_state(canonical)
             if current is not None and canonical.resolve() != target.resolve():
                 raise click.ClickException(
                     f"{name}: canonical target conflict at {canonical}"
@@ -177,7 +189,29 @@ def _register(
                 parent.parent.mkdir(parents=True, exist_ok=True)
                 shutil.move(str(discovery_root), str(parent))
             for canonical, (current, target) in targets.items():
-                journal.link(canonical, current, current or target)
+                if canonical in preserved_copies:
+                    continue
+                try:
+                    journal.link(canonical, current, current or target)
+                except OSError:
+                    if (
+                        not single
+                        or current is not None
+                        or link_state(canonical) is not None
+                    ):
+                        raise
+                    if not journal.links or journal.links[-1] != (
+                        canonical,
+                        None,
+                        target,
+                    ):
+                        raise
+                    journal.links.pop()
+                    journal.copy(canonical, target)
+                    after[canonical.name] = dataclasses.replace(
+                        after[canonical.name],
+                        extras={**after[canonical.name].extras, "materialised": "copy"},
+                    )
             journal.write(lock_path, before, after)
         except (OSError, InstallError) as exc:
             failure = journal.fail(exc)
