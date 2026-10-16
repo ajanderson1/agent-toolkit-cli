@@ -1,6 +1,9 @@
 Issue: #515
 # Ensure Untracked Assets Remain Visible — Implementation Plan
 
+Document type: plan
+Origin: docs/specs/2026-09-10-ensure-assets-visible.md
+
 > **For agentic workers:** Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Steps use checkbox syntax.
 
 **Goal:** Make local and unmanaged assets visible, auditable, and safely importable without altering user data.
