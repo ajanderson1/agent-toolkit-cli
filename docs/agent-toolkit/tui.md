@@ -99,6 +99,10 @@ Toggling a cell **queues** a pending edit; nothing touches disk until you
    contract across all modified asset types. A failed apply rolls the lock back
    rather than leaving it lying about disk, and retains failed pending edits for retry.
 
+Same-named assets in different asset types remain separate edits in Diff,
+Revert, and the quit-confirmation count. Each queued edit keeps its own scope
+when applied, even if another asset type or the global scope is visible.
+
 Quitting with unapplied edits raises a confirm-discard prompt.
 
 !!! note "📸 Screenshot — `tui-scope-toggle.png`"

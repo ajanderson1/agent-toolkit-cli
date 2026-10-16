@@ -622,8 +622,10 @@ class TUIApp(App):
 
     # ----- instruction-view --------------------------------------------------
 
-    def _scope_to_roots(self) -> tuple[str, Path | None, Path | None]:
-        if self._scope == "global":
+    def _scope_to_roots(
+        self, scope: str | None = None
+    ) -> tuple[str, Path | None, Path | None]:
+        if (self._scope if scope is None else scope) == "global":
             return "global", Path.home(), None
         return "project", Path.home(), Path.cwd()
 
@@ -856,7 +858,7 @@ class TUIApp(App):
         return grids
 
     def _get_all_pending_edits(self) -> dict[tuple[str, ...], str]:
-        """Collect pending edit keys across all six grid types."""
+        """Namespace pending keys by grid, retaining scope as the first field."""
         pending: dict[tuple[str, ...], str] = {}
         for selector in (
             "#instruction-grid",
@@ -868,7 +870,9 @@ class TUIApp(App):
         ):
             try:
                 grid = self.query_one(selector)
-                pending.update(grid.pending_entries())  # type: ignore[attr-defined]
+                pending.update(
+                    {(*key, selector): op for key, op in grid.pending_entries().items()}
+                )
             except Exception:
                 pass
         return pending
@@ -1355,12 +1359,9 @@ class TUIApp(App):
         ok = failed = 0
         errors: list[str] = []
         failed_groups: set[tuple[str, str]] = set()
-        _active_scope, home, active_project = self._scope_to_roots()
-
         for (scope, slug), (adds, removes) in by_slug.items():
             n_writes = len(adds) + len(removes)
-            apply_home = Path.home() if scope == "global" else home
-            project = None if scope == "global" else active_project
+            _, apply_home, project = self._scope_to_roots(scope)
             p = InstallPlan(
                 slug=slug,
                 scope=scope,  # type: ignore[arg-type]
@@ -1829,21 +1830,10 @@ class TUIApp(App):
 
         ok = failed = 0
         errors: list[str] = []
-        # Derive roots from the SSOT the grid was built against (review F-cwd) —
-        # NOT a fresh Path.cwd()/Path.home(), so the apply target is guaranteed
-        # identical to the displayed grid (the project .mcp.json / project lock
-        # are repo-root files; a cwd drift would mutate the wrong project).
-        active_scope, home, active_project = self._scope_to_roots()
-        # _scope_to_roots always returns Path.home() for home (both scopes); the
-        # MCP adapters need a real home for sentinel checks even at project scope.
-        # Fail loud rather than silently passing None into the facade.
-        assert home is not None
-
         for (scope, slug), (adds, removes) in by_slug.items():
-            # The pending key's scope wins per-entry, but home/project come from
-            # the active roots; project is None at global, the active project root
-            # otherwise. (Pending only ever carries the active scope today.)
-            project = None if scope == "global" else active_project
+            _, home, project = self._scope_to_roots(scope)
+            # MCP adapters require a home for sentinel checks in both scopes.
+            assert home is not None
             lib_root = library_root(home)
             if adds:
                 try:
