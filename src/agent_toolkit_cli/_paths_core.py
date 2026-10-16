@@ -1,7 +1,7 @@
 """Asset-type-agnostic path/lock-filename core. Bound by per-asset-type facades.
 
 An `AssetTypeBinding` carries everything the path helpers need to know about a
-specific asset type. `SKILL_BINDING`, `INSTRUCTIONS_BINDING`, `AGENT_BINDING`,
+specific source-backed asset type. `SKILL_BINDING`, `AGENT_BINDING`,
 and `PI_EXTENSION_BINDING`/`COMMAND_BINDING` are the bindings instantiated today (PR1 cut
 the seam; the instructions, agent, and pi-extension asset types were added in
 their own PRs).
@@ -29,15 +29,6 @@ SKILL_BINDING = AssetTypeBinding(
     lock_filename="skills-lock.json",
     standard_harness_name="standard-skill",
 )
-
-INSTRUCTIONS_BINDING = AssetTypeBinding(
-    asset_type="instructions",
-    canonical_dirname="instructions",
-    library_subdir="instructions",
-    lock_filename="instructions-lock.json",
-    standard_harness_name="standard-instructions",
-)
-
 
 AGENT_BINDING = AssetTypeBinding(
     asset_type="agent",
@@ -82,8 +73,8 @@ def default_scope(cwd: Path) -> str:
 
     This is the binding-neutral analogue of the per-kind `scope_and_roots`
     detection; the per-kind verbs key on their own lock filename, while a bundle
-    spans kinds and so checks for any of them. instructions-lock.json is NOT
-    counted — instructions is not a bundle member type.
+    spans kinds and so checks for any of them. Instructions has no lock
+    and is not a bundle member type.
     """
     for filename in _PROJECT_LOCK_FILENAMES:
         if (cwd / filename).is_file():

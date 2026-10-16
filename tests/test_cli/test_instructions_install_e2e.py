@@ -1,72 +1,26 @@
-"""End-to-end: apply() lays the correct pointer per Phase A cell."""
-from __future__ import annotations
-
+"""Real filesystem per-harness round trips without any Instructions lock."""
 import pytest
-
-from agent_toolkit_cli import instructions_install
-from agent_toolkit_cli.instructions_adapters.symlink import CELLS
-from agent_toolkit_cli.instructions_lock import (
-    InstructionsLockEntry,
-    InstructionsLockFile,
-    write_lock,
-)
+from agent_toolkit_cli import instructions_install as ii
+from agent_toolkit_cli.instructions_adapters.symlink import CELLS, _pointer_path
 
 
-@pytest.mark.parametrize(
-    "harness",
-    [h for h, cell in CELLS.items() if cell["project"]],
-)
-def test_project_scope_pointer_created(tmp_path, harness):
-    project = tmp_path / "proj"
-    project.mkdir()
-    (project / "AGENTS.md").write_text("# canon\n")
-    write_lock(
-        project / "instructions-lock.json",
-        InstructionsLockFile(
-            version=1,
-            instructions={
-                "AGENTS.md": InstructionsLockEntry(
-                    scope="project", source="AGENTS.md", harnesses=[harness],
-                ),
-            },
-        ),
-    )
-
-    instructions_install.apply(scope="project", project_root=project, home=None)
-
-    pointer_name = CELLS[harness]["pointer_name"]
-    pointer = project / pointer_name
-    assert pointer.is_symlink(), f"{harness}: expected symlink at {pointer}"
-    assert pointer.resolve() == (project / "AGENTS.md").resolve()
-
-
-@pytest.mark.parametrize(
-    "harness",
-    [h for h, cell in CELLS.items() if cell["global"]],
-)
-def test_global_scope_pointer_created(tmp_path, monkeypatch, harness):
+@pytest.mark.parametrize("scope", ["project", "global"])
+@pytest.mark.parametrize("harness", sorted(CELLS))
+def test_pointer_round_trip(tmp_path, monkeypatch, scope, harness):
+    if not CELLS[harness][scope]:
+        pytest.skip("native reader or unavailable scope")
     home = tmp_path / "home"
+    project = tmp_path / "project"
     home.mkdir()
+    project.mkdir()
     monkeypatch.setenv("HOME", str(home))
-    canonical = home / ".agent-toolkit" / "AGENTS.md"
-    canonical.parent.mkdir(parents=True)
-    canonical.write_text("# canon\n")
-    write_lock(
-        home / ".agent-toolkit" / "instructions-lock.json",
-        InstructionsLockFile(
-            version=1,
-            instructions={
-                "AGENTS.md": InstructionsLockEntry(
-                    scope="global", source="AGENTS.md", harnesses=[harness],
-                ),
-            },
-        ),
-    )
-
-    instructions_install.apply(scope="global", project_root=None, home=home)
-
-    # The actual global pointer location varies per cell; reconstruct it.
-    from agent_toolkit_cli.instructions_adapters.symlink import _pointer_path
-    pointer = _pointer_path(harness, "global", None, home)
-    assert pointer.is_symlink(), f"{harness}: expected symlink at {pointer}"
-    assert pointer.resolve() == canonical.resolve()
+    canonical = ii._resolve_canonical(scope, project)
+    canonical.parent.mkdir(parents=True, exist_ok=True)
+    canonical.write_text("user instructions\n")
+    pointer = _pointer_path(harness, scope, project, home)
+    ii.apply(scope=scope, project_root=project, home=home, add_harnesses=(harness,))
+    assert pointer.is_symlink() and pointer.read_text() == canonical.read_text()
+    ii.uninstall(scope=scope, project_root=project, home=home)
+    assert not pointer.is_symlink()
+    assert canonical.read_text() == "user instructions\n"
+    assert not list(tmp_path.rglob("instructions-lock.json"))

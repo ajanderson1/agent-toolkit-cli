@@ -101,7 +101,7 @@ def test_install_refuses_when_pointer_is_foreign_symlink(tmp_path):
     pointer.symlink_to(other)
 
     adapter = symlink.adapter_for("claude-code")
-    with pytest.raises(symlink.PointerConflictError, match="CLAUDE.md.*points elsewhere"):
+    with pytest.raises(symlink.PointerConflictError, match="CLAUDE.md.*foreign"):
         adapter.install(scope="project", project_root=project, canonical=canonical, home=None)
 
     # Symlink target preserved.

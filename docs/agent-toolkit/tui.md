@@ -2,7 +2,7 @@
 
 `agent-toolkit-tui` is the interactive [Textual](https://textual.textualize.io/)
 cockpit over the same surface the [CLI](cli.md) drives. It reads the lock files
-and filesystem directly and applies your edits by calling the shipped CLI
+and filesystem directly (Instructions uses filesystem pointers only) and applies your edits by calling the shipped CLI
 facades in-process — so the TUI and CLI can never disagree about what is
 installed.
 
@@ -117,8 +117,13 @@ Toggling a cell **queues** a pending edit; nothing touches disk until you
    CLI uses across all queued asset types. Failed operations retain pending edits
    for retry; completed unrelated operations remain completed. A legacy collection
    reconciles its complete sibling selection before ordinary per-skill work,
-   with targeted rollback on failure. Apply is not one atomic transaction across
-   different asset types.
+   with targeted rollback on failure. Source-backed kinds retain their
+   lock/projection failure handling. Instructions sends explicit link/unlink
+   requests without a lock and never prunes other links. If an I/O failure applies
+   only part of an Instructions batch, the grid reloads actual state and retains
+   only unsatisfied intents for retry. Canonical-source-chain removal guards run
+   before any Instructions batch writes. Apply is not one atomic transaction
+   across different asset types.
 
 Same-named assets in different asset types remain separate edits in Diff,
 Revert, and the quit-confirmation count. Each queued edit keeps its own scope

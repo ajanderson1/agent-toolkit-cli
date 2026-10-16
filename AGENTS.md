@@ -1,6 +1,6 @@
 # AGENTS.md — agent-toolkit-cli
 
-The Python CLI (`src/agent_toolkit_cli`) and the Textual TUI (`src/agent_toolkit_tui`) for managing AI-agent assets across harnesses. v2.3.0 removed the pre-v2 surface (`check`, `link`, `doctor`, ...); the v3 per-kind architecture has since re-introduced four kinds — `skill`, `agent`, `instructions`, `pi-extension` (each with its own `commands/<kind>/` verb group, `<kind>_install.py` facade, adapters package, and per-kind lockfile); the `mcp` kind is being re-ported (#329). The frozen v1 surface is pinned at the `v1.0.0` tag — see `README.md` for the install command.
+The Python CLI (`src/agent_toolkit_cli`) and the Textual TUI (`src/agent_toolkit_tui`) for managing AI-agent assets across harnesses. v2.3.0 removed the pre-v2 surface (`check`, `link`, `doctor`, ...); the v3 per-kind architecture has since re-introduced four kinds — `skill`, `agent`, `instructions`, `pi-extension` (each with its own `commands/<kind>/` verb group, `<kind>_install.py` facade, adapters package, and source-backed kinds' lockfiles; Instructions instead derives installation from canonical AGENTS.md symlinks); the `mcp` kind is being re-ported (#329). The frozen v1 surface is pinned at the `v1.0.0` tag — see `README.md` for the install command.
 
 ## Agent operation
 

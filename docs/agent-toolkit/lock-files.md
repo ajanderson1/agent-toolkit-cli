@@ -1,8 +1,8 @@
 # Lock files
 
-Every asset type records its installation state in a per-scope JSON **lock
-file** — the source of truth for what is installed, never the filesystem. There
-is one lock file per asset type per scope:
+Source-backed asset types record state in a per-scope JSON **lock file**.
+Instructions is intentionally different: actual symlinks to canonical `AGENTS.md`
+are its installation truth, with no installation record.
 
 | Asset type | Lock file | Top-level key | Entry shape |
 |---|---|---|---|
@@ -11,7 +11,7 @@ is one lock file per asset type per scope:
 | [command](../asset-types/commands.md) | `commands-lock.json` | `skills` ⚠️ | slug → entry (`commandPath`) |
 | [pi-extension](../asset-types/pi-extensions.md) | `pi-extensions-lock.json` | `skills` ⚠️ | slug → entry |
 | [mcp](../asset-types/mcp.md) | `mcps-lock.json` | `mcps` | slug → **list** of entries |
-| [instructions](../asset-types/instructions.md) | `instructions-lock.json` | `instructions` | slug → entry |
+| [instructions](../asset-types/instructions.md) | none — actual symlinks | — | — |
 
 > ⚠️ **The `agents`, `command`, and `pi-extension` lock files use a top-level key named
 > `skills`, not `agents` / `pi-extensions`.** Their lock module re-exports the
@@ -118,37 +118,19 @@ The list is sorted by harness, and slugs are sorted — deterministic diffs. The
 reader **fails loud** on malformed JSON rather than returning an empty lock. See
 the [MCP asset-type page](../asset-types/mcp.md) for the projection mechanism.
 
-## `instructions-lock.json`
+## Instructions: no lock
 
-Instructions have no upstream repo — they are whole-scope `AGENTS.md` pointers —
-so this lock has no `source`/`ref`/SHA fields. It records scope and which
-harnesses received the pointer.
-
-```json
-{
-  "version": 1,
-  "instructions": {
-    "<slug>": {
-      "scope": "project",
-      "source": "AGENTS.md",
-      "harnesses": ["claude-code", "gemini-cli"]
-    }
-  }
-}
-```
-
-| Field | Type | Meaning |
-|---|---|---|
-| `scope` | `"project"` \| `"global"` | Where the canonical `AGENTS.md` lives |
-| `source` | string | Relative path to the source file (typically `AGENTS.md`) |
-| `harnesses` | string[] | Harnesses this entry is installed to (defaults to `[]`) |
-
-The reader is strict: an unsupported `version` raises rather than degrading.
+Instructions has no upstream clone/ref/SHA workflow. Canonical `AGENTS.md` and its
+user-owned source chain remain on disk; only the assistant pointer symlinks are
+installed or uninstalled. Legacy `instructions-lock.json` / `instructions.lock`
+files are ignored and preserved, even when malformed. They can be removed manually
+after checking that no older toolkit version still uses them.
 
 ## Invariants
 
-- **Lock is the source of truth.** Installation state is read from the lock, not
-  inferred from the filesystem. `doctor` is what reconciles the two.
+- **Source-backed kinds use locks.** `doctor` reconciles recorded and actual
+  state. Instructions instead inventories actual pointers and protects any
+  pointer participating in canonical's source chain.
 - **Atomic writes.** skill / agent / pi-extension / mcp locks write to a temp
   file and `os.replace()` so a crash mid-write can't corrupt the lock.
 - **Sorted, newline-terminated JSON.** Keys are sorted and a trailing newline is

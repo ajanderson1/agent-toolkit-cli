@@ -1,233 +1,71 @@
-"""Data model for the TUI's instruction tab.
-
-Reads the instructions lock + filesystem to produce InstructionRow records with
-per-harness cell state. Mirrors agent_state.py for the instruction asset type.
-
-Key differences from agent_state:
-- Manages pointer symlinks to a canonical AGENTS.md file, not copies.
-- Cell state includes a `conflict` flag (real file or foreign symlink in slot).
-- Interactive harnesses derive at call time from the selected main set.
-  The `standard` column is rendered separately by the grid as a read-only status
-  column (shows canonical_exists), NOT listed here.
-- If the lock is empty but the canonical AGENTS.md exists, emit a single
-  AGENTS.md row so a fresh user can install pointers from the grid.
-
-Row-universe contract (#360): instructions are the documented by-design
-EXCEPTION to the union semantic (canonical statement: skill_state.py
-docstring) — this kind has no library concept (the global lock never
-feeds the project-scope universe); the universe is the scope lock plus
-the fresh-user canonical fallback above.
-"""
+"""Read-only scope-local Instructions inventory, derived from files and pointers."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
-from agent_toolkit_cli import instructions_paths
+from agent_toolkit_cli import instructions_install
+from agent_toolkit_cli.instructions_adapters.symlink import _pointer_path, canonical_usable, inspect_pointer
 from agent_toolkit_tui.composition import instructions_nonstandard_main
-from agent_toolkit_cli.instructions_adapters.symlink import _pointer_path
-from agent_toolkit_cli.instructions_lock import read_lock
 
-Scope = Literal["global", "project"]
+Scope = Literal['global', 'project']
 
-def interactive_harnesses(
-    selection: tuple[str, ...] | None = None,
-    *,
-    scope: Scope = "project",
-) -> tuple[str, ...]:
-    """Rendered instruction cells, derived at call time from selection and scope."""
+
+def interactive_harnesses(selection: tuple[str, ...] | None = None, *, scope: Scope = 'project') -> tuple[str, ...]:
     return instructions_nonstandard_main(selection, scope=scope)
 
 
 @dataclass(frozen=True)
 class InstructionCell:
-    """Per-(scope, harness) pointer state for the single AGENTS.md slug."""
-
-    linked: bool    # pointer symlink exists and resolves to canonical
-    conflict: bool  # pointer slot occupied by a real file or foreign symlink
+    linked: bool
+    conflict: bool
 
 
 @dataclass
 class InstructionRow:
-    """One row per slug (today always 'AGENTS.md')."""
-
     slug: str
-    source: str             # always "AGENTS.md"
-    canonical_exists: bool  # True when the canonical AGENTS.md exists on disk
-    # Key: (harness_name, scope) → InstructionCell
+    source: str
+    canonical_exists: bool
     cells: dict[tuple[str, str], InstructionCell] = field(default_factory=dict)
 
 
-def _cell_for(
-    slug: str,
-    harness: str,
-    *,
-    scope: Scope,
-    home: Path | None,
-    project: Path | None,
-    _canonical: Path | None = None,
-) -> InstructionCell | None:
-    """Return InstructionCell for a (slug, harness, scope) triple, or None.
-
-    Returns None when:
-    - _pointer_path() raises ValueError (scope mismatch, e.g. replit at global).
-
-    Returns InstructionCell with:
-    - linked=True  when pointer is a symlink that resolves to the canonical.
-    - conflict=True when pointer slot has a real file or foreign symlink.
-    - both False   when slot is absent.
-
-    ``_canonical`` is an internal override used by build_instruction_rows to
-    avoid re-computing the canonical path for each harness.
-    """
-    try:
-        pointer = _pointer_path(harness, scope, project, home)
-    except (ValueError, KeyError):
-        # Scope mismatch or unknown harness — not applicable.
+def _cell_for(slug: str, harness: str, *, scope: Scope, home: Path | None,
+              project: Path | None, _canonical: Path | None = None) -> InstructionCell | None:
+    pointer = pointer_path_for(harness, scope=scope, home=home, project=project)
+    if pointer is None or (scope == 'project' and project is None):
         return None
-
-    # Resolve canonical for this scope.
-    if _canonical is not None:
-        canonical = _canonical
-    elif scope == "global":
-        canonical = instructions_paths.global_canonical_agents_md()
-    else:
-        if project is None:
-            return None
-        canonical = instructions_paths.project_canonical_agents_md(project)
-
-    if pointer.is_symlink():
-        try:
-            resolved = pointer.resolve()
-        except OSError:
-            # Dangling symlink — treat as conflict (foreign/broken).
-            return InstructionCell(linked=False, conflict=True)
-        if resolved == canonical.resolve():
-            return InstructionCell(linked=True, conflict=False)
-        # Symlink points elsewhere — foreign symlink conflict.
-        return InstructionCell(linked=False, conflict=True)
-
-    if pointer.exists():
-        # Real file occupying the slot — conflict.
-        return InstructionCell(linked=False, conflict=True)
-
-    # Slot is absent.
-    return InstructionCell(linked=False, conflict=False)
+    canonical = _canonical if _canonical is not None else instructions_install._resolve_canonical(scope, project)
+    state = inspect_pointer(pointer, canonical)
+    return InstructionCell(linked=state.linked, conflict=state.conflict)
 
 
-def pointer_path_for(
-    harness: str,
-    *,
-    scope: Scope,
-    home: Path | None,
-    project: Path | None,
-) -> Path | None:
-    """Return the instructions pointer path for UI display, or None.
-
-    Uses the same adapter path table as ``_cell_for`` so the grid explains the
-    exact slot it already checks. Returns None when the harness/scope pair has
-    no pointer slot.
-    """
+def pointer_path_for(harness: str, *, scope: Scope, home: Path | None, project: Path | None) -> Path | None:
     try:
-        return _pointer_path(harness, scope, project, home)  # noqa: PLW0212
+        return _pointer_path(harness, scope, project, home)
     except (ValueError, KeyError):
         return None
 
 
-def build_instruction_rows(
-    *,
-    scope: Scope,
-    home: Path | None,
-    project: Path | None,
-    selection: tuple[str, ...] | None = None,
-) -> list[InstructionRow]:
-    """Build InstructionRow list from the instructions lock + filesystem.
-
-    Reads the scope-appropriate lock. For each slug × selected harness,
-    tests whether the pointer exists and resolves correctly.
-
-    Empty-lock first-run behavior:
-    - If the lock is empty but the canonical AGENTS.md exists, emit a single
-      AGENTS.md row with canonical_exists=True and all cells unlinked, so a
-      fresh user can install pointers from the grid.
-    - If neither lock entry nor canonical exists, return no rows.
-    """
-    # Resolve paths.
-    if scope == "global":
-        canonical = instructions_paths.global_canonical_agents_md()
-        lock_path = instructions_paths.lock_file_path("global", None)
-    else:
-        if project is None:
-            return []
-        canonical = instructions_paths.project_canonical_agents_md(project)
-        lock_path = instructions_paths.lock_file_path("project", project)
-
-    canonical_exists = canonical.exists()
-    harnesses = interactive_harnesses(selection, scope=scope)
-
-    # Read lock (returns empty lock if file absent).
-    lock = read_lock(lock_path)
-
-    if not lock.instructions:
-        # Lock is empty. Emit a row only if canonical exists (fresh-user path).
-        if not canonical_exists:
-            return []
-        row = InstructionRow(
-            slug="AGENTS.md",
-            source="AGENTS.md",
-            canonical_exists=True,
-            cells={},
-        )
-        for harness in harnesses:
-            cell = _cell_for(
-                "AGENTS.md", harness,
-                scope=scope, home=home, project=project,
-                _canonical=canonical,
-            )
-            if cell is not None:
-                row.cells[(harness, scope)] = cell
-        # Project-scope global shadow probe for the 🌐 marker (#388).
-        if scope == "project" and home is not None:
-            for harness in harnesses:
-                gcell = _cell_for(
-                    "AGENTS.md", harness,
-                    scope="global", home=home, project=None,
-                )
-                if gcell is not None:
-                    row.cells[(harness, "global")] = gcell
-        return [row]
-
-    # Lock has entries — build one row per slug.
-    rows: list[InstructionRow] = []
-    for slug in sorted(lock.instructions):
-        entry = lock.instructions[slug]
-        cells: dict[tuple[str, str], InstructionCell] = {}
-        for harness in harnesses:
-            cell = _cell_for(
-                slug, harness,
-                scope=scope, home=home, project=project,
-                _canonical=canonical,
-            )
-            if cell is not None:
-                cells[(harness, scope)] = cell
-        # In project scope, also probe global so the grid can render the
-        # globally-linked 🌐 indicator (#388, mirrors agent_state.py:131-135).
-        # Skipped when home is None. The global probe resolves the GLOBAL
-        # canonical itself (scope="global"), so do NOT pass the project
-        # _canonical override here.
-        if scope == "project" and home is not None:
-            for harness in harnesses:
-                gcell = _cell_for(
-                    slug, harness,
-                    scope="global", home=home, project=None,
-                )
-                if gcell is not None:
-                    cells[(harness, "global")] = gcell
-        rows.append(InstructionRow(
-            slug=slug,
-            source=entry.source,
-            canonical_exists=canonical_exists,
-            cells=cells,
-        ))
-    return rows
+def build_instruction_rows(*, scope: Scope, home: Path | None, project: Path | None,
+                            selection: tuple[str, ...] | None = None) -> list[InstructionRow]:
+    if scope == 'project' and project is None:
+        return []
+    canonical = instructions_install._resolve_canonical(scope, project)
+    slots = instructions_install.pointer_slots(scope=scope, project_root=project, home=home)
+    occupied = any(
+        (s := inspect_pointer(pointer, canonical)).linked or s.conflict
+        for pointer in slots.values()
+    )
+    if not canonical.exists() and not canonical.is_symlink() and not occupied:
+        return []
+    row = InstructionRow('AGENTS.md', 'AGENTS.md', canonical_usable(canonical))
+    for harness in interactive_harnesses(selection, scope=scope):
+        cell = _cell_for('AGENTS.md', harness, scope=scope, home=home, project=project, _canonical=canonical)
+        if cell is not None:
+            row.cells[(harness, scope)] = cell
+        if scope == 'project' and home is not None:
+            global_cell = _cell_for('AGENTS.md', harness, scope='global', home=home, project=None)
+            if global_cell is not None:
+                row.cells[(harness, 'global')] = global_cell
+    return [row]

@@ -132,7 +132,7 @@ terms first.
 **Projection** { #projection }
 :   Making an asset visible to one harness — usually a symlink into its slot
     directory, sometimes a translated file or a registry entry. Derived
-    state: always safe to delete and rebuild.
+    state for source-backed kinds. An Instructions pointer that supports the canonical source chain must not be deleted.
 
 **Mechanism** { #mechanism }
 :   *How* an asset type projects into a particular harness:
@@ -152,12 +152,12 @@ terms first.
 
 **Lock file** { #lock-file }
 :   The per-asset-type, per-scope JSON record of what is installed and from where
-    (`skills-lock.json`, `instructions-lock.json`, …). The source of truth;
-    projections are derived.
+    (`skills-lock.json`, `agents-lock.json`, …). The source of truth for source-backed kinds;
+    projections are derived. Instructions is the exception: actual canonical-file symlinks determine installation, without a lock.
 
 **Doctor** { #doctor }
 :   The per-asset-type reconciler: compares lock ↔ canonical ↔ projections, reports
-    findings (missing, foreign, drifted, unmanaged), offers fixes.
+    findings (missing, foreign, drifted, unmanaged), offers fixes. Instructions instead diagnoses filesystem pointers directly, with explicitly confirmed regular-file adoption.
 
 ## Compatibility data
 

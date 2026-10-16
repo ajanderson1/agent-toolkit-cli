@@ -1157,32 +1157,10 @@ class TUIApp(App):
                 )
 
     def _apply_instruction_pending(self) -> ApplyResult | None:
-        """Apply pending instruction pointer toggles.
-
-        Apply semantics (different from skill/agent): instructions_install.apply
-        reconciles the WHOLE scope lock to disk — it takes no per-harness
-        add/remove. So per scope we:
-          1. Mutate every pending slug entry's harnesses list (adds/removes);
-             an entry left with no harnesses is pruned (matches the CLI's
-             uninstall #312 contract — never leave an empty stub).
-          2. write_lock(), then call apply() ONCE for the scope.
-          3. On failure (CanonicalMissingError / PointerConflictError) roll the
-             lock back to its prior state — apply() reads the lock from disk, so
-             a failed reconcile would otherwise leave the lock lying about disk.
-             Mirrors commands/instructions/install_cmd.py's rollback contract.
-        """
+        """Apply explicit pointer intents; inventory remains the installation truth."""
         from agent_toolkit_cli import instructions_install
-        from agent_toolkit_cli.instructions_adapters.symlink import (
-            PointerConflictError,
-        )
-        from agent_toolkit_cli.instructions_lock import (
-            InstructionsLockEntry,
-            add_entry,
-            read_lock,
-            remove_entry,
-            write_lock,
-        )
-        from agent_toolkit_cli.instructions_paths import lock_file_path
+        from agent_toolkit_cli.instructions_adapters.symlink import canonical_usable, inspect_pointer
+        from agent_toolkit_tui.instruction_state import pointer_path_for
 
         try:
             grid = self.query_one("#instruction-grid", InstructionGrid)
@@ -1192,105 +1170,66 @@ class TUIApp(App):
         if not pending:
             return None
         tag = _scope_tag(pending)
-
-        # Group by scope → {slug: (adds set, removes set)}. apply() is
-        # whole-lock, so all mutations for a scope are written before its single
-        # apply() call — this also keeps ok/failed counts correct if the lock
-        # ever holds more than one slug per scope (the keyed-by-slug shape the
-        # lock model is forward-compatible with).
-        by_scope: dict[str, dict[str, tuple[set[str], set[str]]]] = defaultdict(
-            lambda: defaultdict(lambda: (set(), set()))
-        )
-        for (scope, harness, slug), op in pending.items():
-            adds, removes = by_scope[scope][slug]
-            (adds if op == "link" else removes).add(harness)
-
-        ok = failed = 0
+        batches = {}
         errors: list[str] = []
-
-        for scope, slugs in by_scope.items():
-            home = Path.home() if scope == "global" else None
-            project = None if scope == "global" else Path.cwd()
-            n_writes = sum(len(a) + len(r) for a, r in slugs.values())
-
-            lpath = lock_file_path(scope, project)  # type: ignore[arg-type]
-            prior = read_lock(lpath)
-            prior_existed = lpath.exists()
-
-            # Apply every slug mutation onto a working copy of the lock.
-            updated_lock = prior
-            for slug, (adds, removes) in slugs.items():
-                if slug in updated_lock.instructions:
-                    entry = updated_lock.instructions[slug]
-                    new_harnesses = list(entry.harnesses)
-                    for h in adds:
-                        if h not in new_harnesses:
-                            new_harnesses.append(h)
-                    for h in removes:
-                        if h in new_harnesses:
-                            new_harnesses.remove(h)
-                    if new_harnesses:
-                        updated_lock = add_entry(
-                            updated_lock,
-                            slug,
-                            InstructionsLockEntry(
-                                scope=entry.scope,
-                                source=entry.source,
-                                harnesses=new_harnesses,
-                            ),
-                        )
-                    else:
-                        # No harnesses left — prune the entry rather than
-                        # writing an empty stub the CLI would never produce.
-                        updated_lock = remove_entry(updated_lock, slug)
-                elif adds:
-                    updated_lock = add_entry(
-                        updated_lock,
-                        slug,
-                        InstructionsLockEntry(
-                            scope=scope,  # type: ignore[arg-type]
-                            source="AGENTS.md",
-                            harnesses=sorted(adds),
-                        ),
-                    )
-                # else: only removes and no existing entry — nothing to do.
-
-            # Write the mutated lock, reconcile once, roll back on failure.
-            if updated_lock.instructions:
-                write_lock(lpath, updated_lock)
-            elif prior_existed:
-                # Lock emptied entirely — delete it (#312), don't write `{}`.
-                lpath.unlink()
-            try:
-                plan = instructions_install.apply(
-                    scope=scope,  # type: ignore[arg-type]
-                    project_root=project,
-                    home=home,
+        try:
+            # Guard every scope before writes, including canonical-chain protection.
+            for scope, _, _ in pending:
+                if scope in batches:
+                    continue
+                project = Path.cwd() if scope == "project" else None
+                home = Path.home() if scope == "global" else None
+                adds = [h for (s, h, slug), op in pending.items() if s == scope and op == "link"]
+                removes = [h for (s, h, slug), op in pending.items() if s == scope and op == "unlink"]
+                if any(slug != "AGENTS.md" for s, h, slug in pending if s == scope):
+                    raise ValueError("Instructions only supports AGENTS.md")
+                instructions_install.plan(
+                    scope=scope, project_root=project, home=home,
+                    add_harnesses=adds, remove_harnesses=removes,
                 )
-                created = sum(1 for a in plan.actions if a.action == "create")
-                removed = sum(1 for a in plan.actions if a.action == "remove")
-                ok += created + removed
-            except (
-                instructions_install.CanonicalMissingError,
-                PointerConflictError,
-            ) as exc:
-                # Reconcile failed — restore the lock to its prior state so it
-                # never claims an install that did not land on disk.
-                if prior_existed:
-                    write_lock(lpath, prior)
-                else:
-                    lpath.unlink(missing_ok=True)
-                errors.append(f"{scope}: {exc}")
-                failed += n_writes
+                batches[scope] = (project, home, adds, removes)
+        except (OSError, RuntimeError, ValueError, KeyError) as exc:
+            errors.append(str(exc))
+        if not errors:
+            for scope, (project, home, adds, removes) in batches.items():
+                try:
+                    instructions_install.apply(
+                        scope=scope, project_root=project, home=home,
+                        add_harnesses=adds, remove_harnesses=removes,
+                    )
+                except (OSError, RuntimeError, ValueError, KeyError) as exc:
+                    errors.append(f"{scope}: {exc}")
 
-        saved = grid.pending_entries() if failed else {}
-        if failed == 0:
-            grid.clear_pending()
+        remaining = {}
+        for key, op in pending.items():
+            scope, harness, slug = key
+            project = Path.cwd() if scope == "project" else None
+            home = Path.home() if scope == "global" else None
+            try:
+                canonical = instructions_install._resolve_canonical(scope, project)
+                pointer = pointer_path_for(harness, scope=scope, home=home, project=project)
+                if pointer is None:
+                    remaining[key] = op
+                    continue
+                state = inspect_pointer(pointer, canonical)
+                satisfied = (
+                    state.linked and canonical_usable(canonical) if op == "link"
+                    else not state.linked and not state.conflict
+                )
+                if not satisfied:
+                    remaining[key] = op
+            except (OSError, RuntimeError, ValueError, KeyError):
+                remaining[key] = op
+        failed = len(remaining)
+        ok = len(pending) - failed
+        grid.clear_pending()
         self._refresh_instruction_view()
-        if saved:
-            grid.restore_pending(saved)
+        if remaining:
+            grid.restore_pending(remaining)
         self._refresh_pending_label()
         self._refresh_status_bar()
+        if failed and not errors:
+            errors.append("Some pointer intents remain unsatisfied; inspect conflicts before retrying.")
         if errors:
             first = " ".join(errors[0].split())
             extra = f" (+{len(errors) - 1} more)" if len(errors) > 1 else ""
@@ -1298,10 +1237,8 @@ class TUIApp(App):
                 f"[red]apply failed[/] — {first}{extra}{tag}"
             )
             self.notify(
-                "\n\n".join(errors),
-                title=f"Apply: {ok} ok, {failed} failed",
-                severity="error",
-                timeout=12,
+                "\n\n".join(errors), title=f"Apply: {ok} ok, {failed} failed",
+                severity="error", timeout=12,
             )
         else:
             self.query_one("#footer-pending", Static).update(
