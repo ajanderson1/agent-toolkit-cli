@@ -1917,10 +1917,13 @@ class TUIApp(App):
             cwd = Path(cwd)
         from agent_toolkit_cli.skill_git import is_git_repo
 
-        escaped = escape(str(cwd))
+        path = str(cwd)
+        final = Path(cwd).name or path
+        parent = path[:-len(final)]
+        formatted = f"[bold]REPO:[/bold]{escape(parent)}[bold]{escape(final)}[/bold]"
         if not is_git_repo(cwd):
-            return f"[red]⚠️  {escaped}[/]"
-        return escaped
+            return f"[red]⚠️  {formatted}[/]"
+        return formatted
 
     def _refresh_proj_path(self, cwd: Path | str | None = None) -> None:
         try:
