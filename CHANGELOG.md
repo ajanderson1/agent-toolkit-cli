@@ -1,5 +1,33 @@
 # Changelog
 
+## [5.11.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v5.10.0...v5.11.0) (2026-10-16)
+
+
+### Features
+
+* **skills:** manage collections with parent-child selection ([#535](https://github.com/ajanderson1/agent-toolkit-cli/issues/535)) ([b7b5200](https://github.com/ajanderson1/agent-toolkit-cli/commit/b7b5200d58684fbd9699c29c3fd6c9719f4924a7))
+* **tui:** emphasize repo label and final directory ([#533](https://github.com/ajanderson1/agent-toolkit-cli/issues/533)) ([d3965e3](https://github.com/ajanderson1/agent-toolkit-cli/commit/d3965e376224f9be4dd2fc9e18330eb8ea3165cb)), closes [#527](https://github.com/ajanderson1/agent-toolkit-cli/issues/527)
+* **tui:** enhance project path display and status bar updates; remove footer pending count ([bbc1a02](https://github.com/ajanderson1/agent-toolkit-cli/commit/bbc1a02c03f2287bb8b950e41d2328e7598a73fa))
+* **tui:** simplify asset-type sidebar labels ([#532](https://github.com/ajanderson1/agent-toolkit-cli/issues/532)) ([c6e9292](https://github.com/ajanderson1/agent-toolkit-cli/commit/c6e92920bc4502b98e57e514f14d6ddb6a0b453d))
+
+
+### Bug Fixes
+
+* **skill:** support github directory urls and ssh clone fallback ([d0a266d](https://github.com/ajanderson1/agent-toolkit-cli/commit/d0a266d848129d2baf7441acd96cdd823d3dedfe))
+* **tui:** save and revert edits across asset types ([#530](https://github.com/ajanderson1/agent-toolkit-cli/issues/530)) ([0b2e020](https://github.com/ajanderson1/agent-toolkit-cli/commit/0b2e020fa0dbf5147a890337f04388524e6d23a1))
+
+
+### Refactors
+
+* **instructions:** derive installs from AGENTS.md symlinks ([#534](https://github.com/ajanderson1/agent-toolkit-cli/issues/534)) ([ce16024](https://github.com/ajanderson1/agent-toolkit-cli/commit/ce16024937fab71c20c64a6b66ccbc7a9f34a51b))
+
+
+### Documentation
+
+* reconcile current guides and README with final workflows ([#536](https://github.com/ajanderson1/agent-toolkit-cli/issues/536)) ([b79fe7b](https://github.com/ajanderson1/agent-toolkit-cli/commit/b79fe7b39a045861e4ec9c53814821d6ae118c4a))
+* **review:** preserve release campaign audit reports ([#531](https://github.com/ajanderson1/agent-toolkit-cli/issues/531)) ([899301a](https://github.com/ajanderson1/agent-toolkit-cli/commit/899301a3f9fa63c3da3f05092d847ed979509646))
+* **superpowers:** add spec and plan for issue [#526](https://github.com/ajanderson1/agent-toolkit-cli/issues/526) clean asset types sidebar ([ea66a61](https://github.com/ajanderson1/agent-toolkit-cli/commit/ea66a6198064ca4c9676247fe1ef27f87d6ff799))
+
 ## [5.10.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v5.9.1...v5.10.0) (2026-10-16)
 
 
