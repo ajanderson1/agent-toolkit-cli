@@ -91,6 +91,8 @@ agent-toolkit-cli skill remove <slug>... [--force]
 
 `<source>` accepts `owner/repo`, full URL, SSH URL, local path, or skills.sh URL. Monorepo skills are supported with `--skill <name>` or a subpath source such as `owner/repo/<subpath>`. See [`docs/agent-toolkit/skill-lock.md`](docs/agent-toolkit/skill-lock.md) for lock-file format and skills.sh interop details.
 
+A repository with several skills is registered as individual children and shown as a collection in the TUI. Parent checkboxes select all/none or show mixed selection; child overrides stay independent, and changes remain queued until Apply. Use `skill install --source owner/repo --agents standard` to install all registered children of an exact source. Adding does not install, and repeated registration preserves local work instead of advancing a shared checkout. Legacy rootless wrappers are reconciled inside normal install/Apply without extra conversion steps; unsafe ownership or unproven root/nested isolation fails before writes. See the [collection workflow](docs/agent-toolkit/tui.md#skill-collections).
+
 `skill update` fetches and merges upstream into the canonical clone. `skill push` opens a PR branch by default for local skill improvements; `--direct` pushes straight to the tracked ref.
 
 ### Agents — subagent definitions across harnesses

@@ -46,10 +46,10 @@ def test_skill_add_creates_library_entry_and_no_symlinks(
     assert entry["sourceType"] in {"git", "local"}
 
 
-def test_skill_add_source_registers_all_repo_skills_and_skips_conflicts(
+def test_skill_add_source_refuses_complete_batch_on_conflict(
     git_sandbox, tmp_path: Path, monkeypatch,
 ):
-    """--source adds repository skills by directory slug, skipping conflicts."""
+    """A later collision must not publish earlier siblings or rewrite records."""
     repo = git_sandbox.clone
     skills = repo / "skills"
     (skills / "alpha").mkdir(parents=True)
@@ -96,13 +96,12 @@ def test_skill_add_source_registers_all_repo_skills_and_skips_conflicts(
         ),
     )
     result = runner.invoke(main, ["skill", "add", "--source", "owner/repo"])
-    assert result.exit_code == 0, result.output
-    assert "skipped alpha" in result.output
+    assert result.exit_code != 0
+    assert "collision" in result.output
     lock = read_lock(lock_path)
-    assert set(lock.skills) == {"alpha", "beta"}
+    assert set(lock.skills) == {"alpha"}
     assert lock.skills["alpha"].source == "different/repo"
-    assert "beta" in lock.skills
-    assert (library_root / "beta" / "SKILL.md").exists()
+    assert not (library_root / "beta").exists()
 
 
 def test_skill_add_is_non_interactive(git_sandbox, tmp_path: Path, monkeypatch):

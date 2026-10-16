@@ -559,6 +559,12 @@ def ensure_project_canonical(
     return project_canonical
 
 
+def apply_collection_selection(group, selections, *, scope, home=None, project=None) -> None:
+    """Apply complete sibling selections before ordinary per-slug materialization."""
+    from agent_toolkit_cli.skill_collections import apply_selection
+    apply_selection(group, selections, scope=scope, home=home, project=project)
+
+
 # ── Legacy v2.0.0 wrappers ──────────────────────────────────────────────
 # These continue to accept the 5-harness shortcut names and delegate to
 # plan()+apply() using skills.sh agent names.
