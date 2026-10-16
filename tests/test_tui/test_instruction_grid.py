@@ -15,7 +15,7 @@ Widget-level:
 10. standard column is non-toggleable (no-op)
 
 App-level:
-11. sidebar lists instruction first, separator second, then others
+11. sidebar lists six active asset types with instruction first
 12. switching to instruction shows InstructionGrid, hides others
 13. ctrl+s routes to _apply_instruction_pending when instruction active
 14. apply link writes lock + calls instructions_install.apply (pointer created)
@@ -511,36 +511,24 @@ async def test_instruction_i_opens_asset_info_from_harness_column():
 
 @pytest.mark.asyncio
 async def test_asset_type_sidebar_lists_instruction_first():
-    """Sidebar OptionList must list instruction first, then separator, then others."""
+    """Sidebar lists only six enabled asset types in the established order."""
     from agent_toolkit_tui.app import TUIApp
 
     app = TUIApp()
     async with app.run_test() as pilot:
         await pilot.pause()
         ol = app.query_one("#asset-types-list", OptionList)
-        # First option must be instruction
-        first_option = ol.get_option_at_index(0)
-        assert first_option.id == "asset-type-instruction"
-        # Second entry must be the separator (disabled)
-        separator = ol.get_option_at_index(1)
-        assert separator.disabled is True
-        # Collect all non-separator prompts
-        prompts = []
-        ids = []
-        for i in range(ol.option_count):
-            try:
-                opt = ol.get_option_at_index(i)
-                if opt.id not in (None, "asset-type-separator-1", "asset-type-separator-2") and not opt.disabled:
-                    prompts.append(str(opt.prompt))
-                    ids.append(opt.id)
-            except Exception:
-                pass
-        assert any("Instructions" in p for p in prompts)
-        assert any("Skills" in p for p in prompts)
-        assert any("Pi Extensions" in p for p in prompts)
-        assert any("Agents" in p for p in prompts)
-        # instruction must be first among selectable options
-        assert ids[0] == "asset-type-instruction"
+        assert ol.option_count == 6
+        options = [ol.get_option_at_index(i) for i in range(ol.option_count)]
+        assert all(not option.disabled for option in options)
+        assert [option.id for option in options] == [
+            "asset-type-instruction",
+            "asset-type-command",
+            "asset-type-skill",
+            "asset-type-agent",
+            "asset-type-mcp",
+            "asset-type-pi-extension",
+        ]
 
 
 @pytest.mark.asyncio
