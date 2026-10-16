@@ -222,8 +222,8 @@ async def test_all_grid_pending_enumeration_includes_mcp_and_commands(temp_setti
 
         pending = app._get_all_pending_edits()
         assert len(pending) == 2
-        assert ("project", "claude-code", "my-cmd") in pending
-        assert ("project", "codex", "my-mcp") in pending
+        assert pending[("project", "claude-code", "my-cmd", "#command-grid")] == "link"
+        assert pending[("project", "codex", "my-mcp", "#mcp-grid")] == "link"
 
 
 @pytest.mark.asyncio
