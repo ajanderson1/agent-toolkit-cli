@@ -2,14 +2,13 @@
 
 See issue #513 and docs/specs/2026-10-15-pytest-user-state-isolation.md.
 """
+
 from __future__ import annotations
 
 import os
 import subprocess
 import sys
 from pathlib import Path
-
-import pytest
 
 
 def test_pytest_startup_redirects_home_and_configuration_roots(tmp_path: Path) -> None:
@@ -23,9 +22,17 @@ def test_pytest_startup_redirects_home_and_configuration_roots(tmp_path: Path) -
     sentinel_lock_bytes = b'{"version": 1, "sentinel": "DO_NOT_TOUCH"}\n'
     sentinel_lock.write_bytes(sentinel_lock_bytes)
 
-    sentinel_skill = synthetic_outer_home / ".agent-toolkit" / "skills" / "sentinel-skill" / "SKILL.md"
+    sentinel_skill = (
+        synthetic_outer_home
+        / ".agent-toolkit"
+        / "skills"
+        / "sentinel-skill"
+        / "SKILL.md"
+    )
     sentinel_skill.parent.mkdir(parents=True)
-    sentinel_skill_bytes = b"---\nname: sentinel-skill\ndescription: Outer sentinel.\n---\n"
+    sentinel_skill_bytes = (
+        b"---\nname: sentinel-skill\ndescription: Outer sentinel.\n---\n"
+    )
     sentinel_skill.write_bytes(sentinel_skill_bytes)
 
     sentinel_pi_settings = synthetic_outer_home / ".pi" / "agent" / "settings.json"
@@ -127,7 +134,9 @@ def test_isolation_probe():
     )
 
     # In Step 1 & 2 of TDD, we expect this to FAIL because conftest has not yet implemented the sandbox.
-    assert result.returncode == 0, f"Pytest probe failed:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    assert result.returncode == 0, (
+        f"Pytest probe failed:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    )
 
     # Verify sentinels are completely untouched
     assert sentinel_lock.read_bytes() == sentinel_lock_bytes
@@ -169,7 +178,11 @@ def test_install_in_sandbox(tmp_path):
     subprocess.run(["git", "init", "--initial-branch=main", str(seed)], check=True)
     (seed / "SKILL.md").write_text("---\\nname: isolated-skill\\ndescription: Isolated.\\n---\\n")
     subprocess.run(["git", "-C", str(seed), "add", "SKILL.md"], check=True)
-    subprocess.run(["git", "-C", str(seed), "commit", "-m", "init"], check=True)
+    subprocess.run(
+        ["git", "-C", str(seed), "-c", "user.name=Test User",
+         "-c", "user.email=test@example.invalid", "commit", "-m", "init"],
+        check=True,
+    )
     subprocess.run(["git", "-C", str(seed), "remote", "add", "origin", str(upstream)], check=True)
     subprocess.run(["git", "-C", str(seed), "push", "origin", "main"], check=True)
 
@@ -210,7 +223,9 @@ def test_install_in_sandbox(tmp_path):
         capture_output=True,
         text=True,
     )
-    assert result.returncode == 0, f"Install probe failed:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    assert result.returncode == 0, (
+        f"Install probe failed:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    )
 
     # Verify synthetic outer home lockfile was NOT modified
     assert sentinel_lock.read_bytes() == sentinel_lock_bytes
@@ -261,7 +276,8 @@ def test_print_sandbox():
             sandbox_root = Path(line.split(":", 1)[1].strip())
             break
 
-    assert sandbox_root is not None, f"Could not find SANDBOX_ROOT in output:\n{result.stdout}"
+    assert sandbox_root is not None, (
+        f"Could not find SANDBOX_ROOT in output:\n{result.stdout}"
+    )
     # The sandbox directory must have been cleaned up by pytest_unconfigure
     assert not sandbox_root.exists(), f"Sandbox root was not cleaned up: {sandbox_root}"
-
