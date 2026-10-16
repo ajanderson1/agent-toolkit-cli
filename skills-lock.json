@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "skills-workflow": {
+      "source": "ajanderson1/skills-workflow",
+      "sourceType": "github",
+      "skillPath": "SKILL.md"
+    }
+  }
+}
