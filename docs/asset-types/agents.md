@@ -1,41 +1,31 @@
 # Agents (subagents)
 
-The `agent` [asset type](../glossary.md#asset-type) manages subagent definitions —
-markdown-with-frontmatter descriptions of a delegable assistant — and projects
-them into each harness's agent slot.
+Agents are delegable assistant definitions: canonical Markdown with frontmatter, stored in a source-backed library and projected into supported harness slots. `agents-lock.json` uses the shared `skills` envelope. Source metadata is not proof that the projected file still exists.
 
-## How it works
+## Projection and scope
 
-The toolkit keeps one canonical definition and projects it per harness using
-the cheapest [mechanism](../glossary.md#mechanism) that harness accepts:
+- **Standard:** `.claude/agents/<slug>.md` (or `~/.claude/agents/<slug>.md`). Shared readers are Claude Code, Kode, Neovate, Cortex and Cursor at both scopes, plus Devin at project scope only. `claude-code` normalizes to `standard`.
+- **Symlink:** Claude-compatible Markdown in a harness's own directory.
+- **Translate:** generated frontmatter/format in a managed cache, linked into the native slot.
+- **Config + folder:** registry entry plus managed artifact where the enabled adapter needs both.
+- **Dual symlink:** Pi's agent paths for the external subagent extension; installation does not install that extension or guarantee it is loaded.
 
-- **symlink** — the harness accepts Claude-compatible markdown unchanged; a
-  per-asset symlink into its agents directory is enough.
-- **translate** — the harness wants different frontmatter, another filename
-  suffix, or a non-markdown format (TOML/JSON); the toolkit generates a
-  flavored file in a managed cache and symlinks the slot to it.
-- **config_file+folder** — the harness requires an explicit registry entry
-  (e.g. Codex's `[agents.<role>]` in `config.toml`) alongside the artefact;
-  both surfaces commit and roll back together.
-- **dual-symlink** — two slot directories mirror the same source (Pi).
+Install defaults to Standard plus enabled non-covered adapters at that scope; uninstall is deliberately broader to remove legacy own-directory projections. Catalog/research support is not the same as an enabled adapter: **Codex and Firebender agent adapters remain disabled**. Harness-specific formats and limits live in the [matrix and harness pages](../matrix.md); Standard's per-scope reader sets live in `agent_adapters/standard.py`.
 
-## Support across harnesses
-
-Per the [compatibility matrix](../matrix.md): **28 supported** · 11 gaps ·
-10 not applicable · 5 unknown. The supported set splits 14 symlink ·
-9 translate · 4 registry · 1 dual-symlink. Two verdict-supported cells
-([Codex](../harnesses/codex.md), [Firebender](../harnesses/firebender.md))
-are currently disabled in the toolkit because their mechanism would mutate a
-shared config file — each harness page shows its live adapter status.
-
-## CLI
+## Use
 
 ```bash
-agent-toolkit-cli agent add <source>
-agent-toolkit-cli agent install
-agent-toolkit-cli agent uninstall        # non-destructive (canonical kept)
-agent-toolkit-cli agent remove           # destructive (canonical deleted)
+agent-toolkit-cli agents add owner/repo/path/to/agent --slug reviewer
+agent-toolkit-cli agents install reviewer -p --harnesses standard
+agent-toolkit-cli agents list -p --json
+agent-toolkit-cli agents doctor -p --no-fix
+agent-toolkit-cli agents uninstall reviewer -p --harnesses standard
 ```
 
-See also: [Skills](skills.md) · [Instructions](instructions.md) ·
-[Glossary](../glossary.md)
+Add/remove/import are global-library operations. Install/uninstall default project; other scope-aware verbs infer from the agent project lock. Update merges upstream; push opens a PR unless `--direct`; reset requires explicit slugs and can discard local work. [CLI reference](../agent-toolkit/cli.md#agents).
+
+## Ownership and inventory
+
+The TUI unions lock entries with bounded on-disk discovery. Unmanaged files stay visible; visibility is not consent to take ownership. Doctor reports Standard drift, orphan/dangling sidecars and Cursor shadows (Cursor's own directory wins conflicts). A divergent sentinel-less Cursor file is report-only, and unmanaged Standard files are never auto-removed. Toolkit-owned generated content uses ownership sidecars; inspect conflict diagnostics instead of replacing foreign files.
+
+[Lock formats](../agent-toolkit/lock-files.md) · [Instructions](instructions.md) · [TUI](../agent-toolkit/tui.md)

@@ -1,127 +1,89 @@
-# `skill` subcommand — lock-file-driven skill management
+# Skills: library, Git ownership and locks
 
-> For the schema of **all five** lock files at a glance — and how the agent,
-> command, mcp, and pi-extension locks differ from this one — see
-> [Lock files](lock-files.md). This page is the skills-specific deep dive.
-
-## Overview
-
-The `skill` subgroup manages skills using a **per-skill upstream git repo + lock file** model, mirroring the on-disk layout and lock-file schema of [`vercel-labs/skills`](https://github.com/vercel-labs/skills). Lock files written by this CLI are readable by `npx skills`, and skills installed by either tool live in the same canonical directory.
-
-The skill path keeps no metadata in the monorepo: each skill is a standalone git repository and the lock file is the SSOT for installation state. Agent, command, mcp and pi-extension have their own install machinery and lock files (`agents-lock.json`, `mcps-lock.json`, etc.); Instructions uses actual symlinks without a lock; see the [CLI reference](cli.md).
-
-The defining behaviour: **`update` is a merge-aware operation.** Local edits to a skill (the "self-improvement" case) survive a pull from upstream when there is no overlap, and surface as real `git` merge conflicts when there is.
+**Add registers source; install chooses visibility.** A skill is a real `SKILL.md` folder, either a standalone checkout or a child of a shared parent checkout. Locks record source/ref/SHA metadata; the actual canonical and projection paths still need to exist and be healthy. [All lock formats](lock-files.md) · [Exact CLI surface and defaults](cli.md).
 
 ## On-disk layout
 
-### Global scope (`-g` / `--global`)
+```text
+~/.agent-toolkit/
+├── skills-lock.json
+├── skills/<slug>/                         # standalone clone or child symlink
+├── skills/_parents/<owner>/<repo>[@<ref>]/ # shared monorepo checkout
+└── projects/<id>/skills/                   # separate project backing store
+    ├── <slug>/
+    └── _parents/...
 
-```
-~/.agent-toolkit/skills/<slug>/      ← canonical: a real `git clone` of upstream
-  .git/
-  SKILL.md
-  ...
-~/.agent-toolkit/skills-lock.json    ← global lock
-
-~/.claude/skills/<slug>              → symlink → ~/.agent-toolkit/skills/<slug>
-~/.codex/skills/<slug>               → symlink
-~/.config/opencode/skills/<slug>     → symlink
-~/.gemini/skills/<slug>              → symlink
-~/.agents/skills/<slug>              → shared standard symlink (including Pi)
+<project>/skills-lock.json                 # project source/install metadata
+<project>/.agents/skills/<slug>            # Standard visibility symlink
+<project>/.claude/skills/<slug>            # explicit Claude visibility symlink
 ```
 
-The library root is `~/.agent-toolkit/skills/` by default, overridable via
-`$AGENT_TOOLKIT_SKILLS_ROOT`; the global lock sits one level up from the library
-root at `<library_root>.parent/skills-lock.json` (`skill_paths.py:6,64-69`,
-`_paths_core.py:103-115`).
+Global projections are equivalent paths under the user's home. Standard writes `~/.agents/skills/<slug>` globally; several harnesses (including Pi) read that shared slot. Per-project canonicals live **outside** the consumer repository; only the lock and visibility links live inside it. `AGENT_TOOLKIT_SKILLS_ROOT` overrides the global skill library root; its parent holds the global lock and project store. Parent caches are under the **skills** root, not directly under `~/.agent-toolkit/`.
 
-### Project scope (`-p` / `--project`, default)
+## Normal workflow
 
-The project canonical clone lives **outside** the project tree, in a per-project
-store under `~/.agent-toolkit/` (`project_store_root` →
-`<library_root>.parent/projects/<id>/skills/<slug>/`, `skill_paths.py:87-93,136-145`),
-so removing a skill never touches project files. Only the project lock and the
-harness symlinks live inside the project:
+```bash
+agent-toolkit-cli skills add owner/repo --skill my-skill
+agent-toolkit-cli skills install my-skill --scope global --agents standard
+agent-toolkit-cli skills list -g
 
-```
-<project>/skills-lock.json           ← project lock (commit this to git)
-<project>/.claude/skills/<slug>      → symlink → the project canonical clone
-...
+# Edit the canonical SKILL.md or supporting files, then inspect and publish.
+agent-toolkit-cli skills status my-skill -g
+agent-toolkit-cli skills update my-skill -g
+agent-toolkit-cli skills push my-skill -g
 ```
 
-The per-harness directories are **projections** — editing the canonical updates every harness instantly.
+Add is global-library only and does not install projections. Remove is also a library operation (no `-g/-p`); uninstall chooses scope and keeps library content. List/status/update/push/reset/doctor infer project from a skills project lock, otherwise global (Paperclip company detection is an exception). Install/uninstall default global except in detected Paperclip company projects. Prefer explicit scope; do not infer it from Git membership.
 
-## Command reference
-
-Most scope-aware `skill` verbs (`list`, `status`, `update`, `push`, `remove`) accept `-g` (global) or `-p` (project); global is the default. `skill add` clones into the library only and takes no scope. `skill install`/`uninstall` select target agents with `--agents <names>` (a comma-separated list, the `standard` token, or `all`), not `--harness`.
-
-| Command | Purpose |
+| Operation | Effect / risk |
 |---|---|
-| `skill add <source>` | Clone upstream into the canonical location, create per-harness symlinks, write lock entry. |
-| `skill list` | Show installed skills from the lock file. |
-| `skill status [<slug>...]` | Per-skill working-tree state: clean / dirty / missing. |
-| `skill update [<slug>...]` | `git fetch && git merge` for each skill. Real conflicts surface in the working copy. |
-| `skill push [<slug>...]` | Stage, commit, and push any uncommitted local edits. No-op when clean. |
-| `skill remove <slug>...` | Tear down: lock entry, symlinks, canonical clone. Refuses dirty trees without `--force`. |
+| `add` | Clone/register real skills; no harness visibility. Repeated registration preserves existing local work. |
+| `install` / `uninstall` | Add/remove requested visibility; project install prepares separate backing content. |
+| `status` | Inspect local Git state, scoped to the child subpath for owned monorepos. |
+| `update` | Fetch and merge upstream; real conflicts remain for manual Git resolution. |
+| `push` | Commit local changes and publish a PR branch by default; read-only monorepos refuse. |
+| `reset SLUGS...` | Fetch + hard reset to upstream; explicit slugs required. Dirty trees refuse unless `--force`. This can discard local changes/commits; it is not projection repair. |
+| `remove` | Delete library entry/canonical and owned projections; dirty content requires `--force`. Shared backing checkouts needed by other entries are not disposable. |
+| `doctor --no-fix` | Diagnose without repair. |
 
-### Source formats
+## Sources, refs and collections
 
-`skill add` accepts the same source formats `npx skills add` does:
-
-```bash
-agent-toolkit-cli skill add ajanderson1/journal           # GitHub shorthand
-agent-toolkit-cli skill add https://github.com/o/r        # full URL
-agent-toolkit-cli skill add https://github.com/o/r/tree/main/skills/foo  # subpath
-agent-toolkit-cli skill add git@github.com:o/r.git        # SSH URL
-agent-toolkit-cli skill add ./local-skill                 # local path
-```
-
-### Example: end-to-end
+Sources accept `owner/repo`, Git URLs (HTTPS/SSH), local paths, skills.sh URLs and explicit repository subpaths. Select by frontmatter `name:` using `--skill NAME`, or use `owner/repo/path/to/skill`. `--ref` selects a branch/tag/ref; `owner/repo@ref` is suitable only for unambiguous refs. Use `--ref` for slash-containing refs or a ref combined with a subpath.
 
 ```bash
-# Install
-agent-toolkit-cli skill add ajanderson1/journal -g --harness claude
-agent-toolkit-cli skill list -g
-
-# Edit in place (the "self-improvement" use case)
-$EDITOR ~/.agent-toolkit/skills/journal/SKILL.md
-agent-toolkit-cli skill status -g       # → journal  dirty
-agent-toolkit-cli skill push journal -g # commits + pushes upstream
-agent-toolkit-cli skill status -g       # → journal  clean
-
-# Pull upstream changes
-agent-toolkit-cli skill update journal -g
+agent-toolkit-cli skills add owner/repo/path/to/skill --ref main
+agent-toolkit-cli skills add --source owner/repo --ref main
+agent-toolkit-cli skills install --source owner/repo --scope global --agents standard
 ```
 
-### Merge-aware update
+Repository-wide add discovers all supported real skills, including a genuine root skill. Each is an ordinary persisted child; the TUI's **collection** is a derived source/ref group, not a fake skill or new schema. Source install selects already registered children for the exact source (across refs); it does not fetch and activate later upstream additions.
 
-`skill update` runs `git fetch origin && git merge --no-edit origin/<ref>` in the canonical clone. Outcomes:
+One parent checkout is reused per source/ref. Child canonicals symlink into it. Repeated registration does not advance its HEAD or disturb commits, index, unstaged/untracked files or custom slugs. Update deliberately before registering a child that only exists upstream. Explicit single-child add retains its existing whole-child copy fallback if symlinks fail; repeated add preserves its `materialised: copy` snapshot. Collection exposure is not a filtered-copy implementation or a promise about every harness loader.
 
-| Working copy | Upstream | Result |
-|---|---|---|
-| clean | unchanged | no-op |
-| clean | advanced | fast-forward, silent success |
-| committed local edits | unchanged | no-op |
-| committed local edits | advanced, no overlap | automatic merge commit |
-| committed local edits | advanced, overlapping lines | **real `git` merge conflict** — `<<<<<<<` markers in the working copy, command exits non-zero with the conflicting file list |
+Legacy rootless whole-repo wrappers reconcile inside a **targeted install or selection-changing Apply**, without a separate conversion command. Checkout history/index/local work stay intact; only targeted owned exposure changes after desired real-child links can succeed. Inventory, toggles, Revert, no-op Apply and unrelated Apply do not reconcile. Genuine root+nested combinations whose independent exposure cannot be proven are conservatively refused. Missing real `SKILL.md` content is unhealthy and cannot be repaired by pretending installation succeeded. [Collection controls, failures and recovery](tui.md#skill-collections).
 
-Conflict resolution is whatever your usual git tooling supports (`git mergetool`, an `$EDITOR` pass, etc.).
+## Git ownership and publishing
 
-## Lock-file format
+Standalone skills have their own Git working tree. Monorepo skills share a checkout; `parentUrl` and `skillPath` locate the child. Owned parents (recognized owner or explicit `--owned`) allow push; third-party parents normally carry `readOnly: true` and refuse push. Read-only here restricts publishing, not an assurance that update will discard local work.
 
-The lock file is JSON, schema-compatible with `vercel-labs/skills`'s `skills-lock.json`. Project lock is at `<project>/skills-lock.json`; global lock is at `~/.agent-toolkit/skills-lock.json`.
+**Push normally opens a PR.** For owned monorepos it stages/commits only the selected child subpath, preserving dirty/staged siblings. If `gh` cannot open the PR, a pushed branch and manual-opening hint may remain; inspect the output. `--direct` explicitly opts into pushing the tracked ref, not the recommended shared workflow. Default PR publishing leaves lock advancement to the later merged update.
+
+Update fetches and merges rather than resetting. Nonoverlapping committed local edits can merge; overlapping edits produce a real conflict and a nonzero result. Resolve in the reported canonical/parent working tree, commit the resolution, then retry. Uncommitted changes can prevent a merge. Project monorepo update/reset are refused: `-g` selects the **different global library**, not an in-place re-scope of a project entry.
+
+## Lock schema
 
 ```json
 {
   "version": 1,
   "skills": {
-    "journal": {
-      "source": "ajanderson1/journal",
+    "my-skill": {
+      "source": "owner/repo",
       "sourceType": "github",
       "ref": "main",
-      "skillPath": "SKILL.md",
-      "upstreamSha": "abc123…",
-      "localSha":    "def456…"
+      "skillPath": "skills/my-skill",
+      "parentUrl": "https://github.com/owner/repo.git",
+      "upstreamSha": "0123456789abcdef0123456789abcdef01234567",
+      "readOnly": true
     }
   }
 }
@@ -129,58 +91,20 @@ The lock file is JSON, schema-compatible with `vercel-labs/skills`'s `skills-loc
 
 | Field | Meaning |
 |---|---|
-| `source` | The address we'd use to re-fetch (owner/repo, URL, or local path). |
-| `sourceType` | One of `github`, `gitlab`, `git`, `local`. |
-| `ref` | Branch/tag we cloned. Defaults to the source's default (typically `main`). |
-| `skillPath` | Path within the repo to the skill's `SKILL.md`. Usually `SKILL.md` at root. |
-| `upstreamSha` | The remote HEAD at the most recent successful sync. |
-| `localSha` | Our additive field — the working copy's HEAD. **Ignored by `npx skills`.** Lets us reason about local-vs-upstream divergence without re-running git. |
-| `parentUrl` | Monorepo skills only — the parent repo cloned once into `_parents/<owner>/<repo>/`, with this skill symlinked in from `skillPath`. Absent for standalone (single-repo) skills. |
-| `readOnly` | `true` for a monorepo consumed read-only (e.g. `anthropics/skills`); `skill push` refuses it. **Omitted (falsey) for an *owned* monorepo** — see below. |
+| `source`, `sourceType` | Re-fetch address and source category. |
+| `ref` | Requested branch/tag/commit reference; distinct from the observed SHA. |
+| `skillPath` | Root entrypoint (`SKILL.md`) or selected parent subpath. |
+| `upstreamSha` | Observed upstream commit; shared children observe parent HEAD. Not a separate user pin. |
+| `localSha` | Recorded local HEAD where available; does not replace live Git inspection. |
+| `parentUrl` | Shared parent repository URL; absent for standalone entries. |
+| `readOnly` | Publishing refusal for read-only parents; omitted/false for owned ones. |
 
-Skills are sorted alphabetically on write. Unknown fields are preserved on round-trip so the file stays forward-compatible with both upstream additions and our own future fields.
+Unknown entry fields survive round-trip. Entries are written deterministically. Existing v3 locks retain their version and extra metadata; new locks use v1. A branch/ref and an observed SHA are not interchangeable, and one shared working tree cannot represent incompatible child pins.
 
-### Owned monorepos (writable)
+## Interoperability and moving machines
 
-A monorepo is **owned** when its parent owner is `ajanderson1` (case-insensitive, per `is_owned_owner()`), or when `skill add --owned` is passed. An owned-monorepo entry carries `parentUrl` + `skillPath` but **no** `readOnly` field, so it is writable:
+The serializer accepts compatible v1/v3 skills locks; existing v3 wrapper metadata is preserved. The toolkit's global lock lives at `~/.agent-toolkit/skills-lock.json`; `npx skills` can use `~/.agents/.skill-lock.json`. Do not assume two tools share installation paths automatically. The interop test checks format compatibility, not equivalent ownership, merge or projection semantics.
 
-- `skill push <slug>` stages and commits **only the skill's `skillPath` subpath** inside the shared parent clone (a dirty sibling subpath is not swept in) and opens one subpath-scoped PR per push against the parent's base ref.
-- `skill status <slug>` reports dirty state scoped to that subpath and marks it `<slug>\t<state> (owned)`.
-- `skill update <slug>` merges (never resets), so local owned edits survive.
+Copy the global lock and run `skills import FILE` on the destination. Import is additive, skips existing entries, and reconstructs at recorded upstream SHAs unless `--latest`; it does not transport local-only edits or install projections. Incompatible existing shared-parent pins refuse rather than move siblings. [Cross-machine workflow](cli.md#moving-to-a-new-machine-cross-machine-sync).
 
-Read-only consumption of *others'* monorepos is unchanged: those entries keep `readOnly: true` and `skill push` still refuses them.
-
-### Re-homing standalone skills into an owned monorepo
-
-> The dedicated `skill migrate-to-monorepo` command was removed — it only produced
-> the flat `skills/<slug>` subpath and never the nested/root shapes the monorepo
-> feature actually supports, so it wasn't fit for real consolidations. Re-home by
-> hand instead: fold each skill into the monorepo (e.g. `git subtree`), then
-> `skill remove <slug>` + `skill add <owner>/<repo>/<skill-subpath> --owned`
-> (re-`install -p` per project). The entry rewrites from own-repo shape to
-> owned-monorepo-subpath shape:
-
-| | own-repo (before) | owned-monorepo-subpath (after) |
-|---|---|---|
-| `source` | `ajanderson1/<slug>-skill` | `ajanderson1/<parent-repo>` |
-| `skillPath` | `SKILL.md` | `<skill-subpath>` (e.g. `<slug>` at repo root, or `skills/<slug>`) |
-| `parentUrl` | absent | set to the parent repo URL |
-| `readOnly` | absent | absent (owned → writable) |
-
-After re-adding, the canonical at `~/.agent-toolkit/skills/<slug>/` is a symlink into the shared `_parents/<owner>/<parent-repo>/<skill-subpath>` clone, and harness symlinks are re-projected.
-
-## Interop with `npx skills`
-
-A lock file written by `agent-toolkit-cli skill add` is parseable by `npx skills@latest ls`. We have a smoke test that confirms this (`tests/test_cli/test_skill_interop.py`); it runs whenever `npx` is available on `$PATH`.
-
-The reverse also holds: a skill installed via `npx skills add owner/repo` lands in `~/.agent-toolkit/skills/<slug>/` and `~/.agent-toolkit/skills-lock.json`, where our `skill list` / `skill status` will pick it up.
-
-## What this design intentionally does **not** do
-
-- **Auto-push** of self-improvements. There is no session-end hook that pushes for you. Run `skill push` manually (or wire it into your own workflow). A follow-on design will revisit auto-push once the manual flow is proven.
-- **Other asset types in this lock.** This page covers skills only. Agent, command, mcp and pi-extension have their own install machinery and locks (`agents-lock.json`, `mcps-lock.json`, …); Instructions has lockless pointer operations — see the [CLI reference](cli.md). They are not recorded in `skills-lock.json`.
-- **Submitting to the public skills.sh catalogue.** Your repos can be private; we use the same lock format and addressing scheme without depending on the catalogue.
-
-## Where to look next
-
-- Upstream `vercel-labs/skills` source: <https://github.com/vercel-labs/skills>
+There is no automatic end-of-session push, no public skills.sh catalog submission, and no dedicated migrate-to-monorepo command. Re-home source/history deliberately, then register the new source and reinstall desired projections.

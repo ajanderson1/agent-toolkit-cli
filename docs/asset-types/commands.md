@@ -1,12 +1,13 @@
 # Commands
 
-The `command` asset type manages reusable slash-command prompts. Commands live in the toolkit library as `COMMAND.md` folders and are projected into harness-specific command or prompt-template locations.
+The `commands` group (`command` alias) manages the Commands asset type: reusable slash-command prompts. Commands live in the toolkit library as `COMMAND.md` folders and are projected into harness-specific command or prompt-template locations.
 
 - **Lock file:** `commands-lock.json`
 - **Canonical entrypoint:** `COMMAND.md`
 - **Portable argument recommendation:** `$ARGUMENTS`
 - **Default install targets:** `standard`, Pi, Gemini CLI
-- **Optional lock field:** `harnesses` — optional projection state written only after a successful mutation; legacy v1 locks without it remain readable (non-mutating reads never backfill)
+- **Optional lock field:** `harnesses` — projection metadata written only after a successful mutation; legacy v1 locks without it remain readable (non-mutating reads never backfill). Actual on-disk files/ownership still determine exposure.
+- **Scope default:** project when any source-backed project lock exists in the consumer directory, global otherwise; use explicit `-g/-p`. Add is global-library only; remove is scope-aware.
 
 ## Standard slot (#482)
 
@@ -47,11 +48,11 @@ Supporting files may live beside `COMMAND.md` for authorship, but first-cut proj
 ## CLI
 
 ```text
-agent-toolkit-cli command add <source> [--slug <slug>] [--ref <ref>]
-agent-toolkit-cli command install <slug> [-g|-p] [--harnesses standard,pi,gemini-cli]
-agent-toolkit-cli command uninstall <slug> [-g|-p] [--harnesses <h>[,<h>...]]
-agent-toolkit-cli command list [-g|-p] [--json]
-agent-toolkit-cli command status|update|push|import|reset|remove|doctor ...
+agent-toolkit-cli commands add <source> [--slug <slug>] [--ref <ref>]
+agent-toolkit-cli commands install <slug> [-g|-p] [--harnesses standard,pi,gemini-cli]
+agent-toolkit-cli commands uninstall <slug> [-g|-p] [--harnesses <h>[,<h>...]]
+agent-toolkit-cli commands list [-g|-p] [--json]
+agent-toolkit-cli commands status|update|push|import|reset|remove|doctor ...
 ```
 
 - Default install: `standard,pi,gemini-cli`.

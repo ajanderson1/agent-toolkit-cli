@@ -12,6 +12,13 @@ def _help(args: list[str]) -> str:
     return result.output
 
 
+def test_skill_help_describes_external_project_store():
+    out = _help(["skills", "--help"])
+    assert "external project store" in out
+    assert "canonical lives under <project>/.agents/skills/" not in out
+    assert "global unless a project lock exists" in out
+
+
 def test_skill_group_help_has_examples_section():
     out = _help(["skill", "--help"])
     assert "Examples:" in out, out

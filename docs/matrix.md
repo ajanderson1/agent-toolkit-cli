@@ -8,10 +8,15 @@ row beneath them for the rest, alphabetically. Derived from the machine-read
 by `scripts/gen_harness_docs.py` — edit the SSOT, then regenerate; never edit
 this page by hand.
 
-**Legend:** ✅ supported by the harness and the toolkit ·
-— gap (the harness supports it; the toolkit hasn't implemented it yet) ·
-N/A — the harness has no such concept ·
-? unknown (no public evidence of how the harness handles this asset type)
+**Legend:** ✅ researched support (check scope and enabled adapter on the harness page) ·
+— toolkit gap · N/A — no concept in this integration ·
+? unknown (no public evidence recorded).
+
+Ticks are not a promise of every-kind, every-scope availability. Instructions
+verdicts in this overview are project classifications; native may mean a
+harness-specific discovery path, not a global pointer managed by the toolkit.
+Agent adapters can be disabled despite a researched mechanism. Paperclip Skills
+is company/project-only; Codex Commands is deprecated, explicit and global-only.
 
 <div class="harness-matrix" markdown>
 <table markdown>
@@ -47,7 +52,7 @@ N/A — the harness has no such concept ·
 <tr markdown><td markdown>[Crush](harnesses/crush.md)</td><td markdown>[✅](harnesses/crush.md#instructions)</td><td markdown>[✅](harnesses/crush.md#skills)</td><td markdown>[—](harnesses/crush.md#agents)</td><td markdown>[?](harnesses/crush.md#commands)</td><td markdown>—</td><td markdown>N/A</td></tr>
 <tr markdown><td markdown>[Cursor](harnesses/cursor.md)</td><td markdown>[✅](harnesses/cursor.md#instructions)</td><td markdown>[✅](harnesses/cursor.md#skills)</td><td markdown>[✅](harnesses/cursor.md#agents)</td><td markdown>[—](harnesses/cursor.md#commands)</td><td markdown>—</td><td markdown>N/A</td></tr>
 <tr markdown><td markdown>[Deep Agents](harnesses/deepagents.md)</td><td markdown>[—](harnesses/deepagents.md#instructions)</td><td markdown>[✅](harnesses/deepagents.md#skills)</td><td markdown>N/A</td><td markdown>[?](harnesses/deepagents.md#commands)</td><td markdown>—</td><td markdown>N/A</td></tr>
-<tr markdown><td markdown>[Devin for Terminal](harnesses/devin.md)</td><td markdown>[✅](harnesses/devin.md#instructions)</td><td markdown>[✅](harnesses/devin.md#skills)</td><td markdown>[✅](harnesses/devin.md#agents)</td><td markdown>[?](harnesses/devin.md#commands)</td><td markdown>—</td><td markdown>N/A</td></tr>
+<tr markdown><td markdown>[Devin for Terminal](harnesses/devin.md)</td><td markdown>[✅](harnesses/devin.md#instructions)</td><td markdown>[✅](harnesses/devin.md#skills)</td><td markdown>[✅](harnesses/devin.md#agents)</td><td markdown>[✅](harnesses/devin.md#commands)</td><td markdown>—</td><td markdown>N/A</td></tr>
 <tr markdown><td markdown>[Dexto](harnesses/dexto.md)</td><td markdown>[✅](harnesses/dexto.md#instructions)</td><td markdown>[✅](harnesses/dexto.md#skills)</td><td markdown>[✅](harnesses/dexto.md#agents)</td><td markdown>[?](harnesses/dexto.md#commands)</td><td markdown>—</td><td markdown>N/A</td></tr>
 <tr markdown><td markdown>[Droid](harnesses/droid.md)</td><td markdown>[✅](harnesses/droid.md#instructions)</td><td markdown>[✅](harnesses/droid.md#skills)</td><td markdown>[✅](harnesses/droid.md#agents)</td><td markdown>[?](harnesses/droid.md#commands)</td><td markdown>—</td><td markdown>N/A</td></tr>
 <tr markdown><td markdown>[Firebender](harnesses/firebender.md)</td><td markdown>[✅](harnesses/firebender.md#instructions)</td><td markdown>[✅](harnesses/firebender.md#skills)</td><td markdown>[✅](harnesses/firebender.md#agents)</td><td markdown>[?](harnesses/firebender.md#commands)</td><td markdown>—</td><td markdown>N/A</td></tr>
@@ -64,7 +69,7 @@ N/A — the harness has no such concept ·
 <tr markdown><td markdown>[MCPJam](harnesses/mcpjam.md)</td><td markdown>N/A</td><td markdown>[✅](harnesses/mcpjam.md#skills)</td><td markdown>N/A</td><td markdown>[?](harnesses/mcpjam.md#commands)</td><td markdown>—</td><td markdown>N/A</td></tr>
 <tr markdown><td markdown>[Mistral Vibe](harnesses/mistral-vibe.md)</td><td markdown>[✅](harnesses/mistral-vibe.md#instructions)</td><td markdown>[✅](harnesses/mistral-vibe.md#skills)</td><td markdown>[✅](harnesses/mistral-vibe.md#agents)</td><td markdown>[?](harnesses/mistral-vibe.md#commands)</td><td markdown>—</td><td markdown>N/A</td></tr>
 <tr markdown><td markdown>[Mux](harnesses/mux.md)</td><td markdown>[✅](harnesses/mux.md#instructions)</td><td markdown>[✅](harnesses/mux.md#skills)</td><td markdown>[✅](harnesses/mux.md#agents)</td><td markdown>[?](harnesses/mux.md#commands)</td><td markdown>—</td><td markdown>N/A</td></tr>
-<tr markdown><td markdown>[Neovate](harnesses/neovate.md)</td><td markdown>[✅](harnesses/neovate.md#instructions)</td><td markdown>[✅](harnesses/neovate.md#skills)</td><td markdown>[✅](harnesses/neovate.md#agents)</td><td markdown>[?](harnesses/neovate.md#commands)</td><td markdown>—</td><td markdown>N/A</td></tr>
+<tr markdown><td markdown>[Neovate](harnesses/neovate.md)</td><td markdown>[✅](harnesses/neovate.md#instructions)</td><td markdown>[✅](harnesses/neovate.md#skills)</td><td markdown>[✅](harnesses/neovate.md#agents)</td><td markdown>[✅](harnesses/neovate.md#commands)</td><td markdown>—</td><td markdown>N/A</td></tr>
 <tr markdown><td markdown>[OpenClaw](harnesses/openclaw.md)</td><td markdown>[✅](harnesses/openclaw.md#instructions)</td><td markdown>[✅](harnesses/openclaw.md#skills)</td><td markdown>[—](harnesses/openclaw.md#agents)</td><td markdown>[?](harnesses/openclaw.md#commands)</td><td markdown>—</td><td markdown>N/A</td></tr>
 <tr markdown><td markdown>[OpenHands](harnesses/openhands.md)</td><td markdown>[✅](harnesses/openhands.md#instructions)</td><td markdown>[✅](harnesses/openhands.md#skills)</td><td markdown>[—](harnesses/openhands.md#agents)</td><td markdown>[?](harnesses/openhands.md#commands)</td><td markdown>—</td><td markdown>N/A</td></tr>
 <tr markdown><td markdown>[Pochi](harnesses/pochi.md)</td><td markdown>[✅](harnesses/pochi.md#instructions)</td><td markdown>[✅](harnesses/pochi.md#skills)</td><td markdown>[✅](harnesses/pochi.md#agents)</td><td markdown>[?](harnesses/pochi.md#commands)</td><td markdown>—</td><td markdown>N/A</td></tr>

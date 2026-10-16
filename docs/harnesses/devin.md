@@ -4,18 +4,20 @@
 
 | Asset type | Support | How |
 |---|:-:|---|
-| [Instructions](../asset-types/instructions.md) | [✅](#instructions) | native `AGENTS.md` reader |
+| [Instructions](../asset-types/instructions.md) | [✅](#instructions) | native classification; check discovery paths |
 | [Skills](../asset-types/skills.md) | [✅](#skills) | `.devin/skills` |
 | [Agents (subagents)](../asset-types/agents.md) | [✅](#agents) | translate |
-| [Commands](../asset-types/commands.md) | [?](#commands) | unknown — no public evidence found |
+| [Commands](../asset-types/commands.md) | [✅](#commands) | project Standard slot (`.claude/commands`), imported as skills; no global command adapter |
 | [MCP servers](../asset-types/mcp.md) | — | no toolkit adapter yet |
 | [Pi extensions](../asset-types/pi-extensions.md) | N/A | Pi-only asset type |
 
 ## Instructions { #instructions }
 
-Reads the canonical `AGENTS.md` natively — no pointer needed; the [instructions asset type](../asset-types/instructions.md) is satisfied as-is.
+Classified as a native `AGENTS.md` reader; no project pointer is created. Check the discovery paths below: some readers are workspace-only or do not load the root canonical at every scope.
 
-- **Verdict:** native
+- **Project verdict:** native
+- **Global verdict:** native
+- **Installation truth:** actual filesystem pointers, no Instructions lock.
 - **Default file:** `AGENTS.md`
 - **Project / global path:** `./AGENTS.md` / none (project-only)
 - **Reads `AGENTS.md` natively:** yes
@@ -23,7 +25,7 @@ Reads the canonical `AGENTS.md` natively — no pointer needed; the [instruction
 
 ## Skills { #skills }
 
-Supported — every harness in the catalog has a skills directory the [skills asset type](../asset-types/skills.md) projects into.
+The catalog supplies a skills placement for this harness. The [skills asset type](../asset-types/skills.md) uses the shared Standard slot where covered, otherwise its own projection.
 
 - **Project dir:** `.devin/skills`
 - **Global dir:** `~/.config/devin/skills`
@@ -32,7 +34,7 @@ Supported — every harness in the catalog has a skills directory the [skills as
 
 ## Agents (subagents) { #agents }
 
-Supported via the **translate** mechanism — see the [agents asset type](../asset-types/agents.md) for what each mechanism means.
+Researched support via **translate**; check the enabled adapter below — see the [agents asset type](../asset-types/agents.md) for what each mechanism means.
 
 - **Mechanism:** translate
 - **User / project path:** `~/.config/devin/agents/{profile}/AGENT.md` / `.devin/agents/{profile}/AGENT.md` (also `.agents/agents/{profile}/AGENT.md`)
@@ -42,7 +44,7 @@ Supported via the **translate** mechanism — see the [agents asset type](../ass
 
 ## Commands { #commands }
 
-Unknown — bounded search surfaced no public evidence.
+Supported by the [commands asset type](../asset-types/commands.md).
 
-- **Support:** ?
-- **How:** unknown — no public evidence found
+- **Support:** ✅
+- **How:** project Standard slot (`.claude/commands`), imported as skills; no global command adapter

@@ -43,7 +43,9 @@ SYNTHETIC = {"standard", "standard-skill", "standard-agent"}
 MCP_ADAPTERS = {"claude-code", "codex", "opencode", "pi"}
 
 COMMAND_SUPPORT = {
-    "claude-code": ("✅", "legacy markdown commands (`.claude/commands`); skills preferred"),
+    "claude-code": ("✅", "shared Standard slot (`.claude/commands`)"),
+    "neovate": ("✅", "shared Standard slot (`.claude/commands`), both scopes"),
+    "devin": ("✅", "project Standard slot (`.claude/commands`), imported as skills; no global command adapter"),
     "pi": ("✅", "prompt templates (`.pi/agent/prompts`, `.pi/prompts`)"),
     "codex": ("✅", "deprecated custom prompts; global only (`~/.codex/prompts`)"),
     "gemini-cli": ("✅", "TOML custom commands (`.gemini/commands`)"),
@@ -149,6 +151,7 @@ class InstrRow:
     verdict: str
     default_file: str
     paths: str
+    global_verdict: str
     native: str
     mechanism: str
     citation: str
@@ -186,7 +189,7 @@ def parse_ssot() -> tuple[dict[str, AgentRow], dict[str, InstrRow]]:
         lines, "| Harness | Verdict | Mechanism | User path / Project path |", 6
     )
     instr_raw = _parse_table(
-        lines, "| Harness | Verdict | Default file | Project / Global path |", 7
+        lines, "| Harness | Verdict | Default file | Project / Global path |", 8
     )
     agents = {s: AgentRow(c[0], c[2], c[3], c[4]) for s, c in agent_raw.items()}
     instrs = {s: InstrRow(*c) for s, c in instr_raw.items()}
@@ -292,10 +295,15 @@ row beneath them for the rest, alphabetically. Derived from the machine-read
 by `scripts/gen_harness_docs.py` — edit the SSOT, then regenerate; never edit
 this page by hand.
 
-**Legend:** ✅ supported by the harness and the toolkit ·
-— gap (the harness supports it; the toolkit hasn't implemented it yet) ·
-N/A — the harness has no such concept ·
-? unknown (no public evidence of how the harness handles this asset type)
+**Legend:** ✅ researched support (check scope and enabled adapter on the harness page) ·
+— toolkit gap · N/A — no concept in this integration ·
+? unknown (no public evidence recorded).
+
+Ticks are not a promise of every-kind, every-scope availability. Instructions
+verdicts in this overview are project classifications; native may mean a
+harness-specific discovery path, not a global pointer managed by the toolkit.
+Agent adapters can be disabled despite a researched mechanism. Paperclip Skills
+is company/project-only; Codex Commands is deprecated, explicit and global-only.
 
 <div class="harness-matrix" markdown>
 <table markdown>
@@ -336,8 +344,9 @@ def instr_section(row: InstrRow) -> str:
     lines = ["## Instructions { #instructions }", ""]
     if row.verdict == "native":
         lines.append(
-            "Reads the canonical `AGENTS.md` natively — no pointer needed; "
-            "the [instructions asset type](../asset-types/instructions.md) is satisfied as-is."
+            "Classified as a native `AGENTS.md` reader; no project pointer is created. "
+            "Check the discovery paths below: some readers are workspace-only or "
+            "do not load the root canonical at every scope."
         )
     elif row.verdict == "symlink":
         lines.append(
@@ -356,12 +365,21 @@ def instr_section(row: InstrRow) -> str:
         lines.append("Unknown — bounded search surfaced no public evidence.")
     lines += [
         "",
-        f"- **Verdict:** {row.verdict}",
+        f"- **Project verdict:** {row.verdict}",
+        f"- **Global verdict:** {row.global_verdict}",
+        "- **Installation truth:** actual filesystem pointers, no Instructions lock.",
         f"- **Default file:** {row.default_file or '—'}",
         f"- **Project / global path:** {row.paths or '—'}",
         f"- **Reads `AGENTS.md` natively:** {row.native or '—'}",
         f"- **Source:** {linkify(row.citation)}",
     ]
+    if row.global_verdict == "symlink":
+        lines += [
+            "",
+            "A global pointer slot is managed separately from project native reading; "
+            "install links it to user-authored `~/.agent-toolkit/AGENTS.md`. "
+            "Only supported/requested slots change; install never authors canonical content.",
+        ]
     return "\n".join(lines)
 
 
@@ -407,8 +425,9 @@ def skills_section(slug: str) -> str:
     return "\n".join([
         "## Skills { #skills }",
         "",
-        "Supported — every harness in the catalog has a skills directory the "
-        "[skills asset type](../asset-types/skills.md) projects into.",
+        "The catalog supplies a skills placement for this harness. "
+        "The [skills asset type](../asset-types/skills.md) uses the shared "
+        "Standard slot where covered, otherwise its own projection.",
         "",
         f"- **Project dir:** `{cfg.skills_dir}`",
         f"- **Global dir:** `{tilde(cfg.global_skills_dir)}`",
@@ -425,7 +444,7 @@ def agent_section(slug: str, row: AgentRow) -> str:
     lines = ["## Agents (subagents) { #agents }", ""]
     if row.verdict in AGENT_SUPPORTED:
         lines.append(
-            f"Supported via the **{row.verdict}** mechanism — see the "
+            f"Researched support via **{row.verdict}**; check the enabled adapter below — see the "
             "[agents asset type](../asset-types/agents.md) for what each mechanism means."
         )
         lines += [
@@ -478,7 +497,9 @@ def mcp_section(slug: str) -> str:
         "",
         "Supported — the [MCP asset type](../asset-types/mcp.md) projects a library",
         f"MCP server into this harness's own config by name (config-injection). `{slug}`",
-        "is one of the four harnesses with a config-injection adapter.",
+        "is one of the four harnesses with a config-injection adapter. Project",
+        "Standard covers Claude Code and Pi only; global uses concrete targets.",
+        "Bearer-token environment-name authentication is Pi-only; other targets refuse it.",
         "",
         "- **Mechanism:** config-injection by name (no symlink/copy)",
         "- **Source:** [`mcp_install.py`]"
@@ -493,10 +514,10 @@ def pi_ext_section(slug: str) -> str:
     return "\n".join([
         "## Pi extensions { #pi-extensions }",
         "",
-        "Pi is the only harness with an extension-package concept, so the",
-        "[pi-extension asset type](../asset-types/pi-extensions.md) targets Pi alone.",
-        "Extensions are git-sourced (branch- or SHA-pinned) and projected by",
-        "symlink into Pi's extension directory.",
+        "The [Pi extensions asset type](../asset-types/pi-extensions.md) targets Pi alone;",
+        "this does not classify other harnesses' unrelated plugin systems.",
+        "Git-backed extensions project into Pi's extension directory. Inventory also",
+        "includes npm packages and unmanaged local extensions; not every visible row is toggleable.",
         "",
         "- **Source:** [pi.dev/docs/latest/extensions]"
         "(https://pi.dev/docs/latest/extensions) — Pi's extension docs "
@@ -509,8 +530,9 @@ def write_harness_page(slug: str, agents: dict[str, AgentRow], instrs: dict[str,
     a, i = agents[slug], instrs[slug]
     instr_s, agent_s = sym_instr(i.verdict), sym_agent(a.verdict)
     instr_how = {
-        "✅": "native `AGENTS.md` reader" if i.verdict == "native"
-        else f"pointer symlink ({i.default_file} → `AGENTS.md`)",
+        "✅": ("native classification; check discovery paths" if i.verdict == "native"
+        else f"pointer symlink ({i.default_file} → `AGENTS.md`)")
+        + ("; global pointer slot" if i.global_verdict == "symlink" else ""),
         "—": "no pointer-satisfiable root file",
         "N/A": "no instruction-file concept",
         "?": "no public evidence",

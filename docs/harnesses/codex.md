@@ -4,7 +4,7 @@
 
 | Asset type | Support | How |
 |---|:-:|---|
-| [Instructions](../asset-types/instructions.md) | [✅](#instructions) | native `AGENTS.md` reader |
+| [Instructions](../asset-types/instructions.md) | [✅](#instructions) | native classification; check discovery paths; global pointer slot |
 | [Skills](../asset-types/skills.md) | [✅](#skills) | `.agents/skills` |
 | [Agents (subagents)](../asset-types/agents.md) | [✅](#agents) | config_file+folder |
 | [Commands](../asset-types/commands.md) | [✅](#commands) | deprecated custom prompts; global only (`~/.codex/prompts`) |
@@ -13,17 +13,21 @@
 
 ## Instructions { #instructions }
 
-Reads the canonical `AGENTS.md` natively — no pointer needed; the [instructions asset type](../asset-types/instructions.md) is satisfied as-is.
+Classified as a native `AGENTS.md` reader; no project pointer is created. Check the discovery paths below: some readers are workspace-only or do not load the root canonical at every scope.
 
-- **Verdict:** native
+- **Project verdict:** native
+- **Global verdict:** symlink
+- **Installation truth:** actual filesystem pointers, no Instructions lock.
 - **Default file:** `AGENTS.md`
 - **Project / global path:** `<git-root>/AGENTS.md` (walks git-root → cwd) / `~/.codex/AGENTS.md` (or `AGENTS.override.md`; honors `$CODEX_HOME`)
 - **Reads `AGENTS.md` natively:** yes
 - **Source:** [developers.openai.com/codex/guides/agents-md](https://developers.openai.com/codex/guides/agents-md)
 
+A global pointer slot is managed separately from project native reading; install links it to user-authored `~/.agent-toolkit/AGENTS.md`. Only supported/requested slots change; install never authors canonical content.
+
 ## Skills { #skills }
 
-Supported — every harness in the catalog has a skills directory the [skills asset type](../asset-types/skills.md) projects into.
+The catalog supplies a skills placement for this harness. The [skills asset type](../asset-types/skills.md) uses the shared Standard slot where covered, otherwise its own projection.
 
 - **Project dir:** `.agents/skills`
 - **Global dir:** `~/.codex/skills`
@@ -32,7 +36,7 @@ Supported — every harness in the catalog has a skills directory the [skills as
 
 ## Agents (subagents) { #agents }
 
-Supported via the **config_file+folder** mechanism — see the [agents asset type](../asset-types/agents.md) for what each mechanism means.
+Researched support via **config_file+folder**; check the enabled adapter below — see the [agents asset type](../asset-types/agents.md) for what each mechanism means.
 
 - **Mechanism:** config_file+folder
 - **User / project path:** `~/.codex/agents/<slug>.toml` + `[agents.<role>]` in `~/.codex/config.toml` / `.codex/agents/<slug>.toml`
@@ -51,7 +55,9 @@ Supported by the [commands asset type](../asset-types/commands.md).
 
 Supported — the [MCP asset type](../asset-types/mcp.md) projects a library
 MCP server into this harness's own config by name (config-injection). `codex`
-is one of the four harnesses with a config-injection adapter.
+is one of the four harnesses with a config-injection adapter. Project
+Standard covers Claude Code and Pi only; global uses concrete targets.
+Bearer-token environment-name authentication is Pi-only; other targets refuse it.
 
 - **Mechanism:** config-injection by name (no symlink/copy)
 - **Source:** [`mcp_install.py`](https://github.com/ajanderson1/agent-toolkit-cli/blob/main/src/agent_toolkit_cli/mcp_install.py) — the adapter target-config detection

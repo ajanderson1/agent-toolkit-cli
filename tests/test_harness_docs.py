@@ -32,6 +32,40 @@ def _gen_module():
     return module
 
 
+def test_instructions_scope_verdicts_are_parsed_and_rendered():
+    gen = _gen_module()
+    _, instructions = gen.parse_ssot()
+    for slug in ("codex", "opencode", "pi"):
+        row = instructions[slug]
+        assert row.verdict == "native"
+        assert row.global_verdict == "symlink"
+        rendered = gen.instr_section(row)
+        assert "**Project verdict:** native" in rendered
+        assert "**Global verdict:** symlink" in rendered
+        assert "global pointer" in rendered
+
+
+def test_command_shared_readers_are_not_unknown():
+    gen = _gen_module()
+    for slug in ("neovate", "devin"):
+        assert gen.sym_command(slug) == "✅"
+        assert "Standard" in gen.command_section(slug)
+    assert "project" in gen.command_section("devin")
+
+
+def test_all_generated_pages_and_nav_match_sources(tmp_path, monkeypatch):
+    gen = _gen_module()
+    monkeypatch.setattr(gen, "DOCS", tmp_path)
+    monkeypatch.setattr(gen, "HARNESS_DIR", tmp_path / "harnesses")
+    config = tmp_path / "mkdocs.yml"
+    config.write_bytes((REPO_ROOT / "mkdocs.yml").read_bytes())
+    monkeypatch.setattr(gen, "MKDOCS_YML", config)
+    gen.main()
+    for generated in [tmp_path / "matrix.md", *sorted((tmp_path / "harnesses").glob("*.md"))]:
+        assert generated.read_bytes() == (REPO_ROOT / "docs" / generated.relative_to(tmp_path)).read_bytes()
+    assert config.read_bytes() == (REPO_ROOT / "mkdocs.yml").read_bytes()
+
+
 def test_paperclip_is_a_headline_harness():
     gen = _gen_module()
     assert "paperclip" in gen.MAIN

@@ -15,7 +15,9 @@
 
 Not applicable — no root instruction-file concept at all.
 
-- **Verdict:** unsupported (by design)
+- **Project verdict:** unsupported (by design)
+- **Global verdict:** unsupported (by design)
+- **Installation truth:** actual filesystem pointers, no Instructions lock.
 - **Default file:** none
 - **Project / global path:** none / none
 - **Reads `AGENTS.md` natively:** no

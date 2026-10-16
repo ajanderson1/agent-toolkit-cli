@@ -1,201 +1,104 @@
 # Agent Toolkit CLI
 
-![Tests](https://github.com/ajanderson1/agent-toolkit-cli/actions/workflows/test.yml/badge.svg)
-![License](https://img.shields.io/badge/license-MIT%20%2B%20Commons%20Clause-blue)
-![Python](https://img.shields.io/badge/language-Python-blue)
-![Release](https://img.shields.io/github/v/release/ajanderson1/agent-toolkit-cli)
+![Tests](https://github.com/ajanderson1/agent-toolkit-cli/actions/workflows/test.yml/badge.svg) ![License](https://img.shields.io/badge/license-MIT%20%2B%20Commons%20Clause-blue) ![Release](https://img.shields.io/github/v/release/ajanderson1/agent-toolkit-cli)
 
----
+Keep AI-agent assets under your control across coding harnesses.
 
-> Keep AI-agent skills, subagents, commands, instructions, Pi extensions, and MCP servers in sync across coding harnesses.
+## Overview
 
-![Agent Toolkit CLI TUI](assets/agent-toolkit-cli-tui.png)
+Manage **skills, agents, commands, instructions, Pi extensions, and MCP servers** from a Python CLI or Textual terminal interface. Keep source-backed assets in a library, then choose which harnesses can see them at project or global scope. Local skill improvements are real Git work: update by merging upstream and publish through a pull request.
 
----
+The toolkit creates symlinks, translates Markdown, or edits named configuration entries as each harness requires. **Support and verbs vary by kind and scope**; catalog membership is not universal support. Instructions uses your canonical `AGENTS.md` and actual filesystem pointers, not a lock. Bundles are an installation utility for skills, agents, and Pi extensions, not a seventh asset kind.
 
-Agent Toolkit CLI prevents agent asset drift when you switch between coding harnesses. [Claude Code](docs/harnesses/claude-code.md), [Codex](docs/harnesses/codex.md), [OpenCode](docs/harnesses/opencode.md), [Gemini CLI](docs/harnesses/gemini-cli.md), [Pi](docs/harnesses/pi.md), [Cursor](docs/harnesses/cursor.md), and other tools all expect different files, folders, and config shapes for the same underlying assets.
+[Documentation](https://ajanderson1.github.io/agent-toolkit-cli/) · [Compatibility matrix](docs/matrix.md) · [CLI reference](docs/agent-toolkit/cli.md) · [TUI reference](docs/agent-toolkit/tui.md)
 
-It exists for two jobs:
+## Installation
 
-1. Make it easy to see which [skills](docs/asset-types/skills.md), [agents](docs/asset-types/agents.md), [commands](docs/asset-types/commands.md), [instructions](docs/asset-types/instructions.md), [Pi extensions](docs/asset-types/pi-extensions.md), and [MCP servers](docs/asset-types/mcp.md) each harness can use.
-2. Keep one git-versioned source of truth for first-party and third-party assets.
-
-[`agent-toolkit-cli`](docs/agent-toolkit/cli.md) keeps canonical assets and projects them into each harness by the simplest safe mechanism that harness supports: symlink, translated file, or config injection. `add`/`remove` manage library membership; `install`/`uninstall` manage harness visibility.
-
-[`agent-toolkit-tui`](docs/agent-toolkit/tui.md) is the visual frontend: it makes cross-harness coverage visible and lets you manage assets at a glance.
-
-Read the published docs at [ajanderson1.github.io/agent-toolkit-cli](https://ajanderson1.github.io/agent-toolkit-cli/).
-
-Still a work in progress. I use it day-to-day and fix bugs as I find them. Please [open an issue](https://github.com/ajanderson1/agent-toolkit-cli/issues) if you hit one.
-
-## Install
+Requires **Python 3.12+**, [uv](https://docs.astral.sh/uv/) and Git. Install the **toolkit package** (both binaries):
 
 ```bash
 uv tool install --from git+https://github.com/ajanderson1/agent-toolkit-cli agent-toolkit
-# SSH form: git+ssh://git@github.com/ajanderson1/agent-toolkit-cli
+agent-toolkit-cli --version
 ```
+
+This tracks the repository's default branch. For an immutable release, append its tag to the Git URL. Verified wheel/sdist assets are available on [GitHub Releases](https://github.com/ajanderson1/agent-toolkit-cli/releases); no PyPI publication is configured. The incompatible pre-v2 commands remain frozen at `v1.0.0`; see [legacy installation](docs/agent-toolkit/cli.md#pre-v2-surface).
 
 ## Quickstart
 
 ```bash
-# Add a skill to the library, then make it visible to Claude Code.
-agent-toolkit-cli skill add anthropics/skills --skill pdf
-agent-toolkit-cli skill install pdf --agents claude-code
+# 1. Add source to the library — does not make it visible to a harness.
+agent-toolkit-cli skills add anthropics/skills --skill pdf
 
-# Add a subagent, then project it into all covered harnesses.
-agent-toolkit-cli agent add ajanderson1/agents-workflow/release-manager
-agent-toolkit-cli agent install release-manager -g
+# 2. Install a projection in the current project; the library remains separate.
+agent-toolkit-cli skills install pdf --agents claude-code --scope project
+agent-toolkit-cli skills list -p
 
-# Add a slash command prompt, then project it into default command harnesses.
-agent-toolkit-cli command add ajanderson1/commands-workflow/review --slug review
-agent-toolkit-cli command install review -g
-
-# Point supported harnesses at one canonical AGENTS.md.
-agent-toolkit-cli instructions install --scope project
-
-# Register an MCP server once, then inject it into selected harness configs.
-agent-toolkit-cli mcp add --npx @upstash/context7-mcp --slug context7
-agent-toolkit-cli mcp install context7 -g --harness claude-code --harness codex
-```
-
-## Mechanism basics
-
-- **Library:** source-backed canonical assets live under the toolkit library, keyed by slug.
-- **Lock files:** per-scope lock files record source, ref, current SHA, scope, and projection metadata.
-- **Projection:** install commands make library assets visible to harnesses without duplicating ownership.
-- **Adapters:** each harness gets the simplest safe adapter it supports:
-  - **symlink** — point harness folder at canonical asset;
-  - **translate** — generate harness-native shape from canonical markdown;
-  - **config injection** — edit native JSON/TOML config by name, leaving unmanaged neighbours untouched.
-- **Scopes:** global installs affect user-level harness homes; project installs affect current repo.
-
-Full reference: [`docs/agent-toolkit/cli.md`](docs/agent-toolkit/cli.md). Compatibility matrix: [`docs/matrix.md`](docs/matrix.md).
-
-## Commands
-
-Two verb axes run through source-backed asset types: **`add`/`remove`** manage library membership (destructive — `remove` forgets the source), while **`install`/`uninstall`** manage projection into a harness/scope (non-destructive — the library copy survives). The [verb model](https://ajanderson1.github.io/agent-toolkit-cli/glossary/#verb-model) in the glossary is the single source of truth for semantics.
-
-### Skills — lock-file driven, agent-aware
-
-```text
-agent-toolkit-cli skill add <source> [--ref <ref>] [--slug <slug>] [--skill <name>]
-agent-toolkit-cli skill install <slug> [--agents <name>[,<name>...]] [--scope global|project]
-agent-toolkit-cli skill uninstall <slug> [--agents <name>[,<name>...]] [--scope global|project]
-agent-toolkit-cli skill list [-g|-p]
-agent-toolkit-cli skill status [<slug>...] [-g|-p]
-agent-toolkit-cli skill update [<slug>...] [-g|-p]
-agent-toolkit-cli skill push [<slug>...] [-g|-p] [--direct]
-agent-toolkit-cli skill import <file> [--latest]
-agent-toolkit-cli skill remove <slug>... [--force]
-```
-
-`<source>` accepts `owner/repo`, full URL, SSH URL, local path, or skills.sh URL. Monorepo skills are supported with `--skill <name>` or a subpath source such as `owner/repo/<subpath>`. See [`docs/agent-toolkit/skill-lock.md`](docs/agent-toolkit/skill-lock.md) for lock-file format and skills.sh interop details.
-
-A repository with several skills is registered as individual children and shown as a collection in the TUI. Parent checkboxes select all/none or show mixed selection; child overrides stay independent, and changes remain queued until Apply. Use `skill install --source owner/repo --agents standard` to install all registered children of an exact source. Adding does not install, and repeated registration preserves local work instead of advancing a shared checkout. Legacy rootless wrappers are reconciled inside normal install/Apply without extra conversion steps; unsafe ownership or unproven root/nested isolation fails before writes. See the [collection workflow](docs/agent-toolkit/tui.md#skill-collections).
-
-`skill update` fetches and merges upstream into the canonical clone. `skill push` opens a PR branch by default for local skill improvements; `--direct` pushes straight to the tracked ref.
-
-### Agents — subagent definitions across harnesses
-
-```text
-agent-toolkit-cli agent add <source> [--slug <slug>] [--ref <ref>]
-agent-toolkit-cli agent install <slug> [-g|-p] [--harnesses <name>[,<name>...]]
-agent-toolkit-cli agent uninstall <slug> [-g|-p] [--harnesses <name>[,<name>...]]
-agent-toolkit-cli agent list [-g|-p] [--json]
-agent-toolkit-cli agent status [<slug>...] [-g|-p]
-agent-toolkit-cli agent update [<slug>...] [-g|-p]
-agent-toolkit-cli agent push [<slug>...] [-g|-p] [--direct]
-agent-toolkit-cli agent import <file> [--latest]
-agent-toolkit-cli agent doctor [-g|-p]
-agent-toolkit-cli agent remove <slug> [--force]
-```
-
-Agent assets are canonical markdown subagent definitions. Installs use the shared `standard` slot where harnesses read the same file natively, and fall back to per-harness adapters only where needed.
-
-### Commands — reusable slash-command prompts
-
-```text
-agent-toolkit-cli command add <source> [--slug <slug>] [--ref <ref>]
-agent-toolkit-cli command install <slug> [-g|-p] [--harnesses <h>[,<h>...]]
-agent-toolkit-cli command uninstall <slug> [-g|-p] [--harnesses <h>[,<h>...]]
-agent-toolkit-cli command list [-g|-p] [--json]
-agent-toolkit-cli command status|update|push|import|reset|remove|doctor ...
-```
-
-Command assets are canonical `COMMAND.md` prompts projected into harness command or prompt-template locations. Default install targets are Claude Code, Pi, and Gemini CLI. Codex custom prompts are deprecated and install only when explicitly requested.
-
-### Instructions — one canonical `AGENTS.md`
-
-```text
-agent-toolkit-cli instructions install   [--scope project|global] [--harness <name>]...
-agent-toolkit-cli instructions uninstall [--scope project|global]
-agent-toolkit-cli instructions list      [--format table|json]
-agent-toolkit-cli instructions status    [--scope project|global]
-agent-toolkit-cli instructions doctor    [--scope project|global]
-```
-
-Most harnesses read project `AGENTS.md` natively; supported compatibility and global slots get symlinks to the scope's canonical file. Instructions has **no installation lock**: actual symlinks determine status, including manually created links. Canonical content remains user-owned (project `AGENTS.md` or global `~/.agent-toolkit/AGENTS.md`), and may itself point to a versioned source. Install/uninstall never clobber regular files or foreign symlinks. Uninstall refuses the whole batch if a requested link participates in canonical's source chain. Legacy Instructions locks are ignored and left untouched. Per-harness verdicts live in [`docs/agent-toolkit/harness-matrix.md`](docs/agent-toolkit/harness-matrix.md).
-
-### Pi extensions — Pi-only extension assets
-
-```text
-agent-toolkit-cli pi-extension add <source> [--slug <slug>]
-agent-toolkit-cli pi-extension install <slug> [-g|-p]
-agent-toolkit-cli pi-extension uninstall <slug> [-g|-p]
-agent-toolkit-cli pi-extension list [-g|-p] [--json]
-agent-toolkit-cli pi-extension status [<slug>...] [-g|-p]
-agent-toolkit-cli pi-extension update [<slug>...] [-g|-p]
-agent-toolkit-cli pi-extension push [<slug>...] [-g|-p] [--direct]
-agent-toolkit-cli pi-extension import <file> [--latest]
-agent-toolkit-cli pi-extension doctor [-g|-p]
-agent-toolkit-cli pi-extension remove <slug> [--force]
-```
-
-Pi extension commands manage source-backed extension repos plus Pi projection state. Inventory also reports loose local extensions and npm packages from Pi settings so unmanaged assets stay visible.
-
-### MCP servers — library-driven config injection
-
-```text
-agent-toolkit-cli mcp add --npx|--uvx|--docker|--url|--local <source> [--slug <slug>]
-agent-toolkit-cli mcp install <slug>   [--harness <name>]... [-g|-p] [--force]
-agent-toolkit-cli mcp uninstall <slug> [--harness <name>]... [-g|-p] [--force]
-agent-toolkit-cli mcp remove <slug>    [-g|-p] [--force]
-agent-toolkit-cli mcp update <slug> [--bearer-token-env <NAME>]
-agent-toolkit-cli mcp list   [-g|-p]
-agent-toolkit-cli mcp status [<slug>...] [-g|-p]
-agent-toolkit-cli mcp doctor [-g|-p]
-```
-
-`mcp add` authors a library entry from a package, image, URL, or local path. Authenticated URL entries can use `--bearer-token-env <NAME>`; only the environment-variable name is stored, and this authentication form currently projects to Pi only. `mcp install` projects entries by editing native config by server name. Writes are atomic; doctor is diagnostic.
-
-### Bundles — install several assets together
-
-```text
-agent-toolkit-cli bundle install  <manifest.json> [--global | --project]
-agent-toolkit-cli bundle validate <manifest.json>
-```
-
-A bundle manifest declares a set of skills, agents, and Pi extensions. Install is all-or-nothing: each member is added and installed, and failures roll the whole bundle back. See [`docs/agent-toolkit/bundles.md`](docs/agent-toolkit/bundles.md).
-
-### TUI
-
-```text
+# 3. Inspect or queue visibility changes in the terminal UI.
 agent-toolkit-tui
 ```
 
-Interactive Textual cockpit over the same library and lock files. See [`docs/agent-toolkit/tui.md`](docs/agent-toolkit/tui.md).
+Choose scope explicitly in scripts. Defaults differ across kinds and verbs: a Git repository alone does not select project scope. See [scope rules](docs/agent-toolkit/cli.md#scope-and-target-selection).
 
-## Development
+## Usage
 
 ```bash
-git clone https://github.com/ajanderson1/agent-toolkit-cli ~/GitHub/projects/agent-toolkit-cli
-cd ~/GitHub/projects/agent-toolkit-cli
-uv sync --all-extras
-uv run pytest -q
+# Register a repository's real skills; install its registered children together.
+agent-toolkit-cli skills add --source owner/repo --ref main
+agent-toolkit-cli skills install --source owner/repo --agents standard --scope global
+
+# Inspect local edits, merge upstream, then publish an owned skill through a PR.
+agent-toolkit-cli skills status pdf -g
+agent-toolkit-cli skills update pdf -g
+agent-toolkit-cli skills push my-owned-skill -g
+
+# Share an existing user-authored project AGENTS.md with Claude Code.
+agent-toolkit-cli instructions install --scope project --harness claude-code
+
+# Discover each group's actual verbs and flags.
+agent-toolkit-cli commands --help
+agent-toolkit-cli mcps --help
+agent-toolkit-cli bundles --help
 ```
 
-`lefthook.yml` runs pytest on pre-commit.
+Canonical groups are `skills`, `agents`, `commands`, `instructions`, `pi-extensions`, `mcps`, and `bundles`; singular aliases still work. `uninstall` removes visibility without forgetting source-backed library content; `remove` can delete that content. **MCP is an exception:** remove retains its library manifest and files. See the [verb model](docs/glossary.md#verb-model), [six asset guides](docs/index.md#asset-types), and [skill ownership workflow](docs/agent-toolkit/skill-lock.md).
+
+## Configuration
+
+- Source-backed libraries and global locks normally live under `~/.agent-toolkit/`; project locks describe their own scope. [Storage reference](docs/agent-toolkit/lock-files.md).
+- Instructions canonical content is user-owned: project `AGENTS.md` or `~/.agent-toolkit/AGENTS.md`. Install does not author it. [Instructions safety](docs/asset-types/instructions.md).
+- TUI theme and main-harness columns are preferences, not CLI install targets. Use **Ctrl+P → Theme / Main harnesses**. [Settings schema and overrides](docs/agent-toolkit/tui-settings.md).
+
+## Screenshot
+
+![Current TUI with an expanded skill collection, mixed selection, plural sidebar, repository path and queued changes](assets/agent-toolkit-cli-tui.png)
+
+Fresh disposable-fixture capture of this source tree, not operator assets. Collection controls include collapsed and filter-hidden members; **Apply** runs queues across all six kinds, **Revert** clears them, and failures remain visible for retry. Apply is not a cross-kind atomic transaction. [Controls and limits](docs/agent-toolkit/tui.md) · [Reproduce the capture](docs/assets/screenshots/README.md).
+
+## Architecture
+
+- `src/agent_toolkit_cli/`: Click groups, canonical libraries, locks, Git operations and harness adapters.
+- `src/agent_toolkit_tui/`: Textual grids over the same inventory and installation facades.
+- `docs/agent-toolkit/harness-matrix.md`: packaged compatibility data; `scripts/gen_harness_docs.py` generates matrix/harness views from it and maintained catalog/support tables.
+
+[Storage model](docs/agent-toolkit/lock-files.md) · [Compatibility data](docs/agent-toolkit/harness-matrix.md) · [Unshipped ideas](docs/agent-toolkit/roadmap.md)
+
+## Contributing
+
+```bash
+git clone https://github.com/ajanderson1/agent-toolkit-cli
+cd agent-toolkit-cli
+uv sync --all-extras
+uv run pytest -q
+uv run python scripts/gen_harness_docs.py
+make docs-build
+```
+
+`lefthook.yml` runs the full pytest suite on **pre-push**. Update affected docs with behavior changes; regenerate harness pages rather than editing generated output. [Open an issue](https://github.com/ajanderson1/agent-toolkit-cli/issues) for defects or compatibility gaps.
 
 ## License
 
-MIT License with Commons Clause. You may use, copy, modify, fork, and distribute this project, but you may not sell it or sell products/services whose value derives substantially from it. See [`LICENSE`](LICENSE).
+[MIT with Commons Clause](LICENSE): use, modify and distribute, but do not sell the software or products/services whose value derives substantially from it.
+
+## Acknowledgements
+
+The skills catalog and compatible lock format build on [vercel-labs/skills](https://github.com/vercel-labs/skills). The terminal interface uses [Textual](https://textual.textualize.io/).

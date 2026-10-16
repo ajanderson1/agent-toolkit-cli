@@ -4,7 +4,7 @@
 
 | Asset type | Support | How |
 |---|:-:|---|
-| [Instructions](../asset-types/instructions.md) | [✅](#instructions) | pointer symlink (`replit.md` → `AGENTS.md`) |
+| [Instructions](../asset-types/instructions.md) | [✅](#instructions) | pointer symlink (`replit.md` → `AGENTS.md`); global pointer slot |
 | [Skills](../asset-types/skills.md) | [✅](#skills) | `.agents/skills` |
 | [Agents (subagents)](../asset-types/agents.md) | [—](#agents) | no file-drop convention |
 | [Commands](../asset-types/commands.md) | [?](#commands) | unknown — no public evidence found |
@@ -15,15 +15,19 @@
 
 Reads a fixed own-name file (`replit.md`) instead of `AGENTS.md`. The [instructions asset type](../asset-types/instructions.md) creates a same-name pointer symlink → `AGENTS.md`.
 
-- **Verdict:** symlink
+- **Project verdict:** symlink
+- **Global verdict:** symlink
+- **Installation truth:** actual filesystem pointers, no Instructions lock.
 - **Default file:** `replit.md`
 - **Project / global path:** `./replit.md` (project root only) / none (project-only)
 - **Reads `AGENTS.md` natively:** no
 - **Source:** [docs.replit.com/replitai/replit-dot-md](https://docs.replit.com/replitai/replit-dot-md)
 
+A global pointer slot is managed separately from project native reading; install links it to user-authored `~/.agent-toolkit/AGENTS.md`. Only supported/requested slots change; install never authors canonical content.
+
 ## Skills { #skills }
 
-Supported — every harness in the catalog has a skills directory the [skills asset type](../asset-types/skills.md) projects into.
+The catalog supplies a skills placement for this harness. The [skills asset type](../asset-types/skills.md) uses the shared Standard slot where covered, otherwise its own projection.
 
 - **Project dir:** `.agents/skills`
 - **Global dir:** `~/.config/agents/skills`

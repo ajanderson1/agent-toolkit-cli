@@ -1,39 +1,42 @@
 # Bundle manifest
 
 A bundle is a toolkit-native JSON manifest that declares a set of asset pointers
-and installs them together in a single, all-or-nothing command.
+and sequences their addition/installation in one command, with rollback attempts on failure.
 
 ## What a bundle is (and is not)
 
 v1 is a **stateless shortcut**, not a package format.  Running `bundle install`
 fans out to the existing per-kind installers (`skill`, `agent`, `pi-extension`)
-exactly as if you had run each one by hand.  Installed members appear individually
+using their existing source and projection machinery.  Installed members appear individually
 in their own per-kind lock files and in the TUI/CLI — nothing is recorded on disk
 that says "these came from a bundle."  The bundle itself is recorded nowhere.
 
-The value v1 delivers is **atomic co-install of a known dependency set**: one
-command to get the whole group onto disk, or nothing at all on failure.  It does
-not durably prevent drift after install; if a member is later removed by hand,
-nothing detects the gap.  Durable drift detection is a deliberate v2 concern.
+The value is **co-install of a known set**, not a universal filesystem transaction.
+Failures trigger reverse-order cleanup of newly added members; cleanup can itself
+fail and reports manual recovery. Already-present members are skipped, not
+reinstalled or rolled back, so a valid bundle does not prove their projections
+are currently present. No durable bundle membership/drift record is kept.
 
 ## Verbs
 
 ```text
-agent-toolkit-cli bundle install  <manifest.json> [--global | --project]
-agent-toolkit-cli bundle validate <manifest.json>
+agent-toolkit-cli bundles install  <manifest.json> [--global | --project]
+agent-toolkit-cli bundles validate <manifest.json>
 ```
 
 ### `bundle install`
 
 Reads the manifest from a local file path, validates its structure (the same pass
 `bundle validate` runs), then installs every member by fanning out to each kind's
-`add` + `install` sequence.  All-or-nothing: if any member fails, every member
-installed during this run is rolled back; the system is left as it was before.
+`add` + `install` sequence. If a member fails, rollback is attempted for each
+new member (including a member whose add succeeded before install failed).
+Recovery errors remain visible; do not assume every previous byte is restored.
 
 `--global` / `--project` apply one scope to all members.  With no flag the scope
 is determined by the presence of a per-kind lock file in the current directory:
-project scope if any of `skills-lock.json`, `agents-lock.json`, or
-`pi-extensions-lock.json` exists in cwd; global otherwise.
+project scope if any of `skills-lock.json`, `agents-lock.json`,
+`commands-lock.json`, or `pi-extensions-lock.json` exists in the consumer
+directory; global otherwise.
 
 ### `bundle validate`
 
@@ -76,7 +79,7 @@ compatibility), but the installer hard-fails loudly on any `mcp` member — `mcp
 is a reserved member type not yet wired into the bundle installer. The failure
 happens in the resolve pass, before any install, so there is nothing to roll back.
 
-`instructions` is not a valid bundle member type.  Unlike skills and agents, an
+`commands` and `instructions` are not valid bundle member types.  Unlike skills and agents, an
 `instructions` asset has no shareable git source — it is a per-project pointer
 reconciliation, not a portable asset.  A manifest listing `instructions` is
 rejected with a clear message.
@@ -112,13 +115,13 @@ rejected with a clear message.
 Install at project scope:
 
 ```bash
-agent-toolkit-cli bundle install --project ./team-review.bundle.json
+agent-toolkit-cli bundles install --project ./team-review.bundle.json
 ```
 
 Validate structure without installing:
 
 ```bash
-agent-toolkit-cli bundle validate ./team-review.bundle.json
+agent-toolkit-cli bundles validate ./team-review.bundle.json
 ```
 
 ## Behaviour details
@@ -137,17 +140,16 @@ Each member installs via the real per-kind `add` + `install` sequence:
 No installer logic is duplicated; the bundle reuses the existing per-kind code
 paths, so each member lands in exactly the state a hand-install would produce.
 
-### All-or-nothing rollback
+### Rollback and its limits
 
-If any member fails to install, every member installed during this run is rolled
-back — including the member that failed (its `add` may already have landed before
-its projection step failed).  At **global** scope, rollback calls the kind-level
+If any member fails, cleanup is attempted for every new member from this run,
+including the failing member whose add may already have landed.  At **global** scope, rollback calls the kind-level
 `remove --force` (a full undo — drops the library lock entry, the canonical, and
 all projections), not just `uninstall` (which is projection-only).  At **project**
 scope, rollback additionally tears down the project state: `<kind> uninstall -p`
 (project projection symlinks + project lock entry), then `remove --force`, then it
 removes the project canonical directory — so a failed `bundle install --project`
-leaves no project residue either.
+attempts to remove that run's project residue. This is not a guarantee when cleanup fails.
 
 A member that was **already present** before the run (detected via a library-lock
 pre-check before the install call) is **not** rolled back — it was not installed
