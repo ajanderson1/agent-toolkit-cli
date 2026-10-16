@@ -9,6 +9,8 @@ from pathlib import Path
 import click
 import yaml
 
+from agent_toolkit_cli._group import AliasedGroup
+
 from agent_toolkit_cli import skill_git
 from agent_toolkit_cli.skill_agents import (
     AGENTS,
@@ -246,7 +248,7 @@ Examples:
 """
 
 
-@click.group(epilog=_SKILL_GROUP_EPILOG)
+@click.group(cls=AliasedGroup, epilog=_SKILL_GROUP_EPILOG)
 def skill() -> None:
     """Manage skills via per-skill upstream git repos + skills-lock.json."""
 

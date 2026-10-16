@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import click
 
+from agent_toolkit_cli._group import AliasedGroup
 from agent_toolkit_cli.commands.pi_extension.add_cmd import add_cmd
 from agent_toolkit_cli.commands.pi_extension.doctor_cmd import doctor_cmd
 from agent_toolkit_cli.commands.pi_extension.import_cmd import import_cmd
@@ -19,7 +20,7 @@ from agent_toolkit_cli.commands.pi_extension.uninstall_cmd import uninstall_cmd
 from agent_toolkit_cli.commands.pi_extension.update_cmd import update_cmd
 
 
-@click.group(name="pi-extension")
+@click.group(name="pi-extension", cls=AliasedGroup)
 def pi_extension() -> None:
     """Manage Pi extensions via owned git repos + pi-extensions-lock.json."""
 

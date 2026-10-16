@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import click
 
+from agent_toolkit_cli._group import AliasedGroup
 from agent_toolkit_cli.commands.command.add_cmd import add_cmd
 from agent_toolkit_cli.commands.command.doctor_cmd import doctor_cmd
 from agent_toolkit_cli.commands.command.import_cmd import import_cmd
@@ -15,7 +16,7 @@ from agent_toolkit_cli.commands.command.uninstall_cmd import uninstall_cmd
 from agent_toolkit_cli.commands.command.update_cmd import update_cmd
 
 
-@click.group(name="command")
+@click.group(name="command", cls=AliasedGroup)
 def command() -> None:
     """Manage commands via COMMAND.md folders + commands-lock.json."""
 
