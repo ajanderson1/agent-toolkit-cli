@@ -20,13 +20,14 @@ Layout (matches existing CSS scaffold in css/app.tcss):
   Static#footer-pending
   Footer
 """
+
 from __future__ import annotations
 
 from collections import defaultdict
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 from time import monotonic
-from typing import Callable, Iterable, Literal, cast
+from typing import Any, Callable, Iterable, Literal, cast
 
 from textual.app import App, ComposeResult, SystemCommand
 from textual.binding import Binding
@@ -35,7 +36,14 @@ from textual.containers import Horizontal, Vertical
 from textual.css.query import NoMatches
 from textual.screen import ModalScreen, Screen
 from textual.widgets import (
-    Button, Footer, Header, Input, Label, OptionList, SelectionList, Static,
+    Button,
+    Footer,
+    Header,
+    Input,
+    Label,
+    OptionList,
+    SelectionList,
+    Static,
 )
 from textual.widgets.option_list import Option, OptionDoesNotExist
 from textual.widgets.selection_list import Selection
@@ -78,6 +86,7 @@ AssetType = Literal["instruction", "skill", "command", "pi-extension", "agent", 
 def _asset_type_label(asset_type: AssetType, *, plural: bool = False) -> str:
     return asset_type_label(asset_type, plural=plural)
 
+
 _DOUBLE_CTRL_C_QUIT_SECONDS = 1.5
 
 # Single owner of the AssetType -> filter-input selector map. Consumed by
@@ -107,6 +116,16 @@ def _scope_tag(keys: Iterable[tuple[str, ...]]) -> str:
     if n_global and n_project:
         return f" ({n_global} global, {n_project} project)"
     return ""
+
+
+@dataclass(frozen=True)
+class ApplyResult:
+    """Outcome of an apply operation across a single asset kind."""
+
+    ok: int
+    failed: int
+    errors: list[str]
+    keys: list[tuple[str, ...]]
 
 
 class ConfirmDiscardScreen(ModalScreen[bool]):
@@ -392,14 +411,44 @@ class TUIApp(App):
             with Vertical(id="asset-types-sidebar"):
                 yield Static("Asset Types", classes="rail-header")
                 yield SidebarOptionList(
-                    Option(Text.from_markup(f"[dim]1 -[/dim] {_asset_type_label('instruction', plural=True)}"), id="asset-type-instruction"),
+                    Option(
+                        Text.from_markup(
+                            f"[dim]1 -[/dim] {_asset_type_label('instruction', plural=True)}"
+                        ),
+                        id="asset-type-instruction",
+                    ),
                     Option("─────────────", id="asset-type-separator-1", disabled=True),
-                    Option(Text.from_markup(f"[dim]2 -[/dim] {_asset_type_label('command', plural=True)}"), id="asset-type-command"),
-                    Option(Text.from_markup(f"[dim]3 -[/dim] {_asset_type_label('skill', plural=True)}"), id="asset-type-skill"),
-                    Option(Text.from_markup(f"[dim]4 -[/dim] {_asset_type_label('agent', plural=True)}"), id="asset-type-agent"),
-                    Option(Text.from_markup(f"[dim]5 -[/dim] {_asset_type_label('mcp', plural=True)}"), id="asset-type-mcp"),
+                    Option(
+                        Text.from_markup(
+                            f"[dim]2 -[/dim] {_asset_type_label('command', plural=True)}"
+                        ),
+                        id="asset-type-command",
+                    ),
+                    Option(
+                        Text.from_markup(
+                            f"[dim]3 -[/dim] {_asset_type_label('skill', plural=True)}"
+                        ),
+                        id="asset-type-skill",
+                    ),
+                    Option(
+                        Text.from_markup(
+                            f"[dim]4 -[/dim] {_asset_type_label('agent', plural=True)}"
+                        ),
+                        id="asset-type-agent",
+                    ),
+                    Option(
+                        Text.from_markup(
+                            f"[dim]5 -[/dim] {_asset_type_label('mcp', plural=True)}"
+                        ),
+                        id="asset-type-mcp",
+                    ),
                     Option("─────────────", id="asset-type-separator-2", disabled=True),
-                    Option(Text.from_markup(f"[dim]6 -[/dim] {_asset_type_label('pi-extension', plural=True)}"), id="asset-type-pi-extension"),
+                    Option(
+                        Text.from_markup(
+                            f"[dim]6 -[/dim] {_asset_type_label('pi-extension', plural=True)}"
+                        ),
+                        id="asset-type-pi-extension",
+                    ),
                     id="asset-types-list",
                 )
             with Vertical(id="content"):
@@ -426,9 +475,7 @@ class TUIApp(App):
             loaded = load_settings(available_themes=self.available_themes)
         except OSError as exc:
             path = settings_path()
-            loaded = TuiSettings(
-                diagnostics=(f"{path}: unreadable settings ({exc})",)
-            )
+            loaded = TuiSettings(diagnostics=(f"{path}: unreadable settings ({exc})",))
         self._tui_settings = loaded
         self._settings_diagnostics = loaded.diagnostics
         self.theme = loaded.theme
@@ -465,7 +512,9 @@ class TUIApp(App):
         # direct click on the option.
         try:
             asset_types_list = self.query_one("#asset-types-list", SidebarOptionList)
-            asset_types_list.highlighted = asset_types_list.get_option_index(f"asset-type-{asset_type}")
+            asset_types_list.highlighted = asset_types_list.get_option_index(
+                f"asset-type-{asset_type}"
+            )
         except (NoMatches, OptionDoesNotExist):
             pass
 
@@ -542,7 +591,14 @@ class TUIApp(App):
             self.action_asset_type("mcp")
 
     def action_asset_type(self, asset_type: str) -> None:
-        if asset_type not in ("instruction", "skill", "command", "pi-extension", "agent", "mcp"):
+        if asset_type not in (
+            "instruction",
+            "skill",
+            "command",
+            "pi-extension",
+            "agent",
+            "mcp",
+        ):
             return
         if asset_type == self._active_asset_type:
             # Re-selecting the tab you are already on still puts the caret in
@@ -552,7 +608,11 @@ class TUIApp(App):
             return
         self._active_asset_type = asset_type  # type: ignore[assignment]
         self._show_asset_type(asset_type)  # type: ignore[arg-type]
+        grid = self._active_grid()
+        saved = grid.pending_entries() if grid is not None else {}
         self._refresh_active_view()
+        if grid is not None and saved:
+            grid.restore_pending(saved)  # type: ignore[arg-type]
         self._refresh_content_header()
         self._refresh_pending_label()
         self._refresh_status_bar()
@@ -562,8 +622,10 @@ class TUIApp(App):
 
     # ----- instruction-view --------------------------------------------------
 
-    def _scope_to_roots(self) -> tuple[str, Path | None, Path | None]:
-        if self._scope == "global":
+    def _scope_to_roots(
+        self, scope: str | None = None
+    ) -> tuple[str, Path | None, Path | None]:
+        if (self._scope if scope is None else scope) == "global":
             return "global", Path.home(), None
         return "project", Path.home(), Path.cwd()
 
@@ -577,7 +639,9 @@ class TUIApp(App):
 
     def _active_grid(
         self,
-    ) -> InstructionGrid | SkillGrid | CommandGrid | PiGrid | AgentGrid | McpGrid | None:
+    ) -> (
+        InstructionGrid | SkillGrid | CommandGrid | PiGrid | AgentGrid | McpGrid | None
+    ):
         selector: str
         if self._active_asset_type == "instruction":
             selector = "#instruction-grid"
@@ -747,9 +811,7 @@ class TUIApp(App):
         self._refresh_pending_label()
         self._refresh_status_bar()
 
-    def on_skill_grid_pending_changed(
-        self, event: SkillGrid.PendingChanged
-    ) -> None:
+    def on_skill_grid_pending_changed(self, event: SkillGrid.PendingChanged) -> None:
         """Live-update footer + status bar when the skill grid's pending set changes."""
         self._refresh_pending_label()
         self._refresh_status_bar()
@@ -761,31 +823,42 @@ class TUIApp(App):
         self._refresh_pending_label()
         self._refresh_status_bar()
 
-    def on_pi_grid_pending_changed(
-        self, event: PiGrid.PendingChanged
-    ) -> None:
+    def on_pi_grid_pending_changed(self, event: PiGrid.PendingChanged) -> None:
         """Live-update footer + status bar when the pi grid's pending set changes."""
         self._refresh_pending_label()
         self._refresh_status_bar()
 
-    def on_agent_grid_pending_changed(
-        self, event: AgentGrid.PendingChanged
-    ) -> None:
+    def on_agent_grid_pending_changed(self, event: AgentGrid.PendingChanged) -> None:
         """Live-update footer + status bar when the agent grid's pending set changes."""
         self._refresh_pending_label()
         self._refresh_status_bar()
 
-    def on_mcp_grid_pending_changed(
-        self, event: McpGrid.PendingChanged
-    ) -> None:
+    def on_mcp_grid_pending_changed(self, event: McpGrid.PendingChanged) -> None:
         """Live-update footer + status bar when the MCP grid's pending set changes."""
         self._refresh_pending_label()
         self._refresh_status_bar()
 
     # ----- actions -----------------------------------------------------------
 
+    def _all_grids(self) -> list[Any]:
+        """Collect all mounted grid widgets across the six asset types."""
+        grids: list[Any] = []
+        for selector in (
+            "#instruction-grid",
+            "#skill-grid",
+            "#command-grid",
+            "#pi-grid",
+            "#agent-grid",
+            "#mcp-grid",
+        ):
+            try:
+                grids.append(self.query_one(selector))
+            except Exception:
+                pass
+        return grids
+
     def _get_all_pending_edits(self) -> dict[tuple[str, ...], str]:
-        """Collect pending edit keys across all six grid types."""
+        """Namespace pending keys by grid, retaining scope as the first field."""
         pending: dict[tuple[str, ...], str] = {}
         for selector in (
             "#instruction-grid",
@@ -797,10 +870,32 @@ class TUIApp(App):
         ):
             try:
                 grid = self.query_one(selector)
-                pending.update(grid.pending_entries())  # type: ignore[attr-defined]
+                pending.update(
+                    {(*key, selector): op for key, op in grid.pending_entries().items()}
+                )
             except Exception:
                 pass
         return pending
+
+    def _get_pending_asset_types(self) -> set[str]:
+        """Return the set of asset types that currently have queued pending edits."""
+        pending_types: set[str] = set()
+        type_selectors = (
+            ("instruction", "#instruction-grid"),
+            ("command", "#command-grid"),
+            ("skill", "#skill-grid"),
+            ("pi-extension", "#pi-grid"),
+            ("agent", "#agent-grid"),
+            ("mcp", "#mcp-grid"),
+        )
+        for asset_type, selector in type_selectors:
+            try:
+                grid = self.query_one(selector)
+                if grid.pending_entries():
+                    pending_types.add(asset_type)
+            except Exception:
+                pass
+        return pending_types
 
     def action_double_ctrl_c_quit(self) -> None:
         now = monotonic()
@@ -935,9 +1030,7 @@ class TUIApp(App):
             new_selection = tuple(h for h in current if h != harness)
         else:
             new_set = set(current) | {harness}
-            new_selection = tuple(
-                h for h in MAIN_HARNESS_CANDIDATES if h in new_set
-            )
+            new_selection = tuple(h for h in MAIN_HARNESS_CANDIDATES if h in new_set)
         self._commit_harness_selection(new_selection)
 
     def apply_theme_setting(self, theme: str) -> bool:
@@ -999,45 +1092,96 @@ class TUIApp(App):
         self._refresh_status_bar()
 
     def action_revert(self) -> None:
-        grid = self._active_grid()
-        if grid is None:
-            return
-        # ctrl+z clears the active grid's WHOLE queue — both scopes, including
-        # ops queued in the currently-invisible scope — and says so (#349).
-        keys = list(grid.pending_entries().keys())
+        # ctrl+z clears the pending queue across all asset types and both scopes (#349, #517).
+        all_pending = self._get_all_pending_edits()
+        keys = list(all_pending.keys())
         n = len(keys)
-        grid.clear_pending()
+        for grid in self._all_grids():
+            try:
+                grid.clear_pending()
+            except Exception:
+                pass
         self._refresh_pending_label()
         self.query_one("#footer-pending", Static).update(
             f"reverted: {n} pending cleared{_scope_tag(keys)}"
         )
 
     def action_diff(self) -> None:
-        grid = self._active_grid()
-        if grid is None:
-            return
-        pending = grid.pending_entries()
+        pending = self._get_all_pending_edits()
         n_link = sum(1 for op in pending.values() if op == "link")
         n_unlink = sum(1 for op in pending.values() if op == "unlink")
         self.query_one("#footer-pending", Static).update(
-            f"diff: {n_link} would-link, {n_unlink} would-unlink{_scope_tag(pending)}"
+            f"diff: {n_link} would-link, {n_unlink} would-unlink{_scope_tag(pending.keys())}"
         )
 
-    def action_apply(self) -> None:
-        if self._active_asset_type == "instruction":
-            self._apply_instruction_pending()
-        elif self._active_asset_type == "skill":
-            self._apply_skill_pending()
-        elif self._active_asset_type == "command":
-            self._apply_command_pending()
-        elif self._active_asset_type == "pi-extension":
-            self._apply_pi_pending()
-        elif self._active_asset_type == "mcp":
-            self._apply_mcp_pending()
-        else:
-            self._apply_agent_pending()
+    def _apply_for_asset_type(self, asset_type: str) -> ApplyResult | None:
+        """Dispatch apply for a specific asset type."""
+        if asset_type == "instruction":
+            return self._apply_instruction_pending()
+        if asset_type == "command":
+            return self._apply_command_pending()
+        if asset_type == "skill":
+            return self._apply_skill_pending()
+        if asset_type == "pi-extension":
+            return self._apply_pi_pending()
+        if asset_type == "mcp":
+            return self._apply_mcp_pending()
+        if asset_type == "agent":
+            return self._apply_agent_pending()
+        return None
 
-    def _apply_instruction_pending(self) -> None:
+    def action_apply(self) -> None:
+        pending_types = self._get_pending_asset_types()
+        if not pending_types:
+            # Preserve dispatch when nothing is pending (tests / no-op)
+            if self._active_asset_type == "instruction":
+                self._apply_instruction_pending()
+            elif self._active_asset_type == "skill":
+                self._apply_skill_pending()
+            elif self._active_asset_type == "command":
+                self._apply_command_pending()
+            elif self._active_asset_type == "pi-extension":
+                self._apply_pi_pending()
+            elif self._active_asset_type == "mcp":
+                self._apply_mcp_pending()
+            else:
+                self._apply_agent_pending()
+            return
+
+        order = ("instruction", "command", "skill", "agent", "mcp", "pi-extension")
+        results: list[ApplyResult] = []
+        for asset_type in order:
+            if asset_type in pending_types:
+                res = self._apply_for_asset_type(asset_type)
+                if isinstance(res, ApplyResult):
+                    results.append(res)
+
+        if len(results) > 1:
+            total_ok = sum(r.ok for r in results)
+            total_failed = sum(r.failed for r in results)
+            all_errors = [e for r in results for e in r.errors]
+            all_keys = [k for r in results for k in r.keys]
+            tag = _scope_tag(all_keys)
+            self._refresh_pending_label()
+            self._refresh_status_bar()
+            if all_errors:
+                first = " ".join(all_errors[0].split())
+                extra = f" (+{len(all_errors) - 1} more)" if len(all_errors) > 1 else ""
+                self.query_one("#footer-pending", Static).update(
+                    f"[red]apply failed[/] — {first}{extra}{tag}"
+                )
+                self.notify(
+                    "\n\n".join(all_errors),
+                    title=f"Apply: {total_ok} ok, {total_failed} failed",
+                    severity="error",
+                    timeout=12,
+                )
+            else:
+                self.query_one("#footer-pending", Static).update(
+                    f"applied: {total_ok} ok, {total_failed} failed{tag}"
+                )
+
+    def _apply_instruction_pending(self) -> ApplyResult | None:
         """Apply pending instruction pointer toggles.
 
         Apply semantics (different from skill/agent): instructions_install.apply
@@ -1057,7 +1201,10 @@ class TUIApp(App):
             PointerConflictError,
         )
         from agent_toolkit_cli.instructions_lock import (
-            InstructionsLockEntry, add_entry, read_lock, remove_entry,
+            InstructionsLockEntry,
+            add_entry,
+            read_lock,
+            remove_entry,
             write_lock,
         )
         from agent_toolkit_cli.instructions_paths import lock_file_path
@@ -1065,10 +1212,10 @@ class TUIApp(App):
         try:
             grid = self.query_one("#instruction-grid", InstructionGrid)
         except NoMatches:
-            return
+            return None
         pending = grid.pending_entries()
         if not pending:
-            return
+            return None
         tag = _scope_tag(pending)
 
         # Group by scope → {slug: (adds set, removes set)}. apply() is
@@ -1185,8 +1332,11 @@ class TUIApp(App):
             self.query_one("#footer-pending", Static).update(
                 f"applied: {ok} ok, {failed} failed{tag}"
             )
+        return ApplyResult(
+            ok=ok, failed=failed, errors=errors, keys=list(pending.keys())
+        )
 
-    def _apply_command_pending(self) -> None:
+    def _apply_command_pending(self) -> ApplyResult | None:
         """Apply pending Commands Standard/Pi/Gemini toggles via the facade."""
         from agent_toolkit_cli._install_core import InstallError, InstallPlan
         from agent_toolkit_cli import command_install
@@ -1194,10 +1344,10 @@ class TUIApp(App):
         try:
             grid = self.query_one("#command-grid", CommandGrid)
         except NoMatches:
-            return
+            return None
         pending = grid.pending_entries()
         if not pending:
-            return
+            return None
         tag = _scope_tag(pending)
         by_slug: dict[tuple[str, str], tuple[set[str], set[str]]] = defaultdict(
             lambda: (set(), set())
@@ -1209,12 +1359,9 @@ class TUIApp(App):
         ok = failed = 0
         errors: list[str] = []
         failed_groups: set[tuple[str, str]] = set()
-        _active_scope, home, active_project = self._scope_to_roots()
-
         for (scope, slug), (adds, removes) in by_slug.items():
             n_writes = len(adds) + len(removes)
-            apply_home = Path.home() if scope == "global" else home
-            project = None if scope == "global" else active_project
+            _, apply_home, project = self._scope_to_roots(scope)
             p = InstallPlan(
                 slug=slug,
                 scope=scope,  # type: ignore[arg-type]
@@ -1231,11 +1378,15 @@ class TUIApp(App):
                 failed += n_writes
                 failed_groups.add((scope, slug))
 
-        saved = {
-            k: v
-            for k, v in grid.pending_entries().items()
-            if (k[0], k[2]) in failed_groups
-        } if failed else {}
+        saved = (
+            {
+                k: v
+                for k, v in grid.pending_entries().items()
+                if (k[0], k[2]) in failed_groups
+            }
+            if failed
+            else {}
+        )
         if failed == 0:
             grid.clear_pending()
         self._refresh_command_view()
@@ -1259,21 +1410,27 @@ class TUIApp(App):
             self.query_one("#footer-pending", Static).update(
                 f"applied: {ok} ok, {failed} failed{tag}"
             )
+        return ApplyResult(
+            ok=ok, failed=failed, errors=errors, keys=list(pending.keys())
+        )
 
-    def _apply_skill_pending(self) -> None:
+    def _apply_skill_pending(self) -> ApplyResult | None:
         from agent_toolkit_cli.skill_install import (
-            InstallError, InstallPlan, apply as engine_apply,
-            ensure_project_canonical, validate_projection_context,
+            InstallError,
+            InstallPlan,
+            apply as engine_apply,
+            ensure_project_canonical,
+            validate_projection_context,
         )
         from agent_toolkit_cli.skill_paths import library_lock_path
 
         try:
             grid = self.query_one("#skill-grid", SkillGrid)
         except NoMatches:
-            return
+            return None
         pending = grid.pending_entries()
         if not pending:
-            return
+            return None
         tag = _scope_tag(pending)
         by_slug: dict[tuple[str, str], tuple[set[str], set[str]]] = defaultdict(
             lambda: (set(), set())
@@ -1311,7 +1468,10 @@ class TUIApp(App):
                     failed_groups.add((scope, slug))
                     continue
             p = InstallPlan(
-                slug=slug, scope=scope, source=None, ref=None,
+                slug=slug,
+                scope=scope,
+                source=None,
+                ref=None,
                 add_agents=tuple(sorted(adds)),
                 remove_agents=tuple(sorted(removes)),
             )
@@ -1320,7 +1480,8 @@ class TUIApp(App):
                 ok += len(result.created) + len(result.removed)
                 if scope == "project" and not adds:
                     self._drop_project_entry_if_unlisted_and_unlinked(
-                        slug=slug, project=project,  # type: ignore[arg-type]
+                        slug=slug,
+                        project=project,  # type: ignore[arg-type]
                     )
             except InstallError as exc:
                 errors.append(f"{slug}: {exc}")
@@ -1331,11 +1492,15 @@ class TUIApp(App):
         # unlisted uninstall (entry dropped, row gone) would fail with
         # "not in global library" on every subsequent Apply, holding the
         # genuinely-failed group's retry hostage.
-        saved = {
-            k: v
-            for k, v in grid.pending_entries().items()
-            if (k[0], k[2]) in failed_groups
-        } if failed else {}
+        saved = (
+            {
+                k: v
+                for k, v in grid.pending_entries().items()
+                if (k[0], k[2]) in failed_groups
+            }
+            if failed
+            else {}
+        )
         if failed == 0:
             grid.clear_pending()
         self._refresh_skill_view()
@@ -1359,9 +1524,15 @@ class TUIApp(App):
             self.query_one("#footer-pending", Static).update(
                 f"applied: {ok} ok, {failed} failed{tag}"
             )
+        return ApplyResult(
+            ok=ok, failed=failed, errors=errors, keys=list(pending.keys())
+        )
 
     def _drop_project_entry_if_unlisted_and_unlinked(
-        self, *, slug: str, project: Path,
+        self,
+        *,
+        slug: str,
+        project: Path,
     ) -> None:
         """#360 AC2: after a remove-only apply, drop the project lock entry of
         an UNLISTED slug once no projection symlink remains. Listed slugs keep
@@ -1392,9 +1563,11 @@ class TUIApp(App):
         if slug in lock.skills:
             write_lock(lpath, remove_entry(lock, slug))
 
-    def _apply_pi_pending(self) -> None:
+    def _apply_pi_pending(self) -> ApplyResult | None:
         from agent_toolkit_cli import (
-            _pi_settings, pi_extension_install, pi_extension_ops,
+            _pi_settings,
+            pi_extension_install,
+            pi_extension_ops,
         )
         from agent_toolkit_cli.pi_extension_lock import read_lock
         from agent_toolkit_cli.pi_extension_paths import library_lock_path
@@ -1402,10 +1575,10 @@ class TUIApp(App):
         try:
             grid = self.query_one("#pi-grid", PiGrid)
         except NoMatches:
-            return
+            return None
         pending = grid.pending_entries()
         if not pending:
-            return
+            return None
         tag = _scope_tag(pending)
 
         home = Path.home()
@@ -1425,7 +1598,12 @@ class TUIApp(App):
                 severity="error",
                 timeout=12,
             )
-            return
+            return ApplyResult(
+                ok=0,
+                failed=len(pending),
+                errors=[f"global lock: {exc}"],
+                keys=list(pending.keys()),
+            )
 
         _Scope = Literal["global", "project"]
         for (scope_str, slug), op in pending.items():
@@ -1445,7 +1623,10 @@ class TUIApp(App):
                         slug=slug, scope=scope, home=home, project=project
                     )
                 ok += 1
-            except (pi_extension_install.InstallError, _pi_settings.PiSettingsError) as exc:
+            except (
+                pi_extension_install.InstallError,
+                _pi_settings.PiSettingsError,
+            ) as exc:
                 errors.append(f"{slug}: {exc}")
                 failed += 1
 
@@ -1474,8 +1655,11 @@ class TUIApp(App):
             self.query_one("#footer-pending", Static).update(
                 f"applied: {ok} ok, {failed} failed{tag}"
             )
+        return ApplyResult(
+            ok=ok, failed=failed, errors=errors, keys=list(pending.keys())
+        )
 
-    def _apply_agent_pending(self) -> None:
+    def _apply_agent_pending(self) -> ApplyResult | None:
         import shutil
 
         from agent_toolkit_cli import agent_install
@@ -1485,10 +1669,10 @@ class TUIApp(App):
         try:
             grid = self.query_one("#agent-grid", AgentGrid)
         except NoMatches:
-            return
+            return None
         pending = grid.pending_entries()
         if not pending:
-            return
+            return None
         tag = _scope_tag(pending)
 
         # Group by (scope, slug) → (adds set, removes set) of harnesses.
@@ -1519,20 +1703,26 @@ class TUIApp(App):
                             canonical.parent.mkdir(parents=True, exist_ok=True)
                             shutil.copytree(global_canonical, canonical)
                         except OSError as exc:
-                            errors.append(f"{slug}: could not seed project canonical: {exc}")
+                            errors.append(
+                                f"{slug}: could not seed project canonical: {exc}"
+                            )
                             failed += len(adds) + len(removes)
                             continue
 
             # Adds → agent_install.apply()
             if adds:
                 p = InstallPlan(
-                    slug=slug, scope=scope,  # type: ignore[arg-type]
-                    source=None, ref=None,
+                    slug=slug,
+                    scope=scope,  # type: ignore[arg-type]
+                    source=None,
+                    ref=None,
                     add_agents=tuple(sorted(adds)),
                     remove_agents=(),
                 )
                 try:
-                    result = agent_install.apply(p, home=effective_home, project=project)
+                    result = agent_install.apply(
+                        p, home=effective_home, project=project
+                    )
                     ok += len(result.created)
                 except InstallError as exc:
                     # #373: the facade seam already prefixed the slug — do not
@@ -1555,13 +1745,16 @@ class TUIApp(App):
                     # content-divergent) slot file in place — surface each
                     # instead of silently counting it as removed. The re-scan
                     # below keeps the cell linked (truthful grid state).
-                    refusals = agent_install.uninstall(
-                        slug=slug,
-                        scope=scope,  # type: ignore[arg-type]
-                        home=effective_home,
-                        project=project,
-                        harnesses=tuple(sorted(removes)),
-                    ) or ()
+                    refusals = (
+                        agent_install.uninstall(
+                            slug=slug,
+                            scope=scope,  # type: ignore[arg-type]
+                            home=effective_home,
+                            project=project,
+                            harnesses=tuple(sorted(removes)),
+                        )
+                        or ()
+                    )
                     for harness, dest in refusals:
                         refusal_msgs.append(
                             f"{slug} ({harness}): {dest} is not managed by "
@@ -1609,8 +1802,11 @@ class TUIApp(App):
             self.query_one("#footer-pending", Static).update(
                 f"applied: {ok} ok, {failed} failed{tag}"
             )
+        return ApplyResult(
+            ok=ok, failed=failed, errors=errors, keys=list(pending.keys())
+        )
 
-    def _apply_mcp_pending(self) -> None:
+    def _apply_mcp_pending(self) -> ApplyResult | None:
         from agent_toolkit_cli import mcp_install
         from agent_toolkit_cli._install_core import InstallError
         from agent_toolkit_cli.mcp_library import library_root
@@ -1618,10 +1814,10 @@ class TUIApp(App):
         try:
             grid = self.query_one("#mcp-grid", McpGrid)
         except NoMatches:
-            return
+            return None
         pending = grid.pending_entries()
         if not pending:
-            return
+            return None
         tag = _scope_tag(pending)
 
         # Group by (scope, slug) → (adds set, removes set) of harnesses.
@@ -1634,27 +1830,20 @@ class TUIApp(App):
 
         ok = failed = 0
         errors: list[str] = []
-        # Derive roots from the SSOT the grid was built against (review F-cwd) —
-        # NOT a fresh Path.cwd()/Path.home(), so the apply target is guaranteed
-        # identical to the displayed grid (the project .mcp.json / project lock
-        # are repo-root files; a cwd drift would mutate the wrong project).
-        active_scope, home, active_project = self._scope_to_roots()
-        # _scope_to_roots always returns Path.home() for home (both scopes); the
-        # MCP adapters need a real home for sentinel checks even at project scope.
-        # Fail loud rather than silently passing None into the facade.
-        assert home is not None
-
         for (scope, slug), (adds, removes) in by_slug.items():
-            # The pending key's scope wins per-entry, but home/project come from
-            # the active roots; project is None at global, the active project root
-            # otherwise. (Pending only ever carries the active scope today.)
-            project = None if scope == "global" else active_project
+            _, home, project = self._scope_to_roots(scope)
+            # MCP adapters require a home for sentinel checks in both scopes.
+            assert home is not None
             lib_root = library_root(home)
             if adds:
                 try:
                     result = mcp_install.apply(
-                        slug=slug, harnesses=sorted(adds), scope=scope,
-                        library_root=lib_root, home=home, project=project,
+                        slug=slug,
+                        harnesses=sorted(adds),
+                        scope=scope,
+                        library_root=lib_root,
+                        home=home,
+                        project=project,
                     )
                     ok += len(result.installed)
                 except InstallError as exc:
@@ -1666,8 +1855,12 @@ class TUIApp(App):
             if removes:
                 try:
                     mcp_install.uninstall(
-                        slug=slug, harnesses=sorted(removes), scope=scope,
-                        library_root=lib_root, home=home, project=project,
+                        slug=slug,
+                        harnesses=sorted(removes),
+                        scope=scope,
+                        library_root=lib_root,
+                        home=home,
+                        project=project,
                     )
                     ok += len(removes)
                 except InstallError as exc:
@@ -1701,6 +1894,9 @@ class TUIApp(App):
             self.query_one("#footer-pending", Static).update(
                 f"applied: {ok} ok, {failed} failed{tag}"
             )
+        return ApplyResult(
+            ok=ok, failed=failed, errors=errors, keys=list(pending.keys())
+        )
 
     # ----- header + status ---------------------------------------------------
 
@@ -1795,10 +1991,7 @@ class TUIApp(App):
                 pending = len(grid_instr.pending_entries())
             else:
                 pending = 0
-            text = (
-                f"  [b green]{linked}[/] linked   "
-                f"[b yellow]{pending}[/] pending"
-            )
+            text = f"  [b green]{linked}[/] linked   [b yellow]{pending}[/] pending"
         elif active == "skill":
             linked = drifted = stray = broken = 0
             try:
@@ -1846,10 +2039,7 @@ class TUIApp(App):
                 pending = len(grid_pi.pending_entries())
             else:
                 pending = 0
-            text = (
-                f"  [b green]{loaded}[/] loaded   "
-                f"[b yellow]{pending}[/] pending"
-            )
+            text = f"  [b green]{loaded}[/] loaded   [b yellow]{pending}[/] pending"
         elif active == "mcp":
             linked = 0
             try:
@@ -1867,10 +2057,7 @@ class TUIApp(App):
                 pending = len(grid_mcp.pending_entries())
             else:
                 pending = 0
-            text = (
-                f"  [b green]{linked}[/] linked   "
-                f"[b yellow]{pending}[/] pending"
-            )
+            text = f"  [b green]{linked}[/] linked   [b yellow]{pending}[/] pending"
         else:  # "agent"
             linked = 0
             try:
@@ -1888,10 +2075,7 @@ class TUIApp(App):
                 pending = len(grid_agent.pending_entries())
             else:
                 pending = 0
-            text = (
-                f"  [b green]{linked}[/] linked   "
-                f"[b yellow]{pending}[/] pending"
-            )
+            text = f"  [b green]{linked}[/] linked   [b yellow]{pending}[/] pending"
         settings_diagnostics = getattr(self, "_settings_diagnostics", ())
         if settings_diagnostics:
             diagnostic = " | ".join(settings_diagnostics)
