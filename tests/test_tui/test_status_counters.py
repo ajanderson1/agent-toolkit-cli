@@ -57,17 +57,22 @@ class _FooterHost(App):
 
     def compose(self) -> ComposeResult:
         yield SkillGrid(self._rows, id="skill-grid")
-        yield Static("", id="footer-pending")
+        yield Static("", id="proj-path")
         yield Static("", id="status-bar")
+        yield Static("", id="footer-pending")
 
     def on_mount(self) -> None:
+        self._refresh_proj_path()
         self._refresh_pending_label()
+        self._refresh_status_bar()
 
     # Reuse the real implementations so the wiring under test is the shipped one.
     on_skill_grid_pending_changed = TUIApp.on_skill_grid_pending_changed
     _get_all_pending_edits = TUIApp._get_all_pending_edits
     _refresh_pending_label = TUIApp._refresh_pending_label
     _refresh_status_bar = TUIApp._refresh_status_bar
+    _refresh_proj_path = TUIApp._refresh_proj_path
+    _build_proj_path_markup = TUIApp._build_proj_path_markup
     _scope_to_roots = TUIApp._scope_to_roots
     _scope = "global"
 
@@ -83,7 +88,9 @@ async def test_footer_pending_updates_on_toggle_up_and_down():
     app = _FooterHost([_row("j")])
     async with app.run_test() as pilot:
         await pilot.pause()
-        assert "Pending: 0" in _footer_text(app)
+        assert "Pending:" not in _footer_text(app)
+        bar = str(app.query_one("#status-bar", Static).render())
+        assert "0 pending" in bar
 
         grid = app.query_one("#skill-grid", SkillGrid)
         grid.cursor_to_cell(row_slug="j", agent_name="claude-code")
@@ -91,17 +98,21 @@ async def test_footer_pending_updates_on_toggle_up_and_down():
 
         await pilot.press("space")
         await pilot.pause()
-        assert "Pending: 1" in _footer_text(app)
+        assert "Pending:" not in _footer_text(app)
+        bar = str(app.query_one("#status-bar", Static).render())
+        assert "1 pending" in bar
 
         # Toggling back must drive it down again.
         await pilot.press("space")
         await pilot.pause()
-        assert "Pending: 0" in _footer_text(app)
+        assert "Pending:" not in _footer_text(app)
+        bar = str(app.query_one("#status-bar", Static).render())
+        assert "0 pending" in bar
 
 
 @pytest.mark.asyncio
 async def test_footer_pending_counts_global_harnesses():
-    """One skill toggled across all three global harness columns → Pending: 3."""
+    """One skill toggled across all three global harness columns → 3 pending in status bar."""
     app = _FooterHost([_row("j")])
     async with app.run_test() as pilot:
         await pilot.pause()
@@ -111,7 +122,9 @@ async def test_footer_pending_counts_global_harnesses():
             await pilot.pause()
             await pilot.press("space")
             await pilot.pause()
-        assert "Pending: 3" in _footer_text(app)
+        assert "Pending:" not in _footer_text(app)
+        bar = str(app.query_one("#status-bar", Static).render())
+        assert "3 pending" in bar
 
 
 def test_pending_changed_message_carries_count():
