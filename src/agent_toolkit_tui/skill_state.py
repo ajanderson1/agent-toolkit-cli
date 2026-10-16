@@ -26,8 +26,8 @@ from agent_toolkit_cli.skill_install import _should_skip_symlink
 from agent_toolkit_cli.skill_lock import read_lock
 from agent_toolkit_cli.skill_paths import (
     agent_projection_dir, canonical_skill_dir, library_lock_path,
-    library_skill_path, lock_file_path, parent_clone_path,
-    project_parents_root,
+    library_root, library_skill_path, lock_file_path, parent_clone_path,
+    project_parents_root, project_store_root,
 )
 from agent_toolkit_tui.composition import skills_nonstandard_main
 
@@ -112,10 +112,15 @@ def _project_standard_link(project: Path, slug: str) -> Path:
 def _cell_for(
     slug: str, agent_name: str, *,
     scope: Scope, home: Path | None, project: Path | None,
+    canonical: Path | None = None,
 ) -> SkillCell:
     # The synthetic "standard" token has its own detection logic: it does NOT
     # use _should_skip_symlink (that function doesn't understand "standard" as
     # an agent_name — the engine strips it before calling skip checks).
+    if canonical is None:
+        canonical = canonical_skill_dir(
+            slug, scope=scope, home=home, project=project,
+        )
     if agent_name == "standard":
         # The standard bundle is one shared projection symlink that all
         # standard agents read through. Both scopes detect it the same way now:
@@ -123,9 +128,6 @@ def _cell_for(
         # (which lives in the library at global scope, the external store at
         # project scope). Global: ~/.agents/skills/<slug>; project:
         # <project>/.agents/skills/<slug>.
-        canonical = canonical_skill_dir(
-            slug, scope=scope, home=home, project=project,
-        )
         bundle_link = (
             _standard_bundle_link(slug)
             if scope == "global"
@@ -164,7 +166,6 @@ def _cell_for(
         # Available company project cell: falls through to the standard
         # link/drift/stray probe below via agent_projection_dir().
 
-    canonical = canonical_skill_dir(slug, scope=scope, home=home, project=project)
     skip, _ = _should_skip_symlink(
         agent_name=agent_name, scope=scope, project=project,
     )
@@ -186,6 +187,105 @@ def _cell_for(
     return SkillCell(linked=False, drift=True, skipped=False)
 
 
+def _is_inside(child: Path, parent: Path) -> bool:
+    try:
+        child.resolve().relative_to(parent.resolve())
+        return True
+    except (ValueError, OSError):
+        return False
+
+
+def _discover_unmanaged_skills(root: Path) -> list[tuple[str, Path]]:
+    """Bounded filesystem discovery of skills and bundle sub-skills under root.
+
+    Discovers:
+    - Standalone skills: <root>/<slug>/SKILL.md -> slug
+    - Bundle containers: <root>/<bundle>/SKILL.md -> bundle
+    - Nested bundle skills: <root>/<bundle>/skills/<subskill>/SKILL.md
+      or <root>/<bundle>/<subskill>/SKILL.md -> f"{bundle}:{subskill}"
+
+    Does not follow escaping symlinks or crash on dangling symlinks.
+    Ignores _parents, hidden directories, and *.bak-* leftovers.
+    """
+    if not root.is_dir():
+        return []
+    results: list[tuple[str, Path]] = []
+    seen_slugs: set[str] = set()
+    try:
+        children = sorted(root.iterdir())
+    except OSError:
+        return []
+
+    for top in children:
+        if top.name.startswith(".") or top.name == "_parents" or ".bak-" in top.name:
+            continue
+        try:
+            if not top.exists() or not top.is_dir():
+                continue
+        except OSError:
+            continue
+
+        if top.is_symlink():
+            try:
+                target = top.resolve()
+                if not target.exists() or not target.is_dir():
+                    continue
+            except OSError:
+                continue
+
+        # Check top-level SKILL.md
+        top_skill = top / "SKILL.md"
+        if top_skill.is_file():
+            results.append((top.name, top))
+            seen_slugs.add(top.name)
+
+        # Bounded scan for nested skills inside top
+        try:
+            subdirs = sorted(top.iterdir())
+        except OSError:
+            subdirs = []
+
+        for sub in subdirs:
+            if sub.name.startswith(".") or sub.name == "_parents" or ".bak-" in sub.name:
+                continue
+            if sub.is_symlink() and not _is_inside(sub, top):
+                continue
+            try:
+                if not sub.exists() or not sub.is_dir():
+                    continue
+            except OSError:
+                continue
+
+            if sub.name == "skills":
+                try:
+                    nested_dirs = sorted(sub.iterdir())
+                except OSError:
+                    nested_dirs = []
+                for nested in nested_dirs:
+                    if nested.name.startswith(".") or ".bak-" in nested.name:
+                        continue
+                    if nested.is_symlink() and not _is_inside(nested, top):
+                        continue
+                    try:
+                        if not nested.exists() or not nested.is_dir():
+                            continue
+                    except OSError:
+                        continue
+                    if (nested / "SKILL.md").is_file():
+                        slug = f"{top.name}:{nested.name}"
+                        if slug not in seen_slugs:
+                            results.append((slug, nested))
+                            seen_slugs.add(slug)
+            else:
+                if (sub / "SKILL.md").is_file():
+                    slug = f"{top.name}:{sub.name}"
+                    if slug not in seen_slugs:
+                        results.append((slug, sub))
+                        seen_slugs.add(slug)
+
+    return results
+
+
 def build_skill_rows(
     *,
     scope: Scope,
@@ -193,10 +293,10 @@ def build_skill_rows(
     project: Path | None,
     selection: tuple[str, ...] | None = None,
 ) -> list[SkillRow]:
-    # Row universe = union(library lock, scope lock) — see module docstring.
+    # Row universe = union(library lock, scope lock) + filesystem.
     # At global scope the library lock IS the scope lock, so the union is a
     # no-op. At project scope, project-lock-only slugs are `unlisted`.
-    lib_lock = read_lock(library_lock_path())
+    lib_lock = read_lock(library_lock_path(home=home))
     universe = dict(lib_lock.skills)
     unlisted: set[str] = set()
     if scope == "project":
@@ -276,4 +376,37 @@ def build_skill_rows(
             state=state, cells=cells,
             description=description,
         ))
+
+    # Bounded filesystem discovery of unmanaged skills/bundles
+    scan_root = (
+        library_root(home=home)
+        if scope == "global"
+        else (project_store_root(project) if project is not None else None)
+    )
+    if scan_root is not None:
+        for disc_slug, disc_path in _discover_unmanaged_skills(scan_root):
+            if disc_slug in universe:
+                continue
+            cells = {}
+            for agent in harnesses:
+                cells[(agent, scope)] = _cell_for(
+                    disc_slug, agent, scope=scope, home=home, project=project,
+                    canonical=disc_path,
+                )
+            if scope == "project" and home is not None:
+                for agent in harnesses:
+                    cells[(agent, "global")] = _cell_for(
+                        disc_slug, agent, scope="global", home=home, project=None,
+                        canonical=disc_path,
+                    )
+            description = _read_skill_description(disc_path)
+            rows.append(SkillRow(
+                slug=disc_slug,
+                source="untracked",
+                ref="(untracked)",
+                state="unlisted",
+                cells=cells,
+                description=description,
+            ))
+
     return rows
