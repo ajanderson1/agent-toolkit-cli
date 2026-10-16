@@ -11,7 +11,7 @@ Background (#252 "generalize install/lock/paths to an asset-type dimension"):
   modules per asset type:
     - skill_install / skill_lock / skill_paths
     - agent_install / agent_lock / agent_paths
-    - instructions_install / instructions_lock / instructions_paths
+    - instructions_install / instructions_paths (filesystem truth, no lock)
     - pi_extension_install / pi_extension_lock / pi_extension_paths
   The #252 "generalize" item is obsolete — superseded four times over.
   See the 2026-05-30 agent PR3–5 plan in docs/superpowers/plans/ § PR3.
@@ -81,12 +81,11 @@ def test_all_five_asset_type_install_modules_exist():
         assert mod is not None, f"module {mod_name!r} must exist"
 
 
-def test_all_five_asset_type_lock_modules_exist():
-    """All five asset types have their own lock module."""
+def test_source_backed_asset_type_lock_modules_exist():
+    """Source-backed asset types retain their own lock modules."""
     expected_modules = [
         "agent_toolkit_cli.skill_lock",
         "agent_toolkit_cli.agent_lock",
-        "agent_toolkit_cli.instructions_lock",
         "agent_toolkit_cli.pi_extension_lock",
         "agent_toolkit_cli.command_lock",
     ]

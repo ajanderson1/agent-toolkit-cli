@@ -1,9 +1,9 @@
 """Tests for instruction_state.py — data model for the TUI's instruction tab.
 
 Covers:
-1. empty lock + no canonical → no rows
-2. empty lock + canonical exists → single AGENTS.md row (canonical_exists=True, cells unlinked)
-3. lock with claude-code listed + pointer symlinked → linked=True
+1. no canonical or occupied slots → no rows
+2. canonical exists → single AGENTS.md row
+3. actual pointer symlinked → linked=True (legacy files do not affect truth)
 4. pointer is a real file → conflict=True, linked=False
 5. canonical present → canonical_exists=True
 6. scope mismatch path (replit at global) → _cell_for returns None
@@ -360,13 +360,6 @@ def test_project_scope_probes_global_shadow_cell(tmp_path: Path, monkeypatch):
     proj_canonical = instructions_paths.project_canonical_agents_md(project)
     proj_canonical.write_text("# project AGENTS\n")
 
-    # Project lock entry → locked-entry branch.
-    lock_file = instructions_paths.project_lock_path(project)
-    lock_file.write_text(
-        '{"version": 1, "instructions": {"AGENTS.md": '
-        '{"scope": "project", "source": "AGENTS.md", "harnesses": ["claude-code"]}}}\n'
-    )
-
     # Install the GLOBAL claude-code pointer (~/.claude/CLAUDE.md → global canonical).
     from agent_toolkit_cli.instructions_adapters.symlink import _pointer_path
     glob_pointer = _pointer_path("claude-code", "global", None, home)
@@ -433,17 +426,6 @@ def test_project_scope_home_none_skips_global_probe(tmp_path: Path, monkeypatch)
     proj_canonical = instructions_paths.project_canonical_agents_md(project)
     proj_canonical.write_text("# project AGENTS\n")
 
-    # Empty-lock fresh-user branch (canonical exists, no project lock).
     rows = build_instruction_rows(scope="project", home=None, project=project)
     assert rows and rows[0].slug == "AGENTS.md"
-    assert all(scope != "global" for (_, scope) in rows[0].cells)
-
-    # Locked-entry branch (seed a project lock entry).
-    lock_file = instructions_paths.project_lock_path(project)
-    lock_file.write_text(
-        '{"version": 1, "instructions": {"AGENTS.md": '
-        '{"scope": "project", "source": "AGENTS.md", "harnesses": ["claude-code"]}}}\n'
-    )
-    rows = build_instruction_rows(scope="project", home=None, project=project)
-    assert rows
     assert all(scope != "global" for (_, scope) in rows[0].cells)

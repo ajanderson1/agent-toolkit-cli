@@ -2,7 +2,7 @@
 
 `agent-toolkit-tui` is the interactive [Textual](https://textual.textualize.io/)
 cockpit over the same surface the [CLI](cli.md) drives. It reads the lock files
-and filesystem directly and applies your edits by calling the shipped CLI
+and filesystem directly (Instructions uses filesystem pointers only) and applies your edits by calling the shipped CLI
 facades in-process — so the TUI and CLI can never disagree about what is
 installed.
 
@@ -95,9 +95,10 @@ Toggling a cell **queues** a pending edit; nothing touches disk until you
 1. Toggle cells across rows (and across scopes) to build a pending queue.
 2. ++ctrl+d++ to preview, or ++ctrl+z++ to throw the queue away.
 3. ++ctrl+s++ to apply — the TUI calls the same install/uninstall facades the
-   CLI uses, with the same lock-write-then-project-then-roll-back-on-failure
-   contract. A failed apply rolls the lock back rather than leaving it lying
-   about disk.
+   CLI uses. Instructions sends explicit link/unlink requests without a lock;
+   it never prunes other links. If an I/O failure applies only part of a batch,
+   the grid reloads actual state and retains only unsatisfied intents for retry.
+   Canonical-source-chain removal guards run before any batch writes.
 
 Quitting with unapplied edits raises a confirm-discard prompt.
 

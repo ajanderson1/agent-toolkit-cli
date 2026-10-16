@@ -185,8 +185,8 @@ This asset type has **one supported mechanism** (pointer symlinks only — no
   `symlink`-verdict harnesses.
 - **Project-only natives.** Several `native` harnesses (e.g. `command-code`,
   `kode`) read `AGENTS.md` at project scope but have no documented global/user
-  instruction-file path. The lockfile must allow `scope="project"` entries
-  with no global pointer, even when the harness is `native`.
+  instruction-file path. Availability is scope-specific; native project readers
+  need no pointer or installation record.
 - **Workspace-bound natives.** `openclaw` reads `AGENTS.md` only from its single
   global workspace (`~/.openclaw/workspace/AGENTS.md`), not from per-project
   cwd. Treated as `native` because the bucket discriminator is "reads AGENTS.md
