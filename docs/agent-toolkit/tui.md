@@ -27,6 +27,7 @@ Header
 └─ Content
    ├─ Content header + Scope toggle   (project ⇄ global)
    └─ One grid per asset type         (swapped as you change asset type)
+Repository path
 Status bar
 Pending line
 Footer (key hints)
@@ -38,6 +39,13 @@ Footer (key hints)
 - **Grid** — one row per asset, columns vary by type (slug, source, ref, state,
   per-harness cells). Press ++i++ for the selected asset; click a glyphed column
   header for column-level information.
+- **Repository path** — the row above the status bar shows a bold **REPO:**
+  label, a regular-weight parent path, and a bold final displayed directory.
+  It shows the launch directory (including a repository subdirectory), not a
+  substituted Git root. Spaces and markup characters remain literal. A warning
+  triangle and red text still indicate a directory that is not itself a Git
+  root; linked worktree roots do not warn. Filesystem root is shown once, in
+  bold. Narrow terminals retain the existing single-row clipping behavior.
 - **Scope toggle** — flips the whole view between **project** and **global**
   [scope](../glossary.md#scope). The grid re-reads at the new scope; pending
   edits queued in the other scope are kept, not discarded.
