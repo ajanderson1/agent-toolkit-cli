@@ -199,3 +199,55 @@ async def test_rendered_lockless_instruction_evidence(roots, scope, broken):
         suffix = f'{scope}-broken' if broken else scope
         (ARTIFACTS / f'instructions-{suffix}.svg').write_text(app.export_screenshot())
         (ARTIFACTS / f'instructions-{suffix}.json').write_text(json.dumps({'columns': columns, 'row': visible}, indent=2))
+
+
+@pytest.mark.parametrize('conflict', [False, True])
+@pytest.mark.asyncio
+async def test_all_kind_save_integrates_hidden_lockless_instructions_with_real_command(roots, conflict):
+    from agent_toolkit_cli import command_paths
+    from agent_toolkit_cli.command_adapters import get_adapter
+    from agent_toolkit_cli.command_lock import LockEntry, LockFile, write_lock
+    from agent_toolkit_tui.widgets.command_grid import CommandGrid
+
+    project, home = roots
+    source = command_paths.library_root() / 'test-command'
+    source.mkdir(parents=True)
+    (source / 'COMMAND.md').write_text('test prompt\n')
+    write_lock(command_paths.library_lock_path(), LockFile(version=1, skills={
+        'test-command': LockEntry(source='o/r', source_type='github', ref='main', command_path='COMMAND.md'),
+    }))
+    if conflict:
+        (project / 'CLAUDE.md').write_text('user file\n')
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        instructions = app.query_one('#instruction-grid', InstructionGrid)
+        commands = app.query_one('#command-grid', CommandGrid)
+        instruction_pending = {(scope, 'claude-code', 'AGENTS.md'): 'link' for scope in ('global', 'project')}
+        instructions.restore_pending(instruction_pending)
+        commands.restore_pending({(scope, 'standard', 'test-command'): 'link' for scope in ('global', 'project')})
+        app.action_asset_type('mcp')
+        app.action_scope('global')
+        app.action_apply()
+        await pilot.pause()
+        assert not commands.pending_entries()
+        for scope in ('global', 'project'):
+            assert get_adapter('standard').destination('test-command', scope=scope, home=home,
+                                                       project=project if scope == 'project' else None).is_file()
+        footer = str(app.query_one('#footer-pending', Static).render())
+        assert '(2 global, 2 project)' in footer
+        if conflict:
+            assert 'apply failed' in footer
+            assert (project / 'CLAUDE.md').read_text() == 'user file\n'
+            assert instructions.pending_entries() == instruction_pending
+            assert not (home / '.claude/CLAUDE.md').exists()
+            (project / 'CLAUDE.md').unlink()
+            app.action_apply()
+            await pilot.pause()
+        else:
+            assert 'applied: 4 ok, 0 failed' in footer
+        assert not instructions.pending_entries()
+        assert (project / 'CLAUDE.md').read_text() == 'project\n'
+        assert (home / '.claude/CLAUDE.md').read_text() == 'global\n'
+        assert not list(project.rglob('instructions-lock.json'))
+        assert not list(home.rglob('instructions-lock.json'))

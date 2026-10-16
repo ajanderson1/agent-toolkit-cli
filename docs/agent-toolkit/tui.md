@@ -56,10 +56,10 @@ Skill, agent, and command grids union lock entries with bounded on-disk discover
 
 | Key | Action | Notes |
 |---|---|---|
-| ++ctrl+s++ | **Apply** | Run every pending edit for the active asset type through the CLI facade. |
-| ++ctrl+d++ | **Diff** | Preview the pending queue (`N would-link, M would-unlink`) without applying. |
+| ++ctrl+s++ | **Apply** | Run pending edits across all asset types through the CLI facade. |
+| ++ctrl+d++ | **Diff** | Preview the pending queue (`N would-link, M would-unlink`) across all asset types without applying. |
 | ++ctrl+r++ | **Refresh** | Re-read locks + filesystem for the active view. |
-| ++ctrl+z++ | **Revert** | Clear the active grid's *entire* pending queue — both scopes. |
+| ++ctrl+z++ | **Revert** | Clear the pending queue across all asset types — both scopes. |
 | ++slash++ | **Filter** | Focus the fuzzy filter box over the grid. |
 | ++ctrl+g++ | **Scope toggle** | Switch project ⇄ global. |
 | ++ctrl+p++ | **Command palette** | Choose **Theme** or **Main harnesses** to customize themes or standalone columns. |
@@ -92,13 +92,19 @@ override, failure handling, and the explicit CLI boundary.
 Toggling a cell **queues** a pending edit; nothing touches disk until you
 **Apply** (++ctrl+s++). This mirrors a staged-changes model:
 
-1. Toggle cells across rows (and across scopes) to build a pending queue.
+1. Toggle cells across rows, across scopes, and across asset types to build a pending queue.
 2. ++ctrl+d++ to preview, or ++ctrl+z++ to throw the queue away.
 3. ++ctrl+s++ to apply — the TUI calls the same install/uninstall facades the
-   CLI uses. Instructions sends explicit link/unlink requests without a lock;
-   it never prunes other links. If an I/O failure applies only part of a batch,
-   the grid reloads actual state and retains only unsatisfied intents for retry.
-   Canonical-source-chain removal guards run before any batch writes.
+   CLI uses across all modified asset types. Source-backed kinds retain their
+   lock/projection failure handling. Instructions sends explicit link/unlink
+   requests without a lock and never prunes other links. If an I/O failure applies
+   only part of an Instructions batch, the grid reloads actual state and retains
+   only unsatisfied intents for retry. Canonical-source-chain removal guards run
+   before any Instructions batch writes.
+
+Same-named assets in different asset types remain separate edits in Diff,
+Revert, and the quit-confirmation count. Each queued edit keeps its own scope
+when applied, even if another asset type or the global scope is visible.
 
 Quitting with unapplied edits raises a confirm-discard prompt.
 

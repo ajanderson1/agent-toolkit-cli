@@ -76,7 +76,7 @@ async def test_apply_standard_collapses_legacy_rows_real_facade(tmp_path, monkey
     # Point the TUI's roots at tmp dirs (override the SSOT, not Path.cwd inline).
     monkeypatch.setattr(
         TUIApp, "_scope_to_roots",
-        lambda self: ("project", home, project),
+        lambda self, scope=None: (scope or "project", home, project if scope != "global" else None),
     )
     app = TUIApp()
     async with app.run_test() as pilot:
