@@ -14,7 +14,7 @@ library.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Literal
 
@@ -57,6 +57,8 @@ class SkillCell:
     stray: bool = False  # symlink exists but skill isn't installed at this scope
     available: bool = True  # False → the harness cannot be toggled in this context
     unavailable_reason: str = ""  # human-facing explanation when not available
+    exposure_reason: str = ""
+    payload_missing: bool = False
 
 
 @dataclass
@@ -67,6 +69,12 @@ class SkillRow:
     state: State
     cells: dict[tuple[str, str], SkillCell] = field(default_factory=dict)
     description: str = ""
+    collection_key: tuple[str, str | None] | None = None
+    collection_label: str = ""
+    display_name: str = ""
+    is_collection: bool = False
+    skill_path: str = ""
+    collection_error: str = ""
 
 
 def _read_skill_description(canonical: Path) -> str:
@@ -210,8 +218,22 @@ def build_skill_rows(
         )
         for slug, proj_entry in proj_lock.skills.items():
             if slug not in universe:
-                universe[slug] = proj_entry
                 unlisted.add(slug)
+            universe[slug] = proj_entry
+    from agent_toolkit_cli.skill_collections import catalog, exposed
+    groups = catalog(scope=scope, home=home, project=project)
+    membership = {}
+    managed_paths = set()
+    for group in groups:
+        if group.wrapper is not None:
+            universe.pop(group.wrapper, None)
+        for name, child in group.children.items():
+            if name in universe and (universe[name].source, universe[name].ref) != group.key:
+                group.error = f"Child slug {name} belongs to another source/ref. Collection selection is unavailable until the collision is resolved."
+                continue
+            universe[name] = child.entry
+            membership[name] = (group, child)
+            managed_paths.add(child.path.resolve())
     harnesses = interactive_agents(selection)
     rows: list[SkillRow] = []
     for slug in sorted(universe):
@@ -226,6 +248,9 @@ def build_skill_rows(
             # clone of a committed skills-lock.json has the entry but no
             # store canonical, which is a broken install: `missing` (G2).
             state: State = "unlisted" if canonical.exists() else "missing"
+        elif slug in membership and membership[slug][0].backing is not None:
+            backing = membership[slug][0].backing
+            state = "dirty" if skill_git.status(backing, env=None) == skill_git.GitWorkingTreeStatus.DIRTY else "clean"
         elif not canonical.exists():
             # Project scope: slug is in the library but not yet installed here.
             # Global scope: library entry recorded but directory was deleted.
@@ -238,6 +263,10 @@ def build_skill_rows(
                 owner, repo, ref=entry.ref, env=None,
                 root=project_parents_root(project) if scope == "project" else None,
             )
+            if slug in membership and canonical.exists():
+                parent_dir = canonical.resolve()
+                for _ in Path(entry.skill_path).parts if entry.skill_path != '.' else ():
+                    parent_dir = parent_dir.parent
             if not skill_git.is_git_repo(parent_dir):
                 # Parent clone missing — user `rm -rf`'d it, or
                 # materialised: copy with no parent available.
@@ -257,11 +286,33 @@ def build_skill_rows(
                 "dirty" if wt == skill_git.GitWorkingTreeStatus.DIRTY
                 else "clean"
             )
+        payload = membership[slug][1].path if slug in membership and membership[slug][0].backing is not None else canonical
+        missing_payload = payload.exists() and not (payload / "SKILL.md").is_file()
+        if missing_payload:
+            state = "missing"
         cells: dict[tuple[str, str], SkillCell] = {}
         for agent in harnesses:
             cells[(agent, scope)] = _cell_for(
                 slug, agent, scope=scope, home=home, project=project,
             )
+        if slug in membership:
+            group, child = membership[slug]
+            for agent in harnesses:
+                cell = cells[(agent, scope)]
+                if cell.available and not cell.drift and not cell.stray and exposed(
+                    child, group, agent, scope=scope, home=home, project=project,
+                ):
+                    cells[(agent, scope)] = replace(cell, linked=True)
+                elif cell.available and not cell.linked and child.entry.skill_path != ".":
+                    for root_child in group.children.values():
+                        if root_child.entry.skill_path == "." and exposed(
+                            root_child, group, agent, scope=scope, home=home, project=project,
+                        ):
+                            cells[(agent, scope)] = replace(cell, exposure_reason="Root projection is active; independent nested isolation is unproven for this target. Apply refuses root-on/nested-off before writes.")
+        if missing_payload:
+            cells = {k: replace(c, linked=False, payload_missing=True) for k, c in cells.items()}
+        if slug in membership and membership[slug][0].error:
+            cells = {k: replace(c, linked=False, available=False, unavailable_reason=membership[slug][0].error) for k, c in cells.items()}
         # In project scope, also probe global so the SkillGrid can render
         # the globally-installed indicator (#188). Skipped when home is
         # None (callers that don't care about the indicator).
@@ -270,7 +321,12 @@ def build_skill_rows(
                 cells[(agent, "global")] = _cell_for(
                     slug, agent, scope="global", home=home, project=None,
                 )
-        description = _read_skill_description(canonical)
+        if scope == "project" and home is not None:
+            global_payload = library_skill_path(slug, home=home)
+            if global_payload.exists() and not (global_payload / "SKILL.md").is_file():
+                for agent in harnesses:
+                    cells[(agent, "global")] = replace(cells[(agent, "global")], linked=False, payload_missing=True)
+        description = _read_skill_description(membership[slug][1].path if slug in membership else canonical)
         if not description and scope == "project":
             # Project canonical may be absent (state == "library") or missing
             # SKILL.md; fall back to the library copy, which is the source of
@@ -280,6 +336,11 @@ def build_skill_rows(
             slug=slug, source=entry.source, ref=entry.ref or "(default)",
             state=state, cells=cells,
             description=description,
+            collection_error=membership[slug][0].error if slug in membership else "",
+            skill_path=entry.skill_path or "",
+            collection_key=membership[slug][0].key if slug in membership else None,
+            collection_label=membership[slug][0].label if slug in membership else '',
+            display_name=(Path(entry.skill_path).name if entry.skill_path != '.' else '(root)') if slug in membership else slug,
         ))
 
     # Bounded filesystem discovery of unmanaged skills/bundles
@@ -290,7 +351,7 @@ def build_skill_rows(
     )
     if scan_root is not None:
         for disc_slug, disc_path in _discover_unmanaged_skills(scan_root):
-            if disc_slug in universe:
+            if disc_slug in universe or disc_path.resolve() in managed_paths:
                 continue
             cells = {}
             for agent in harnesses:

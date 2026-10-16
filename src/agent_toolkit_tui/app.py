@@ -668,6 +668,7 @@ class TUIApp(App):
             return
         scope, home, _ = self._scope_to_roots()
         project = None if scope == "global" else self._skill_project_root()
+        saved = grid.pending_entries()
         grid.set_harness_selection(self._tui_settings.harnesses)
         grid.set_scope(scope)
         grid.set_rows(
@@ -678,6 +679,7 @@ class TUIApp(App):
                 selection=self._tui_settings.harnesses,
             )
         )
+        grid.restore_pending(saved)
 
     # ----- command-view -----------------------------------------------------
 
@@ -1043,6 +1045,8 @@ class TUIApp(App):
 
         self._tui_settings = updated
         self._set_grid_harness_selection(harnesses)
+        for grid in self._all_grids():
+            grid.clear_pending()
         # set_rows clears pending queues by the existing grid contract. This is
         # intentionally disclosed in the PR rather than hidden behind new v1
         # persistence semantics (#480 plan Task 3 Step 5).
@@ -1053,6 +1057,9 @@ class TUIApp(App):
         return True
 
     def action_refresh(self) -> None:
+        grid = self._active_grid()
+        if grid is not None:
+            grid.clear_pending()
         self._refresh_active_view()
         self._refresh_proj_path()
         self._refresh_pending_label()
@@ -1337,15 +1344,60 @@ class TUIApp(App):
         if not pending:
             return None
         tag = _scope_tag(pending)
+        from agent_toolkit_cli.skill_collections import catalog, exposed
+        from agent_toolkit_cli.skill_install import apply_collection_selection as apply_selection
+        handled: set[tuple[str, str, str]] = set()
+        failed_keys: set[tuple[str, str, str]] = set()
+        ok = failed = 0
+        errors: list[str] = []
+        failed_groups: set[tuple[str, str]] = set()
+        for scope in {k[0] for k in pending}:
+            home = Path.home()
+            project = None if scope == "global" else self._skill_project_root()
+            try:
+                groups = catalog(scope=scope, home=home, project=project)
+            except (InstallError, OSError) as exc:
+                keys = {k for k in pending if k[0] == scope}
+                handled.update(keys)
+                failed_keys.update(keys)
+                failed += len(keys)
+                errors.append(str(exc))
+                continue
+            from agent_toolkit_cli.skill_lock import read_lock
+            from agent_toolkit_cli.skill_paths import lock_file_path
+            records = {**read_lock(library_lock_path()).skills,
+                       **read_lock(lock_file_path(scope=scope, home=home, project=project)).skills}
+            owners = {n: (e.source, e.ref) for n, e in records.items()}
+            for group in groups:
+                for name in group.children:
+                    owners.setdefault(name, group.key)
+            for group in groups:
+                agents = {k[1] for k in pending if k[0] == scope and k[2] in group.children and owners.get(k[2]) == group.key}
+                for agent in agents:
+                    keys = {k for k in pending if k[0] == scope and k[1] == agent and k[2] in group.children and owners.get(k[2]) == group.key}
+                    handled.update(keys)
+                    selected = {n for n, c in group.children.items() if exposed(
+                        c, group, agent, scope=scope, home=home, project=project)}
+                    for key in keys:
+                        if pending[key] == "link":
+                            selected.add(key[2])
+                        else:
+                            selected.discard(key[2])
+                    try:
+                        apply_selection(group, {agent: selected}, scope=scope, home=home, project=project)
+                        ok += len(keys)
+                    except (InstallError, OSError) as exc:
+                        failed_keys.update(keys)
+                        failed += len(keys)
+                        errors.append(f"{group.label}/{agent}: {exc}")
         by_slug: dict[tuple[str, str], tuple[set[str], set[str]]] = defaultdict(
             lambda: (set(), set())
         )
         for (scope, agent, slug), op in pending.items():
+            if (scope, agent, slug) in handled:
+                continue
             adds, removes = by_slug[(scope, slug)]
             (adds if op == "link" else removes).add(agent)
-        ok = failed = 0
-        errors: list[str] = []
-        failed_groups: set[tuple[str, str]] = set()
         for (scope, slug), (adds, removes) in by_slug.items():
             n_writes = len(adds) + len(removes)
             home = Path.home() if scope == "global" else None
@@ -1401,13 +1453,12 @@ class TUIApp(App):
             {
                 k: v
                 for k, v in grid.pending_entries().items()
-                if (k[0], k[2]) in failed_groups
+                if k in failed_keys or (k[0], k[2]) in failed_groups
             }
             if failed
             else {}
         )
-        if failed == 0:
-            grid.clear_pending()
+        grid.clear_pending()
         self._refresh_skill_view()
         if saved:
             grid.restore_pending(saved)
@@ -1814,7 +1865,11 @@ class TUIApp(App):
                 n = 0
         elif self._active_asset_type == "skill":
             try:
-                n = self.query_one("#skill-grid", SkillGrid).row_count
+                skills = self.query_one("#skill-grid", SkillGrid)
+                n = skills.row_count
+                if skills.collection_count:
+                    count = skills.collection_count
+                    return f"  [b]{label}[/]   [dim]·[/]   {n} skills in {count} collection{'s' if count != 1 else ''}"
             except (NoMatches, Exception):
                 n = 0
         elif self._active_asset_type == "command":
@@ -1872,7 +1927,10 @@ class TUIApp(App):
 
     def _refresh_pending_label(self) -> None:
         try:
-            self.query_one("#footer-pending", Static).update("")
+            footer = self.query_one("#footer-pending", Static)
+            if "apply failed" in str(footer.render()):
+                return
+            footer.update("")
         except Exception:
             pass
 

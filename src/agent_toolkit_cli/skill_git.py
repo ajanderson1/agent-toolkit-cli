@@ -277,7 +277,7 @@ def is_git_repo(repo: Path) -> bool:
 
 
 def status(repo: Path, *, env: dict[str, str] | None) -> GitWorkingTreeStatus:
-    proc = _run(["git", "-C", str(repo), "status", "--porcelain"], env=env)
+    proc = _run(["git", "--no-optional-locks", "-C", str(repo), "status", "--porcelain"], env=env)
     return (
         GitWorkingTreeStatus.CLEAN if not proc.stdout.strip()
         else GitWorkingTreeStatus.DIRTY
@@ -422,7 +422,9 @@ def _checked_out_at_ref(bare: Path, ref: str, env: dict[str, str] | None) -> boo
       branch (not detached), so the SHA arm fails and we fall through to an exact
       branch-name comparison. The SHA-shaped ref therefore matches on EITHER the
       commit prefix OR an exact branch name (#422 fix 1).
-    - Branch ref (non-hex): require the checked-out branch to equal `ref`.
+    - Branch ref: require the checked-out branch to equal `ref`.
+    - Tag ref: only a detached HEAD may match the tag's peeled commit. Another
+      checked-out branch is not adopted just because it shares that commit.
 
     Accepted residuals (both astronomically unlikely — require a user-authored
     7-40 char hex collision):
@@ -441,9 +443,16 @@ def _checked_out_at_ref(bare: Path, ref: str, env: dict[str, str] | None) -> boo
         if looks_like_sha(ref):
             if head_sha(bare, env=env).startswith(ref):
                 return True
-            # hex-NAMED branch: clone is on a branch, not detached at a commit.
-            return current_branch(bare, env=env) == ref
-        return current_branch(bare, env=env) == ref
+        branch = current_branch(bare, env=env)
+        if branch == ref:
+            return True
+        if branch != "HEAD":
+            return False
+        tag_commit = _run(
+            ["git", "-C", str(bare), "rev-parse", "--verify", f"refs/tags/{ref}^{{commit}}"],
+            env=env,
+        ).stdout.strip()
+        return head_sha(bare, env=env) == tag_commit
     except GitError:
         return False
 

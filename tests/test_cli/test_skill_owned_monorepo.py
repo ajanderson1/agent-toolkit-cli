@@ -64,13 +64,50 @@ def test_add_unowned_monorepo_keeps_readonly(tmp_path, monkeypatch):
 
 
 def test_owned_flag_on_single_skill_add_is_error(tmp_path, monkeypatch):
-    _setup_parent(tmp_path, monkeypatch)
-    # A single-skill add (no subpath/--skill) with --owned must fail loud.
-    r = CliRunner().invoke(
-        cli, ["skill", "add", "ajanderson1/journal-skill", "--owned"],
+    # Discovery must inspect a real root-only repo before deciding it is not a
+    # collection. Keep that acquisition credential-free and forbid remote Git
+    # transports even on an authenticated developer machine.
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / ".gitconfig").write_text(
+        '[protocol]\n\tallow = never\n'
+        '[protocol "file"]\n\tallow = always\n'
+        '[credential]\n\thelper =\n'
     )
-    assert r.exit_code != 0
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+    library = tmp_path / "library"
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(library / "skills"))
+    source = tmp_path / "standalone"
+    source.mkdir()
+    payload = source / "SKILL.md"
+    payload.write_text("---\nname: standalone\ndescription: Local fixture.\n---\nbody\n")
+    env = scrub_git_env()
+    for args in (
+        ["init", "-q", "-b", "main"],
+        ["add", "SKILL.md"],
+        ["-c", "user.email=test@example.invalid", "-c", "user.name=Test",
+         "commit", "-q", "-m", "standalone fixture"],
+    ):
+        subprocess.run(["git", *args], cwd=source, check=True, env=env)
+    before = (payload.read_bytes(), (source / ".git/index").read_bytes())
+    head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=source)
+    assert list(source.rglob("SKILL.md")) == [payload]
+
+    # No --skill or subpath: this must reach the standalone --owned guard, not
+    # pass merely because clone authentication or another unrelated step failed.
+    r = CliRunner().invoke(cli, ["skill", "add", source.as_uri(), "--owned"])
+    assert r.exit_code == 2, r.output
     assert "owned" in r.output.lower()
+    assert (
+        "Error: --owned only applies to a monorepo add (use --skill, a subpath, "
+        "or owner/repo/<path>); a single-skill repo is pushed via its own remote."
+    ) in " ".join(r.output.split())
+    assert not library.exists()
+    assert not library_lock_path().exists()
+    assert not (home / ".agent-toolkit").exists()
+    assert (payload.read_bytes(), (source / ".git/index").read_bytes()) == before
+    assert subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=source) == head
 
 
 def test_owned_push_direct_commits_subpath_only(tmp_path, monkeypatch):

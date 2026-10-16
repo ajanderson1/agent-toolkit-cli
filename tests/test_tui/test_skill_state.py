@@ -531,21 +531,20 @@ def test_build_rows_monorepo_clean_when_parent_has_only_committed_changes(
 def test_build_rows_monorepo_copy_when_parent_missing(
     tmp_path: Path, monkeypatch,
 ):
-    """User `rm -rf`'d _parents/ — state falls back to 'copy'."""
+    """A valid retained snapshot without its parent cache is a copy, not missing."""
     import shutil
 
     _install_monorepo_skill(tmp_path, monkeypatch)
     library_root = tmp_path / "library" / "skills"
+    canonical = library_root / "mkdocs"
+    payload = (canonical / "SKILL.md").read_bytes()
     parents_dir = library_root / "_parents"
     shutil.rmtree(parents_dir)
 
-    # Canonical (symlink target) is now dangling. Make canonical existent
-    # so we exercise the parent-missing branch (not the missing-canonical
-    # one).
-    canonical = library_root / "mkdocs"
     if canonical.is_symlink():
         canonical.unlink()
     canonical.mkdir(parents=True, exist_ok=True)
+    (canonical / "SKILL.md").write_bytes(payload)
 
     rows = build_skill_rows(scope="global", home=tmp_path, project=None)
     row = next(r for r in rows if r.slug == "mkdocs")
