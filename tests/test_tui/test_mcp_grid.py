@@ -177,12 +177,15 @@ async def test_mcp_tab_header_and_pending_label_parity():
         header = str(app.query_one("#content-header", Static).render())
         assert "MCP" in header
         assert "2 items" in header
-        # Pending label counts MCP pending entries.
+        # Status bar counts MCP pending entries; duplicate footer label is removed.
         grid.restore_pending({("project", "codex", "a"): "link"})
         app._refresh_pending_label()
+        app._refresh_status_bar()
         await pilot.pause()
+        bar = str(app.query_one("#status-bar", Static).render())
+        assert "1 pending" in bar
         footer = str(app.query_one("#footer-pending", Static).render())
-        assert "Pending: 1" in footer
+        assert "Pending:" not in footer
 
 @pytest.mark.asyncio
 async def test_mcp_i_opens_asset_info_from_harness_column():

@@ -1,6 +1,6 @@
 /* agent-toolkit-tui — gruvbox-friendly.
    Layout: Header → Vertical(content-header-row + SkillGrid)
-           → status-bar → footer-pending → Footer.
+           → proj-path → status-bar → footer-pending → Footer.
 */
 
 Screen {
@@ -145,13 +145,21 @@ DataTable > .datatable--cursor {
     color: $text;
 }
 
-/* Status bar — full-width row above the footer. */
-#status-bar {
+/* Project path (cwd) bar — full-width row above status bar. */
+#proj-path {
     height: 2;
     color: $text-muted;
     background: $panel;
     padding: 0 2;
     border-top: tall $primary-darken-2;
+}
+
+/* Status bar — full-width row above footer. */
+#status-bar {
+    height: 1;
+    color: $text-muted;
+    background: $panel;
+    padding: 0 2;
 }
 
 #footer-pending {
