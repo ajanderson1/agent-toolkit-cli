@@ -31,6 +31,7 @@ if str(_SCRIPTS_DIR) not in sys.path:
 
 from build_and_verify_release import (
     build_artifacts,
+    parse_sha256sums,
     compute_sha256,
     generate_receipt,
     get_versions,
@@ -162,6 +163,7 @@ def test_generate_receipt_creates_valid_json_and_sums(tmp_path):
         smoke_results=smoke_results,
         receipt_file=receipt_file,
         sums_file=sums_file,
+        expected_commit=generate_receipt.__globals__["get_git_commit"](_REPO_ROOT),
     )
 
     assert receipt["release"] == f"v{_CURRENT_REPO_VERSION}"
@@ -251,18 +253,71 @@ def test_verify_checksums_and_receipt_detects_tampering(tmp_path):
         version=_CURRENT_REPO_VERSION,
         wheel_path=wheel_path,
         sdist_path=sdist_path,
-        smoke_results={"all": "pass"},
+        smoke_results={
+            "cli_version": "pass", "cli_help": "pass", "cli_instructions_list": "pass",
+            "tui_version": "pass", "tui_headless_pilot": "pass",
+        },
         receipt_file=receipt_file,
         sums_file=sums_file,
+        expected_commit=generate_receipt.__globals__["get_git_commit"](_REPO_ROOT),
     )
 
     # Valid check passes
-    verify_checksums_and_receipt(wheel_path, sdist_path, receipt_file, sums_file)
+    commit = generate_receipt.__globals__["get_git_commit"](_REPO_ROOT)
+    verify_checksums_and_receipt(
+        wheel_path, sdist_path, receipt_file, sums_file,
+        expected_tag=f"v{_CURRENT_REPO_VERSION}",
+        expected_version=_CURRENT_REPO_VERSION,
+        expected_commit=commit,
+    )
 
     # Tamper with wheel
     wheel_path.write_text("tampered wheel contents")
     with pytest.raises(ValueError, match="Checksum mismatch for wheel"):
-        verify_checksums_and_receipt(wheel_path, sdist_path, receipt_file, sums_file)
+        verify_checksums_and_receipt(
+            wheel_path, sdist_path, receipt_file, sums_file,
+            expected_tag=f"v{_CURRENT_REPO_VERSION}",
+            expected_version=_CURRENT_REPO_VERSION,
+            expected_commit=commit,
+        )
+
+
+def test_verify_checksums_and_receipt_rejects_wrong_tag_and_commit(tmp_path):
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    wheel_path = dist_dir / f"agent_toolkit-{_CURRENT_REPO_VERSION}-py3-none-any.whl"
+    wheel_path.write_text("wheel")
+    sdist_path = dist_dir / f"agent_toolkit-{_CURRENT_REPO_VERSION}.tar.gz"
+    sdist_path.write_text("sdist")
+    receipt_file = dist_dir / "deployment-receipt.json"
+    sums_file = dist_dir / "SHA256SUMS"
+    receipt = generate_receipt(
+        repo_root=_REPO_ROOT,
+        tag=f"v{_CURRENT_REPO_VERSION}",
+        version=_CURRENT_REPO_VERSION,
+        wheel_path=wheel_path,
+        sdist_path=sdist_path,
+        smoke_results={"all": "pass"},
+        receipt_file=receipt_file,
+        sums_file=sums_file,
+        expected_commit=generate_receipt.__globals__["get_git_commit"](_REPO_ROOT),
+    )
+    receipt["release"] = "v0.0.0"
+    receipt["commit"] = "0" * 40
+    receipt_file.write_text(json.dumps(receipt))
+
+    with pytest.raises(ValueError, match="Receipt release does not match expected tag"):
+        verify_checksums_and_receipt(
+            wheel_path, sdist_path, receipt_file, sums_file,
+            expected_tag=f"v{_CURRENT_REPO_VERSION}",
+            expected_version=_CURRENT_REPO_VERSION,
+            expected_commit=receipt["commit"],
+        )
+
+
+def test_parse_sha256sums_rejects_extra_entries():
+    with pytest.raises(ValueError, match="SHA256SUMS must contain exactly"):
+        parse_sha256sums("a" * 64 + "  wheel.whl\n" + "b" * 64 + "  sdist.tar.gz\n" + "c" * 64 + "  extra.whl\n")
 
 
 def test_main_rejects_pre_existing_stale_artifacts(tmp_path):
@@ -314,12 +369,35 @@ def test_main_skip_build_writes_exact_allowlist_and_github_output(tmp_path, monk
 
 
 def test_release_workflow_uses_exact_artifact_outputs_no_wildcards():
+
     """Verify .github/workflows/release.yml avoids wildcards and sets fail_on_unmatched_files."""
     workflow_path = _REPO_ROOT / ".github" / "workflows" / "release.yml"
     assert workflow_path.exists()
     content = workflow_path.read_text(encoding="utf-8")
 
     assert "fail_on_unmatched_files: true" in content
+    assert "workflow_dispatch:" in content
+    assert "required: true" in content
+    assert "actions: read" in content
+    assert "--expected-sha" in content
+    assert "github.ref_name" in content
+    assert "gh run list --workflow" in content
+    assert "status == \"completed\" and .conclusion == \"success\"" in content
+    assert "tag_name: ${{ steps.target.outputs.tag }}" in content
+    assert "sort_by(.createdAt) | last" in content
+    assert '.headBranch == "main"' in content
+    assert '.event == "push"' in content
+    runs = [
+        {"headSha": "a" * 40, "headBranch": "main", "event": "push", "status": "completed", "conclusion": "success", "createdAt": "2026-01-01T00:00:00Z"},
+        {"headSha": "a" * 40, "headBranch": "main", "event": "push", "status": "completed", "conclusion": "failure", "createdAt": "2026-01-02T00:00:00Z"},
+    ]
+    selected = subprocess.run(
+        ["jq", "-c", "--arg", "sha", "a" * 40,
+         '[.[] | select(.headSha == $sha and .headBranch == "main" and .event == "push")] | sort_by(.createdAt) | last // empty'],
+        input=json.dumps(runs), capture_output=True, text=True, check=True,
+    )
+    assert json.loads(selected.stdout)["conclusion"] == "failure"
+    assert "tag_name: ${{ steps.target.outputs.tag }}" in content
     assert "*.whl" not in content, "Wildcard *.whl found in release.yml"
     assert "*.tar.gz" not in content, "Wildcard *.tar.gz found in release.yml"
     assert "${{ steps.build.outputs.wheel }}" in content

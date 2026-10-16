@@ -59,7 +59,20 @@ def get_versions(repo_root: Path) -> tuple[str, str]:
     return pyproject_version, manifest_version
 
 
-def verify_tag_and_manifest(repo_root: Path, tag: str | None) -> str:
+def get_git_commit(repo_root: Path) -> str:
+    """Return the checked-out commit, never the workflow-triggering commit implicitly."""
+    proc = subprocess.run(
+        ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return proc.stdout.strip()
+
+
+def verify_tag_and_manifest(
+    repo_root: Path, tag: str | None, expected_sha: str | None = None
+) -> str:
     """Verify version alignment across pyproject.toml, manifest, and optional git tag.
 
     Returns the verified version string.
@@ -78,6 +91,21 @@ def verify_tag_and_manifest(repo_root: Path, tag: str | None) -> str:
             raise ValueError(
                 f"Tag '{tag}' does not match pyproject.toml version '{pyproject_ver}' (expected '{expected_tag}')"
             )
+
+    if expected_sha is not None:
+        actual_sha = get_git_commit(repo_root)
+        if actual_sha != expected_sha:
+            raise ValueError(
+                f"Checked-out commit '{actual_sha}' does not match expected SHA '{expected_sha}'"
+            )
+        tag_proc = subprocess.run(
+            ["git", "-C", str(repo_root), "rev-parse", f"refs/tags/{tag}^{{commit}}"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        if tag_proc.stdout.strip() != expected_sha:
+            raise ValueError(f"Tag '{tag}' does not resolve to expected SHA '{expected_sha}'")
 
     return pyproject_ver
 
@@ -363,21 +391,15 @@ def compute_sha256(path: Path) -> str:
     return h.hexdigest()
 
 
-def get_git_commit(repo_root: Path) -> str:
-    """Retrieve git HEAD commit SHA, or fallback to environment."""
-    commit = os.environ.get("GITHUB_SHA")
-    if commit:
-        return commit
-    try:
-        proc = subprocess.run(
-            ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        return proc.stdout.strip()
-    except Exception:
-        return "unknown"
+def _get_git_commit_for_receipt(repo_root: Path) -> str:
+    """Return checked-out HEAD; workflow-trigger SHA is not artifact provenance."""
+    proc = subprocess.run(
+        ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return proc.stdout.strip()
 
 
 def generate_receipt(
@@ -389,11 +411,14 @@ def generate_receipt(
     smoke_results: dict[str, str],
     receipt_file: Path,
     sums_file: Path,
+    expected_commit: str,
 ) -> dict:
-    """Generate deployment-receipt.json and SHA256SUMS."""
+    """Generate receipt and checksums bound to the checked-out release commit."""
     wheel_sha = compute_sha256(wheel_path)
     sdist_sha = compute_sha256(sdist_path)
     commit = get_git_commit(repo_root)
+    if commit != expected_commit:
+        raise ValueError(f"Checked-out commit '{commit}' does not match expected SHA '{expected_commit}'")
     now_iso = datetime.now(timezone.utc).isoformat()
 
     receipt = {
@@ -428,13 +453,32 @@ def generate_receipt(
     return receipt
 
 
+def parse_sha256sums(content: str) -> dict[str, str]:
+    """Parse a strict two-entry SHA256SUMS file."""
+    entries: dict[str, str] = {}
+    for line in content.splitlines():
+        parts = line.split("  ")
+        if len(parts) != 2 or len(parts[0]) != 64 or any(c not in "0123456789abcdef" for c in parts[0]):
+            raise ValueError(f"Malformed SHA256SUMS line: {line!r}")
+        if not parts[1] or parts[1] in entries:
+            raise ValueError(f"Duplicate or empty SHA256SUMS filename: {parts[1]!r}")
+        entries[parts[1]] = parts[0]
+    if len(entries) != 2:
+        raise ValueError(f"SHA256SUMS must contain exactly two entries, found {len(entries)}")
+    return entries
+
+
 def verify_checksums_and_receipt(
     wheel_path: Path,
     sdist_path: Path,
     receipt_file: Path,
     sums_file: Path,
+    *,
+    expected_tag: str,
+    expected_version: str,
+    expected_commit: str,
 ) -> None:
-    """Verify that deployment-receipt.json and SHA256SUMS exactly match the artifacts on disk."""
+    """Verify candidate identity, successful smoke tests, and exact artifact hashes."""
     if not receipt_file.exists():
         raise FileNotFoundError(f"Receipt file missing: {receipt_file}")
     if not sums_file.exists():
@@ -442,6 +486,19 @@ def verify_checksums_and_receipt(
 
     with receipt_file.open("r", encoding="utf-8") as f:
         receipt = json.load(f)
+
+    if receipt.get("release") != expected_tag:
+        raise ValueError(f"Receipt release does not match expected tag '{expected_tag}'")
+    if receipt.get("version") != expected_version:
+        raise ValueError(f"Receipt version does not match expected version '{expected_version}'")
+    if receipt.get("commit") != expected_commit:
+        raise ValueError(f"Receipt commit does not match expected SHA '{expected_commit}'")
+    smoke_tests = receipt.get("smoke_tests")
+    required_smoke = {"cli_version", "cli_help", "cli_instructions_list", "tui_version", "tui_headless_pilot"}
+    if not isinstance(smoke_tests, dict) or set(smoke_tests) != required_smoke or any(
+        result != "pass" for result in smoke_tests.values()
+    ):
+        raise ValueError("Receipt smoke tests are missing or not all passing")
 
     actual_wheel_sha = compute_sha256(wheel_path)
     actual_sdist_sha = compute_sha256(sdist_path)
@@ -456,6 +513,9 @@ def verify_checksums_and_receipt(
             f"Size mismatch for wheel in receipt: expected {receipt_wheel['bytes']}, got {wheel_path.stat().st_size}"
         )
 
+    if receipt_wheel.get("name") != wheel_path.name:
+        raise ValueError(f"Receipt wheel name does not match expected '{wheel_path.name}'")
+
     receipt_sdist = receipt["artifacts"]["sdist"]
     if receipt_sdist["sha256"] != actual_sdist_sha:
         raise ValueError(
@@ -466,19 +526,19 @@ def verify_checksums_and_receipt(
             f"Size mismatch for sdist in receipt: expected {receipt_sdist['bytes']}, got {sdist_path.stat().st_size}"
         )
 
-    sums_text = sums_file.read_text(encoding="utf-8")
-    expected_wheel_line = f"{actual_wheel_sha}  {wheel_path.name}"
-    expected_sdist_line = f"{actual_sdist_sha}  {sdist_path.name}"
+    if receipt_sdist.get("name") != sdist_path.name:
+        raise ValueError(f"Receipt sdist name does not match expected '{sdist_path.name}'")
 
-    if expected_wheel_line not in sums_text:
-        raise ValueError(f"SHA256SUMS missing expected line for wheel: {expected_wheel_line}")
-    if expected_sdist_line not in sums_text:
-        raise ValueError(f"SHA256SUMS missing expected line for sdist: {expected_sdist_line}")
+    sums = parse_sha256sums(sums_file.read_text(encoding="utf-8"))
+    expected_sums = {wheel_path.name: actual_wheel_sha, sdist_path.name: actual_sdist_sha}
+    if sums != expected_sums:
+        raise ValueError(f"SHA256SUMS entries do not exactly match expected artifacts: {expected_sums}")
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Build and verify release artifacts.")
     parser.add_argument("--tag", help="Git release tag (e.g. v5.9.1)")
+    parser.add_argument("--expected-sha", help="Expected immutable release commit SHA")
     parser.add_argument("--dist-dir", default="dist", help="Directory for distribution artifacts (default: dist)")
     parser.add_argument("--repo-root", default=".", help="Root of repository (default: .)")
     parser.add_argument("--skip-build", action="store_true", help="Skip build and verify existing artifacts in dist-dir")
@@ -488,7 +548,8 @@ def main(argv: list[str] | None = None) -> int:
     dist_dir = (repo_root / args.dist_dir).resolve() if not Path(args.dist_dir).is_absolute() else Path(args.dist_dir)
 
     print(f"==> Verifying release candidate at {repo_root}")
-    version = verify_tag_and_manifest(repo_root, args.tag)
+    version = verify_tag_and_manifest(repo_root, args.tag, expected_sha=args.expected_sha)
+    expected_sha = args.expected_sha or get_git_commit(repo_root)
     tag = args.tag or f"v{version}"
     print(f"✓ Version verified: {version} (tag: {tag})")
 
@@ -516,7 +577,7 @@ def main(argv: list[str] | None = None) -> int:
     receipt_file = dist_dir / "deployment-receipt.json"
     sums_file = dist_dir / "SHA256SUMS"
     print("==> Generating receipt and SHA256 checksums")
-    receipt = generate_receipt(
+    generate_receipt(
         repo_root=repo_root,
         tag=tag,
         version=version,
@@ -525,12 +586,16 @@ def main(argv: list[str] | None = None) -> int:
         smoke_results=smoke_results,
         receipt_file=receipt_file,
         sums_file=sums_file,
+        expected_commit=expected_sha,
     )
     print(f"✓ Receipt written: {receipt_file}")
     print(f"✓ Checksums written: {sums_file}")
 
     print("==> Validating generated receipt and checksums against artifacts on disk")
-    verify_checksums_and_receipt(wheel_path, sdist_path, receipt_file, sums_file)
+    verify_checksums_and_receipt(
+        wheel_path, sdist_path, receipt_file, sums_file,
+        expected_tag=tag, expected_version=version, expected_commit=expected_sha,
+    )
     print("✓ Checksums and receipt verified against disk artifacts")
 
     # Write exact release artifacts allowlist
