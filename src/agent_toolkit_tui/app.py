@@ -10,7 +10,7 @@ Layout (matches existing CSS scaffold in css/app.tcss):
   Horizontal#main
     Vertical#asset-types-sidebar
       Static.rail-header
-      OptionList#asset-types-list  ("instruction" / separator / "skill" / "pi-extension" / "agent")
+      OptionList#asset-types-list  ("Instructions" / "Commands" / "Skills" / "Agents" / "MCPs" / "Pi Extensions")
     Vertical#content
       Horizontal#content-header-row
         Static#content-header
@@ -411,44 +411,12 @@ class TUIApp(App):
             with Vertical(id="asset-types-sidebar"):
                 yield Static("Asset Types", classes="rail-header")
                 yield SidebarOptionList(
-                    Option(
-                        Text.from_markup(
-                            f"[dim]1 -[/dim] {_asset_type_label('instruction', plural=True)}"
-                        ),
-                        id="asset-type-instruction",
-                    ),
-                    Option("─────────────", id="asset-type-separator-1", disabled=True),
-                    Option(
-                        Text.from_markup(
-                            f"[dim]2 -[/dim] {_asset_type_label('command', plural=True)}"
-                        ),
-                        id="asset-type-command",
-                    ),
-                    Option(
-                        Text.from_markup(
-                            f"[dim]3 -[/dim] {_asset_type_label('skill', plural=True)}"
-                        ),
-                        id="asset-type-skill",
-                    ),
-                    Option(
-                        Text.from_markup(
-                            f"[dim]4 -[/dim] {_asset_type_label('agent', plural=True)}"
-                        ),
-                        id="asset-type-agent",
-                    ),
-                    Option(
-                        Text.from_markup(
-                            f"[dim]5 -[/dim] {_asset_type_label('mcp', plural=True)}"
-                        ),
-                        id="asset-type-mcp",
-                    ),
-                    Option("─────────────", id="asset-type-separator-2", disabled=True),
-                    Option(
-                        Text.from_markup(
-                            f"[dim]6 -[/dim] {_asset_type_label('pi-extension', plural=True)}"
-                        ),
-                        id="asset-type-pi-extension",
-                    ),
+                    Option(_asset_type_label("instruction", plural=True), id="asset-type-instruction"),
+                    Option(_asset_type_label("command", plural=True), id="asset-type-command"),
+                    Option(_asset_type_label("skill", plural=True), id="asset-type-skill"),
+                    Option(_asset_type_label("agent", plural=True), id="asset-type-agent"),
+                    Option(_asset_type_label("mcp", plural=True), id="asset-type-mcp"),
+                    Option(_asset_type_label("pi-extension", plural=True), id="asset-type-pi-extension"),
                     id="asset-types-list",
                 )
             with Vertical(id="content"):
@@ -1886,10 +1854,13 @@ class TUIApp(App):
             cwd = Path(cwd)
         from agent_toolkit_cli.skill_git import is_git_repo
 
-        escaped = escape(str(cwd))
+        path = str(cwd)
+        final = Path(cwd).name or path
+        parent = path[:-len(final)]
+        formatted = f"[bold]REPO:[/bold]{escape(parent)}[bold]{escape(final)}[/bold]"
         if not is_git_repo(cwd):
-            return f"[red]⚠️  {escaped}[/]"
-        return escaped
+            return f"[red]⚠️  {formatted}[/]"
+        return formatted
 
     def _refresh_proj_path(self, cwd: Path | str | None = None) -> None:
         try:
