@@ -65,13 +65,20 @@ jobs:
         run: |
           set -euo pipefail
           for workflow in test.yml docs.yml; do
-            runs="$(gh run list --workflow "$workflow" --commit "$EXPECTED_SHA" --json headSha,status,conclusion --limit 100)"
-            jq -e --arg sha "$EXPECTED_SHA" '
-              any(.[]; .headSha == $sha and .status == "completed" and .conclusion == "success")
-            ' <<< "$runs" >/dev/null || {
-              echo "No successful completed $workflow run found for $EXPECTED_SHA" >&2
+            runs="$(gh run list --workflow "$workflow" --commit "$EXPECTED_SHA" --json databaseId,headSha,headBranch,event,status,conclusion,createdAt --limit 100)"
+            latest="$(jq -c --arg sha "$EXPECTED_SHA" '
+              [.[] | select(
+                .headSha == $sha and
+                .headBranch == "main" and
+                .event == "push"
+              )] | sort_by(.createdAt) | last // empty
+            ' <<< "$runs")"
+            if [[ -z "$latest" ]] || ! jq -e '
+              .status == "completed" and .conclusion == "success"
+            ' <<< "$latest" >/dev/null; then
+              echo "Latest qualifying $workflow run for $EXPECTED_SHA is missing, running, or unsuccessful" >&2
               exit 1
-            }
+            fi
           done
 
       - name: Pre-release verification gate
@@ -88,6 +95,7 @@ jobs:
         uses: softprops/action-gh-release@c062e08bd532815e2082a85e87e3ef29c3e6d191 # v2.0.8
         with:
           generate_release_notes: true
+          tag_name: ${{ steps.target.outputs.tag }}
           files: |
             ${{ steps.build.outputs.wheel }}
             ${{ steps.build.outputs.sdist }}

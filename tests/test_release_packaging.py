@@ -369,6 +369,7 @@ def test_main_skip_build_writes_exact_allowlist_and_github_output(tmp_path, monk
 
 
 def test_release_workflow_uses_exact_artifact_outputs_no_wildcards():
+
     """Verify .github/workflows/release.yml avoids wildcards and sets fail_on_unmatched_files."""
     workflow_path = _REPO_ROOT / ".github" / "workflows" / "release.yml"
     assert workflow_path.exists()
@@ -382,6 +383,21 @@ def test_release_workflow_uses_exact_artifact_outputs_no_wildcards():
     assert "github.ref_name" in content
     assert "gh run list --workflow" in content
     assert "status == \"completed\" and .conclusion == \"success\"" in content
+    assert "tag_name: ${{ steps.target.outputs.tag }}" in content
+    assert "sort_by(.createdAt) | last" in content
+    assert '.headBranch == "main"' in content
+    assert '.event == "push"' in content
+    runs = [
+        {"headSha": "a" * 40, "headBranch": "main", "event": "push", "status": "completed", "conclusion": "success", "createdAt": "2026-01-01T00:00:00Z"},
+        {"headSha": "a" * 40, "headBranch": "main", "event": "push", "status": "completed", "conclusion": "failure", "createdAt": "2026-01-02T00:00:00Z"},
+    ]
+    selected = subprocess.run(
+        ["jq", "-c", "--arg", "sha", "a" * 40,
+         '[.[] | select(.headSha == $sha and .headBranch == "main" and .event == "push")] | sort_by(.createdAt) | last // empty'],
+        input=json.dumps(runs), capture_output=True, text=True, check=True,
+    )
+    assert json.loads(selected.stdout)["conclusion"] == "failure"
+    assert "tag_name: ${{ steps.target.outputs.tag }}" in content
     assert "*.whl" not in content, "Wildcard *.whl found in release.yml"
     assert "*.tar.gz" not in content, "Wildcard *.tar.gz found in release.yml"
     assert "${{ steps.build.outputs.wheel }}" in content
