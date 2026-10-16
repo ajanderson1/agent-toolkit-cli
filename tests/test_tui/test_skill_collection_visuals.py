@@ -2,6 +2,7 @@
 
 import os
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 import pytest
 from textual.coordinate import Coordinate
@@ -27,9 +28,24 @@ NAMES = [
 ]
 
 
+@pytest.fixture(name="tmp_path")
+def public_visual_fixture_root():
+    with TemporaryDirectory(
+        prefix="atk-529-visual-", dir="/tmp" if Path("/tmp").is_dir() else None
+    ) as directory:
+        yield Path(directory).resolve()
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("size", [(120, 40), (180, 50)])
-async def test_visual_matrix(legacy, size):
+async def test_visual_matrix(legacy, size, tmp_path, monkeypatch):
+    directory = os.environ.get("ATK_529_VISUAL_DIR")
+    output = Path(directory).resolve() if directory else None
+    if output:
+        output.mkdir(parents=True, exist_ok=True)
+    workspace = tmp_path / "collection-demo"
+    workspace.mkdir()
+    monkeypatch.chdir(workspace)
     for old, name in zip(sorted(legacy.glob("workflow-*")), NAMES):
         old.rename(legacy / name)
         (legacy / name / "SKILL.md").write_text(
@@ -39,10 +55,6 @@ async def test_visual_matrix(legacy, size):
     git(legacy, "commit", "-qm", "realistic fixture names")
     app = TUIApp()
     app._scope = "global"
-    directory = os.environ.get("ATK_529_VISUAL_DIR")
-    output = Path(directory).resolve() if directory else None
-    if output:
-        output.mkdir(parents=True, exist_ok=True)
     async with app.run_test(size=size) as pilot:
         app.action_asset_type("skill")
         await pilot.pause()
