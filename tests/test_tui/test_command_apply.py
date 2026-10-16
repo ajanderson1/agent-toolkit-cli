@@ -38,7 +38,7 @@ async def test_apply_standard_link_and_unlink(tmp_path, monkeypatch):
     monkeypatch.setattr(
         TUIApp,
         "_scope_to_roots",
-        lambda self: ("global", home, None),
+        lambda self, scope=None: (scope or "global", home, None),
     )
     app = TUIApp()
     async with app.run_test() as pilot:
