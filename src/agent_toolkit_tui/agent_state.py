@@ -97,7 +97,7 @@ def build_agent_rows(
 
     See the module docstring for the row-universe contract (#360).
     """
-    from agent_toolkit_cli.agent_paths import library_lock_path
+    from agent_toolkit_cli.agent_paths import library_lock_path, library_root, project_store_root
 
     def _read(path: Path) -> dict:
         # read_lock returns an empty LockFile on FileNotFoundError — no try/except needed.
@@ -143,4 +143,49 @@ def build_agent_rows(
             state=state,
             cells=cells,
         ))
+
+    # Bounded filesystem discovery for unmanaged agents
+    discovered_slugs: set[str] = set()
+    scan_root = library_root() if scope == "global" else (project_store_root(project) if project is not None else None)
+    if scan_root is not None and scan_root.is_dir():
+        for child in sorted(scan_root.iterdir()):
+            if child.name.startswith(".") or child.name == "_parents" or ".bak-" in child.name:
+                continue
+            if child.is_dir():
+                discovered_slugs.add(child.name)
+            elif child.is_file() and child.suffix == ".md":
+                discovered_slugs.add(child.stem)
+
+    try:
+        standard_adapter = get_adapter("standard")
+        standard_dir = standard_adapter.destination("__probe__", scope=scope, home=home, project=project).parent
+        if standard_dir.is_dir():
+            for f in sorted(standard_dir.glob("*.md")):
+                if f.name.startswith(".") or ".bak-" in f.name:
+                    continue
+                discovered_slugs.add(f.stem)
+    except Exception:
+        pass
+
+    for disc_slug in sorted(discovered_slugs):
+        if disc_slug in universe:
+            continue
+        cells = {}
+        for harness in harnesses:
+            cell = _cell_for(disc_slug, harness, scope=scope, home=home, project=project)
+            if cell is not None:
+                cells[(harness, scope)] = cell
+        if scope == "project" and home is not None:
+            for harness in harnesses:
+                cell = _cell_for(disc_slug, harness, scope="global", home=home, project=None)
+                if cell is not None:
+                    cells[(harness, "global")] = cell
+        rows.append(AgentRow(
+            slug=disc_slug,
+            source="untracked",
+            ref="(untracked)",
+            state="unlisted",
+            cells=cells,
+        ))
+
     return rows

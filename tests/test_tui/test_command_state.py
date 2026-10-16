@@ -40,3 +40,20 @@ def test_command_rows_include_library_lock(tmp_path, monkeypatch):
     assert rows[0].state == "library"
     assert rows[0].cells[("standard", "global")].linked is False
     assert ("claude-code", "global") not in rows[0].cells
+
+
+def test_build_command_rows_discovers_unmanaged_filesystem_commands(tmp_path, monkeypatch):
+    """#515: Unmanaged on-disk command directories surface as unlisted rows."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    lib = tmp_path / ".agent-toolkit" / "commands" / "custom-cmd"
+    lib.mkdir(parents=True)
+    (lib / "COMMAND.md").write_text("# custom command\n")
+
+    rows = build_command_rows(scope="global", home=tmp_path, project=None)
+    slugs = {r.slug for r in rows}
+    assert "custom-cmd" in slugs
+    row = next(r for r in rows if r.slug == "custom-cmd")
+    assert row.state == "unlisted"
+    assert row.source == "untracked"
+    assert row.ref == "(untracked)"
+
