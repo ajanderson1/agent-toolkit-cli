@@ -25,7 +25,12 @@ Every active asset found in supported configuration or on-disk inventory locatio
 
 ## Acceptance
 
-See issue #515 sections 2 and 7 for the acceptance criteria and verification commands. Special attention: multi-skill bundles, collision-free row identity, package origin precedence, lockfile repair rollback/error behavior, custom home path resolution, and no writes in report-only mode.
+1. Pi inventory represents local filesystem packages as visible, unmanaged local-package entries, retaining precedence against existing npm/store-owned entries.
+2. Skills, agents, and commands TUI rows union lock-backed and discoverable filesystem assets; unmanaged assets are visibly unlisted.
+3. Skill bundles show bundle and nested skills with stable, distinguishable identifiers.
+4. Skill and Pi-extension doctor audits identify unmanaged supported assets. Explicit confirmed repair imports locally without changing asset contents/config; `--no-fix` is read-only.
+5. Global skill lock path honors an explicit home while preserving default/environment behavior.
+6. Tests cover visibility, bundle IDs, package precedence, repair/decline/report-only, error safety, and sandboxed paths; full suite passes.
 
 ## Scope boundary
 
