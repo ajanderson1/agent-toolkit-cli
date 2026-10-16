@@ -45,6 +45,7 @@ async def test_visual_matrix(legacy, size, tmp_path, monkeypatch):
         output.mkdir(parents=True, exist_ok=True)
     workspace = tmp_path / "collection-demo"
     workspace.mkdir()
+    git(workspace, "init", "-q", "-b", "main")
     monkeypatch.chdir(workspace)
     for old, name in zip(sorted(legacy.glob("workflow-*")), NAMES):
         old.rename(legacy / name)
