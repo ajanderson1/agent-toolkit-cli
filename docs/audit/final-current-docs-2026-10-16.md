@@ -112,7 +112,7 @@ Capture/check tests/scripts only: source-asserted isolated fixture rendering, lo
 
 - PNG written at **2026-10-16T18:27:16.953385+00:00** (filesystem UTC timestamp, observed after capture).
 - `assets/agent-toolkit-cli-tui.png` SHA256: `0ff00c36da9b940710c66a8531a30bbf2778781645b328f59b2e3a61df63f71f`.
-- Source `assets/agent-toolkit-cli-tui.svg` SHA256: `2049da49d984417d942bb93b412f395a93d7bfde74e5852302e61cffafe61970`.
+- Normalized source `assets/agent-toolkit-cli-tui.svg` SHA256: `b7f4d7e41e19dd9aafa5a01e7c0581e1cc248bc2548afe8439f76476f3444a9a`. Original raw export SHA256 was `2049da49d984417d942bb93b412f395a93d7bfde74e5852302e61cffafe61970`; eight trailing whitespace bytes were removed after review (see below). PNG bytes/capture time are unchanged.
 - Identical site copy: `docs/assets/screenshots/tui-overview.png`; 1848×831 PNG from the real 150×32 Textual viewport.
 - `scripts/capture_docs_tui.py` asserts CLI/TUI imports from owned source after isolated HOME/config/library initialization; local Git only, actual source-batch install, seven real children, one collection, two queued-but-unwritten operations. No browser/live operator configuration.
 - **Visual PASS:** all six clean plural sidebar labels, real expanded collection/children, cyan mixed vs yellow pending removal, global scope/two pending edits, bold REPO/final demo-project component visible. Source cell clipping is actual behavior; full identity remains in Info.
@@ -136,5 +136,13 @@ The first candidate `338c6aaca8f57f08afffbbdef3b1553a8d5b541d` passed its normal
 The generator now derives **every harness's project/global pointer claims** from actual `instructions_install.pointer_slots` (7 project, 9 global slots), displays raw research classifications separately with an explicit caveat, and renders unavailable scopes without promising a pointer. No runtime behavior, raw SSOT verdict, help-only source delta or image bytes changed. Replit remains project-only in the enabled contract; global CLI install is refused without writes, while project install creates the actual pointer.
 
 New regression coverage checks both scopes across all 55 harnesses, plus real isolated Replit global refusal/project installation. All generated pages/nav are regenerated and byte-compared to generator output. Selected repair checks: **81 passed in 15.22s**, strict docs/link/anchor/image checks passed, all 75 help invocations passed, 57-output repeat generation was byte-identical. New-head full suite/hook/CI and fresh review are required separately.
+
+## Independent-review correction: authored-range whitespace gate
+
+Review/PM reproduced `git diff --check b7b5200..7e49ee2` failing on eight trailing spaces in the original Rich SVG export. A clean working-tree diff check had missed the committed-range defect. The new gate checks the **entire authored range**, not just unstaged changes.
+
+Preserved the original raw export locally; removed only those eight whitespace bytes, with no text/geometry/style changes. Fresh `rsvg-convert` output from the normalized SVG is **binary-identical to both committed PNG copies**. The capture script now strips trailing line whitespace before export; its regression test failed first, then passed. Selected actual capture/script, current links/anchors/media and all-harness generator checks: **14 passed**; strict docs and base-to-working-candidate range whitespace check passed. SVG checksum/provenance above binds the normalized source honestly; this is not a newly relabeled PNG capture.
+
+The intermediate `7e49ee2` author full suite passed **2645 tests, 10 skipped in 252.43s**, but is not credited as the final normalized candidate's full gate. Final exact-head full suite, mandatory normal hook, new remote CI and reviewer recheck are still required. Images and runtime source behavior remain unchanged.
 
 Normal mandatory pre-push full suite, remote push/PR, **fresh independent exact-head review and actual exact-head green CI remain separate delivery gates**; this author audit is not approval. PM owns merge/release.

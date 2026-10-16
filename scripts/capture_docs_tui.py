@@ -91,6 +91,7 @@ async def capture(output: Path) -> None:
         bar = str(app.query_one("#status-bar", Static).render())
         assert "7 linked" in bar and "2 pending" in bar, bar
         svg = app.export_screenshot(title="Agent Toolkit — disposable documentation fixture")
+        svg = "\n".join(line.rstrip() for line in svg.splitlines()) + "\n"
         # Rich embeds a per-run identifier; no host paths/configuration may ship.
         for private in (str(ROOT), str(home), "/Users/", "Bearer "):
             assert private not in svg, private

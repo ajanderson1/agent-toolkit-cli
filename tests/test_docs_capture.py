@@ -23,5 +23,6 @@ def test_documentation_capture_is_isolated_and_real(tmp_path):
     assert png.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
     svg = (tmp_path / "media/agent-toolkit-cli-tui.svg").read_text()
     assert "demo-project" in svg and "code-review" in svg
+    assert all(line == line.rstrip() for line in svg.splitlines()), "capture must not reintroduce authored-range whitespace errors"
     assert str(root) not in svg and "/Users/" not in svg
     assert not (tmp_path / "not-the-fixture-home").exists()
