@@ -131,6 +131,11 @@ def _register(
                 raise click.ClickException(
                     f"Ambiguous existing identities for {parsed.owner_repo}/{path}: {matching}"
                 )
+            if matching and slug is not None and slug != matching[0]:
+                raise click.ClickException(
+                    f"{slug}: source/ref/path already registered as {matching[0]}; "
+                    "refusing to substitute a different recorded slug"
+                )
             name = (
                 matching[0]
                 if matching

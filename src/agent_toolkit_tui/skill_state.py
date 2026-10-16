@@ -220,13 +220,17 @@ def build_skill_rows(
             if slug not in universe:
                 unlisted.add(slug)
             universe[slug] = proj_entry
-    from agent_toolkit_cli.skill_collections import catalog, exposed
+    from agent_toolkit_cli.skill_collections import catalog, derived_library_children, exposed
+    if scope == "project":
+        unlisted -= derived_library_children(
+            library=lib_lock, scoped=proj_lock, home=home, project=project,
+        )
     groups = catalog(scope=scope, home=home, project=project)
     membership = {}
     managed_paths = set()
     for group in groups:
-        if group.wrapper is not None:
-            universe.pop(group.wrapper, None)
+        for container in group.containers:
+            universe.pop(container, None)
         for name, child in group.children.items():
             if name in universe and (universe[name].source, universe[name].ref) != group.key:
                 group.error = f"Child slug {name} belongs to another source/ref. Collection selection is unavailable until the collision is resolved."

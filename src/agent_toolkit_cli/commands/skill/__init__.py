@@ -306,6 +306,8 @@ Examples:
 @click.option("--ref", default=None, help="Branch or tag to clone.")
 @click.option("--skill", "skill_name_flag", default=None,
               help="Pick one skill from a monorepo by SKILL.md `name:`.")
+@click.option("--path", "skill_path_flag", default=None,
+              help="Pick one exact repository-relative skill directory (library only).")
 @click.option("--owned", is_flag=True,
               help="Treat the monorepo parent as owned (writable). Implied "
                    "for known owned owners; this forces it for any parent.")
@@ -313,11 +315,14 @@ Examples:
 def add(
     ctx: click.Context, source: str | None, source_option: str | None,
     slug: str | None, ref: str | None, skill_name_flag: str | None, owned: bool,
+    skill_path_flag: str | None = None,
 ) -> None:
     """Add SOURCE to the library, or batch-add with --source owner/repo."""
     if bool(source) == bool(source_option):
         raise click.UsageError("provide SOURCE or --source, but not both")
     if source_option is not None:
+        if skill_path_flag is not None:
+            raise click.UsageError("--path requires SOURCE, not --source")
         _add_source_batch(source_option, ref, owned=owned)
         return
     assert source is not None
@@ -332,6 +337,19 @@ def add(
         except SourceParseError as exc:
             raise click.UsageError(str(exc)) from exc
         parsed = dataclasses.replace(parsed, ref=ref)
+
+    if skill_path_flag is not None:
+        if parsed.owner_repo is None:
+            raise click.UsageError("--path requires a repository source; use file:// for local Git repositories")
+        path = Path(skill_path_flag)
+        if (
+            not skill_path_flag or path.is_absolute() or ".." in path.parts
+            or "\\" in skill_path_flag
+        ):
+            raise click.UsageError("--path must be a safe repository-relative directory")
+        if parsed.subpath is not None or parsed.skill_name or skill_name_flag is not None:
+            raise click.UsageError("--path cannot be combined with another child selector")
+        parsed = dataclasses.replace(parsed, subpath=path.as_posix())
 
     if skill_name_flag is not None:
         if parsed.subpath is not None:
@@ -406,6 +424,16 @@ def _add_single(parsed: ParsedSource, slug: str | None) -> None:
                 f"refusing to overwrite with {requested!r}. "
                 f"Run `skill remove {slug}` first."
             )
+
+    if (library_dir.exists() or library_dir.is_symlink()) and (
+        not skill_git.is_git_repo(library_dir)
+        or not skill_git.remote_matches(library_dir, parsed.url, None)
+        or (
+            parsed.ref is not None
+            and not skill_git._checked_out_at_ref(library_dir, parsed.ref, env=None)
+        )
+    ):
+        raise click.ClickException(f"{slug}: cannot prove canonical source/ref ownership")
 
     if not library_dir.exists():
         library_dir.parent.mkdir(parents=True, exist_ok=True)
