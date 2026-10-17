@@ -1,5 +1,17 @@
 # Changelog
 
+## [5.11.1](https://github.com/ajanderson1/agent-toolkit-cli/compare/v5.11.0...v5.11.1) (2026-10-17)
+
+
+### Bug Fixes
+
+* **skills:** keep project Save and doctor consistent ([#537](https://github.com/ajanderson1/agent-toolkit-cli/issues/537)) ([b45c718](https://github.com/ajanderson1/agent-toolkit-cli/commit/b45c71800c422fae41420b92480811f277b72c24))
+
+
+### Documentation
+
+* prepare clear asset lifecycle and doctor redesign ([#539](https://github.com/ajanderson1/agent-toolkit-cli/issues/539)) ([32380e8](https://github.com/ajanderson1/agent-toolkit-cli/commit/32380e892433734ea797191c32230c5b51480458))
+
 ## [5.11.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v5.10.0...v5.11.0) (2026-10-16)
 
 
