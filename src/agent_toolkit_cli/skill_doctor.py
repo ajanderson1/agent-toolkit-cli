@@ -7,10 +7,10 @@ caller's responsibility (via fix_action.apply).
 """
 from __future__ import annotations
 
-import dataclasses
 import datetime as _dt
 import glob
 import json
+import shlex
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
@@ -237,6 +237,7 @@ def _scan_stray_symlinks(
     findings: list[Finding] = []
     known = set(lock.skills)
     seen: set[Path] = set()
+    projection_dirs = [project / ".agents/skills"] if scope == "project" and project is not None else []
     for agent_name, cfg in AGENTS.items():
         if cfg.is_standard:
             continue
@@ -261,6 +262,8 @@ def _scan_stray_symlinks(
         else:
             assert project is not None
             parent = project / cfg.skills_dir
+        projection_dirs.append(parent)
+    for parent in projection_dirs:
         if parent in seen:
             continue
         seen.add(parent)
@@ -659,60 +662,93 @@ def _make_monorepo_reclone_action(
     )
 
 
+def _library_identity(entry: LockEntry) -> tuple:
+    path = entry.skill_path
+    if entry.parent_url is None and path in (None, "SKILL.md", "."):
+        path = "."
+    return (
+        entry.source, entry.ref, path,
+        _normalise_git_url(entry.parent_url or clone_url_from_entry(entry)),
+    )
+
+
 def _scan_unlisted_entries(
     *, scope: Scope, home: Path | None, project: Path | None, lock: LockFile,
 ) -> list[Finding]:
-    """#360 AC4: project lock entries whose slug is missing from the library lock.
-
-    The install remains functional while the project canonical exists
-    (project canonicals are independent of the
-    library); the finding flags that the library no longer tracks the slug
-    and offers to re-add it from the entry's recorded source+ref."""
+    """Flag missing library membership, excluding proven legacy-derived children."""
     if scope != "project":
         return []
-    lib_lock = read_lock(library_lock_path())
+    from agent_toolkit_cli.skill_collections import derived_library_children
+
+    lib_lock = read_lock(library_lock_path(home=home))
+    derived = derived_library_children(
+        library=lib_lock, scoped=lock, home=home, project=project,
+    )
     findings: list[Finding] = []
     for slug, entry in sorted(lock.skills.items()):
-        if slug in lib_lock.skills:
+        library_entry = lib_lock.skills.get(slug)
+        if library_entry is not None:
+            if _library_identity(library_entry) != _library_identity(entry):
+                findings.append(Finding(
+                    finding_type="lock_source_mismatch", slug=slug, scope=scope,
+                    path=library_lock_path(home=home),
+                    detail=("same slug has a different source/ref/path identity in the library; "
+                            "neither scope was changed"),
+                    fix_action=None,
+                ))
+            continue
+        if slug in derived:
             continue
         findings.append(Finding(
             finding_type="unlisted", slug=slug, scope=scope,
             path=lock_file_path(scope=scope, home=home, project=project),
             detail=(
                 "project lock entry's slug is missing from the library lock "
-                "(install remains functional while the project canonical exists; "
-                "the library no longer tracks it)"
+                "(library inclusion is optional; this does not by itself mean "
+                "the project install is broken)"
             ),
             fix_action=_make_readd_library_action(slug=slug, entry=entry),
         ))
     return findings
 
 
-def _make_readd_library_action(*, slug: str, entry: LockEntry) -> FixAction:
-    """Re-add an unlisted slug to the library from its recorded source+ref.
+def _make_readd_library_action(*, slug: str, entry: LockEntry) -> FixAction | None:
+    """Offer the same explicit library-only registration as the displayed CLI."""
+    from agent_toolkit_cli.skill_source import SourceParseError, parse_source
 
-    Materialises the library canonical (reusing the reclone machinery at
-    global scope — monorepo entries take the parent-clone branch) and writes
-    the library lock entry. SHAs are reset to None; `skill update` re-resolves
-    them."""
-    reclone = _make_reclone_action(
-        slug=slug, scope="global", home=None, project=None, entry=entry,
-    )
+    url = entry.parent_url or clone_url_from_entry(entry)
+    try:
+        parsed = parse_source(url)
+    except SourceParseError:
+        return None
+    if (parsed.owner_repo or parsed.url) != entry.source:
+        return None
+    args = [url, "--slug", slug]
+    if entry.ref is not None:
+        args += ["--ref", entry.ref]
+    if entry.parent_url is not None:
+        if not entry.skill_path:
+            return None
+        args += ["--path", entry.skill_path]
+        if not entry.read_only:
+            args.append("--owned")
+    elif parsed.owner_repo is not None and entry.skill_path in (None, "SKILL.md", "."):
+        args += ["--path", "."]
+        if not entry.read_only:
+            args.append("--owned")
 
     def _apply() -> None:
-        reclone.apply()
-        lib_path = library_lock_path()
-        lib_lock = read_lock(lib_path)
-        if slug not in lib_lock.skills:
-            write_lock(lib_path, add_entry(
-                lib_lock, slug,
-                dataclasses.replace(entry, upstream_sha=None, local_sha=None),
-            ))
+        from agent_toolkit_cli.commands.skill import add
 
-    ref_arg = f" --ref {entry.ref}" if entry.ref else ""
+        with add.make_context("add", args.copy()) as ctx:
+            add.invoke(ctx)
+
     return FixAction(
-        description=f"Re-add {slug} to the library from {entry.source}",
-        shell_preview=f"agent-toolkit-cli skill add {entry.source}{ref_arg} --slug {slug}",
+        description=(
+            f"Optionally add {slug} to the global library only from {entry.source}; "
+            "project records/projections stay unchanged, local project edits are not copied"
+        ),
+        shell_preview=shlex.join(["agent-toolkit-cli", "skill", "add", *args]),
         apply=_apply,
     )
 

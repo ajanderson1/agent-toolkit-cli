@@ -15,7 +15,7 @@ from agent_toolkit_cli.skill_collection_transaction import (
     link_state,
 )
 from agent_toolkit_cli.skill_install import InstallError, validate_projection_context
-from agent_toolkit_cli.skill_lock import LockEntry, clone_url_from_entry
+from agent_toolkit_cli.skill_lock import LockEntry, LockFile, clone_url_from_entry
 from agent_toolkit_cli.skill_paths import (
     agent_projection_dir,
     canonical_skill_dir,
@@ -44,6 +44,8 @@ class Collection:
     children: dict[str, Child] = field(default_factory=dict)
     wrapper: str | None = None
     backing: Path | None = None
+    containers: set[str] = field(default_factory=set)
+    container_conflicts: set[str] = field(default_factory=set)
     error: str = ""
 
     @property
@@ -89,6 +91,21 @@ def catalog(*, scope: str, home: Path | None, project: Path | None) -> list[Coll
             if not roots:
                 continue
             group = groups.setdefault(key, Collection(*key))
+            if _legacy_container(canonical, entry):
+                if all(
+                    not (p.exists() or p.is_symlink())
+                    or (slug in scoped.skills and p.is_symlink() and p.resolve() == canonical.resolve())
+                    for agent in ("standard", *(a for a in AGENTS if not AGENTS[a].is_standard))
+                    if is_skill_projection_available(agent, scope=scope, project=project)
+                    for p in [projection(slug, agent, scope=scope, home=home, project=project)]
+                ):
+                    group.containers.add(slug)
+                else:
+                    group.container_conflicts.add(slug)
+                    group.error = (
+                        f"Conflicting or unregistered wrapper projection {slug} may expose the whole collection. "
+                        "Inspect scoped projections with skills doctor --no-fix; selection cannot safely retire this wrapper."
+                    )
             if slug in scoped.skills:
                 group.wrapper, group.backing = slug, canonical.resolve()
             for root in roots:
@@ -111,7 +128,86 @@ def catalog(*, scope: str, home: Path | None, project: Path | None) -> list[Coll
                     group.children.setdefault(
                         name, Child(name, child_entry, root.resolve())
                     )
-    return [g for g in groups.values() if len(g.children) > 1 or g.wrapper is not None]
+    return [
+        g for g in groups.values()
+        if len(g.children) > 1 or g.wrapper is not None or g.containers or g.container_conflicts
+    ]
+
+
+def _owned_backing(path: Path, entry: LockEntry) -> bool:
+    return (
+        skill_git.is_git_repo(path)
+        and skill_git.remote_matches(path, clone_url_from_entry(entry), None)
+        and (
+            entry.ref is None
+            or skill_git._checked_out_at_ref(path, entry.ref, env=None)
+        )
+    )
+
+
+def _legacy_container(path: Path, entry: LockEntry) -> bool:
+    if (
+        entry.parent_url is not None or entry.skill_path not in (None, "SKILL.md")
+        or not path.is_dir() or (path / "SKILL.md").is_file()
+        or not _owned_backing(path, entry)
+    ):
+        return False
+    # A deleted genuine root document is damage, not a legacy container.
+    try:
+        return not any(
+            skill_git._run(["git", "-C", str(path), *args], env=None).stdout.strip()
+            for args in (
+                ["ls-tree", "--name-only", "HEAD", "--", "SKILL.md"],
+                ["ls-files", "--", "SKILL.md"],
+            )
+        )
+    except skill_git.GitError:
+        return False
+
+
+def derived_library_children(
+    *, library: LockFile, scoped: LockFile, home: Path | None, project: Path,
+) -> set[str]:
+    """Prove project children retained from a still-registered legacy container."""
+    recognized = set()
+    for wrapper, parent in library.skills.items():
+        if parent.parent_url is not None:
+            continue
+        library_backing = library_skill_path(wrapper, home=home)
+        backing = _canonical(wrapper, "project", home, project)
+        if not all(_legacy_container(p, parent) for p in (library_backing, backing)):
+            continue
+        scoped_parent = scoped.skills.get(wrapper)
+        if scoped_parent is not None and scoped_parent != parent:
+            continue
+        for slug, entry in scoped.skills.items():
+            path = entry.skill_path
+            if (
+                entry.parent_url is None
+                or (entry.source, entry.ref) != (parent.source, parent.ref)
+                or skill_git.normalise_git_url(entry.parent_url)
+                != skill_git.normalise_git_url(clone_url_from_entry(parent))
+                or not path or path == "." or Path(path).is_absolute()
+                or ".." in Path(path).parts
+            ):
+                continue
+            identities = [
+                e for e in scoped.skills.values()
+                if (e.source, e.ref, e.skill_path) == (entry.source, entry.ref, path)
+                and e.parent_url is not None
+            ]
+            if len(identities) != 1:
+                continue
+            target = backing / path
+            canonical = _canonical(slug, "project", home, project)
+            if (
+                target.resolve().is_relative_to(backing.resolve())
+                and canonical.is_symlink() and canonical.resolve() == target.resolve()
+                and (target / "SKILL.md").is_file()
+                and (library_backing / path / "SKILL.md").is_file()
+            ):
+                recognized.add(slug)
+    return recognized
 
 
 def exposed(

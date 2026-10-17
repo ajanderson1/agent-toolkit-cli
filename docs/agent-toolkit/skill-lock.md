@@ -48,10 +48,11 @@ Add is global-library only and does not install projections. Remove is also a li
 
 ## Sources, refs and collections
 
-Sources accept `owner/repo`, Git URLs (HTTPS/SSH), local paths, skills.sh URLs and explicit repository subpaths. Select by frontmatter `name:` using `--skill NAME`, or use `owner/repo/path/to/skill`. `--ref` selects a branch/tag/ref; `owner/repo@ref` is suitable only for unambiguous refs. Use `--ref` for slash-containing refs or a ref combined with a subpath.
+Sources accept `owner/repo`, Git URLs (HTTPS/SSH), local paths, skills.sh URLs and explicit repository subpaths. Select by frontmatter `name:` using `--skill NAME`, use `owner/repo/path/to/skill`, or supply `SOURCE --path path/to/skill` for an exact directory (including `.` for a real root skill). `--ref` selects a branch/tag/ref; `owner/repo@ref` is suitable only for unambiguous refs. Use `--ref` for slash-containing refs or a ref combined with a subpath.
 
 ```bash
 agent-toolkit-cli skills add owner/repo/path/to/skill --ref main
+agent-toolkit-cli skills add owner/repo --path packs/child --slug custom-child --ref feature/work
 agent-toolkit-cli skills add --source owner/repo --ref main
 agent-toolkit-cli skills install --source owner/repo --scope global --agents standard
 ```
@@ -61,6 +62,14 @@ Repository-wide add discovers all supported real skills, including a genuine roo
 One parent checkout is reused per source/ref. Child canonicals symlink into it. Repeated registration does not advance its HEAD or disturb commits, index, unstaged/untracked files or custom slugs. Update deliberately before registering a child that only exists upstream. Explicit single-child add retains its existing whole-child copy fallback if symlinks fail; repeated add preserves its `materialised: copy` snapshot. Collection exposure is not a filtered-copy implementation or a promise about every harness loader.
 
 Legacy rootless whole-repo wrappers reconcile inside a **targeted install or selection-changing Apply**, without a separate conversion command. Checkout history/index/local work stay intact; only targeted owned exposure changes after desired real-child links can succeed. Inventory, toggles, Revert, no-op Apply and unrelated Apply do not reconcile. Genuine root+nested combinations whose independent exposure cannot be proven are conservatively refused. Missing real `SKILL.md` content is unhealthy and cannot be repaired by pretending installation succeeded. [Collection controls, failures and recovery](tui.md#skill-collections).
+
+### Project conversion and doctor
+
+Project-only legacy conversion registers the complete sibling set in the project lock, exposes only selected children, and leaves the global library unchanged. A retained rootless backing is not a missing root skill. Inventory and full doctor recognize derived children through matching source/ref/path, Git backing ownership and actual canonical targets; this does not grant a library-only container permission to retire project projections.
+
+Ordinary project-only entries can still produce an optional library-inclusion warning. Doctor does not infer project corruption from missing library membership. When offered, **add to library** uses the displayed command with the recorded child path, ref and custom slug. A recorded genuine root uses `--path .`, not repository-wide discovery, even if nested siblings now exist. It changes only global library registration/content: no project lock/projection repair, no global harness installation, and no copying of local project edits. Missing payloads, source conflicts and foreign projections remain diagnostic. Inspect any conflict before retrying; registration never resets an existing checkout.
+
+Separate existing global clones (for example an old wrapper plus a doctor-added child) remain intact. Conflicting physical child identities retain conservative ambiguity diagnostics; no automatic deduplication or old-copy cleanup is performed.
 
 ## Git ownership and publishing
 
