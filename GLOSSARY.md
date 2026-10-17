@@ -35,7 +35,6 @@ specified in [the design](docs/specs/2026-10-17-538-asset-lifecycle.md).
 | Local changes | Staged, unstaged, or untracked changes within the selected asset's content. |
 | Unpublished commits | Local commits not proven reachable from the relevant upstream; clean files do not prove publication. |
 | Health | Whether required content, records, and exposure are readable, consistent, and usable. |
-| View local changes | Inspect content edits; separate from previewing pending Toolkit operations. |
 | Preview changes | Inspect proposed Toolkit operations before applying them. |
 | Reviewed plan | Exact proposed effects and expected resource state; conditional Apply refuses changed targets rather than replanning. |
 | Unmanage | Release Toolkit management records while preserving content; residual discovered content remains visible. |

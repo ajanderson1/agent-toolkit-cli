@@ -20,6 +20,12 @@ dependency, database or background service. No named model/provider requirement.
 **Specification:** [Design contract](../specs/2026-10-17-538-asset-lifecycle.md).
 **Vocabulary:** [GLOSSARY.md](../../GLOSSARY.md).
 
+**Scope split:** [#540](https://github.com/ajanderson1/agent-toolkit-cli/issues/540)
+exclusively owns View local changes, content rendering, CLI diff commands and
+viewer tests/docs. #538 retains Modified/Clean/No Git/Unknown and changed-path
+summaries plus deletion/publication guards, but neither implements nor depends on
+the viewer. Implement lifecycle refusal/manual Git guidance without it.
+
 ## Execution rules and delivery sequence
 
 This is one coordinated L (substantial) issue with eight ordered, independently
@@ -119,7 +125,7 @@ Expected GREEN for baseline legacy compatibility fixtures only. Canonical-verb
 and JSON-v1 behavior is added/red-green verified in P4, not claimed passed in P1.
 Keep test ownership staged without permanently xfail-ing final requirements.
 
-## P2. Reconciled read-only inventory and truthful local changes
+## P2. Reconciled read-only inventory and truthful change indicators
 
 **Files:** create `asset_inventory.py`, `asset_capabilities.py`, `asset_output.py`;
 modify per-kind inventory/state providers and `skill_git.py` as necessary.
@@ -351,15 +357,14 @@ Run: `uv run pytest -q tests/test_cli/test_asset_doctor_matrix.py tests/test_cli
 Expected GREEN: complete applicability table, shared effects, actionable refusals,
 no false clean, no global dependency for project-only content and idempotent repair.
 
-## P6. Human-native TUI journeys and local-change inspection
+## P6. Human-native lifecycle TUI journeys and change indicators
 
 **Files:** integrate six `*_state.py` readers; modify `app.py`, relevant widgets,
-Info/column help and screens; add focused `screens/asset_actions.py` and
-`screens/asset_changes.py` if existing modals do not fit. Create
-`tests/test_tui/test_asset_lifecycle_journeys.py`,
-`tests/test_tui/test_asset_action_queue.py`,
-`tests/test_tui/test_asset_changes.py`,
-`tests/test_tui/test_asset_lifecycle_visuals.py`.
+Info/column help and screens; add focused `screens/asset_actions.py` if existing
+modals do not fit. Create `tests/test_tui/test_asset_lifecycle_journeys.py`,
+`tests/test_tui/test_asset_action_queue.py` and
+`tests/test_tui/test_asset_lifecycle_visuals.py`. No content-viewer screen/test module
+or CLI diff registration is part of this issue.
 
 - [ ] Render reconciled identities, orthogonal management/changes/health and
   qualified copies; preserve hierarchy and useful counters. Enabled count means
@@ -373,9 +378,11 @@ Info/column help and screens; add focused `screens/asset_actions.py` and
 - [ ] Provide accessible action menu and keyboard/mouse activation, including Inspect
   storage/Delete checkout for exact units. All discoveries are inspectable and
   manageable or show an exact unsupported reason.
-- [ ] Rename Ctrl+D/footer/palette to Preview changes. Add distinct View local
-  changes with staged/unstaged/untracked sections, asset scope by default and
-  clearly labelled whole-checkout inspection. Config secrets remain redacted.
+- [ ] Rename Ctrl+D/footer/palette to Preview changes and verify it shows queued
+  Toolkit operations only. Render asset-scoped Changes indicators and path/status
+  summaries; no content viewer/action/shortcut. Keep config secrets redacted.
+  Deletion refusals identify affected paths and external Git/manual inspection
+  guidance without requiring #540.
 - [ ] Queue supported Manage/Unmanage/Delete plans alongside existing cross-kind
   enable/disable intents. Preview destructive targets and confirm separately.
   Preserve successful independent operations, failed intents, aggregate counts,
@@ -388,7 +395,7 @@ Info/column help and screens; add focused `screens/asset_actions.py` and
   scope, names, health, modified child, distinct pending/mixed indicators,
   inherited availability, actions, preview and recovery. Write per-image verdicts.
 
-Run: `uv run pytest -q tests/test_tui/test_asset_lifecycle_journeys.py tests/test_tui/test_asset_action_queue.py tests/test_tui/test_asset_changes.py tests/test_tui/test_asset_lifecycle_visuals.py tests/test_tui/test_cross_asset_save_revert.py tests/test_tui/test_cross_asset_review_regressions.py`.
+Run: `uv run pytest -q tests/test_tui/test_asset_lifecycle_journeys.py tests/test_tui/test_asset_action_queue.py tests/test_tui/test_asset_lifecycle_visuals.py tests/test_tui/test_cross_asset_save_revert.py tests/test_tui/test_cross_asset_review_regressions.py`.
 Expected GREEN: one disabled retained item, no count growth, no loss of source or
 edits, correct global caveat, usable keyboard workflows and truthful error states.
 

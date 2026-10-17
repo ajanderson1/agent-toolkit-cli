@@ -70,6 +70,17 @@ Chosen: observational reconciliation into one typed inventory, then explicit
 planned actions with ownership checks. No background watcher, daemon, new database,
 new runtime dependency, new asset type or full-disk crawler is required.
 
+### Scope split: local-content viewer is a separate issue
+
+At AJ's explicit request, [issue #540](https://github.com/ajanderson1/agent-toolkit-cli/issues/540)
+owns the View local changes action, content-diff rendering, CLI diff commands and
+viewer-specific tests/docs. None is a deliverable or prerequisite of #538. This
+issue retains asset-scoped change indicators and path/status observations, checkout
+warnings, publication checks and all deletion/refusal safeguards. Its Preview
+changes action displays proposed Toolkit operations, not content patches. Deletion
+safety must work without a built-in content viewer; report exact paths/reasons and
+external Git/manual inspection guidance where necessary.
+
 ## 3. Glossary and user-facing state
 
 Use [GLOSSARY.md](../../GLOSSARY.md) for definitions. “Library” remains permissible
@@ -460,7 +471,6 @@ agent-toolkit-cli --project /consumer skills list --scope project --format json-
 agent-toolkit-cli --project /consumer skills manage --id INSTANCE --scope project --dry-run
 agent-toolkit-cli --project /consumer skills enable --id INSTANCE --scope project --agents standard
 agent-toolkit-cli --project /consumer skills disable --id INSTANCE --scope project --agents standard
-agent-toolkit-cli --project /consumer skills diff --id INSTANCE --scope project
 agent-toolkit-cli --project /consumer skills unmanage --id INSTANCE --scope project --dry-run
 agent-toolkit-cli --project /consumer skills delete --id INSTANCE --scope project --dry-run
 agent-toolkit-cli --project /consumer skills doctor --scope project --format json-v1
@@ -667,13 +677,13 @@ and preview with the same scoped Add operation as CLI; no acquisition/network
 request occurs until explicit Apply. Source entry accepts URLs/local paths or a
 selected existing instance via Add from this copy. MCP fields accept env names,
 not secret values. Introduce an Actions menu accessible by keyboard and mouse:
-Inspect, Manage, Enable/Disable, View local changes, Unmanage, Delete local copy,
+Inspect, Manage, Enable/Disable, Unmanage, Delete local copy,
 Inspect storage/Delete checkout, Doctor. Unsupported actions are disabled with
-a reason and alternative, not absent mysteries. Opening menus/diff/Info never writes.
-Rename Ctrl+D to Preview changes. Content diff is a distinct action, showing
-staged/unstaged and untracked content safely, asset-scoped by default with a clearly
-labelled whole-checkout option. Never expose secrets by automatically displaying
-MCP credential config or environment values as a generic content diff.
+a reason and alternative, not absent mysteries. Opening menus/Info/previews never
+writes. Rename Ctrl+D to Preview changes; it previews queued Toolkit operations
+only. Do not add a content viewer, content-diff shortcut or View local changes
+menu item under #538; those belong exclusively to #540. Changes badges/path-status
+summaries remain visible, with sensitive config/environment values omitted.
 
 Keep queue ownership intact across tabs/scopes. Add management/deletion action
 plans to the shared preview/Apply layer with explicit destructive confirmation.
@@ -697,7 +707,8 @@ Required end-to-end journeys:
 4. **Global inherited exposure:** project disable leaves global route visible with
    plain explanation and correct effective availability, never a false off verdict.
 5. **Removal with local work:** modified/unpublished content blocks ordinary delete;
-   inspect diff/publication uncertainty; preserve/export work; only explicitly
+   inspect affected-path/publication findings and external Git/manual guidance;
+   preserve/export work; only explicitly
    authorized whole-storage action can proceed. Shared child deletion refuses.
 6. **Foreign/unsupported discovery:** inspect and actionable adoption or refusal;
    foreign config/files remain unchanged; unsupported does not disappear.
@@ -736,7 +747,7 @@ Finding IDs survive unchanged observations, not arbitrary scan order.
 | Dangling/missing/drifted projection or ownership sidecar | Recreate/remove only proven owned resource under exact plan |
 | Foreign regular file/link/config collision | Preserve; explicit conflict; no “repair all” overwrite |
 | Unexpected root/nested/global effective exposure | Show actual route; supported narrow disable or isolation refusal |
-| Git staged/unstaged/untracked/ignored edits | Asset-scoped details and shared-checkout summary; never reset as repair |
+| Git staged/unstaged/untracked/ignored edits | Asset-scoped path/status details and shared-checkout summary, not content patches; never reset as repair |
 | Ahead/diverged/detached/unknown publication | Accurate status; protect unique history; no implicit fetch/push/checkout |
 | Ref/pin/origin/path mismatch or escaping target | Identity conflict; block unsafe mutation, report evidence |
 | Referenced backing / unused retained backing | Referenced is protected; retained is visible, not auto-garbage |
@@ -757,7 +768,7 @@ not an unmaintainable brute-force Cartesian test suite. A checked-in coverage ta
 maps every class/kind to test IDs or justified unsupported/report-only behavior.
 
 Repairs are individually scoped, additive where possible, idempotent and previewable.
-Report-only doctor, startup, refresh, diff and previews preserve lock/config bytes,
+Report-only doctor, startup, refresh and operation previews preserve lock/config bytes,
 source content/index/history and managed-path state. Repair confirmation neither
 waives ownership checks nor authorizes publication, upstream updates, destructive
 discard, network execution or cross-scope mutation. Reinspect after each action.
@@ -787,7 +798,7 @@ Where several repairs exist require `--action ACTION`; never pick a destructive 
 | F07 | S A C P; M owned materialization; I pointer | Drifted owned generated resource/sidecar; error/1 | Required regenerate/relink only when exact ownership and unmodified-destination evidence hold; otherwise F08 |
 | F08 | S A C I P M | Foreign regular file/link/config collision; error/1 | Report-only/manual preserve/relocate; no automatic overwrite or ownership manufacture |
 | F09 | S root/nested; all global/project routes | Unexpected actual exposure; warning/1 | Required exact narrow Disable when representable; unknown isolation report-only refusal; show remaining global route |
-| F10 | S A C P; I if underlying source Git; M local definition edits | Modified/staged/untracked source; info/0 | View local changes, report checkout summary; no repair/reset |
+| F10 | S A C P; I if underlying source Git; M local definition edits | Modified/staged/untracked source; info/0 | Report affected paths/status and checkout summary with external inspection guidance; no built-in content viewer, repair or reset |
 | F11 | S A C P; I if Git; M if definition source Git | Unpublished/diverged/detached/unknown publication; info/0 | Report-only Git guidance; blocks Delete independently; no implicit network/push |
 | F12 | S A C I P M | Permission/cycle/timeouts/corrupt or newer metadata/unsupported input; incomplete/3 | Report-only exact error/recovery guidance; never rewrite as empty; independent safe inspection continues |
 | F13 | S A C P; M definition/materialization units; I source chains | Retained/referenced backing; info/0 | Inspect storage; required safe Delete plan only for proven owned inactive storage; protected/external report-only |
@@ -872,7 +883,7 @@ project state's operations directory (0700 directory, 0600 files). Manifest stor
 only their locators/digests, never secret/config contents. Preserve only affected
 values where representable; if a config needs a full snapshot, keep it protected
 locally with original restrictive permissions, never log/export/commit it. No raw
-credential values enter JSON, tokens, issue evidence or generic diffs. No secret
+credential values enter JSON, tokens, issue evidence or diagnostic output. No secret
 provider is queried. Explicit successful recovery resolves snapshot retention;
 failed/uncertain recovery never erases evidence automatically.
 
@@ -902,7 +913,7 @@ processes, not only exceptions inside one transaction.
 | AC10 | CLI/TUI/doctor identical targets/effects; stable versioned JSON, exit codes, exact selectors, noninteractive safety | P4, P5, P6 |
 | AC11 | Total doctor coverage matrix, actionable report-only limitations, no false clean or global re-add for project-only | P5, P7 |
 | AC12 | Fresh-state ownership checks, targeted recovery, no unrelated overwrite, restart and fault-injection proofs | P3, P4, P7 |
-| AC13 | TUI all-kind queues, preview/content-diff distinction, accessible actions and two-size visual evidence | P6, P7 |
+| AC13 | TUI all-kind queues, accurately named operation preview, status-only change indicators, accessible lifecycle actions and two-size visual evidence | P6, P7 |
 | AC14 | Portable locks/Instructions contract and isolated wheel/source behavior agree | P3, P7, P8 |
 | AC15 | Existing full suite, strict docs, hosted compatible-platform checks and independent exact-head review pass | P7, P8 |
 
@@ -928,7 +939,8 @@ asset changes, merge or release under this preparation session. Implementation
 requires a subsequent explicit dispatch; L3 (conditional autonomy) is recommended.
 Escalate material acceptance/safety divergence, not routine reversible details.
 
-Non-goals: new asset kind, invisible discovered content, automatic startup
+Non-goals: local-content viewer/CLI diff (owned by #540), new asset kind,
+invisible discovered content, automatic startup
 registration/repair, full-home scanning, global/project clone consolidation,
 filtered-copy loader redesign, universal runtime unloading, arbitrary foreign
 content deletion, public publishing, config secrets transport or provider choices.
