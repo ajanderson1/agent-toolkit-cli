@@ -49,7 +49,7 @@ Targets differ too:
 ## Skills
 
 ```text
-agent-toolkit-cli skills add [SOURCE] [--source owner/repo] [--ref REF] [--slug SLUG] [--skill NAME] [--owned]
+agent-toolkit-cli skills add [SOURCE] [--source owner/repo] [--ref REF] [--slug SLUG] [--skill NAME | --path PATH] [--owned]
 agent-toolkit-cli skills install [SLUG] [--source owner/repo] [--agents NAMES] [--scope global|project] [-p]
 agent-toolkit-cli skills uninstall [SLUG] [--source owner/repo] [--agents NAMES] [--scope global|project] [-p]
 agent-toolkit-cli skills list [-g|-p] [--agent NAME] [--json]
@@ -62,7 +62,7 @@ agent-toolkit-cli skills import FILE [--latest]
 agent-toolkit-cli skills doctor [SLUGS]... [-g|-p] [--no-fix] [--repair] [--repair-foreign]
 ```
 
-Use a positional source or `--source`, not both. Repository-wide add registers real skills including a genuine root; `--skill NAME` or an explicit subpath selects one child. `install --source` selects persisted children of the exact source across registered refs, whereas a TUI collection controls one source/ref group. It does not discover or autoactivate later upstream children. Remove without arguments opens an interactive selection.
+Use a positional source or `--source`, not both. Repository-wide add registers real skills including a genuine root; `--skill NAME`, an explicit source subpath, or `--path PATH` selects one child. `--path` names an exact repository-relative directory independently of its frontmatter name or custom slug; it cannot be combined with another child selector or batch `--source`. `install --source` selects persisted children of the exact source across registered refs, whereas a TUI collection controls one source/ref group. It does not discover or autoactivate later upstream children. Remove without arguments opens an interactive selection.
 
 Sources accept `owner/repo`, `owner/repo@ref`, subpaths, HTTPS/SSH URLs, local paths and skills.sh URLs. Combine ref+subpath using `--ref` or a GitHub `/tree/<ref>/<subpath>` URL; ambiguous `owner/repo@ref/subpath` is refused. Slash-containing refs require `--ref`. [Skill storage, ownership and update](skill-lock.md) · [Collections and legacy exposure](tui.md#skill-collections).
 
