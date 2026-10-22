@@ -25,6 +25,10 @@ import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
+class LockFormatError(ValueError):
+    """An existing lock cannot be safely interpreted; never overwrite it."""
+
+
 CURRENT_VERSION = 1
 SUPPORTED_VERSIONS: tuple[int, ...] = (1, 3)
 
@@ -236,6 +240,8 @@ def clone_url_from_entry(e: LockEntry) -> str:
     url_from_extras = e.extras.get("sourceUrl")
     if isinstance(url_from_extras, str) and url_from_extras:
         return url_from_extras
+    if e.parent_url:
+        return e.parent_url
     if re.match(r"^[A-Za-z][A-Za-z0-9+.-]*://", e.source) or re.match(
         r"^[^/\s]+@[^/\s]+:", e.source
     ):
@@ -280,19 +286,36 @@ def _entry_to_dict_v3(e: LockEntry) -> dict:
     return out
 
 
+def validate_entries(entries, path: Path) -> None:
+    if not isinstance(entries, dict):
+        raise LockFormatError(f"Malformed lock {path}: entries must be an object")
+    for name, entry in entries.items():
+        if not isinstance(name, str) or not name or Path(name).is_absolute() or ".." in Path(name).parts or "\\" in name:
+            raise LockFormatError(f"Malformed lock {path}: unsafe slug {name!r}")
+        if not isinstance(entry, dict):
+            raise LockFormatError(f"Malformed lock {path}: {name} must be an object")
+        for key in ("source", "sourceType", "ref", "skillPath", "agentPath", "commandPath", "parentUrl", "sourceUrl", "upstreamSha", "localSha"):
+            value = entry.get(key)
+            if value is not None and not isinstance(value, str):
+                raise LockFormatError(f"Malformed lock {path}: {name}.{key} must be a string")
+        if entry.get("projectBacking") not in (None, "central", "isolated"):
+            raise LockFormatError(f"Malformed lock {path}: invalid projectBacking")
+
+
 def read_lock(path: Path) -> LockFile:
     try:
         raw = json.loads(path.read_text())
-    except (FileNotFoundError, json.JSONDecodeError):
+    except FileNotFoundError:
         return LockFile(version=CURRENT_VERSION, skills={})
+    except json.JSONDecodeError as exc:
+        raise LockFormatError(f"Malformed lock {path}: {exc}") from exc
     if not isinstance(raw, dict):
-        return LockFile(version=CURRENT_VERSION, skills={})
+        raise LockFormatError(f"Malformed lock {path}: expected an object")
     version = raw.get("version")
     if version not in SUPPORTED_VERSIONS:
-        return LockFile(version=CURRENT_VERSION, skills={})
-    skills_raw = raw.get("skills") or {}
-    if not isinstance(skills_raw, dict):
-        return LockFile(version=CURRENT_VERSION, skills={})
+        raise LockFormatError(f"Unsupported lock version in {path}: {version!r}")
+    skills_raw = raw.get("skills", {})
+    validate_entries(skills_raw, path)
     from_dict = _entry_from_dict_v1 if version == 1 else _entry_from_dict_v3
     skills = {
         name: from_dict(d)

@@ -294,6 +294,18 @@ def installed_skill(git_sandbox, _cli_env) -> InstalledSkill:
 
 
 @pytest.fixture
+def isolated_project_backing(monkeypatch):
+    """Explicit legacy-mode regression configuration; default-mode tests opt out.
+
+    Patch the configuration read seam because these old tests change HOME
+    after fixture setup. Real on-disk enable/disable coverage is in test_reground.
+    """
+    from agent_toolkit_cli import behavior, project_backing
+    monkeypatch.setattr(behavior, "project_backing", lambda **kwargs: "isolated")
+    monkeypatch.setattr(project_backing, "project_backing", lambda **kwargs: "isolated")
+
+
+@pytest.fixture
 def copymode_skill(_cli_env) -> InstalledSkill:
     """A canonical with plain files and no .git/ (copy-mode)."""
     root = _cli_env

@@ -130,7 +130,10 @@ class _SymlinkAdapter:
         whether this harness already holds a projection (dest.exists()),
         since adapters write real files — never symlinks at the skill path.
         """
-        return self._resolve_dest(slug, scope=scope, home=home, project=project)
+        dest = self._resolve_dest(slug, scope=scope, home=home, project=project)
+        if self.harness == "pi" and (dest.with_suffix("").exists() or dest.with_suffix("").is_symlink()):
+            return dest.with_suffix("")
+        return dest
 
     def install(
         self,
@@ -143,6 +146,14 @@ class _SymlinkAdapter:
         overwrite: bool = False,
     ) -> Path:
         dest = self._resolve_dest(slug, scope=scope, home=home, project=project)
+        if content_path.is_dir():
+            from agent_toolkit_cli.agent_adapters import directory
+            if not directory.supported(self.harness):
+                raise InstallError(f"{self.harness}: directory agents are unsupported")
+            # Refuse mixed flat/directory destinations rather than shadowing one.
+            if dest.exists() or dest.is_symlink():
+                raise InstallError(f"{self.harness}: conflicting flat agent at {dest}")
+            return directory.install(dest, content_path)
         # Fail loud on a missing canonical content file (standard-adapter F8
         # parity) BEFORE filecmp/copy2 raises a raw OSError mid-fan-out.
         if not content_path.exists():
@@ -187,6 +198,10 @@ class _SymlinkAdapter:
         a structured refusal. The sidecar is removed whenever the file is
         gone (orphan hygiene, #361/#366)."""
         dest = self._resolve_dest(slug, scope=scope, home=home, project=project)
+        directory_dest = dest.with_suffix("")
+        if self.harness == "pi" and (directory_dest.exists() or directory_dest.is_symlink()):
+            from agent_toolkit_cli.agent_adapters import directory
+            return directory.uninstall(dest, canonical_content)
         sentinel = _sentinel_path(dest)
         refused: Path | None = None
         if dest.exists() or dest.is_symlink():

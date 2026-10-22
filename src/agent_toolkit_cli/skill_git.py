@@ -353,7 +353,7 @@ def current_branch(repo: Path, *, env: dict[str, str] | None) -> str:
 
 def remote_url(repo: Path, *, env: dict[str, str] | None) -> str:
     proc = _run(
-        ["git", "-C", str(repo), "remote", "get-url", "origin"], env=env,
+        ["git", "-C", str(repo), "config", "--get", "remote.origin.url"], env=env,
     )
     return proc.stdout.strip()
 
@@ -372,13 +372,13 @@ def normalise_git_url(url: str) -> str:
     back to lowercase + trailing-`.git` strip + trailing-slash strip, so
     local paths and unfamiliar URL forms still round-trip sensibly.
     """
-    u = url.strip().lower()
+    u = url.strip()
     if (m := _SSH_GIT_URL_RE.match(u)):
-        return f"{m.group(1)}/{m.group(2)}"
+        return f"{m.group(1).lower()}/{m.group(2)}"
     if (m := _HTTPS_GIT_URL_RE.match(u)):
-        return f"{m.group(1)}/{m.group(2)}"
+        return f"{m.group(1).lower()}/{m.group(2)}"
     if (m := _SSH_URL_RE.match(u)):
-        return f"{m.group(1)}/{m.group(2)}"
+        return f"{m.group(1).lower()}/{m.group(2)}"
     u = u.rstrip("/")
     if u.endswith(".git"):
         u = u[:-4]

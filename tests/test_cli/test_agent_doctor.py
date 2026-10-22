@@ -21,6 +21,8 @@ import subprocess
 from pathlib import Path
 
 import pytest
+
+pytestmark = pytest.mark.usefixtures("isolated_project_backing")
 from click.testing import CliRunner
 
 from agent_toolkit_cli.agent_adapters import _sentinel_path
@@ -493,12 +495,8 @@ def test_project_install_is_not_flagged_as_orphan(
 
     _seed_global_canonical()
     _write_global_lock()
-    proj_canonical = canonical_agent_dir(
-        "demo-agent", scope="project", project=project,
-    )
-    proj_canonical.mkdir(parents=True)
-    (proj_canonical / "demo-agent.md").write_text(_CONTENT)
-
+    # Let the shared engine materialize backing; an unrecorded private
+    # directory is now correctly refused as foreign rather than adopted.
     apply(
         InstallPlan(
             slug="demo-agent", scope="project", source=None, ref=None,

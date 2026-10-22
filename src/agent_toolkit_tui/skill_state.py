@@ -248,6 +248,8 @@ def build_skill_rows(
             # clone of a committed skills-lock.json has the entry but no
             # store canonical, which is a broken install: `missing` (G2).
             state: State = "unlisted" if canonical.exists() else "missing"
+        elif scope == "project" and slug not in proj_lock.skills:
+            state = "library"
         elif slug in membership and membership[slug][0].backing is not None:
             backing = membership[slug][0].backing
             state = "dirty" if skill_git.status(backing, env=None) == skill_git.GitWorkingTreeStatus.DIRTY else "clean"

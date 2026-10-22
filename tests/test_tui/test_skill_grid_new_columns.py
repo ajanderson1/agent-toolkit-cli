@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import pytest
 
+pytestmark = pytest.mark.usefixtures("isolated_project_backing")
+
 from agent_toolkit_tui.skill_state import (
     interactive_agents,
     SkillCell,

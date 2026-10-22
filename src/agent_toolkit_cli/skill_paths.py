@@ -86,6 +86,8 @@ def library_skill_path(
     slug: str, *, env: dict[str, str] | None = None, home: Path | None = None,
 ) -> Path:
     """Return the canonical library path for a single skill slug."""
+    from agent_toolkit_cli._paths_core import validate_asset_slug
+    validate_asset_slug(slug)
     return library_root(env, home=home) / slug
 
 
@@ -119,7 +121,8 @@ def canonical_skill_dir(
         return library_skill_path(slug, home=home)
     if project is None:
         raise ValueError("project scope requires project")
-    return project_store_root(project) / slug
+    from agent_toolkit_cli.project_backing import resolve
+    return resolve(SKILL_BINDING, slug, project, home=home)
 
 
 def lock_file_path(

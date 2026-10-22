@@ -74,9 +74,9 @@ def test_file_url_with_tree_ref_and_subpath():
     assert s.subpath == "sub/folder"
 
 
-def test_file_url_strips_dotgit_suffix():
+def test_file_url_preserves_actual_clone_path():
     s = parse_source("file:///tmp/parent-src.git")
-    assert s.url == "file:///tmp/parent-src"
+    assert s.url == "file:///tmp/parent-src.git"
     assert s.owner_repo == "local/parent-src"
 
 

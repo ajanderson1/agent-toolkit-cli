@@ -1,0 +1,61 @@
+# Project backing
+
+New project installations of skills, agents and commands use the same central
+library backing as global installations. Project locks still record source/ref
+and projection state. Removing a project's projection does not remove backing
+used by another project. Pi extensions retain their existing central behavior;
+instructions and MCP retain their own native mechanisms.
+
+CLI and TUI use the same installation engines. Behavior configuration is a small
+JSON object at `~/.agent-toolkit/config.json` (not the TUI presentation settings):
+
+```json
+{
+  "projectBacking": "central",
+  "allowIsolatedProjects": false
+}
+```
+
+These are the defaults when the file is absent. To deliberately create legacy
+private backing, **both** select `"isolated"` and set
+`"allowIsolatedProjects": true`. Selecting isolated while it is disabled refuses
+new creation, including source-driven engine and collection/TUI paths. Existing
+recorded private installations remain private and usable without enabling new
+creation. A missing old backing directory is not silently reinterpreted as a
+central install. Agent private directories now use `projects/<id>/agents/`, not
+the historical shared skills directory; recorded legacy agent paths are retained.
+
+## Explicit migration
+
+For one existing project installation:
+
+```bash
+agent-toolkit-cli skills install my-skill -p --migrate-to-central
+agent-toolkit-cli agents install my-agent -p --harnesses pi --migrate-to-central
+agent-toolkit-cli commands install my-command -p --harnesses pi --migrate-to-central
+```
+
+Migration reports old/new backing paths, requires matching project/library
+source, ref and content paths, clean Git checkouts with matching origins and
+commits, identical resources, and provably matching destinations. Dirty,
+divergent, foreign, ambiguous or malformed state is refused. It does not merge
+or discard unique work. External private backing is left in place. A legacy
+real in-tree skill checkout is renamed intact to `<slug>.pre-central` (refused
+if occupied) before replacing its slot with a central link. Preserve these
+checkouts until recovery is no longer needed.
+
+The operation is intentionally conservative: translated/customized legacy
+projections which cannot be proved identical require manual inspection and
+restoration/detachment before migration. There is no force bypass. Keep lock
+and link backups for cutover recovery. Do not run global library removal while
+consumers depend on that library entry; project uninstall is the detach operation.
+
+## Source identity
+
+Generic Git/Gitea standalone sources retain their complete clone URL, including
+scheme, host, port and `.git`, in exported locks. Monorepo sources retain the
+complete `parentUrl` plus source-relative resource path and ref. Gitea
+`/src/branch/<ref>/<path>`, `/src/tag/…` and `/src/commit/…` URLs are supported;
+use `--ref` for refs containing slashes. Parent-cache reuse verifies origin
+identity rather than choosing another host with the same owner/repository name.
+Malformed/unknown-version locks are refused, never treated as empty for overwrite.

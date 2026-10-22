@@ -228,6 +228,12 @@ def apply(
         LockEntry, add_entry, read_lock, write_lock,
     )
 
+    if plan.scope == "project" and (plan.add_agents or plan.source is not None):
+        from agent_toolkit_cli._paths_core import AGENT_BINDING
+        from agent_toolkit_cli.project_backing import check_creation, ensure
+        check_creation(AGENT_BINDING, plan.slug, project, home=home)
+        if plan.source is None:
+            ensure(AGENT_BINDING, plan.slug, project, home=home, write_entry=False)
     canonical = canonical_agent_dir(
         plan.slug, scope=plan.scope, home=home, project=project,
     )
@@ -276,7 +282,7 @@ def apply(
             plan.source.url, canonical, ref=plan.ref, env=env,
         )
     elif plan.source is not None and existing_entry is not None:
-        requested = plan.source.owner_repo or plan.source.url
+        requested = plan.source.identity
         if existing_entry.source != requested:
             raise LockMismatchError(
                 f"{plan.slug}: canonical exists with source "
@@ -288,7 +294,8 @@ def apply(
     # Real adapters may override (e.g. devin → AGENT.md, kiro-cli → <slug>.json).
     # The adapter receives the canonical content file as input; it decides
     # the on-disk shape at the destination.
-    content_path = canonical / f"{plan.slug}.md"
+    directory_agent = (canonical / "AGENTS.md").is_file()
+    content_path = canonical if directory_agent else canonical / f"{plan.slug}.md"
 
     # Tool-ownership signal: a lock entry for this slug means agent-toolkit-cli
     # already installed it, so re-writing our own destination files is an
@@ -318,6 +325,11 @@ def apply(
         except UnsupportedMechanismError:
             skipped.append(name)
             continue
+        if directory_agent:
+            from agent_toolkit_cli.agent_adapters.directory import supported
+            if not supported(name):
+                skipped.append(name)
+                continue
         try:
             out = adapter.install(
                 plan.slug, content_path,
@@ -371,12 +383,13 @@ def apply(
             upstream_sha = None
             local_sha = None
         entry = LockEntry(
-            source=plan.source.owner_repo or plan.source.url,
+            source=plan.source.identity,
             source_type=plan.source.type,
             ref=plan.ref,
-            agent_path=f"{plan.slug}.md",
+            agent_path="AGENTS.md" if directory_agent else f"{plan.slug}.md",
             upstream_sha=upstream_sha,
             local_sha=local_sha,
+            extras={"projectBacking": "central" if canonical == canonical_agent_dir(plan.slug, scope="global") else "isolated"} if plan.scope == "project" else {},
         )
         write_lock(lock_path, add_entry(lock, plan.slug, entry))
         lock_action = "added" if existing_entry is None else "updated"
@@ -398,6 +411,7 @@ def apply(
             local_sha=None,
             parent_url=global_entry.parent_url,
             read_only=global_entry.read_only,
+            extras={**global_entry.extras, "projectBacking": "central" if canonical == canonical_agent_dir(plan.slug, scope="global") else "isolated"},
         )
         write_lock(lock_path, add_entry(lock, plan.slug, entry))
         lock_action = "added"
@@ -488,7 +502,9 @@ def uninstall(
     try:
         canonical_content = canonical_agent_dir(
             slug, scope=scope, home=home, project=project,
-        ) / f"{slug}.md"
+        )
+        if not (canonical_content / "AGENTS.md").is_file():
+            canonical_content = canonical_content / f"{slug}.md"
     except ValueError:
         canonical_content = None
 

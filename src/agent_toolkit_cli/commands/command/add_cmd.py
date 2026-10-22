@@ -58,10 +58,10 @@ def add_cmd(source: str, slug: str | None, ref: str | None) -> None:
 def _add_single(parsed, final_slug: str) -> None:
     lock_path = library_lock_path()
     lock = read_lock(lock_path)
-    requested = parsed.owner_repo or parsed.url
+    requested = parsed.identity
     existing = lock.skills.get(final_slug)
     if existing is not None:
-        if existing.source != requested:
+        if existing.source != requested or existing.ref != parsed.ref:
             raise click.ClickException(f"{final_slug}: library entry exists with source {existing.source!r}; refusing to overwrite with {requested!r}. Run `command remove {final_slug}` first.")
         click.echo(f"already in library: {final_slug}")
         return
@@ -96,6 +96,8 @@ def _add_monorepo(parsed, final_slug: str) -> None:
             skill_git.clone_pinned_or_branch(parsed.url, parent, ref=parsed.ref, env=None)
         except skill_git.GitError as exc:
             raise click.ClickException(f"parent clone failed: {exc}") from exc
+    if not skill_git.remote_matches(parent, parsed.url, None):
+        raise click.ClickException(f"{final_slug}: foreign parent origin at {parent}")
     command_root = parent / parsed.subpath
     content = command_root / "COMMAND.md"
     if content.is_symlink() or not content.is_file():

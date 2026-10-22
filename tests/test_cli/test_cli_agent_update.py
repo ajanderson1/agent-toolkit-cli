@@ -220,7 +220,10 @@ def test_agent_update_project_scope(tmp_path, monkeypatch, git_sandbox):
     project = tmp_path / "proj"
     project.mkdir()
     proj_lock_path = lock_file_path(scope="project", home=None, project=project)
-    write_lock(proj_lock_path, read_lock(library_lock_path()))
+    # New central installs record their backing explicitly; a copied legacy
+    # lock with missing private backing must not be silently reinterpreted.
+    install = CliRunner().invoke(main, ["--project", str(project), "agent", "install", "demo", "-p", "--harnesses", "pi"])
+    assert install.exit_code == 0, install.output
 
     canonical = library_agent_path("demo")
     _advance_remote(upstream, git_sandbox.env)

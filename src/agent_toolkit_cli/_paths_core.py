@@ -82,6 +82,12 @@ def default_scope(cwd: Path) -> str:
     return "global"
 
 
+def validate_asset_slug(slug: str) -> None:
+    if not slug or slug in (".", "..") or Path(slug).name != slug or "\\" in slug:
+        from agent_toolkit_cli._install_core import InstallError
+        raise InstallError(f"Unsafe asset slug: {slug!r}; expected one leaf name")
+
+
 def library_root_for_asset_type(
     binding: AssetTypeBinding,
     env: dict[str, str] | None = None,

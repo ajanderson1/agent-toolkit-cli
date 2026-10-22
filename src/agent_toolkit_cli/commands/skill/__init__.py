@@ -399,7 +399,7 @@ def _add_single(parsed: ParsedSource, slug: str | None) -> None:
     existing_entry = lock.skills.get(slug)
 
     if existing_entry is not None:
-        requested = parsed.owner_repo or parsed.url
+        requested = parsed.identity
         if existing_entry.source != requested or existing_entry.ref != parsed.ref:
             raise click.ClickException(
                 f"{slug}: library entry exists with source {existing_entry.source!r} ref={existing_entry.ref!r}; "
@@ -428,7 +428,7 @@ def _add_single(parsed: ParsedSource, slug: str | None) -> None:
         local_sha = None
 
     entry = LockEntry(
-        source=parsed.owner_repo or parsed.url,
+        source=parsed.identity,
         source_type=parsed.type,
         ref=parsed.ref,
         skill_path="SKILL.md",
@@ -530,10 +530,12 @@ Examples:
                    "company).")
 @click.option("-p", "--project", "project_flag", is_flag=True,
               help="Shorthand for --scope project.")
+@click.option("--migrate-to-central", is_flag=True, help="Migrate verified private backing, retaining the old checkout.")
 @click.pass_context
 def install_cmd(
     ctx: click.Context, slug: str | None, source_filter: str | None,
     agents_str: str, scope: str | None, project_flag: bool,
+    migrate_to_central: bool = False,
 ) -> None:
     """Create agent-visibility symlinks for one skill or a source family.
 
@@ -555,6 +557,16 @@ def install_cmd(
         normalize_skill_project_root(candidate) if scope == "project" else None
     )
 
+    if migrate_to_central:
+        if scope != "project" or project_root is None or slug is None:
+            raise click.UsageError("--migrate-to-central requires one SLUG and project scope")
+        from agent_toolkit_cli._paths_core import SKILL_BINDING
+        from agent_toolkit_cli.project_backing import migrate
+        try:
+            old, new = migrate(SKILL_BINDING, slug, project_root)
+        except (InstallError, ValueError) as exc:
+            raise click.ClickException(str(exc)) from exc
+        click.echo(f"{slug}: {old} -> {new} (old backing preserved)")
     try:
         target_agents = _resolve_agents(agents_str, scope, project=project_root)
     except click.UsageError:
@@ -654,19 +666,8 @@ def install_cmd(
         # project_root was normalized above (Paperclip descendants fold to the
         # company root); reuse it so the lock and canonical land there.
         assert project_root is not None
-        try:
-            ensure_project_canonical(
-                slug=slug,
-                project=project_root,
-                global_lock_path=global_lock_path,
-                env=None,
-            )
-        except InstallError as exc:
-            raise click.ClickException(str(exc)) from exc
-        except Exception as exc:
-            raise click.ClickException(
-                f"clone for project scope failed: {exc}"
-            ) from exc
+        # Backing materialization and provenance writes are owned by apply();
+        # a refused foreign projection must not acquire a project lock entry.
 
         # Under the external-store model every agent — including the synthetic
         # "standard" bundle token — projects via a symlink into the project

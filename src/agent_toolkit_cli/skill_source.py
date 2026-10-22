@@ -27,6 +27,12 @@ class ParsedSource:
     subpath: str | None
     skill_name: str | None = None
 
+    @property
+    def identity(self) -> str:
+        """Keep the full clone identity for non-public hosts and local sources."""
+        public = urlparse(self.url).hostname in ("github.com", "gitlab.com") or self.url.startswith("git@github.com:") or self.url.startswith("git@gitlab.com:")
+        return self.owner_repo if public and self.owner_repo else self.url
+
 
 _LOCAL_PREFIXES = ("./", "../")
 _SSH_RE = re.compile(r"^git@([^:]+):(.+)$")
@@ -109,8 +115,9 @@ def _parse_https(url: str) -> ParsedSource:
 
     ref: str | None = None
     subpath: str | None = None
-    if "/tree/" in path or "/blob/" in path:
-        delimiter = "/tree/" if "/tree/" in path else "/blob/"
+    delimiters = ("/tree/", "/blob/", "/src/branch/", "/src/tag/", "/src/commit/")
+    delimiter = next((d for d in delimiters if d in path), None)
+    if delimiter is not None:
         head, _, rest = path.partition(delimiter)
         parts = rest.split("/", 1)
         ref = _sanitize_ref(parts[0]) if parts[0] else None
@@ -151,7 +158,10 @@ def _parse_https(url: str) -> ParsedSource:
         owner, repo = path.split("/", 1)
         owner_repo = f"{owner}/{repo}"
 
-    canonical_url = f"https://{host}/{owner_repo}"
+    canonical_url = (f"https://{host}/{owner_repo}" if host == "github.com" else
+                     f"{parsed.scheme}://{parsed.netloc}/{path}")
+    if host != "github.com" and parsed.path.endswith(".git") and ref is None:
+        canonical_url += ".git"
     return ParsedSource(
         type=source_type,
         url=canonical_url,
@@ -180,10 +190,10 @@ def _parse_file_url(url: str) -> ParsedSource:
         if len(parts) == 2 and parts[1]:
             subpath = _sanitize_subpath(parts[1])
         body = head
-    abs_path = body.removesuffix(".git").rstrip("/")
+    abs_path = body.rstrip("/")
     if not abs_path:
         raise SourceParseError(f"Unparseable file:// URL: {url}")
-    repo = Path(abs_path).name
+    repo = Path(abs_path).name.removesuffix(".git")
     if not repo:
         raise SourceParseError(f"Unparseable file:// URL: {url}")
     owner_repo = f"local/{repo}"

@@ -1331,7 +1331,6 @@ class TUIApp(App):
             InstallError,
             InstallPlan,
             apply as engine_apply,
-            ensure_project_canonical,
             validate_projection_context,
         )
         from agent_toolkit_cli.skill_paths import library_lock_path
@@ -1412,12 +1411,6 @@ class TUIApp(App):
                         scope=scope,
                         home=home,
                         project=project,
-                    )
-                    ensure_project_canonical(
-                        slug=slug,
-                        project=project,
-                        global_lock_path=library_lock_path(),
-                        env=None,
                     )
                 except InstallError as exc:
                     errors.append(f"{slug}: {exc}")
@@ -1616,11 +1609,8 @@ class TUIApp(App):
         )
 
     def _apply_agent_pending(self) -> ApplyResult | None:
-        import shutil
-
         from agent_toolkit_cli import agent_install
         from agent_toolkit_cli._install_core import InstallError, InstallPlan
-        from agent_toolkit_cli.agent_paths import canonical_agent_dir
 
         try:
             grid = self.query_one("#agent-grid", AgentGrid)
@@ -1649,22 +1639,6 @@ class TUIApp(App):
             effective_home = Path.home() if scope == "global" else None
             project = None if scope == "global" else Path.cwd()
 
-            # Project scope: seed canonical from global if not already present.
-            if scope == "project" and project is not None:
-                canonical = canonical_agent_dir(slug, scope="project", project=project)
-                if not canonical.exists():
-                    global_canonical = canonical_agent_dir(slug, scope="global")
-                    if global_canonical.exists():
-                        try:
-                            canonical.parent.mkdir(parents=True, exist_ok=True)
-                            shutil.copytree(global_canonical, canonical)
-                        except OSError as exc:
-                            errors.append(
-                                f"{slug}: could not seed project canonical: {exc}"
-                            )
-                            failed += len(adds) + len(removes)
-                            continue
-
             # Adds → agent_install.apply()
             if adds:
                 p = InstallPlan(
@@ -1679,6 +1653,12 @@ class TUIApp(App):
                     result = agent_install.apply(
                         p, home=effective_home, project=project
                     )
+                    skipped = tuple(getattr(result, "skipped", ()))
+                    if skipped:
+                        self.notify(
+                            f"{slug}: skipped unsupported agent projection: {', '.join(skipped)}",
+                            title="Agent projection not supported", severity="warning", timeout=12,
+                        )
                     ok += len(result.created)
                 except InstallError as exc:
                     # #373: the facade seam already prefixed the slug — do not

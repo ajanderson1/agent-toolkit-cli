@@ -110,8 +110,8 @@ def _add_single(parsed: ParsedSource, slug: str | None) -> None:
 
     existing_entry = lock.skills.get(final_slug)
     if existing_entry is not None:
-        requested = parsed.owner_repo or parsed.url
-        if existing_entry.source != requested:
+        requested = parsed.identity
+        if existing_entry.source != requested or existing_entry.ref != parsed.ref:
             raise click.ClickException(
                 f"{final_slug}: library entry exists with source "
                 f"{existing_entry.source!r}; refusing to overwrite with "
@@ -145,7 +145,7 @@ def _add_single(parsed: ParsedSource, slug: str | None) -> None:
     # don't leave an unreclaimable orphan. Only fires for a fresh clone — a
     # pre-existing canonical (idempotent re-run with correct --slug) is left
     # alone.
-    content_file = canonical / f"{final_slug}.md"
+    content_file = canonical / ("AGENTS.md" if (canonical / "AGENTS.md").is_file() else f"{final_slug}.md")
     if not content_file.exists():
         if fresh_clone:
             shutil.rmtree(canonical, ignore_errors=True)
@@ -173,10 +173,10 @@ def _add_single(parsed: ParsedSource, slug: str | None) -> None:
         local_sha = None
 
     entry = LockEntry(
-        source=parsed.owner_repo or parsed.url,
+        source=parsed.identity,
         source_type=parsed.type,
         ref=parsed.ref,
-        agent_path=f"{final_slug}.md",
+        agent_path=content_file.name,
         upstream_sha=upstream_sha,
         local_sha=local_sha,
     )
@@ -213,26 +213,25 @@ def _add_monorepo(parsed: ParsedSource, slug: str | None) -> None:
         except Exception as exc:
             raise click.ClickException(f"parent clone failed: {exc}") from exc
     else:
-        # Refresh the shared parent cache so a *growing* category repo resolves
-        # agents added after this cache was first cloned (#276 class). fetch
-        # alone advances the remote-tracking ref but leaves the working tree
-        # pinned; the hard reset moves it onto the new tip. The parent is a
-        # read-only cache, so the reset is safe. NEVER rmtree it — it is shared
-        # across every agent from this repo (unlike the single-repo fresh-clone
-        # cleanup, which owns its whole clone).
-        ref = skill_git.resolve_ref(parsed.ref, parent_dir)
-        try:
-            skill_git.fetch_ref(parent_dir, ref=ref, env=None)
-            skill_git.reset_hard(parent_dir, ref=ref, env=None)
-        except Exception as exc:
-            click.echo(
-                f"warning: parent refresh failed for {parent_dir}: {exc}",
-                err=True,
-            )
+        if not skill_git.remote_matches(parent_dir, parsed.url, None):
+            raise click.ClickException(f"{final_slug}: shared parent has a foreign origin: {parent_dir}")
+        if skill_git.status(parent_dir, env=None) != skill_git.GitWorkingTreeStatus.CLEAN:
+            raise click.ClickException(f"{final_slug}: dirty shared parent: {parent_dir}")
+        # Never reset a shared checkout: a clean fast-forward is the only
+        # permitted refresh. A divergent cache remains intact for inspection.
+        if parsed.ref is not None and not skill_git._checked_out_at_ref(parent_dir, parsed.ref, None):
+            raise click.ClickException(f"{final_slug}: shared parent ref conflict at {parent_dir}")
+        from agent_toolkit_cli.skill_lock import looks_like_sha
+        if not looks_like_sha(parsed.ref):
+            try:
+                skill_git.pull_ff_only(parent_dir, ref=skill_git.resolve_ref(parsed.ref, parent_dir), env=None)
+            except skill_git.GitError as exc:
+                raise click.ClickException(f"{final_slug}: parent refresh refused: {exc}") from exc
 
     agent_root = parent_dir / subpath
-    content_rel = f"{subpath}/{final_slug}.md"
-    if not (agent_root / f"{final_slug}.md").exists():
+    filename = "AGENTS.md" if (agent_root / "AGENTS.md").is_file() else f"{final_slug}.md"
+    content_rel = f"{subpath}/{filename}"
+    if not (agent_root / filename).is_file():
         # Do NOT rmtree the shared parent on a missing content file.
         raise click.ClickException(
             f"{final_slug}: content file {content_rel} not found in parent "

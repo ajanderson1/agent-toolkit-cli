@@ -90,22 +90,21 @@ def test_remove_unknown_entry_is_noop():
     assert remove_entry(lf, "nope") == lf
 
 
-def test_unknown_high_version_treated_as_empty(tmp_path: Path):
-    """Forward compat: a version we have no reader for becomes empty rather
-    than crashing — but unknown fields in known versions are preserved
-    (covered by test_unknown_fields_in_input_are_preserved_on_round_trip).
-    """
+def test_unknown_high_version_refused(tmp_path: Path):
+    """Unknown locks must not be mistaken for empty and overwritten."""
+    import pytest
     p = tmp_path / "skills-lock.json"
     p.write_text('{"version": 999, "skills": {}}')
-    lf = read_lock(p)
-    assert lf == LockFile(version=1, skills={})
+    with pytest.raises(ValueError):
+        read_lock(p)
 
 
-def test_unparseable_file_treated_as_empty(tmp_path: Path):
+def test_unparseable_file_refused(tmp_path: Path):
+    import pytest
     p = tmp_path / "skills-lock.json"
     p.write_text("not json")
-    lf = read_lock(p)
-    assert lf == LockFile(version=1, skills={})
+    with pytest.raises(ValueError):
+        read_lock(p)
 
 
 # ── Cross-version interop: `npx skills` writes v3 globally ─────────────────

@@ -278,6 +278,19 @@ def apply_selection(
         ):
             raise InstallError(f"{name}: source/ref/path record collision")
         canonical = _canonical(name, scope, home, project)
+        private_wrapper = (
+            scope == "project" and group.backing is not None
+            and not group.backing.resolve().is_relative_to(library_skill_path("_unused", home=home).parent.resolve())
+        )
+        if private_wrapper:
+            # Reconcile an EXISTING private wrapper without turning its data
+            # into central library backing or cloning another private checkout.
+            from agent_toolkit_cli.skill_paths import project_store_root
+            canonical = project_store_root(project) / name
+        elif scope == "project":
+            from agent_toolkit_cli._paths_core import SKILL_BINDING
+            from agent_toolkit_cli.project_backing import check_creation
+            check_creation(SKILL_BINDING, name, project, home=home)
         target = backing / child.entry.skill_path
         if not target.resolve().is_relative_to(backing.resolve()):
             raise InstallError(f"{name}: escaping skill path")
@@ -290,6 +303,9 @@ def apply_selection(
             raise InstallError(f"{name}: missing SKILL.md in preserved checkout")
         # Register the complete sibling set, without activating unselected siblings.
         before[name], after[name] = old, old or child.entry
+        if scope == "project" and old is None:
+            after[name] = dataclasses.replace(child.entry, extras={**child.entry.extras,
+                "projectBacking": "central" if canonical == library_skill_path(name, home=home) else "isolated"})
         canonicals[canonical] = (current, current or target)
         for agent, selected in selections.items():
             path = projection(name, agent, scope=scope, home=home, project=project)

@@ -20,6 +20,8 @@ import json
 from pathlib import Path
 
 import pytest
+
+pytestmark = pytest.mark.usefixtures("isolated_project_backing")
 from click.testing import CliRunner
 
 from agent_toolkit_cli.cli import main
@@ -203,9 +205,6 @@ def test_install_uninstall_project_round_trip(
     project.mkdir()
     _seed_global_canonical(tmp_path)
     _write_global_lock(tmp_path)
-
-    # Seed the project canonical so install can find the content file.
-    _seed_project_canonical(project)
 
     runner = CliRunner()
 
@@ -1813,7 +1812,6 @@ def test_project_install_writes_lock_and_list_shows_it(
     project.mkdir()
     _seed_global_canonical(tmp_path)
     _write_global_lock(tmp_path)
-    _seed_project_canonical(project)
 
     runner = CliRunner()
     r_install = runner.invoke(

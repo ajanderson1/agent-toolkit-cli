@@ -3,7 +3,7 @@
 Skills are `SKILL.md` folders with optional references, scripts and supporting files. **Add registers library content; install makes it visible.** Canonicals are standalone Git checkouts or symlinks into shared parent checkouts; harness projections point to those canonicals.
 
 - Global library: `~/.agent-toolkit/skills/`; global lock: `~/.agent-toolkit/skills-lock.json`.
-- Project backing store: `~/.agent-toolkit/projects/<id>/skills/`, outside the consumer repo; project lock: `<project>/skills-lock.json`.
+- New project projections share the central library; project lock: `<project>/skills-lock.json`. Recorded legacy private stores remain usable. See [project backing and explicit migration](../agent-toolkit/project-backing.md).
 - Standard visibility: `.agents/skills/<slug>` (project), `~/.agents/skills/<slug>` (global). Other harnesses use their catalog-specific slots.
 - `AGENT_TOOLKIT_SKILLS_ROOT` relocates the skills library and associated state; it is not an override for every kind.
 

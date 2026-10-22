@@ -61,19 +61,11 @@ def ensure_project_command_canonical(*, slug: str, project: Path) -> bool:
     Returns True only when this call created the project directory.
     Does not write lock state.
     """
-    project_canonical = canonical_command_dir(slug, scope="project", project=project)
-    if project_canonical.exists() or project_canonical.is_symlink():
-        return False
-    global_canonical = canonical_command_dir(slug, scope="global")
-    source_file = _command_file(global_canonical)
-    # Validate global COMMAND.md is regular (already enforced by _command_file).
-    del source_file
-    project_canonical.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        project_canonical.symlink_to(global_canonical.resolve(), target_is_directory=True)
-    except OSError:
-        shutil.copytree(global_canonical, project_canonical, symlinks=True)
-    return True
+    from agent_toolkit_cli._paths_core import COMMAND_BINDING
+    from agent_toolkit_cli.project_backing import ensure
+    ensure(COMMAND_BINDING, slug, project, write_entry=False)
+    # Central backing is never rollback-owned by this project operation.
+    return False
 
 
 def _project_entry_from_global(slug: str) -> LockEntry | None:
@@ -363,7 +355,7 @@ def apply(
                         local_sha=None,
                         parent_url=derived.parent_url,
                         read_only=derived.read_only,
-                        extras=dict(derived.extras),
+                        extras={**derived.extras, "projectBacking": "central" if canonical == canonical_command_dir(plan.slug, scope="global") else "isolated"},
                         harnesses=_ordered_tokens(successful_add),
                     )
                     write_lock(lock_path, add_entry(lock, plan.slug, derived))

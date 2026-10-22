@@ -54,7 +54,7 @@ def _validated_agent_path(slug: str, value: str | None) -> PurePosixPath:
     if not parts or any(part in {"", ".", ".."} for part in parts):
         raise ValueError(f"{slug}: invalid agentPath {raw!r}")
     path = PurePosixPath(raw)
-    if path.is_absolute() or path.name != f"{slug}.md":
+    if path.is_absolute() or path.name not in (f"{slug}.md", "AGENTS.md"):
         raise ValueError(
             f"{slug}: agentPath must end with {slug}.md, got {raw!r}"
         )

@@ -41,8 +41,6 @@ from agent_toolkit_cli.skill_paths import (
     harness_projection_dir,
     parent_clone_path,
     project_id,
-    project_parents_root,
-    project_store_root,
 )
 
 Scope = Literal["project", "global"]
@@ -69,6 +67,14 @@ __all__ = [
 ]
 
 
+def project_store_root(project: Path, *, env: dict[str, str] | None = None) -> Path:
+    return library_root(env).parent / "projects" / project_id(project) / "agents"
+
+
+def project_parents_root(project: Path) -> Path:
+    return project_store_root(project)
+
+
 def library_root(env: dict[str, str] | None = None) -> Path:
     """Return the root of the global agent library.
 
@@ -80,6 +86,8 @@ def library_root(env: dict[str, str] | None = None) -> Path:
 
 def library_agent_path(slug: str, *, env: dict[str, str] | None = None) -> Path:
     """Return the canonical library path for a single agent slug."""
+    from agent_toolkit_cli._paths_core import validate_asset_slug
+    validate_asset_slug(slug)
     return library_root(env) / slug
 
 
@@ -123,7 +131,8 @@ def canonical_agent_dir(
         return library_agent_path(slug)
     if project is None:
         raise ValueError("project scope requires project")
-    return project_store_root(project) / slug
+    from agent_toolkit_cli.project_backing import resolve
+    return resolve(AGENT_BINDING, slug, project, home=home)
 
 
 def lock_file_path(

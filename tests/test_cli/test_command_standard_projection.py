@@ -385,5 +385,6 @@ def test_ensure_project_canonical_idempotent(tmp_path, monkeypatch):
     _seed_global(home)
     project = tmp_path / "repo"
     project.mkdir()
-    assert ensure_project_command_canonical(slug="demo", project=project) is True
+    # Central selection does not create a project-owned canonical.
+    assert ensure_project_command_canonical(slug="demo", project=project) is False
     assert ensure_project_command_canonical(slug="demo", project=project) is False

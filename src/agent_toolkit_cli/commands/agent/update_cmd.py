@@ -6,10 +6,11 @@ calls skill_git.fetch + skill_git.merge, and updates lock SHAs on success.
 from __future__ import annotations
 
 import click
+from pathlib import Path
 
 from agent_toolkit_cli import skill_git
-from agent_toolkit_cli.agent_lock import read_lock, write_lock
-from agent_toolkit_cli.agent_paths import library_agent_path, lock_file_path
+from agent_toolkit_cli.agent_lock import read_lock, write_lock, clone_url_from_entry
+from agent_toolkit_cli.agent_paths import canonical_agent_dir, lock_file_path
 from agent_toolkit_cli.commands.agent._common import scope_and_roots, scope_banner
 
 
@@ -55,7 +56,12 @@ def update_cmd(
             had_error = True
             continue
 
-        canonical = library_agent_path(slug)
+        entry = lock.skills[slug]
+        canonical = canonical_agent_dir(slug, scope=scope, home=home, project=project_root)
+        if entry.parent_url is not None:
+            canonical = canonical.resolve()
+            for _ in Path(entry.agent_path or f"{slug}.md").parent.parts:
+                canonical = canonical.parent
         if not skill_git.is_git_repo(canonical):
             click.echo(
                 f"{slug}: no .git/ in canonical — cannot update; "
@@ -64,11 +70,21 @@ def update_cmd(
             had_error = True
             continue
 
-        entry = lock.skills[slug]
+        if not skill_git.remote_matches(canonical, clone_url_from_entry(entry), None):
+            click.echo(f"{slug}: foreign origin; refusing update")
+            had_error = True
+            continue
+        if skill_git.status(canonical, env=None) != skill_git.GitWorkingTreeStatus.CLEAN:
+            click.echo(f"{slug}: dirty backing; refusing update")
+            had_error = True
+            continue
+        if entry.ref_looks_pinned:
+            click.echo(f"{slug}: SHA-pinned; unchanged")
+            continue
         skill_git.fetch(canonical, env=None)
         ref = skill_git.resolve_ref(entry.ref, canonical)
         try:
-            skill_git.merge(canonical, ref=ref, env=None)
+            skill_git.pull_ff_only(canonical, ref=ref, env=None)
         except skill_git.GitError as exc:
             click.echo(f"{slug}: conflict during merge (resolve in working copy)")
             click.echo(exc.stderr)

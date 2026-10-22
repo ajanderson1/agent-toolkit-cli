@@ -82,6 +82,7 @@ Examples:
     help="Comma-separated harness names. Default: standard + all enabled "
          "harnesses not covered by the standard slot.",
 )
+@click.option("--migrate-to-central", is_flag=True, help="Explicitly migrate verified private backing; preserve the old checkout.")
 @click.pass_context
 def install_cmd(
     ctx: click.Context,
@@ -89,6 +90,7 @@ def install_cmd(
     global_: bool,
     project_flag: bool,
     harnesses: str | None,
+    migrate_to_central: bool = False,
 ) -> None:
     """Project an agent into the chosen scope's harnesses."""
     scope, home, project, _implicit = scope_and_roots(
@@ -137,19 +139,16 @@ def install_cmd(
         click.echo(f"{slug}: no enabled harnesses; nothing to do")
         return
 
-    # For project scope, seed the canonical if not already present.
-    if scope == "project" and project is not None:
-        canonical = canonical_agent_dir(slug, scope="project", project=project)
-        if not canonical.exists():
-            global_canonical = canonical_agent_dir(slug, scope="global")
-            if global_canonical.exists():
-                import shutil
-                canonical.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copytree(global_canonical, canonical)
-            else:
-                raise click.ClickException(
-                    f"{slug}: global canonical missing; re-run `agent add {slug}` first"
-                )
+    if migrate_to_central:
+        if scope != "project" or project is None:
+            raise click.UsageError("--migrate-to-central requires project scope")
+        from agent_toolkit_cli._paths_core import AGENT_BINDING
+        from agent_toolkit_cli.project_backing import migrate
+        try:
+            old, new = migrate(AGENT_BINDING, slug, project)
+        except (InstallError, ValueError) as exc:
+            raise click.ClickException(str(exc)) from exc
+        click.echo(f"{slug}: {old} -> {new} (old backing preserved)")
 
     p = InstallPlan(
         slug=slug, scope=scope, source=None, ref=None,
