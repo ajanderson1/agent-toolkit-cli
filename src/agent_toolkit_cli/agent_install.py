@@ -196,11 +196,26 @@ def _normalize_to_standard(
 
 
 def apply(
+    plan: InstallPlan, *, home: Path | None = None,
+    project: Path | None = None, env: dict[str, str] | None = None,
+) -> InstallResult:
+    from agent_toolkit_cli.project_backing import new_install_paths, cleanup_created_paths
+    with new_install_paths() as created:
+        result = _apply(plan, home=home, project=project, env=env, _created_paths=created)
+        if created and plan.scope == "project" and not result.created and plan.source is None:
+            from agent_toolkit_cli.agent_lock import read_lock
+            if plan.slug not in read_lock(lock_file_path(scope="project", project=project)).skills:
+                cleanup_created_paths(created)  # an all-skipped request owns no backing
+        return result
+
+
+def _apply(
     plan: InstallPlan,
     *,
     home: Path | None = None,
     project: Path | None = None,
     env: dict[str, str] | None = None,
+    _created_paths=None,
 ) -> InstallResult:
     """Execute the agent-install plan.
 
@@ -224,7 +239,8 @@ def apply(
     tokens that normalize to "standard" nets to a DELETE of the shared slot
     (add installs it, the remove loop then unlinks it).
     """
-    from agent_toolkit_cli.agent_adapters import UnsupportedMechanismError
+    from agent_toolkit_cli.agent_adapters import UnsupportedMechanismError, _sentinel_path
+    from agent_toolkit_cli.project_backing import record_created_path
     from agent_toolkit_cli.agent_lock import (
         LockEntry, add_entry, read_lock, write_lock,
     )
@@ -234,7 +250,7 @@ def apply(
         from agent_toolkit_cli.project_backing import check_creation, ensure
         check_creation(AGENT_BINDING, plan.slug, project, home=home)
         if plan.source is None:
-            ensure(AGENT_BINDING, plan.slug, project, home=home, write_entry=False)
+            ensure(AGENT_BINDING, plan.slug, project, home=home, write_entry=False, created_paths=_created_paths)
     canonical = canonical_agent_dir(
         plan.slug, scope=plan.scope, home=home, project=project,
     )
@@ -278,10 +294,16 @@ def apply(
     if (plan.source is not None
             and not canonical.exists()
             and not canonical.is_symlink()):
-        canonical.parent.mkdir(parents=True, exist_ok=True)
-        skill_git.clone_pinned_or_branch(
-            plan.source.url, canonical, ref=plan.ref, env=env,
-        )
+        from agent_toolkit_cli.agent_paths import acquire_agent_parent, registered_agent_paths
+        paths = registered_agent_paths(canonical)
+        if existing_entry is not None:
+            if existing_entry.source != plan.source.identity or existing_entry.ref != plan.ref:
+                raise LockMismatchError(f"{plan.slug}: conflicting source/ref identity")
+            paths[plan.slug] = Path(existing_entry.agent_path or f"{plan.slug}.md").name
+        acquire_agent_parent(canonical,
+            lambda stage: skill_git.clone_pinned_or_branch(plan.source.url, stage, ref=plan.ref, env=env),
+            paths, new_agent=None if existing_entry is not None else (plan.slug, ""))
+        record_created_path(canonical, _created_paths)
     elif plan.source is not None and existing_entry is not None:
         requested = plan.source.identity
         if existing_entry.source != requested:
@@ -336,6 +358,14 @@ def apply(
             if not supported(name):
                 skipped.append(name)
                 continue
+        dest = adapter.destination(plan.slug, scope=plan.scope, home=home, project=project)
+        sentinel = _sentinel_path(dest)
+        if sentinel.is_symlink():
+            raise InstallError(f"{plan.slug}: foreign ownership sidecar symlink: {sentinel}")
+        candidates = {dest, sentinel}
+        if name == "pi":
+            candidates.add(dest.parent / plan.slug)
+        missing = {p for p in candidates if not p.exists() and not p.is_symlink()}
         try:
             out = adapter.install(
                 plan.slug, content_path,
@@ -346,6 +376,10 @@ def apply(
             # #373: name the failing slug exactly once, for every mechanism.
             # type(exc) keeps AgentProjectionConflictError discriminable.
             raise type(exc)(f"{plan.slug}: {exc}") from exc
+        finally:
+            for path in missing:
+                if path.exists() or path.is_symlink():
+                    record_created_path(path, _created_paths)
         created.append(out)
 
     removed: list[Path] = []
@@ -446,16 +480,23 @@ def install(
     canonical = canonical_agent_dir(
         slug, scope=scope, home=home, project=project,
     )
+    if scope == "project":
+        from agent_toolkit_cli._paths_core import AGENT_BINDING
+        from agent_toolkit_cli.project_backing import check_creation
+        check_creation(AGENT_BINDING, slug, project, home=home)
     if canonical.exists() and skill_git.is_git_repo(canonical):
-        skill_git.fetch(canonical, env=env)
-        try:
-            skill_git.merge(
-                canonical,
-                ref=skill_git.resolve_ref(parsed.ref, canonical, env=env),
-                env=env,
-            )
-        except skill_git.GitError:
-            pass
+        from agent_toolkit_cli.agent_lock import read_lock
+        from agent_toolkit_cli.agent_paths import agent_git_root, registered_agent_paths, refresh_agent_repo
+        lock = read_lock(lock_file_path(scope=scope, home=home, project=project))
+        entry = lock.skills.get(slug)
+        if entry is not None and (entry.ref != parsed.ref or entry.source != parsed.identity):
+            raise LockMismatchError(f"{slug}: conflicting source/ref identity")
+        content = agent_content_path(canonical, slug, entry)
+        root = agent_git_root(canonical, slug, entry, project=project if scope == "project" else None) if entry else canonical
+        paths = registered_agent_paths(root, library=lock if scope == "global" else None,
+                                       scoped=lock if scope == "project" else None, project=project)
+        paths[slug] = "AGENTS.md" if content == canonical else content.name
+        refresh_agent_repo(root, source_url=parsed.url, ref=parsed.ref, paths=paths)
 
     p = plan(
         slug=slug, scope=scope,

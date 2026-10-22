@@ -200,13 +200,29 @@ def _current_linked_agents(
 
 
 def apply(
+    plan: InstallPlan, *, home: Path | None = None,
+    project: Path | None = None, env: dict[str, str] | None = None,
+) -> InstallResult:
+    from agent_toolkit_cli.project_backing import new_install_paths, cleanup_created_paths
+    with new_install_paths() as created:
+        result = _apply(plan, home=home, project=project, env=env, _created_paths=created)
+        if plan.scope == "project" and any(path == result.canonical_path for path, _dev, _ino in created):
+            from agent_toolkit_cli.skill_lock import read_lock
+            if plan.slug not in read_lock(lock_file_path(scope="project", project=project)).skills:
+                cleanup_created_paths(created)
+        return result
+
+
+def _apply(
     plan: InstallPlan,
     *,
     home: Path | None = None,
     project: Path | None = None,
     env: dict[str, str] | None = None,
+    _created_paths=None,
 ) -> InstallResult:
-    """Execute the plan."""
+    """Execute the plan; retain only successfully registered new state."""
+    from agent_toolkit_cli.project_backing import create_backing_dir, record_created_path
     from agent_toolkit_cli.skill_lock import (
         LockEntry, add_entry, read_lock, write_lock,
     )
@@ -241,7 +257,7 @@ def apply(
         check_creation(SKILL_BINDING, plan.slug, project, home=home)
         if plan.source is None:
             from agent_toolkit_cli.skill_paths import library_lock_path
-            ensure_project_canonical(slug=plan.slug, project=project, global_lock_path=library_lock_path(), write_entry=False)
+            ensure_project_canonical(slug=plan.slug, project=project, global_lock_path=library_lock_path(), write_entry=False, _created_paths=_created_paths)
     canonical = canonical_skill_dir(
         plan.slug, scope=plan.scope, home=home, project=project,
     )
@@ -251,7 +267,7 @@ def apply(
 
     # Clone canonical if needed.
     if plan.source is not None and not canonical.exists():
-        canonical.parent.mkdir(parents=True, exist_ok=True)
+        create_backing_dir(canonical, _created_paths)
         skill_git.clone_pinned_or_branch(
             plan.source.url, canonical, ref=plan.ref, env=env,
         )
@@ -301,6 +317,7 @@ def apply(
             else:
                 link.symlink_to(canonical)
                 created.append(link)
+                record_created_path(link, _created_paths)
             continue
 
         skip, reason = _should_skip_symlink(
@@ -329,6 +346,7 @@ def apply(
         else:
             link.symlink_to(canonical)
             created.append(link)
+            record_created_path(link, _created_paths)
 
     # Remove symlinks.
     removed: list[Path] = []
@@ -471,6 +489,7 @@ def ensure_project_canonical(
     global_lock_path: Path,
     env: dict[str, str] | None = None,
     write_entry: bool = True,
+    _created_paths=None,
 ) -> Path:
     """If <project>/.agents/skills/<slug>/ doesn't exist, clone it from the
     global library lock's recorded source URL. Returns the canonical path.
@@ -485,6 +504,11 @@ def ensure_project_canonical(
     Raises InstallError if the slug is not in the global library lock and the
     install is not already complete at project scope.
     """
+    from agent_toolkit_cli.project_backing import new_install_paths, create_backing_dir, record_created_path
+    if _created_paths is None:
+        with new_install_paths() as created:
+            return ensure_project_canonical(slug=slug, project=project,
+                global_lock_path=global_lock_path, env=env, write_entry=write_entry, _created_paths=created)
     from agent_toolkit_cli.skill_lock import (
         LockEntry, add_entry, clone_url_from_entry, read_lock, write_lock,
     )
@@ -499,7 +523,7 @@ def ensure_project_canonical(
     project_canonical = check_creation(SKILL_BINDING, slug, project)
     from agent_toolkit_cli.skill_paths import library_skill_path
     if project_canonical == library_skill_path(slug):
-        return ensure(SKILL_BINDING, slug, project, write_entry=write_entry)
+        return ensure(SKILL_BINDING, slug, project, write_entry=write_entry, created_paths=_created_paths)
     # Existing private work is usable irrespective of rollout configuration.
     # Only missing backing requires deliberately enabled legacy creation.
     if not project_canonical.exists():
@@ -545,7 +569,7 @@ def ensure_project_canonical(
             root=project_parents_root(project), env=env,
         )
         if not parent_dir.exists():
-            parent_dir.parent.mkdir(parents=True, exist_ok=True)
+            create_backing_dir(parent_dir, _created_paths)
             # Cache key (parent_clone_path above) stays on the raw ref; the
             # clone honours a SHA pin via clone-at-HEAD + checkout (#345).
             skill_git.clone_pinned_or_branch(
@@ -565,6 +589,7 @@ def ensure_project_canonical(
         if not project_canonical.exists() and not project_canonical.is_symlink():
             project_canonical.parent.mkdir(parents=True, exist_ok=True)
             project_canonical.symlink_to(skill_root)
+            record_created_path(project_canonical, _created_paths)
         if project_canonical.is_symlink() and not project_canonical.exists():
             raise InstallError(
                 f"{slug}: canonical symlink at {project_canonical} is broken "
@@ -572,7 +597,7 @@ def ensure_project_canonical(
             )
     elif not project_canonical.exists():
         # Single-skill repo: clone the repo root flat into the canonical dir.
-        project_canonical.parent.mkdir(parents=True, exist_ok=True)
+        create_backing_dir(project_canonical, _created_paths)
         source_url = clone_url_from_entry(entry)
         skill_git.clone_pinned_or_branch(
             source_url, project_canonical, ref=entry.ref, env=env,

@@ -10,7 +10,9 @@ from pathlib import Path
 
 from agent_toolkit_cli import skill_git
 from agent_toolkit_cli.agent_lock import read_lock, write_lock, clone_url_from_entry
-from agent_toolkit_cli.agent_paths import canonical_agent_dir, agent_content_path, lock_file_path
+from agent_toolkit_cli.agent_paths import (
+    canonical_agent_dir, agent_git_root, registered_agent_paths, refresh_agent_repo, lock_file_path,
+)
 from agent_toolkit_cli._install_core import InstallError
 from agent_toolkit_cli.commands.agent._common import scope_and_roots, scope_banner
 
@@ -59,59 +61,23 @@ def update_cmd(
 
         entry = lock.skills[slug]
         canonical = canonical_agent_dir(slug, scope=scope, home=home, project=project_root)
-        if entry.parent_url is not None:
-            try:
-                agent_content_path(canonical, slug, entry)
-            except InstallError as exc:
-                click.echo(str(exc))
-                had_error = True
+        try:
+            root = agent_git_root(canonical, slug, entry, project=project_root if scope == "project" else None)
+            if entry.ref_looks_pinned:
+                click.echo(f"{slug}: SHA-pinned; unchanged")
                 continue
-            canonical = canonical.resolve()
-            for _ in Path(entry.agent_path or f"{slug}.md").parent.parts:
-                canonical = canonical.parent
-        if not skill_git.is_git_repo(canonical):
-            click.echo(
-                f"{slug}: no .git/ in canonical — cannot update; "
-                f"remove and re-add to switch to git-managed"
-            )
+            paths = registered_agent_paths(root, library=lock if scope == "global" else None,
+                                           scoped=lock if scope == "project" else None, project=project_root)
+            relative = entry.agent_path or f"{slug}.md"
+            paths[slug] = Path(relative).name if root == canonical.resolve() else relative
+            target, _chosen = refresh_agent_repo(root, source_url=clone_url_from_entry(entry), ref=entry.ref, paths=paths)
+        except (InstallError, skill_git.GitError) as exc:
+            click.echo(f"{slug}: update refused: {exc}")
             had_error = True
             continue
 
-        from agent_toolkit_cli.project_backing import verify_gitfile_worktree
-        try:
-            verify_gitfile_worktree(canonical)
-        except InstallError as exc:
-            click.echo(str(exc))
-            had_error = True
-            continue
-        if not skill_git.remote_matches(canonical, clone_url_from_entry(entry), None):
-            click.echo(f"{slug}: foreign origin; refusing update")
-            had_error = True
-            continue
-        if skill_git.status(canonical, env=None) != skill_git.GitWorkingTreeStatus.CLEAN:
-            click.echo(f"{slug}: dirty backing; refusing update")
-            had_error = True
-            continue
-        if entry.ref_looks_pinned:
-            click.echo(f"{slug}: SHA-pinned; unchanged")
-            continue
-        skill_git.fetch(canonical, env=None)
-        ref = skill_git.resolve_ref(entry.ref, canonical)
-        try:
-            skill_git.pull_ff_only(canonical, ref=ref, env=None)
-        except skill_git.GitError as exc:
-            click.echo(f"{slug}: conflict during merge (resolve in working copy)")
-            click.echo(exc.stderr)
-            had_error = True
-            continue
-
-        entry.local_sha = skill_git.head_sha(canonical, env=None)
-        try:
-            entry.upstream_sha = skill_git.remote_head_sha(
-                canonical, ref=ref, env=None,
-            )
-        except skill_git.GitError:
-            pass
+        entry.local_sha = skill_git.head_sha(root, env=None)
+        entry.upstream_sha = target
         # Keep the requested ref identity (including None/default) separate
         # from the branch observed for this update. Re-registration and cache
         # selection must not silently become a different explicit request.

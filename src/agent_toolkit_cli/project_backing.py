@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import dataclasses
+from contextlib import contextmanager
 import importlib
 import shutil
 import subprocess
@@ -82,7 +83,63 @@ def check_creation(binding, slug, project, *, home=None):
     return canonical
 
 
-def ensure(binding, slug, project, *, home=None, write_entry=True):
+def record_created_path(path: Path, created_paths) -> None:
+    """Remember only paths created by this install, not pre-existing backing."""
+    if created_paths is not None:
+        info = path.lstat()
+        created_paths.append((path, info.st_dev, info.st_ino))
+
+
+def create_backing_dir(path: Path, created_paths) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.mkdir()  # claim an absent target atomically; never adopt foreign state
+    record_created_path(path, created_paths)
+
+
+def cleanup_created_paths(created_paths) -> None:
+    errors = []
+    for path, device, inode in reversed(created_paths):
+        try:
+            info = path.lstat()
+        except FileNotFoundError:
+            continue
+        except OSError as exc:
+            errors.append(str(exc))
+            continue
+        if (info.st_dev, info.st_ino) != (device, inode):
+            errors.append(f"{path}: replaced path preserved")
+            continue
+        try:
+            if path.is_symlink() or not path.is_dir():
+                path.unlink()
+            else:
+                shutil.rmtree(path)
+        except OSError as exc:
+            errors.append(str(exc))
+    if errors:
+        raise InstallError(f"new-install cleanup incomplete: {'; '.join(errors)}")
+
+
+@contextmanager
+def new_install_paths():
+    """Failure cleanup for new backing/projections, never existing private work."""
+    created = []
+    try:
+        yield created
+    except Exception as failure:
+        try:
+            cleanup_created_paths(created)
+        except InstallError as exc:
+            raise InstallError(f"{failure}; {exc}") from failure
+        if isinstance(failure, OSError):
+            raise InstallError(f"installation failed: {failure}") from failure
+        raise
+
+
+def ensure(binding, slug, project, *, home=None, write_entry=True, created_paths=None):
+    if created_paths is None:
+        with new_install_paths() as created:
+            return ensure(binding, slug, project, home=home, write_entry=write_entry, created_paths=created)
     paths, locks = _modules(binding)
     canonical = check_creation(binding, slug, project, home=home)
     lock_path = project / binding.lock_filename
@@ -110,8 +167,8 @@ def ensure(binding, slug, project, *, home=None, write_entry=True):
         gitfile = next((p for p in central.rglob(".git") if p.is_file() or p.is_symlink()), None)
         if gitfile is not None:
             raise InstallError(f"{slug}: cannot isolate linked worktree/gitfile backing: {gitfile}")
-        canonical.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copytree(central, canonical, symlinks=True)
+        create_backing_dir(canonical, created_paths)
+        shutil.copytree(central, canonical, symlinks=True, dirs_exist_ok=True)
     if write_entry and slug not in lock.skills:
         entry = dataclasses.replace(global_entry, upstream_sha=None, local_sha=None,
             extras={**global_entry.extras, "projectBacking": "central" if canonical == central else "isolated"})

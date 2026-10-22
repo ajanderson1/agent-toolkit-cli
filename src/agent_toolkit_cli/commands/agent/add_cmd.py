@@ -36,6 +36,7 @@ from agent_toolkit_cli.agent_lock import (
 from agent_toolkit_cli.agent_paths import (
     agent_parent_clone_path,
     checked_agent_content,
+    registered_agent_paths, refresh_agent_repo, acquire_agent_parent, validate_agent_revision,
     library_agent_path,
     library_lock_path,
 )
@@ -130,11 +131,10 @@ def _add_single(parsed: ParsedSource, slug: str | None) -> None:
     ):
         raise click.ClickException(f"{final_slug}: cannot prove canonical source ownership")
     if not canonical.exists():
-        canonical.parent.mkdir(parents=True, exist_ok=True)
         try:
-            skill_git.clone_pinned_or_branch(
-                parsed.url, canonical, ref=parsed.ref, env=None,
-            )
+            acquire_agent_parent(canonical,
+                lambda stage: skill_git.clone_pinned_or_branch(parsed.url, stage, ref=parsed.ref, env=None),
+                registered_agent_paths(canonical, library=lock), new_agent=(final_slug, ""))
         except skill_git.GitError as exc:
             raise click.ClickException(f"clone failed: {exc}") from exc
         fresh_clone = True
@@ -234,14 +234,17 @@ def _add_monorepo(parsed: ParsedSource, slug: str | None) -> None:
             raise click.ClickException(f"{final_slug}: conflicting source/ref/path identity; refusing re-registration")
 
     parent_dir = agent_parent_clone_path(owner, repo, ref=parsed.ref, env=None)
+    paths = registered_agent_paths(parent_dir, library=lock)
+    if existing_entry is not None:
+        paths[final_slug] = existing_entry.agent_path
+    new_agent = None if existing_entry is not None else (final_slug, subpath)
     if not parent_dir.exists():
-        parent_dir.parent.mkdir(parents=True, exist_ok=True)
         try:
-            skill_git.clone_pinned_or_branch(
-                parsed.url, parent_dir, ref=parsed.ref, env=None,
-            )
+            _head, chosen = acquire_agent_parent(parent_dir,
+                lambda stage: skill_git.clone_pinned_or_branch(parsed.url, stage, ref=parsed.ref, env=None),
+                paths, new_agent=new_agent)
         except Exception as exc:
-            raise click.ClickException(f"parent clone failed: {exc}") from exc
+            raise click.ClickException(f"parent clone refused: {exc}") from exc
     else:
         if not skill_git.remote_matches(parent_dir, parsed.url, None):
             raise click.ClickException(f"{final_slug}: shared parent has a foreign origin: {parent_dir}")
@@ -252,16 +255,18 @@ def _add_monorepo(parsed: ParsedSource, slug: str | None) -> None:
         if parsed.ref is not None and not skill_git._checked_out_at_ref(parent_dir, parsed.ref, None):
             raise click.ClickException(f"{final_slug}: shared parent ref conflict at {parent_dir}")
         from agent_toolkit_cli.skill_lock import looks_like_sha
-        if not looks_like_sha(parsed.ref):
-            try:
-                skill_git.pull_ff_only(parent_dir, ref=skill_git.resolve_ref(parsed.ref, parent_dir), env=None)
-            except skill_git.GitError as exc:
-                raise click.ClickException(f"{final_slug}: parent refresh refused: {exc}") from exc
+        try:
+            if looks_like_sha(parsed.ref):
+                chosen = validate_agent_revision(parent_dir, skill_git.head_sha(parent_dir, env=None), paths, new_agent=new_agent)
+            else:
+                _head, chosen = refresh_agent_repo(parent_dir, source_url=parsed.url, ref=parsed.ref,
+                                                  paths=paths, new_agent=new_agent)
+        except (skill_git.GitError, RuntimeError) as exc:
+            raise click.ClickException(f"{final_slug}: parent refresh refused: {exc}") from exc
 
     agent_root = parent_dir / subpath
-    filename = Path(existing_entry.agent_path).name if existing_entry is not None and existing_entry.agent_path else (
-        f"{final_slug}.md" if (agent_root / f"{final_slug}.md").is_file() else "AGENTS.md")
-    content_rel = f"{subpath}/{filename}"
+    content_rel = existing_entry.agent_path if existing_entry is not None else chosen
+    filename = Path(content_rel).name
     if not (agent_root / filename).is_file():
         # Do NOT rmtree the shared parent on a missing content file.
         raise click.ClickException(

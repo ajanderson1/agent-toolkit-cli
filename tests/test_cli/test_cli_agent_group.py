@@ -1160,8 +1160,10 @@ def test_import_category_repo_reuses_exact_parent_and_projects_agents(
     }))
     original_clone = skill_git.clone
     clones: list[Path] = []
+    parent = agent_parent_clone_path("test", "agent-bundle", ref=None)
 
     def clone(url, dest, *, ref, env, depth=None):
+        assert not parent.exists(), "prospective checkout must not be visible while cloning"
         clones.append(dest)
         return original_clone(
             str(git_sandbox.upstream), dest, ref=ref, env=env, depth=depth,  # type: ignore[union-attr]
@@ -1173,7 +1175,9 @@ def test_import_category_repo_reuses_exact_parent_and_projects_agents(
 
     assert result.exit_code == 0, result.output
     parent = agent_parent_clone_path("test", "agent-bundle", ref=None)
-    assert clones == [parent]
+    assert len(clones) == 1, "registered siblings still share one acquired parent"
+    assert clones[0] != parent and not clones[0].exists(), "staged clone was validated then moved"
+    assert parent.is_dir()
     assert skill_git.head_sha(parent, env=None) == pin
     for slug, relative in {
         "alpha": "agents/alpha",

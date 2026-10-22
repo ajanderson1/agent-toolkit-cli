@@ -85,7 +85,8 @@ def test_clone_disables_prompt_and_batches_ssh(git_sandbox, tmp_path, monkeypatc
     assert "BatchMode=yes" in env["GIT_SSH_COMMAND"]
 
 
-def test_clone_https_fallback_to_ssh(tmp_path: Path, monkeypatch):
+@pytest.mark.parametrize("reserved_empty", [False, True])
+def test_clone_https_fallback_to_ssh(tmp_path: Path, monkeypatch, reserved_empty):
     """If HTTPS clone of a github repo fails, fallback to SSH (for private repos)."""
     from agent_toolkit_cli import skill_git
 
@@ -104,6 +105,8 @@ def test_clone_https_fallback_to_ssh(tmp_path: Path, monkeypatch):
 
     monkeypatch.setattr(skill_git, "_run", mock_run)
     dest = tmp_path / "cloned"
+    if reserved_empty:
+        dest.mkdir()  # operation-owned empty reservation is a native Git target
     result = clone("https://github.com/foo/bar", dest, ref=None, env=None)
     assert len(calls) == 2
     assert "https://github.com/foo/bar" in calls[0]

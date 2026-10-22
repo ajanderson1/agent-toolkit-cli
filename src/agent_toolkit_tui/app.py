@@ -1483,16 +1483,21 @@ class TUIApp(App):
         slug: str,
         project: Path,
     ) -> None:
-        """#360 AC2: after a remove-only apply, drop the project lock entry of
-        an UNLISTED slug once no projection symlink remains. Listed slugs keep
-        today's behaviour (entry stays; the row remains visible via the
-        library universe). Non-destructive: the external-store canonical is
-        preserved; doctor's orphan sweep reclaims it if unreferenced."""
+        """Forget only an unlinked CENTRAL projection registration.
+
+        Private provenance is backing ownership, not activation state. Keep it
+        even when unlisted, so detach/status/re-registration/reinstall works
+        without adopting an unrecorded directory or enabling new isolation.
+        """
         from agent_toolkit_cli.skill_agents import AGENTS
         from agent_toolkit_cli.skill_lock import read_lock, remove_entry, write_lock
-        from agent_toolkit_cli.skill_paths import library_lock_path, lock_file_path
+        from agent_toolkit_cli.skill_paths import (
+            library_lock_path, lock_file_path, canonical_skill_dir, library_skill_path,
+        )
         from agent_toolkit_tui.skill_state import _cell_for
 
+        if canonical_skill_dir(slug, scope="project", project=project) != library_skill_path(slug):
+            return  # retained private backing needs its recorded identity
         if slug in read_lock(library_lock_path()).skills:
             return  # listed — out of scope for the drop rule
         # Probe the FULL agent universe, not just the rendered columns: a

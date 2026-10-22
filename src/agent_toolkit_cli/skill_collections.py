@@ -338,30 +338,33 @@ def apply_selection(
         guard[group.wrapper] = lock.skills.get(group.wrapper)
     journal.expect(lock_path, guard)
     journal.expect_paths([*canonicals, *links, *wrappers])
-    try:
-        if new_parent is not None:
-            # No operator-owned checkout is replaced. Failed clones remain recoverable.
-            url, target = new_parent
-            if target.exists() or target.is_symlink():
-                raise InstallError(f"Backing destination appeared: {target}")
-            target.parent.mkdir(parents=True, exist_ok=True)
-            skill_git.clone_pinned_or_branch(url, target, ref=group.ref, env=None)
-            if any(
-                not (backing / c.entry.skill_path / "SKILL.md").is_file()
-                for c in group.children.values()
-            ):
-                raise InstallError("Registered children missing from acquired checkout")
-        for path, (current, target) in canonicals.items():
-            journal.link(path, current, target)
-        for path, (current, target) in links.items():
-            journal.link(path, current, target)
-        for path, (current, target) in wrappers.items():
-            journal.link(path, current, target)
-        journal.write(lock_path, before, after)
-        for agent, selected in selections.items():
-            for name in group.children:
-                link = projection(name, agent, scope=scope, home=home, project=project)
-                if link.is_symlink() != (name in selected):
-                    raise InstallError(f"Exposure verification failed: {link}")
-    except (OSError, InstallError, skill_git.GitError) as exc:
-        raise journal.fail(exc) from exc
+    from agent_toolkit_cli.project_backing import new_install_paths, create_backing_dir
+    with new_install_paths() as created:
+        try:
+            if new_parent is not None:
+                # The journal owns links/locks; this operation alone owns this
+                # new checkout. Never clean up an existing/shared dirty parent.
+                url, target = new_parent
+                if target.exists() or target.is_symlink():
+                    raise InstallError(f"Backing destination appeared: {target}")
+                create_backing_dir(target, created)
+                skill_git.clone_pinned_or_branch(url, target, ref=group.ref, env=None)
+                if any(
+                    not (backing / c.entry.skill_path / "SKILL.md").is_file()
+                    for c in group.children.values()
+                ):
+                    raise InstallError("Registered children missing from acquired checkout")
+            for path, (current, target) in canonicals.items():
+                journal.link(path, current, target)
+            for path, (current, target) in links.items():
+                journal.link(path, current, target)
+            for path, (current, target) in wrappers.items():
+                journal.link(path, current, target)
+            journal.write(lock_path, before, after)
+            for agent, selected in selections.items():
+                for name in group.children:
+                    link = projection(name, agent, scope=scope, home=home, project=project)
+                    if link.is_symlink() != (name in selected):
+                        raise InstallError(f"Exposure verification failed: {link}")
+        except (OSError, InstallError, skill_git.GitError) as exc:
+            raise journal.fail(exc) from exc

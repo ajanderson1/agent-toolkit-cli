@@ -21,8 +21,10 @@ private backing, **both** select `"isolated"` and set
 `"allowIsolatedProjects": true`. Selecting isolated while it is disabled refuses
 new creation, including source-driven engine and collection/TUI paths. Existing
 recorded private installations remain private and usable without enabling new
-creation. Detaching a private skill keeps its existing project provenance, so
-reinstallation can reuse unique work even with new isolation disabled. Creating
+creation. Detaching a private skill keeps its existing project provenance,
+including TUI detach after removal from library membership. Status reports no
+active target after detach; re-registration and reinstall reuse unique private
+work even with new isolation disabled. Creating
 isolated agent/command copies from linked-worktree/gitfile backing is refused
 before writes, rather than copying a pointer to shared Git metadata. Legitimate
 central linked worktrees remain usable. Old copied gitfiles whose native Git
@@ -30,6 +32,31 @@ backlink identifies another worktree are refused before mutation, preserving
 both trees for explicit recovery. A missing old backing directory is not silently reinterpreted as a
 central install. Agent private directories now use `projects/<id>/agents/`, not
 the historical shared skills directory; recorded legacy agent paths are retained.
+
+A failed first materialization/install removes newly claimed backing and partial
+new target files/links, not foreign slots or existing dirty backing. Cleanup
+checks filesystem identity before deleting claimed nodes; replaced nodes are
+preserved and incomplete cleanup is reported. This is scoped failure cleanup,
+not a general transaction or automatic adoption of old unrecorded backing.
+
+## Agent source refresh and reset
+
+Fresh agent acquisitions are staged before publication. Refreshes fetch a
+prospective commit without exposing its checkout, validate recorded entries for
+all known agents sharing that parent, and only then fast-forward or explicitly
+reset to that exact commit. Entry symlinks, escaping/dangling/cyclic resource
+symlinks and unproven submodule resources are refused. Internal repository
+resource symlinks remain supported. Unrecorded canonical aliases sharing a
+parent block refresh rather than guessing their selection; restore their
+registration before advancing that backing. These checks cover add, import,
+update, reset and the legacy source-driven installation helper.
+
+`agents reset -p` selects the recorded project backing, not the library clone.
+A private clone or legitimate linked worktree uses its own HEAD/index. Missing
+private backing, aliases to another checkout, redirected Git working trees and
+copied gitfiles pointing at another worktree are refused. A branch checked out
+in multiple worktrees also blocks mutation, even with `--force`. There is no
+fallback to resetting central or another worktree.
 
 ## Explicit migration
 

@@ -7,10 +7,14 @@ Requires at least one slug — there is no implicit "reset everything" form
 from __future__ import annotations
 
 import click
+from pathlib import Path
 
 from agent_toolkit_cli import skill_git
-from agent_toolkit_cli.agent_lock import read_lock, write_lock
-from agent_toolkit_cli.agent_paths import library_agent_path, lock_file_path
+from agent_toolkit_cli.agent_lock import read_lock, write_lock, clone_url_from_entry
+from agent_toolkit_cli._install_core import InstallError
+from agent_toolkit_cli.agent_paths import (
+    canonical_agent_dir, agent_git_root, registered_agent_paths, refresh_agent_repo, lock_file_path,
+)
 from agent_toolkit_cli.commands.agent._common import scope_and_roots, scope_banner
 
 
@@ -60,44 +64,28 @@ def reset_cmd(
             had_error = True
             continue
 
-        canonical = library_agent_path(slug)
-        if not skill_git.is_git_repo(canonical):
-            click.echo(
-                f"{slug}: no .git/ in canonical — cannot reset; "
-                f"remove and re-add to switch to git-managed"
-            )
+        entry = lock.skills[slug]
+        canonical = canonical_agent_dir(slug, scope=scope, home=home, project=project_root)
+        try:
+            root = agent_git_root(canonical, slug, entry, project=project_root if scope == "project" else None)
+            if not force and skill_git.status(root, env=None) == skill_git.GitWorkingTreeStatus.DIRTY:
+                click.echo(f"{slug}: dirty — commit, push, or use --force to discard")
+                had_error = True
+                continue
+            paths = registered_agent_paths(root, library=lock if scope == "global" else None,
+                                           scoped=lock if scope == "project" else None, project=project_root)
+            relative = entry.agent_path or f"{slug}.md"
+            paths[slug] = Path(relative).name if root == canonical.resolve() else relative
+            target, _chosen = refresh_agent_repo(root, source_url=clone_url_from_entry(entry),
+                ref=entry.ref, paths=paths, reset=True, force=force)
+        except (InstallError, skill_git.GitError) as exc:
+            click.echo(f"{slug}: reset refused: {exc}")
             had_error = True
             continue
 
-        if not force:
-            wt = skill_git.status(canonical, env=None)
-            if wt == skill_git.GitWorkingTreeStatus.DIRTY:
-                click.echo(
-                    f"{slug}: dirty — commit, push, or use --force to discard"
-                )
-                had_error = True
-                continue
-
-        entry = lock.skills[slug]
-        ref = skill_git.resolve_ref(entry.ref, canonical)
-        try:
-            skill_git.fetch(canonical, env=None)
-            skill_git.reset_hard(canonical, ref=ref, env=None)
-        except skill_git.GitError as exc:
-            raise click.ClickException(
-                f"{slug}: git failed during reset\n{exc.stderr}"
-            ) from exc
-
-        entry.local_sha = skill_git.head_sha(canonical, env=None)
-        try:
-            entry.upstream_sha = skill_git.remote_head_sha(
-                canonical, ref=ref, env=None,
-            )
-        except skill_git.GitError:
-            pass
-        # Memoise the detected default branch (parity with skill reset).
-        if entry.ref is None:
-            entry.ref = ref
+        entry.local_sha = skill_git.head_sha(root, env=None)
+        entry.upstream_sha = target
+        # Reset does not turn an implicit/default request into another ref.
         write_lock(lock_path, lock)
         click.echo(f"{slug}: reset to {(entry.local_sha or '')[:7]}")
 

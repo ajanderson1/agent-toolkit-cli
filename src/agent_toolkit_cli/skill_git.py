@@ -154,6 +154,7 @@ def clone(
     clone_env["GIT_TERMINAL_PROMPT"] = "0"
     clone_env.setdefault("GIT_SSH_COMMAND", "ssh -o BatchMode=yes")
     destination_existed = dest.exists() or dest.is_symlink()
+    reserved_empty = dest.is_dir() and not dest.is_symlink() and not any(dest.iterdir())
     try:
         proc = _run(cmd, env=clone_env)
     except GitError as exc:
@@ -161,7 +162,10 @@ def clone(
         auth_failure = any(message in exc.stderr.lower() for message in (
             "not found", "authentication failed", "could not read username",
         ))
-        if m and auth_failure and not destination_existed and not dest.exists() and not dest.is_symlink():
+        retry_empty = not dest.is_symlink() and (
+            not dest.exists() or (dest.is_dir() and not any(dest.iterdir()))
+        )
+        if m and auth_failure and (not destination_existed or reserved_empty) and retry_empty:
             owner, repo_name = m.group(1), m.group(2)
             ssh_url = f"git@github.com:{owner}/{repo_name}.git"
             ssh_cmd = list(cmd)

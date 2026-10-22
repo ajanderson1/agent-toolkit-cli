@@ -1,7 +1,6 @@
 """Command install facade and harness adapter dispatch."""
 from __future__ import annotations
 
-import shutil
 from pathlib import Path
 from typing import Iterable
 
@@ -55,7 +54,7 @@ def _normalize_to_standard(
     return name
 
 
-def ensure_project_command_canonical(*, slug: str, project: Path) -> bool:
+def ensure_project_command_canonical(*, slug: str, project: Path, _created_paths=None) -> bool:
     """Materialise the project canonical from the global library.
 
     Returns True only when this call created the project directory.
@@ -63,9 +62,10 @@ def ensure_project_command_canonical(*, slug: str, project: Path) -> bool:
     """
     from agent_toolkit_cli._paths_core import COMMAND_BINDING
     from agent_toolkit_cli.project_backing import ensure
-    ensure(COMMAND_BINDING, slug, project, write_entry=False)
-    # Central backing is never rollback-owned by this project operation.
-    return False
+    canonical = canonical_command_dir(slug, scope="project", project=project)
+    private_new = canonical != canonical_command_dir(slug, scope="global") and not canonical.exists() and not canonical.is_symlink()
+    ensure(COMMAND_BINDING, slug, project, write_entry=False, created_paths=_created_paths)
+    return private_new  # central backing is never owned by this install
 
 
 def _project_entry_from_global(slug: str) -> LockEntry | None:
@@ -175,46 +175,39 @@ def _snapshot_slot(dest: Path) -> tuple[bool, bool]:
     return dest_existed, side_existed
 
 
-def _rollback_created(
-    created_new: list[Path],
-    adopted_sidecars: list[Path],
-    *,
-    created_project_canonical: Path | None,
-) -> None:
-    for dest in reversed(created_new):
+def _rollback_created(created_paths) -> None:
+    from agent_toolkit_cli.project_backing import cleanup_created_paths
+    if created_paths is not None:
         try:
-            if dest.exists() or dest.is_symlink():
-                dest.unlink()
-            sidecar_path(dest).unlink(missing_ok=True)
-        except OSError:
-            pass
-    for side in adopted_sidecars:
-        try:
-            side.unlink(missing_ok=True)
-        except OSError:
-            pass
-    if created_project_canonical is not None:
-        try:
-            if created_project_canonical.is_symlink():
-                created_project_canonical.unlink(missing_ok=True)
-            elif created_project_canonical.exists():
-                shutil.rmtree(created_project_canonical)
-        except OSError:
-            pass
+            cleanup_created_paths(created_paths)
+        finally:
+            created_paths.clear()  # public boundary must not retry uncertain cleanup
 
 
 def apply(
+    plan: InstallPlan, *, home: Path | None = None, project: Path | None = None,
+    env: dict[str, str] | None = None, command_dir_resolver=canonical_command_dir,
+) -> InstallResult:
+    from agent_toolkit_cli.project_backing import new_install_paths, cleanup_created_paths
+    with new_install_paths() as created:
+        result = _apply(plan, home=home, project=project, env=env,
+                        command_dir_resolver=command_dir_resolver, _created_paths=created)
+        if plan.scope == "project" and any(path == result.canonical_path for path, _dev, _ino in created):
+            if plan.slug not in read_lock(lock_file_path(scope="project", project=project)).skills:
+                cleanup_created_paths(created)
+        return result
+
+
+def _apply(
     plan: InstallPlan,
     *,
     home: Path | None = None,
     project: Path | None = None,
     env: dict[str, str] | None = None,
     command_dir_resolver=canonical_command_dir,
+    _created_paths=None,
 ) -> InstallResult:
     del env  # reserved for future clone-on-install
-    created_project_canonical: Path | None = None
-    created_new: list[Path] = []
-    adopted_sidecars: list[Path] = []
     created: list[Path] = []
     removed: list[Path] = []
     successful_add: list[str] = []
@@ -224,10 +217,7 @@ def apply(
         if plan.scope == "project" and plan.add_agents:
             if project is None:
                 raise ValueError("project scope requires project")
-            if ensure_project_command_canonical(slug=plan.slug, project=project):
-                created_project_canonical = command_dir_resolver(
-                    plan.slug, scope="project", home=home, project=project,
-                )
+            ensure_project_command_canonical(slug=plan.slug, project=project, _created_paths=_created_paths)
 
         canonical = command_dir_resolver(
             plan.slug, scope=plan.scope, home=home, project=project,
@@ -265,21 +255,17 @@ def apply(
                 plan.slug, scope=plan.scope, home=home, project=project,
             )
             dest_existed, side_existed = _snapshot_slot(dest)
-            if name in {"claude-code", "pi", "codex", "standard"}:
+            from agent_toolkit_cli.project_backing import record_created_path
+            try:
                 result_dest = adapter.install(
                     plan.slug, source_file, scope=plan.scope, home=home, project=project,
                 )
-            else:
-                result_dest = adapter.install(
-                    plan.slug, source_file, scope=plan.scope, home=home, project=project,
-                )
+            finally:
+                for path, existed in ((dest, dest_existed), (sidecar_path(dest), side_existed)):
+                    if not existed and (path.exists() or path.is_symlink()):
+                        record_created_path(path, _created_paths)
             created.append(result_dest)
             successful_add.append(name)
-            if not dest_existed:
-                created_new.append(result_dest)
-            elif not side_existed and sidecar_path(result_dest).exists():
-                # Adoption: only the new sidecar is rollback-owned.
-                adopted_sidecars.append(sidecar_path(result_dest))
 
         for name in remove_tokens:
             adapter = get_adapter(name)
@@ -382,12 +368,11 @@ def apply(
             skipped=(),
             lock_action=lock_action,  # type: ignore[arg-type]
         )
-    except Exception:
-        _rollback_created(
-            created_new,
-            adopted_sidecars,
-            created_project_canonical=created_project_canonical,
-        )
+    except Exception as failure:
+        try:
+            _rollback_created(_created_paths)
+        except InstallError as exc:
+            raise InstallError(f"{failure}; {exc}") from failure
         raise
 
 
