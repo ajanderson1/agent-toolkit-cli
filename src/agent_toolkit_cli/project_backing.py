@@ -73,6 +73,7 @@ def check_creation(binding, slug, project, *, home=None):
     central = library_root_for_asset_type(binding, home=home) / slug
     entry = locks.read_lock(project / binding.lock_filename).skills.get(slug)
     _validate_entry(entry, slug)
+    verify_gitfile_worktree(canonical)
     if canonical != central and not (entry is not None and canonical.exists()):
         # Reads may describe disabled isolation, but every creation seam refuses it.
         project_backing(home=home)
@@ -103,6 +104,12 @@ def ensure(binding, slug, project, *, home=None, write_entry=True):
         # Explicit enablement required even for engine/source callers and damaged old installs.
         if project_backing(home=home) != "isolated":
             raise InstallError(f"{slug}: private backing missing; restore it or explicitly migrate to central")
+        # A copied gitdir pointer (linked worktree/submodule) would keep
+        # sharing the original HEAD/index. Refuse this unsupported shape
+        # before creating any project backing; ordinary full clones still copy.
+        gitfile = next((p for p in central.rglob(".git") if p.is_file() or p.is_symlink()), None)
+        if gitfile is not None:
+            raise InstallError(f"{slug}: cannot isolate linked worktree/gitfile backing: {gitfile}")
         canonical.parent.mkdir(parents=True, exist_ok=True)
         shutil.copytree(central, canonical, symlinks=True)
     if write_entry and slug not in lock.skills:
@@ -121,6 +128,25 @@ def _git(path, *args):
     return result.stdout.strip()
 
 
+def verify_gitfile_worktree(path: Path) -> None:
+    """A legacy copied gitfile must not mutate another working tree's index."""
+    gitfile = path / ".git"
+    if not gitfile.is_file() and not gitfile.is_symlink():
+        return
+    # --show-toplevel is NOT ownership evidence: Git infers the copied cwd
+    # even when its gitfile still shares another worktree's HEAD/index. The
+    # native metadata backlink must identify this exact working tree.
+    gitdir = Path(_git(path, "rev-parse", "--absolute-git-dir"))
+    try:
+        backlink = Path((gitdir / "gitdir").read_text().strip())
+        if not backlink.is_absolute():
+            backlink = gitdir / backlink
+    except (OSError, ValueError) as exc:
+        raise InstallError(f"{path}: worktree Git metadata ownership unproven; refusing mutation") from exc
+    if gitfile.is_symlink() or backlink.resolve() != gitfile.resolve():
+        raise InstallError(f"{path}: shared worktree Git metadata; refusing mutation")
+
+
 def _tree(path):
     # Compare all resources, including ignored/untracked files; no .git internals.
     result = {}
@@ -135,8 +161,12 @@ def _tree(path):
     return result
 
 
-def migrate(binding, slug, project):
-    """Retarget only proven projections; retain old backing and all its history."""
+def migrate(binding, slug, project, *, install=None):
+    """Retarget proven projections and optionally install within this rollback boundary.
+
+    This snapshots only this asset's known projection slots/sidecars and scope
+    lock, not backing trees or a general filesystem transaction.
+    """
     paths, locks = _modules(binding)
     lock_path = project / binding.lock_filename
     lock = locks.read_lock(lock_path)
@@ -148,8 +178,6 @@ def migrate(binding, slug, project):
     _validate_entry(global_entry, slug)
     old = resolve(binding, slug, project)
     central = library_root_for_asset_type(binding) / slug
-    if old == central:
-        return old, central
     identity_fields = ("source", "source_type", "ref", "parent_url", f"{binding.asset_type}_path")
     if any(getattr(old_entry, key) != getattr(global_entry, key) for key in identity_fields):
         raise InstallError(f"{slug}: divergent source/ref/path lock identity")
@@ -157,6 +185,7 @@ def migrate(binding, slug, project):
     url = locks.clone_url_from_entry(global_entry)
     for path in (old, central):
         root = Path(_git(path.resolve(), "rev-parse", "--show-toplevel"))
+        verify_gitfile_worktree(root)
         if _git(root, "status", "--porcelain", "--untracked-files=all"):
             raise InstallError(f"{slug}: dirty backing at {root}")
         if not skill_git.remote_matches(root, url, None):
@@ -205,7 +234,30 @@ def migrate(binding, slug, project):
             content = old / (f"{slug}.md" if binding.asset_type == "agent" else "COMMAND.md")
             if not content.is_file() or dest.read_bytes() != content.read_bytes():
                 raise InstallError(f"{slug}: foreign/divergent projection at {dest}")
-    changed = []
+    slots = set(destinations)
+    sidecars = set()
+    if binding.asset_type == "agent":
+        from agent_toolkit_cli.agent_adapters import _sentinel_path
+        sidecars.update(_sentinel_path(p) for p in destinations)
+    elif binding.asset_type == "command":
+        from agent_toolkit_cli.command_adapters.base import sidecar_path
+        sidecars.update(sidecar_path(p) for p in destinations)
+    if any(p.is_symlink() for p in sidecars):
+        raise InstallError(f"{slug}: symlinked ownership sidecar; refusing migration")
+    slots.update(sidecars)
+    snapshots = {}
+    for path in slots:
+        if in_tree and path == old:
+            continue  # the real checkout is preserved by rename below
+        if path.is_symlink():
+            snapshots[path] = ("link", path.readlink())
+        elif path.is_file():
+            snapshots[path] = ("file", path.read_bytes(), path.stat().st_mode)
+        elif not path.exists():
+            snapshots[path] = None
+        else:
+            raise InstallError(f"{slug}: unsupported migration slot: {path}")
+    original_lock = lock_path.read_bytes()
     moved = False
     try:
         if backup is not None:
@@ -213,18 +265,45 @@ def migrate(binding, slug, project):
             moved = True
             old.symlink_to(central, target_is_directory=True)
         for dest, desired in links:
-            target = dest.readlink()
-            changed.append((dest, target))
             dest.unlink()
             dest.symlink_to(desired, target_is_directory=desired.is_dir())
         entry = dataclasses.replace(old_entry, extras={**old_entry.extras, "projectBacking": "central"})
         locks.write_lock(lock_path, locks.add_entry(lock, slug, entry))
-    except Exception:
-        for dest, target in reversed(changed):
-            dest.unlink(missing_ok=True)
-            dest.symlink_to(target, target_is_directory=True)
+        result = install() if install is not None else None
+    except Exception as failure:
+        rollback_errors = []
+        try:
+            temporary = lock_path.with_name(f".{lock_path.name}.tmp")
+            temporary.write_bytes(original_lock)
+            temporary.replace(lock_path)
+        except OSError as exc:
+            rollback_errors.append(str(exc))
+        for path, state in snapshots.items():
+            try:
+                if state is None and not path.exists() and not path.is_symlink():
+                    continue
+                if state is not None and state[0] == "link" and path.is_symlink() and path.readlink() == state[1]:
+                    continue
+                if state is not None and state[0] == "file" and not path.is_symlink() and path.is_file() and path.read_bytes() == state[1] and path.stat().st_mode == state[2]:
+                    continue
+                if path.is_symlink() or path.is_file():
+                    path.unlink()
+                if state is not None:
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    if state[0] == "link":
+                        path.symlink_to(state[1])
+                    else:
+                        path.write_bytes(state[1])
+                        path.chmod(state[2])
+            except OSError as exc:
+                rollback_errors.append(str(exc))
         if moved:
-            old.unlink(missing_ok=True)
-            backup.rename(old)
+            try:
+                old.unlink(missing_ok=True)
+                backup.rename(old)
+            except OSError as exc:
+                rollback_errors.append(str(exc))
+        if rollback_errors:
+            raise InstallError(f"{slug}: install failed ({failure}); rollback incomplete: {'; '.join(rollback_errors)}") from failure
         raise
-    return backup or old, central
+    return backup or old, central, result

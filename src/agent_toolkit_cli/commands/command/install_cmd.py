@@ -34,16 +34,8 @@ def install_cmd(ctx, slug, global_, project_flag, harnesses, migrate_to_central=
     scope, home, project, _ = scope_and_roots(
         global_, project_flag, ctx.obj.get("project_root") if ctx.obj else None,
     )
-    if migrate_to_central:
-        if scope != "project" or project is None:
-            raise click.UsageError("--migrate-to-central requires project scope")
-        from agent_toolkit_cli._paths_core import COMMAND_BINDING
-        from agent_toolkit_cli.project_backing import migrate
-        try:
-            old, new = migrate(COMMAND_BINDING, slug, project)
-        except (InstallError, ValueError) as exc:
-            raise click.ClickException(str(exc)) from exc
-        click.echo(f"{slug}: {old} -> {new} (old backing preserved)")
+    if migrate_to_central and (scope != "project" or project is None):
+        raise click.UsageError("--migrate-to-central requires project scope")
     global_lock = read_lock(library_lock_path())
     if slug not in global_lock.skills and not canonical_command_dir(slug, scope="global").exists():
         raise click.ClickException(f"{slug}: not in the global library; run `command add` first")
@@ -65,11 +57,16 @@ def install_cmd(ctx, slug, global_, project_flag, harnesses, migrate_to_central=
         remove_agents=(),
     )
     try:
-        result = command_install.apply(
-            p,
-            home=home or (Path.home() if scope == "global" else None),
-            project=project,
-        )
+        def apply_install():
+            return command_install.apply(p,
+                home=home or (Path.home() if scope == "global" else None), project=project)
+        if migrate_to_central:
+            from agent_toolkit_cli._paths_core import COMMAND_BINDING
+            from agent_toolkit_cli.project_backing import migrate
+            old, new, result = migrate(COMMAND_BINDING, slug, project, install=apply_install)
+            click.echo(f"{slug}: {old} -> {new} (old backing preserved)")
+        else:
+            result = apply_install()
     except (InstallError, ValueError) as exc:
         raise click.ClickException(str(exc)) from exc
     for path in result.created:

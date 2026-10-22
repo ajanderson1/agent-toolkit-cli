@@ -89,6 +89,8 @@ def update_cmd(ctx, slug, global_, project_flag):
             click.echo(f"{s}: copy-mode (no .git/) — cannot update; remove and re-add to switch to git-managed")
             had_conflict = True
             continue
+        from agent_toolkit_cli.project_backing import verify_gitfile_worktree
+        verify_gitfile_worktree(canonical)
         if skill_git.status(canonical, env=None) != skill_git.GitWorkingTreeStatus.CLEAN:
             click.echo(f"{s}: dirty working tree; commit or reset first")
             had_conflict = True

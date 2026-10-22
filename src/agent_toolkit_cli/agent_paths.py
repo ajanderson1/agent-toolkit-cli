@@ -154,3 +154,55 @@ def lock_file_path(
     if project is None:
         raise ValueError("project scope requires project")
     return project / AGENT_BINDING.lock_filename
+
+
+def checked_agent_content(root: Path, relative: str, slug: str) -> Path:
+    """Resolve a recorded entry without traversing source/content symlinks."""
+    from agent_toolkit_cli._install_core import InstallError
+    parts = relative.split("/")
+    if (not relative or Path(relative).is_absolute() or "\\" in relative
+            or any(p in ("", ".", "..") for p in parts)):
+        raise InstallError(f"{slug}: invalid agentPath {relative!r}")
+    content = root
+    for component in parts:
+        content = content / component
+        if content.is_symlink():
+            raise InstallError(f"{slug}: agentPath contains a symlink: {content}")
+    if not content.is_file() or not content.resolve().is_relative_to(root.resolve()):
+        raise InstallError(f"{slug}: missing or escaping agentPath {relative!r}")
+    return content
+
+
+def agent_content_path(canonical: Path, slug: str, entry=None) -> Path:
+    """Recorded content wins over incidental repository-maintenance AGENTS.md."""
+    from agent_toolkit_cli._install_core import InstallError
+    relative = (entry.agent_path or f"{slug}.md") if entry is not None else (
+        f"{slug}.md" if (canonical / f"{slug}.md").is_file() else "AGENTS.md")
+    # Validate the entire recorded path even when a private copy is rooted at
+    # the selected entry directory rather than the original repository root.
+    if Path(relative).is_absolute() or ".." in Path(relative).parts or "\\" in relative:
+        raise InstallError(f"{slug}: invalid agentPath {relative!r}")
+    filename = Path(relative).name
+    if entry is not None and entry.parent_url and canonical.resolve() == library_agent_path(slug).resolve():
+        from agent_toolkit_cli.skill_source import parse_source
+        parsed = parse_source(entry.parent_url)
+        if parsed.owner_repo is None or parsed.owner_repo.removesuffix(".git") != entry.source.removesuffix(".git"):
+            raise InstallError(f"{slug}: parent URL/source identity mismatch")
+        owner, repo = entry.source.split("/", 1)
+        from agent_toolkit_cli.skill_paths import resolve_existing_parent_clone
+        parent = resolve_existing_parent_clone(owner, repo, ref=entry.ref,
+            parent_url=entry.parent_url, root=library_root())
+        if not parent.exists() and repo.endswith(".git"):
+            # Older tree-URL registrations kept .git in source/cache keys;
+            # import normalizes the cache key while preserving the lock URL.
+            parent = resolve_existing_parent_clone(owner, repo.removesuffix(".git"),
+                ref=entry.ref, parent_url=entry.parent_url, root=library_root())
+        from agent_toolkit_cli import skill_git
+        if not skill_git.remote_matches(parent, entry.parent_url, None):
+            raise InstallError(f"{slug}: foreign shared parent origin")
+        content = checked_agent_content(parent, relative, slug)
+        if canonical.resolve() != content.parent.resolve():
+            raise InstallError(f"{slug}: foreign agent canonical target: {canonical}")
+    else:
+        content = checked_agent_content(canonical, filename, slug)
+    return canonical if filename == "AGENTS.md" else content

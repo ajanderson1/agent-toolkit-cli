@@ -31,6 +31,7 @@ from agent_toolkit_cli._install_core import (
 from agent_toolkit_cli.agent_paths import (
     Scope,
     canonical_agent_dir,
+    agent_content_path,
     lock_file_path,
 )
 from agent_toolkit_cli.skill_agents import (
@@ -294,8 +295,13 @@ def apply(
     # Real adapters may override (e.g. devin → AGENT.md, kiro-cli → <slug>.json).
     # The adapter receives the canonical content file as input; it decides
     # the on-disk shape at the destination.
-    directory_agent = (canonical / "AGENTS.md").is_file()
-    content_path = canonical if directory_agent else canonical / f"{plan.slug}.md"
+    try:
+        content_path = agent_content_path(canonical, plan.slug, existing_entry or global_entry)
+    except InstallError:
+        if plan.add_agents or plan.source is not None:
+            raise
+        content_path = canonical / f"{plan.slug}.md"
+    directory_agent = content_path == canonical
 
     # Tool-ownership signal: a lock entry for this slug means agent-toolkit-cli
     # already installed it, so re-writing our own destination files is an
@@ -503,9 +509,12 @@ def uninstall(
         canonical_content = canonical_agent_dir(
             slug, scope=scope, home=home, project=project,
         )
-        if not (canonical_content / "AGENTS.md").is_file():
-            canonical_content = canonical_content / f"{slug}.md"
-    except ValueError:
+        from agent_toolkit_cli.agent_lock import read_lock
+        entry = read_lock(lock_file_path(scope=scope, home=home, project=project)).skills.get(slug)
+        canonical_content = agent_content_path(canonical_content, slug, entry)
+    except (ValueError, InstallError):
+        # Missing/unverifiable content cannot authorize legacy byte-match
+        # removal. Adapters may still detach their own sentinel-owned files.
         canonical_content = None
 
     # Remove every requested projected file via its own adapter (idempotent).

@@ -20,7 +20,11 @@ projection links that directory at `.pi/agents/<slug>` (global:
 `~/.pi/agent/agents/<slug>`); updates to backing remain visible through the link.
 Only the Pi directory projection is currently supported: single-file/translated
 adapters are reported skipped rather than flattening away resources. Legacy
-`<slug>.md` agents retain their existing adapters.
+`<slug>.md` agents retain their existing adapters. Recorded `agentPath` selection
+is authoritative: a maintenance `AGENTS.md` beside a recorded flat entry does
+not turn it into a directory agent. New registrations prefer `<slug>.md` when
+both files exist. Entry/content symlinks that escape or substitute source paths
+are refused on registration and projection, including recorded monorepo paths.
 
 **Projection does not prove native Pi role, memory or skill loading**, install a
 subagent extension, or establish an agent runtime. Verify actual loading using

@@ -133,7 +133,13 @@ def main():
     assert private["skill"] != private["agent"]
     config.write_text('{}')
     for kind in files:
-        command(kind, "install", private_project)  # preserved without new-creation permission
+        private_root = private[kind] if private[kind].is_dir() else private[kind].parent
+        unique = private_root / "unique-detached-memory"
+        unique.write_text("preserve private work")
+        command(kind, "uninstall", private_project)
+        command(kind, "install", private_project)  # reuse despite disabled NEW creation
+        assert unique.read_text() == "preserve private work"
+        unique.unlink()  # remove only this fixture marker to allow clean migration
         command(kind, "install", private_project, "--migrate-to-central")
         assert private[kind].exists(), "old backing lost"
         target = private_project / destinations[kind]

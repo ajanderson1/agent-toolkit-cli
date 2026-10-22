@@ -653,7 +653,7 @@ def uninstall(
     project: Path | None,
     harnesses: tuple[str, ...],
 ) -> None:
-    """Legacy 5-harness shortcut: full remove (every symlink + canonical)."""
+    """Legacy shortcut: detach projects (retaining private provenance); global full removal."""
     p = plan(
         slug=slug, scope=scope,
         source=None, ref=None,
@@ -663,14 +663,14 @@ def uninstall(
     apply(p, home=home, project=project, env=None)
 
     if scope == "project":
-        # Non-destructive: projection symlinks removed by apply() above; drop
-        # only the project lock entry. The external canonical is preserved so
-        # dirty work survives; doctor's orphan sweep reclaims it if unreferenced.
+        # Detach private backing without forgetting the provenance needed to
+        # reinstall it while new isolation is disabled. Central projections
+        # can drop their scope-only registration.
         from agent_toolkit_cli.skill_lock import read_lock, remove_entry, write_lock
 
         lock_path = lock_file_path(scope="project", project=project)
         lock = read_lock(lock_path)
-        if slug in lock.skills:
+        if (slug in lock.skills and canonical_skill_dir(slug, scope="project", home=home, project=project) == canonical_skill_dir(slug, scope="global", home=home)):
             write_lock(lock_path, remove_entry(lock, slug))
         return
 

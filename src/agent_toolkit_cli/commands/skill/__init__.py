@@ -37,6 +37,7 @@ from agent_toolkit_cli.skill_lock import (
     write_lock,
 )
 from agent_toolkit_cli.skill_paths import (
+    canonical_skill_dir,
     is_skill_projection_available,
     library_lock_path,
     library_skill_path,
@@ -579,16 +580,8 @@ def install_cmd(
         normalize_skill_project_root(candidate) if scope == "project" else None
     )
 
-    if migrate_to_central:
-        if scope != "project" or project_root is None or slug is None:
-            raise click.UsageError("--migrate-to-central requires one SLUG and project scope")
-        from agent_toolkit_cli._paths_core import SKILL_BINDING
-        from agent_toolkit_cli.project_backing import migrate
-        try:
-            old, new = migrate(SKILL_BINDING, slug, project_root)
-        except (InstallError, ValueError) as exc:
-            raise click.ClickException(str(exc)) from exc
-        click.echo(f"{slug}: {old} -> {new} (old backing preserved)")
+    if migrate_to_central and (scope != "project" or project_root is None or slug is None):
+        raise click.UsageError("--migrate-to-central requires one SLUG and project scope")
     try:
         target_agents = _resolve_agents(agents_str, scope, project=project_root)
     except click.UsageError:
@@ -642,6 +635,26 @@ def install_cmd(
         )
     except InstallError as exc:
         raise click.ClickException(str(exc)) from exc
+
+    if migrate_to_central:
+        # Resolve/validate targets and context first. Keep the single-asset
+        # projection refresh inside migration's lock/link rollback boundary.
+        from agent_toolkit_cli._paths_core import SKILL_BINDING
+        from agent_toolkit_cli.project_backing import migrate
+        p = InstallPlan(slug=slug, scope=scope, source=None, ref=None,
+                        add_agents=target_agents, remove_agents=())
+        try:
+            old, new, result = migrate(SKILL_BINDING, slug, project_root,
+                install=lambda: engine_apply(p, home=None, project=project_root, env=None))
+        except (InstallError, ValueError) as exc:
+            raise click.ClickException(str(exc)) from exc
+        click.echo(f"{slug}: {old} -> {new} (old backing preserved)")
+        for link in result.created:
+            click.echo(f"  linked {link}")
+        if result.skipped:
+            click.echo(f"  skipped (skip rule): {', '.join(result.skipped)}")
+        click.echo(f"installed {slug} for {agents_str}")
+        return
 
     from agent_toolkit_cli.skill_collections import catalog, exposed
     from agent_toolkit_cli.skill_install import apply_collection_selection as apply_selection
@@ -829,12 +842,12 @@ def uninstall_cmd(
             raise click.ClickException(str(exc)) from exc
         removed = result.removed
 
-        # Project scope is non-destructive: the external canonical in the
-        # per-project store is preserved (dirty work survives; doctor's orphan
-        # sweep reclaims it later). Drop only the project lock entry.
+        # A private checkout needs its existing provenance to remain usable
+        # after detach, even when creation of NEW isolation is disabled.
+        # Central-only projections need no private ownership record.
         proj_lock_path = lock_file_path(scope="project", project=project_root)
         proj_lock = read_lock(proj_lock_path)
-        if slug in proj_lock.skills:
+        if (slug in proj_lock.skills and canonical_skill_dir(slug, scope="project", project=project_root) == library_skill_path(slug)):
             write_lock(proj_lock_path, remove_entry(proj_lock, slug))
 
     if removed:

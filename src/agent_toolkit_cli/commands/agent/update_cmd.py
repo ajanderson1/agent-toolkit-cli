@@ -10,7 +10,8 @@ from pathlib import Path
 
 from agent_toolkit_cli import skill_git
 from agent_toolkit_cli.agent_lock import read_lock, write_lock, clone_url_from_entry
-from agent_toolkit_cli.agent_paths import canonical_agent_dir, lock_file_path
+from agent_toolkit_cli.agent_paths import canonical_agent_dir, agent_content_path, lock_file_path
+from agent_toolkit_cli._install_core import InstallError
 from agent_toolkit_cli.commands.agent._common import scope_and_roots, scope_banner
 
 
@@ -59,6 +60,12 @@ def update_cmd(
         entry = lock.skills[slug]
         canonical = canonical_agent_dir(slug, scope=scope, home=home, project=project_root)
         if entry.parent_url is not None:
+            try:
+                agent_content_path(canonical, slug, entry)
+            except InstallError as exc:
+                click.echo(str(exc))
+                had_error = True
+                continue
             canonical = canonical.resolve()
             for _ in Path(entry.agent_path or f"{slug}.md").parent.parts:
                 canonical = canonical.parent
@@ -70,6 +77,13 @@ def update_cmd(
             had_error = True
             continue
 
+        from agent_toolkit_cli.project_backing import verify_gitfile_worktree
+        try:
+            verify_gitfile_worktree(canonical)
+        except InstallError as exc:
+            click.echo(str(exc))
+            had_error = True
+            continue
         if not skill_git.remote_matches(canonical, clone_url_from_entry(entry), None):
             click.echo(f"{slug}: foreign origin; refusing update")
             had_error = True
@@ -98,12 +112,9 @@ def update_cmd(
             )
         except skill_git.GitError:
             pass
-        # Memoise the detected default branch so the next update reads it from
-        # the lock instead of re-detecting (which can fire a network
-        # `set-head --auto` when origin/HEAD is unset). Only reached on the
-        # merge-success path, so a real, mergeable branch — never the fallback.
-        if entry.ref is None:
-            entry.ref = ref
+        # Keep the requested ref identity (including None/default) separate
+        # from the branch observed for this update. Re-registration and cache
+        # selection must not silently become a different explicit request.
         write_lock(lock_path, lock)
         click.echo(f"{slug}: updated")
 

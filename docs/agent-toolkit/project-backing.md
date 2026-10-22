@@ -21,7 +21,13 @@ private backing, **both** select `"isolated"` and set
 `"allowIsolatedProjects": true`. Selecting isolated while it is disabled refuses
 new creation, including source-driven engine and collection/TUI paths. Existing
 recorded private installations remain private and usable without enabling new
-creation. A missing old backing directory is not silently reinterpreted as a
+creation. Detaching a private skill keeps its existing project provenance, so
+reinstallation can reuse unique work even with new isolation disabled. Creating
+isolated agent/command copies from linked-worktree/gitfile backing is refused
+before writes, rather than copying a pointer to shared Git metadata. Legitimate
+central linked worktrees remain usable. Old copied gitfiles whose native Git
+backlink identifies another worktree are refused before mutation, preserving
+both trees for explicit recovery. A missing old backing directory is not silently reinterpreted as a
 central install. Agent private directories now use `projects/<id>/agents/`, not
 the historical shared skills directory; recorded legacy agent paths are retained.
 
@@ -34,6 +40,12 @@ agent-toolkit-cli skills install my-skill -p --migrate-to-central
 agent-toolkit-cli agents install my-agent -p --harnesses pi --migrate-to-central
 agent-toolkit-cli commands install my-command -p --harnesses pi --migrate-to-central
 ```
+
+Targets/context are validated before migration. The requested single-asset
+projection refresh runs inside migration's narrow rollback boundary: a failure
+restores the prior scope lock, owned projection slots and sidecars. Agent
+migrating installs support simple file/directory targets (`pi`/`standard`); use
+a separate install for translated/registry targets after successful migration.
 
 Migration reports old/new backing paths, requires matching project/library
 source, ref and content paths, clean Git checkouts with matching origins and

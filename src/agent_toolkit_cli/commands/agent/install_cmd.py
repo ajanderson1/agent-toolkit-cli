@@ -142,13 +142,8 @@ def install_cmd(
     if migrate_to_central:
         if scope != "project" or project is None:
             raise click.UsageError("--migrate-to-central requires project scope")
-        from agent_toolkit_cli._paths_core import AGENT_BINDING
-        from agent_toolkit_cli.project_backing import migrate
-        try:
-            old, new = migrate(AGENT_BINDING, slug, project)
-        except (InstallError, ValueError) as exc:
-            raise click.ClickException(str(exc)) from exc
-        click.echo(f"{slug}: {old} -> {new} (old backing preserved)")
+        if any(name != "standard" and AGENTS[name].subagent_mechanism not in ("symlink", "none") for name in target_harnesses):
+            raise click.UsageError("migrating install requires simple file/directory targets; migrate with --harnesses pi or standard, then install translated targets separately")
 
     p = InstallPlan(
         slug=slug, scope=scope, source=None, ref=None,
@@ -158,7 +153,14 @@ def install_cmd(
     # {HOME} path templates (home=None causes ValueError in symlink._expand).
     effective_home = home if home is not None else (Path.home() if scope == "global" else None)
     try:
-        result = agent_install.apply(p, home=effective_home, project=project)
+        if migrate_to_central:
+            from agent_toolkit_cli._paths_core import AGENT_BINDING
+            from agent_toolkit_cli.project_backing import migrate
+            old, new, result = migrate(AGENT_BINDING, slug, project,
+                install=lambda: agent_install.apply(p, home=effective_home, project=project))
+            click.echo(f"{slug}: {old} -> {new} (old backing preserved)")
+        else:
+            result = agent_install.apply(p, home=effective_home, project=project)
     except InstallError as exc:
         raise click.ClickException(str(exc)) from exc
 
