@@ -22,6 +22,9 @@ assets/verification/
 # uv
 .uv-cache/
 
+# Local execution evidence and disposable build/test environments
+.execution/
+
 # Audit run artifacts
 audit/.last-run.tsv
 audit/.*.log

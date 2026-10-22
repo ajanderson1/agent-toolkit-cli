@@ -71,7 +71,8 @@ def test_two_projects_share_backing(tmp_path, sandbox, monkeypatch, kind, files,
 
 
 @pytest.mark.parametrize("kind", ["skill", "agent", "command"])
-def test_isolated_config_cannot_bypass_engine(tmp_path, sandbox, kind):
+@pytest.mark.parametrize("source_driven", [False, True])
+def test_isolated_config_cannot_bypass_engine(tmp_path, sandbox, kind, source_driven):
     config = sandbox / ".agent-toolkit/config.json"
     config.parent.mkdir()
     config.write_text(json.dumps({"projectBacking": "isolated"}))
@@ -79,7 +80,9 @@ def test_isolated_config_cannot_bypass_engine(tmp_path, sandbox, kind):
     project = tmp_path / "project"
     project.mkdir()
     with pytest.raises(InstallError, match="disabled"):
-        engine.apply(InstallPlan(slug="x", scope="project", source=None, ref=None,
+        from agent_toolkit_cli.skill_source import parse_source
+        source = parse_source(str(tmp_path / "unused-source")) if source_driven else None
+        engine.apply(InstallPlan(slug="x", scope="project", source=source, ref=None,
                                  add_agents=("pi",), remove_agents=()), project=project)
     assert not list(project.iterdir())
 
@@ -290,11 +293,12 @@ def test_gitea_registration_import_real_git(tmp_path, sandbox, monkeypatch, kind
     # Ordinary Git insteadOf in temporary HOME: no network or live config.
     config_text = f'[url "file://{source}"]\n    insteadOf = {url}\n'
     (sandbox / ".gitconfig").write_text(config_text)
-    invoke(kind, "add", url, "--slug", "shared", "--ref", "main")
+    git(source, "branch", "release/test")
+    invoke(kind, "add", url, "--slug", "shared", "--ref", "release/test")
     lock = sandbox / f".agent-toolkit/{kind}s-lock.json"
     data = json.loads(lock.read_text())
     assert data["skills"]["shared"]["source"] == url
-    assert data["skills"]["shared"]["ref"] == "main"
+    assert data["skills"]["shared"]["ref"] == "release/test"
     incoming = tmp_path / "incoming.json"
     incoming.write_bytes(lock.read_bytes())
     second = tmp_path / "second"
@@ -304,6 +308,7 @@ def test_gitea_registration_import_real_git(tmp_path, sandbox, monkeypatch, kind
     invoke(kind, "import", str(incoming))
     imported = json.loads((second / f".agent-toolkit/{kind}s-lock.json").read_text())
     assert imported["skills"]["shared"]["source"] == url
+    assert imported["skills"]["shared"]["ref"] == "release/test"
     paths = importlib.import_module(f"agent_toolkit_cli.{kind}_paths")
     canonical = getattr(paths, f"canonical_{kind}_dir")("shared", scope="global")
     assert git(canonical, "config", "--get", "remote.origin.url") == url

@@ -1,36 +1,40 @@
 # Agent Toolkit CLI
 
-![Tests](https://github.com/ajanderson1/agent-toolkit-cli/actions/workflows/test.yml/badge.svg) ![License](https://img.shields.io/badge/license-MIT%20%2B%20Commons%20Clause-blue) ![Release](https://img.shields.io/github/v/release/ajanderson1/agent-toolkit-cli)
-
 Keep AI-agent assets under your control across coding harnesses.
 
 ## Overview
 
-Manage **skills, agents, commands, instructions, Pi extensions, and MCP servers** from a Python CLI or Textual terminal interface. Keep source-backed assets in a library, then choose which harnesses can see them at project or global scope. Local skill improvements are real Git work: update by merging upstream and publish through a pull request.
+Manage **skills, agents, commands, instructions, Pi extensions, and MCP servers** from a Python CLI or Textual terminal interface. Keep source-backed assets in a library, then choose which harnesses can see them at project or global scope. Asset improvements are ordinary Git work in their maintained source repositories.
 
 The toolkit creates symlinks, translates Markdown, or edits named configuration entries as each harness requires. **Support and verbs vary by kind and scope**; catalog membership is not universal support. Instructions uses your canonical `AGENTS.md` and actual filesystem pointers, not a lock. Bundles are an installation utility for skills, agents, and Pi extensions, not a seventh asset kind.
 
-[Documentation](https://ajanderson1.github.io/agent-toolkit-cli/) · [Compatibility matrix](docs/matrix.md) · [CLI reference](docs/agent-toolkit/cli.md) · [TUI reference](docs/agent-toolkit/tui.md)
+[Documentation](docs/index.md) · [Private Gitea source](ssh://gitlab@broadpeak.tailbf2225.ts.net:2424/ajanderson/agent-toolkit-cli.git) · [Compatibility matrix](docs/matrix.md) · [CLI reference](docs/agent-toolkit/cli.md) · [TUI reference](docs/agent-toolkit/tui.md)
 
 ## Installation
 
 Requires **Python 3.12+**, [uv](https://docs.astral.sh/uv/) and Git. Install the **toolkit package** (both binaries):
 
 ```bash
-uv tool install --from git+https://github.com/ajanderson1/agent-toolkit-cli agent-toolkit
+# Deployment owner: install the reviewed wheel, not an unreviewed branch.
+uv tool install /path/to/reviewed/agent_toolkit-5.11.0-py3-none-any.whl
 agent-toolkit-cli --version
 ```
 
-This tracks the repository's default branch. For an immutable release, append its tag to the Git URL. Verified wheel/sdist assets are available on [GitHub Releases](https://github.com/ajanderson1/agent-toolkit-cli/releases); no PyPI publication is configured. The incompatible pre-v2 commands remain frozen at `v1.0.0`; see [legacy installation](docs/agent-toolkit/cli.md#pre-v2-surface).
+New source and delivery use private Broadpeak Gitea, not GitHub Releases or PyPI.
+Record the source commit and wheel SHA-256: version `5.11.0` alone does not
+identify a REGROUND build. Host upgrades are coordinated separately after review.
+Legacy GitHub CI/release files remain in history/the checkout; no replacement
+Gitea CI/release automation is established by this change.
 
 ## Quickstart
 
 ```bash
 # 1. Add source to the library — does not make it visible to a harness.
-agent-toolkit-cli skills add anthropics/skills --skill pdf
+# Replace SOURCE_URL and my-skill with your maintained source and entry.
+agent-toolkit-cli skills add "$SOURCE_URL" --skill my-skill --ref main
 
 # 2. Install a projection in the current project; the library remains separate.
-agent-toolkit-cli skills install pdf --agents claude-code --scope project
+agent-toolkit-cli skills install my-skill --agents claude-code --scope project
 agent-toolkit-cli skills list -p
 
 # 3. Inspect or queue visibility changes in the terminal UI.
@@ -42,14 +46,17 @@ Choose scope explicitly in scripts. Defaults differ across kinds and verbs: a Gi
 ## Usage
 
 ```bash
-# Register a repository's real skills; install its registered children together.
-agent-toolkit-cli skills add --source owner/repo --ref main
-agent-toolkit-cli skills install --source owner/repo --agents standard --scope global
+# Register one exact Gitea repository directory and project that skill.
+agent-toolkit-cli skills add "$SOURCE_URL" --path skills/my-skill --ref main
+agent-toolkit-cli skills install my-skill --agents standard --scope project
 
-# Inspect local edits, merge upstream, then publish an owned skill through a PR.
-agent-toolkit-cli skills status pdf -g
-agent-toolkit-cli skills update pdf -g
-agent-toolkit-cli skills push my-owned-skill -g
+# Inspect local edits and refresh upstream content.
+agent-toolkit-cli skills status my-skill -g
+agent-toolkit-cli skills update my-skill -g
+
+# Register/project a complete AGENTS.md directory (or a legacy flat agent).
+agent-toolkit-cli agents add "$AGENT_SOURCE_URL" --slug my-agent --ref main
+agent-toolkit-cli agents install my-agent -p --harnesses pi
 
 # Share an existing user-authored project AGENTS.md with Claude Code.
 agent-toolkit-cli instructions install --scope project --harness claude-code
@@ -64,8 +71,10 @@ Canonical groups are `skills`, `agents`, `commands`, `instructions`, `pi-extensi
 
 ## Configuration
 
-- Source-backed libraries and global locks normally live under `~/.agent-toolkit/`; project locks describe their own scope. [Storage reference](docs/agent-toolkit/lock-files.md).
+- Source-backed libraries and global locks normally live under `~/.agent-toolkit/`; new project skill/agent/command projections share central backing. Existing private installations remain usable. [Configuration and explicit migration](docs/agent-toolkit/project-backing.md).
+- Shared behavior config is `~/.agent-toolkit/config.json`: `projectBacking` defaults to `"central"`; new isolation requires both `"isolated"` and `allowIsolatedProjects: true`. Disabled requests are refused by CLI and TUI.
 - Instructions canonical content is user-owned: project `AGENTS.md` or `~/.agent-toolkit/AGENTS.md`. Install does not author it. [Instructions safety](docs/asset-types/instructions.md).
+- Directory-agent projection preserves memory, nested skills and resources; it does **not** prove native Pi role/memory/skill loading. Non-Pi directory adapters are reported unsupported. [Agent limits](docs/asset-types/agents.md).
 - TUI theme and main-harness columns are preferences, not CLI install targets. Use **Ctrl+P → Theme / Main harnesses**. [Settings schema and overrides](docs/agent-toolkit/tui-settings.md).
 
 ## Screenshot
@@ -85,7 +94,7 @@ Fresh disposable-fixture capture of this source tree, not operator assets. Colle
 ## Contributing
 
 ```bash
-git clone https://github.com/ajanderson1/agent-toolkit-cli
+git clone ssh://gitlab@broadpeak.tailbf2225.ts.net:2424/ajanderson/agent-toolkit-cli.git
 cd agent-toolkit-cli
 uv sync --all-extras
 uv run pytest -q
@@ -93,7 +102,12 @@ uv run python scripts/gen_harness_docs.py
 make docs-build
 ```
 
-`lefthook.yml` runs the full pytest suite on **pre-push**. Update affected docs with behavior changes; regenerate harness pages rather than editing generated output. [Open an issue](https://github.com/ajanderson1/agent-toolkit-cli/issues) for defects or compatibility gaps.
+Use temporary HOME/config directories and local Git fixtures, not a live toolkit
+installation. `lefthook.yml` currently runs pytest on pre-push; it is not a
+release/deployment service. Regenerate harness views rather than hand-editing
+outputs. Gitea-owned source changes use ordinary Git; existing provider-specific
+PR helpers do not establish a Gitea PR API. Preserve historical reports and
+unrelated work.
 
 ## License
 

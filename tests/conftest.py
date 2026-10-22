@@ -300,9 +300,10 @@ def isolated_project_backing(monkeypatch):
     Patch the configuration read seam because these old tests change HOME
     after fixture setup. Real on-disk enable/disable coverage is in test_reground.
     """
-    from agent_toolkit_cli import behavior, project_backing
-    monkeypatch.setattr(behavior, "project_backing", lambda **kwargs: "isolated")
-    monkeypatch.setattr(project_backing, "project_backing", lambda **kwargs: "isolated")
+    from agent_toolkit_cli import behavior
+    monkeypatch.setattr(behavior, "_read_config", lambda home=None: {
+        "projectBacking": "isolated", "allowIsolatedProjects": True,
+    })
 
 
 @pytest.fixture

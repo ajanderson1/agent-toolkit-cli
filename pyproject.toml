@@ -11,6 +11,9 @@ dependencies = [
     "tomlkit>=0.13",
 ]
 
+[project.urls]
+Repository = "ssh://gitlab@broadpeak.tailbf2225.ts.net:2424/ajanderson/agent-toolkit-cli.git"
+
 [project.scripts]
 agent-toolkit-cli = "agent_toolkit_cli.cli:main"
 agent-toolkit-tui = "agent_toolkit_tui.app:main"

@@ -51,7 +51,7 @@ def main():
         git(root, "-c", "user.name=REGROUND fixture", "-c", "user.email=fixture@example.test", "commit", "-m", message)
 
     files = {
-        "skill": {"SKILL.md": "---\nname: shared\ndescription: Fixture skill\n---\nUse references/detail.md\n", "references/detail.md": "Detail", "scripts/check.py": "print('skill helper works')\n"},
+        "skill": {"skills/reground/SKILL.md": "---\nname: shared\ndescription: Fixture skill\n---\nUse references/detail.md\n", "skills/reground/references/detail.md": "Detail", "skills/reground/scripts/check.py": "print('skill helper works')\n"},
         "agent": {"AGENTS.md": "Fixture role. See MEMORY.md.\n", "MEMORY.md": "Before\n", "memory/detail.md": "Detail\n", ".pi/skills/expert/SKILL.md": "---\nname: expert\ndescription: Fixture expert\n---\nSee references/detail.md\n", ".pi/skills/expert/references/detail.md": "Expert detail", "scripts/check.py": "print('agent helper works')\n", "resources/data.txt": "Data"},
         "command": {"COMMAND.md": "---\nname: shared\ndescription: Fixture command\n---\nHello $ARGUMENTS\n"},
     }
@@ -78,6 +78,8 @@ def main():
         argv += [kind, verb]
         if verb == "add":
             argv += [urls[kind], "--slug", "shared", "--ref", "main"]
+            if kind == "skill":
+                argv += ["--path", "skills/reground"]
         else:
             argv += ["shared", "-p" if project else "-g"]
             if verb in ("install", "uninstall"):
@@ -91,7 +93,9 @@ def main():
     for kind in files:
         command(kind, "add")
         record = json.loads((home / f".agent-toolkit/{kind}s-lock.json").read_text())["skills"]["shared"]
-        assert record["source"] == urls[kind] and record["ref"] == "main"
+        assert record.get("parentUrl", record["source"]) == urls[kind] and record["ref"] == "main"
+        if kind == "skill":
+            assert record["skillPath"] == "skills/reground"
         assert git(central[kind], "config", "--get", "remote.origin.url").strip() == urls[kind]
     for name in ("a", "b"):
         project = work / name
@@ -160,6 +164,9 @@ def main():
     import agent_toolkit_cli
     from agent_toolkit_tui.app import TUIApp
     print("Installed package:", agent_toolkit_cli.__file__, importlib.metadata.version("agent-toolkit"))
+    project_urls = importlib.metadata.metadata("agent-toolkit").get_all("Project-URL") or []
+    assert "Repository, ssh://gitlab@broadpeak.tailbf2225.ts.net:2424/ajanderson/agent-toolkit-cli.git" in project_urls
+    print("Packaged source URL:", project_urls)
     matrix = importlib.resources.files("agent_toolkit_cli.data").joinpath("harness-matrix.md")
     assert matrix.is_file()
 

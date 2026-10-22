@@ -1,49 +1,56 @@
 # AGENTS.md — agent-toolkit-cli
 
-Python Click CLI and Textual TUI for managing six asset kinds across coding
-harnesses: Skills, Agents, Commands, Instructions, Pi extensions and MCP servers.
-Bundles is a separate installation utility, not a seventh kind. Canonical CLI
-groups are plural; singular aliases remain accepted.
+Python 3.12+ Click CLI and Textual TUI for six asset kinds: skills, agents,
+commands, instructions, Pi extensions and MCP servers. Bundles are an
+installation utility, not a seventh kind. Canonical CLI groups are plural;
+singular aliases remain accepted.
 
-## Operation
+## Source and delivery
 
-- Project-default trust: **L3 (Conditional)**; raise on plan divergence,
-  out-of-scope blast radius or low confidence (shared aj-workflow trust ladder).
-- L4+ raise timeout: **30 minutes**; park and escalate to AJ on timeout.
-- `main` has no branch protection; squash merges land immediately. Recheck branch
-  and base after long sessions; release work may move main.
-- ReleasePlease owns package version/CHANGELOG; do not hand-author release bumps.
+Source remote is private Broadpeak Gitea:
+`ssh://gitlab@broadpeak.tailbf2225.ts.net:2424/ajanderson/agent-toolkit-cli.git`.
+Use the reviewed source commit and wheel SHA to identify a deployment, not the
+package version alone. Deployment is coordinated separately; do not infer
+permission to push, publish, upgrade a live installation or change services.
+Legacy GitHub workflow/release files are not the current delivery authority.
 
 ## Commands
 
-- dev: `uv run agent-toolkit-tui` (local terminal interface, not a web server).
-- build: `uv build`; docs: `make docs-build` (strict).
-- test: `uv run pytest -q`; bootstrap: `uv sync --all-extras`.
-- lint/format/typecheck: no dedicated project script configured.
-- deploy: n/a for local CLI/TUI; GitHub workflows own release assets/docs publication.
-- `lefthook.yml` runs the full pytest suite on **pre-push**.
+- Bootstrap: `uv sync --all-extras`.
+- CLI: `uv run agent-toolkit-cli --help`.
+- TUI: `uv run agent-toolkit-tui` (terminal interface, not a web server).
+- Test: `uv run pytest -q`.
+- Build: `uv build`; strict docs: `make docs-build`.
+- Installed-wheel smoke: run the disposable environment's Python with
+  `scripts/verify_reground_artifact.py --work-dir <new-empty-directory>`.
+- No dedicated lint/format/typecheck script is configured.
+- `lefthook.yml` currently runs pytest on pre-push; this is not deployment.
 
 ## Code map
 
-- `src/agent_toolkit_cli/cli.py`: plural group registration and singular aliases.
-- `commands/{skill,agent,command,instructions,pi_extension,mcp,bundle}/`: actual verb surfaces.
-- `<kind>_install.py`, adapter packages and source/path/lock modules: per-kind facades.
-- Skills/Agents/Commands/Pi extensions use source-backed locks; Instructions uses
-  actual canonical-file pointers, **no installation lock**. MCP library authority
-  is `mcps-library.json`; its per-scope locks record projections.
-- `src/agent_toolkit_tui/`: inventory, six grids, cross-kind pending queues;
-  `settings.py` persists presentation only, never CLI targets.
-- `docs/agent-toolkit/`, `docs/asset-types/`: current public reference.
-- `docs/agent-toolkit/harness-matrix.md`: packaged machine-read data;
-  `scripts/gen_harness_docs.py` generates matrix/harness views/nav. Never hand-edit outputs.
-- `docs/solutions/`: historical decisions/fixes; specs/plans/reviews are not current reference.
-- `tests/`: pytest; TUI behavior in `tests/test_tui/`.
+- `src/agent_toolkit_cli/cli.py`: plural groups and singular aliases.
+- `commands/{skill,agent,command,instructions,pi_extension,mcp,bundle}/`: verb surfaces.
+- `<kind>_install.py`, adapters, source/path/lock modules: shared CLI/TUI behavior.
+- `behavior.py`, `project_backing.py`: backing configuration, legacy preservation
+  and explicit central migration. New isolation is disabled by default.
+- Skills/agents/commands/Pi extensions use source-backed locks. Instructions use
+  canonical-file pointers, no installation lock. MCP authority is
+  `mcps-library.json`; per-scope locks record projections.
+- `src/agent_toolkit_tui/`: inventory, grids and pending queues; `settings.py`
+  persists presentation only, not CLI behavior.
+- `docs/agent-toolkit/`, `docs/asset-types/`: current reference.
+- `docs/agent-toolkit/harness-matrix.md`: packaged compatibility data;
+  `scripts/gen_harness_docs.py` generates matrix/harness pages and nav.
+- `tests/`: pytest; headless Textual checks are in `tests/test_tui/`.
 
-## Testing and maintenance
+## Verification and maintenance
 
-`tests/conftest.py` strips inherited `GIT_*` variables before each test to prevent
-hook subprocesses writing into the outer repository. Set identity variables only
-when a test needs them. Use disposable HOME/config/assets for CLI/TUI tests or media;
-`scripts/capture_docs_tui.py` captures the real source-asserted documentation UI.
-Register new verbs in their per-kind group and add behavior/help coverage. Update
-the current docs with behavior changes; preserve historical reports and release notes.
+Use disposable HOME/config/assets and local Git remotes, never the live toolkit
+installation. `tests/conftest.py` also strips inherited `GIT_*` variables to
+prevent hook subprocesses accessing the outer repository. Legacy-private tests
+explicitly select that mode; default/disabled creation must remain covered.
+
+Preserve unrelated edits and source originals. Keep generated harness views in
+sync through their generator; do not rewrite historical reports or release
+notes as current documentation. Directory projection is not proof of native Pi
+role, memory or skill loading; verify that separately in the chosen Pi setup.

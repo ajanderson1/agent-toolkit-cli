@@ -113,6 +113,7 @@ def _register(
         for root in roots:
             if (
                 not root.resolve().is_relative_to(discovery_root.resolve())
+                or not (root / "SKILL.md").resolve().is_relative_to(discovery_root.resolve())
                 or not (root / "SKILL.md").is_file()
             ):
                 raise click.ClickException(
@@ -130,6 +131,11 @@ def _register(
             if len(matching) > 1:
                 raise click.ClickException(
                     f"Ambiguous existing identities for {parsed.owner_repo}/{path}: {matching}"
+                )
+            if matching and slug is not None and slug != matching[0]:
+                raise click.ClickException(
+                    f"{slug}: source/ref/path already registered as {matching[0]}; "
+                    "refusing to substitute a different recorded slug"
                 )
             name = (
                 matching[0]
