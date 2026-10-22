@@ -58,8 +58,9 @@ class AgentProjectionConflictError(InstallError):
     Mirrors `_install_core._symlink_or_copy`'s 'refusing to overwrite
     existing path' posture for the skill path: a foreign file at the
     destination is refused (fail-loud), NOT silently overwritten. The
-    facade allows `overwrite=True` only for a TOOL-OWNED slug (one we
-    previously wrote, recorded in the lock) so re-install stays idempotent.
+    facade does not authorize overwrites from scope registration. Only native
+    per-destination ownership/adoption, or an explicit direct-adapter override,
+    can permit refresh.
     """
 
 
@@ -75,12 +76,22 @@ def _sentinel_path(dest: Path) -> Path:
     return dest.parent / f".{dest.name}.attk"
 
 
+def _write_sentinel(dest: Path) -> None:
+    """Claim a new empty native marker; never overwrite an opaque arrival."""
+    from agent_toolkit_cli.project_backing import write_projection
+    sentinel = _sentinel_path(dest)
+    if sentinel.is_symlink() or (sentinel.exists() and sentinel.read_bytes() != b""):
+        raise InstallError(f"{sentinel}: foreign ownership marker preserved")
+    if not sentinel.exists():
+        write_projection(sentinel, b"")
+
+
 def _guard_foreign(dest: Path, *, harness: str, overwrite: bool) -> None:
     """Refuse to clobber a foreign file at `dest` unless overwrite is allowed.
 
     Two signals permit overwriting a pre-existing file:
-      1. `overwrite=True` — the facade confirmed this slug is tool-owned via
-         the lock (used by agent_install.apply() when a lock entry exists).
+      1. `overwrite=True` — an explicit direct-adapter caller authorization.
+         The facade never infers this permission from a scope lock entry.
       2. Sentinel present — `.<dest.name>.attk` exists alongside `dest`, written
          by a previous install via this tool. Allows adapter-level re-install
          without requiring the caller to set up a full lock entry (used by
@@ -93,8 +104,10 @@ def _guard_foreign(dest: Path, *, harness: str, overwrite: bool) -> None:
     if overwrite:
         return
     sentinel = _sentinel_path(dest)
+    if sentinel.is_symlink() or (sentinel.exists() and sentinel.read_bytes() != b""):
+        raise AgentProjectionConflictError(f"{harness}: foreign ownership marker preserved: {sentinel}")
     if sentinel.exists():
-        return  # our own file — recognised by the .attk sidecar
+        return  # our own file — recognised by the empty native .attk marker
     if dest.exists() or dest.is_symlink():
         raise AgentProjectionConflictError(
             f"{harness}: refusing to overwrite existing path {dest} — "

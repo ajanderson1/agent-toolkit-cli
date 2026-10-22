@@ -8,13 +8,13 @@ from __future__ import annotations
 
 import filecmp
 import os
-import shutil
 import sys
 from pathlib import Path
 
 from agent_toolkit_cli._install_core import InstallError
-from agent_toolkit_cli.agent_adapters import _guard_foreign, _sentinel_path
+from agent_toolkit_cli.agent_adapters import _guard_foreign, _sentinel_path, _write_sentinel
 from agent_toolkit_cli.skill_agents import UnknownAgentError
+from agent_toolkit_cli.project_backing import write_projection
 
 
 # Path templates per cell. {HOME}, {PROJECT}, {SLUG} are placeholders.
@@ -166,7 +166,7 @@ class _SymlinkAdapter:
         if dest.exists() and not dest.is_symlink() and filecmp.cmp(
             content_path, dest, shallow=False,
         ):
-            _sentinel_path(dest).write_text("")
+            _write_sentinel(dest)
             return dest
         # Ownership = SENTINEL, not lock (#368, standard-adapter parity): the
         # facade passes overwrite=True for any locked slug, but a lock entry
@@ -178,8 +178,8 @@ class _SymlinkAdapter:
         # copy2 over a symlink would write into its target (F6 parity).
         if dest.is_symlink():
             dest.unlink()
-        shutil.copy2(content_path, dest)
-        _sentinel_path(dest).write_text("")
+        write_projection(dest, b"", source=content_path, overwrite=_sentinel_path(dest).exists())
+        _write_sentinel(dest)
         return dest
 
     def uninstall(

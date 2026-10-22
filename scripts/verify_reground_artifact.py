@@ -207,6 +207,57 @@ def main():
         command(kind, "install", retry, targets=targets)
         assert dest.exists()
 
+    # Ordinary local regression through the installed real adapters: a foreign
+    # node arrives AFTER facade preflight, then the real writer refuses it.
+    late_probe = r'''
+import importlib, sys
+from pathlib import Path
+from unittest.mock import patch
+from click.testing import CliRunner
+from agent_toolkit_cli.cli import main
+kind = sys.argv[1]
+slot = Path.cwd() / {"skill": ".claude/skills/shared", "agent": ".pi/agents/shared", "command": ".pi/prompts/shared.md"}[kind]
+arrived = []
+def arrive():
+    slot.parent.mkdir(parents=True, exist_ok=True)
+    slot.write_text("foreign late arrival")
+    arrived.append(slot.stat().st_ino)
+flag, target = ("--agents", "claude-code") if kind == "skill" else ("--harnesses", "pi")
+args = [kind, "install", "shared", "-p", flag, target]
+if kind == "skill":
+    original = Path.symlink_to
+    def install_link(self, *a, **kw):
+        if self == slot and not arrived:
+            arrive()
+        return original(self, *a, **kw)
+    context = patch.object(Path, "symlink_to", install_link)
+else:
+    engine = importlib.import_module("agent_toolkit_cli." + kind + "_install")
+    owner = engine.agent_adapters if kind == "agent" else engine
+    original = owner.get_adapter
+    class Arrival:
+        def __init__(self, adapter): self.adapter = adapter
+        def __getattr__(self, name): return getattr(self.adapter, name)
+        def install(self, *a, **kw):
+            if not arrived: arrive()
+            return self.adapter.install(*a, **kw)
+    context = patch.object(owner, "get_adapter", lambda name: Arrival(original(name)))
+with context:
+    result = CliRunner().invoke(main, args)
+    print(result.output)
+    assert result.exit_code != 0
+assert slot.read_text() == "foreign late arrival" and slot.stat().st_ino == arrived[0]
+assert not (Path.cwd() / (kind + "s-lock.json")).exists()
+slot.unlink()
+result = CliRunner().invoke(main, args)
+assert result.exit_code == 0, result.output
+print("PASS actual installed late-arrival refusal, preservation and retry:", kind)
+'''
+    for kind in files:
+        late_project = work / f"late-arrival-{kind}"
+        late_project.mkdir()
+        run([sys.executable, "-c", late_probe, kind], cwd=late_project)
+
     # Keep an unlisted private consumer for a real TUI detach/re-register proof.
     unlisted = work / "unlisted-private"
     unlisted.mkdir()

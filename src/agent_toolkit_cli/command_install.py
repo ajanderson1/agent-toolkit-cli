@@ -6,7 +6,6 @@ from typing import Iterable
 
 from agent_toolkit_cli._install_core import InstallError, InstallPlan, InstallResult, plan as _core_plan
 from agent_toolkit_cli.command_adapters import INSTALLABLE_HARNESSES, SUPPORTED_HARNESSES, get_adapter
-from agent_toolkit_cli.command_adapters.base import sidecar_path
 from agent_toolkit_cli.command_lock import LockEntry, add_entry, read_lock, write_lock
 from agent_toolkit_cli.command_paths import Scope, canonical_command_dir, library_lock_path, lock_file_path
 from agent_toolkit_cli.skill_source import ParsedSource
@@ -168,13 +167,6 @@ def _current_linked_harnesses(
     return tuple(linked)
 
 
-def _snapshot_slot(dest: Path) -> tuple[bool, bool]:
-    """Return (dest_existed, sidecar_existed) before a mutation."""
-    dest_existed = dest.exists() or dest.is_symlink()
-    side_existed = sidecar_path(dest).exists()
-    return dest_existed, side_existed
-
-
 def _rollback_created(created_paths) -> None:
     from agent_toolkit_cli.project_backing import cleanup_created_paths
     if created_paths is not None:
@@ -251,19 +243,9 @@ def _apply(
             if source_file is None:
                 raise InstallError(f"{canonical / 'COMMAND.md'}: COMMAND.md must be a regular file")
             adapter = get_adapter(name)
-            dest = adapter.destination(
-                plan.slug, scope=plan.scope, home=home, project=project,
+            result_dest = adapter.install(
+                plan.slug, source_file, scope=plan.scope, home=home, project=project,
             )
-            dest_existed, side_existed = _snapshot_slot(dest)
-            from agent_toolkit_cli.project_backing import record_created_path
-            try:
-                result_dest = adapter.install(
-                    plan.slug, source_file, scope=plan.scope, home=home, project=project,
-                )
-            finally:
-                for path, existed in ((dest, dest_existed), (sidecar_path(dest), side_existed)):
-                    if not existed and (path.exists() or path.is_symlink()):
-                        record_created_path(path, _created_paths)
             created.append(result_dest)
             successful_add.append(name)
 

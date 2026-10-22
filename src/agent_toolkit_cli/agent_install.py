@@ -325,11 +325,9 @@ def _apply(
         content_path = canonical / f"{plan.slug}.md"
     directory_agent = content_path == canonical
 
-    # Tool-ownership signal: a lock entry for this slug means agent-toolkit-cli
-    # already installed it, so re-writing our own destination files is an
-    # allowed refresh (overwrite=True). A fresh install (no lock entry) refuses
-    # to clobber a pre-existing foreign file at any destination.
-    overwrite = existing_entry is not None
+    # Scope registration is not per-destination ownership. Each real adapter
+    # must authorize refresh via its native sentinel/adoption guard.
+    overwrite = False
 
     created: list[Path] = []
     skipped: list[str] = []
@@ -362,10 +360,6 @@ def _apply(
         sentinel = _sentinel_path(dest)
         if sentinel.is_symlink():
             raise InstallError(f"{plan.slug}: foreign ownership sidecar symlink: {sentinel}")
-        candidates = {dest, sentinel}
-        if name == "pi":
-            candidates.add(dest.parent / plan.slug)
-        missing = {p for p in candidates if not p.exists() and not p.is_symlink()}
         try:
             out = adapter.install(
                 plan.slug, content_path,
@@ -376,10 +370,6 @@ def _apply(
             # #373: name the failing slug exactly once, for every mechanism.
             # type(exc) keeps AgentProjectionConflictError discriminable.
             raise type(exc)(f"{plan.slug}: {exc}") from exc
-        finally:
-            for path in missing:
-                if path.exists() or path.is_symlink():
-                    record_created_path(path, _created_paths)
         created.append(out)
 
     removed: list[Path] = []

@@ -19,8 +19,9 @@ import textwrap
 from pathlib import Path
 
 from agent_toolkit_cli._install_core import InstallError
-from agent_toolkit_cli.agent_adapters import _guard_foreign, _sentinel_path
+from agent_toolkit_cli.agent_adapters import _guard_foreign, _sentinel_path, _write_sentinel
 from agent_toolkit_cli.skill_agents import UnknownAgentError
+from agent_toolkit_cli.project_backing import write_projection
 
 
 _VALID_SCOPES = frozenset({"global", "project"})
@@ -108,10 +109,10 @@ class _AiderDeskAdapter:
             "subagent": {"enabled": True},
             "source": text,
         }
-        cfg.write_text(json.dumps(body, indent=2) + "\n")
+        write_projection(cfg, json.dumps(body, indent=2) + "\n", overwrite=overwrite or _sentinel_path(cfg).exists())
         # Write the .attk sentinel so _guard_foreign recognises this as our
         # own file on future re-installs (without requiring the lock system).
-        _sentinel_path(cfg).write_text("")
+        _write_sentinel(cfg)
         return cfg
 
     def uninstall(
@@ -175,14 +176,15 @@ class _DextoAdapter:
         # would also work with naive interpolation, but real agent files are
         # multi-line.
         source_block = textwrap.indent(source_text.strip(), "  ")
-        yml.write_text(
+        write_projection(yml,
             f"name: {slug}\n"
             f"description: imported by agent-toolkit-cli\n"
-            f"source: |\n{source_block}\n"
+            f"source: |\n{source_block}\n",
+            overwrite=overwrite or _sentinel_path(yml).exists(),
         )
         # Write the .attk sentinel so _guard_foreign recognises this as our
         # own file on future re-installs (without requiring the lock system).
-        _sentinel_path(yml).write_text("")
+        _write_sentinel(yml)
         return yml
 
     def uninstall(
@@ -248,8 +250,8 @@ class _FirebenderAdapter:
             text = "---\n" + head + "\n---\n" + rest
         else:
             text = "---\ncallable: true\n---\n" + text
-        md.write_text(text)
-        _sentinel_path(md).write_text("")
+        write_projection(md, text, overwrite=overwrite or _sentinel_path(md).exists())
+        _write_sentinel(md)
         # Mutate firebender.json atomically.
         fb_json = base / "firebender.json"
         if fb_json.exists():
@@ -347,10 +349,11 @@ class _CodexAdapter:
         # Produce a minimal TOML with developer_instructions from content.
         # Escape any triple-quoted strings by using single-quoted TOML multiline.
         escaped = source_text.replace("'''", "''\\''")
-        toml_path.write_text(
-            f"developer_instructions = '''\n{escaped}\n'''\n"
+        write_projection(toml_path,
+            f"developer_instructions = '''\n{escaped}\n'''\n",
+            overwrite=overwrite or _sentinel_path(toml_path).exists(),
         )
-        _sentinel_path(toml_path).write_text("")
+        _write_sentinel(toml_path)
         # Mutate config.toml: add/update [agents.<slug>] section.
         config_toml = base / "config.toml"
         if config_toml.exists():

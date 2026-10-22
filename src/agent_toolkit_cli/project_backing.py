@@ -3,6 +3,9 @@ from __future__ import annotations
 
 import dataclasses
 from contextlib import contextmanager
+from contextvars import ContextVar
+import os
+import stat
 import importlib
 import shutil
 import subprocess
@@ -83,11 +86,48 @@ def check_creation(binding, slug, project, *, home=None):
     return canonical
 
 
-def record_created_path(path: Path, created_paths) -> None:
-    """Remember only paths created by this install, not pre-existing backing."""
+_install_created_paths = ContextVar("install_created_paths", default=None)
+
+
+def record_created_path(path: Path, created_paths=None, *, info=None) -> None:
+    """Record an actual creation; file creators supply their open FD identity."""
+    if created_paths is None:
+        created_paths = _install_created_paths.get()
     if created_paths is not None:
-        info = path.lstat()
+        info = path.lstat() if info is None else info
         created_paths.append((path, info.st_dev, info.st_ino))
+
+
+def write_projection(path: Path, content: str | bytes, *, overwrite=False, source: Path | None = None) -> None:
+    """Exclusively claim new files and record ownership BEFORE fallible writes.
+
+    Existing files require the adapter's own overwrite/adoption authorization;
+    they are never newly cleanup-owned. Never write through a symlink.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        output = path.open("xb")
+    except FileExistsError:
+        if not overwrite or path.is_symlink():
+            raise InstallError(f"{path}: existing projection preserved")
+        # O_NOFOLLOW also protects against substitution after the check above.
+        fd = os.open(path, os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0))
+        output = os.fdopen(fd, "wb")
+        output.truncate()
+    else:
+        record_created_path(path, info=os.fstat(output.fileno()))
+    with output:
+        if source is None:
+            output.write(content.encode() if isinstance(content, str) else content)
+        else:
+            with source.open("rb") as input_file:
+                shutil.copyfileobj(input_file, output)
+            output.flush()
+            info = source.stat()
+            if hasattr(os, "fchmod"):
+                os.fchmod(output.fileno(), stat.S_IMODE(info.st_mode))
+            if os.utime in os.supports_fd:
+                os.utime(output.fileno(), ns=(info.st_atime_ns, info.st_mtime_ns))
 
 
 def create_backing_dir(path: Path, created_paths) -> None:
@@ -124,6 +164,8 @@ def cleanup_created_paths(created_paths) -> None:
 def new_install_paths():
     """Failure cleanup for new backing/projections, never existing private work."""
     created = []
+    parent = _install_created_paths.get()
+    token = _install_created_paths.set(created)
     try:
         yield created
     except Exception as failure:
@@ -134,6 +176,11 @@ def new_install_paths():
         if isinstance(failure, OSError):
             raise InstallError(f"installation failed: {failure}") from failure
         raise
+    else:
+        if parent is not None:
+            parent.extend(created)
+    finally:
+        _install_created_paths.reset(token)
 
 
 def ensure(binding, slug, project, *, home=None, write_entry=True, created_paths=None):

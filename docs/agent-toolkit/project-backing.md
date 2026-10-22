@@ -35,8 +35,11 @@ the historical shared skills directory; recorded legacy agent paths are retained
 
 A failed first materialization/install removes newly claimed backing and partial
 new target files/links, not foreign slots or existing dirty backing. Cleanup
-checks filesystem identity before deleting claimed nodes; replaced nodes are
-preserved and incomplete cleanup is reported. This is scoped failure cleanup,
+records ownership only at successful exclusive file/link creation, not from an
+initially absent target followed by an adapter refusal. File receipts use the
+creating descriptor's identity. Cleanup checks that identity before deletion;
+late-arriving foreign targets/markers and replaced nodes are preserved, and
+incomplete cleanup is reported. This is scoped failure cleanup,
 not a general transaction or automatic adoption of old unrecorded backing.
 
 ## Agent source refresh and reset

@@ -2,6 +2,7 @@
 from pathlib import Path
 
 from agent_toolkit_cli._install_core import InstallError
+from agent_toolkit_cli.project_backing import record_created_path
 
 
 def supported(harness: str) -> bool:
@@ -19,6 +20,7 @@ def install(dest: Path, canonical: Path) -> Path:
     else:
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.symlink_to(canonical, target_is_directory=True)
+        record_created_path(dest)
     return dest
 
 

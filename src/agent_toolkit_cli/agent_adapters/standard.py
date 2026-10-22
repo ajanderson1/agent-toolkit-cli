@@ -9,12 +9,12 @@ dedupes by destination and reports it as `standard`).
 from __future__ import annotations
 
 import filecmp
-import shutil
 import sys
 from pathlib import Path
 
 from agent_toolkit_cli._install_core import InstallError
-from agent_toolkit_cli.agent_adapters import _guard_foreign, _sentinel_path
+from agent_toolkit_cli.agent_adapters import _guard_foreign, _sentinel_path, _write_sentinel
+from agent_toolkit_cli.project_backing import write_projection
 
 # Harnesses that natively read the standard agents dir, per scope.
 # Evidence: docs/agent-toolkit/research/subagent-fragments/ (re-verified for
@@ -78,7 +78,7 @@ class _StandardAdapter:
         if dest.exists() and not dest.is_symlink() and filecmp.cmp(
             content_path, dest, shallow=False,
         ):
-            _sentinel_path(dest).write_text("")
+            _write_sentinel(dest)
             return dest
         # Ownership = SENTINEL, not lock (PM review): the facade passes
         # overwrite=True for any locked slug, but lock membership is not
@@ -92,8 +92,8 @@ class _StandardAdapter:
         # symlink would write into its target (PM review F6).
         if dest.is_symlink():
             dest.unlink()
-        shutil.copy2(content_path, dest)
-        _sentinel_path(dest).write_text("")
+        write_projection(dest, b"", source=content_path, overwrite=_sentinel_path(dest).exists())
+        _write_sentinel(dest)
         return dest
 
     def uninstall(
