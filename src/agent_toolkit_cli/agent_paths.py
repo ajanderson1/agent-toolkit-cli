@@ -320,30 +320,50 @@ def validate_agent_revision(repo: Path, revision: str, paths: dict[str, str], *,
         chosen = flat if flat in tree or directory_entry not in tree else directory_entry
         selected[slug] = chosen
 
+    checked_directories = set()
+
     def resource_target(name):
-        pending, seen = name, set()
-        while True:
-            if pending in seen:
-                raise InstallError(f"cyclic agent resource symlink: {name}")
-            seen.add(pending)
-            parts = [] if pending == "." else pending.split("/")
-            for index in range(len(parts)):
-                prefix = "/".join(parts[:index + 1])
+        def resolve_parts(parts, resolved, active):
+            for part in parts:
+                # POSIX traversal expands links BEFORE a following '..'. Also,
+                # file/.. is ENOTDIR, not a lexical cancellation of the file.
+                if tree["/".join(resolved) or "."][0] != "040000":
+                    raise InstallError(f"unproven prospective agent resource: {name}")
+                if part in ("", "."):
+                    continue
+                if part == "..":
+                    if not resolved:
+                        raise InstallError(f"escaping agent resource symlink: {name}")
+                    resolved = resolved[:-1]
+                    continue
+                prefix = "/".join([*resolved, part])
                 node = tree.get(prefix)
                 if node is None:
                     raise InstallError(f"missing prospective agent resource: {name}")
                 if node[0] == "120000":
+                    if prefix in active:
+                        raise InstallError(f"cyclic agent resource symlink: {name}")
                     target = skill_git._run(["git", "-C", str(repo), "cat-file", "blob", node[1]], env=None).stdout
                     if not target or posixpath.isabs(target) or "\\" in target or "\0" in target:
                         raise InstallError(f"escaping agent resource symlink: {name}")
-                    pending = posixpath.normpath(posixpath.join(posixpath.dirname(prefix), target, *parts[index + 1:]))
-                    if pending == ".." or pending.startswith("../"):
-                        raise InstallError(f"escaping agent resource symlink: {name}")
-                    break
-                if node[0] == "160000" or (index < len(parts) - 1 and node[0] != "040000"):
+                    resolved = resolve_parts(target.split("/"), resolved, active | {prefix})
+                elif node[0] == "160000":
                     raise InstallError(f"unproven prospective agent resource: {name}")
-            else:
-                return
+                else:
+                    resolved = [*resolved, part]
+            return resolved
+
+        directory = "/".join(resolve_parts(name.split("/"), [], set()))
+        if tree[directory or "."][0] == "040000" and directory not in checked_directories:
+            checked_directories.add(directory)
+            # A directory alias exposes its descendants too, including those
+            # outside the agent's lexical subtree but inside this repository.
+            for child, (mode, _oid) in tree.items():
+                if not directory or child.startswith(directory + "/"):
+                    if mode == "120000":
+                        resource_target(child)
+                    elif mode == "160000":
+                        raise InstallError(f"unproven submodule resource: {child}")
 
     for slug, relative in selected.items():
         parts = _agent_parts(relative, slug)

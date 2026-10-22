@@ -138,6 +138,22 @@ def main():
     assert (agent_link / "AGENTS.md").read_text() == files["agent"]["AGENTS.md"]
     git(sources["agent"], "reset", "--hard", before_head)  # only this disposable remote fixture
 
+    # Do not cancel '..' before expanding an intermediate directory symlink.
+    outside_data = work / "data.txt"
+    outside_data.write_text("outside repository fixture")
+    (sources["agent"] / "resources/back").symlink_to("..", target_is_directory=True)
+    leak = sources["agent"] / "resources/leak"
+    leak.symlink_to("back/../data.txt")
+    assert leak.resolve(strict=True) == outside_data
+    commit(sources["agent"], "fixture linked-directory parent traversal")
+    command("agent", "update", ok=False)
+    assert git(central["agent"], "rev-parse", "HEAD").strip() == before_head
+    assert (home / ".agent-toolkit/agents-lock.json").read_bytes() == before_lock
+    assert not (agent_link / "resources/leak").is_symlink()
+    assert (agent_link / "resources/data.txt").read_text() == "Data"
+    assert outside_data.read_text() == "outside repository fixture"
+    git(sources["agent"], "reset", "--hard", before_head)
+
     # Same-name skill and agent have independent backing at both layouts.
     config = home / ".agent-toolkit/config.json"
     config.write_text('{"projectBacking":"isolated","allowIsolatedProjects":true}')

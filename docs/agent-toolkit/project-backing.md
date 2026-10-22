@@ -46,7 +46,9 @@ prospective commit without exposing its checkout, validate recorded entries for
 all known agents sharing that parent, and only then fast-forward or explicitly
 reset to that exact commit. Entry symlinks, escaping/dangling/cyclic resource
 symlinks and unproven submodule resources are refused. Internal repository
-resource symlinks remain supported. Unrecorded canonical aliases sharing a
+resource symlinks remain supported. Linked directories are resolved before
+following parent (`..`) components, and directory aliases' reachable resources
+are checked rather than only their lexical location. Unrecorded canonical aliases sharing a
 parent block refresh rather than guessing their selection; restore their
 registration before advancing that backing. These checks cover add, import,
 update, reset and the legacy source-driven installation helper.
