@@ -25,6 +25,10 @@ from __future__ import annotations
 
 from typing import Literal
 
+from rich.markup import escape
+
+from agent_toolkit_tui.asset_info import library_info, local_path_info
+
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical
@@ -59,8 +63,8 @@ _GLOBAL_GLYPH    = "🌐"
 
 _ORIGIN_MARKUP = {
     "store-owned": "[blue]library[/]",
-    "untracked":   "[dim]untracked[/]",
-    "local-package": "[yellow]local package · untracked[/]",
+    "untracked":   "[dim]local[/]",
+    "local-package": "[dim]local[/]",
 }
 
 # Column indices (single scope column; the active scope is self._scope).
@@ -226,7 +230,7 @@ class PiGrid(Vertical):
             if self._scope == "global"
             else row.project_cell.project_loaded
         )
-        state = "untracked" if row.origin in ("untracked", "local-package") else "loaded" if loaded else "not loaded"
+        state = "loaded" if loaded else "not loaded"
         self.app.push_screen(
             CellInfoScreen(
                 title=f"{row.slug} · {asset_type_label('pi-extension')}",
@@ -235,11 +239,11 @@ class PiGrid(Vertical):
                     slug=row.slug,
                     description=None,
                     description_location="extension metadata",
-                    source=row.source,
+                    source=escape(row.source),
                     ref=None,
                     state=state,
                     scope=self._scope,
-                    extra_lines=[f"Origin: {self._origin_label(row)}"],
+                    extra_lines=[self._info_body(row=row, scope=self._scope)],
                 ),
             )
         )
@@ -268,34 +272,28 @@ class PiGrid(Vertical):
         )
 
     def _extension_info_body(self, row: PiExtensionRow) -> str:
-        body = (
-            f"Pi extension [b]{row.slug}[/]\n"
-            f"Origin: {self._origin_label(row)}\n"
-            f"Source: {row.source}"
-        )
         if row.origin == "store-owned":
             from agent_toolkit_cli.pi_extension_paths import library_pi_extension_path
 
-            ext_dir = library_pi_extension_path(row.slug)
-            body += f"\nLibrary path: {ext_dir}"
-        return body
+            return "\n".join(library_info(library_pi_extension_path(row.slug)))
+        if row.origin == "npm":
+            return (
+                "Origin: npm\n"
+                "Pi obtains the published package. Enable/disable adds/removes its\n"
+                "settings reference, not an extension symlink and not package files.\n"
+                "Updates use Pi package handling, not Toolkit Git update.\n"
+                "Disabling does not unload an already-running session."
+            )
+        return "Origin: local"
 
     def _origin_info_body(self) -> str:
-        return (
-            "Origin labels:\n\n"
-            "[b]library-owned[/]: cloned into the agent-toolkit library;\n"
-            "  managed via pi-extension add/install/update.\n"
-            "[b]npm managed[/]: registry package in Pi settings.json packages[];\n"
-            "  managed via pi-extension install (scope toggle).\n"
-            "[b]npm unmanaged[/]: registry package Pi loads from settings.json,\n"
-            "  but agent-toolkit did not add it; remove manually from packages[].\n"
-            "[b]local package (untracked)[/]: local filesystem package in Pi\n"
-            "  settings.json packages[]; not in asset lock.\n"
-            "[b]untracked[/]: found in Pi's extensions/ dir but not in\n"
-            "  the asset-type lock. Use pi-extension import to adopt."
-        )
+        info = get_column_info("origin", asset_type="pi-extension", context={"scope": self._scope})
+        return "\n".join(info.lines)
 
     def _info_body(self, *, row: PiExtensionRow, scope: str) -> str:
+        return self._extension_info_body(row) + "\n\n" + self._scope_info_body(row=row, scope=scope)
+
+    def _scope_info_body(self, *, row: PiExtensionRow, scope: str) -> str:
         from pathlib import Path
         from agent_toolkit_cli.pi_extension_paths import (
             library_pi_extension_path,
@@ -303,12 +301,17 @@ class PiGrid(Vertical):
         )
 
         if row.origin == "untracked":
-            return (
-                f"[dim]Untracked extension.[/]\n\n"
-                f"This extension is not in the asset-type lock and cannot be\n"
-                f"toggled here. To adopt it, run:\n"
-                f"  [b]agent-toolkit-cli pi-extension import {row.slug}[/]"
-            )
+            # Locate the already-discovered slug's actual loose file/directory.
+            details: list[str] = []
+            for location in (scope, "global" if scope == "project" else "project"):
+                base = pi_extension_dir(
+                    row.slug, scope=location, home=Path.home(),
+                    project=Path.cwd() if location == "project" else None,
+                )
+                for path in (base, base.with_name(base.name + ".ts"), base.with_name(base.name + ".js")):
+                    if path.exists() or path.is_symlink():
+                        details += [f"Location ({location}):", *local_path_info(path), ""]
+            return "\n".join(details) or "Local files are no longer present in either scope."
 
         if row.origin == "local-package":
             path = (
@@ -321,10 +324,17 @@ class PiGrid(Vertical):
                 if scope == "global"
                 else row.project_package_spec
             ) or row.source
-            return (
-                "[dim]untracked local filesystem package.[/]\n\n"
-                "agent-toolkit-cli does not manage local filesystem package declarations.\n"
-                f"Configured in {path} as \"{spec}\"."
+            candidate = Path(spec).expanduser()
+            if not candidate.is_absolute():
+                candidate = Path(path).parent / candidate
+            return escape(
+                f"Source path: {candidate}\n"
+                "Existing local filesystem package; files are not moved or registered.\n"
+                "No TUI enable/disable or deletion; edit/update the local files directly.\n"
+                f"Manual removal: edit {path} and remove the packages[] entry\n"
+                f"whose source is {spec!r} (or the matching string entry).\n"
+                "This removes only the settings reference; it does not delete package files.\n"
+                "Removing a reference does not unload an already-running session."
             )
 
         home = Path.home()
@@ -341,9 +351,10 @@ class PiGrid(Vertical):
                     path = row.project_config_path or row.global_config_path or "Pi settings.json"
                     spec = row.project_package_spec or row.global_package_spec or row.source
                 return (
-                    "[dim]unmanaged npm package.[/]\n\n"
-                    "agent-toolkit-cli will not remove packages it did not add.\n"
-                    f"To remove it manually, edit {path} and remove \"{spec}\" from packages[]."
+                    "Toolkit did not register this npm reference; toggles are unavailable.\n"
+                    + escape(f"Manual removal: edit {path} and remove the packages[] entry "
+                             f"whose source is {spec!r} (or the matching string entry).\n"
+                             "This removes only the reference, not package files.")
                 )
             if pending == "link":
                 return (
@@ -418,7 +429,7 @@ class PiGrid(Vertical):
         if row.origin == "npm" and not row.managed:
             try:
                 self.app.notify(
-                    "unmanaged npm package: remove manually from Pi settings.json packages[]",
+                    "npm reference not registered by Toolkit: see Info for manual removal",
                     severity="warning",
                 )
             except Exception:
@@ -534,12 +545,10 @@ class PiGrid(Vertical):
         return base
 
     def _origin_label(self, row: PiExtensionRow) -> str:
-        if row.origin == "npm":
-            return "npm managed" if row.managed else "npm unmanaged"
         return pi_extension_origin_label(row.origin)
 
     def _origin_glyph(self, row: PiExtensionRow) -> str:
         """Return styled markup for an origin label. Never named _render_*."""
         if row.origin == "npm":
-            return "[cyan]npm managed[/]" if row.managed else "[yellow]npm unmanaged[/]"
+            return "[cyan]npm[/]"
         return _ORIGIN_MARKUP.get(row.origin, pi_extension_origin_label(row.origin))

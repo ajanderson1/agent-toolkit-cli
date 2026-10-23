@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Vertical
+from textual.containers import VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Label, Static
 
@@ -44,12 +44,14 @@ class CellInfoScreen(ModalScreen[None]):
     CellInfoScreen {
         align: center middle;
     }
-    CellInfoScreen > Vertical {
+    CellInfoScreen > VerticalScroll {
         background: $panel;
         border: round $primary;
         padding: 1 2;
         width: 80;
+        max-width: 95%;
         height: auto;
+        max-height: 80%;
     }
     CellInfoScreen #cell-info-title {
         width: 100%;
@@ -78,7 +80,7 @@ class CellInfoScreen(ModalScreen[None]):
         self._body_markup = body_markup
 
     def compose(self) -> ComposeResult:
-        with Vertical():
+        with VerticalScroll():
             yield Label(self._title, id="cell-info-title")
             yield Static(self._body_markup, id="cell-info-body", markup=True)
             yield Static("Esc / q / i  close", id="cell-info-footer")

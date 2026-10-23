@@ -32,9 +32,7 @@ from agent_toolkit_cli import _pi_settings, skill_git
 from agent_toolkit_cli.pi_extension_lock import (
     LockEntry,
     LockFile,
-    add_entry,
     read_lock,
-    write_lock,
 )
 from agent_toolkit_cli.pi_extension_paths import (
     Scope,
@@ -477,36 +475,6 @@ def _scan_unmanaged_packages(
                 f"local filesystem package '{pkg_name}' in settings.json "
                 f"is not tracked in the lockfile"
             ),
-            fix_action=_make_import_package_action(
-                slug=pkg_name,
-                source=source,
-                scope=scope,
-                home=home,
-                project=project,
-            ) if repair else None,
+            fix_action=None,  # Local discovery never registers or moves files (#538).
         ))
     return findings
-
-
-def _make_import_package_action(
-    *, slug: str, source: str, scope: Scope, home: Path, project: Path | None,
-) -> FixAction:
-    lock_path = lock_file_path(scope=scope, home=home, project=project)
-
-    def _apply() -> None:
-        cur_lock = read_lock(lock_path)
-        if slug in cur_lock.skills:
-            return  # idempotent
-        entry = LockEntry(
-            source=source,
-            source_type="local",
-            ref="(default)",
-            read_only=False,
-        )
-        write_lock(lock_path, add_entry(cur_lock, slug, entry))
-
-    return FixAction(
-        description=f"Import unmanaged package '{slug}' into {lock_path.name}",
-        shell_preview=f"agent-toolkit-cli pi-extension add {source} --slug {slug}",
-        apply=_apply,
-    )

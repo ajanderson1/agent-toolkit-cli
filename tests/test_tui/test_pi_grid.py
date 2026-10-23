@@ -249,14 +249,14 @@ async def test_pi_grid_origin_and_extension_info_use_library_copy():
         row = _store_row("alpha")
 
         origin_body = grid._origin_info_body()
-        assert "library-owned" in origin_body
+        assert "library" in origin_body
         assert "agent-toolkit library" in origin_body
         assert "Store path" not in origin_body
         assert "store-owned" not in origin_body
 
         extension_body = grid._extension_info_body(row)
         assert "Origin: library" in extension_body
-        assert "Library path:" in extension_body
+        assert "Source path:" in extension_body
         assert "Store path:" not in extension_body
         assert "store-owned" not in extension_body
 
@@ -478,7 +478,7 @@ async def test_npm_row_toggles_per_scope():
 
 @pytest.mark.asyncio
 async def test_unmanaged_npm_row_is_non_interactive_and_labeled():
-    """Space on unmanaged npm warns/no-ops; origin says npm unmanaged."""
+    """Space on unmanaged npm warns/no-ops; origin says npm."""
 
     class _A(App):
         def compose(self) -> ComposeResult:
@@ -489,7 +489,7 @@ async def test_unmanaged_npm_row_is_non_interactive_and_labeled():
         await pilot.pause()
         g = app.query_one("#g", PiGrid)
         table = app.query_one("#pi-table", DataTable)
-        assert "npm unmanaged" in str(table.get_cell_at(Coordinate(0, 2)))
+        assert Text.from_markup(str(table.get_cell_at(Coordinate(0, 2)))).plain == "npm"
         table.cursor_coordinate = table.cursor_coordinate.__class__(row=0, column=1)
         table.focus()
         await pilot.pause()
@@ -511,16 +511,16 @@ async def test_unmanaged_npm_info_body_gives_manual_removal_advice():
         g = app.query_one("#g", PiGrid)
         row = _unmanaged_npm_row("pi-title-renamer")
         body = g._info_body(row=row, scope="global")
-        assert "unmanaged npm package" in body
-        assert "will not remove packages it did not add" in body
+        assert "Origin: npm" in body
+        assert "did not register this npm reference" in body
         assert "/tmp/home/.pi/agent/settings.json" in body
-        assert 'remove "npm:pi-title-renamer" from packages[]' in body
+        assert "whose source is 'npm:pi-title-renamer'" in body
 
         # If the active scope has no npm metadata, still show the exact loaded
         # scope path/spec instead of a vague placeholder.
         project_body = g._info_body(row=row, scope="project")
         assert "/tmp/home/.pi/agent/settings.json" in project_body
-        assert 'remove "npm:pi-title-renamer" from packages[]' in project_body
+        assert "whose source is 'npm:pi-title-renamer'" in project_body
 
 
 @pytest.mark.asyncio
@@ -561,8 +561,8 @@ async def test_local_package_row_is_non_interactive_and_explains_untracked():
 
         # Origin markup and label
         row = g._visible_rows()[0]
-        assert g._origin_label(row) == "local package (untracked)"
-        assert "local package · untracked" in g._origin_glyph(row)
+        assert g._origin_label(row) == "local"
+        assert Text.from_markup(g._origin_glyph(row)).plain == "local"
 
         # Non-interactive toggle
         table.cursor_coordinate = table.cursor_coordinate.__class__(row=0, column=1)
@@ -573,7 +573,7 @@ async def test_local_package_row_is_non_interactive_and_explains_untracked():
 
         # Info body explains untracked local package
         info = g._info_body(row=row, scope="global")
-        assert "untracked local filesystem package" in info
+        assert "local filesystem package" in info
         assert "../local-pkg" in info
 
 

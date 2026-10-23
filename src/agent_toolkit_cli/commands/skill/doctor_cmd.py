@@ -20,7 +20,7 @@ from ._common import scope_and_roots, scope_banner
 @click.option("--no-fix", is_flag=True,
               help="Report only; do not prompt or mutate.")
 @click.option("--repair", is_flag=True,
-              help="Prompt to repair fixable findings (required for unmanaged asset import).")
+              help="Prompt to repair fixable findings; discovered local assets remain report-only.")
 @click.option("--repair-foreign", is_flag=True,
               help="Allow fixing foreign symlinks (off by default).")
 @click.pass_context

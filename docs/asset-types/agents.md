@@ -47,6 +47,6 @@ Add/remove/import are global-library operations. Install/uninstall default proje
 
 ## Ownership and inventory
 
-The TUI unions lock entries with bounded on-disk discovery. Unmanaged files stay visible; visibility is not consent to take ownership. Doctor reports Standard drift, orphan/dangling sidecars and Cursor shadows (Cursor's own directory wins conflicts). A divergent sentinel-less Cursor file is report-only, and unmanaged Standard files are never auto-removed. Toolkit-owned generated content uses ownership sidecars; inspect conflict diagnostics instead of replacing foreign files.
+The TUI unions lock entries with bounded on-disk discovery. Discovered files stay visible as `local`; visibility is not consent to take ownership. Local rows cannot enter single/All/None toggle queues and have no TUI enable/disable or deletion action. Info shows the actual path and manual removal instructions, distinguishing symlink removal from permanent file deletion. `library` rows keep existing controls; disabling retracts the connection, not the central source. Doctor reports Standard drift, orphan/dangling sidecars and Cursor shadows (Cursor's own directory wins conflicts). A divergent sentinel-less Cursor file is report-only, and unmanaged Standard files are never auto-removed. Toolkit-owned generated content uses ownership sidecars; inspect conflict diagnostics instead of replacing foreign files.
 
 [Lock formats](../agent-toolkit/lock-files.md) · [Instructions](instructions.md) · [TUI](../agent-toolkit/tui.md)

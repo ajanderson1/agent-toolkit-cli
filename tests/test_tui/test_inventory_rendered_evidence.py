@@ -21,11 +21,11 @@ from agent_toolkit_tui.widgets.skill_grid import SkillGrid
 class InventoryEvidenceApp(App):
     def compose(self) -> ComposeResult:
         yield SkillGrid([
-            SkillRow("standalone-skill", "untracked", "(untracked)", "unlisted"),
-            SkillRow("superpowers:brainstorming", "untracked", "(untracked)", "unlisted"),
+            SkillRow("standalone-skill", "/tmp/home/skills/standalone-skill", "(untracked)", "unlisted"),
+            SkillRow("superpowers:brainstorming", "/tmp/home/skills/superpowers/skills/brainstorming", "(untracked)", "unlisted"),
         ], id="skills")
         yield AgentGrid([
-            AgentRow("local-agent", "untracked", "(untracked)", "unlisted"),
+            AgentRow("local-agent", "/tmp/home/.claude/agents/local-agent.md", "(untracked)", "unlisted"),
         ], id="agents")
         yield CommandGrid([
             CommandRow("local-command", "untracked", "(untracked)", "unlisted"),
@@ -51,18 +51,18 @@ def _cell_value(table: DataTable, row: int, column: int) -> str:
 
 
 @pytest.mark.asyncio
-async def test_rendered_unmanaged_inventory_evidence():
-    """Capture visible cells and stable row keys for every discovered asset type."""
-    artifact_dir = Path("assets/verification/515")
+async def test_rendered_unmanaged_inventory_evidence(tmp_path):
+    """Capture current cells without overwriting historical verification assets."""
+    artifact_dir = tmp_path / "inventory-evidence"
     artifact_dir.mkdir(parents=True, exist_ok=True)
     app = InventoryEvidenceApp()
     async with app.run_test(size=(132, 36)) as pilot:
         await pilot.pause()
         cases = [
-            ("skills", "skill-table", ["standalone-skill", "superpowers:brainstorming"], "unlisted", 2),
-            ("agents", "agent-table", ["local-agent"], "unlisted", 2),
+            ("skills", "skill-table", ["standalone-skill", "superpowers:brainstorming"], "local", 2),
+            ("agents", "agent-table", ["local-agent"], "local", 2),
             ("commands", "command-table", ["local-command"], "unlisted", 2),
-            ("pi", "pi-table", ["local-package"], "local package · untracked", 2),
+            ("pi", "pi-table", ["local-package"], "local", 2),
         ]
         evidence = {}
         for widget_id, table_id, slugs, expected_label, badge_column in cases:
@@ -77,7 +77,7 @@ async def test_rendered_unmanaged_inventory_evidence():
                 assert all(expected_label in row[badge_column] for row in visible)
             else:
                 state_column = next(i for i, col in enumerate(table.columns.values()) if "State" in str(col.label))
-                assert all("unlisted" in row[state_column] for row in visible), (widget_id, visible)
+                assert all(expected_label in row[state_column] for row in visible), (widget_id, visible)
             evidence[widget_id] = {
                 "row_keys": keys,
                 "columns": [str(c.label) for c in table.columns.values()],

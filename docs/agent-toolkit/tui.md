@@ -51,12 +51,37 @@ Footer (key hints)
   [scope](../glossary.md#scope). The grid re-reads at the new scope; pending
   edits queued in the other scope are kept, not discarded.
 
-| Inventory state | Meaning |
-|---|---|
-| `unlisted` | Unmanaged on-disk discovery, or an ordinary project record absent from the library. Proven project children derived from a retained library collection are managed, not unlisted merely for lacking individual global records. |
-| `local package · untracked` | Pi package declared by local filesystem path; read-only until explicitly imported by confirmed doctor repair. |
+### Library, local and npm origins
 
-Skill, agent, and command grids union lock entries with bounded on-disk discovery. Registered multi-skill sources group real children into collections; bounded unmanaged discovery may also expose legacy members without making them managed. Inventory itself is observational, not a conversion/import. For Pi, local-package rows are non-interactive until explicitly managed.
+Skills and Agents prefix the existing Source column with `library` or `local`;
+Pi Extensions uses its existing Origin column. Git-change and health badges
+(such as dirty, missing or drift) remain separate from origin.
+
+| Origin | Meaning and controls |
+|---|---|
+| `library` | Toolkit-managed central source connected through the existing installation mechanism. Disable removes the connection, not the source. |
+| `local` | Existing files used where they are, outside Toolkit library management—even if discovered under a library directory. Visible and usable, but excluded from individual, collection and All/None toggle queues. No TUI enable/disable, deletion, moving or registration. |
+| `npm` | Pi obtains the published package. Toolkit-registered references retain their toggle controls; references Toolkit did not register remain read-only with manual guidance in Info. |
+
+Press ++i++ for the actual source path and linking/update behavior. For local
+files, Info gives the exact manual removal command and warns when it
+**permanently deletes files**. Removing a symlink keeps its target; remove only
+the selected child, never a shared parent checkout. For a local package in Pi
+settings, remove its string or structured `packages[]` reference in the shown
+settings file; this does not delete package contents.
+
+npm enable/disable adds/removes a reference in Pi settings—not an extension
+symlink or package-file deletion. Updates use Pi package handling, not Toolkit
+Git update. Removing a reference does not unload an already-running Pi session.
+
+Skill, agent, and command grids retain their existing lock/filesystem inventory.
+Registered multi-skill sources group real children into collections; discovery
+itself is observational, not incorporation. A scope-only locked asset may still
+show `unlisted`; it is not a discovered local file and keeps its existing
+controls. Proven project children derived from a retained library collection
+are managed even without individual global records. Skill/Pi-extension doctor
+does not register discovered local assets, even with `--repair`. Ordinary source
+registration, lock-file import and unrelated repairs are unchanged.
 
 ## Key bindings
 

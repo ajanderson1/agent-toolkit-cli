@@ -19,6 +19,9 @@ original context rather than being rewritten as current reference.
 - TUI queues across six kinds and both scopes, aggregate Apply/Diff/Revert,
   source/ref skill collections of real children, guarded legacy exposure
   reconciliation, clean plural sidebar and emphasized repository path.
+- Clear library/local/npm origins for Skills, Agents and Pi extensions; local
+  rows remain visible but non-toggleable, with manual removal guidance rather
+  than local-adoption repairs.
 
 These do not imply every adapter is enabled, every scope is supported, or Apply
 is a global transaction. See [compatibility](../matrix.md) and recovery limits.
@@ -56,7 +59,7 @@ a separate decision. Current scripts must continue using shipped verbs.
 - Surface dirty owned content at session end without obscuring more urgent state.
 - A convenience skill diff command (not currently shipped).
 - Explicit handling of other installers' copied assets beyond supported bounded
-  unmanaged discovery/confirmed import.
+  local discovery (without incorporating discovered local files).
 - Additional harness adapters only when placement, ownership and verification
   evidence justify them; researched support alone does not enable an adapter.
 

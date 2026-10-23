@@ -86,32 +86,42 @@ def test_pi_doctor_repair_declined_leaves_settings_and_lock_untouched(tmp_path: 
     assert "my-local-pkg" not in lock.skills
 
 
-def test_pi_doctor_repair_confirmed_imports_package_losslessly(tmp_path: Path, monkeypatch):
-    """When user confirms repair, local package is recorded in lock, settings.json NOT mutated."""
+def test_pi_doctor_repair_never_imports_local_package(tmp_path: Path, monkeypatch):
     fake_home, pi_agent_dir = _setup_env(monkeypatch, tmp_path)
     pkg_dir = tmp_path / "local-pkg"
-    pkg_dir.mkdir(parents=True)
-    (pkg_dir / "package.json").write_text(json.dumps({"name": "my-local-pkg", "version": "1.0.0"}))
+    pkg_dir.mkdir()
+    manifest = '{"name": "my-local-pkg", "version": "1.0.0"}'
+    (pkg_dir / "package.json").write_text(manifest)
+    settings = pi_agent_dir / "settings.json"
+    content = json.dumps({"packages": [str(pkg_dir)], "extensions": []}) + "\n"
+    settings.write_text(content)
 
-    settings_file = pi_agent_dir / "settings.json"
-    settings_content = json.dumps({"packages": [str(pkg_dir)], "extensions": []}, indent=2) + "\n"
-    settings_file.write_text(settings_content)
+    result = CliRunner().invoke(main, ["pi-extension", "doctor", "-g", "--repair"], input="y\n")
+    assert result.exit_code != 0, result.output
+    assert "my-local-pkg" in result.output
+    assert "Import unmanaged" not in result.output
+    assert settings.read_text() == content
+    assert "my-local-pkg" not in read_lock(lock_file_path(scope="global", home=fake_home)).skills
+    assert (pkg_dir / "package.json").read_text() == manifest
 
-    runner = CliRunner()
-    r = runner.invoke(main, ["pi-extension", "doctor", "-g", "--repair"], input="y\n")
-    assert r.exit_code == 0, r.output
-    assert "fixed" in r.output
 
-    # settings.json MUST be byte-for-byte identical — NEVER mutated!
-    assert settings_file.read_text() == settings_content
+def test_local_package_findings_have_no_repair_in_either_scope(tmp_path, monkeypatch):
+    from agent_toolkit_cli.pi_extension_doctor import diagnose
 
-    # Lockfile has the local package entry
-    lock = read_lock(lock_file_path(scope="global", home=fake_home))
-    assert "my-local-pkg" in lock.skills
-    entry = lock.skills["my-local-pkg"]
-    assert entry.source_type == "local"
-
-    # Repeat run of doctor: now all clean
-    r2 = runner.invoke(main, ["pi-extension", "doctor", "-g"])
-    assert r2.exit_code == 0, r2.output
-    assert "clean" in r2.output.lower()
+    home, pi_dir = _setup_env(monkeypatch, tmp_path)
+    project = tmp_path / "project"
+    package = tmp_path / "local-package"
+    package.mkdir()
+    (package / "package.json").write_text('{"name": "local-package"}')
+    for scope, settings in (("global", pi_dir / "settings.json"),
+                            ("project", project / ".pi/settings.json")):
+        settings.parent.mkdir(parents=True, exist_ok=True)
+        content = json.dumps({"packages": [{"source": str(package), "extensions": ["index.ts"]}]})
+        settings.write_text(content)
+        findings = diagnose(slugs=("local-package",), scope=scope, home=home,
+                            project=project if scope == "project" else None, repair=True)
+        local = [f for f in findings if f.finding_type == "unmanaged"]
+        assert len(local) == 1
+        assert local[0].path == package
+        assert local[0].fix_action is None
+        assert settings.read_text() == content

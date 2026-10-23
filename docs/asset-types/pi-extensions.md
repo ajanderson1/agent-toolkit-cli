@@ -1,13 +1,13 @@
 # Pi extensions
 
-This kind manages **Pi** extensions only; it does not classify other harnesses' plugin systems. Inventory includes Git-backed library packages, npm registrations and unmanaged local extensions/packages.
+This kind manages **Pi** extensions only; it does not classify other harnesses' plugin systems. Inventory includes Git-backed library packages, npm registrations and local extensions/packages.
 
 ## Storage and loading
 
 - Git-backed library: `~/.agent-toolkit/pi-extensions/<slug>`; source/ref/observed commit metadata in `pi-extensions-lock.json`.
-- Store-owned projection: `~/.pi/agent/extensions/<slug>` globally or `<project>/.pi/extensions/<slug>` in a project. Both scopes link to the global library copy, unlike the separate project skill backing store.
-- npm registrations use Pi settings/package handling rather than the store-owned symlink path.
-- Loose extensions and local filesystem packages declared in settings remain observable even when untracked. A visible row is not necessarily managed or toggleable.
+- Library projection: `~/.pi/agent/extensions/<slug>` globally or `<project>/.pi/extensions/<slug>` in a project. Both scopes link to the global library copy; new project skills also use central backing.
+- npm registrations use Pi settings/package handling rather than a library symlink. Toolkit-registered enable/disable adds/removes the settings reference, not package files. Updates use Pi package handling, not Toolkit Git update. References Toolkit did not register cannot be toggled; Info explains the exact manual settings edit. Disabling does not unload an already-running session.
+- Loose extensions and local filesystem packages declared in settings are labeled `local` in the TUI and remain usable in place. They have no TUI enable/disable or deletion action. Info shows the actual path and manual removal instructions: deleting a file/directory is permanent, unlinking a symlink keeps its target, and removing a local package reference from `packages[]` keeps the package files. Never delete a shared parent checkout to remove one child.
 
 ## Use
 
@@ -27,6 +27,6 @@ If a checkout already exists but its lock entry is missing, add registers it onl
 
 ## Safety
 
-Store-owned installation refuses foreign links or regular destination files; uninstall removes only the matching owned projection. Doctor reports orphaned `extensions[]` overrides but does not edit that settings array. Local-package `--repair` import requires explicit confirmation and records the original path without copying or rewriting package source/settings. Registry packages and settings values that cannot be represented losslessly remain report-only. `--no-fix` is read-only.
+Library installation refuses foreign links or regular destination files; uninstall removes only the matching owned projection. Doctor reports orphaned `extensions[]` overrides but does not edit that settings array. Local discovery remains report-only even with `--repair`: doctor does not register local packages or rewrite their settings/source. Ordinary source registration, lock-file import and unrelated repairs remain supported. Registry packages and settings values that cannot be represented losslessly remain report-only. `--no-fix` is read-only.
 
 [Pi harness](../harnesses/pi.md) · [Locks](../agent-toolkit/lock-files.md) · [TUI](../agent-toolkit/tui.md)

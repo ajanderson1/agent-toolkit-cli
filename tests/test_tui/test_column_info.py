@@ -230,7 +230,7 @@ def test_harness_panel_keeps_its_authored_copy(
 def test_skill_state_panel_keeps_all_six_badges_in_state_markup_order() -> None:
     info = _info("state", "skill")
     badges = [line.split("—")[0].strip().lstrip("• ") for line in info.lines if line.startswith("•")]
-    assert badges == ["clean", "dirty", "missing", "copy", "library", "unlisted"]
+    assert badges == ["clean", "dirty", "missing", "copy", "library", "unlisted", "local"]
 
 
 @pytest.mark.parametrize("asset_type", ["agent", "command", "mcp"])
@@ -239,16 +239,22 @@ def test_non_skill_state_panels_use_the_three_badge_legend(asset_type: str) -> N
     text = "\n".join(info.lines)
     for badge in ("installed", "library", "unlisted"):
         assert f"• {badge} —" in text
-    assert "matching `doctor` command" in text
+    if asset_type == "agent":
+        assert "• local —" in text
+        assert "no TUI toggles" in text
+    else:
+        assert "matching `doctor` command" in text
 
 
 def test_pi_extension_origin_panel_uses_the_three_authored_origins() -> None:
     info = _info("origin", "pi-extension")
-    assert info.lines == [
-        "• library — owned by the toolkit store",
-        "• npm — installed as an npm package",
-        "• untracked — present in Pi but not managed by the toolkit",
-    ]
+    text = "\n".join(info.lines)
+    for origin in ("library", "local", "npm"):
+        assert f"• {origin} —" in text
+    assert "Disable removes the connection, not the source" in text
+    assert "Pi package handling" in text
+    assert "manual removal" in text
+    assert "untracked" not in text
 
 
 

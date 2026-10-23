@@ -15,7 +15,10 @@ modal surfaces the skill description when present.
 """
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Literal
+
+from agent_toolkit_tui.asset_info import library_info, local_path_info
 
 from textual.app import ComposeResult
 from textual.binding import Binding
@@ -24,6 +27,7 @@ from textual.coordinate import Coordinate
 from textual.message import Message
 from textual.widgets import DataTable, Input
 from textual.events import Resize
+from rich.markup import escape
 from rich.text import Text
 from agent_toolkit_tui.widgets._support import adjust_source_column_width, current_source_column_width
 
@@ -296,6 +300,24 @@ class SkillGrid(Vertical):
         if table.cursor_coordinate.row >= len(visible):
             return
         row = visible[table.cursor_coordinate.row]
+        from agent_toolkit_cli.paperclip_paths import normalize_skill_project_root
+        from agent_toolkit_cli.skill_paths import canonical_skill_dir, library_skill_path
+
+        if row.ref == "(untracked)":
+            details = local_path_info(Path(row.source))
+        else:
+            member = self._members(row)[0] if row.is_collection else row
+            source_path = canonical_skill_dir(
+                member.slug, scope=self._scope, home=Path.home(),
+                project=normalize_skill_project_root(Path.cwd()) if self._scope == "project" else None,
+            )
+            if not source_path.exists():
+                source_path = library_skill_path(member.slug)
+            source_path = source_path.resolve()
+            if row.is_collection and member.skill_path and member.skill_path != ".":
+                for _ in Path(member.skill_path).parts:
+                    source_path = source_path.parent
+            details = library_info(source_path)
         self.app.push_screen(
             CellInfoScreen(
                 title=f"{row.slug} · {asset_type_label('skill')}",
@@ -304,10 +326,11 @@ class SkillGrid(Vertical):
                     slug=row.slug,
                     description=row.description,
                     description_location="SKILL.md",
-                    source=row.source,
-                    ref=row.ref,
-                    state=row.state,
+                    source=escape(row.source),
+                    ref=None if row.ref == "(untracked)" else row.ref,
+                    state="local files (read-only)" if row.ref == "(untracked)" else row.state,
                     scope=self._scope,
+                    extra_lines=details,
                 ) + (f"\n\nSkill path: {row.skill_path}" if row.skill_path else ""),
             )
         )
@@ -334,6 +357,8 @@ class SkillGrid(Vertical):
             return "[red]Missing SKILL.md.[/]\nA matching directory or projection is not a usable skill without its document. Restore SKILL.md in the preserved checkout before retrying; no missing document is counted as a healthy selection."
         if getattr(cell, "exposure_reason", ""):
             return f"[yellow]Exposure uncertain.[/]\n{cell.exposure_reason}"
+        if row.ref == "(untracked)":
+            return "\n".join(local_path_info(Path(row.source)))
         # Unavailable cells (e.g. company-only Paperclip outside a company)
         # have no projection to describe; explain the context requirement
         # before any path resolver that would raise.
@@ -447,7 +472,7 @@ class SkillGrid(Vertical):
         any_off = False
         for r in self._rows:
             cell = r.cells.get((agent, scope))
-            if cell is None or cell.skipped or not cell.available:
+            if r.ref == "(untracked)" or cell is None or cell.skipped or not cell.available:
                 continue
             key = (scope, agent, r.slug)
             pending = self._pending.get(key)
@@ -460,7 +485,7 @@ class SkillGrid(Vertical):
         target_op: Op = "link" if any_off else "unlink"
         for r in self._rows:
             cell = r.cells.get((agent, scope))
-            if cell is None or cell.skipped or not cell.available:
+            if r.ref == "(untracked)" or cell is None or cell.skipped or not cell.available:
                 continue
             key = (scope, agent, r.slug)
             ground_matches = (
@@ -526,7 +551,7 @@ class SkillGrid(Vertical):
             if agent is None:
                 return
             members = self._members(row)
-            available = [r for r in members if (c := r.cells.get((agent, self._scope)))
+            available = [r for r in members if r.ref != "(untracked)" and (c := r.cells.get((agent, self._scope)))
                          and c.available and not c.skipped]
             if not available:
                 return
@@ -544,7 +569,7 @@ class SkillGrid(Vertical):
         if agent is None:
             return
         cell = row.cells.get((agent, self._scope))
-        if cell is None or cell.skipped or not cell.available:
+        if row.ref == "(untracked)" or cell is None or cell.skipped or not cell.available:
             return
         # Standard at project scope is now a plain projection symlink into the
         # external store (post-#235/#237), so unlinking it is non-destructive and
@@ -646,8 +671,10 @@ class SkillGrid(Vertical):
             cells: list[str | Text] = [Text(name, no_wrap=True, overflow="ellipsis")]
             for agent in active:
                 cells.append(self._cell_glyph(row=row, agent=agent))
-            cells.append("collection" if row.is_collection else _STATE_MARKUP.get(row.state, row.state))
-            cells.append(Text(row.collection_label if row.is_collection else row.source, no_wrap=True, overflow="ellipsis"))
+            cells.append("collection" if row.is_collection else "[dim]local[/]" if row.ref == "(untracked)" else _STATE_MARKUP.get(row.state, row.state))
+            origin = "local" if row.ref == "(untracked)" else "library"
+            source = row.collection_label if row.is_collection else row.source
+            cells.append(Text(f"{origin} · {source}", no_wrap=True, overflow="ellipsis"))
             table.add_row(*cells, key=f"skill:{row.slug}")
         if visible:
             max_row = len(visible) - 1

@@ -145,16 +145,16 @@ def build_agent_rows(
         ))
 
     # Bounded filesystem discovery for unmanaged agents
-    discovered_slugs: set[str] = set()
+    discovered_paths: dict[str, Path] = {}
     scan_root = library_root() if scope == "global" else (project_store_root(project) if project is not None else None)
     if scan_root is not None and scan_root.is_dir():
         for child in sorted(scan_root.iterdir()):
             if child.name.startswith(".") or child.name == "_parents" or ".bak-" in child.name:
                 continue
             if child.is_dir():
-                discovered_slugs.add(child.name)
+                discovered_paths[child.name] = child
             elif child.is_file() and child.suffix == ".md":
-                discovered_slugs.add(child.stem)
+                discovered_paths[child.stem] = child
 
     try:
         standard_adapter = get_adapter("standard")
@@ -163,11 +163,11 @@ def build_agent_rows(
             for f in sorted(standard_dir.glob("*.md")):
                 if f.name.startswith(".") or ".bak-" in f.name:
                     continue
-                discovered_slugs.add(f.stem)
+                discovered_paths[f.stem] = f
     except Exception:
         pass
 
-    for disc_slug in sorted(discovered_slugs):
+    for disc_slug in sorted(discovered_paths):
         if disc_slug in universe:
             continue
         cells = {}
@@ -182,7 +182,7 @@ def build_agent_rows(
                     cells[(harness, "global")] = cell
         rows.append(AgentRow(
             slug=disc_slug,
-            source="untracked",
+            source=str(discovered_paths[disc_slug]),
             ref="(untracked)",
             state="unlisted",
             cells=cells,

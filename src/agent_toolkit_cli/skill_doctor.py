@@ -21,7 +21,7 @@ from agent_toolkit_cli._install_core import InstallError
 from agent_toolkit_cli.skill_agents import AGENTS
 from agent_toolkit_cli.skill_install import _should_skip_symlink, _standard_bundle_link
 from agent_toolkit_cli.skill_lock import (
-    LockEntry, LockFile, add_entry, clone_url_from_entry, read_lock, remove_entry,
+    LockEntry, LockFile, clone_url_from_entry, read_lock, remove_entry,
     write_lock,
 )
 from agent_toolkit_cli.skill_paths import (
@@ -1207,43 +1207,6 @@ def _scan_unmanaged_skills(
             scope=scope,
             path=skill_dir,
             detail=f"on-disk skill directory '{skill_dir.name}' has no lock entry",
-            fix_action=_make_import_skill_action(
-                slug=slug, path=skill_dir, scope=scope, home=home, project=project,
-            ) if repair else None,
+            fix_action=None,  # Local discovery never registers or moves files (#538).
         ))
     return findings
-
-
-def _make_import_skill_action(
-    *, slug: str, path: Path, scope: Scope, home: Path | None, project: Path | None,
-) -> FixAction:
-    lock_path = lock_file_path(scope=scope, home=home, project=project)
-
-    def _apply() -> None:
-        cur_lock = read_lock(lock_path)
-        if slug in cur_lock.skills:
-            return
-        skill_path = None
-        if ":" in slug:
-            bundle_name, _ = slug.split(":", 1)
-            cur = path.parent
-            while cur.name != bundle_name and cur != cur.parent:
-                cur = cur.parent
-            if cur.name == bundle_name:
-                try:
-                    skill_path = str(path.relative_to(cur))
-                except Exception:
-                    skill_path = None
-        entry = LockEntry(
-            source=str(path),
-            source_type="local",
-            skill_path=skill_path,
-            ref="(default)",
-        )
-        write_lock(lock_path, add_entry(cur_lock, slug, entry))
-
-    return FixAction(
-        description=f"Import unmanaged skill '{slug}' into {lock_path.name}",
-        shell_preview=f"agent-toolkit-cli skill add {path} --slug {slug}",
-        apply=_apply,
-    )

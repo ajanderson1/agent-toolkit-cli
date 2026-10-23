@@ -33,7 +33,7 @@ from agent_toolkit_cli.pi_extension_paths import lock_file_path
 @click.option("-g", "--global", "global_", is_flag=True)
 @click.option("-p", "--project", "project_flag", is_flag=True)
 @click.option("--no-fix", is_flag=True, help="Report only; do not prompt or mutate.")
-@click.option("--repair", is_flag=True, help="Prompt to repair fixable findings (required for unmanaged package import).")
+@click.option("--repair", is_flag=True, help="Prompt to repair fixable findings; discovered local packages remain report-only.")
 @click.pass_context
 def doctor_cmd(
     ctx: click.Context,

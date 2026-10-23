@@ -72,44 +72,49 @@ def test_doctor_repair_declined_leaves_lock_and_source_untouched(tmp_path: Path,
     assert (unmanaged / "SKILL.md").exists()
 
 
-def test_doctor_repair_confirmed_imports_skill_losslessly(tmp_path: Path, monkeypatch):
-    """When user confirms repair, unmanaged skill is imported into lock."""
+def test_doctor_repair_never_imports_local_skill(tmp_path: Path, monkeypatch):
     fake_home, lib_root = _setup_env(monkeypatch, tmp_path)
     unmanaged = lib_root / "custom-skill"
     unmanaged.mkdir(parents=True)
-    skill_content = "---\nname: custom-skill\ndescription: test content\n---\n"
-    (unmanaged / "SKILL.md").write_text(skill_content)
+    content = "---\nname: custom-skill\ndescription: test\n---\n"
+    (unmanaged / "SKILL.md").write_text(content)
 
-    runner = CliRunner()
-    r = runner.invoke(main, ["skill", "doctor", "-g", "--repair"], input="y\n")
-    assert r.exit_code == 0, r.output
-    assert "fixed" in r.output
-
-    # Verified in lock
-    lock = read_lock(library_lock_path(home=fake_home))
-    assert "custom-skill" in lock.skills
-    entry = lock.skills["custom-skill"]
-    assert entry.source_type == "local"
-    # Source content completely preserved
-    assert (unmanaged / "SKILL.md").read_text() == skill_content
-
-    # Repeat run of doctor: now all clean!
-    r2 = runner.invoke(main, ["skill", "doctor", "-g"])
-    assert r2.exit_code == 0, r2.output
-    assert "clean" in r2.output.lower()
+    result = CliRunner().invoke(main, ["skill", "doctor", "-g", "--repair"], input="y\n")
+    assert result.exit_code != 0, result.output
+    assert "custom-skill" in result.output
+    assert "Apply?" not in result.output
+    assert "Import unmanaged" not in result.output
+    assert "custom-skill" not in read_lock(library_lock_path(home=fake_home)).skills
+    assert (unmanaged / "SKILL.md").read_text() == content
 
 
-def test_doctor_repair_bundle_subskill(tmp_path: Path, monkeypatch):
-    """Bundle subskills (bundle:subskill) are imported with bundle layout preserved."""
+def test_doctor_repair_never_imports_bundle_child(tmp_path: Path, monkeypatch):
     fake_home, lib_root = _setup_env(monkeypatch, tmp_path)
-    bundle_sub = lib_root / "superpowers" / "skills" / "brainstorming"
-    bundle_sub.mkdir(parents=True)
-    (bundle_sub / "SKILL.md").write_text("---\nname: brainstorming\ndescription: think\n---\n")
+    child = lib_root / "superpowers" / "skills" / "brainstorming"
+    child.mkdir(parents=True)
+    (child / "SKILL.md").write_text("---\nname: brainstorming\n---\n")
 
-    runner = CliRunner()
-    r = runner.invoke(main, ["skill", "doctor", "-g", "--repair"], input="y\n")
-    assert r.exit_code == 0, r.output
+    result = CliRunner().invoke(main, ["skill", "doctor", "-g", "--repair"], input="y\n")
+    assert result.exit_code != 0, result.output
+    assert "superpowers:brainstorming" in result.output
+    assert not read_lock(library_lock_path(home=fake_home)).skills
+    assert (child / "SKILL.md").exists()
 
-    lock = read_lock(library_lock_path(home=fake_home))
-    assert "superpowers:brainstorming" in lock.skills
-    assert (bundle_sub / "SKILL.md").exists()
+
+def test_local_findings_have_no_repair_in_either_scope(tmp_path, monkeypatch):
+    from agent_toolkit_cli.skill_doctor import diagnose
+    from agent_toolkit_cli.skill_paths import project_store_root
+
+    home, library = _setup_env(monkeypatch, tmp_path)
+    project = tmp_path / "project"
+    project.mkdir()
+    for scope, root in (("global", library), ("project", project_store_root(project))):
+        child = root / "local-child"
+        child.mkdir(parents=True)
+        (child / "SKILL.md").write_text("local")
+        findings = diagnose(slugs=("local-child",), scope=scope, home=home,
+                            project=project if scope == "project" else None, repair=True)
+        local = [f for f in findings if f.finding_type == "unmanaged"]
+        assert len(local) == 1
+        assert local[0].path == child
+        assert local[0].fix_action is None

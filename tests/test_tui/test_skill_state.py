@@ -767,11 +767,11 @@ def test_filesystem_discovery_unmanaged_standalone_and_bundle(tmp_path: Path, mo
 
     by_slug = {r.slug: r for r in rows}
     assert by_slug["standalone-skill"].state == "unlisted"
-    assert by_slug["standalone-skill"].source == "untracked"
+    assert by_slug["standalone-skill"].source == str(standalone)
     assert by_slug["standalone-skill"].description == "Standalone unmanaged skill"
 
     assert by_slug["superpowers:brainstorming"].state == "unlisted"
-    assert by_slug["superpowers:brainstorming"].source == "untracked"
+    assert by_slug["superpowers:brainstorming"].source == str(bundle / "skills" / "brainstorming")
     assert by_slug["superpowers:brainstorming"].description == "Brainstorming skill"
 
 

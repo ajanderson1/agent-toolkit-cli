@@ -56,4 +56,5 @@ def test_standard_column_header_uses_live_skill_coverage():
 def test_pi_extension_origin_label_uses_library():
     assert pi_extension_origin_label("store-owned") == "library"
     assert pi_extension_origin_label("npm") == "npm"
-    assert pi_extension_origin_label("untracked") == "untracked"
+    assert pi_extension_origin_label("untracked") == "local"
+    assert pi_extension_origin_label("local-package") == "local"

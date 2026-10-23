@@ -66,7 +66,7 @@ Use a positional source or `--source`, not both. Repository-wide add registers r
 
 Sources accept `owner/repo`, `owner/repo@ref`, subpaths, HTTPS/SSH URLs, local paths and skills.sh URLs. Combine ref+subpath using `--ref` or a GitHub `/tree/<ref>/<subpath>` URL; ambiguous `owner/repo@ref/subpath` is refused. Slash-containing refs require `--ref`. [Skill storage, ownership and update](skill-lock.md) · [Collections and legacy exposure](tui.md#skill-collections).
 
-Doctor reports canonical/projection drift and bounded unmanaged discovery. `--repair` enables confirmed unmanaged imports; it does not silently adopt everything. `--no-fix` disables mutations. An externally owned global skill projection can be declared in `~/.agent-toolkit/external-skill-projections.json`:
+Doctor reports canonical/projection drift and bounded unmanaged discovery. Discovered local skills remain report-only even with `--repair`; doctor does not register them. Unrelated repairs, ordinary source registration and lock-file import are unchanged. `--no-fix` disables mutations. An externally owned global skill projection can be declared in `~/.agent-toolkit/external-skill-projections.json`:
 
 ```json
 {"version": 1, "projections": [{"path": ".pi/agent/skills/example", "targetGlob": ".npm/_npx/*/node_modules/example/skills/example", "owner": "external installer"}]}
@@ -134,7 +134,7 @@ agent-toolkit-cli pi-extensions import FILE [--latest]
 agent-toolkit-cli pi-extensions doctor [SLUGS]... [-g|-p] [--no-fix] [--repair]
 ```
 
-Push also accepts `--direct`. Git refs are part of SOURCE (`@ref`), not a `--ref` option. Inventory includes git-backed, loose local and npm/package registrations. Local filesystem packages declared in Pi settings are visible as `local package · untracked`, read-only until a confirmed doctor `--repair` import records their original path. Doctor does not rewrite settings or source. [Pi extensions](../asset-types/pi-extensions.md).
+Push also accepts `--direct`. Git refs are part of SOURCE (`@ref`), not a `--ref` option. Inventory includes git-backed, loose local and npm/package registrations. Local filesystem packages declared in Pi settings are visible as `local` in the TUI, with manual reference-removal guidance and no toggle/deletion action. Doctor does not register discovered local packages, even with `--repair`. Doctor does not rewrite settings or source. [Pi extensions](../asset-types/pi-extensions.md).
 
 ## MCP servers
 

@@ -135,7 +135,7 @@ def test_build_agent_rows_discovers_unmanaged_filesystem_agents(tmp_path: Path, 
     assert "custom-agent" in slugs
     row = next(r for r in rows if r.slug == "custom-agent")
     assert row.state == "unlisted"
-    assert row.source == "untracked"
+    assert row.source == str(slot / "custom-agent.md")
     assert row.ref == "(untracked)"
     assert row.cells[("standard", "global")].linked is True
 

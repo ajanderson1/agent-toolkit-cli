@@ -17,7 +17,10 @@ All glyph helpers are named `_cell_glyph`, `_rebuild`.
 """
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Literal
+
+from agent_toolkit_tui.asset_info import library_info, local_path_info
 
 from textual.app import ComposeResult
 from textual.binding import Binding
@@ -27,6 +30,7 @@ from textual.events import Resize
 from textual.message import Message
 from textual.widgets import DataTable, Input
 from textual.events import Resize
+from rich.markup import escape
 from rich.text import Text
 from agent_toolkit_tui.widgets._support import adjust_source_column_width, current_source_column_width
 
@@ -229,6 +233,18 @@ class AgentGrid(Vertical):
         if table.cursor_coordinate.row >= len(visible):
             return
         row = visible[table.cursor_coordinate.row]
+        from agent_toolkit_cli.agent_paths import canonical_agent_dir, library_agent_path
+
+        if row.ref == "(untracked)":
+            details = local_path_info(Path(row.source))
+        else:
+            source_path = canonical_agent_dir(
+                row.slug, scope=self._scope, home=Path.home(),
+                project=Path.cwd() if self._scope == "project" else None,
+            )
+            if not source_path.exists():
+                source_path = library_agent_path(row.slug)
+            details = library_info(source_path)
         self.app.push_screen(
             CellInfoScreen(
                 title=f"{row.slug} · {asset_type_label('agent')}",
@@ -237,10 +253,11 @@ class AgentGrid(Vertical):
                     slug=row.slug,
                     description=None,
                     description_location="agent definition",
-                    source=row.source,
-                    ref=row.ref,
-                    state=row.state,
+                    source=escape(row.source),
+                    ref=None if row.ref == "(untracked)" else row.ref,
+                    state="local files (read-only)" if row.ref == "(untracked)" else row.state,
                     scope=self._scope,
+                    extra_lines=details,
                 ),
             )
         )
@@ -260,7 +277,7 @@ class AgentGrid(Vertical):
         any_off = False
         for r in self._rows:
             cell = r.cells.get((harness, scope))
-            if cell is None:
+            if r.ref == "(untracked)" or cell is None:
                 continue
             key = (scope, harness, r.slug)
             pending = self._pending.get(key)
@@ -273,7 +290,7 @@ class AgentGrid(Vertical):
         target_op: Op = "link" if any_off else "unlink"
         for r in self._rows:
             cell = r.cells.get((harness, scope))
-            if cell is None:
+            if r.ref == "(untracked)" or cell is None:
                 continue
             key = (scope, harness, r.slug)
             ground_matches = (
@@ -296,8 +313,8 @@ class AgentGrid(Vertical):
             return
         row = visible[coord.row]
         cell = row.cells.get((harness, self._scope))
-        if cell is None:
-            # Cell not applicable at this scope — no-op.
+        if row.ref == "(untracked)" or cell is None:
+            # Local or cell not applicable at this scope — no-op.
             return
         key = (self._scope, harness, row.slug)
         if key in self._pending:
@@ -409,8 +426,9 @@ class AgentGrid(Vertical):
             cells: list[str | Text] = [row.slug]
             for harness in harnesses:
                 cells.append(self._cell_glyph(row=row, harness=harness))
-            cells.append(_STATE_MARKUP.get(row.state, row.state))
-            cells.append(Text(row.source, no_wrap=True, overflow="ellipsis"))
+            cells.append("[dim]local[/]" if row.ref == "(untracked)" else _STATE_MARKUP.get(row.state, row.state))
+            origin = "local" if row.ref == "(untracked)" else "library"
+            cells.append(Text(f"{origin} · {row.source}", no_wrap=True, overflow="ellipsis"))
             table.add_row(*cells, key=f"agent:{row.slug}")
 
         if visible:

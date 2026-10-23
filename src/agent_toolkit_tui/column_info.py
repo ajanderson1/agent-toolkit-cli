@@ -114,14 +114,17 @@ _STANDARD_SENTENCES: dict[str, str] = {
 _SKILL_STATE_LINES = [
     "Per-skill working-tree state in this scope.",
     "",
-    "• clean — installed and matches the library canonical",
-    "• dirty — installed but the on-disk copy diverges from the library",
-    "• missing — in the library, not installed in this scope",
+    "• clean — Git working tree has no local changes",
+    "• dirty — Git working tree has local changes (not an asset origin)",
+    "• missing — registered source or skill document is missing",
     "• copy — installed as a real copy (symlink fallback — e.g. Windows)",
     "• library — in the library, not yet installed in this project "
     "(project scope only — normal pre-install state)",
     "• unlisted — installed in this project but no longer tracked by "
     "the library lock (re-add via `skill doctor -p`)",
+    "• local — existing files used in place; no TUI toggles or deletion. "
+    "Info shows the actual path and manual removal instructions.",
+    "Source prefixes library/local describe origin, separately from Git/health badges.",
 ]
 
 _THREE_BADGE_STATE_LINES = [
@@ -267,7 +270,14 @@ def _skill_state(_context: dict[str, object]) -> ColumnInfo:
 def _three_badge_state(asset_type: str, _context: dict[str, object]) -> ColumnInfo:
     return ColumnInfo(
         title=f"State badges — {asset_type_label(asset_type, plural=True)}",
-        lines=[f"Per-{asset_type_label(asset_type).lower()} state in this scope.", "", *_THREE_BADGE_STATE_LINES],
+        lines=[f"Per-{asset_type_label(asset_type).lower()} state in this scope.", "", *(
+            [*_THREE_BADGE_STATE_LINES[:2],
+             "• unlisted — scope record exists but is absent from the library lock",
+             "• local — existing files used in place; no TUI toggles or deletion. "
+             "Info shows the path and manual removal instructions.",
+             "Source prefixes library/local describe origin."]
+            if asset_type == "agent" else _THREE_BADGE_STATE_LINES
+        )],
     )
 
 
@@ -275,9 +285,14 @@ def _pi_extension_origin(_context: dict[str, object]) -> ColumnInfo:
     return ColumnInfo(
         title="Origin — Pi Extensions",
         lines=[
-            "• library — owned by the toolkit store",
-            "• npm — installed as an npm package",
-            "• untracked — present in Pi but not managed by the toolkit",
+            "• library — Toolkit-managed central source in the agent-toolkit library. "
+            "Disable removes the connection, not the source.",
+            "• local — existing files used in place; no TUI toggles or deletion. "
+            "Info shows paths and manual removal instructions.",
+            "• npm — Pi obtains the published package. Toolkit-registered settings "
+            "references can be toggled; other references require manual removal.",
+            "Updates use Pi package handling, not Toolkit Git update. "
+            "Disabling does not unload an already-running session.",
         ],
     )
 

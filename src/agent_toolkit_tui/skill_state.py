@@ -387,7 +387,7 @@ def build_skill_rows(
             description = _read_skill_description(disc_path)
             rows.append(SkillRow(
                 slug=disc_slug,
-                source="untracked",
+                source=str(disc_path),
                 ref="(untracked)",
                 state="unlisted",
                 cells=cells,
