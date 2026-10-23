@@ -1,5 +1,20 @@
 # Changelog
 
+## [5.13.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v5.12.2...v5.13.0) (2026-10-23)
+
+
+### Bug Fixes
+
+* **pi:** follow native local extension selection and discovery ([4d90890](https://github.com/ajanderson1/agent-toolkit-cli/commit/4d9089098cdb0e249f87124d97a899ecf285a55c))
+* **pi:** match native minimatch comment semantics ([ed25e74](https://github.com/ajanderson1/agent-toolkit-cli/commit/ed25e744da7965465ae345ba83c127218cb440b4))
+* **pi:** preserve scope and native resource ownership during local toggles ([fa9a5c9](https://github.com/ajanderson1/agent-toolkit-cli/commit/fa9a5c9834b1bddc5cf1cdf9123e5e47e806268e))
+* **tui:** enable native local Pi extension controls ([fb7b746](https://github.com/ajanderson1/agent-toolkit-cli/commit/fb7b746b37b6202be93b60c2ec86172882b89657))
+
+
+### Chores
+
+* release 5.13.0 ([e85ee4c](https://github.com/ajanderson1/agent-toolkit-cli/commit/e85ee4cf09c4b06ce22aa5145d01bf58a17409c3))
+
 ## [5.12.2](https://github.com/ajanderson1/agent-toolkit-cli/compare/v5.12.1...v5.12.2) (2026-10-23)
 
 
