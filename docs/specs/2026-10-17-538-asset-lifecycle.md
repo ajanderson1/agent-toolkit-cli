@@ -2,6 +2,8 @@ Issue: #538
 
 # Clear asset discovery, management, enablement and removal
 
+> **Superseded — 2026-10-23.** Historical #538 planning only; do not implement this contract. AJ replaced it with the minimal **library / local / npm** scope in [issue #538](https://github.com/ajanderson1/agent-toolkit-cli/issues/538). The old acceptance criteria, architecture, milestones and vocabulary below are no longer implementation requirements.
+
 Status: proposed implementation contract, not a description of shipped behavior.
 Owner: AJ; preparation requested 2026-10-17. Applies to CLI, TUI and doctor across
 all six supported asset types, retaining their real capability differences.

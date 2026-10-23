@@ -2,6 +2,8 @@ Issue: #538
 
 # Asset lifecycle implementation plan
 
+> **Superseded — 2026-10-23.** Historical #538 planning only; do not implement this contract. AJ replaced it with the minimal **library / local / npm** scope in [issue #538](https://github.com/ajanderson1/agent-toolkit-cli/issues/538). The old acceptance criteria, architecture, milestones and vocabulary below are no longer implementation requirements.
+
 > For agentic workers: execute task-by-task in an owned Worktrunk worktree using
 > the executing-plans procedure. Delegated review uses visible Herdr panes, never
 > invisible workers. This preparation request does not authorize implementation.

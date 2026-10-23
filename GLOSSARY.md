@@ -1,5 +1,7 @@
 # Glossary
 
+> **Superseded — 2026-10-23.** Historical #538 planning only; do not implement this contract. AJ replaced it with the minimal **library / local / npm** scope in [issue #538](https://github.com/ajanderson1/agent-toolkit-cli/issues/538). The old acceptance criteria, architecture, milestones and vocabulary below are no longer implementation requirements.
+
 Target vocabulary for [issue #538](https://github.com/ajanderson1/agent-toolkit-cli/issues/538).
 This planning document does not claim the proposed commands already ship.
 Definitions describe the intended product; implementation and compatibility are
