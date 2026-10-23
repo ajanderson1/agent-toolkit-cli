@@ -211,3 +211,64 @@ async def test_refresh_preserves_local_intent_but_keeps_registered_package_disca
         await pilot.pause()
         assert grid.pending_entries() == {("global", "router"): "unlink"}
         assert lock.read_bytes() == before
+
+
+async def test_failed_scope_refresh_never_queues_or_writes_in_the_previous_scope(environment):
+    home, project = environment
+    source = seed(home, project)
+    global_settings = home / ".pi/agent/settings.json"
+    global_settings.write_text('{"theme":"dark"}')
+    before = global_settings.read_bytes()
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        grid, table = select(app, "global")
+        settings = project / ".pi/settings.json"
+        settings.parent.mkdir(parents=True, exist_ok=True)
+        settings.write_text("{broken")
+        app.action_scope("project")
+        await pilot.pause()
+        settings.write_text('{"theme":"light"}')
+        table.focus()
+        await pilot.press("space", "ctrl+s")
+        await pilot.pause()
+        assert global_settings.read_bytes() == before
+        assert json.loads(settings.read_text()) == {"theme": "light", "extensions": [str(source), f"-{source}"]}
+        assert not grid.pending_entries()
+
+
+async def test_package_reference_added_after_queue_refuses_without_losing_intent(environment):
+    home, project = environment
+    source = seed(home, project)
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        grid, table = select(app)
+        await pilot.press("space")
+        settings = home / ".pi/agent/settings.json"
+        settings.write_text('{"packages":["extensions/router.ts"]}')
+        before = settings.read_bytes()
+        await pilot.press("ctrl+s")
+        await pilot.pause()
+        assert settings.read_bytes() == before
+        assert grid.pending_entries() == {("global", "router"): "unlink"}
+        assert "packages" in str(app.query_one("#footer-pending", Static).render())
+
+
+async def test_package_controlled_project_cell_keeps_global_loose_controls(environment):
+    home, project = environment
+    source = seed(home, project)
+    settings = project / ".pi/settings.json"
+    settings.parent.mkdir(parents=True, exist_ok=True)
+    settings.write_text(json.dumps({"packages": [str(source)]}))
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        grid, table = select(app, "project")
+        assert "—" in glyph(table)
+        await pilot.press("space")
+        assert not grid.pending_entries()
+        assert "1 enabled" in Text.from_markup(str(app.query_one("#status-bar", Static).render())).plain
+        select(app, "global")
+        await pilot.press("space", "ctrl+s")
+        await pilot.pause()
+        assert not grid.pending_entries()
+        row = next(r for r in build_pi_rows(home=home, project=project) if r.slug == "router")
+        assert not row.global_cell.global_loaded and row.project_cell.project_loaded

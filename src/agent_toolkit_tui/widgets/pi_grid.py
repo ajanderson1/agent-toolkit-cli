@@ -328,6 +328,10 @@ class PiGrid(Vertical):
                 if pending else f"[b]Space[/] → queue {action} ({scope})\n[b]Ctrl+S[/] → apply"
             )
             paths = row.local_state.paths_for(scope) if row.local_state else ()
+            package_paths = (row.local_state.global_package_paths if scope == "global" else row.local_state.project_package_paths) if row.local_state else ()
+            if package_paths:
+                guidance = "Selected through packages[]; edit that package reference. Loose selectors cannot override it."
+                controls = controls + "\n" + guidance if pending else guidance
             if len(paths) > 1:
                 controls += f"\n{action} affects all {len(paths)} entrypoints."
             details = [controls]
@@ -441,6 +445,10 @@ class PiGrid(Vertical):
         if coord.column != _COL_SCOPE:
             return
         scope = self._scope
+        package_paths = (row.local_state.global_package_paths if scope == "global" else row.local_state.project_package_paths) if row.local_state else ()
+        if package_paths and (scope, row.slug) not in self._pending:
+            self.app.notify("Selected through packages[]; see Info for package configuration", severity="warning")
+            return
 
         key = (scope, row.slug)
         if key in self._pending:
@@ -529,6 +537,9 @@ class PiGrid(Vertical):
     @staticmethod
     def _selection_label(row: PiExtensionRow, scope: str) -> str:
         if row.local_state:
+            package_paths = row.local_state.global_package_paths if scope == "global" else row.local_state.project_package_paths
+            if package_paths:
+                return "Package-controlled"
             entries = row.local_state.global_entries if scope == "global" else row.local_state.project_entries
             if any(e.enabled for e in entries) and not all(e.enabled for e in entries):
                 return f"Mixed ({sum(e.enabled for e in entries)}/{len(entries)})"
@@ -550,6 +561,8 @@ class PiGrid(Vertical):
             base = _PENDING_LINK
         elif pending == "unlink":
             base = _PENDING_UNLINK
+        elif row.local_state and (row.local_state.global_package_paths if scope == "global" else row.local_state.project_package_paths):
+            base = _UNTRACKED_GLYPH
         elif row.local_state and (row.local_state.global_mixed if scope == "global" else row.local_state.project_mixed):
             base = _MIXED_GLYPH
         else:

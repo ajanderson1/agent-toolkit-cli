@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Literal
 
 from agent_toolkit_cli import _pi_settings
-from agent_toolkit_cli.pi_local_extensions import discover_local_extensions
+from agent_toolkit_cli.pi_local_extensions import discover_local_extensions, read_local_extension_states
 from agent_toolkit_cli.pi_extension_lock import read_lock
 from agent_toolkit_cli.pi_extension_paths import (
     Scope,
@@ -189,4 +189,14 @@ def build_inventory(
                 rec.project_config_path = config_path
                 rec.project_package_metadata = metadata
 
+    if any(record.origin == "untracked" for record in by_slug.values()):
+        states = read_local_extension_states(home=home, project=project)
+        by_slug = {
+            slug: record for slug, record in by_slug.items()
+            if record.origin != "untracked"
+            or (slug in states and (
+                any(entry.path not in states[slug].global_package_paths for entry in states[slug].global_entries)
+                or any(entry.path not in states[slug].project_package_paths for entry in states[slug].project_entries)
+            ))
+        }
     return [by_slug[k] for k in sorted(by_slug)]

@@ -81,6 +81,9 @@ original targets; **Ctrl+Z** discards them.
 
 For npm/local filesystem packages, enabled means a `packages[]` reference in
 that scope; local packages and unregistered npm references remain read-only.
+Package-selected resources do not acquire duplicate loose controls. A loose row
+can be package-controlled in one scope and configurable in the other; Info
+identifies that boundary.
 Library rows show **Linked** for their symlink connections and are counted
 separately in the status bar. None of these states observes a running Pi session.
 

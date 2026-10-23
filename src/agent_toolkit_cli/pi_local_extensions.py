@@ -33,6 +33,8 @@ class LocalExtensionState:
     global_entries: tuple[LocalExtensionEntry, ...] = ()
     project_entries: tuple[LocalExtensionEntry, ...] = ()
     available_paths: tuple[Path, ...] = ()
+    global_package_paths: tuple[Path, ...] = ()
+    project_package_paths: tuple[Path, ...] = ()
 
     @property
     def global_enabled(self) -> bool:
@@ -84,14 +86,12 @@ def discover_local_extensions(root: Path) -> dict[str, tuple[Path, ...]]:
     if not root.is_dir():
         return {}
     grouped: dict[str, list[Path]] = {}
-    seen: set[Path] = set()
-
     def add(slug: str, paths: tuple[Path, ...]) -> None:
+        # Keep lexical aliases until settings precedence has selected a winner.
         for path in paths:
-            canonical = path.resolve()
-            if canonical not in seen:
-                seen.add(canonical)
-                grouped.setdefault(slug, []).append(path)
+            entries = grouped.setdefault(slug, [])
+            if path not in entries:
+                entries.append(path)
 
     root_entries = _directory_entries(root)
     if root_entries:
@@ -158,8 +158,8 @@ def _is_pattern(value: str) -> bool:
     return value.startswith(("!", "+", "-")) or "*" in value or "?" in value
 
 
-def _enabled(path: Path, selectors: list[str], base: Path, home: Path, *, explicit: bool = False) -> bool:
-    patterns = [s for s in selectors if _is_pattern(s)]
+def _enabled(path: Path, selectors: list[str], base: Path, home: Path, *, explicit: bool = False, package_filter: bool = False) -> bool:
+    patterns = selectors if package_filter else [s for s in selectors if _is_pattern(s)]
     includes = [s for s in patterns if not s.startswith(("!", "+", "-"))]
     enabled = not (explicit and includes) or any(_matches(path, s, base, home) for s in includes)
     if any(_matches(path, s[1:], base, home) for s in patterns if s.startswith("!")):
@@ -184,11 +184,67 @@ def _plain_paths(selectors: list[str], base: Path, home: Path) -> tuple[Path, ..
     return tuple(paths)
 
 
+def _package_resources(root: Path, filters: dict[str, object] | None, home: Path) -> dict[Path, bool]:
+    """Read existing package resources only; never install or modify packages."""
+    if root.is_file():
+        return {root: True}  # Native file-package sources ignore resource filters.
+    if not root.is_dir():
+        return {}
+    manifest = None
+    try:
+        value = json.loads((root / "package.json").read_text(encoding="utf-8-sig"))
+        pi = value.get("pi") if isinstance(value, dict) else None
+        if isinstance(pi, dict):
+            manifest = pi
+    except (OSError, ValueError):
+        pass
+    entries = manifest.get("extensions") if manifest is not None else None
+    if not isinstance(entries, list) or not all(isinstance(e, str) for e in entries):
+        entries = None
+    filtered = filters is not None and ("extensions" in filters or filters.get("autoload") is False)
+    if entries is not None and (entries or not filtered):
+        files = []
+        for entry in entries:
+            if entry.startswith(("!", "+", "-")):
+                continue
+            if "*" in entry or "?" in entry:
+                matches = [_lexical(Path(p)) for p in glob.glob(str(root / entry), flags=glob.GLOBSTAR | glob.BRACE | glob.EXTGLOB)]
+                matches = [p for p in matches if all(part == ".." or not part.startswith(".") for part in Path(os.path.relpath(p, root)).parts)]
+            else:
+                matches = [_lexical(root / entry)]
+            for path in matches:
+                if path.is_file():
+                    files.append(path)
+                elif path.is_dir():
+                    files.extend(p for group in discover_local_extensions(path).values() for p in group)
+        overrides = [entry for entry in entries if entry.startswith(("!", "+", "-"))]
+        files = [p for p in files if _enabled(p, overrides, root, home)]
+    elif filters is not None or manifest is None:
+        files = [p for group in discover_local_extensions(root / "extensions").values() for p in group]
+    else:
+        files = []
+    if filters is not None and filters.get("autoload") is False:
+        result = {}
+        for pattern in filters.get("extensions", []):
+            target = pattern[1:] if pattern.startswith(("!", "+", "-")) else pattern
+            for path in files:
+                matches = _exact(path, target, root, home) if pattern.startswith(("+", "-")) else _matches(path, target, root, home)
+                if matches:
+                    result[path] = not pattern.startswith(("!", "-"))
+        return result
+    if filters is not None and "extensions" in filters:
+        patterns = filters["extensions"]
+        return {p: bool(patterns) and _enabled(p, patterns, root, home, explicit=True, package_filter=True) for p in files}
+    if not files and manifest is None and filters is None and not any((root / name).exists() for name in ("extensions", "skills", "prompts", "themes")):
+        return {root: True}
+    return {p: True for p in files}
+
+
 def _resolve_local_states(
     *, home: Path, project: Path | None,
     overrides: dict[str, list[str]] | None = None,
 ) -> dict[str, LocalExtensionState]:
-    """Resolve the loose universe once; project state includes global inheritance."""
+    """Resolve loose resources after existing filesystem-package precedence."""
     bases = {"global": _lexical(home / ".pi/agent")}
     if project is not None:
         bases["project"] = _lexical(project / ".pi")
@@ -199,24 +255,55 @@ def _resolve_local_states(
         for scope in bases
     }
     plain = {scope: _plain_paths(selectors[scope], base, home) for scope, base in bases.items()}
+    packages = {}
+    for scope, base in bases.items():
+        settings = _pi_settings.settings_path(scope=scope, home=home, project=project)
+        records, style = _pi_settings._package_sources(_pi_settings._load(settings), settings)
+        sources = {}
+        for record in records:
+            spec = record["source"]
+            if spec.startswith("npm:"):
+                identity = "npm:" + _pi_settings.npm_identity(spec)
+                root = base / "npm/node_modules" / _pi_settings.npm_identity(spec)
+            elif spec.startswith(("git:", "github:", "http:", "https:", "ssh:", "git@")):
+                continue  # Remote installs stay with existing package lifecycle handling.
+            else:
+                root = _lexical(base / _normalize_pattern(spec.strip(), home))
+                identity = "local:" + str(root)
+            sources[identity] = (root, None if style == "strings" else record)
+        packages[scope] = sources
 
-    def resolve(with_project: bool) -> dict[Path, bool]:
-        # Native addResource is first-lexical-wins; final canonical dedup gives
-        # project metadata priority over global metadata.
-        resources: dict[Path, tuple[bool, str]] = {}
+    def resolve(with_project: bool) -> dict[Path, tuple[bool, bool]]:
+        # First lexical occurrence wins, then native origin/scope precedence
+        # decides canonical aliases. Package resources have final rank 4.
+        resources: dict[Path, tuple[bool, int, bool]] = {}
         scopes = ["project", "global"] if with_project and project is not None else ["global"]
+        seen_sources = set()
+        retained_bases = set()
+        for scope in scopes:
+            for identity, (root, filters) in packages[scope].items():
+                if identity in seen_sources and not (scope == "global" and identity in retained_bases):
+                    continue
+                seen_sources.add(identity)
+                if scope == "project" and filters is not None and filters.get("autoload") is False and identity in packages["global"]:
+                    retained_bases.add(identity)
+                    root = packages["global"][identity][0]
+                selected = _package_resources(root, filters, home)
+                for path, enabled in selected.items():
+                    resources.setdefault(path, (enabled, 4, True))
         for explicit in (True, False):
             for scope in scopes:
                 paths = plain[scope] if explicit else tuple(p for entries in discovered[scope].values() for p in entries)
+                rank = (0 if scope == "project" else 2) + (0 if explicit else 1)
                 for path in paths:
-                    resources.setdefault(path, (_enabled(path, selectors[scope], bases[scope], home, explicit=explicit), scope))
+                    resources.setdefault(path, (_enabled(path, selectors[scope], bases[scope], home, explicit=explicit), rank, False))
         seen: set[Path] = set()
-        result: dict[Path, bool] = {}
-        for path, (enabled, scope) in sorted(resources.items(), key=lambda item: item[1][1] != "project"):
+        result = {}
+        for path, (enabled, rank, package) in sorted(resources.items(), key=lambda item: item[1][1]):
             canonical = path.resolve()
             if canonical not in seen:
                 seen.add(canonical)
-                result[path] = enabled
+                result[path] = (enabled, package)
         return result
 
     global_values = resolve(False)
@@ -226,9 +313,11 @@ def _resolve_local_states(
     for slug in all_slugs:
         paths = tuple(dict.fromkeys(path for entries in discovered.values() for path in entries.get(slug, ())))
         states[slug] = LocalExtensionState(
-            global_entries=tuple(LocalExtensionEntry(p, global_values[p]) for p in paths if p in global_values),
-            project_entries=tuple(LocalExtensionEntry(p, project_values[p]) for p in paths if p in project_values),
+            global_entries=tuple(LocalExtensionEntry(p, global_values[p][0]) for p in paths if p in global_values),
+            project_entries=tuple(LocalExtensionEntry(p, project_values[p][0]) for p in paths if p in project_values),
             available_paths=paths,
+            global_package_paths=tuple(p for p in paths if p in global_values and global_values[p][1]),
+            project_package_paths=tuple(p for p in paths if p in project_values and project_values[p][1]),
         )
     return states
 
@@ -287,13 +376,18 @@ def set_local_extension_enabled(
     try:
         with _settings_lock(path):
             state = read_local_extension_state(slug=slug, home=home, project=project)
+            package_paths = state.global_package_paths if scope == "global" else state.project_package_paths
+            if package_paths:
+                raise PiSettingsError(f"{slug}: selected through packages[]; edit that package reference, not loose selectors")
             targets = state.paths_for(scope)
             if not expected_paths or set(targets) != set(expected_paths):
                 raise PiSettingsError(f"{slug}: local entrypoints changed or disappeared; revert, refresh and queue again")
             data = _pi_settings._load(path)
             current = _pi_settings._string_list(data, "extensions", path)
             base = _lexical(path.parent)
-            updated = [s for s in current if not any(_exact(p, s[1:] if s.startswith(("!", "+", "-")) else s, base, home) for p in targets)]
+            # Plain entries establish lexical resource precedence; removing one
+            # can activate a different symlink alias instead of disabling this one.
+            updated = [s for s in current if not (s.startswith(("!", "+", "-")) and any(_exact(p, s[1:], base, home) for p in targets))]
             auto_paths = {p for entries in discover_local_extensions(base / "extensions").values() for p in entries}
             inherited_paths = {entry.path for entry in state.global_entries} if scope == "project" else set()
             for target in targets:
@@ -311,5 +405,5 @@ def set_local_extension_enabled(
             if current != updated:
                 data["extensions"] = updated
                 _write_settings(path, data)
-    except OSError as exc:
+    except (OSError, ValueError) as exc:
         raise PiSettingsError(f"{path}: {exc}") from exc

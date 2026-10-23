@@ -120,7 +120,7 @@ def test_manifest_mixed_state_and_whole_directory_toggle(local):
     assert a.read_text() == "a" and b.read_text() == "b"
 
 
-@pytest.mark.parametrize("change", ["vanished", "added", "malformed", "invalid-utf8", "invalid-list", "busy"])
+@pytest.mark.parametrize("change", ["vanished", "added", "malformed", "invalid-utf8", "invalid-list", "invalid-path", "busy"])
 def test_invalid_or_stale_intent_never_writes_settings(local, change):
     home, project, path = local
     settings = home / ".pi/agent/settings.json"
@@ -135,6 +135,8 @@ def test_invalid_or_stale_intent_never_writes_settings(local, change):
         settings.write_bytes(b"\xff")
     elif change == "invalid-list":
         put(settings, {"extensions": "not a list"})
+    elif change == "invalid-path":
+        put(settings, {"extensions": ["file://["]})
     else:
         Path(str(settings) + ".lock").mkdir()
     before = settings.read_bytes()
@@ -276,3 +278,83 @@ def test_minimatch_comment_pattern_does_not_exclude_hash_prefixed_filename(local
     assert row.slug == "#router"
     assert row.global_cell.global_loaded is True
     assert row.project_cell.project_loaded is True
+
+
+@pytest.mark.parametrize("shape,package_enabled", [("file", True), ("manifest", True), ("filtered", False)])
+def test_package_selected_resource_is_not_controlled_by_loose_selectors(local, shape, package_enabled):
+    home, project, path = local
+    spec = "extensions/router.ts"
+    if shape != "file":
+        path.unlink()
+        directory = path.with_suffix("")
+        directory.mkdir()
+        path = directory / "index.ts"
+        path.write_text("source")
+        put(directory / "package.json", {"pi": {"extensions": ["index.ts"]}})
+        spec = "extensions/router"
+    package = {"source": spec, "extensions": []} if shape == "filtered" else spec
+    settings = home / ".pi/agent/settings.json"
+    put(settings, {"packages": [package], "extensions": ["-extensions/router.ts", "-extensions/router/index.ts"]})
+    before = settings.read_bytes()
+    assert read(home, project).global_enabled is package_enabled
+    with pytest.raises(PiSettingsError, match=r"packages\[\]"):
+        toggle(home, project, [path], not package_enabled)
+    assert settings.read_bytes() == before
+
+
+def test_project_package_overlap_does_not_block_global_local_configuration(local):
+    home, project, path = local
+    settings = project / ".pi/settings.json"
+    put(settings, {"packages": [str(path)]})
+    before = settings.read_bytes()
+    toggle(home, project, [path], False)
+    state = read(home, project)
+    assert not state.global_enabled and state.project_enabled
+    with pytest.raises(PiSettingsError, match=r"packages\[\]"):
+        toggle(home, project, [path], False, "project")
+    assert settings.read_bytes() == before
+
+
+def test_explicit_second_alias_is_the_native_visible_controllable_row(local, tmp_path):
+    home, project, original = local
+    original.unlink()
+    target = tmp_path / "source.ts"
+    target.write_text("source")
+    a, b = original.with_name("a.ts"), original.with_name("b.ts")
+    a.symlink_to(target)
+    b.symlink_to(target)
+    settings = home / ".pi/agent/settings.json"
+    put(settings, {"extensions": ["extensions/b.ts"]})
+    rows = build_pi_rows(home=home, project=project)
+    assert [r.slug for r in rows] == ["b"]
+    assert rows[0].global_cell.global_loaded
+    from agent_toolkit_cli.pi_local_extensions import set_local_extension_enabled
+    for enabled in (False, True):
+        set_local_extension_enabled(slug="b", enabled=enabled, scope="global", home=home, project=project, expected_paths=(b,))
+        rows = build_pi_rows(home=home, project=project)
+        assert [r.slug for r in rows] == ["b"]
+        assert rows[0].global_cell.global_loaded is enabled
+    assert a.is_symlink() and b.is_symlink() and target.read_text() == "source"
+
+
+def test_project_autoload_false_keeps_native_global_package_base(local):
+    home, project, original = local
+    original.unlink()
+    directory = original.with_suffix("")
+    directory.mkdir()
+    path = directory / "index.ts"
+    path.write_text("source")
+    put(directory / "package.json", {"pi": {"extensions": ["index.ts"]}})
+    put(home / ".pi/agent/settings.json", {"packages": [{"source": str(directory), "extensions": []}]})
+    put(project / ".pi/settings.json", {"packages": [{"source": str(directory), "autoload": False}]})
+    state = read(home, project)
+    assert not state.global_enabled and not state.project_enabled
+    with pytest.raises(PiSettingsError, match=r"packages\[\]"):
+        toggle(home, project, [path], True, "project")
+
+
+def test_package_owned_file_is_not_duplicated_as_a_loose_control(local):
+    home, project, path = local
+    put(home / ".pi/agent/settings.json", {"packages": ["extensions/router.ts"]})
+    rows = build_pi_rows(home=home, project=project)
+    assert [(row.slug, row.origin) for row in rows] == [("extensions/router.ts", "local-package")]

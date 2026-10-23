@@ -57,6 +57,7 @@ async def main():
     from textual.widgets import DataTable
     from agent_toolkit_tui.app import TUIApp
     from agent_toolkit_tui.pi_extension_state import build_pi_rows
+    from agent_toolkit_cli.pi_local_extensions import read_local_extension_states
     from agent_toolkit_tui.widgets.pi_grid import PiGrid
 
     cases = [
@@ -71,6 +72,10 @@ async def main():
         ("glob override", "global", "file", "global", ["!**/@(router|other).ts"]),
         ("project file referenced globally", "project", "file", "project", ["<source>", "-<source>"]),
         ("minimatch comment", "global", "hashfile", "global", ["!#router.ts"]),
+        ("explicit second alias", "global", "explicit-alias", "global", ["extensions/router.ts"]),
+        ("failed scope refresh", "global", "failed-refresh", "project", []),
+        ("package overlap refusal", "global", "package-collision", "global", []),
+        ("package autoload delta", "global", "package-delta", "project", []),
     ]
     for name, origin, shape, scope, selectors in cases:
         with tempfile.TemporaryDirectory(prefix="pi-tui-native-") as directory:
@@ -81,17 +86,17 @@ async def main():
             os.chdir(project)
             root = home / ".pi/agent/extensions" if origin == "global" else project / ".pi/extensions"
             slug = "#router" if shape == "hashfile" else "router"
-            source = root / ("router" if shape in ("index", "manifest", "symlink-directory") else slug + ".ts")
+            source = root / ("router" if shape in ("index", "manifest", "symlink-directory", "package-delta") else slug + ".ts")
             source.parent.mkdir(parents=True, exist_ok=True)
-            actual = sandbox / "target.ts" if shape == "symlink" else sandbox / "target" if shape == "symlink-directory" else source
+            actual = sandbox / "target.ts" if shape in ("symlink", "explicit-alias") else sandbox / "target" if shape == "symlink-directory" else source
             files = []
-            if shape in ("index", "manifest", "symlink-directory"):
+            if shape in ("index", "manifest", "symlink-directory", "package-delta"):
                 actual.mkdir()
-                for filename in (["a.ts", "b.ts"] if shape == "manifest" else ["index.ts"]):
+                for filename in (["a.ts", "b.ts"] if shape in ("manifest", "package-delta") else ["index.ts"]):
                     target = actual / filename
                     target.write_text("throw new Error('Do not execute extension code')")
                     files.append(target)
-                if shape == "manifest":
+                if shape in ("manifest", "package-delta"):
                     manifest = actual / "package.json"
                     manifest.write_text(json.dumps({"pi": {"extensions": ["a.ts", "b.ts"]}}))
                     files.append(manifest)
@@ -100,29 +105,102 @@ async def main():
                 files.append(actual)
             if source != actual:
                 source.symlink_to(actual, target_is_directory=actual.is_dir())
+            if shape == "explicit-alias":
+                (root / "aa-router.ts").symlink_to(actual)
             sources = {path: path.read_bytes() for path in files}
             global_settings, project_settings = home / ".pi/agent/settings.json", project / ".pi/settings.json"
             put(global_settings, json.dumps({"theme": "dark", "extensions": [s.replace("<source>", str(source)) for s in selectors]}))
             put(project_settings, json.dumps({"theme": "light"}))
+            if shape == "package-delta":
+                put(global_settings, json.dumps({"theme": "dark", "packages": [{"source": str(source), "extensions": []}]}))
+                put(project_settings, json.dumps({"theme": "light", "packages": [{"source": str(source), "autoload": False}]}))
             other = project_settings if scope == "global" else global_settings
             other_before = other.read_bytes()
 
             def compare():
                 rows = build_pi_rows(home=home, project=project)
+                states = read_local_extension_states(home=home, project=project)
                 for trusted, attribute in [(False, "global_entries"), (True, "project_entries")]:
-                    model = {str(e.path): e.enabled for row in rows for e in getattr(row.local_state, attribute)}
+                    model = {str(e.path): e.enabled for state in states.values() for e in getattr(state, attribute)}
                     assert model == native(home, project, trusted), (name, attribute, model)
                 return rows
 
             rows = compare()
-            initial = rows[0].global_cell.global_loaded if scope == "global" else rows[0].project_cell.project_loaded
+            if shape == "package-collision":
+                app = TUIApp()
+                async with app.run_test() as pilot:
+                    app.action_asset_type("pi-extension"); app.action_scope("global")
+                    grid = app.query_one("#pi-grid", PiGrid)
+                    table = grid.query_one("#pi-table", DataTable)
+                    table.cursor_coordinate = Coordinate(grid.row_slugs.index(slug), 1); table.focus()
+                    await pilot.press("space")
+                    assert grid.pending_entries() == {("global", slug): "unlink"}
+                    put(global_settings, json.dumps({"theme": "dark", "packages": ["extensions/router.ts"]}))
+                    before = global_settings.read_bytes()
+                    await pilot.press("ctrl+s"); await pilot.pause()
+                    assert global_settings.read_bytes() == before
+                    assert grid.pending_entries() == {("global", slug): "unlink"}
+                    assert native(home, project, False) == {str(source): True}
+                    compare()
+                    assert slug not in grid.row_slugs
+                app = TUIApp()
+                async with app.run_test() as pilot:
+                    app.action_asset_type("pi-extension"); app.action_scope("global")
+                    grid = app.query_one("#pi-grid", PiGrid)
+                    assert grid.row_slugs == ["extensions/router.ts"]
+                    table = grid.query_one("#pi-table", DataTable)
+                    table.cursor_coordinate = Coordinate(0, 1); table.focus()
+                    await pilot.press("space")
+                    assert not grid.pending_entries()
+                assert other.read_bytes() == other_before
+                assert all(path.read_bytes() == original for path, original in sources.items())
+                assert not (home / ".agent-toolkit/pi-extensions-lock.json").exists()
+                print("PASS: package overlap refusal: unchanged settings, retained intent, native selection preserved, no duplicate loose control")
+                continue
+            if shape == "package-delta":
+                from agent_toolkit_cli.pi_local_extensions import set_local_extension_enabled
+                from agent_toolkit_cli._pi_settings import PiSettingsError
+                state = read_local_extension_states(home=home, project=project)[slug]
+                assert not state.global_enabled and not state.project_enabled
+                before = project_settings.read_bytes()
+                try:
+                    set_local_extension_enabled(slug=slug, enabled=True, scope="project", home=home, project=project, expected_paths=state.paths_for("project"))
+                except PiSettingsError as error:
+                    assert "packages[]" in str(error)
+                else:
+                    raise AssertionError("Package-owned resources accepted loose selectors")
+                assert project_settings.read_bytes() == before
+                app = TUIApp()
+                async with app.run_test() as pilot:
+                    app.action_asset_type("pi-extension"); app.action_scope("project")
+                    grid = app.query_one("#pi-grid", PiGrid)
+                    assert slug not in grid.row_slugs
+                    table = grid.query_one("#pi-table", DataTable)
+                    table.cursor_coordinate = Coordinate(0, 1); table.focus()
+                    await pilot.press("space")
+                    assert not grid.pending_entries()
+                compare()
+                assert other.read_bytes() == other_before
+                assert all(path.read_bytes() == original for path, original in sources.items())
+                print("PASS: package autoload delta: native global base retained; package controls remain separate")
+                continue
+            row = next(row for row in rows if row.slug == slug)
+            initial = row.global_cell.global_loaded if scope == "global" else row.project_cell.project_loaded
             for desired in ([False, True] if initial else [True, False]):
                 app = TUIApp()
                 async with app.run_test() as pilot:
-                    app.action_asset_type("pi-extension"); app.action_scope(scope)
+                    app.action_asset_type("pi-extension")
+                    if shape == "failed-refresh":
+                        app.action_scope("global")
+                        original_project = project_settings.read_bytes()
+                        project_settings.write_text("{broken")
+                        app.action_scope("project")
+                        project_settings.write_bytes(original_project)
+                    else:
+                        app.action_scope(scope)
                     grid = app.query_one("#pi-grid", PiGrid)
                     table = grid.query_one("#pi-table", DataTable)
-                    table.cursor_coordinate = Coordinate(0, 1)
+                    table.cursor_coordinate = Coordinate(grid.row_slugs.index(slug), 1)
                     table.focus()
                     await pilot.press("space")
                     assert grid.pending_entries() == {(scope, slug): "link" if desired else "unlink"}, name
@@ -146,7 +224,7 @@ async def main():
                 app.action_asset_type("pi-extension"); app.action_scope(scope)
                 grid = app.query_one("#pi-grid", PiGrid)
                 table = grid.query_one("#pi-table", DataTable)
-                table.cursor_coordinate = Coordinate(0, 1)
+                table.cursor_coordinate = Coordinate(grid.row_slugs.index(slug), 1)
                 text = Text.from_markup(str(table.get_cell_at(table.cursor_coordinate))).plain
                 assert ("✔" if desired else "☐") in text, name
                 compare()

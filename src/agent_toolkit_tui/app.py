@@ -711,12 +711,14 @@ class TUIApp(App):
 
         pending = grid.pending_entries()
         local_targets = grid.pending_local_targets()
+        # Scope follows the visible application toggle even if rebuilding fails.
+        grid.set_scope(self._scope)  # type: ignore[arg-type]
         try:
             rows = build_pi_rows(home=Path.home(), project=Path.cwd())
         except (PiSettingsError, OSError, ValueError) as exc:
+            grid.restore_pending(pending, local_targets=local_targets)
             self.notify(str(exc), title="Pi refresh failed", severity="error", timeout=12)
             return
-        grid.set_scope(self._scope)  # type: ignore[arg-type]
         grid.set_rows(rows)
         grid.restore_pending(pending, local_targets=local_targets)
 
@@ -1988,6 +1990,8 @@ class TUIApp(App):
             if grid_pi is not None:
                 scope = self._scope_to_roots()[0]
                 for pi_row in grid_pi._rows:
+                    if pi_row.local_state and (pi_row.local_state.global_package_paths if scope == "global" else pi_row.local_state.project_package_paths):
+                        continue  # Count its package reference, not a duplicate loose cell.
                     selected = (
                         pi_row.global_cell.global_loaded if scope == "global"
                         else pi_row.project_cell.project_loaded
