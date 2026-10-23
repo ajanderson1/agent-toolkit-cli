@@ -1,5 +1,12 @@
 # Changelog
 
+## [5.12.1](https://github.com/ajanderson1/agent-toolkit-cli/compare/v5.12.0...v5.12.1) (2026-10-23)
+
+
+### Bug Fixes
+
+* **tui:** clarify Pi extension enablement and native removal ([72493ed](https://github.com/ajanderson1/agent-toolkit-cli/commit/72493edf68dbe1e35bd8c7eec0bd394b7d345631))
+
 ## [5.12.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v5.11.0...v5.12.0) (2026-10-23)
 
 
