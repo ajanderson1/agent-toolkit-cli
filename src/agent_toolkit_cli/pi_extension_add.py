@@ -6,7 +6,7 @@ Source classification (spec §3):
                            a lock entry with pi_extension_path=<slug>.
 
 Mirrors skill_add's global-only posture. Lock is written ONLY after a
-successful clone (store-owned) — never before (#283)."""
+successful clone or verified adoption (store-owned) — never before (#283)."""
 from __future__ import annotations
 
 import shutil
@@ -56,8 +56,9 @@ def add(
     """Add a Pi extension to the global library. Returns the slug.
 
     npm:<spec>  -> registry-tracked lock entry only (no clone).
-    everything else -> store-owned: clone into the library, then write lock.
-    Lock is written ONLY after a successful clone (#283 class of bug).
+    everything else -> store-owned: clone or verify an orphan checkout, then register.
+    Subdirectory sources are rejected: projections target the repository root.
+    Lock is written ONLY after clone/adoption succeeds (#283 class of bug).
     """
     lock_path = library_lock_path(env={})
 
@@ -75,6 +76,11 @@ def add(
         parsed = parse_source(source)
     except SourceParseError as exc:
         raise AddError(str(exc)) from exc
+    if parsed.subpath:
+        raise AddError(
+            f"Pi extension subdirectory sources are not supported: {parsed.subpath!r}. "
+            "Use a repository-root source; add does not activate extensions."
+        )
 
     ext_slug_maybe: str | None = slug or _derive_slug(parsed)
     if not ext_slug_maybe:
@@ -96,42 +102,53 @@ def add(
                     f"{ext_slug}: library already has a different source "
                     f"({existing.source!r}); run `pi-extension remove {ext_slug}` first"
                 )
-            return ext_slug
-        # #347: exists but NOT a git repo — a half-written/empty dir left by a
-        # partially-failed cleanup. Treat as not-present: remove it and fall
-        # through to the clone path below (which rewrites the lock entry).
-        shutil.rmtree(canonical, ignore_errors=True)
-
-    canonical.parent.mkdir(parents=True, exist_ok=True)
-    # `git clone --branch` accepts only branch/tag names — a raw SHA must be
-    # cloned at HEAD then fetched + checked out (the import pattern, #259).
-    pin_sha = parsed.ref if looks_like_sha(parsed.ref) else None
-    # May raise GitError -> no lock write (lock honesty, #283).
-    skill_git.clone(
-        parsed.url, canonical, ref=None if pin_sha else parsed.ref, env=env,
-    )
-    if pin_sha and skill_git.is_git_repo(canonical):
-        # fetch_ref is BEST-EFFORT: a full clone already holds every
-        # ref-reachable object, so the fetch only rescues full-SHA pins
-        # not reachable from advertised tips — and it ALWAYS fails for
-        # abbreviated pins (git fetch accepts only remote refs and full
-        # object IDs, while checkout resolves abbreviations locally).
-        try:
-            skill_git.fetch_ref(canonical, ref=pin_sha, env=env)
-        except skill_git.GitError:
-            pass
-        # checkout is the FAIL-LOUD authority. Deliberate divergence from
-        # import's swallow-and-stay-at-HEAD: add is a single explicit pin —
-        # silently landing on the wrong commit would violate fail-loud.
-        # Clean up the clone so a failed pin leaves no orphaned store dir
-        # (#313) and no lock entry (#283).
-        try:
-            skill_git.checkout(canonical, ref=pin_sha, env=env)
-        except skill_git.GitError:
+            if existing is not None:
+                return ext_slug
+            # #542: an orphan checkout is not registered yet. Verify its
+            # provenance before adopting it; never reclone or delete local work.
+            if not skill_git.remote_matches(canonical, parsed.url, env=env):
+                raise AddError(
+                    f"{ext_slug}: refusing to register existing checkout at {canonical}: "
+                    "origin is missing or does not match the requested source; "
+                    "checkout left unchanged"
+                )
+        else:
+            # #347: exists but NOT a git repo — a half-written/empty dir left by a
+            # partially-failed cleanup. Treat as not-present: remove it and fall
+            # through to the clone path below (which rewrites the lock entry).
             shutil.rmtree(canonical, ignore_errors=True)
-            raise
 
-    # Clone succeeded -> safe to record the lock entry.
+    if not skill_git.is_git_repo(canonical):
+        canonical.parent.mkdir(parents=True, exist_ok=True)
+        # `git clone --branch` accepts only branch/tag names — a raw SHA must be
+        # cloned at HEAD then fetched + checked out (the import pattern, #259).
+        pin_sha = parsed.ref if looks_like_sha(parsed.ref) else None
+        # May raise GitError -> no lock write (lock honesty, #283).
+        skill_git.clone(
+            parsed.url, canonical, ref=None if pin_sha else parsed.ref, env=env,
+        )
+        if pin_sha and skill_git.is_git_repo(canonical):
+            # fetch_ref is BEST-EFFORT: a full clone already holds every
+            # ref-reachable object, so the fetch only rescues full-SHA pins
+            # not reachable from advertised tips — and it ALWAYS fails for
+            # abbreviated pins (git fetch accepts only remote refs and full
+            # object IDs, while checkout resolves abbreviations locally).
+            try:
+                skill_git.fetch_ref(canonical, ref=pin_sha, env=env)
+            except skill_git.GitError:
+                pass
+            # checkout is the FAIL-LOUD authority. Deliberate divergence from
+            # import's swallow-and-stay-at-HEAD: add is a single explicit pin —
+            # silently landing on the wrong commit would violate fail-loud.
+            # Clean up the clone so a failed pin leaves no orphaned store dir
+            # (#313) and no lock entry (#283).
+            try:
+                skill_git.checkout(canonical, ref=pin_sha, env=env)
+            except skill_git.GitError:
+                shutil.rmtree(canonical, ignore_errors=True)
+                raise
+
+    # Clone succeeded or existing checkout verified -> safe to register.
     if skill_git.is_git_repo(canonical):
         try:
             upstream_sha: str | None = skill_git.remote_head_sha(
