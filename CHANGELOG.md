@@ -1,5 +1,31 @@
 # Changelog
 
+## [5.12.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v5.11.0...v5.12.0) (2026-10-23)
+
+
+### Features
+
+* central project backing and complete agent projection ([c9764b2](https://github.com/ajanderson1/agent-toolkit-cli/commit/c9764b23f2287f71c47c49e67b751890f8e39f6e))
+
+
+### Bug Fixes
+
+* **agents:** resolve resource links before parent traversal ([fdd76a4](https://github.com/ajanderson1/agent-toolkit-cli/commit/fdd76a49d546319eda9c7608254647704fff4121))
+* close projection lifecycle and registration safety gaps ([cc5c40d](https://github.com/ajanderson1/agent-toolkit-cli/commit/cc5c40db2774e0a9b6a1efdf993a22bf5a242eb4))
+* **installs:** claim cleanup ownership at native creation seams ([2a0b0db](https://github.com/ajanderson1/agent-toolkit-cli/commit/2a0b0dbee44e1f99c08362bfaaf85d3d339676e6))
+* **pi-extensions:** register verified orphan checkouts ([f534e12](https://github.com/ajanderson1/agent-toolkit-cli/commit/f534e12e3ea747da360670ca23147c6396be804c)), closes [#542](https://github.com/ajanderson1/agent-toolkit-cli/issues/542)
+* preserve installed exact-path registration and Gitea build provenance ([8a95a79](https://github.com/ajanderson1/agent-toolkit-cli/commit/8a95a79d8d2fe6de4968155bf158d871d4b9bfb7))
+* reconcile installed CLI with canonical source ([409f749](https://github.com/ajanderson1/agent-toolkit-cli/commit/409f749fc6690b527b54037e96b3ffc1a7881f0a))
+* **reground:** preserve private lifecycle and validate agent checkouts ([9f8a0ac](https://github.com/ajanderson1/agent-toolkit-cli/commit/9f8a0ac00ac8d7417368764c6c36a09fee3d4ec2))
+* **skills:** keep project Save and doctor consistent ([#537](https://github.com/ajanderson1/agent-toolkit-cli/issues/537)) ([8bb28c6](https://github.com/ajanderson1/agent-toolkit-cli/commit/8bb28c68c304603bb9883bf3774476574123ff4a))
+* **tui:** clarify asset origins and local controls ([dcc415b](https://github.com/ajanderson1/agent-toolkit-cli/commit/dcc415bbc3a5779efff7fb2348e628a057feb8ce)), closes [#538](https://github.com/ajanderson1/agent-toolkit-cli/issues/538)
+
+
+### Documentation
+
+* prepare clear asset lifecycle and doctor redesign ([#539](https://github.com/ajanderson1/agent-toolkit-cli/issues/539)) ([a6e8b14](https://github.com/ajanderson1/agent-toolkit-cli/commit/a6e8b148e64764a1b9b017d46ed12d23b4af4ba7))
+* supersede oversized issue 538 lifecycle plan ([1d8aee9](https://github.com/ajanderson1/agent-toolkit-cli/commit/1d8aee964a9afeefb8851680bcca5fe4ee7b656e))
+
 ## [5.11.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v5.10.0...v5.11.0) (2026-10-16)
 
 
