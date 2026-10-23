@@ -139,6 +139,8 @@ def _exact(path: Path, pattern: str, base: Path, home: Path) -> bool:
 
 def _matches(path: Path, pattern: str, base: Path, home: Path) -> bool:
     pattern = _normalize_pattern(pattern, home)
+    if pattern.startswith("#"):
+        return False  # Minimatch comments are not exclusion expressions.
     # Minimatch's leading ! negates the expression, even after the selector !.
     negated = False
     while pattern.startswith("!"):

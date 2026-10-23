@@ -70,6 +70,7 @@ async def main():
         ("inherited mixed manifest", "global", "manifest", "project", ["-extensions/router/a.ts"]),
         ("glob override", "global", "file", "global", ["!**/@(router|other).ts"]),
         ("project file referenced globally", "project", "file", "project", ["<source>", "-<source>"]),
+        ("minimatch comment", "global", "hashfile", "global", ["!#router.ts"]),
     ]
     for name, origin, shape, scope, selectors in cases:
         with tempfile.TemporaryDirectory(prefix="pi-tui-native-") as directory:
@@ -79,7 +80,8 @@ async def main():
             sandbox_environment(home)
             os.chdir(project)
             root = home / ".pi/agent/extensions" if origin == "global" else project / ".pi/extensions"
-            source = root / ("router" if shape in ("index", "manifest", "symlink-directory") else "router.ts")
+            slug = "#router" if shape == "hashfile" else "router"
+            source = root / ("router" if shape in ("index", "manifest", "symlink-directory") else slug + ".ts")
             source.parent.mkdir(parents=True, exist_ok=True)
             actual = sandbox / "target.ts" if shape == "symlink" else sandbox / "target" if shape == "symlink-directory" else source
             files = []
@@ -123,7 +125,7 @@ async def main():
                     table.cursor_coordinate = Coordinate(0, 1)
                     table.focus()
                     await pilot.press("space")
-                    assert grid.pending_entries() == {(scope, "router"): "link" if desired else "unlink"}, name
+                    assert grid.pending_entries() == {(scope, slug): "link" if desired else "unlink"}, name
                     await pilot.press("ctrl+s")
                     await pilot.pause()
                     assert grid.pending_entries() == {}, name

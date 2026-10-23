@@ -266,3 +266,13 @@ def test_conflicting_canonical_reference_is_not_a_successful_noop(local, tmp_pat
     with pytest.raises(PiSettingsError, match="conflicting"):
         toggle(home, project, [path], True)
     assert settings.read_bytes() == before
+
+
+def test_minimatch_comment_pattern_does_not_exclude_hash_prefixed_filename(local):
+    home, project, path = local
+    path.rename(path.with_name("#router.ts"))
+    put(home / ".pi/agent/settings.json", {"extensions": ["!#router.ts"]})
+    row, = build_pi_rows(home=home, project=project)
+    assert row.slug == "#router"
+    assert row.global_cell.global_loaded is True
+    assert row.project_cell.project_loaded is True
