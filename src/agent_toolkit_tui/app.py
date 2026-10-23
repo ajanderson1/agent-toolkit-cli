@@ -1971,7 +1971,7 @@ class TUIApp(App):
                 f"[b red]{broken}[/] broken"
             )
         elif active == "pi-extension":
-            loaded = 0
+            enabled = linked = 0
             try:
                 grid_pi = self.query_one("#pi-grid", PiGrid)
             except (NoMatches, Exception):
@@ -1979,15 +1979,20 @@ class TUIApp(App):
             if grid_pi is not None:
                 scope = self._scope_to_roots()[0]
                 for pi_row in grid_pi._rows:
-                    if scope == "global":
-                        if pi_row.global_cell.global_loaded:
-                            loaded += 1
-                    elif pi_row.project_cell.project_loaded:
-                        loaded += 1
+                    selected = (
+                        pi_row.global_cell.global_loaded if scope == "global"
+                        else pi_row.project_cell.project_loaded
+                    )
+                    if selected:
+                        if pi_row.origin == "store-owned":
+                            linked += 1
+                        else:
+                            enabled += 1
                 pending = len(grid_pi.pending_entries())
             else:
                 pending = 0
-            text = f"  [b green]{loaded}[/] enabled   [b yellow]{pending}[/] pending"
+            connections = f"   [b green]{linked}[/] linked" if linked else ""
+            text = f"  [b green]{enabled}[/] enabled{connections}   [b yellow]{pending}[/] pending"
         elif active == "mcp":
             linked = 0
             try:

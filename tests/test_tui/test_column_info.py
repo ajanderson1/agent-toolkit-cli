@@ -212,8 +212,9 @@ def test_standard_project_marker_is_present_only_for_a_globally_linked_asset(
         (
             "pi-extension",
             "pi",
-            "Extensions are Pi-only; there is no shared slot and no other harness "
-            "consumes them, which is why this asset type has no Standard column.",
+            "Enabled means referenced in that scope’s Pi settings.json. "
+            "Local files alone do not count as enabled. Library rows instead "
+            "show their symlink connection (linked). Space queues a change; Ctrl+S applies it.",
         ),
     ],
 )

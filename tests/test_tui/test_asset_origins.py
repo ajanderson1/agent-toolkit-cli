@@ -186,16 +186,14 @@ async def test_pi_origin_labels_and_active_info(origin, managed, label, tmp_path
         grid.action_info()
         await pilot.pause()
         body = Text.from_markup(grid.app.screen._body_markup).plain
-        assert f"Origin: {label}" in body
+        if origin in ("store-owned", "untracked"):
+            assert f"Origin: {label}" in body
         assert "adopt" not in body.lower()
         if origin == "npm":
-            assert "download status is not checked" in body
+            assert "download status is not checked" not in body
             assert "Enabled globally: Yes" in body
             assert "Enabled for this project: No" in body
             assert "Remove with Pi: pi uninstall npm:@scope/pkg" in body
-            assert "Pi package handling" in body
-            assert "not Toolkit Git update" in body
-            assert "running sessions may differ" in body
             assert "not package files" in body
             if not managed:
                 assert str(settings) in body

@@ -87,8 +87,9 @@ _HARNESS_SENTENCES: dict[tuple[str, str], str] = {
         "markdown is converted rather than copied."
     ),
     ("pi-extension", "pi"): (
-        "Extensions are Pi-only; there is no shared slot and no other harness "
-        "consumes them, which is why this asset type has no Standard column."
+        "Enabled means referenced in that scope’s Pi settings.json. "
+        "Local files alone do not count as enabled. Library rows instead "
+        "show their symlink connection (linked). Space queues a change; Ctrl+S applies it."
     ),
 }
 
@@ -289,11 +290,9 @@ def _pi_extension_origin(_context: dict[str, object]) -> ColumnInfo:
             "Disable removes the connection, not the source.",
             "• local — existing files used in place; no TUI toggles or deletion. "
             "Info shows paths and manual removal instructions.",
-            "• npm — an npm package reference, not proof of downloaded files or "
-            "enablement. Enable/disable changes Pi settings for registered entries; "
-            "other references stay read-only.",
-            "Info shows configuration in both scopes, controls and native Pi "
-            "removal commands, alongside exact manual removal instructions.",
+            "• npm — Enable/Disable adds/removes its reference in Pi settings. "
+            "Other references stay read-only.",
+            "Info shows each scope’s state, controls and removal commands.",
             "Updates use Pi package handling, not Toolkit Git update. "
             "Running Pi sessions are unchanged.",
         ],

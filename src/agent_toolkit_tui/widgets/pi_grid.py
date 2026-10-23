@@ -223,15 +223,15 @@ class PiGrid(Vertical):
         if table.cursor_coordinate.row >= len(visible):
             return
         row = visible[table.cursor_coordinate.row]
+        state = "Linked" if row.origin == "store-owned" else "Enabled"
         self.app.push_screen(
             CellInfoScreen(
                 title=f"{row.slug} · {asset_type_label('pi-extension')}",
                 body_markup="\n".join([
                     f"Source: {escape(row.source)}",
                     "",
-                    f"Enabled globally: {'Yes' if row.global_cell.global_loaded else 'No'}",
-                    f"Enabled for this project: {'Yes' if row.project_cell.project_loaded else 'No'}",
-                    "Configuration only; running sessions may differ.",
+                    f"{state} globally: {'Yes' if row.global_cell.global_loaded else 'No'}",
+                    f"{state} for this project: {'Yes' if row.project_cell.project_loaded else 'No'}",
                     "",
                     self._info_body(row=row, scope=self._scope),
                 ]),
@@ -266,14 +266,7 @@ class PiGrid(Vertical):
             from agent_toolkit_cli.pi_extension_paths import library_pi_extension_path
 
             return "\n".join(library_info(library_pi_extension_path(row.slug)))
-        if row.origin == "npm":
-            registration = "Registered in Toolkit." if row.managed else "Not registered in Toolkit."
-            return (
-                f"Origin: npm\n{registration}\n"
-                "Package download status is not checked.\n"
-                "Updates use Pi package handling, not Toolkit Git update."
-            )
-        return "Origin: local"
+        return ""
 
     def _origin_info_body(self) -> str:
         info = get_column_info("origin", asset_type="pi-extension", context={"scope": self._scope})
@@ -304,7 +297,7 @@ class PiGrid(Vertical):
             if row.managed:
                 removal += "\nToolkit registration is kept."
             sections.append(removal)
-        return "\n\n".join(sections)
+        return "\n\n".join(section for section in sections if section)
 
     def _scope_info_body(self, *, row: PiExtensionRow, scope: str) -> str:
         from pathlib import Path
@@ -385,8 +378,9 @@ class PiGrid(Vertical):
             action = "Enable" if pending == "link" else "Disable"
             controls = f"[yellow]Pending: {action} ({scope}).[/]\n[b]Ctrl+S[/] → apply"
         elif scope == "project" and row.global_cell.global_loaded and not loaded:
+            state = "linked" if row.origin == "store-owned" else "enabled"
             controls = (
-                "Already enabled globally. No project change needed.\n"
+                f"Already {state} globally. No project change needed.\n"
                 "To use it only in this project, disable globally first."
             )
         else:

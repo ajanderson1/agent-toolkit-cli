@@ -28,7 +28,7 @@ def _row(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("global_enabled,project_enabled", [(False, False), (True, False), (False, True), (True, True)])
-async def test_info_distinguishes_scope_settings_from_registration(global_enabled, project_enabled):
+async def test_info_shows_scope_enablement_without_repeating_presence(global_enabled, project_enabled):
     row = _row(global_enabled=global_enabled, project_enabled=project_enabled)
     grid = PiGrid([row])
 
@@ -46,11 +46,28 @@ async def test_info_distinguishes_scope_settings_from_registration(global_enable
         body = Text.from_markup(app.screen._body_markup).plain
         assert f"Enabled globally: {'Yes' if global_enabled else 'No'}" in body
         assert f"Enabled for this project: {'Yes' if project_enabled else 'No'}" in body
-        assert "Registered in Toolkit" in body
-        assert "download status is not checked" in body
+        assert "Registered in Toolkit" not in body
+        assert "download status is not checked" not in body
         assert "No description" not in body
         assert "Ref:" not in body
         assert "loaded" not in body.lower()
+
+
+@pytest.mark.asyncio
+async def test_library_symlink_is_not_reported_as_settings_enablement():
+    grid = PiGrid([_row("store-owned", global_enabled=True)])
+
+    class _App(App):
+        def compose(self) -> ComposeResult:
+            yield grid
+
+    async with _App().run_test() as pilot:
+        grid.action_info()
+        await pilot.pause()
+        body = Text.from_markup(grid.app.screen._body_markup).plain
+        assert "Linked globally: Yes" in body
+        assert "Linked for this project: No" in body
+        assert "Enabled globally" not in body
 
 
 @pytest.mark.parametrize("origin", ["npm", "store-owned"])
@@ -79,7 +96,8 @@ def test_info_actions_name_enable_disable_without_claiming_package_installation(
 def test_project_info_explains_global_enablement_without_offering_duplicate_enable(origin):
     row = _row(origin, global_enabled=True)
     body = Text.from_markup(PiGrid([row])._info_body(row=row, scope="project")).plain
-    assert "Already enabled globally" in body
+    state = "linked" if origin == "store-owned" else "enabled"
+    assert f"Already {state} globally" in body
     assert "disable globally first" in body
     assert "queue Enable" not in body
 
@@ -125,8 +143,13 @@ async def test_pi_status_counts_enabled_configuration_not_runtime_loading():
         app.action_asset_type("pi-extension")
         await pilot.pause()
         grid = app.query_one("#pi-grid", PiGrid)
-        grid.set_rows([_row(project_enabled=True), _row(slug="other-extension")])
+        grid.set_rows([
+            _row(project_enabled=True),
+            _row("store-owned", slug="library-extension", project_enabled=True),
+            _row(slug="other-extension"),
+        ])
         app._refresh_status_bar()
         text = Text.from_markup(str(app.query_one("#status-bar", Static).render())).plain
         assert "1 enabled" in text
+        assert "1 linked" in text
         assert "loaded" not in text

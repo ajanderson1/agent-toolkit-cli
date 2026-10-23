@@ -12,6 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.widgets import Static
 
@@ -211,7 +212,7 @@ async def test_apply_failed_count_is_symmetric(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_pi_status_bar_shows_active_scope_only(monkeypatch):
-    """Pi status counts enabled configuration in the active scope, not both."""
+    """Pi status counts library links separately, in the active scope only."""
     from textual.widgets import Static
 
     from agent_toolkit_tui.app import TUIApp
@@ -232,12 +233,12 @@ async def test_pi_status_bar_shows_active_scope_only(monkeypatch):
         await pilot.pause()
         app.action_asset_type("pi-extension")
         await pilot.pause()
-        bar = str(app.query_one("#status-bar", Static).render())
-        # Project scope is active on startup: exactly one enabled row.
-        assert "1" in bar and "enabled" in bar and "pending" in bar
+        bar = Text.from_markup(str(app.query_one("#status-bar", Static).render())).plain
+        # Project scope is active on startup: one library link, no settings refs.
+        assert "0 enabled" in bar and "1 linked" in bar and "0 pending" in bar
         assert "global" not in bar
 
         await pilot.press("ctrl+g")
         await pilot.pause()
-        bar = str(app.query_one("#status-bar", Static).render())
-        assert "2" in bar and "enabled" in bar
+        bar = Text.from_markup(str(app.query_one("#status-bar", Static).render())).plain
+        assert "0 enabled" in bar and "2 linked" in bar

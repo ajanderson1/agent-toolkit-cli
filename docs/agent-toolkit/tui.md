@@ -61,7 +61,7 @@ Pi Extensions uses its existing Origin column. Git-change and health badges
 |---|---|
 | `library` | Toolkit-managed central source connected through the existing installation mechanism. Disable removes the connection, not the source. |
 | `local` | Existing files used where they are, outside Toolkit library management—even if discovered under a library directory. Visible and usable, but excluded from individual, collection and All/None toggle queues. No TUI enable/disable, deletion, moving or registration. |
-| `npm` | An npm package reference—not proof of downloaded files or enablement. Toolkit-registered references have Enable/Disable controls; other references stay read-only with removal guidance in Info. |
+| `npm` | Toolkit-registered packages have Enable/Disable controls; other references stay read-only with removal guidance in Info. |
 
 Press ++i++ for the actual source path and linking/update behavior. For local
 files, Info gives the exact manual removal command and warns when it
@@ -70,11 +70,13 @@ the selected child, never a shared parent checkout. For a local package in Pi
 settings, remove its string or structured `packages[]` reference in the shown
 settings file; this does not delete package contents.
 
-Pi Extension Info shows **Enabled globally** and **Enabled for this project**
-separately. These describe configuration, not a running Pi session. **Space**
-queues Enable/Disable in the selected scope; **Ctrl+S** applies it. Pending
-messages use the same vocabulary. The status bar counts enabled configuration,
-not runtime loading.
+For npm and local Pi extensions, **Enabled globally** and **Enabled for this
+project** mean a matching reference in that scope’s `settings.json`:
+`packages[]` for packages, `extensions[]` for loose files. Merely finding a
+local file does not mark it enabled. Library rows instead show **Linked** for
+their symlink connections; these are counted separately in the status bar.
+None of these states observes a running Pi session. **Space** queues
+Enable/Disable in the selected scope; **Ctrl+S** applies it.
 
 npm enable/disable adds/removes a reference in Pi settings—not an extension
 symlink or package-file deletion. Info also shows the native removal command:

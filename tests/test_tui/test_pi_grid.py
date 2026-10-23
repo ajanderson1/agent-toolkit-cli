@@ -511,7 +511,7 @@ async def test_unmanaged_npm_info_body_gives_manual_removal_advice():
         g = app.query_one("#g", PiGrid)
         row = _unmanaged_npm_row("pi-title-renamer")
         body = g._info_body(row=row, scope="global")
-        assert "Origin: npm" in body
+        assert "npm:pi-title-renamer" in body
         assert "did not register this npm reference" in body
         assert "/tmp/home/.pi/agent/settings.json" in body
         assert "whose source is 'npm:pi-title-renamer'" in body
@@ -1177,7 +1177,7 @@ def test_project_info_explains_global_enablement_block():
 
     body = grid._info_body(row=row, scope="project")
 
-    assert "Already enabled globally" in body
+    assert "Already linked globally" in body
     assert "disable globally first" in body
     assert "queue Enable" not in body
 
