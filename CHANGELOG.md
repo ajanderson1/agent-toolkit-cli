@@ -1,5 +1,12 @@
 # Changelog
 
+## [5.12.2](https://github.com/ajanderson1/agent-toolkit-cli/compare/v5.12.1...v5.12.2) (2026-10-23)
+
+
+### Bug Fixes
+
+* **tui:** derive Pi enablement from settings references ([5cf8777](https://github.com/ajanderson1/agent-toolkit-cli/commit/5cf877777a46e409beae835995d2b43dd914e0a4))
+
 ## [5.12.1](https://github.com/ajanderson1/agent-toolkit-cli/compare/v5.12.0...v5.12.1) (2026-10-23)
 
 
