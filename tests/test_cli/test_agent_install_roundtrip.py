@@ -19,6 +19,8 @@ from __future__ import annotations
 
 import pytest
 
+pytestmark = pytest.mark.usefixtures("isolated_project_backing")
+
 
 @pytest.fixture(autouse=True)
 def _clean_env(monkeypatch):
@@ -41,11 +43,14 @@ def _seed_global_canonical(slug="rt-agent"):
 
 
 def _seed_project_canonical(project, slug="rt-agent"):
-    from agent_toolkit_cli.agent_paths import canonical_agent_dir
+    """A recorded legacy private install, not an unowned directory."""
+    from agent_toolkit_cli.agent_paths import canonical_agent_dir, lock_file_path
+    from agent_toolkit_cli.agent_lock import LockEntry, LockFile, write_lock
 
     canonical = canonical_agent_dir(slug, scope="project", project=project)
     canonical.mkdir(parents=True, exist_ok=True)
     (canonical / f"{slug}.md").write_text(_CONTENT)
+    write_lock(lock_file_path(scope="project", project=project), LockFile(version=1, skills={slug: LockEntry(source=f"x/{slug}", source_type="github", agent_path=f"{slug}.md")}))
     return canonical
 
 
@@ -392,7 +397,6 @@ def test_project_install_source_none_writes_derived_lock_entry(
 
     _seed_global_canonical()
     _write_global_lock_entry(ref="main")
-    _seed_project_canonical(project)
 
     result = apply(_source_none_plan(), project=project)
 
@@ -439,7 +443,6 @@ def test_project_install_no_global_entry_fails_before_projection(
     from agent_toolkit_cli.agent_paths import lock_file_path
 
     _seed_global_canonical()  # canonical only — NO global lock entry
-    _seed_project_canonical(project)
 
     with _pytest.raises(InstallError, match="no global lock entry"):
         apply(_source_none_plan(), project=project)
@@ -462,7 +465,6 @@ def test_project_reinstall_source_none_is_idempotent(tmp_path, monkeypatch):
 
     _seed_global_canonical()
     _write_global_lock_entry()
-    _seed_project_canonical(project)
 
     r1 = apply(_source_none_plan(), project=project)
     assert r1.lock_action == "added"
@@ -489,7 +491,6 @@ def test_project_first_install_still_refuses_foreign_file(
 
     _seed_global_canonical()
     _write_global_lock_entry()
-    _seed_project_canonical(project)
     foreign = project / ".gemini" / "agents" / "rt-agent.md"
     foreign.parent.mkdir(parents=True)
     foreign.write_text("# user's own file\n")
@@ -555,7 +556,6 @@ def test_project_install_all_skipped_writes_no_lock_entry(tmp_path, monkeypatch)
 
     _seed_global_canonical()
     _write_global_lock_entry()
-    _seed_project_canonical(project)
 
     # codex is a real catalog entry with subagent_mechanism='none' → skipped.
     result = apply(_source_none_plan(add=("codex",)), project=project)

@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Literal, Protocol
 
 from agent_toolkit_cli._install_core import InstallError
+from agent_toolkit_cli.project_backing import write_projection
 
 Scope = Literal["global", "project"]
 
@@ -31,7 +32,13 @@ def sidecar_path(dest: Path) -> Path:
 
 
 def write_sidecar(dest: Path, *, slug: str, harness: str, scope: str, canonical: Path, content: str) -> None:
-    sidecar_path(dest).write_text(json.dumps({
+    marker = sidecar_path(dest)
+    if marker.is_symlink():
+        raise InstallError(f"{marker}: foreign ownership marker preserved")
+    existing = read_sidecar(dest)
+    owned = (isinstance(existing, dict) and existing.get("tool") == "agent-toolkit-cli"
+             and existing.get("asset_type") == "command" and existing.get("slug") == slug)
+    write_projection(marker, json.dumps({
         "tool": "agent-toolkit-cli",
         "asset_type": "command",
         "slug": slug,
@@ -39,7 +46,7 @@ def write_sidecar(dest: Path, *, slug: str, harness: str, scope: str, canonical:
         "scope": scope,
         "canonical": str(canonical),
         "sha256": sha256_text(content),
-    }, indent=2, sort_keys=True) + "\n")
+    }, indent=2, sort_keys=True) + "\n", overwrite=owned)
 
 
 def read_sidecar(dest: Path) -> dict | None:

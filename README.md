@@ -64,7 +64,9 @@ Canonical groups are `skills`, `agents`, `commands`, `instructions`, `pi-extensi
 
 ## Configuration
 
-- Source-backed libraries and global locks normally live under `~/.agent-toolkit/`; project locks describe their own scope. [Storage reference](docs/agent-toolkit/lock-files.md).
+- Source-backed libraries and global locks normally live under `~/.agent-toolkit/`; new project skill/agent/command installations share central backing. Existing private installations remain usable. [Storage reference](docs/agent-toolkit/lock-files.md) · [Backing configuration and explicit migration](docs/agent-toolkit/project-backing.md).
+- Shared CLI/TUI behavior config is `~/.agent-toolkit/config.json`: `projectBacking` defaults to `"central"`; creating isolated projects requires both `"isolated"` and `allowIsolatedProjects: true`.
+- Pi directory-agent installation preserves `AGENTS.md`, memory, nested skills and resources; non-Pi directory adapters remain unsupported. This does not by itself activate native Pi roles or memory. [Agent support](docs/asset-types/agents.md).
 - Instructions canonical content is user-owned: project `AGENTS.md` or `~/.agent-toolkit/AGENTS.md`. Install does not author it. [Instructions safety](docs/asset-types/instructions.md).
 - TUI theme and main-harness columns are preferences, not CLI install targets. Use **Ctrl+P → Theme / Main harnesses**. [Settings schema and overrides](docs/agent-toolkit/tui-settings.md).
 
@@ -92,6 +94,8 @@ uv run pytest -q
 uv run python scripts/gen_harness_docs.py
 make docs-build
 ```
+
+This repository is the canonical CLI/TUI source; the separate REGROUND checkout is historical. Identify installed builds by canonical commit and wheel SHA-256, not version alone.
 
 `lefthook.yml` runs the full pytest suite on **pre-push**. Update affected docs with behavior changes; regenerate harness pages rather than editing generated output. [Open an issue](https://github.com/ajanderson1/agent-toolkit-cli/issues) for defects or compatibility gaps.
 

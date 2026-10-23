@@ -26,13 +26,16 @@ from agent_toolkit_cli.commands.command._common import (
     default=None,
     help="Comma-separated harness names. Default: standard + Pi + Gemini.",
 )
+@click.option("--migrate-to-central", is_flag=True, help="Migrate verified private backing, preserving the old checkout.")
 @click.pass_context
-def install_cmd(ctx, slug, global_, project_flag, harnesses):
+def install_cmd(ctx, slug, global_, project_flag, harnesses, migrate_to_central=False):
     """Project a command into harness command slots."""
     slug = validate_slug(slug)
     scope, home, project, _ = scope_and_roots(
         global_, project_flag, ctx.obj.get("project_root") if ctx.obj else None,
     )
+    if migrate_to_central and (scope != "project" or project is None):
+        raise click.UsageError("--migrate-to-central requires project scope")
     global_lock = read_lock(library_lock_path())
     if slug not in global_lock.skills and not canonical_command_dir(slug, scope="global").exists():
         raise click.ClickException(f"{slug}: not in the global library; run `command add` first")
@@ -54,11 +57,16 @@ def install_cmd(ctx, slug, global_, project_flag, harnesses):
         remove_agents=(),
     )
     try:
-        result = command_install.apply(
-            p,
-            home=home or (Path.home() if scope == "global" else None),
-            project=project,
-        )
+        def apply_install():
+            return command_install.apply(p,
+                home=home or (Path.home() if scope == "global" else None), project=project)
+        if migrate_to_central:
+            from agent_toolkit_cli._paths_core import COMMAND_BINDING
+            from agent_toolkit_cli.project_backing import migrate
+            old, new, result = migrate(COMMAND_BINDING, slug, project, install=apply_install)
+            click.echo(f"{slug}: {old} -> {new} (old backing preserved)")
+        else:
+            result = apply_install()
     except (InstallError, ValueError) as exc:
         raise click.ClickException(str(exc)) from exc
     for path in result.created:

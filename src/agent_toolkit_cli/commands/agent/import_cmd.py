@@ -26,6 +26,7 @@ from agent_toolkit_cli.skill_lock import looks_like_sha
 from agent_toolkit_cli.skill_source import parse_source, sanitize_ref
 from agent_toolkit_cli.agent_paths import (
     agent_parent_clone_path,
+    registered_agent_paths, acquire_agent_parent, validate_agent_revision,
     library_agent_path,
     library_lock_path,
 )
@@ -54,7 +55,7 @@ def _validated_agent_path(slug: str, value: str | None) -> PurePosixPath:
     if not parts or any(part in {"", ".", ".."} for part in parts):
         raise ValueError(f"{slug}: invalid agentPath {raw!r}")
     path = PurePosixPath(raw)
-    if path.is_absolute() or path.name != f"{slug}.md":
+    if path.is_absolute() or path.name not in (f"{slug}.md", "AGENTS.md"):
         raise ValueError(
             f"{slug}: agentPath must end with {slug}.md, got {raw!r}"
         )
@@ -225,10 +226,11 @@ def import_cmd(ctx: click.Context, file: Path, latest: bool) -> None:
             agent_path = _validated_agent_path(slug, entry.agent_path)
             canonical.parent.mkdir(parents=True, exist_ok=True)
             if agent_path.parent == PurePosixPath("."):
+                paths = registered_agent_paths(canonical, library=current)
+                paths[slug] = agent_path.as_posix()
+                local_sha, _chosen = acquire_agent_parent(canonical,
+                    lambda stage: _clone_at_requested_revision(source_url, stage, ref=ref, pin=pin_sha), paths)
                 created_path = canonical
-                local_sha = _clone_at_requested_revision(
-                    source_url, canonical, ref=ref, pin=pin_sha,
-                )
                 _assert_category_content(canonical, agent_path, slug)
                 upstream_sha = effective_pin or local_sha
                 new_entry = LockEntry(
@@ -244,17 +246,18 @@ def import_cmd(ctx: click.Context, file: Path, latest: bool) -> None:
             else:
                 owner, repo, parent_source_url = _category_identity(entry, slug)
                 parent = agent_parent_clone_path(owner, repo, ref=ref, env=None)
+                paths = registered_agent_paths(parent, library=current)
+                paths[slug] = agent_path.as_posix()
                 if parent.exists() or parent.is_symlink():
                     landed = _assert_safe_parent(
                         parent, source_url=parent_source_url,
                         expected_head=effective_pin, ref=ref, slug=slug,
                     )
                 else:
-                    parent.parent.mkdir(parents=True, exist_ok=True)
+                    landed, _chosen = acquire_agent_parent(parent,
+                        lambda stage: _clone_at_requested_revision(parent_source_url, stage, ref=ref, pin=pin_sha), paths)
                     created_parent = parent
-                    landed = _clone_at_requested_revision(
-                        parent_source_url, parent, ref=ref, pin=pin_sha,
-                    )
+                validate_agent_revision(parent, landed, paths)
                 agent_root = _assert_category_content(parent, agent_path, slug)
                 created_path = canonical
                 materialised = _symlink_or_copy(agent_root, canonical)

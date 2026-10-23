@@ -4,6 +4,8 @@ import subprocess
 from pathlib import Path
 
 import pytest
+
+pytestmark = pytest.mark.usefixtures("isolated_project_backing")
 from click.testing import CliRunner
 
 from agent_toolkit_cli import skill_doctor, skill_install
@@ -190,12 +192,19 @@ def test_project_uninstall_preserves_external_canonical(
                                  "--agents", "codex", "-p"])
     assert result.exit_code == 0, result.output
 
-    # Projection symlink gone; lock entry gone.
+    # Projection is detached, but a private checkout retains its provenance.
+    # Dropping this entry made the preserved checkout impossible to reinstall.
     assert not (project / ".agents" / "skills" / "mkdocs").exists()
     proj_lock = json.loads((project / "skills-lock.json").read_text())
-    assert "mkdocs" not in proj_lock.get("skills", {})
-    # External canonical PRESERVED (the whole point).
+    assert proj_lock["skills"]["mkdocs"]["skillPath"] == "mkdocs"
+    assert proj_lock["skills"]["mkdocs"]["parentUrl"] == parent_url
+    # External canonical PRESERVED (the whole point), including on reinstall
+    # with creation of new isolated backing disabled.
     assert (canonical / "SKILL.md").exists(), "external canonical must survive uninstall"
+    from agent_toolkit_cli import behavior
+    monkeypatch.setattr(behavior, "_read_config", lambda home=None: {})
+    assert runner.invoke(cli, ["skill", "install", "mkdocs", "--agents", "codex", "-p"]).exit_code == 0
+    assert (project / ".agents/skills/mkdocs").resolve() == canonical.resolve()
 
 
 def test_doctor_orphan_sweep_detects_unreferenced_canonical(

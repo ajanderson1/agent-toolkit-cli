@@ -141,7 +141,7 @@ def _diagnose(
     )
 
     for slug, entry in sorted(targets.items()):
-        canonical = library_agent_path(slug)
+        canonical = canonical_agent_dir(slug, scope=scope, home=home, project=project)
 
         # 1. Missing canonical directory.
         if not canonical.exists():
@@ -155,12 +155,12 @@ def _diagnose(
             continue
 
         # 2. Missing content file.
-        content_file = canonical / f"{slug}.md"
+        content_file = canonical / (Path(entry.agent_path).name if entry.agent_path else f"{slug}.md")
         if not content_file.exists():
             findings.append(Finding(
                 slug=slug, finding_type="missing-content-file", scope=scope,
                 path=content_file,
-                detail=f"{slug}.md absent in canonical",
+                detail=f"{content_file.name} absent in canonical",
                 fix_action=None,
             ))
 

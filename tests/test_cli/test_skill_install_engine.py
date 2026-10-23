@@ -8,6 +8,8 @@ from uuid import uuid4
 
 import pytest
 
+pytestmark = pytest.mark.usefixtures("isolated_project_backing")
+
 from agent_toolkit_cli.skill_install import (
     InstallError, InstallPlan,
     _should_skip_symlink, apply, ensure_project_canonical, plan,

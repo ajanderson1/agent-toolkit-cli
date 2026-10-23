@@ -17,7 +17,8 @@ from pathlib import Path
 from typing import Any, Callable
 
 from agent_toolkit_cli._install_core import InstallError
-from agent_toolkit_cli.agent_adapters import _guard_foreign, _sentinel_path
+from agent_toolkit_cli.agent_adapters import _guard_foreign, _sentinel_path, _write_sentinel
+from agent_toolkit_cli.project_backing import write_projection
 from agent_toolkit_cli.skill_agents import UnknownAgentError
 
 
@@ -415,7 +416,7 @@ class _TranslateAdapter:
         # decoded text: a foreign non-UTF8 file at the destination must route
         # to the conflict branch below, not raise UnicodeDecodeError.
         if dest.exists() and not dest.is_symlink() and dest.read_bytes() == output.encode():
-            _sentinel_path(dest).write_text("")
+            _write_sentinel(dest)
             return dest
         # Ownership = SENTINEL, not lock (#368, standard-adapter parity; G5).
         _guard_foreign(dest, harness=self.harness, overwrite=False)
@@ -423,8 +424,8 @@ class _TranslateAdapter:
         # Replace, never write through, a symlink at the slot (F6 parity).
         if dest.is_symlink():
             dest.unlink()
-        dest.write_text(output)
-        _sentinel_path(dest).write_text("")
+        write_projection(dest, output, overwrite=_sentinel_path(dest).exists())
+        _write_sentinel(dest)
         return dest
 
     def _emitted_or_none(

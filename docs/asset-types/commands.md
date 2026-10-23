@@ -9,6 +9,10 @@ The `commands` group (`command` alias) manages the Commands asset type: reusable
 - **Optional lock field:** `harnesses` — projection metadata written only after a successful mutation; legacy v1 locks without it remain readable (non-mutating reads never backfill). Actual on-disk files/ownership still determine exposure.
 - **Scope default:** project when any source-backed project lock exists in the consumer directory, global otherwise; use explicit `-g/-p`. Add is global-library only; remove is scope-aware.
 
+New project projections share central library backing. Existing private backing
+is retained until [explicit verified migration](../agent-toolkit/project-backing.md);
+new isolated backing is disabled by default in shared CLI/TUI configuration.
+
 ## Standard slot (#482)
 
 One toolkit-owned Markdown file serves every verified shared-path reader:

@@ -1,10 +1,11 @@
-"""#360 AC2: TUI Apply fully uninstalls an unlisted row — projections detached
-AND project lock entry dropped (non-destructive: canonical preserved)."""
+"""TUI detach removes targets but preserves private ownership, even unlisted."""
 from __future__ import annotations
 
 from pathlib import Path
 
 import pytest
+
+pytestmark = pytest.mark.usefixtures("isolated_project_backing")
 from click.testing import CliRunner
 
 from agent_toolkit_cli.cli import main
@@ -14,7 +15,7 @@ from agent_toolkit_tui.app import TUIApp
 
 
 @pytest.mark.asyncio
-async def test_apply_full_uninstall_unlisted_drops_project_entry(
+async def test_apply_full_uninstall_unlisted_preserves_private_reinstall(
     git_sandbox, tmp_path: Path, monkeypatch,
 ):
     project = tmp_path / "proj"
@@ -60,14 +61,27 @@ async def test_apply_full_uninstall_unlisted_drops_project_entry(
         await pilot.pause()
 
     proj_lock = read_lock(lock_file_path(scope="project", project=project))
-    assert "demo" not in proj_lock.skills          # entry dropped
+    identity = proj_lock.skills["demo"]  # retained private ownership, not activation
     canonical = canonical_skill_dir("demo", scope="project", project=project)
     assert canonical.exists()                      # non-destructive: canonical preserved
+    (canonical / "unique-memory").write_text("keep private work")
     # The apply genuinely detached projections (it consulted the pending ops,
     # not the library — spec D4): the claude-code projection symlink is gone.
     from agent_toolkit_cli.skill_paths import agent_projection_dir
     link = agent_projection_dir("claude-code", "demo", scope="project", home=None, project=project)
     assert not link.is_symlink()
+    import json
+    status = runner.invoke(main, ["skill", "list", "-p", "--agent", "claude-code", "--json"])
+    assert status.exit_code == 0 and json.loads(status.output) == []
+    from agent_toolkit_cli import behavior
+    monkeypatch.setattr(behavior, "_read_config", lambda home=None: {})
+    r = runner.invoke(main, ["skill", "add", str(git_sandbox.upstream), "--slug", "demo"])
+    assert r.exit_code == 0, r.output
+    r = runner.invoke(main, ["skill", "install", "demo", "-p", "--agents", "claude-code"])
+    assert r.exit_code == 0, r.output
+    assert read_lock(lock_file_path(scope="project", project=project)).skills["demo"] == identity
+    assert link.resolve() == canonical.resolve()
+    assert (canonical / "unique-memory").read_text() == "keep private work"
 
 
 @pytest.mark.asyncio
@@ -122,10 +136,9 @@ async def test_apply_failure_keeps_project_entry(git_sandbox, tmp_path: Path, mo
 async def test_apply_partial_failure_restores_only_failed_ops(
     git_sandbox, tmp_path: Path, monkeypatch,
 ):
-    """#360 G1: a mixed batch (one group fails, one unlisted full-unlink
-    succeeds with entry drop) must NOT re-queue the succeeded group's ops.
-    Replaying them would hit "not in global library" on every later Apply,
-    holding the genuinely-failed group's retry hostage."""
+    """A successful private detach keeps provenance but must NOT be re-queued
+    when another group fails. Status and disabled-mode reinstall remain usable.
+    """
     project = tmp_path / "proj"
     project.mkdir()
     library_root = tmp_path / "lib" / "skills"
@@ -183,8 +196,24 @@ async def test_apply_partial_failure_restores_only_failed_ops(
         }
 
     proj_lock = read_lock(lock_file_path(scope="project", project=project))
-    assert "demo" not in proj_lock.skills  # the successful drop stuck
-    assert "boom" in proj_lock.skills      # failed group untouched
+    assert "demo" in proj_lock.skills  # successful private detach retains ownership
+    assert "boom" in proj_lock.skills  # failed group untouched
+    from agent_toolkit_cli.skill_paths import agent_projection_dir
+    demo_link = agent_projection_dir("claude-code", "demo", scope="project", home=None, project=project)
+    boom_link = agent_projection_dir("claude-code", "boom", scope="project", home=None, project=project)
+    assert not demo_link.is_symlink() and boom_link.is_symlink()
+    canonical = canonical_skill_dir("demo", scope="project", project=project)
+    (canonical / "unique-memory").write_text("survives mixed apply")
+    import json
+    status = runner.invoke(main, ["skill", "list", "-p", "--agent", "claude-code", "--json"])
+    assert status.exit_code == 0 and all(row["slug"] != "demo" for row in json.loads(status.output))
+    from agent_toolkit_cli import behavior
+    monkeypatch.setattr(behavior, "_read_config", lambda home=None: {})
+    assert runner.invoke(main, ["skill", "add", str(git_sandbox.upstream), "--slug", "demo"]).exit_code == 0
+    result = runner.invoke(main, ["skill", "install", "demo", "-p", "--agents", "claude-code"])
+    assert result.exit_code == 0, result.output
+    assert demo_link.resolve() == canonical.resolve()
+    assert (canonical / "unique-memory").read_text() == "survives mixed apply"
 
 
 @pytest.mark.asyncio
@@ -246,8 +275,8 @@ async def test_apply_full_unlink_listed_slug_keeps_entry(
     git_sandbox, tmp_path: Path, monkeypatch,
 ):
     """#360 G5b: a LISTED slug's full unlink keeps the project lock entry —
-    the designed asymmetry (the row stays visible via the library universe;
-    only unlisted slugs need the drop to avoid a stranded row)."""
+    private provenance is not a projection activation flag. The same ownership
+    must survive when the library later no longer lists the slug."""
     project = tmp_path / "proj"
     project.mkdir()
     library_root = tmp_path / "lib" / "skills"

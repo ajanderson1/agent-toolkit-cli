@@ -8,13 +8,13 @@ from __future__ import annotations
 
 import filecmp
 import os
-import shutil
 import sys
 from pathlib import Path
 
 from agent_toolkit_cli._install_core import InstallError
-from agent_toolkit_cli.agent_adapters import _guard_foreign, _sentinel_path
+from agent_toolkit_cli.agent_adapters import _guard_foreign, _sentinel_path, _write_sentinel
 from agent_toolkit_cli.skill_agents import UnknownAgentError
+from agent_toolkit_cli.project_backing import write_projection
 
 
 # Path templates per cell. {HOME}, {PROJECT}, {SLUG} are placeholders.
@@ -130,7 +130,10 @@ class _SymlinkAdapter:
         whether this harness already holds a projection (dest.exists()),
         since adapters write real files — never symlinks at the skill path.
         """
-        return self._resolve_dest(slug, scope=scope, home=home, project=project)
+        dest = self._resolve_dest(slug, scope=scope, home=home, project=project)
+        if self.harness == "pi" and (dest.with_suffix("").exists() or dest.with_suffix("").is_symlink()):
+            return dest.with_suffix("")
+        return dest
 
     def install(
         self,
@@ -143,6 +146,14 @@ class _SymlinkAdapter:
         overwrite: bool = False,
     ) -> Path:
         dest = self._resolve_dest(slug, scope=scope, home=home, project=project)
+        if content_path.is_dir():
+            from agent_toolkit_cli.agent_adapters import directory
+            if not directory.supported(self.harness):
+                raise InstallError(f"{self.harness}: directory agents are unsupported")
+            # Refuse mixed flat/directory destinations rather than shadowing one.
+            if dest.exists() or dest.is_symlink():
+                raise InstallError(f"{self.harness}: conflicting flat agent at {dest}")
+            return directory.install(dest, content_path)
         # Fail loud on a missing canonical content file (standard-adapter F8
         # parity) BEFORE filecmp/copy2 raises a raw OSError mid-fan-out.
         if not content_path.exists():
@@ -155,7 +166,7 @@ class _SymlinkAdapter:
         if dest.exists() and not dest.is_symlink() and filecmp.cmp(
             content_path, dest, shallow=False,
         ):
-            _sentinel_path(dest).write_text("")
+            _write_sentinel(dest)
             return dest
         # Ownership = SENTINEL, not lock (#368, standard-adapter parity): the
         # facade passes overwrite=True for any locked slug, but a lock entry
@@ -167,8 +178,8 @@ class _SymlinkAdapter:
         # copy2 over a symlink would write into its target (F6 parity).
         if dest.is_symlink():
             dest.unlink()
-        shutil.copy2(content_path, dest)
-        _sentinel_path(dest).write_text("")
+        write_projection(dest, b"", source=content_path, overwrite=_sentinel_path(dest).exists())
+        _write_sentinel(dest)
         return dest
 
     def uninstall(
@@ -187,6 +198,10 @@ class _SymlinkAdapter:
         a structured refusal. The sidecar is removed whenever the file is
         gone (orphan hygiene, #361/#366)."""
         dest = self._resolve_dest(slug, scope=scope, home=home, project=project)
+        directory_dest = dest.with_suffix("")
+        if self.harness == "pi" and (directory_dest.exists() or directory_dest.is_symlink()):
+            from agent_toolkit_cli.agent_adapters import directory
+            return directory.uninstall(dest, canonical_content)
         sentinel = _sentinel_path(dest)
         refused: Path | None = None
         if dest.exists() or dest.is_symlink():

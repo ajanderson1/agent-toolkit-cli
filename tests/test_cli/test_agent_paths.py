@@ -1,6 +1,9 @@
 """agent_paths.py facade — public-symbol surface + binding behaviour."""
 from __future__ import annotations
 
+import pytest
+pytestmark = pytest.mark.usefixtures("isolated_project_backing")
+
 
 
 # Mirrors test_skill_facade_parity.py § skill_paths but for agent_paths.

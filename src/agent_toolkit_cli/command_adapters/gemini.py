@@ -7,6 +7,7 @@ import tomlkit
 import yaml
 
 from agent_toolkit_cli._install_core import InstallError
+from agent_toolkit_cli.project_backing import write_projection
 from agent_toolkit_cli.command_adapters.base import ensure_regular_command_file, is_managed_file, remove_managed_file, sidecar_path, write_sidecar
 
 
@@ -64,7 +65,7 @@ class GeminiCommandAdapter:
         if dest.exists() and not is_managed_file(dest, slug=slug, harness=self.name):
             raise InstallError(f"{dest}: unmanaged command exists")
         dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.write_text(rendered)
+        write_projection(dest, rendered, overwrite=is_managed_file(dest, slug=slug, harness=self.name))
         write_sidecar(dest, slug=slug, harness=self.name, scope=scope, canonical=source_file, content=rendered)
         return dest
 

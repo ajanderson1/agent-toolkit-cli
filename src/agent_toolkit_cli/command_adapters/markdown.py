@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import shutil
 from pathlib import Path
 
 from agent_toolkit_cli._install_core import InstallError
+from agent_toolkit_cli.project_backing import write_projection, record_created_path
 from agent_toolkit_cli.command_adapters.base import ensure_regular_command_file, is_managed_file, remove_managed_file, write_sidecar
 
 DESTINATIONS = {
@@ -59,8 +59,10 @@ class MarkdownCommandAdapter:
             dest.symlink_to(source_file)
         except OSError:
             content = source_file.read_text()
-            shutil.copyfile(source_file, dest)
+            write_projection(dest, b"", source=source_file)
             write_sidecar(dest, slug=slug, harness=self.name, scope=scope, canonical=source_file, content=content)
+        else:
+            record_created_path(dest)
         return dest
 
     def uninstall(self, slug: str, *, scope: str, home: Path | None, project: Path | None, canonical: Path | None = None) -> Path | None:

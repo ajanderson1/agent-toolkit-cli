@@ -1,5 +1,8 @@
 from pathlib import Path
 
+import pytest
+pytestmark = pytest.mark.usefixtures("isolated_project_backing")
+
 from agent_toolkit_cli.skill_agents import AGENTS
 from agent_toolkit_cli.skill_paths import (
     SUPPORTED_HARNESSES,

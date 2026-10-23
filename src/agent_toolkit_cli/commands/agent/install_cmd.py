@@ -82,6 +82,7 @@ Examples:
     help="Comma-separated harness names. Default: standard + all enabled "
          "harnesses not covered by the standard slot.",
 )
+@click.option("--migrate-to-central", is_flag=True, help="Explicitly migrate verified private backing; preserve the old checkout.")
 @click.pass_context
 def install_cmd(
     ctx: click.Context,
@@ -89,6 +90,7 @@ def install_cmd(
     global_: bool,
     project_flag: bool,
     harnesses: str | None,
+    migrate_to_central: bool = False,
 ) -> None:
     """Project an agent into the chosen scope's harnesses."""
     scope, home, project, _implicit = scope_and_roots(
@@ -137,19 +139,11 @@ def install_cmd(
         click.echo(f"{slug}: no enabled harnesses; nothing to do")
         return
 
-    # For project scope, seed the canonical if not already present.
-    if scope == "project" and project is not None:
-        canonical = canonical_agent_dir(slug, scope="project", project=project)
-        if not canonical.exists():
-            global_canonical = canonical_agent_dir(slug, scope="global")
-            if global_canonical.exists():
-                import shutil
-                canonical.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copytree(global_canonical, canonical)
-            else:
-                raise click.ClickException(
-                    f"{slug}: global canonical missing; re-run `agent add {slug}` first"
-                )
+    if migrate_to_central:
+        if scope != "project" or project is None:
+            raise click.UsageError("--migrate-to-central requires project scope")
+        if any(name != "standard" and AGENTS[name].subagent_mechanism not in ("symlink", "none") for name in target_harnesses):
+            raise click.UsageError("migrating install requires simple file/directory targets; migrate with --harnesses pi or standard, then install translated targets separately")
 
     p = InstallPlan(
         slug=slug, scope=scope, source=None, ref=None,
@@ -159,7 +153,14 @@ def install_cmd(
     # {HOME} path templates (home=None causes ValueError in symlink._expand).
     effective_home = home if home is not None else (Path.home() if scope == "global" else None)
     try:
-        result = agent_install.apply(p, home=effective_home, project=project)
+        if migrate_to_central:
+            from agent_toolkit_cli._paths_core import AGENT_BINDING
+            from agent_toolkit_cli.project_backing import migrate
+            old, new, result = migrate(AGENT_BINDING, slug, project,
+                install=lambda: agent_install.apply(p, home=effective_home, project=project))
+            click.echo(f"{slug}: {old} -> {new} (old backing preserved)")
+        else:
+            result = agent_install.apply(p, home=effective_home, project=project)
     except InstallError as exc:
         raise click.ClickException(str(exc)) from exc
 

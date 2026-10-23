@@ -113,6 +113,7 @@ def _register(
         for root in roots:
             if (
                 not root.resolve().is_relative_to(discovery_root.resolve())
+                or not (root / "SKILL.md").resolve().is_relative_to(discovery_root.resolve())
                 or not (root / "SKILL.md").is_file()
             ):
                 raise click.ClickException(
@@ -205,13 +206,8 @@ def _register(
                         or link_state(canonical) is not None
                     ):
                         raise
-                    if not journal.links or journal.links[-1] != (
-                        canonical,
-                        None,
-                        target,
-                    ):
-                        raise
-                    journal.links.pop()
+                    # Failed native creation records no cleanup ownership.
+                    # The exclusive copy claim below still refuses arrivals.
                     journal.copy(canonical, target)
                     after[canonical.name] = dataclasses.replace(
                         after[canonical.name],

@@ -1,6 +1,9 @@
 import subprocess
 from pathlib import Path
 
+import pytest
+pytestmark = pytest.mark.usefixtures("isolated_project_backing")
+
 from click.testing import CliRunner
 
 from agent_toolkit_cli.cli import main

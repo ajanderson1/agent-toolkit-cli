@@ -85,7 +85,8 @@ def test_clone_disables_prompt_and_batches_ssh(git_sandbox, tmp_path, monkeypatc
     assert "BatchMode=yes" in env["GIT_SSH_COMMAND"]
 
 
-def test_clone_https_fallback_to_ssh(tmp_path: Path, monkeypatch):
+@pytest.mark.parametrize("reserved_empty", [False, True])
+def test_clone_https_fallback_to_ssh(tmp_path: Path, monkeypatch, reserved_empty):
     """If HTTPS clone of a github repo fails, fallback to SSH (for private repos)."""
     from agent_toolkit_cli import skill_git
 
@@ -104,6 +105,8 @@ def test_clone_https_fallback_to_ssh(tmp_path: Path, monkeypatch):
 
     monkeypatch.setattr(skill_git, "_run", mock_run)
     dest = tmp_path / "cloned"
+    if reserved_empty:
+        dest.mkdir()  # operation-owned empty reservation is a native Git target
     result = clone("https://github.com/foo/bar", dest, ref=None, env=None)
     assert len(calls) == 2
     assert "https://github.com/foo/bar" in calls[0]
@@ -819,3 +822,20 @@ def test_remote_matches_none_parent_url_is_false(tmp_path):
     bare = tmp_path / "r"
     _bare_repo_on(bare, "https://github.com/o/r", "main")
     assert remote_matches(bare, None, None) is False
+
+
+def test_remote_matches_honors_rewrite_without_losing_recorded_origin(git_sandbox):
+    """A rewritten clone URL must not make its existing checkout look foreign."""
+    repo = git_sandbox.clone
+    original = "https://example.invalid/team/skill.git"
+    rewritten = git_sandbox.upstream.as_uri()
+    for args in (
+        ["remote", "set-url", "origin", original],
+        ["config", f"url.{rewritten}.insteadOf", original],
+    ):
+        subprocess.run(["git", "-C", str(repo), *args],
+                       check=True, env=git_sandbox.env, capture_output=True)
+
+    assert skill_git.remote_url(repo, env=git_sandbox.env) == original
+    assert skill_git.remote_matches(repo, rewritten, git_sandbox.env)
+    assert not skill_git.remote_matches(repo, "https://foreign.invalid/other.git", git_sandbox.env)

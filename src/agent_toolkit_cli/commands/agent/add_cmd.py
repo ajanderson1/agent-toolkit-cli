@@ -35,6 +35,8 @@ from agent_toolkit_cli.agent_lock import (
 )
 from agent_toolkit_cli.agent_paths import (
     agent_parent_clone_path,
+    checked_agent_content,
+    registered_agent_paths, refresh_agent_repo, acquire_agent_parent, validate_agent_revision,
     library_agent_path,
     library_lock_path,
 )
@@ -110,8 +112,8 @@ def _add_single(parsed: ParsedSource, slug: str | None) -> None:
 
     existing_entry = lock.skills.get(final_slug)
     if existing_entry is not None:
-        requested = parsed.owner_repo or parsed.url
-        if existing_entry.source != requested:
+        requested = parsed.identity
+        if existing_entry.source != requested or existing_entry.ref != parsed.ref:
             raise click.ClickException(
                 f"{final_slug}: library entry exists with source "
                 f"{existing_entry.source!r}; refusing to overwrite with "
@@ -123,12 +125,16 @@ def _add_single(parsed: ParsedSource, slug: str | None) -> None:
 
     canonical = library_agent_path(final_slug)
     fresh_clone = False
+    if (canonical.exists() or canonical.is_symlink()) and (
+        canonical.is_symlink() or not skill_git.is_git_repo(canonical)
+        or not skill_git.remote_matches(canonical, parsed.url, None)
+    ):
+        raise click.ClickException(f"{final_slug}: cannot prove canonical source ownership")
     if not canonical.exists():
-        canonical.parent.mkdir(parents=True, exist_ok=True)
         try:
-            skill_git.clone_pinned_or_branch(
-                parsed.url, canonical, ref=parsed.ref, env=None,
-            )
+            acquire_agent_parent(canonical,
+                lambda stage: skill_git.clone_pinned_or_branch(parsed.url, stage, ref=parsed.ref, env=None),
+                registered_agent_paths(canonical, library=lock), new_agent=(final_slug, ""))
         except skill_git.GitError as exc:
             raise click.ClickException(f"clone failed: {exc}") from exc
         fresh_clone = True
@@ -145,7 +151,10 @@ def _add_single(parsed: ParsedSource, slug: str | None) -> None:
     # don't leave an unreclaimable orphan. Only fires for a fresh clone — a
     # pre-existing canonical (idempotent re-run with correct --slug) is left
     # alone.
-    content_file = canonical / f"{final_slug}.md"
+    # Existing flat packages often carry repository-maintenance AGENTS.md.
+    # Prefer the actual flat entry when present; directory packages have only
+    # AGENTS.md and record that choice explicitly.
+    content_file = canonical / (f"{final_slug}.md" if (canonical / f"{final_slug}.md").is_file() else "AGENTS.md")
     if not content_file.exists():
         if fresh_clone:
             shutil.rmtree(canonical, ignore_errors=True)
@@ -154,6 +163,13 @@ def _add_single(parsed: ParsedSource, slug: str | None) -> None:
             f"{parsed.url!r}; expected <slug>.md at the repo root. "
             f"Pass --slug to match the source's content file."
         )
+
+    try:
+        checked_agent_content(canonical, content_file.name, final_slug)
+    except Exception as exc:
+        if fresh_clone:
+            shutil.rmtree(canonical)
+        raise click.ClickException(str(exc)) from exc
 
     if skill_git.is_git_repo(canonical):
         try:
@@ -173,10 +189,10 @@ def _add_single(parsed: ParsedSource, slug: str | None) -> None:
         local_sha = None
 
     entry = LockEntry(
-        source=parsed.owner_repo or parsed.url,
+        source=parsed.identity,
         source_type=parsed.type,
         ref=parsed.ref,
-        agent_path=f"{final_slug}.md",
+        agent_path=content_file.name,
         upstream_sha=upstream_sha,
         local_sha=local_sha,
     )
@@ -202,61 +218,70 @@ def _add_monorepo(parsed: ParsedSource, slug: str | None) -> None:
     # The agent slug is the LAST segment of the subpath (its directory name),
     # not the repo name. `--slug` overrides for the rare rename case.
     final_slug = slug or Path(subpath).name
+    library_dir = library_agent_path(final_slug)  # validate slug before writes
+    if Path(subpath).is_absolute() or ".." in Path(subpath).parts or "\\" in subpath:
+        raise click.UsageError("agent subpath must be a safe repository-relative directory")
+    lock_path = library_lock_path()
+    lock = read_lock(lock_path)  # malformed locks must not advance shared backing
+    existing_entry = lock.skills.get(final_slug)
+    if existing_entry is not None:
+        recorded = existing_entry.agent_path or f"{final_slug}.md"
+        if (existing_entry.source != parsed.owner_repo or existing_entry.ref != parsed.ref
+                or Path(recorded).parent != Path(subpath)
+                or Path(recorded).name not in (f"{final_slug}.md", "AGENTS.md")
+                or existing_entry.parent_url is None
+                or skill_git.normalise_git_url(existing_entry.parent_url) != skill_git.normalise_git_url(parsed.url)):
+            raise click.ClickException(f"{final_slug}: conflicting source/ref/path identity; refusing re-registration")
 
     parent_dir = agent_parent_clone_path(owner, repo, ref=parsed.ref, env=None)
+    paths = registered_agent_paths(parent_dir, library=lock)
+    if existing_entry is not None:
+        paths[final_slug] = existing_entry.agent_path
+    new_agent = None if existing_entry is not None else (final_slug, subpath)
     if not parent_dir.exists():
-        parent_dir.parent.mkdir(parents=True, exist_ok=True)
         try:
-            skill_git.clone_pinned_or_branch(
-                parsed.url, parent_dir, ref=parsed.ref, env=None,
-            )
+            _head, chosen = acquire_agent_parent(parent_dir,
+                lambda stage: skill_git.clone_pinned_or_branch(parsed.url, stage, ref=parsed.ref, env=None),
+                paths, new_agent=new_agent)
         except Exception as exc:
-            raise click.ClickException(f"parent clone failed: {exc}") from exc
+            raise click.ClickException(f"parent clone refused: {exc}") from exc
     else:
-        # Refresh the shared parent cache so a *growing* category repo resolves
-        # agents added after this cache was first cloned (#276 class). fetch
-        # alone advances the remote-tracking ref but leaves the working tree
-        # pinned; the hard reset moves it onto the new tip. The parent is a
-        # read-only cache, so the reset is safe. NEVER rmtree it — it is shared
-        # across every agent from this repo (unlike the single-repo fresh-clone
-        # cleanup, which owns its whole clone).
-        ref = skill_git.resolve_ref(parsed.ref, parent_dir)
+        if not skill_git.remote_matches(parent_dir, parsed.url, None):
+            raise click.ClickException(f"{final_slug}: shared parent has a foreign origin: {parent_dir}")
+        if skill_git.status(parent_dir, env=None) != skill_git.GitWorkingTreeStatus.CLEAN:
+            raise click.ClickException(f"{final_slug}: dirty shared parent: {parent_dir}")
+        # Never reset a shared checkout: a clean fast-forward is the only
+        # permitted refresh. A divergent cache remains intact for inspection.
+        if parsed.ref is not None and not skill_git._checked_out_at_ref(parent_dir, parsed.ref, None):
+            raise click.ClickException(f"{final_slug}: shared parent ref conflict at {parent_dir}")
+        from agent_toolkit_cli.skill_lock import looks_like_sha
         try:
-            skill_git.fetch_ref(parent_dir, ref=ref, env=None)
-            skill_git.reset_hard(parent_dir, ref=ref, env=None)
-        except Exception as exc:
-            click.echo(
-                f"warning: parent refresh failed for {parent_dir}: {exc}",
-                err=True,
-            )
+            if looks_like_sha(parsed.ref):
+                chosen = validate_agent_revision(parent_dir, skill_git.head_sha(parent_dir, env=None), paths, new_agent=new_agent)
+            else:
+                _head, chosen = refresh_agent_repo(parent_dir, source_url=parsed.url, ref=parsed.ref,
+                                                  paths=paths, new_agent=new_agent)
+        except (skill_git.GitError, RuntimeError) as exc:
+            raise click.ClickException(f"{final_slug}: parent refresh refused: {exc}") from exc
 
     agent_root = parent_dir / subpath
-    content_rel = f"{subpath}/{final_slug}.md"
-    if not (agent_root / f"{final_slug}.md").exists():
+    content_rel = existing_entry.agent_path if existing_entry is not None else chosen
+    filename = Path(content_rel).name
+    if not (agent_root / filename).is_file():
         # Do NOT rmtree the shared parent on a missing content file.
         raise click.ClickException(
             f"{final_slug}: content file {content_rel} not found in parent "
             f"{parsed.owner_repo}; expected <subpath>/<slug>.md."
         )
 
-    lock_path = library_lock_path()
-    lock = read_lock(lock_path)
-    existing_entry = lock.skills.get(final_slug)
+    try:
+        checked_agent_content(parent_dir, content_rel, final_slug)
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
     if existing_entry is not None:
-        requested = parsed.owner_repo
-        if (existing_entry.source != requested
-                or existing_entry.agent_path != content_rel):
-            raise click.ClickException(
-                f"{final_slug}: library entry exists with source "
-                f"{existing_entry.source!r} agentPath="
-                f"{existing_entry.agent_path!r}; refusing to overwrite with "
-                f"{requested!r} agentPath={content_rel!r}. "
-                f"Run `agent remove {final_slug}` first."
-            )
         click.echo(f"already in library: {final_slug}")
         return
 
-    library_dir = library_agent_path(final_slug)
     materialised = "symlink"
     if not library_dir.exists() and not library_dir.is_symlink():
         materialised = _symlink_or_copy(agent_root, library_dir)

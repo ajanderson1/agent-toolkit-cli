@@ -8,6 +8,8 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.usefixtures("isolated_project_backing")
+
 from agent_toolkit_cli import skill_install
 from agent_toolkit_cli._install_core import InstallPlan
 from agent_toolkit_cli.skill_install import InstallError, install, uninstall

@@ -20,6 +20,8 @@ import json
 from pathlib import Path
 
 import pytest
+
+pytestmark = pytest.mark.usefixtures("isolated_project_backing")
 from click.testing import CliRunner
 
 from agent_toolkit_cli.cli import main
@@ -203,9 +205,6 @@ def test_install_uninstall_project_round_trip(
     project.mkdir()
     _seed_global_canonical(tmp_path)
     _write_global_lock(tmp_path)
-
-    # Seed the project canonical so install can find the content file.
-    _seed_project_canonical(project)
 
     runner = CliRunner()
 
@@ -1161,8 +1160,10 @@ def test_import_category_repo_reuses_exact_parent_and_projects_agents(
     }))
     original_clone = skill_git.clone
     clones: list[Path] = []
+    parent = agent_parent_clone_path("test", "agent-bundle", ref=None)
 
     def clone(url, dest, *, ref, env, depth=None):
+        assert not parent.exists(), "prospective checkout must not be visible while cloning"
         clones.append(dest)
         return original_clone(
             str(git_sandbox.upstream), dest, ref=ref, env=env, depth=depth,  # type: ignore[union-attr]
@@ -1174,7 +1175,9 @@ def test_import_category_repo_reuses_exact_parent_and_projects_agents(
 
     assert result.exit_code == 0, result.output
     parent = agent_parent_clone_path("test", "agent-bundle", ref=None)
-    assert clones == [parent]
+    assert len(clones) == 1, "registered siblings still share one acquired parent"
+    assert clones[0] != parent and not clones[0].exists(), "staged clone was validated then moved"
+    assert parent.is_dir()
     assert skill_git.head_sha(parent, env=None) == pin
     for slug, relative in {
         "alpha": "agents/alpha",
@@ -1813,7 +1816,6 @@ def test_project_install_writes_lock_and_list_shows_it(
     project.mkdir()
     _seed_global_canonical(tmp_path)
     _write_global_lock(tmp_path)
-    _seed_project_canonical(project)
 
     runner = CliRunner()
     r_install = runner.invoke(

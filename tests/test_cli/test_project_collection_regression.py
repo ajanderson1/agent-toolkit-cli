@@ -53,7 +53,7 @@ def snapshot(root):
 
 
 @pytest.fixture
-def project_collection(tmp_path, monkeypatch):
+def project_collection(tmp_path, monkeypatch, isolated_project_backing):
     source_root = Path(__file__).resolve().parents[2] / "src"
     for module in (skill_collection_register, skill_collections, skill_doctor, skill_git,
                    skill_command, tui_app, skill_state):

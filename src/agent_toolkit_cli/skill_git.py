@@ -154,6 +154,7 @@ def clone(
     clone_env["GIT_TERMINAL_PROMPT"] = "0"
     clone_env.setdefault("GIT_SSH_COMMAND", "ssh -o BatchMode=yes")
     destination_existed = dest.exists() or dest.is_symlink()
+    reserved_empty = dest.is_dir() and not dest.is_symlink() and not any(dest.iterdir())
     try:
         proc = _run(cmd, env=clone_env)
     except GitError as exc:
@@ -161,7 +162,10 @@ def clone(
         auth_failure = any(message in exc.stderr.lower() for message in (
             "not found", "authentication failed", "could not read username",
         ))
-        if m and auth_failure and not destination_existed and not dest.exists() and not dest.is_symlink():
+        retry_empty = not dest.is_symlink() and (
+            not dest.exists() or (dest.is_dir() and not any(dest.iterdir()))
+        )
+        if m and auth_failure and (not destination_existed or reserved_empty) and retry_empty:
             owner, repo_name = m.group(1), m.group(2)
             ssh_url = f"git@github.com:{owner}/{repo_name}.git"
             ssh_cmd = list(cmd)
@@ -353,7 +357,7 @@ def current_branch(repo: Path, *, env: dict[str, str] | None) -> str:
 
 def remote_url(repo: Path, *, env: dict[str, str] | None) -> str:
     proc = _run(
-        ["git", "-C", str(repo), "remote", "get-url", "origin"], env=env,
+        ["git", "-C", str(repo), "config", "--get", "remote.origin.url"], env=env,
     )
     return proc.stdout.strip()
 
@@ -372,13 +376,13 @@ def normalise_git_url(url: str) -> str:
     back to lowercase + trailing-`.git` strip + trailing-slash strip, so
     local paths and unfamiliar URL forms still round-trip sensibly.
     """
-    u = url.strip().lower()
+    u = url.strip()
     if (m := _SSH_GIT_URL_RE.match(u)):
-        return f"{m.group(1)}/{m.group(2)}"
+        return f"{m.group(1).lower()}/{m.group(2)}"
     if (m := _HTTPS_GIT_URL_RE.match(u)):
-        return f"{m.group(1)}/{m.group(2)}"
+        return f"{m.group(1).lower()}/{m.group(2)}"
     if (m := _SSH_URL_RE.match(u)):
-        return f"{m.group(1)}/{m.group(2)}"
+        return f"{m.group(1).lower()}/{m.group(2)}"
     u = u.rstrip("/")
     if u.endswith(".git"):
         u = u[:-4]
@@ -402,6 +406,13 @@ def remote_matches(
         return False
     try:
         actual = remote_url(repo, env=env)
+        if normalise_git_url(actual) == normalise_git_url(parent_url):
+            return True
+        # Keep provenance reads raw, but compare Git's effective URL when a
+        # lock's clone URL has already been expanded through insteadOf.
+        actual = _run(
+            ["git", "-C", str(repo), "remote", "get-url", "origin"], env=env,
+        ).stdout.strip()
     except GitError:
         return False
     return normalise_git_url(actual) == normalise_git_url(parent_url)

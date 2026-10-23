@@ -199,6 +199,7 @@ nav:
     - TUI settings schema: agent-toolkit/tui-settings.md
     - Bundles: agent-toolkit/bundles.md
     - Lock files: agent-toolkit/lock-files.md
+    - Project backing and migration: agent-toolkit/project-backing.md
     - Skill lock (deep dive): agent-toolkit/skill-lock.md
     - Roadmap: agent-toolkit/roadmap.md
   - Glossary: glossary.md

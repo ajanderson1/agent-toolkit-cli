@@ -3,7 +3,7 @@
 Skills are `SKILL.md` folders with optional references, scripts and supporting files. **Add registers library content; install makes it visible.** Canonicals are standalone Git checkouts or symlinks into shared parent checkouts; harness projections point to those canonicals.
 
 - Global library: `~/.agent-toolkit/skills/`; global lock: `~/.agent-toolkit/skills-lock.json`.
-- Project backing store: `~/.agent-toolkit/projects/<id>/skills/`, outside the consumer repo; project lock: `<project>/skills-lock.json`.
+- New project projections share the central library; project lock: `<project>/skills-lock.json`. Recorded legacy private stores remain usable. See [project backing and explicit migration](../agent-toolkit/project-backing.md).
 - Standard visibility: `.agents/skills/<slug>` (project), `~/.agents/skills/<slug>` (global). Other harnesses use their catalog-specific slots.
 - `AGENT_TOOLKIT_SKILLS_ROOT` relocates the skills library and associated state; it is not an override for every kind.
 
@@ -20,7 +20,7 @@ Scope defaults differ by verb; add/remove/import are library-only. Read/update/p
 
 ## Collections and ownership
 
-Repository-wide add registers all real children (including a genuine root); explicit subpaths, `--skill NAME` or `--path PATH` select one. `--path` selects the recorded repository-relative directory even when its slug differs from its frontmatter name. Parent checkouts are shared by source/ref under `skills/_parents/`. A TUI collection groups these real entries rather than introducing another kind or lock schema. Source-batch install uses persisted membership, not future upstream discovery.
+Repository-wide add registers all real children (including a genuine root); explicit subpaths, `--skill NAME` or `--path PATH` select one. `--path` selects the recorded repository-relative directory even when its slug differs from its frontmatter name; `--path .` selects a real root. This is library-only registration and cannot be combined with `--source`, `--skill` or a source child selector. Absolute/traversal/escaping paths and conflicting source/ref/path/slug identities are refused; local Git repositories use `file://`. Parent checkouts are shared by source/ref under `skills/_parents/`. A TUI collection groups these real entries rather than introducing another kind or lock schema. Source-batch install uses persisted membership, not future upstream discovery.
 
 Owned monorepo push commits only the selected child subpath and opens a PR by default; third-party read-only parents refuse push. Update merges upstream; reset is explicitly destructive. Repeated add preserves local work and does not advance the shared checkout. Legacy rootless wrappers reconcile only during targeted install/selection-changing Apply. Missing `SKILL.md` is unhealthy; unsafe root+nested exposure combinations refuse before writes. [Storage/Git deep dive](../agent-toolkit/skill-lock.md) · [Collection controls and recovery](../agent-toolkit/tui.md#skill-collections).
 

@@ -606,8 +606,8 @@ async def test_apply_error_names_slug_exactly_once(monkeypatch, tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_apply_project_scope_seeds_canonical(monkeypatch, tmp_path):
-    """Project scope apply copies global canonical to project when missing."""
+async def test_apply_project_scope_delegates_backing_to_engine(monkeypatch, tmp_path):
+    """TUI must not independently copy private backing; the shared engine decides."""
     from agent_toolkit_tui.app import TUIApp
     import agent_toolkit_cli.agent_install as _ai
     import agent_toolkit_cli.agent_paths as _ap
@@ -668,8 +668,8 @@ async def test_apply_project_scope_seeds_canonical(monkeypatch, tmp_path):
         app._apply_agent_pending()
         footer = str(app.query_one("#footer-pending", Static).render())
 
-    # copytree was called because project canonical was missing.
-    assert copytree_calls, "expected shutil.copytree to seed project canonical"
+    assert not copytree_calls, "TUI must leave backing selection to the engine"
+    assert apply_calls == [{"slug": "my-agent", "scope": "project"}]
     assert "applied:" in footer
 
 

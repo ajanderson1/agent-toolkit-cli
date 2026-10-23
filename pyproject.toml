@@ -11,6 +11,9 @@ dependencies = [
     "tomlkit>=0.13",
 ]
 
+[project.urls]
+Repository = "https://github.com/ajanderson1/agent-toolkit-cli"
+
 [project.scripts]
 agent-toolkit-cli = "agent_toolkit_cli.cli:main"
 agent-toolkit-tui = "agent_toolkit_tui.app:main"

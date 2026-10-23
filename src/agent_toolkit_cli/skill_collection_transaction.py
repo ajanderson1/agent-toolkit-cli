@@ -92,6 +92,7 @@ def copy_fingerprint(root: Path) -> tuple:
 class Journal:
     def __init__(self) -> None:
         self.links: list[tuple[Path, Path | None, Path | None]] = []
+        self.link_identities: dict[int, tuple[int, int]] = {}
         self.records: list[tuple[Path, dict, dict]] = []
         self.guards: list[tuple[Path, dict]] = []
         self.parents: dict[Path, Path] = {}
@@ -116,9 +117,10 @@ class Journal:
             raise InstallError(f"Ownership changed immediately before write: {path}")
         if before == after:
             return
-        self.links.append((path, before, after))
+        record_index = len(self.links)
         if before is not None:
             path.unlink()
+            self.links.append((path, before, None))  # actual removal, not intent
         if after is not None:
             path.parent.mkdir(parents=True, exist_ok=True)
             if path in self.parents and path.parent.resolve() != self.parents[path]:
@@ -130,6 +132,12 @@ class Journal:
                     f"Ownership changed immediately before create: {path}"
                 )
             path.symlink_to(after)
+            identity = path.lstat()
+            if before is None:
+                self.links.append((path, None, after))
+            else:
+                self.links[record_index] = (path, before, after)
+            self.link_identities[record_index] = (identity.st_dev, identity.st_ino)
 
     def copy(self, path: Path, source: Path) -> None:
         expected = copy_fingerprint(source)
@@ -216,13 +224,18 @@ class Journal:
                 shutil.rmtree(path)
             except (OSError, InstallError) as exc:
                 errors.append(str(exc))
-        for path, before, after in reversed(self.links):
+        for index in reversed(range(len(self.links))):
+            path, before, after = self.links[index]
             try:
                 current = link_state(path)
                 if current == before:
                     continue
                 if current != after:
                     raise InstallError(f"link recovery conflict: {path} -> {current}")
+                if after is not None:
+                    identity = path.lstat()
+                    if (identity.st_dev, identity.st_ino) != self.link_identities.get(index):
+                        raise InstallError(f"link replacement preserved during recovery: {path}")
                 recovery = Journal()
                 recovery.guards = self.guards
                 recovery.parents = self.parents

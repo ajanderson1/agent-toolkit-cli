@@ -124,13 +124,19 @@ def _entry_to_dict(e: LockEntry) -> dict:
 
 
 def read_lock(path: Path) -> LockFile:
+    from agent_toolkit_cli.skill_lock import LockFormatError, validate_entries
     try:
         data = json.loads(path.read_text())
     except FileNotFoundError:
         return LockFile(version=CURRENT_VERSION, skills={})
-    version = int(data.get("version", CURRENT_VERSION))
+    except json.JSONDecodeError as exc:
+        raise LockFormatError(f"Malformed lock {path}: {exc}") from exc
+    if not isinstance(data, dict):
+        raise LockFormatError(f"Malformed lock {path}: expected an object")
+    version = data.get("version", CURRENT_VERSION)
     if version not in SUPPORTED_VERSIONS:
-        raise ValueError(f"unsupported commands lock version: {version}")
+        raise LockFormatError(f"unsupported commands lock version: {version}")
+    validate_entries(data.get("skills", {}), path)
     skills = {slug: _entry_from_dict(entry) for slug, entry in data.get("skills", {}).items()}
     extras = {k: v for k, v in data.items() if k not in {"version", "skills"}}
     return LockFile(version=version, skills=skills, wrapper_extras=extras)
@@ -143,7 +149,9 @@ def write_lock(path: Path, lock: LockFile) -> None:
     }
     data.update(lock.wrapper_extras)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
+    temporary = path.with_name(f".{path.name}.tmp")
+    temporary.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
+    temporary.replace(path)
 
 
 def add_entry(lock: LockFile, slug: str, entry: LockEntry) -> LockFile:
@@ -162,6 +170,10 @@ def clone_url_from_entry(e: LockEntry) -> str:
     url = e.extras.get("sourceUrl")
     if isinstance(url, str) and url:
         return url
+    if e.parent_url:
+        return e.parent_url
+    if "://" in e.source or e.source.startswith("git@"):
+        return e.source
     if e.source_type == "github" and "/" in e.source:
         return f"https://github.com/{e.source}.git"
     if e.source_type == "gitlab" and "/" in e.source:

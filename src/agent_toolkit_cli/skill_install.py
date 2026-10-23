@@ -200,13 +200,29 @@ def _current_linked_agents(
 
 
 def apply(
+    plan: InstallPlan, *, home: Path | None = None,
+    project: Path | None = None, env: dict[str, str] | None = None,
+) -> InstallResult:
+    from agent_toolkit_cli.project_backing import new_install_paths, cleanup_created_paths
+    with new_install_paths() as created:
+        result = _apply(plan, home=home, project=project, env=env, _created_paths=created)
+        if plan.scope == "project" and any(path == result.canonical_path for path, _dev, _ino in created):
+            from agent_toolkit_cli.skill_lock import read_lock
+            if plan.slug not in read_lock(lock_file_path(scope="project", project=project)).skills:
+                cleanup_created_paths(created)
+        return result
+
+
+def _apply(
     plan: InstallPlan,
     *,
     home: Path | None = None,
     project: Path | None = None,
     env: dict[str, str] | None = None,
+    _created_paths=None,
 ) -> InstallResult:
-    """Execute the plan."""
+    """Execute the plan; retain only successfully registered new state."""
+    from agent_toolkit_cli.project_backing import create_backing_dir, record_created_path
     from agent_toolkit_cli.skill_lock import (
         LockEntry, add_entry, read_lock, write_lock,
     )
@@ -235,6 +251,13 @@ def apply(
         project=project,
     )
 
+    if plan.scope == "project" and (plan.add_agents or plan.source is not None):
+        from agent_toolkit_cli._paths_core import SKILL_BINDING
+        from agent_toolkit_cli.project_backing import check_creation
+        check_creation(SKILL_BINDING, plan.slug, project, home=home)
+        if plan.source is None:
+            from agent_toolkit_cli.skill_paths import library_lock_path
+            ensure_project_canonical(slug=plan.slug, project=project, global_lock_path=library_lock_path(), write_entry=False, _created_paths=_created_paths)
     canonical = canonical_skill_dir(
         plan.slug, scope=plan.scope, home=home, project=project,
     )
@@ -244,12 +267,12 @@ def apply(
 
     # Clone canonical if needed.
     if plan.source is not None and not canonical.exists():
-        canonical.parent.mkdir(parents=True, exist_ok=True)
+        create_backing_dir(canonical, _created_paths)
         skill_git.clone_pinned_or_branch(
             plan.source.url, canonical, ref=plan.ref, env=env,
         )
     elif plan.source is not None and existing_entry is not None:
-        requested = plan.source.owner_repo or plan.source.url
+        requested = plan.source.identity
         if existing_entry.source != requested:
             raise LockMismatchError(
                 f"{plan.slug}: canonical exists with source "
@@ -275,6 +298,10 @@ def apply(
                 else _project_standard_link(project, plan.slug)
             )
             link.parent.mkdir(parents=True, exist_ok=True)
+            if link == canonical and link.is_dir() and not link.is_symlink():
+                # A recorded pre-external-store install is its own projection.
+                # Keep it intact until explicit central migration.
+                continue
             if link.is_symlink():
                 if link.resolve() != canonical.resolve():
                     raise InstallError(
@@ -290,6 +317,7 @@ def apply(
             else:
                 link.symlink_to(canonical)
                 created.append(link)
+                record_created_path(link, _created_paths)
             continue
 
         skip, reason = _should_skip_symlink(
@@ -318,6 +346,7 @@ def apply(
         else:
             link.symlink_to(canonical)
             created.append(link)
+            record_created_path(link, _created_paths)
 
     # Remove symlinks.
     removed: list[Path] = []
@@ -371,15 +400,26 @@ def apply(
             upstream_sha = None
             local_sha = None
         entry = LockEntry(
-            source=plan.source.owner_repo or plan.source.url,
+            source=plan.source.identity,
             source_type=plan.source.type,
             ref=plan.ref,
             skill_path="SKILL.md",
             upstream_sha=upstream_sha,
             local_sha=local_sha,
+            extras={"projectBacking": "central" if canonical == canonical_skill_dir(plan.slug, scope="global", home=home) else "isolated"} if plan.scope == "project" else {},
         )
         write_lock(lock_path, add_entry(lock, plan.slug, entry))
         lock_action = "added" if existing_entry is None else "updated"
+
+    if plan.scope == "project" and plan.source is None and existing_entry is None and plan.add_agents and len(skipped) < len(plan.add_agents):
+        from dataclasses import replace
+        from agent_toolkit_cli.skill_paths import library_lock_path
+        global_entry = read_lock(library_lock_path()).skills.get(plan.slug)
+        if global_entry is not None:
+            entry = replace(global_entry, upstream_sha=None, local_sha=None,
+                extras={**global_entry.extras, "projectBacking": "central" if canonical == canonical_skill_dir(plan.slug, scope="global", home=home) else "isolated"})
+            write_lock(lock_path, add_entry(lock, plan.slug, entry))
+            lock_action = "added"
 
     return InstallResult(
         plan=plan,
@@ -448,6 +488,8 @@ def ensure_project_canonical(
     project: Path,
     global_lock_path: Path,
     env: dict[str, str] | None = None,
+    write_entry: bool = True,
+    _created_paths=None,
 ) -> Path:
     """If <project>/.agents/skills/<slug>/ doesn't exist, clone it from the
     global library lock's recorded source URL. Returns the canonical path.
@@ -462,6 +504,11 @@ def ensure_project_canonical(
     Raises InstallError if the slug is not in the global library lock and the
     install is not already complete at project scope.
     """
+    from agent_toolkit_cli.project_backing import new_install_paths, create_backing_dir, record_created_path
+    if _created_paths is None:
+        with new_install_paths() as created:
+            return ensure_project_canonical(slug=slug, project=project,
+                global_lock_path=global_lock_path, env=env, write_entry=write_entry, _created_paths=created)
     from agent_toolkit_cli.skill_lock import (
         LockEntry, add_entry, clone_url_from_entry, read_lock, write_lock,
     )
@@ -469,8 +516,20 @@ def ensure_project_canonical(
         canonical_skill_dir, lock_file_path, parent_clone_path, project_parents_root,
     )
 
-    migrate_project_canonical(project=project, slug=slug)
-    project_canonical = canonical_skill_dir(slug, scope="project", project=project)
+    # Selection is shared with the TUI and all engine entry points. Never
+    # automatically move/remove an old in-tree or external private checkout.
+    from agent_toolkit_cli._paths_core import SKILL_BINDING
+    from agent_toolkit_cli.project_backing import check_creation, ensure
+    project_canonical = check_creation(SKILL_BINDING, slug, project)
+    from agent_toolkit_cli.skill_paths import library_skill_path
+    if project_canonical == library_skill_path(slug):
+        return ensure(SKILL_BINDING, slug, project, write_entry=write_entry, created_paths=_created_paths)
+    # Existing private work is usable irrespective of rollout configuration.
+    # Only missing backing requires deliberately enabled legacy creation.
+    if not project_canonical.exists():
+        from agent_toolkit_cli.behavior import project_backing
+        if project_backing() != "isolated":
+            raise InstallError(f"{slug}: private backing missing; restore it or explicitly migrate to central")
 
     # Already fully installed at project scope (canonical on disk + project
     # lock entry)? Nothing to ensure — return without consulting the global
@@ -487,6 +546,8 @@ def ensure_project_canonical(
     entry = global_lock.skills.get(slug)
     if entry is None:
         raise InstallError(f"{slug}: not in global library")
+    from agent_toolkit_cli.project_backing import _validate_entry
+    _validate_entry(entry, slug)
 
     if entry.parent_url is not None:
         # Monorepo skill: clone the parent into the project-local _parents/
@@ -508,7 +569,7 @@ def ensure_project_canonical(
             root=project_parents_root(project), env=env,
         )
         if not parent_dir.exists():
-            parent_dir.parent.mkdir(parents=True, exist_ok=True)
+            create_backing_dir(parent_dir, _created_paths)
             # Cache key (parent_clone_path above) stays on the raw ref; the
             # clone honours a SHA pin via clone-at-HEAD + checkout (#345).
             skill_git.clone_pinned_or_branch(
@@ -528,6 +589,7 @@ def ensure_project_canonical(
         if not project_canonical.exists() and not project_canonical.is_symlink():
             project_canonical.parent.mkdir(parents=True, exist_ok=True)
             project_canonical.symlink_to(skill_root)
+            record_created_path(project_canonical, _created_paths)
         if project_canonical.is_symlink() and not project_canonical.exists():
             raise InstallError(
                 f"{slug}: canonical symlink at {project_canonical} is broken "
@@ -535,7 +597,7 @@ def ensure_project_canonical(
             )
     elif not project_canonical.exists():
         # Single-skill repo: clone the repo root flat into the canonical dir.
-        project_canonical.parent.mkdir(parents=True, exist_ok=True)
+        create_backing_dir(project_canonical, _created_paths)
         source_url = clone_url_from_entry(entry)
         skill_git.clone_pinned_or_branch(
             source_url, project_canonical, ref=entry.ref, env=env,
@@ -543,7 +605,7 @@ def ensure_project_canonical(
 
     project_lock_path = lock_file_path(scope="project", project=project)
     project_lock = read_lock(project_lock_path)
-    if slug not in project_lock.skills:
+    if write_entry and slug not in project_lock.skills:
         proj_entry = LockEntry(
             source=entry.source,
             source_type=entry.source_type,
@@ -616,7 +678,7 @@ def uninstall(
     project: Path | None,
     harnesses: tuple[str, ...],
 ) -> None:
-    """Legacy 5-harness shortcut: full remove (every symlink + canonical)."""
+    """Legacy shortcut: detach projects (retaining private provenance); global full removal."""
     p = plan(
         slug=slug, scope=scope,
         source=None, ref=None,
@@ -626,14 +688,14 @@ def uninstall(
     apply(p, home=home, project=project, env=None)
 
     if scope == "project":
-        # Non-destructive: projection symlinks removed by apply() above; drop
-        # only the project lock entry. The external canonical is preserved so
-        # dirty work survives; doctor's orphan sweep reclaims it if unreferenced.
+        # Detach private backing without forgetting the provenance needed to
+        # reinstall it while new isolation is disabled. Central projections
+        # can drop their scope-only registration.
         from agent_toolkit_cli.skill_lock import read_lock, remove_entry, write_lock
 
         lock_path = lock_file_path(scope="project", project=project)
         lock = read_lock(lock_path)
-        if slug in lock.skills:
+        if (slug in lock.skills and canonical_skill_dir(slug, scope="project", home=home, project=project) == canonical_skill_dir(slug, scope="global", home=home)):
             write_lock(lock_path, remove_entry(lock, slug))
         return
 

@@ -6,10 +6,10 @@ ONE owned Markdown file that all covered harnesses consume.
 """
 from __future__ import annotations
 
-import shutil
 from pathlib import Path
 
 from agent_toolkit_cli._install_core import InstallError
+from agent_toolkit_cli.project_backing import write_projection, record_created_path, new_install_paths
 from agent_toolkit_cli.command_adapters.base import (
     ensure_regular_command_file,
     is_managed_file,
@@ -112,16 +112,17 @@ class StandardCommandAdapter:
         ensure_regular_command_file(source_file)
         dest = self.destination(slug, scope=scope, home=home, project=project)
         content = source_file.read_text()
-        created_new = False
-
         if not dest.exists() and not dest.is_symlink():
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            try:
-                dest.symlink_to(source_file)
-            except OSError:
-                shutil.copyfile(source_file, dest)
-            created_new = True
-            try:
+            # Direct adapter callers retain failure cleanup too; successful
+            # creation receipts join the facade's enclosing install scope.
+            with new_install_paths():
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                try:
+                    dest.symlink_to(source_file)
+                except OSError:
+                    write_projection(dest, b"", source=source_file)
+                else:
+                    record_created_path(dest)
                 write_sidecar(
                     dest,
                     slug=slug,
@@ -130,10 +131,6 @@ class StandardCommandAdapter:
                     canonical=source_file,
                     content=content,
                 )
-            except Exception:
-                if created_new and (dest.exists() or dest.is_symlink()):
-                    dest.unlink(missing_ok=True)
-                raise
             return dest
 
         if _resolves_to(dest, source_file):
@@ -166,7 +163,9 @@ class StandardCommandAdapter:
             try:
                 dest.symlink_to(source_file)
             except OSError:
-                shutil.copyfile(source_file, dest)
+                write_projection(dest, b"", source=source_file)
+            else:
+                record_created_path(dest)
             write_sidecar(
                 dest,
                 slug=slug,

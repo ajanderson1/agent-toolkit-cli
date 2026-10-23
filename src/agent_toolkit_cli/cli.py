@@ -35,6 +35,14 @@ _ASSET_COMMAND_ALIASES = {
 class AssetCommandGroup(click.Group):
     """Expose plural canonical asset groups while accepting singular aliases."""
 
+    def invoke(self, ctx: click.Context):
+        from agent_toolkit_cli._install_core import InstallError
+        from agent_toolkit_cli.skill_lock import LockFormatError
+        try:
+            return super().invoke(ctx)
+        except (InstallError, LockFormatError) as exc:
+            raise click.ClickException(str(exc)) from exc
+
     def get_command(self, ctx: click.Context, cmd_name: str) -> click.Command | None:
         command = super().get_command(ctx, cmd_name)
         if command is not None:

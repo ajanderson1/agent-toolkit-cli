@@ -15,6 +15,8 @@ def library_root(env: dict[str, str] | None = None) -> Path:
 
 
 def library_command_path(slug: str, *, env: dict[str, str] | None = None) -> Path:
+    from agent_toolkit_cli._paths_core import validate_asset_slug
+    validate_asset_slug(slug)
     return library_root(env) / slug
 
 
@@ -39,7 +41,8 @@ def canonical_command_dir(slug: str, *, scope: Scope, home: Path | None = None, 
         return library_command_path(slug)
     if project is None:
         raise ValueError("project scope requires project")
-    return project_store_root(project) / slug
+    from agent_toolkit_cli.project_backing import resolve
+    return resolve(COMMAND_BINDING, slug, project, home=home)
 
 
 def lock_file_path(*, scope: Scope, home: Path | None = None, project: Path | None = None) -> Path:

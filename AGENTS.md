@@ -5,6 +5,13 @@ harnesses: Skills, Agents, Commands, Instructions, Pi extensions and MCP servers
 Bundles is a separate installation utility, not a seventh kind. Canonical CLI
 groups are plural; singular aliases remain accepted.
 
+## Source of truth
+
+This checkout and `https://github.com/ajanderson1/agent-toolkit-cli` are the
+canonical CLI/TUI source. Build and install from verified canonical commits;
+the separate REGROUND checkout is historical, not another development authority.
+Record the source commit and wheel hash: the version string alone is insufficient.
+
 ## Operation
 
 - Project-default trust: **L3 (Conditional)**; raise on plan divergence,
@@ -31,6 +38,8 @@ groups are plural; singular aliases remain accepted.
 - Skills/Agents/Commands/Pi extensions use source-backed locks; Instructions uses
   actual canonical-file pointers, **no installation lock**. MCP library authority
   is `mcps-library.json`; its per-scope locks record projections.
+- `behavior.py`, `project_backing.py`: shared CLI/TUI backing configuration;
+  new projects use central sources by default, preserving existing private copies.
 - `src/agent_toolkit_tui/`: inventory, six grids, cross-kind pending queues;
   `settings.py` persists presentation only, never CLI targets.
 - `docs/agent-toolkit/`, `docs/asset-types/`: current public reference.

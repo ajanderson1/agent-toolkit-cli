@@ -12,6 +12,27 @@ Agents are delegable assistant definitions: canonical Markdown with frontmatter,
 
 Install defaults to Standard plus enabled non-covered adapters at that scope; uninstall is deliberately broader to remove legacy own-directory projections. Catalog/research support is not the same as an enabled adapter: **Codex and Firebender agent adapters remain disabled**. Harness-specific formats and limits live in the [matrix and harness pages](../matrix.md); Standard's per-scope reader sets live in `agent_adapters/standard.py`.
 
+## Complete directories
+
+An agent source may instead contain `AGENTS.md` with `MEMORY.md`, nested skills,
+scripts and resources. Registration/import retain the entire directory. Pi
+projection links that directory at `.pi/agents/<slug>` (global:
+`~/.pi/agent/agents/<slug>`); updates to backing remain visible through the link.
+Only the Pi directory projection is currently supported: single-file/translated
+adapters are reported skipped rather than flattening away resources. Legacy
+`<slug>.md` agents retain their existing adapters. Recorded `agentPath` selection
+is authoritative: a maintenance `AGENTS.md` beside a recorded flat entry does
+not turn it into a directory agent. New registrations prefer `<slug>.md` when
+both files exist. Entry/content symlinks that escape or substitute source paths
+are refused on registration and projection, including recorded monorepo paths.
+
+**Projection does not prove native Pi role, memory or skill loading**, install a
+subagent extension, or establish an agent runtime. Verify actual loading using
+the chosen native Pi setup from the real task location.
+
+New project backing is central by default; existing private installations are
+preserved. See [configuration and explicit migration](../agent-toolkit/project-backing.md).
+
 ## Use
 
 ```bash
@@ -22,7 +43,7 @@ agent-toolkit-cli agents doctor -p --no-fix
 agent-toolkit-cli agents uninstall reviewer -p --harnesses standard
 ```
 
-Add/remove/import are global-library operations. Install/uninstall default project; other scope-aware verbs infer from the agent project lock. Update merges upstream; push opens a PR unless `--direct`; reset requires explicit slugs and can discard local work. [CLI reference](../agent-toolkit/cli.md#agents).
+Add/remove/import are global-library operations. Install/uninstall default project; other scope-aware verbs infer from the agent project lock. Update fast-forwards clean, source-matching backing; push opens a PR unless `--direct`; reset requires explicit slugs and can discard local work. [CLI reference](../agent-toolkit/cli.md#agents).
 
 ## Ownership and inventory
 

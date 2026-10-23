@@ -6,10 +6,14 @@ calls skill_git.fetch + skill_git.merge, and updates lock SHAs on success.
 from __future__ import annotations
 
 import click
+from pathlib import Path
 
 from agent_toolkit_cli import skill_git
-from agent_toolkit_cli.agent_lock import read_lock, write_lock
-from agent_toolkit_cli.agent_paths import library_agent_path, lock_file_path
+from agent_toolkit_cli.agent_lock import read_lock, write_lock, clone_url_from_entry
+from agent_toolkit_cli.agent_paths import (
+    canonical_agent_dir, agent_git_root, registered_agent_paths, refresh_agent_repo, lock_file_path,
+)
+from agent_toolkit_cli._install_core import InstallError
 from agent_toolkit_cli.commands.agent._common import scope_and_roots, scope_banner
 
 
@@ -55,39 +59,28 @@ def update_cmd(
             had_error = True
             continue
 
-        canonical = library_agent_path(slug)
-        if not skill_git.is_git_repo(canonical):
-            click.echo(
-                f"{slug}: no .git/ in canonical — cannot update; "
-                f"remove and re-add to switch to git-managed"
-            )
-            had_error = True
-            continue
-
         entry = lock.skills[slug]
-        skill_git.fetch(canonical, env=None)
-        ref = skill_git.resolve_ref(entry.ref, canonical)
+        canonical = canonical_agent_dir(slug, scope=scope, home=home, project=project_root)
         try:
-            skill_git.merge(canonical, ref=ref, env=None)
-        except skill_git.GitError as exc:
-            click.echo(f"{slug}: conflict during merge (resolve in working copy)")
-            click.echo(exc.stderr)
+            root = agent_git_root(canonical, slug, entry, project=project_root if scope == "project" else None)
+            if entry.ref_looks_pinned:
+                click.echo(f"{slug}: SHA-pinned; unchanged")
+                continue
+            paths = registered_agent_paths(root, library=lock if scope == "global" else None,
+                                           scoped=lock if scope == "project" else None, project=project_root)
+            relative = entry.agent_path or f"{slug}.md"
+            paths[slug] = Path(relative).name if root == canonical.resolve() else relative
+            target, _chosen = refresh_agent_repo(root, source_url=clone_url_from_entry(entry), ref=entry.ref, paths=paths)
+        except (InstallError, skill_git.GitError) as exc:
+            click.echo(f"{slug}: update refused: {exc}")
             had_error = True
             continue
 
-        entry.local_sha = skill_git.head_sha(canonical, env=None)
-        try:
-            entry.upstream_sha = skill_git.remote_head_sha(
-                canonical, ref=ref, env=None,
-            )
-        except skill_git.GitError:
-            pass
-        # Memoise the detected default branch so the next update reads it from
-        # the lock instead of re-detecting (which can fire a network
-        # `set-head --auto` when origin/HEAD is unset). Only reached on the
-        # merge-success path, so a real, mergeable branch — never the fallback.
-        if entry.ref is None:
-            entry.ref = ref
+        entry.local_sha = skill_git.head_sha(root, env=None)
+        entry.upstream_sha = target
+        # Keep the requested ref identity (including None/default) separate
+        # from the branch observed for this update. Re-registration and cache
+        # selection must not silently become a different explicit request.
         write_lock(lock_path, lock)
         click.echo(f"{slug}: updated")
 
