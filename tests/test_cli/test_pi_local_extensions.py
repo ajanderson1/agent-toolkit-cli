@@ -120,7 +120,7 @@ def test_manifest_mixed_state_and_whole_directory_toggle(local):
     assert a.read_text() == "a" and b.read_text() == "b"
 
 
-@pytest.mark.parametrize("change", ["vanished", "added", "malformed", "invalid-list", "busy"])
+@pytest.mark.parametrize("change", ["vanished", "added", "malformed", "invalid-utf8", "invalid-list", "busy"])
 def test_invalid_or_stale_intent_never_writes_settings(local, change):
     home, project, path = local
     settings = home / ".pi/agent/settings.json"
@@ -131,6 +131,8 @@ def test_invalid_or_stale_intent_never_writes_settings(local, change):
         path.with_suffix(".js").write_text("new")
     elif change == "malformed":
         settings.write_text("{invalid")
+    elif change == "invalid-utf8":
+        settings.write_bytes(b"\xff")
     elif change == "invalid-list":
         put(settings, {"extensions": "not a list"})
     else:
@@ -236,3 +238,31 @@ def test_project_local_can_be_selected_globally_without_copying(local):
     assert read(home, project).global_enabled
     assert local_file.read_text() == "source"
     assert json.loads((home / ".pi/agent/settings.json").read_text())["extensions"] == [str(local_file), f"+{local_file}"]
+
+
+def test_project_override_of_project_file_selected_through_global_settings(local):
+    home, project, path = local
+    path.unlink()
+    target = project / ".pi/extensions/router.ts"
+    target.parent.mkdir(parents=True)
+    target.write_text("project")
+    put(home / ".pi/agent/settings.json", {"extensions": [str(target), f"-{target}"]})
+    assert not read(home, project).project_enabled
+    toggle(home, project, [target], True, "project")
+    state = read(home, project)
+    assert state.project_enabled and not state.global_enabled
+    assert json.loads((project / ".pi/settings.json").read_text())["extensions"] == [str(target), f"+{target}"]
+
+
+def test_conflicting_canonical_reference_is_not_a_successful_noop(local, tmp_path):
+    home, project, path = local
+    path.unlink()
+    target = tmp_path / "target.ts"
+    target.write_text("same source")
+    path.symlink_to(target)
+    settings = home / ".pi/agent/settings.json"
+    put(settings, {"extensions": [str(target)]})
+    before = settings.read_bytes()
+    with pytest.raises(PiSettingsError, match="conflicting"):
+        toggle(home, project, [path], True)
+    assert settings.read_bytes() == before

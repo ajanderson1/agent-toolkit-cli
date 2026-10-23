@@ -212,9 +212,10 @@ def test_standard_project_marker_is_present_only_for_a_globally_linked_asset(
         (
             "pi-extension",
             "pi",
-            "Enabled means referenced in that scope’s Pi settings.json. "
-            "Local files alone do not count as enabled. Library rows instead "
-            "show their symlink connection (linked). Space queues a change; Ctrl+S applies it.",
+            "Loose local extensions are enabled by native discovery unless settings exclude them; "
+            "project selection includes inherited global resources. ◐ means mixed entrypoints. "
+            "Packages use settings references; library rows show symlink connections (linked). "
+            "Space queues Enable/Disable; Ctrl+S applies it without deleting source files.",
         ),
     ],
 )

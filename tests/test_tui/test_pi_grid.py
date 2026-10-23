@@ -6,7 +6,7 @@ Covers:
 - toggle global/project queues link
 - toggle-twice clears
 - npm row toggles both scopes
-- untracked row is non-interactive no-op
+- loose local rows queue settings-only changes; local packages remain read-only
 - PendingChanged fires
 - apply store-owned global (monkeypatch apply)
 - apply npm global + project (monkeypatch add_package, assert scope/project args)
@@ -524,8 +524,8 @@ async def test_unmanaged_npm_info_body_gives_manual_removal_advice():
 
 
 @pytest.mark.asyncio
-async def test_untracked_row_is_non_interactive():
-    """Space on an untracked row has no effect."""
+async def test_loose_local_row_queues_and_cancels_disable():
+    """File ownership does not prevent queuing a native settings change."""
 
     class _A(App):
         def compose(self) -> ComposeResult:
@@ -541,8 +541,10 @@ async def test_untracked_row_is_non_interactive():
         table.focus()
         await pilot.pause()
         await pilot.press("space")
-        # Must remain empty
+        assert g.pending_entries() == {("global", "loose-ext"): "unlink"}
+        await pilot.press("space")
         assert g.pending_entries() == {}
+        assert g.pending_local_targets() == {}
 
 
 @pytest.mark.asyncio

@@ -18,11 +18,12 @@ CRITICAL: never name any method `_render_*` — it collides with Textual's
 internal flag mechanism and produces a "bool is not callable" error from
 compose. All glyph helpers are named `_cell_glyph`, `_origin_glyph`, etc.
 
-Untracked rows are non-interactive: toggling them is a no-op and their cells
-display a dim glyph. They have no lock entry so there is nothing to act on.
+Loose local rows configure native Pi selectors without taking file ownership.
+Filesystem packages and unregistered npm references remain read-only.
 """
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Literal
 
 from rich.markup import escape
@@ -58,6 +59,7 @@ _UNLOADED_GLYPH  = "☐"
 _PENDING_LINK    = "[yellow]+[/]"
 _PENDING_UNLINK  = "[yellow]-[/]"
 _UNTRACKED_GLYPH = "[dim]—[/]"
+_MIXED_GLYPH = "[yellow]◐[/]"
 _INFO_GLYPH      = "ⓘ"
 _GLOBAL_GLYPH    = "🌐"
 
@@ -107,6 +109,7 @@ class PiGrid(Vertical):
         self._scope: Literal["global", "project"] = "global"
         # (scope: "global"|"project", slug) -> Op
         self._pending: dict[tuple[str, str], Op] = {}
+        self._local_targets: dict[tuple[str, str], tuple[Path, ...]] = {}
         self._filter: str = ""
 
     @property
@@ -120,6 +123,7 @@ class PiGrid(Vertical):
     def set_rows(self, rows: list[PiExtensionRow]) -> None:
         self._rows = sorted(rows, key=lambda r: r.slug)
         self._pending.clear()
+        self._local_targets.clear()
         try:
             table = self.query_one("#pi-table", DataTable)
             self._rebuild(table)
@@ -129,6 +133,7 @@ class PiGrid(Vertical):
     def set_scope(self, scope: Literal["global", "project"]) -> None:
         self._scope = scope
         self._pending.clear()
+        self._local_targets.clear()
         # Snap the cursor to the single interactive scope column (same row).
         try:
             table = self.query_one("#pi-table", DataTable)
@@ -141,16 +146,25 @@ class PiGrid(Vertical):
     def pending_entries(self) -> dict[tuple[str, str], Op]:
         return dict(self._pending)
 
+    def pending_local_targets(self) -> dict[tuple[str, str], tuple[Path, ...]]:
+        return dict(self._local_targets)
+
     def clear_pending(self) -> None:
         self._pending.clear()
+        self._local_targets.clear()
         try:
             table = self.query_one("#pi-table", DataTable)
             self._rebuild(table)
         except Exception:
             pass
 
-    def restore_pending(self, pending: dict[tuple[str, str], Op]) -> None:
+    def restore_pending(
+        self, pending: dict[tuple[str, str], Op], *,
+        local_targets: dict[tuple[str, str], tuple[Path, ...]] | None = None,
+    ) -> None:
         self._pending.update(pending)
+        if local_targets is not None:
+            self._local_targets.update({key: paths for key, paths in local_targets.items() if key in pending})
         try:
             table = self.query_one("#pi-table", DataTable)
             self._rebuild(table)
@@ -158,7 +172,7 @@ class PiGrid(Vertical):
             pass
 
     def _project_install_blocked(self, *, row: PiExtensionRow, loaded: bool) -> bool:
-        return self._scope == "project" and row.global_cell.global_loaded and not loaded
+        return row.origin != "untracked" and self._scope == "project" and row.global_cell.global_loaded and not loaded
 
     def _notify_pending(self) -> None:
         self.post_message(self.PendingChanged(len(self._pending)))
@@ -230,8 +244,8 @@ class PiGrid(Vertical):
                 body_markup="\n".join([
                     f"Source: {escape(row.source)}",
                     "",
-                    f"{state} globally: {'Yes' if row.global_cell.global_loaded else 'No'}",
-                    f"{state} for this project: {'Yes' if row.project_cell.project_loaded else 'No'}",
+                    f"{state} globally: {self._selection_label(row, 'global')}",
+                    f"{state} for this project: {self._selection_label(row, 'project')}",
                     "",
                     self._info_body(row=row, scope=self._scope),
                 ]),
@@ -306,8 +320,20 @@ class PiGrid(Vertical):
         )
 
         if row.origin == "untracked":
-            # Locate the already-discovered slug's actual loose file/directory.
-            details: list[str] = []
+            pending = self._pending.get((scope, row.slug))
+            loaded = row.global_cell.global_loaded if scope == "global" else row.project_cell.project_loaded
+            action = ("Enable" if pending == "link" else "Disable") if pending else ("Disable" if loaded else "Enable")
+            controls = (
+                f"[yellow]Pending: {action} ({scope}).[/]\n[b]Ctrl+S[/] → apply"
+                if pending else f"[b]Space[/] → queue {action} ({scope})\n[b]Ctrl+S[/] → apply"
+            )
+            paths = row.local_state.paths_for(scope) if row.local_state else ()
+            if len(paths) > 1:
+                controls += f"\n{action} affects all {len(paths)} entrypoints."
+            details = [controls]
+            if len(paths) > 1:
+                details.append("Entrypoints:\n" + "\n".join(escape(str(path)) for path in paths))
+            found = False
             for location in (scope, "global" if scope == "project" else "project"):
                 base = pi_extension_dir(
                     row.slug, scope=location, home=Path.home(),
@@ -315,8 +341,12 @@ class PiGrid(Vertical):
                 )
                 for path in (base, base.with_name(base.name + ".ts"), base.with_name(base.name + ".js")):
                     if path.exists() or path.is_symlink():
-                        details += [f"Location ({location}):", *local_path_info(path), ""]
-            return "\n".join(details) or "Local files are no longer present in either scope."
+                        found = True
+                        details.append("\n".join([f"Location ({location}):", *local_path_info(path, configurable=True)]))
+            if not found:
+                details.extend("\n".join(local_path_info(path, configurable=True)) for path in paths)
+            details.append("Running Pi sessions are unchanged.")
+            return "\n\n".join(details)
 
         if row.origin == "local-package":
             path = (
@@ -394,8 +424,8 @@ class PiGrid(Vertical):
             return
         row = visible[coord.row]
 
-        # Untracked rows are non-interactive — no lock entry to act on.
-        if row.origin in ("untracked", "local-package"):
+        # Filesystem packages retain their separate package/filter semantics.
+        if row.origin == "local-package":
             return
 
         if row.origin == "npm" and not row.managed:
@@ -415,6 +445,7 @@ class PiGrid(Vertical):
         key = (scope, row.slug)
         if key in self._pending:
             del self._pending[key]
+            self._local_targets.pop(key, None)
         else:
             loaded = (
                 row.global_cell.global_loaded
@@ -424,6 +455,8 @@ class PiGrid(Vertical):
             if self._project_install_blocked(row=row, loaded=loaded):
                 return
             self._pending[key] = "unlink" if loaded else "link"
+            if row.origin == "untracked":
+                self._local_targets[key] = row.local_state.paths_for(scope) if row.local_state else ()
 
         try:
             table = self.query_one("#pi-table", DataTable)
@@ -493,9 +526,18 @@ class PiGrid(Vertical):
         column_key = list(table.columns.keys())[index]
         return table.columns[column_key].width or default
 
+    @staticmethod
+    def _selection_label(row: PiExtensionRow, scope: str) -> str:
+        if row.local_state:
+            entries = row.local_state.global_entries if scope == "global" else row.local_state.project_entries
+            if any(e.enabled for e in entries) and not all(e.enabled for e in entries):
+                return f"Mixed ({sum(e.enabled for e in entries)}/{len(entries)})"
+        loaded = row.global_cell.global_loaded if scope == "global" else row.project_cell.project_loaded
+        return "Yes" if loaded else "No"
+
     def _cell_glyph(self, *, row: PiExtensionRow, scope: str) -> str:
         """Return the display glyph for a scope cell. Never named _render_*."""
-        if row.origin in ("untracked", "local-package"):
+        if row.origin == "local-package":
             return _UNTRACKED_GLYPH
 
         loaded = (
@@ -508,6 +550,8 @@ class PiGrid(Vertical):
             base = _PENDING_LINK
         elif pending == "unlink":
             base = _PENDING_UNLINK
+        elif row.local_state and (row.local_state.global_mixed if scope == "global" else row.local_state.project_mixed):
+            base = _MIXED_GLYPH
         else:
             base = _LOADED_GLYPH if loaded else _UNLOADED_GLYPH
         # In project scope, mark rows that are also loaded globally — same

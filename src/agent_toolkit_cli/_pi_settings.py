@@ -37,7 +37,7 @@ def _load(path: Path) -> dict[str, object]:
         return {}
     try:
         data = json.loads(path.read_text(encoding="utf-8-sig"))
-    except (json.JSONDecodeError, OSError) as exc:
+    except (json.JSONDecodeError, UnicodeError, OSError) as exc:
         raise PiSettingsError(f"{path}: {exc}") from exc
     if not isinstance(data, dict):
         raise PiSettingsError(f"{path}: top-level value is not an object")

@@ -5,12 +5,13 @@ from shlex import quote
 from rich.markup import escape
 
 
-def local_path_info(path: Path) -> list[str]:
+def local_path_info(path: Path, *, configurable: bool = False) -> list[str]:
     lines = [
         "Origin: local",
         f"Source path: {escape(str(path))}",
         "Existing files are used where they are, not moved or registered.",
-        "Local assets cannot be enabled, disabled or deleted in the TUI.",
+        ("Enable/Disable changes Pi settings only; source files are kept. No TUI deletion."
+         if configurable else "Local assets cannot be enabled, disabled or deleted in the TUI."),
         "Edit/update these files directly; Toolkit does not update local assets.",
     ]
     if path.is_symlink():

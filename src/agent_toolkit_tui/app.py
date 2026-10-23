@@ -707,8 +707,18 @@ class TUIApp(App):
             grid = self.query_one("#pi-grid", PiGrid)
         except NoMatches:
             return
+        from agent_toolkit_cli._pi_settings import PiSettingsError
+
+        pending = grid.pending_entries()
+        local_targets = grid.pending_local_targets()
+        try:
+            rows = build_pi_rows(home=Path.home(), project=Path.cwd())
+        except (PiSettingsError, OSError, ValueError) as exc:
+            self.notify(str(exc), title="Pi refresh failed", severity="error", timeout=12)
+            return
         grid.set_scope(self._scope)  # type: ignore[arg-type]
-        grid.set_rows(build_pi_rows(home=Path.home(), project=Path.cwd()))
+        grid.set_rows(rows)
+        grid.restore_pending(pending, local_targets=local_targets)
 
     # ----- agent-view --------------------------------------------------------
 
@@ -1058,7 +1068,14 @@ class TUIApp(App):
 
     def action_refresh(self) -> None:
         grid = self._active_grid()
-        if grid is not None:
+        # Local Pi intents carry a target snapshot. Keep those only; other
+        # assets retain their existing refresh-discard behavior.
+        if isinstance(grid, PiGrid):
+            targets = grid.pending_local_targets()
+            local_pending = {key: op for key, op in grid.pending_entries().items() if key in targets}
+            grid.clear_pending()
+            grid.restore_pending(local_pending, local_targets=targets)
+        elif grid is not None:
             grid.clear_pending()
         self._refresh_active_view()
         self._refresh_proj_path()
@@ -1523,6 +1540,7 @@ class TUIApp(App):
             pi_extension_install,
             pi_extension_ops,
         )
+        from agent_toolkit_cli.pi_local_extensions import set_local_extension_enabled
         from agent_toolkit_cli.pi_extension_lock import read_lock
         from agent_toolkit_cli.pi_extension_paths import library_lock_path
 
@@ -1539,43 +1557,36 @@ class TUIApp(App):
         ok = failed = 0
         errors: list[str] = []
 
-        # Read the global library lock once — it is the universe of slugs.
-        try:
-            glob_lock = read_lock(library_lock_path(env={}))
-        except Exception as exc:
-            self.query_one("#footer-pending", Static).update(
-                f"[red]apply failed[/] — could not read global lock: {exc}"
-            )
-            self.notify(
-                str(exc),
-                title="Apply: could not read global lock",
-                severity="error",
-                timeout=12,
-            )
-            return ApplyResult(
-                ok=0,
-                failed=len(pending),
-                errors=[f"global lock: {exc}"],
-                keys=list(pending.keys()),
-            )
-
+        local_targets = grid.pending_local_targets()
+        remaining = {}
+        glob_lock = None
         _Scope = Literal["global", "project"]
         for (scope_str, slug), op in pending.items():
             scope = cast(_Scope, scope_str)
-            project = Path.cwd() if scope == "project" else None
-            if slug not in glob_lock.skills:
-                # Untracked slug — no lock entry, skip (untracked rows are
-                # non-interactive; guard mirrors the old behaviour).
-                continue
+            key = (scope_str, slug)
             try:
-                if op == "link":
-                    pi_extension_ops.install(
-                        slug=slug, scope=scope, home=home, project=project
+                if key in local_targets:
+                    # Local configuration has no dependency on a Toolkit lock.
+                    set_local_extension_enabled(
+                        slug=slug, scope=scope, enabled=op == "link",
+                        home=home, project=Path.cwd(),
+                        expected_paths=local_targets[key],
                     )
                 else:
-                    pi_extension_ops.uninstall(
-                        slug=slug, scope=scope, home=home, project=project
-                    )
+                    if glob_lock is None:
+                        try:
+                            glob_lock = read_lock(library_lock_path(env={}))
+                        except Exception as exc:
+                            raise _pi_settings.PiSettingsError(f"global lock: {exc}") from exc
+                    if slug not in glob_lock.skills:
+                        raise _pi_settings.PiSettingsError(
+                            f"{slug}: no longer registered or missing local target snapshot; refresh and queue again"
+                        )
+                    project = Path.cwd() if scope == "project" else None
+                    if op == "link":
+                        pi_extension_ops.install(slug=slug, scope=scope, home=home, project=project)
+                    else:
+                        pi_extension_ops.uninstall(slug=slug, scope=scope, home=home, project=project)
                 ok += 1
             except (
                 pi_extension_install.InstallError,
@@ -1583,13 +1594,11 @@ class TUIApp(App):
             ) as exc:
                 errors.append(f"{slug}: {exc}")
                 failed += 1
+                remaining[key] = op
 
-        saved = grid.pending_entries() if failed else {}
-        if failed == 0:
-            grid.clear_pending()
+        grid.clear_pending()
+        grid.restore_pending(remaining, local_targets=local_targets)
         self._refresh_pi_view()
-        if saved:
-            grid.restore_pending(saved)
         self._refresh_pending_label()
         self._refresh_status_bar()
 

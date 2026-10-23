@@ -7,7 +7,9 @@ This kind manages **Pi** extensions only; it does not classify other harnesses' 
 - Git-backed library: `~/.agent-toolkit/pi-extensions/<slug>`; source/ref/observed commit metadata in `pi-extensions-lock.json`.
 - Library projection: `~/.pi/agent/extensions/<slug>` globally or `<project>/.pi/extensions/<slug>` in a project. Both scopes link to the global library copy; new project skills also use central backing.
 - npm registrations use Pi settings/package handling rather than a library symlink. Toolkit-registered enable/disable adds/removes the settings reference, not package files. Updates use Pi package handling, not Toolkit Git update. References Toolkit did not register cannot be toggled; Info explains native Pi removal and the exact manual settings edit. A registered npm row does not prove package files are downloaded. Info shows global and project enablement separately: Yes means a reference in that scope’s `settings.json`, not running-session status.
-- Loose extensions and local filesystem packages declared in settings are labeled `local` in the TUI and remain usable in place. A loose file is enabled in the TUI only when that scope’s `settings.json` explicitly selects it in `extensions[]`; discovering it in an extensions folder is not enablement. Local packages use their `packages[]` reference. They have no TUI enable/disable or deletion action. Info shows the actual path and manual removal instructions: deleting a file/directory is permanent, unlinking a symlink keeps its target, and removing a local package reference from `packages[]` keeps the package files. Never delete a shared parent checkout to remove one child.
+- Loose extensions in Pi’s conventional global/project extension directories are labeled `local` and enabled by default, unless native `extensions[]` selectors exclude them. Project state includes inherited global resources. **Space → Ctrl+S** enables/disables these resources through settings only: exact `+path`/`-path` selectors; a project override also names an inherited file by its absolute path. No registration, source-file changes, projections or Toolkit lock are required.
+- A directory can resolve several manifest entrypoints. Its checkbox is checked when all are enabled, empty when none are, and **◐** when mixed. Space on a mixed row queues Enable for every entrypoint; Info lists them. Merely viewing a mixed row changes nothing. Discovery follows Pi’s manifest/index, ignore and duplicate-resource rules; `package.json` alone does not make a directory loadable.
+- Local filesystem packages declared through `packages[]` remain a separate, read-only surface; they are not converted to loose extensions. Info gives exact paths and manual removal guidance. Deleting a file/directory is permanent; unlinking a symlink keeps its target; removing a package reference keeps its files. Never delete a shared parent checkout to remove one child.
 
 Library symlink states are shown as **Linked**, not settings enablement, and counted separately. The TUI uses **Enable/Disable** for controls, including pending actions, rather than Install/Uninstall. Space queues the selected scope’s change; Ctrl+S applies it. Disabling keeps downloaded files. To remove an npm package with native Pi, use `pi uninstall npm:<package>` globally, or `pi uninstall npm:<package> -l` from the project directory. Pi removes its package and settings reference, but does not remove Toolkit registration; the row may remain visible. Info uses the recorded package spec, including any version. These actions do not change an already-running Pi session.
 
@@ -29,6 +31,14 @@ If a checkout already exists but its lock entry is missing, add registers it onl
 
 ## Safety
 
+Local toggles preserve unrelated settings, source files and Toolkit locks. Apply refuses invalid settings, busy native settings locks, or entrypoints that changed since queueing. Failed intents stay pending; successful ones clear. Refresh preserves queued loose-local Pi intents and their original targets; **Ctrl+Z** discards them. Settings writes are serialized with native Pi and reread under the lock.
+
 Library installation refuses foreign links or regular destination files; uninstall removes only the matching owned projection. Doctor reports orphaned `extensions[]` overrides but does not edit that settings array. Local discovery remains report-only even with `--repair`: doctor does not register local packages or rewrite their settings/source. Ordinary source registration, lock-file import and unrelated repairs remain supported. Registry packages and settings values that cannot be represented losslessly remain report-only. `--no-fix` is read-only.
+
+To recheck native compatibility from a source checkout, run
+`uv run python scripts/verify_pi_local_controls.py --pi-package /path/to/pi-coding-agent`.
+It drives real keys against disposable assets, compares both scopes with the
+installed Pi resolver, and checks native settings-lock contention. It never
+loads extension code or changes your live configuration.
 
 [Pi harness](../harnesses/pi.md) · [Locks](../agent-toolkit/lock-files.md) · [TUI](../agent-toolkit/tui.md)

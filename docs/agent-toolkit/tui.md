@@ -60,7 +60,7 @@ Pi Extensions uses its existing Origin column. Git-change and health badges
 | Origin | Meaning and controls |
 |---|---|
 | `library` | Toolkit-managed central source connected through the existing installation mechanism. Disable removes the connection, not the source. |
-| `local` | Existing files used where they are, outside Toolkit library management—even if discovered under a library directory. Visible and usable, but excluded from individual, collection and All/None toggle queues. No TUI enable/disable, deletion, moving or registration. |
+| `local` | Existing files used in place, outside Toolkit library management. Skills/Agents stay outside toggle queues. Loose Pi extensions have settings-only Enable/Disable controls; local filesystem packages remain read-only. No TUI deletion, moving or registration. |
 | `npm` | Toolkit-registered packages have Enable/Disable controls; other references stay read-only with removal guidance in Info. |
 
 Press ++i++ for the actual source path and linking/update behavior. For local
@@ -70,13 +70,19 @@ the selected child, never a shared parent checkout. For a local package in Pi
 settings, remove its string or structured `packages[]` reference in the shown
 settings file; this does not delete package contents.
 
-For npm and local Pi extensions, **Enabled globally** and **Enabled for this
-project** mean a matching reference in that scope’s `settings.json`:
-`packages[]` for packages, `extensions[]` for loose files. Merely finding a
-local file does not mark it enabled. Library rows instead show **Linked** for
-their symlink connections; these are counted separately in the status bar.
-None of these states observes a running Pi session. **Space** queues
-Enable/Disable in the selected scope; **Ctrl+S** applies it.
+For loose Pi extensions, **Enabled globally** and **Enabled for this project**
+follow native discovery and `extensions[]` selectors: existing resources are
+enabled by default; project state includes global inheritance. **Space** queues
+Enable/Disable in the selected scope; **Ctrl+S** writes exact selectors without
+changing or registering source files. A mixed multi-entry directory shows **◐**;
+Space queues Enable for all its entrypoints, listed in Info. Failed changes stay
+pending, while successful changes clear. Refresh preserves loose-local Pi intents and their
+original targets; **Ctrl+Z** discards them.
+
+For npm/local filesystem packages, enabled means a `packages[]` reference in
+that scope; local packages and unregistered npm references remain read-only.
+Library rows show **Linked** for their symlink connections and are counted
+separately in the status bar. None of these states observes a running Pi session.
 
 npm enable/disable adds/removes a reference in Pi settings—not an extension
 symlink or package-file deletion. Info also shows the native removal command:

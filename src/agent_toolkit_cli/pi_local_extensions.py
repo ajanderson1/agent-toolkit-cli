@@ -182,13 +182,20 @@ def _plain_paths(selectors: list[str], base: Path, home: Path) -> tuple[Path, ..
     return tuple(paths)
 
 
-def read_local_extension_states(*, home: Path, project: Path | None) -> dict[str, LocalExtensionState]:
+def _resolve_local_states(
+    *, home: Path, project: Path | None,
+    overrides: dict[str, list[str]] | None = None,
+) -> dict[str, LocalExtensionState]:
     """Resolve the loose universe once; project state includes global inheritance."""
     bases = {"global": _lexical(home / ".pi/agent")}
     if project is not None:
         bases["project"] = _lexical(project / ".pi")
     discovered = {scope: discover_local_extensions(base / "extensions") for scope, base in bases.items()}
-    selectors = {scope: _pi_settings.read_extension_paths(scope=scope, home=home, project=project) for scope in bases}
+    selectors = {
+        scope: overrides[scope] if overrides is not None and scope in overrides
+        else _pi_settings.read_extension_paths(scope=scope, home=home, project=project)
+        for scope in bases
+    }
     plain = {scope: _plain_paths(selectors[scope], base, home) for scope, base in bases.items()}
 
     def resolve(with_project: bool) -> dict[Path, bool]:
@@ -222,6 +229,10 @@ def read_local_extension_states(*, home: Path, project: Path | None) -> dict[str
             available_paths=paths,
         )
     return states
+
+
+def read_local_extension_states(*, home: Path, project: Path | None) -> dict[str, LocalExtensionState]:
+    return _resolve_local_states(home=home, project=project)
 
 
 def read_local_extension_state(*, slug: str, home: Path, project: Path | None) -> LocalExtensionState:
@@ -276,17 +287,25 @@ def set_local_extension_enabled(
             state = read_local_extension_state(slug=slug, home=home, project=project)
             targets = state.paths_for(scope)
             if not expected_paths or set(targets) != set(expected_paths):
-                raise PiSettingsError(f"{slug}: local entrypoints changed or disappeared; refresh and queue again")
+                raise PiSettingsError(f"{slug}: local entrypoints changed or disappeared; revert, refresh and queue again")
             data = _pi_settings._load(path)
             current = _pi_settings._string_list(data, "extensions", path)
             base = _lexical(path.parent)
             updated = [s for s in current if not any(_exact(p, s[1:] if s.startswith(("!", "+", "-")) else s, base, home) for p in targets)]
             auto_paths = {p for entries in discover_local_extensions(base / "extensions").values() for p in entries}
+            inherited_paths = {entry.path for entry in state.global_entries} if scope == "project" else set()
             for target in targets:
-                if target not in auto_paths and str(target) not in updated:
+                inherited = target in inherited_paths
+                if (inherited or target not in auto_paths) and str(target) not in updated:
                     updated.append(str(target))
-                pattern = str(target.relative_to(base)) if target.is_relative_to(base) else str(target)
+                pattern = str(target.relative_to(base)) if target.is_relative_to(base) and not inherited else str(target)
                 updated.append(("+" if enabled else "-") + pattern)
+            # Validate the effective result before committing. Competing lexical
+            # references to one canonical source must never become successful no-ops.
+            prospective = _resolve_local_states(home=home, project=project, overrides={scope: updated}).get(slug, LocalExtensionState())
+            selected = prospective.global_entries if scope == "global" else prospective.project_entries
+            if {e.path for e in selected} != set(targets) or any(e.enabled != enabled for e in selected):
+                raise PiSettingsError(f"{slug}: conflicting native reference prevents this change; inspect Pi config")
             if current != updated:
                 data["extensions"] = updated
                 _write_settings(path, data)
