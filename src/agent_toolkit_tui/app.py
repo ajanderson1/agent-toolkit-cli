@@ -1987,7 +1987,7 @@ class TUIApp(App):
                 pending = len(grid_pi.pending_entries())
             else:
                 pending = 0
-            text = f"  [b green]{loaded}[/] loaded   [b yellow]{pending}[/] pending"
+            text = f"  [b green]{loaded}[/] enabled   [b yellow]{pending}[/] pending"
         elif active == "mcp":
             linked = 0
             try:

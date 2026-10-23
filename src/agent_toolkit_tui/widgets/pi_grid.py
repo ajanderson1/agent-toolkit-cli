@@ -215,8 +215,6 @@ class PiGrid(Vertical):
 
     def action_info(self) -> None:
         """Open the selected Pi extension's asset panel, regardless of column."""
-        from agent_toolkit_tui.screens.cell_info import asset_info_body
-
         try:
             table = self.query_one("#pi-table", DataTable)
         except Exception:
@@ -225,26 +223,18 @@ class PiGrid(Vertical):
         if table.cursor_coordinate.row >= len(visible):
             return
         row = visible[table.cursor_coordinate.row]
-        loaded = (
-            row.global_cell.global_loaded
-            if self._scope == "global"
-            else row.project_cell.project_loaded
-        )
-        state = "loaded" if loaded else "not loaded"
         self.app.push_screen(
             CellInfoScreen(
                 title=f"{row.slug} · {asset_type_label('pi-extension')}",
-                body_markup=asset_info_body(
-                    asset_label=asset_type_label("pi-extension"),
-                    slug=row.slug,
-                    description=None,
-                    description_location="extension metadata",
-                    source=escape(row.source),
-                    ref=None,
-                    state=state,
-                    scope=self._scope,
-                    extra_lines=[self._info_body(row=row, scope=self._scope)],
-                ),
+                body_markup="\n".join([
+                    f"Source: {escape(row.source)}",
+                    "",
+                    f"Enabled globally: {'Yes' if row.global_cell.global_loaded else 'No'}",
+                    f"Enabled for this project: {'Yes' if row.project_cell.project_loaded else 'No'}",
+                    "Configuration only; running sessions may differ.",
+                    "",
+                    self._info_body(row=row, scope=self._scope),
+                ]),
             )
         )
 
@@ -277,12 +267,11 @@ class PiGrid(Vertical):
 
             return "\n".join(library_info(library_pi_extension_path(row.slug)))
         if row.origin == "npm":
+            registration = "Registered in Toolkit." if row.managed else "Not registered in Toolkit."
             return (
-                "Origin: npm\n"
-                "Pi obtains the published package. Enable/disable adds/removes its\n"
-                "settings reference, not an extension symlink and not package files.\n"
-                "Updates use Pi package handling, not Toolkit Git update.\n"
-                "Disabling does not unload an already-running session."
+                f"Origin: npm\n{registration}\n"
+                "Package download status is not checked.\n"
+                "Updates use Pi package handling, not Toolkit Git update."
             )
         return "Origin: local"
 
@@ -291,12 +280,35 @@ class PiGrid(Vertical):
         return "\n".join(info.lines)
 
     def _info_body(self, *, row: PiExtensionRow, scope: str) -> str:
-        return self._extension_info_body(row) + "\n\n" + self._scope_info_body(row=row, scope=scope)
+        sections = [self._extension_info_body(row), self._scope_info_body(row=row, scope=scope)]
+        if row.origin == "npm":
+            from shlex import join
+
+            removal_scope = scope
+            if scope == "project" and not row.project_package_spec and row.global_package_spec:
+                removal_scope = "global"
+            elif scope == "global" and not row.global_package_spec and row.project_package_spec:
+                removal_scope = "project"
+            spec = (
+                row.global_package_spec if removal_scope == "global" else row.project_package_spec
+            ) or row.source
+            command = join(["pi", "uninstall", spec] + (["-l"] if removal_scope == "project" else []))
+            removal = (
+                f"Remove with Pi: {escape(command)}\n"
+                "Removes package files and the Pi settings reference.\n"
+            )
+            removal += (
+                "Run in this project's directory."
+                if removal_scope == "project" else "Uses global Pi settings."
+            )
+            if row.managed:
+                removal += "\nToolkit registration is kept."
+            sections.append(removal)
+        return "\n\n".join(sections)
 
     def _scope_info_body(self, *, row: PiExtensionRow, scope: str) -> str:
         from pathlib import Path
         from agent_toolkit_cli.pi_extension_paths import (
-            library_pi_extension_path,
             pi_extension_dir,
         )
 
@@ -356,65 +368,31 @@ class PiGrid(Vertical):
                              f"whose source is {spec!r} (or the matching string entry).\n"
                              "This removes only the reference, not package files.")
                 )
-            if pending == "link":
-                return (
-                    f"[yellow]Pending: install (npm).[/]\n"
-                    f"Will add {row.source} to packages[] @ {scope}.\n\n"
-                    f"Press [b]^s[/] to apply."
-                )
-            if pending == "unlink":
-                return (
-                    f"[yellow]Pending: uninstall (npm).[/]\n"
-                    f"Will remove {row.source} from packages[] @ {scope}.\n\n"
-                    f"Press [b]^s[/] to apply."
-                )
-            if loaded:
-                return f"Loaded (npm).\nPackage {row.source} is in packages[] @ {scope}."
-            if scope == "project" and row.global_cell.global_loaded:
-                return (
-                    f"Not loaded in project (npm).\n"
-                    f"Already loaded globally as {row.source}.\n"
-                    f"Project install is unavailable; uninstall globally first "
-                    f"if this extension must be project-scoped."
-                )
-            return (
-                f"Not loaded (npm).\nPress [b]space[/] to queue install\n"
-                f"(adds {row.source} to packages[] @ {scope})."
+            target = "global Pi settings" if scope == "global" else "this project's Pi settings"
+            effect = (
+                f"Enable adds the package to {target}.\n"
+                "Disable removes that reference, not package files."
             )
-
-        # store-owned
-        if scope == "global":
-            link = pi_extension_dir(row.slug, scope="global", home=home)
         else:
-            link = pi_extension_dir(row.slug, scope="project", project=project)
-        canonical = library_pi_extension_path(row.slug)
+            link = pi_extension_dir(row.slug, scope=scope, home=home, project=project)
+            effect = (
+                "Enable connects the library source to Pi.\n"
+                "Disable removes the connection, not source files.\n"
+                f"Pi path: {escape(str(link))}"
+            )
 
-        if pending == "link":
-            return (
-                f"[yellow]Pending: install.[/]\n"
-                f"{link} → {canonical}\n\n"
-                f"Press [b]^s[/] to apply."
+        if pending:
+            action = "Enable" if pending == "link" else "Disable"
+            controls = f"[yellow]Pending: {action} ({scope}).[/]\n[b]Ctrl+S[/] → apply"
+        elif scope == "project" and row.global_cell.global_loaded and not loaded:
+            controls = (
+                "Already enabled globally. No project change needed.\n"
+                "To use it only in this project, disable globally first."
             )
-        if pending == "unlink":
-            return (
-                f"[yellow]Pending: uninstall.[/]\n"
-                f"{link}\n\n"
-                f"Press [b]^s[/] to apply."
-            )
-        if loaded:
-            return f"Loaded.\n{link} → {canonical}"
-        if scope == "project" and row.global_cell.global_loaded:
-            return (
-                f"Not loaded in project.\n"
-                f"Already loaded globally.\n"
-                f"Project install is unavailable; uninstall globally first "
-                f"if this extension must be project-scoped.\n"
-                f"{link} → {canonical}"
-            )
-        return (
-            f"Not loaded.\nPress [b]space[/] to queue install\n"
-            f"({link} → {canonical})."
-        )
+        else:
+            action = "Disable" if loaded else "Enable"
+            controls = f"[b]Space[/] → queue {action} ({scope})\n[b]Ctrl+S[/] → apply"
+        return f"{controls}\n\n{effect}\nRunning Pi sessions are unchanged."
 
     def _toggle_at(self, coord: Coordinate) -> None:
         visible = self._visible_rows()
@@ -429,7 +407,7 @@ class PiGrid(Vertical):
         if row.origin == "npm" and not row.managed:
             try:
                 self.app.notify(
-                    "npm reference not registered by Toolkit: see Info for manual removal",
+                    "npm reference not registered by Toolkit: see Info for removal",
                     severity="warning",
                 )
             except Exception:

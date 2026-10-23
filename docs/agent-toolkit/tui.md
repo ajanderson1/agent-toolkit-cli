@@ -61,7 +61,7 @@ Pi Extensions uses its existing Origin column. Git-change and health badges
 |---|---|
 | `library` | Toolkit-managed central source connected through the existing installation mechanism. Disable removes the connection, not the source. |
 | `local` | Existing files used where they are, outside Toolkit library management—even if discovered under a library directory. Visible and usable, but excluded from individual, collection and All/None toggle queues. No TUI enable/disable, deletion, moving or registration. |
-| `npm` | Pi obtains the published package. Toolkit-registered references retain their toggle controls; references Toolkit did not register remain read-only with manual guidance in Info. |
+| `npm` | An npm package reference—not proof of downloaded files or enablement. Toolkit-registered references have Enable/Disable controls; other references stay read-only with removal guidance in Info. |
 
 Press ++i++ for the actual source path and linking/update behavior. For local
 files, Info gives the exact manual removal command and warns when it
@@ -70,9 +70,19 @@ the selected child, never a shared parent checkout. For a local package in Pi
 settings, remove its string or structured `packages[]` reference in the shown
 settings file; this does not delete package contents.
 
+Pi Extension Info shows **Enabled globally** and **Enabled for this project**
+separately. These describe configuration, not a running Pi session. **Space**
+queues Enable/Disable in the selected scope; **Ctrl+S** applies it. Pending
+messages use the same vocabulary. The status bar counts enabled configuration,
+not runtime loading.
+
 npm enable/disable adds/removes a reference in Pi settings—not an extension
-symlink or package-file deletion. Updates use Pi package handling, not Toolkit
-Git update. Removing a reference does not unload an already-running Pi session.
+symlink or package-file deletion. Info also shows the native removal command:
+`pi uninstall npm:<package>` globally or `pi uninstall npm:<package> -l` from
+the project directory. This removes Pi’s package and settings reference, but
+keeps Toolkit registration; a registered row may remain visible. Info preserves
+the exact configured package spec and identifies the applicable scope. Updates
+use Pi package handling, not Toolkit Git update. Running Pi sessions are unchanged.
 
 Skill, agent, and command grids retain their existing lock/filesystem inventory.
 Registered multi-skill sources group real children into collections; discovery

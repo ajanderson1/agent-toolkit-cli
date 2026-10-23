@@ -156,8 +156,12 @@ async def test_i_opens_an_asset_panel_for_every_grid(case: _Case) -> None:
         assert app.screen._title == case.expected_title
         body = app.screen._body_markup
         assert "Source:" in body
-        assert "Ref:" in body
-        assert "State (global):" in body
+        if case.name == "pi-extension":
+            assert "Enabled globally: No" in body
+            assert "Enabled for this project: No" in body
+        else:
+            assert "Ref:" in body
+            assert "State (global):" in body
 
 
 @pytest.mark.asyncio

@@ -211,8 +211,7 @@ async def test_apply_failed_count_is_symmetric(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_pi_status_bar_shows_active_scope_only(monkeypatch):
-    """Pi status bar reports the ACTIVE scope's loaded count + pending (#349)
-    instead of 'N global · M project'. New test — no prior pi case existed."""
+    """Pi status counts enabled configuration in the active scope, not both."""
     from textual.widgets import Static
 
     from agent_toolkit_tui.app import TUIApp
@@ -234,11 +233,11 @@ async def test_pi_status_bar_shows_active_scope_only(monkeypatch):
         app.action_asset_type("pi-extension")
         await pilot.pause()
         bar = str(app.query_one("#status-bar", Static).render())
-        # project scope is active on load: exactly one project-loaded row.
-        assert "1" in bar and "loaded" in bar and "pending" in bar
+        # Project scope is active on startup: exactly one enabled row.
+        assert "1" in bar and "enabled" in bar and "pending" in bar
         assert "global" not in bar
 
         await pilot.press("ctrl+g")
         await pilot.pause()
         bar = str(app.query_one("#status-bar", Static).render())
-        assert "2" in bar and "loaded" in bar
+        assert "2" in bar and "enabled" in bar

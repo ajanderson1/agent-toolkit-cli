@@ -289,10 +289,13 @@ def _pi_extension_origin(_context: dict[str, object]) -> ColumnInfo:
             "Disable removes the connection, not the source.",
             "• local — existing files used in place; no TUI toggles or deletion. "
             "Info shows paths and manual removal instructions.",
-            "• npm — Pi obtains the published package. Toolkit-registered settings "
-            "references can be toggled; other references require manual removal.",
+            "• npm — an npm package reference, not proof of downloaded files or "
+            "enablement. Enable/disable changes Pi settings for registered entries; "
+            "other references stay read-only.",
+            "Info shows configuration in both scopes, controls and native Pi "
+            "removal commands, alongside exact manual removal instructions.",
             "Updates use Pi package handling, not Toolkit Git update. "
-            "Disabling does not unload an already-running session.",
+            "Running Pi sessions are unchanged.",
         ],
     )
 

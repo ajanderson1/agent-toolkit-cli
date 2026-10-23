@@ -1171,15 +1171,15 @@ async def test_project_uninstall_global_loaded_row_still_queues_unlink():
     assert g.pending_entries() == {("project", "alpha"): "unlink"}
 
 
-def test_project_info_explains_global_loaded_install_block():
+def test_project_info_explains_global_enablement_block():
     grid = PiGrid([_store_row("alpha", global_loaded=True, project_loaded=False)])
     row = grid._rows[0]
 
     body = grid._info_body(row=row, scope="project")
 
-    assert "Already loaded globally" in body
-    assert "uninstall globally" in body
-    assert "queue install" not in body
+    assert "Already enabled globally" in body
+    assert "disable globally first" in body
+    assert "queue Enable" not in body
 
 @pytest.mark.asyncio
 async def test_apply_project_link_fails_when_global_loaded(monkeypatch):
