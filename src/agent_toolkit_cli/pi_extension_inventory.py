@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Literal
 
 from agent_toolkit_cli import _pi_settings
+from agent_toolkit_cli.pi_local_extensions import discover_local_extensions
 from agent_toolkit_cli.pi_extension_lock import read_lock
 from agent_toolkit_cli.pi_extension_paths import (
     Scope,
@@ -20,11 +21,6 @@ from agent_toolkit_cli.pi_extension_paths import (
 )
 
 Origin = Literal["store-owned", "untracked", "npm", "local-package"]
-
-# Pi loads dirs with index.ts/.js or a pi.extensions manifest, plus loose
-# .ts/.js files. We classify discovered entries by these rules (0.77.0).
-_EXTENSION_FILE_SUFFIXES = (".ts", ".js")
-
 
 @dataclass
 class InventoryRecord:
@@ -49,25 +45,8 @@ def _extensions_root(*, scope: Scope, home: Path | None, project: Path | None) -
 
 
 def _discover_loose(root: Path) -> list[tuple[str, bool]]:
-    """Return (slug, is_loaded) for entries Pi would discover under `root`.
-
-    A directory loads if it has index.ts/.js or package.json; a loose
-    *.ts/*.js file loads as its stem. We don't read package.json contents
-    in PR1 — presence of the file is enough to call it loadable."""
-    out: list[tuple[str, bool]] = []
-    if not root.exists():
-        return out
-    for entry in sorted(root.iterdir()):
-        if entry.is_dir() or (entry.is_symlink() and entry.resolve().is_dir()):
-            has_entry = any(
-                (entry / name).exists()
-                for name in ("index.ts", "index.js", "package.json")
-            )
-            if has_entry:
-                out.append((entry.name, True))
-        elif entry.suffix in _EXTENSION_FILE_SUFFIXES:
-            out.append((entry.stem, True))
-    return out
+    """Return native-discoverable slugs without claiming settings selection."""
+    return [(slug, True) for slug in discover_local_extensions(root)]
 
 
 def _is_store_owned_symlink(slug: str, path: Path, rec: InventoryRecord) -> bool:

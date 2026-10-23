@@ -9,6 +9,8 @@ dependencies = [
     "questionary>=2.0",
     "pyyaml>=6.0",
     "tomlkit>=0.13",
+    "wcmatch>=10",
+    "pathspec>=0.12",
 ]
 
 [project.urls]

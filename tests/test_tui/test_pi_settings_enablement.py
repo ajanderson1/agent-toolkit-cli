@@ -1,4 +1,4 @@
-"""Pi enablement follows settings references, never loose-file discovery."""
+"""Loose selection follows native discovery/overrides; packages keep their policy."""
 from __future__ import annotations
 
 import json
@@ -19,7 +19,7 @@ def _settings(path: Path, **values) -> None:
 
 @pytest.mark.parametrize("scope", ["global", "project"])
 @pytest.mark.parametrize("shape", ["file", "directory", "symlink"])
-def test_discovered_local_extension_is_visible_but_not_enabled_without_settings(
+def test_discovered_local_extension_is_default_enabled_without_settings(
     tmp_path, monkeypatch, scope, shape,
 ):
     home = tmp_path / "home"
@@ -44,27 +44,27 @@ def test_discovered_local_extension_is_visible_but_not_enabled_without_settings(
 
     assert [row.slug for row in rows] == ["jev-router"]
     row = rows[0]
-    assert row.global_cell.global_loaded is False
-    assert row.project_cell.project_loaded is False
+    assert row.global_cell.global_loaded is (scope == "global")
+    assert row.project_cell.project_loaded is True
     assert row.managed is False
     assert path.exists()
 
 
 @pytest.mark.parametrize("scope,references,want", [
-    ("global", ["extensions/jev-router.ts"], (True, False)),
-    ("project", ["../unused.ts"], (False, False)),
-    ("global", ["~/.pi/agent/extensions/jev-router.ts"], (True, False)),
-    ("global", ["+extensions/jev-router.ts"], (True, False)),
+    ("global", ["extensions/jev-router.ts"], (True, True)),
+    ("project", ["../unused.ts"], (True, True)),
+    ("global", ["~/.pi/agent/extensions/jev-router.ts"], (True, True)),
+    ("global", ["+extensions/jev-router.ts"], (True, True)),
     ("global", ["-extensions/jev-router.ts"], (False, False)),
-    ("global", ["extensions/*.ts"], (True, False)),
-    ("global", ["*.ts"], (False, False)),
-    ("global", ["+extensions/*.ts"], (False, False)),
-    ("global", ["extensions"], (True, False)),
+    ("global", ["extensions/*.ts"], (True, True)),
+    ("global", ["*.ts"], (True, True)),
+    ("global", ["+extensions/*.ts"], (True, True)),
+    ("global", ["extensions"], (True, True)),
     ("global", ["extensions/*.ts", "!**/jev-router.ts"], (False, False)),
     ("global", ["extensions/jev-router.ts", "-extensions/jev-router.ts"], (False, False)),
-    ("global", ["extensions/jev-router.ts", "-extensions/jev-router.ts", "+extensions/jev-router.ts"], (True, False)),
+    ("global", ["extensions/jev-router.ts", "-extensions/jev-router.ts", "+extensions/jev-router.ts"], (False, False)),
 ])
-def test_local_enablement_reads_only_matching_positive_settings_references(
+def test_local_enablement_follows_native_selectors_and_inheritance(
     tmp_path, monkeypatch, scope, references, want,
 ):
     home = tmp_path / "home"
@@ -83,7 +83,7 @@ def test_local_enablement_reads_only_matching_positive_settings_references(
     assert settings.read_bytes() == before
 
 
-def test_project_settings_can_reference_global_local_file_without_global_enablement(tmp_path, monkeypatch):
+def test_project_reference_does_not_change_global_native_selection(tmp_path, monkeypatch):
     home = tmp_path / "home"
     project = tmp_path / "project"
     monkeypatch.setenv("HOME", str(home))
@@ -95,7 +95,7 @@ def test_project_settings_can_reference_global_local_file_without_global_enablem
 
     row, = build_pi_rows(home=home, project=project)
 
-    assert row.global_cell.global_loaded is False
+    assert row.global_cell.global_loaded is True
     assert row.project_cell.project_loaded is True
 
 
@@ -171,7 +171,7 @@ def test_npm_registration_stays_visible_while_enablement_tracks_scope_settings(
 
 
 @pytest.mark.asyncio
-async def test_jev_router_info_does_not_call_discovery_global_enablement(tmp_path, monkeypatch):
+async def test_jev_router_info_reports_native_default_enablement(tmp_path, monkeypatch):
     home = tmp_path / "home"
     project = tmp_path / "project"
     project.mkdir()
@@ -190,14 +190,14 @@ async def test_jev_router_info_does_not_call_discovery_global_enablement(tmp_pat
         grid.action_info()
         await pilot.pause()
         body = Text.from_markup(grid.app.screen._body_markup).plain
-        assert "Enabled globally: No" in body
-        assert "Enabled for this project: No" in body
+        assert "Enabled globally: Yes" in body
+        assert "Enabled for this project: Yes" in body
         assert str(path) in body
         assert grid.pending_entries() == {}
 
 
 @pytest.mark.asyncio
-async def test_loose_file_does_not_inflate_enabled_status_count(tmp_path, monkeypatch):
+async def test_native_enabled_loose_file_counts_in_status(tmp_path, monkeypatch):
     from textual.widgets import Static
     from agent_toolkit_tui.app import TUIApp
 
@@ -217,4 +217,4 @@ async def test_loose_file_does_not_inflate_enabled_status_count(tmp_path, monkey
         grid.set_rows(build_pi_rows(home=home, project=project))
         app._refresh_status_bar()
         text = Text.from_markup(str(app.query_one("#status-bar", Static).render())).plain
-        assert "0 enabled" in text
+        assert "1 enabled" in text
