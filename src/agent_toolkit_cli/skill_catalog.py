@@ -104,6 +104,8 @@ def run_git(args: list[str], *, cwd: Path | None = None) -> str:
 
 def fetch_catalog(url: str, ref: str | None = None) -> CatalogSnapshot:
     try:
+        if ref is not None and not isinstance(ref, str):
+            raise ValueError("catalog ref must be a string")
         parsed = safe_source(url)
         if parsed.subpath or parsed.skill_name:
             raise ValueError("catalog source must be a repository")
@@ -133,7 +135,7 @@ def read_catalog(*, home: Path | None = None) -> CatalogSnapshot | None:
         config = _read_config(home).get("skillCatalog")
         if config is None:
             return None
-        if not isinstance(config, dict) or not isinstance(config.get("url"), str):
+        if not isinstance(config, dict) or not isinstance(config.get("url"), str) or (config.get("ref") is not None and not isinstance(config["ref"], str)):
             raise ValueError("invalid subscription")
         return fetch_catalog(config["url"], config.get("ref"))
     except (ValueError, OSError, RuntimeError):

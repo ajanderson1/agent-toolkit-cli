@@ -407,21 +407,21 @@ def build_skill_rows(
 
 def merge_catalog_rows(rows: list[SkillRow], snapshot: CatalogSnapshot, *, scope: Scope, home: Path | None, project: Path | None, selection: tuple[str, ...] | None = None) -> list[SkillRow]:
     """Pure catalog join over local observations; no acquisition or network."""
-    from agent_toolkit_cli.skill_catalog_ops import catalog_match
+    from agent_toolkit_cli.skill_catalog_ops import catalog_target
     result = list(rows)
     entries = dict(read_lock(library_lock_path(home=home)).skills)
     if scope == "project":
         entries.update(read_lock(lock_file_path(scope=scope, home=home, project=project)).skills)
     by_slug = {r.slug: r for r in result}
     for item in snapshot.skills:
-        matches = [slug for slug, entry in entries.items() if catalog_match(entry, item)]
-        if len(matches) == 1 and matches[0] in by_slug:
-            row = by_slug[matches[0]]
+        matched, warning = catalog_target(entries, item, snapshot.url)
+        if matched is not None and matched in by_slug:
+            row = by_slug[matched]
             index = result.index(row)
-            result[index] = replace(row, catalog_item=item, catalog_url=snapshot.url)
+            result[index] = replace(row, catalog_item=None if warning else item, catalog_url=snapshot.url, catalog_warning=warning)
             by_slug[row.slug] = result[index]
             continue
-        if item.key in by_slug or len(matches) > 1:
+        if item.key in by_slug or warning:
             if item.key in by_slug:
                 row = by_slug[item.key]
                 result[result.index(row)] = replace(row, catalog_warning="Catalog identity conflicts with local backing; use CLI to inspect. Local content retained.")

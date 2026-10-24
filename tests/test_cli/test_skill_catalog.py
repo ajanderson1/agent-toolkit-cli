@@ -79,6 +79,24 @@ def test_timeout_is_bounded_and_no_stale_rows(tmp_path, sandbox, monkeypatch):
     assert result.error and result.skills == ()
 
 
+@pytest.mark.parametrize("bad_ref", [42, [], {}, True])
+def test_malformed_subscription_ref_does_not_break_local_commands(tmp_path, sandbox, bad_ref):
+    from tests.test_cli.test_skill_catalog_acquire import subscribed
+    upstream, cat = subscribed(tmp_path)
+    invoke("skills", "catalog", "add", "demo")
+    config = sandbox / ".agent-toolkit/config.json"
+    data = json.loads(config.read_text())
+    data["skillCatalog"]["ref"] = bad_ref
+    config.write_text(json.dumps(data))
+    listed = invoke("skills", "list", "-g", "--json")
+    assert [row["slug"] for row in json.loads(listed.stdout)] == ["demo"]
+    assert "catalog" in listed.stderr.lower()
+    diagnosed = invoke("skills", "doctor", "demo", "-g", "--no-fix")
+    assert "catalog warning" in diagnosed.output.lower()
+    from agent_toolkit_cli.skill_catalog import read_catalog
+    assert read_catalog().error
+
+
 def test_catalog_list_json_and_regular_no_subscription_json(tmp_path, sandbox):
     assert json.loads(invoke("skills", "list", "-g", "--json").stdout) == []
     source = catalog_repo(tmp_path)

@@ -69,6 +69,20 @@ def test_check_works_after_catalog_unsubscribe_and_marks_local_edits(tmp_path, s
     assert (sandbox / ".agent-toolkit/skills/demo/SKILL.md").read_text() == "local work"
 
 
+def test_project_check_is_private_cache_and_visible_in_info(tmp_path, sandbox, monkeypatch):
+    upstream, cat = subscribed(tmp_path)
+    project = tmp_path / "project"
+    project.mkdir()
+    monkeypatch.chdir(project)
+    invoke("skills", "catalog", "enable", "demo", "--scope", "project", "--agents", "standard")
+    row = json.loads(invoke("skills", "check", "demo", "-p", "--json").stdout)[0]
+    assert row["status"] == "current"
+    assert not (project / "skills-update-checks.json").exists()
+    assert (sandbox / ".agent-toolkit/skills-update-checks.json").exists()
+    from agent_toolkit_tui.asset_info import catalog_skill_info
+    assert row["checked_at"] in "\n".join(catalog_skill_info("demo", scope="project", home=sandbox, project=project))
+
+
 def test_no_subscription_check_has_no_side_effects(sandbox):
     assert json.loads(invoke("skills", "check", "-g", "--json").stdout) == []
     assert not (sandbox / ".agent-toolkit").exists()

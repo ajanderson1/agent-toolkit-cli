@@ -47,12 +47,18 @@ array. Entries have a unique `key`, `description`, Git repository `source`, safe
 relative `path` (`.` for root), and optional branch/tag/commit `ref`. No payloads,
 credentials or activation state belong in the catalog. Nested children use their
 exact directory and existing shared-parent machinery. Matching source/path/ref
-reuses a library row; names alone never authorize replacement. Explicit catalog
+reuses a library row; names alone never authorize replacement. Existing catalog
+provenance also retains that association when a listing's selector changes; the
+changed selector is reported rather than acquired a second time. In subscribed
+CLI inventory, global-only library candidates retain their actual global record
+scope rather than being labeled as project registrations. Explicit catalog
 acquisition records provenance, while browsing does not mutate library records.
 
 `skills check [SLUGS...] -g|-p [--json]` checks catalog-associated downloaded
 skills against their recorded upstream selector without updating content. Results
-are timestamped in `skills-update-checks.json` beside the skills lock. Unequal
+are timestamped in a private `skills-update-checks.json` beside the global library
+lock, including observations keyed to individual project backings. This cache is
+not project configuration and is not transported when a project moves. Unequal
 commits mean the upstream revision differs, not proof of ancestry or a change in
 that particular monorepo child. Local changes are preserved. A failed check is
 unknown; changed local HEAD/source makes an old result stale. Fixed commit pins

@@ -61,9 +61,15 @@ def doctor_cmd(
         if snapshot.error:
             click.echo(f"Catalog warning: {snapshot.error}; local diagnosis continues.")
         else:
-            library = read_lock(library_lock_path(home=home))
+            from agent_toolkit_cli.skill_catalog_ops import catalog_target
+            entries = {**read_lock(library_lock_path(home=home)).skills, **read_lock(lock_path).skills}
             for item in snapshot.skills:
-                if item.key not in library.skills and (not slugs or item.key in slugs):
+                matched, warning = catalog_target(entries, item, snapshot.url)
+                if slugs and item.key not in slugs and matched not in slugs:
+                    continue
+                if warning:
+                    click.echo(f"Catalog advisory: {warning}")
+                elif matched is None:
                     click.echo(f"{item.key}: catalog listing only; no local backing expected.")
     for slug in slugs or tuple(read_lock(lock_path).skills):
         observed = read_check(slug, scope=scope, home=home, project=project_root)

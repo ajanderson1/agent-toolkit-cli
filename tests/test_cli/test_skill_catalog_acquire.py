@@ -78,6 +78,47 @@ def test_catalog_only_list_hides_when_offline_but_keeps_acquired(tmp_path, sandb
     assert (sandbox / ".agents/skills/demo").is_symlink()
 
 
+def test_custom_slug_selector_change_is_reported_not_acquired_twice(tmp_path, sandbox):
+    upstream, cat = subscribed(tmp_path)
+    invoke("skills", "add", upstream.as_uri(), "--path", "skills/demo", "--slug", "custom", "--ref", "main")
+    invoke("skills", "catalog", "add", "demo")
+    lockpath = sandbox / ".agent-toolkit/skills-lock.json"
+    before = lockpath.read_bytes()
+    data = json.loads((cat / "catalog.json").read_text())
+    data["skills"][0]["path"] = "skills/other"
+    (cat / "catalog.json").write_text(json.dumps(data))
+    git(cat, "add", ".")
+    git(cat, "-c", "user.name=Test", "-c", "user.email=test@example.test", "commit", "-m", "selector changed")
+    listed = invoke("skills", "list", "-g", "--json")
+    assert [row["slug"] for row in json.loads(listed.stdout)] == ["custom"]
+    assert "selector changed" in listed.stderr.lower()
+    from agent_toolkit_cli.skill_catalog import read_catalog
+    from agent_toolkit_tui.skill_state import build_skill_rows
+    rows = build_skill_rows(scope="global", home=sandbox, project=None, catalog_snapshot=read_catalog())
+    assert [row.slug for row in rows] == ["custom"]
+    assert "selector changed" in rows[0].catalog_warning.lower()
+    refused = CliRunner().invoke(main, ["skills", "catalog", "add", "demo"])
+    assert refused.exit_code != 0 and "selector changed" in refused.output.lower()
+    assert lockpath.read_bytes() == before
+    diagnosis = invoke("skills", "doctor", "-g", "--no-fix")
+    assert "selector changed" in diagnosis.output.lower()
+    assert "catalog listing only" not in diagnosis.output.lower()
+
+
+def test_catalog_inventory_does_not_relabel_global_rows_as_project(tmp_path, sandbox, monkeypatch):
+    upstream, cat = subscribed(tmp_path)
+    invoke("skills", "catalog", "add", "demo")
+    project = tmp_path / "project"
+    project.mkdir()
+    monkeypatch.chdir(project)
+    rows = json.loads(invoke("skills", "list", "-p", "--json").stdout)
+    assert rows[0]["slug"] == "demo" and rows[0]["scope"] == "global"
+    invoke("skills", "install", "demo", "-p", "--agents", "standard")
+    implicit = invoke("skills", "list", "--json")
+    assert json.loads(implicit.stdout)[0]["scope"] == "project"
+    assert "Operating on project scope" in implicit.stderr
+
+
 def test_matching_record_with_foreign_backing_origin_is_not_adopted(tmp_path, sandbox):
     upstream, cat = subscribed(tmp_path)
     invoke("skills", "catalog", "add", "demo")

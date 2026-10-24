@@ -54,9 +54,21 @@ def catalog_skill_info(slug: str, *, scope: str, home: Path, project: Path | Non
     central = canonical_skill_dir(slug, scope=scope, home=home, project=project).resolve() == library_skill_path(slug, home=home).resolve()
     if central:
         check_scope, check_project = "global", None
-    observed = read_check(slug, scope=check_scope, home=home, project=check_project)
+    observed = read_check(slug, scope=scope, home=home, project=project)
+    if observed is None and central:
+        observed = read_check(slug, scope=check_scope, home=home, project=check_project)
     flag = "-g" if check_scope == "global" else "-p"
     lines += [f"Recorded ref: {escape(entry.ref or '(default)')}"]
+    from agent_toolkit_cli.skill_catalog import run_git
+    import subprocess
+    try:
+        backing = canonical_skill_dir(slug, scope=scope, home=home, project=project)
+        if not backing.exists():
+            backing = library_skill_path(slug, home=home)
+        current_head = run_git(["rev-parse", "HEAD"], cwd=backing)
+        lines.append(f"Installed revision: {escape(current_head)}")
+    except (ValueError, RuntimeError, OSError, subprocess.SubprocessError):
+        lines.append("Installed revision: unavailable; inspect backing with skills doctor.")
     if observed:
         lines += [f"Installed revision at check: {escape(str(observed.get('local_sha') or '(unknown)'))}", f"Upstream status: {escape(str(observed['status']))} (historical observation)", f"Last checked: {escape(str(observed['checked_at']))}"]
         if observed.get("status") == "different":

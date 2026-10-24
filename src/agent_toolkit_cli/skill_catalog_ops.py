@@ -23,6 +23,26 @@ def catalog_match(entry: LockEntry, item: CatalogSkill) -> bool:
     )
 
 
+def catalog_target(entries: dict[str, LockEntry], item: CatalogSkill, catalog_url: str) -> tuple[str | None, str]:
+    """Resolve stable provenance before current selector equality. Never adopt changes."""
+    associated = []
+    for slug, entry in entries.items():
+        provenance = entry.extras.get("catalog")
+        if isinstance(provenance, dict) and provenance.get("url") == catalog_url and provenance.get("key") == item.key:
+            associated.append(slug)
+    matches = associated or [slug for slug, entry in entries.items() if catalog_match(entry, item)]
+    if len(matches) > 1:
+        return None, f"{item.key}: ambiguous matching library entries; inspect with CLI"
+    if matches:
+        slug = matches[0]
+        if not catalog_match(entries[slug], item):
+            return slug, f"{slug}: catalog selector changed; local source/ref/path retained. Inspect with skills status; source adoption is explicit CLI maintenance."
+        return slug, ""
+    if item.key in entries:
+        return item.key, f"{item.key}: library source/ref/path conflicts with catalog; existing content retained"
+    return None, ""
+
+
 def resolve_catalog_skill(key: str, *, expected: CatalogSkill | None = None, home: Path | None = None) -> tuple[CatalogSnapshot, CatalogSkill]:
     snapshot = read_catalog(home=home)
     if snapshot is None or snapshot.error:
@@ -39,11 +59,10 @@ def acquire_catalog_skill(item: CatalogSkill, *, catalog_url: str, home: Path | 
     from agent_toolkit_cli.commands.skill import add
     lock_path = library_lock_path(home=home)
     lock = read_lock(lock_path)
-    matches = [slug for slug, entry in lock.skills.items() if catalog_match(entry, item)]
-    if len(matches) > 1:
-        raise ValueError(f"{item.key}: ambiguous matching library entries")
-    if matches:
-        slug = matches[0]
+    slug, warning = catalog_target(lock.skills, item, catalog_url)
+    if warning:
+        raise ValueError(warning)
+    if slug is not None:
         if not (library_skill_path(slug, home=home) / "SKILL.md").is_file():
             raise ValueError(f"{slug}: recorded library content is missing; run skills doctor")
     else:
