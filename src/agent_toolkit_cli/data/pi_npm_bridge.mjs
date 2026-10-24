@@ -40,13 +40,13 @@ try {
   const identity = source => globalPM.parseSource(source).name;
   const globalRecords = new Map(records(request.global).map(p => [identity(spec(p)), p]));
   const projectRecords = new Map(records(request.projectSettings).map(p => [identity(spec(p)), p]));
-  const states = {};
+  const states = Object.create(null);
   for (const name of request.identities) {
     const g = globalRecords.get(name), p = projectRecords.get(name);
     const scopeState = async (scope, record, resolved) => {
       const inherits = scope === 'project' && (!record || (typeof record === 'object' && record.autoload === false)) && !!g;
       const selected = inherits ? g : record;
-      const source = selected ? spec(selected) : `npm:${name}`;
+      const source = selected ? spec(selected) : request.candidates[scope]?.[name] || `npm:${name}`;
       const pm = scope === 'global' ? globalPM : projectPM;
       const storageScope = scope === 'global' || inherits ? 'user' : 'project';
       const root = pm.getInstalledPath(source, storageScope);

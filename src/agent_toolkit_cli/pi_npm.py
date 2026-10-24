@@ -118,9 +118,24 @@ def _legacy_npm(home: Path, settings: dict) -> tuple[Path | None, tuple[str, ...
     return Path(root) if root else None, names
 
 
-def _direct_names(base: Path) -> set[str]:
+def _direct_sources(base: Path) -> dict[str, str]:
     dependencies = _json_object(base / "npm/package.json").get("dependencies", {})
-    return {_identity(name) for name in dependencies} if isinstance(dependencies, dict) else set()
+    sources = {}
+    if isinstance(dependencies, dict):
+        for name, version in dependencies.items():
+            name = _identity(name)
+            if not isinstance(version, str):
+                raise PiSettingsError(f"{base}: invalid npm dependency specification for {name}")
+            if version.startswith("file:"):
+                location = Path(version[5:])
+                if not location.is_absolute():
+                    version = "file:" + os.path.abspath(base / "npm" / location)
+            sources[name] = f"npm:{name}@{version}"
+    return sources
+
+
+def _direct_names(base: Path) -> set[str]:
+    return set(_direct_sources(base))
 
 
 def _has_extensions(root: Path) -> bool:
@@ -148,6 +163,7 @@ def read_npm_states(
         bases["project"] = project / ".pi"
     settings = {}
     identities = set()
+    candidates = {}
     for scope, base in bases.items():
         path = _pi_settings.settings_path(scope=scope, home=home, project=project)
         data = overrides[scope] if overrides and scope in overrides else _pi_settings._load(path)
@@ -155,7 +171,8 @@ def read_npm_states(
         identities.update(_identity(p["source"]) for p in records if p["source"].startswith("npm:"))
         # Native manager receives resource selection only, not executable commands.
         settings[scope] = {key: data[key] for key in ("packages", "extensions") if key in data}
-        identities.update(name for name in _direct_names(base) if _has_extensions(base / "npm/node_modules" / name))
+        candidates[scope] = _direct_sources(base)
+        identities.update(name for name in candidates[scope] if _has_extensions(base / "npm/node_modules" / name))
     global_data = _pi_settings._load(_pi_settings.settings_path(scope="global", home=home))
     legacy_root, legacy_names = _legacy_npm(home, global_data)
     if legacy_root:
@@ -169,7 +186,8 @@ def read_npm_states(
     request = {"home": str(home), "project": str(project) if project else None,
         "agentDir": str(bases["global"]), "piRoot": str(native_root),
         "global": settings["global"], "projectSettings": settings.get("project", {}),
-        "identities": sorted(identities), "legacyRoot": str(legacy_root) if legacy_root else None}
+        "identities": sorted(identities), "candidates": candidates,
+        "legacyRoot": str(legacy_root) if legacy_root else None}
     try:
         result = subprocess.run([node, str(Path(__file__).parent / "data/pi_npm_bridge.mjs")],
             input=json.dumps(request), text=True, capture_output=True, timeout=30,
@@ -184,3 +202,79 @@ def read_npm_states(
         snapshot = hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
         states[name] = NpmState(name, _scope_from_json(value["global"]), _scope_from_json(value["project"]), snapshot)
     return states
+
+
+def _change_selection(
+    *, identity: str, scope: Scope, home: Path, project: Path | None,
+    enabled: bool | None, expected_snapshot: str | None = None,
+) -> None:
+    from agent_toolkit_cli.pi_local_extensions import _settings_lock, _write_settings
+
+    identity = _identity(identity)
+    path = _pi_settings.settings_path(scope=scope, home=home, project=project)
+    try:
+        with _settings_lock(path):
+            state = read_npm_states(home=home, project=project).get(identity)
+            if state is None:
+                raise PiSettingsError(f"{identity}: no native installation or declaration; install first")
+            if expected_snapshot is not None and state.snapshot != expected_snapshot:
+                raise PiSettingsError(f"{identity}: native package or filters changed; revert, refresh and queue again")
+            current = state.for_scope(scope)
+            if enabled is True and (not current.compatible or not current.resources):
+                raise PiSettingsError(f"{identity}: install or repair this scope before enabling; toggle does not download packages")
+            data = _pi_settings._load(path)
+            records, style = _pi_settings._package_sources(data, path)
+            index = next((i for i, p in enumerate(records) if p["source"].startswith("npm:") and _identity(p["source"]) == identity), None)
+            if index is None:
+                if enabled is None or not current.configured and not enabled:
+                    return  # Reset/disable must not activate an unconfigured package's other resources.
+                if scope == "project" and state.global_scope.configured:
+                    record = {"source": state.global_scope.source, "autoload": False}
+                else:
+                    record = {"source": current.source}
+                index = len(records)
+                records.append(record)
+            record = dict(records[index])
+            delta = record.get("autoload") is False
+            if enabled is None:
+                record.pop("extensions", None)
+                if delta and scope == "project" and set(record) <= {"source", "autoload"}:
+                    records.pop(index)
+                else:
+                    records[index] = record
+            else:
+                if delta:
+                    # Basename globs cover both ordinary and dot-prefixed names,
+                    # including future package entrypoints. [] in an inherited
+                    # autoload:false delta would mean INHERIT, not disable.
+                    record["extensions"] = ["*", ".*"] if enabled else ["!*", "!.*"]
+                elif enabled:
+                    record.pop("extensions", None)
+                else:
+                    record["extensions"] = []
+                records[index] = record
+            data["packages"] = _pi_settings._encode_packages(records, style)
+            prospective = read_npm_states(home=home, project=project, overrides={scope: data}).get(identity)
+            if enabled is not None:
+                target = prospective.for_scope(scope) if prospective else NpmScope()
+                if target.enabled != enabled or target.mixed:
+                    raise PiSettingsError(f"{identity}: conflicting native reference prevents this selection; inspect Pi config")
+            _write_settings(path, data)
+    except (OSError, ValueError) as exc:
+        raise PiSettingsError(f"{path}: {exc}") from exc
+
+
+def set_npm_enabled(
+    *, identity: str, enabled: bool, scope: Scope, home: Path,
+    project: Path | None, expected_snapshot: str | None = None,
+) -> None:
+    """Settings-only all/none selection; never installs or deletes package files."""
+    _change_selection(identity=identity, enabled=enabled, scope=scope, home=home,
+        project=project, expected_snapshot=expected_snapshot)
+
+
+def reset_npm_override(
+    *, identity: str, scope: Scope, home: Path, project: Path | None,
+) -> None:
+    """Reset extension policy only, keeping owned installs and other deltas."""
+    _change_selection(identity=identity, enabled=None, scope=scope, home=home, project=project)

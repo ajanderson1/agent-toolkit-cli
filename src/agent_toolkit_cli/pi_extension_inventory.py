@@ -213,9 +213,9 @@ def build_inventory(
             global_loaded=global_scope.enabled, project_loaded=project_scope.enabled,
             managed=False, npm_state=state,
             global_package_spec=global_scope.source if global_scope.configured else None,
-            project_package_spec=project_scope.source if project_scope.configured else None,
+            project_package_spec=(project_scope.record if isinstance(project_scope.record, str) else project_scope.record["source"]) if project_scope.record is not None else None,
             global_config_path=_pi_settings.settings_path(scope="global", home=home) if global_scope.configured else None,
-            project_config_path=_pi_settings.settings_path(scope="project", project=project) if project is not None and project_scope.configured else None,
+            project_config_path=_pi_settings.settings_path(scope="project", project=project) if project is not None and project_scope.record is not None else None,
             global_package_metadata=global_scope.metadata, project_package_metadata=project_scope.metadata,
         )
     return [by_slug[k] for k in sorted(by_slug)]

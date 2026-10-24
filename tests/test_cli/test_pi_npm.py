@@ -54,6 +54,8 @@ def test_native_npm_identity_does_not_include_version(tmp_path):
     row = rows["@scope/demo"]
     assert row.global_loaded and row.project_loaded
     assert row.npm_state.project_scope.mode == "inherit"
+    assert row.project_package_spec is None
+    assert row.project_config_path is None
     assert row.npm_state.global_scope.version == "1.0.0"
 
 
@@ -63,6 +65,21 @@ def test_transitive_files_do_not_make_an_inventory_row(tmp_path):
     write_json(root.parent / "transitive/package.json", {"name": "transitive", "version": "1.0.0", "pi": {"extensions": ["index.js"]}})
     (root.parent / "transitive/index.js").write_text("throw new Error('never execute')")
     assert [r.slug for r in build_inventory(home=home, project=project)] == ["demo"]
+
+
+def test_available_install_keeps_its_local_source_not_a_registry_guess(tmp_path):
+    from agent_toolkit_cli.pi_npm import read_npm_states
+    home, project = tmp_path / "home", tmp_path / "project"
+    seed_package(home, project, configured=False)
+    write_json(home / ".pi/agent/npm/package.json", {"dependencies": {"demo": "file:/private/local-demo"}})
+    current = read_npm_states(home=home, project=project)["demo"]
+    assert current.global_scope.source == "npm:demo@file:/private/local-demo"
+
+
+def test_native_identity_cannot_disappear_as_a_javascript_prototype_key(tmp_path):
+    home, project = tmp_path / "home", tmp_path / "project"
+    seed_package(home, project, name="__proto__")
+    assert "__proto__" in {r.slug for r in build_inventory(home=home, project=project)}
 
 
 def test_configured_missing_source_remains_visible_without_fetch(tmp_path):
