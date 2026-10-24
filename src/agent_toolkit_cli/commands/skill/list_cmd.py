@@ -59,6 +59,13 @@ def list_cmd(
 
     lock_path = lock_file_path(scope=scope, home=home, project=project_root)
     lock = read_lock(lock_path)
+    from agent_toolkit_cli.skill_catalog import read_catalog
+    snapshot = read_catalog(home=home)
+    if snapshot is not None:
+        if snapshot.error:
+            click.echo(f"Warning: {snapshot.error}; catalog-only skills hidden", err=True)
+        _emit_catalog_inventory(lock, snapshot, scope=scope, home=home, project=project_root, agent=agent, as_json=as_json)
+        return
     scope_banner(
         scope, implicit=implicit, lock_path=lock_path,
         count=len(lock.skills), err=as_json,
@@ -77,6 +84,31 @@ def list_cmd(
         _emit_json(lock, slugs, scope)
         return
     _emit_table(lock, slugs, agent, scope=scope, project_flag_explicit=project_flag)
+
+
+def _emit_catalog_inventory(lock, snapshot, *, scope, home, project, agent, as_json):
+    from agent_toolkit_cli.skill_catalog_ops import catalog_match
+    from agent_toolkit_cli.skill_paths import library_lock_path
+    entries = {**read_lock(library_lock_path(home=home)).skills, **lock.skills}
+    rows = []
+    for slug, entry in sorted(entries.items()):
+        if agent is not None and agent not in _current_linked_agents(slug=slug, scope=scope, home=home, project=project):
+            continue
+        rows.append(dict(slug=slug, source=entry.source, ref=entry.ref, upstream_sha=entry.upstream_sha, local_sha=entry.local_sha, scope=scope, origin="library"))
+    for item in snapshot.skills:
+        if any(catalog_match(entry, item) for entry in entries.values()):
+            continue
+        if item.key in entries:
+            click.echo(f"Warning: catalog {item.key} conflicts with library source/ref/path", err=True)
+            continue
+        if agent is None:
+            rows.append(dict(slug=item.key, source=item.source.url, ref=item.source.ref, scope=scope, origin="catalog", description=item.description, path=item.source.subpath, upstream_sha=None, local_sha=None))
+    if as_json:
+        click.echo(json.dumps(rows))
+    elif rows:
+        click.echo(render_table([[r["slug"], r["origin"], r["source"], r["ref"] or "(default)", (r["upstream_sha"] or "")[:7]] for r in rows]))
+    else:
+        click.echo("(no skills available)")
 
 
 def _emit_json(lock: LockFile, slugs: list[str], scope: str) -> None:
