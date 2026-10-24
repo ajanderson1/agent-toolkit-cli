@@ -36,6 +36,7 @@ from textual.widgets import DataTable, OptionList, Static
 from agent_toolkit_tui.pi_extension_state import PiCell, PiExtensionRow
 from agent_toolkit_tui.widgets.pi_grid import PiGrid
 from agent_toolkit_tui.widgets.skill_grid import SkillGrid
+from tests.pi_npm_fixtures import display_state
 
 
 # ---------------------------------------------------------------------------
@@ -80,6 +81,7 @@ def _npm_row(
         source=spec,
         global_cell=cell,
         project_cell=cell,
+        npm_state=display_state(slug, global_loaded, project_loaded),
     )
 
 
@@ -477,7 +479,7 @@ async def test_npm_row_toggles_per_scope():
 
 
 @pytest.mark.asyncio
-async def test_unmanaged_npm_row_is_non_interactive_and_labeled():
+async def test_npm_without_native_state_is_non_interactive_and_labeled():
     """Space on unmanaged npm warns/no-ops; origin says npm."""
 
     class _A(App):
@@ -498,7 +500,7 @@ async def test_unmanaged_npm_row_is_non_interactive_and_labeled():
 
 
 @pytest.mark.asyncio
-async def test_unmanaged_npm_info_body_gives_manual_removal_advice():
+async def test_npm_without_native_state_requires_refresh_before_control():
     """Info body explains toolkit refusal and exact settings edit."""
 
     class _A(App):
@@ -511,16 +513,11 @@ async def test_unmanaged_npm_info_body_gives_manual_removal_advice():
         g = app.query_one("#g", PiGrid)
         row = _unmanaged_npm_row("pi-title-renamer")
         body = g._info_body(row=row, scope="global")
-        assert "npm:pi-title-renamer" in body
-        assert "did not register this npm reference" in body
-        assert "/tmp/home/.pi/agent/settings.json" in body
-        assert "whose source is 'npm:pi-title-renamer'" in body
-
-        # If the active scope has no npm metadata, still show the exact loaded
-        # scope path/spec instead of a vague placeholder.
+        assert "Native npm state unavailable" in body
+        assert "refresh" in body
+        assert "did not register" not in body
         project_body = g._info_body(row=row, scope="project")
-        assert "/tmp/home/.pi/agent/settings.json" in project_body
-        assert "whose source is 'npm:pi-title-renamer'" in project_body
+        assert "Native npm state unavailable" in project_body
 
 
 @pytest.mark.asyncio
@@ -666,65 +663,6 @@ async def test_apply_store_owned_global(monkeypatch):
     assert "applied:" in footer
     assert "failed" not in footer or "0 failed" in footer
     assert len(applied_calls) >= 1
-
-
-@pytest.mark.asyncio
-async def test_apply_npm_global_and_project(monkeypatch):
-    """Apply npm link for global and unlink for project: delegates to
-    add_package (link) and remove_package_by_identity (unlink, drift-tolerant)."""
-    from agent_toolkit_tui.app import TUIApp
-    import agent_toolkit_cli._pi_settings as _settings
-    import agent_toolkit_cli.pi_extension_lock as _lock
-    import agent_toolkit_cli.pi_extension_ops as _ops
-
-    add_calls: list[Any] = []
-    remove_calls: list[Any] = []
-
-    def fake_add(spec, *, scope, home=None, project=None):
-        add_calls.append({"spec": spec, "scope": scope, "home": home, "project": project})
-
-    def fake_remove(spec, *, scope, home=None, project=None):
-        remove_calls.append({"spec": spec, "scope": scope, "home": home, "project": project})
-
-    entry = MagicMock()
-    entry.source_type = "npm"
-    entry.source = "npm:@scope/pkg"
-    entry.ref = None
-    entry.pi_extension_path = None
-
-    def fake_read_lock(path):
-        lf = MagicMock()
-        lf.skills = {"@scope/pkg": entry}
-        return lf
-
-    monkeypatch.setattr(_settings, "add_package", fake_add)
-    # Delegated npm uninstall goes through remove_package_by_identity (#333):
-    # drift-tolerant, unlike the old exact-match remove_package.
-    monkeypatch.setattr(_settings, "remove_package_by_identity", fake_remove)
-    monkeypatch.setattr(_lock, "read_lock", fake_read_lock)
-    monkeypatch.setattr(_ops, "_global_entry", lambda slug: entry)
-    monkeypatch.setattr("agent_toolkit_cli.pi_extension_paths.library_lock_path", lambda env=None: Path("/fake/lock"))
-
-    app = TUIApp()
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        app._active_asset_type = "pi-extension"
-        grid = app.query_one("#pi-grid", PiGrid)
-        grid.set_rows([_npm_row("@scope/pkg", global_loaded=False, project_loaded=True)])
-        grid.restore_pending({
-            ("global", "@scope/pkg"): "link",
-            ("project", "@scope/pkg"): "unlink",
-        })
-        await pilot.pause()
-
-        app._apply_pi_pending()
-        footer = str(app.query_one("#footer-pending", Static).render())
-
-    assert "applied:" in footer
-    # add_package called for global scope
-    assert any(c["scope"] == "global" and c["spec"] == "npm:@scope/pkg" for c in add_calls)
-    # remove_package_by_identity called for project scope
-    assert any(c["scope"] == "project" and c["spec"] == "npm:@scope/pkg" for c in remove_calls)
 
 
 @pytest.mark.asyncio

@@ -193,12 +193,12 @@ async def test_partial_success_keeps_only_the_failed_local_intent(environment):
         assert json.loads((home / ".pi/agent/settings.json").read_text())["extensions"] == ["-extensions/router.ts"]
 
 
-async def test_refresh_preserves_local_intent_but_keeps_registered_package_discard_policy(environment):
+async def test_refresh_preserves_local_intent_but_keeps_library_discard_policy(environment):
     home, project = environment
     seed(home, project)
     lock = home / ".agent-toolkit/pi-extensions-lock.json"
     lock.parent.mkdir(parents=True)
-    lock.write_text(json.dumps({"version": 1, "skills": {"registered": {"source": "npm:registered", "sourceType": "npm"}}}))
+    lock.write_text(json.dumps({"version": 1, "skills": {"registered": {"source": "owner/registered", "sourceType": "github", "piExtensionPath": "registered"}}}))
     before = lock.read_bytes()
     app = TUIApp()
     async with app.run_test() as pilot:

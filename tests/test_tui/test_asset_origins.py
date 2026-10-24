@@ -176,6 +176,9 @@ async def test_pi_origin_labels_and_active_info(origin, managed, label, tmp_path
     cell = PiCell(True, False, origin, managed=managed)
     row = PiExtensionRow("demo", origin, spec, cell, cell, managed=managed,
                          global_config_path=str(settings), global_package_spec=spec)
+    if origin == "npm":
+        from tests.pi_npm_fixtures import display_state
+        row.npm_state = display_state("@scope/pkg", True, False)
     if origin == "untracked":
         loose = tmp_path / ".pi/agent/extensions/demo.ts"
         loose.parent.mkdir()
@@ -191,14 +194,12 @@ async def test_pi_origin_labels_and_active_info(origin, managed, label, tmp_path
         assert "adopt" not in body.lower()
         if origin == "npm":
             assert "download status is not checked" not in body
-            assert "Enabled globally: Yes" in body
-            assert "Enabled for this project: No" in body
-            assert "Remove with Pi: pi uninstall npm:@scope/pkg" in body
-            assert "not package files" in body
-            if not managed:
-                assert str(settings) in body
-                assert spec in body
-                assert "did not register" in body
+            assert "Enabled globally: Enabled" in body
+            assert "Enabled for this project: Disabled" in body
+            assert "Remove installation/declaration: agent-toolkit-cli pi-extensions remove npm:@scope/pkg --global" in body
+            assert "files and declarations are retained" in body
+            assert "did not register" not in body
+            assert "second unregister step" in body
         elif origin == "local-package":
             assert str(settings) in body
             assert str(settings.parent / "../local package") in body

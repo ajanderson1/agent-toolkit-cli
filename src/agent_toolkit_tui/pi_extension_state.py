@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Literal
 
 from agent_toolkit_cli.pi_local_extensions import LocalExtensionState, read_local_extension_states
+from agent_toolkit_cli.pi_npm import NpmState
 from agent_toolkit_cli.pi_extension_inventory import InventoryRecord, build_inventory
 from agent_toolkit_cli.pi_extension_paths import library_pi_extension_path, pi_extension_dir
 
@@ -49,6 +50,7 @@ class PiExtensionRow:
     global_package_metadata: dict[str, object] | None = None
     project_package_metadata: dict[str, object] | None = None
     local_state: LocalExtensionState | None = None
+    npm_state: NpmState | None = None
 
 
 def _row_from_record(rec: InventoryRecord) -> PiExtensionRow:
@@ -81,6 +83,7 @@ def _row_from_record(rec: InventoryRecord) -> PiExtensionRow:
         project_config_path=str(rec.project_config_path) if rec.project_config_path else None,
         global_package_metadata=rec.global_package_metadata,
         project_package_metadata=rec.project_package_metadata,
+        npm_state=rec.npm_state,
     )
 
 
@@ -96,7 +99,7 @@ def build_pi_rows(
     local_states = read_local_extension_states(home=home, project=project) if any(record.origin == "untracked" for record in records) else {}
     rows = []
     for record in records:
-        if record.origin in ("npm", "local-package"):
+        if record.origin == "local-package":
             record = replace(
                 record, global_loaded=record.global_package_spec is not None,
                 project_loaded=record.project_package_spec is not None,
@@ -111,7 +114,7 @@ def build_pi_rows(
                 record, global_loaded=linked["global"],
                 project_loaded=linked.get("project", False),
             )
-        else:
+        elif record.origin == "untracked":
             state = local_states.get(record.slug, LocalExtensionState())
             record = replace(record, global_loaded=state.global_enabled, project_loaded=state.project_enabled)
         row = _row_from_record(record)

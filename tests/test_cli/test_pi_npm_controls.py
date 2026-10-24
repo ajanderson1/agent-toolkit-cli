@@ -122,6 +122,33 @@ def test_enable_missing_requires_explicit_install_without_writing(setup):
     assert config.read_bytes() == before
 
 
+def test_enable_unconfigured_files_does_not_activate_other_resource_types(setup):
+    home, project, root = setup
+    write_json(home / ".pi/agent/settings.json", {"packages": []})
+    toggle(home, project, True)
+    record = state(home, project).global_scope.record
+    assert record["skills"] == [] and record["prompts"] == [] and record["themes"] == []
+    assert state(home, project).global_scope.enabled
+
+
+def test_reset_owned_autoload_false_keeps_its_project_declaration(setup):
+    home, project, root = setup
+    write_json(home / ".pi/agent/settings.json", {"packages": []})
+    seed_package(home, project, scope="project", version="2.0.0")
+    write_json(project / ".pi/settings.json", {"packages": [{"source": "npm:demo@2.0.0", "autoload": False, "extensions": ["+extensions/main.ts"]}]})
+    pi_npm.reset_npm_override(identity="demo", scope="project", home=home, project=project)
+    assert state(home, project).project_scope.record == {"source": "npm:demo@2.0.0", "autoload": False}
+
+
+def test_project_overlay_does_not_hide_a_separate_unused_installation(setup):
+    home, project, root = setup
+    project_root = seed_package(home, project, scope="project", version="2.0.0")
+    write_json(project / ".pi/settings.json", {"packages": [{"source": "npm:demo@2.0.0", "autoload": False, "extensions": ["+extensions/main.ts"]}]})
+    current = state(home, project).project_scope
+    assert current.root == root and current.version == "1.0.0"
+    assert current.scope_root == project_root and current.scope_version == "2.0.0"
+
+
 def test_reset_delta_preserves_other_resource_overrides(setup):
     home, project, root = setup
     config = project / ".pi/settings.json"

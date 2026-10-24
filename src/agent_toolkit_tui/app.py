@@ -711,16 +711,17 @@ class TUIApp(App):
 
         pending = grid.pending_entries()
         local_targets = grid.pending_local_targets()
+        npm_snapshots = grid.pending_npm_snapshots()
         # Scope follows the visible application toggle even if rebuilding fails.
         grid.set_scope(self._scope)  # type: ignore[arg-type]
         try:
             rows = build_pi_rows(home=Path.home(), project=Path.cwd())
         except (PiSettingsError, OSError, ValueError) as exc:
-            grid.restore_pending(pending, local_targets=local_targets)
+            grid.restore_pending(pending, local_targets=local_targets, npm_snapshots=npm_snapshots)
             self.notify(str(exc), title="Pi refresh failed", severity="error", timeout=12)
             return
         grid.set_rows(rows)
-        grid.restore_pending(pending, local_targets=local_targets)
+        grid.restore_pending(pending, local_targets=local_targets, npm_snapshots=npm_snapshots)
 
     # ----- agent-view --------------------------------------------------------
 
@@ -1074,9 +1075,10 @@ class TUIApp(App):
         # assets retain their existing refresh-discard behavior.
         if isinstance(grid, PiGrid):
             targets = grid.pending_local_targets()
-            local_pending = {key: op for key, op in grid.pending_entries().items() if key in targets}
+            npm_snapshots = grid.pending_npm_snapshots()
+            native_pending = {key: op for key, op in grid.pending_entries().items() if key in targets or key in npm_snapshots}
             grid.clear_pending()
-            grid.restore_pending(local_pending, local_targets=targets)
+            grid.restore_pending(native_pending, local_targets=targets, npm_snapshots=npm_snapshots)
         elif grid is not None:
             grid.clear_pending()
         self._refresh_active_view()
@@ -1543,6 +1545,7 @@ class TUIApp(App):
             pi_extension_ops,
         )
         from agent_toolkit_cli.pi_local_extensions import set_local_extension_enabled
+        from agent_toolkit_cli.pi_npm import set_npm_enabled, reset_npm_override
         from agent_toolkit_cli.pi_extension_lock import read_lock
         from agent_toolkit_cli.pi_extension_paths import library_lock_path
 
@@ -1560,6 +1563,7 @@ class TUIApp(App):
         errors: list[str] = []
 
         local_targets = grid.pending_local_targets()
+        npm_snapshots = grid.pending_npm_snapshots()
         remaining = {}
         glob_lock = None
         _Scope = Literal["global", "project"]
@@ -1567,7 +1571,12 @@ class TUIApp(App):
             scope = cast(_Scope, scope_str)
             key = (scope_str, slug)
             try:
-                if key in local_targets:
+                if key in npm_snapshots:
+                    if op == "reset":
+                        reset_npm_override(identity=slug, scope=scope, home=home, project=Path.cwd(), expected_snapshot=npm_snapshots[key])
+                    else:
+                        set_npm_enabled(identity=slug, enabled=op == "link", scope=scope, home=home, project=Path.cwd(), expected_snapshot=npm_snapshots[key])
+                elif key in local_targets:
                     # Local configuration has no dependency on a Toolkit lock.
                     set_local_extension_enabled(
                         slug=slug, scope=scope, enabled=op == "link",
@@ -1580,7 +1589,7 @@ class TUIApp(App):
                             glob_lock = read_lock(library_lock_path(env={}))
                         except Exception as exc:
                             raise _pi_settings.PiSettingsError(f"global lock: {exc}") from exc
-                    if slug not in glob_lock.skills:
+                    if slug not in glob_lock.skills or glob_lock.skills[slug].source_type == "npm":
                         raise _pi_settings.PiSettingsError(
                             f"{slug}: no longer registered or missing local target snapshot; refresh and queue again"
                         )
@@ -1599,7 +1608,7 @@ class TUIApp(App):
                 remaining[key] = op
 
         grid.clear_pending()
-        grid.restore_pending(remaining, local_targets=local_targets)
+        grid.restore_pending(remaining, local_targets=local_targets, npm_snapshots=npm_snapshots)
         self._refresh_pi_view()
         self._refresh_pending_label()
         self._refresh_status_bar()
@@ -1982,7 +1991,7 @@ class TUIApp(App):
                 f"[b red]{broken}[/] broken"
             )
         elif active == "pi-extension":
-            enabled = linked = 0
+            enabled = linked = mixed = 0
             try:
                 grid_pi = self.query_one("#pi-grid", PiGrid)
             except (NoMatches, Exception):
@@ -1990,6 +1999,8 @@ class TUIApp(App):
             if grid_pi is not None:
                 scope = self._scope_to_roots()[0]
                 for pi_row in grid_pi._rows:
+                    if pi_row.npm_state and pi_row.npm_state.for_scope(scope).mixed:
+                        mixed += 1
                     if pi_row.local_state and (pi_row.local_state.global_package_paths if scope == "global" else pi_row.local_state.project_package_paths):
                         continue  # Count its package reference, not a duplicate loose cell.
                     selected = (
@@ -2005,7 +2016,8 @@ class TUIApp(App):
             else:
                 pending = 0
             connections = f"   [b green]{linked}[/] linked" if linked else ""
-            text = f"  [b green]{enabled}[/] enabled{connections}   [b yellow]{pending}[/] pending"
+            partial = f"   [b yellow]{mixed}[/] mixed" if mixed else ""
+            text = f"  [b green]{enabled}[/] enabled{connections}{partial}   [b yellow]{pending}[/] pending"
         elif active == "mcp":
             linked = 0
             try:

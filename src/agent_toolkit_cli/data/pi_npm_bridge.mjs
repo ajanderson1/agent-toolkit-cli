@@ -41,12 +41,13 @@ try {
   const globalRecords = new Map(records(request.global).map(p => [identity(spec(p)), p]));
   const projectRecords = new Map(records(request.projectSettings).map(p => [identity(spec(p)), p]));
   const states = Object.create(null);
+  const candidate = (scope, name) => Object.hasOwn(request.candidates[scope] || {}, name) ? request.candidates[scope][name] : `npm:${name}`;
   for (const name of request.identities) {
     const g = globalRecords.get(name), p = projectRecords.get(name);
     const scopeState = async (scope, record, resolved) => {
       const inherits = scope === 'project' && (!record || (typeof record === 'object' && record.autoload === false)) && !!g;
       const selected = inherits ? g : record;
-      const source = selected ? spec(selected) : request.candidates[scope]?.[name] || `npm:${name}`;
+      const source = selected ? spec(selected) : candidate(scope, name);
       const pm = scope === 'global' ? globalPM : projectPM;
       const storageScope = scope === 'global' || inherits ? 'user' : 'project';
       const root = pm.getInstalledPath(source, storageScope);
@@ -55,6 +56,12 @@ try {
         try { metadata = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')); version = metadata.version || null; } catch {}
       }
       const compatible = !!root && await pm.installedNpmMatchesConfiguredVersion(pm.parseSource(source), root);
+      const scopeSource = record ? spec(record) : candidate(scope, name);
+      const managed = pm.getManagedNpmInstallPath(pm.parseSource(scopeSource), scope === 'global' ? 'user' : 'project');
+      const scopeRoot = existsSync(managed) ? managed : scope === 'global' ? root : null;
+      let scopeVersion = null;
+      if (scopeRoot) { try { scopeVersion = JSON.parse(readFileSync(join(scopeRoot, 'package.json'), 'utf8')).version || null; } catch {} }
+      const scopeCompatible = !!scopeRoot && await pm.installedNpmMatchesConfiguredVersion(pm.parseSource(scopeSource), scopeRoot);
       const entries = resolved.extensions.filter(e => e.metadata.origin === 'package' &&
         e.metadata.source.startsWith('npm:') && identity(e.metadata.source) === name)
         .map(e => ({ path: e.path, enabled: e.enabled }));
@@ -65,7 +72,8 @@ try {
         for (const e of pm.toResolvedPaths(accumulator).extensions) resources.push(e.path);
       }
       return { record: record || null, source, root: root || null, version, metadata,
-        compatible, configured: !!selected, missing: !!selected && !compatible,
+        compatible, scope_root: scopeRoot || null, scope_version: scopeVersion, scope_compatible: scopeCompatible,
+        configured: !!selected, missing: !!selected && !compatible,
         mode: inherits ? (record && Object.hasOwn(record, 'extensions') ? 'override' : 'inherit') : record ? 'owned' : 'available',
         entries, resources,
         external: !!root && !!request.legacyRoot && root.startsWith(request.legacyRoot + '/') };

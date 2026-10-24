@@ -52,7 +52,7 @@ from agent_toolkit_tui.screens.cell_info import CellInfoScreen
 from agent_toolkit_tui.widgets.column_info_modal import ColumnInfoModal
 from agent_toolkit_tui.widgets.filter_input import GridFilterInput
 
-Op = Literal["link", "unlink"]
+Op = Literal["link", "unlink", "reset"]
 
 _LOADED_GLYPH    = "[green]✔[/]"
 _UNLOADED_GLYPH  = "☐"
@@ -101,6 +101,7 @@ class PiGrid(Vertical):
     BINDINGS = [
         Binding("space", "toggle_cell", "Toggle", priority=True),
         Binding("i", "info", "Info", priority=True),
+        Binding("r", "reset_npm_selection", "Reset npm filter"),
     ]
 
     def __init__(self, rows: list[PiExtensionRow], *, id: str | None = None) -> None:
@@ -110,6 +111,7 @@ class PiGrid(Vertical):
         # (scope: "global"|"project", slug) -> Op
         self._pending: dict[tuple[str, str], Op] = {}
         self._local_targets: dict[tuple[str, str], tuple[Path, ...]] = {}
+        self._npm_snapshots: dict[tuple[str, str], str] = {}
         self._filter: str = ""
 
     @property
@@ -124,6 +126,7 @@ class PiGrid(Vertical):
         self._rows = sorted(rows, key=lambda r: r.slug)
         self._pending.clear()
         self._local_targets.clear()
+        self._npm_snapshots.clear()
         try:
             table = self.query_one("#pi-table", DataTable)
             self._rebuild(table)
@@ -134,6 +137,7 @@ class PiGrid(Vertical):
         self._scope = scope
         self._pending.clear()
         self._local_targets.clear()
+        self._npm_snapshots.clear()
         # Snap the cursor to the single interactive scope column (same row).
         try:
             table = self.query_one("#pi-table", DataTable)
@@ -149,9 +153,13 @@ class PiGrid(Vertical):
     def pending_local_targets(self) -> dict[tuple[str, str], tuple[Path, ...]]:
         return dict(self._local_targets)
 
+    def pending_npm_snapshots(self) -> dict[tuple[str, str], str]:
+        return dict(self._npm_snapshots)
+
     def clear_pending(self) -> None:
         self._pending.clear()
         self._local_targets.clear()
+        self._npm_snapshots.clear()
         try:
             table = self.query_one("#pi-table", DataTable)
             self._rebuild(table)
@@ -161,10 +169,13 @@ class PiGrid(Vertical):
     def restore_pending(
         self, pending: dict[tuple[str, str], Op], *,
         local_targets: dict[tuple[str, str], tuple[Path, ...]] | None = None,
+        npm_snapshots: dict[tuple[str, str], str] | None = None,
     ) -> None:
         self._pending.update(pending)
         if local_targets is not None:
             self._local_targets.update({key: paths for key, paths in local_targets.items() if key in pending})
+        if npm_snapshots is not None:
+            self._npm_snapshots.update({key: value for key, value in npm_snapshots.items() if key in pending})
         try:
             table = self.query_one("#pi-table", DataTable)
             self._rebuild(table)
@@ -172,7 +183,7 @@ class PiGrid(Vertical):
             pass
 
     def _project_install_blocked(self, *, row: PiExtensionRow, loaded: bool) -> bool:
-        return row.origin != "untracked" and self._scope == "project" and row.global_cell.global_loaded and not loaded
+        return row.origin not in ("untracked", "npm") and self._scope == "project" and row.global_cell.global_loaded and not loaded
 
     def _notify_pending(self) -> None:
         self.post_message(self.PendingChanged(len(self._pending)))
@@ -287,31 +298,59 @@ class PiGrid(Vertical):
         return "\n".join(info.lines)
 
     def _info_body(self, *, row: PiExtensionRow, scope: str) -> str:
-        sections = [self._extension_info_body(row), self._scope_info_body(row=row, scope=scope)]
-        if row.origin == "npm":
-            from shlex import join
+        return "\n\n".join(section for section in (
+            self._extension_info_body(row), self._scope_info_body(row=row, scope=scope),
+        ) if section)
 
-            removal_scope = scope
-            if scope == "project" and not row.project_package_spec and row.global_package_spec:
-                removal_scope = "global"
-            elif scope == "global" and not row.global_package_spec and row.project_package_spec:
-                removal_scope = "project"
-            spec = (
-                row.global_package_spec if removal_scope == "global" else row.project_package_spec
-            ) or row.source
-            command = join(["pi", "uninstall", spec] + (["-l"] if removal_scope == "project" else []))
-            removal = (
-                f"Remove with Pi: {escape(command)}\n"
-                "Removes package files and the Pi settings reference.\n"
-            )
-            removal += (
-                "Run in this project's directory."
-                if removal_scope == "project" else "Uses global Pi settings."
-            )
-            if row.managed:
-                removal += "\nToolkit registration is kept."
-            sections.append(removal)
-        return "\n\n".join(section for section in sections if section)
+    def _npm_info_body(self, row: PiExtensionRow, scope: str) -> str:
+        from shlex import join
+        if row.npm_state is None:
+            return "Native npm state unavailable; refresh before changing selection."
+        state = row.npm_state
+        current = state.for_scope(scope)
+        mode = {"inherit": "Inherited global policy", "override": "Project override of global package",
+            "owned": "Scope-owned declaration", "available": "Available, not configured"}[current.mode]
+        details = [f"Native Pi selection: {current.status}", mode,
+            f"Source: {current.source}",
+            f"Installed version: {current.version or 'not installed'}",
+            f"Installation: {current.root or 'missing in this scope'}"]
+        if current.record is not None:
+            declaration = current.record if isinstance(current.record, str) else current.record["source"]
+            details.append(f"Scoped declaration: {declaration}")
+        if current.scope_root is not None and current.scope_root != current.root:
+            details.append(f"Separate scope installation (not selected): {current.scope_root} · {current.scope_version}")
+        pending = self._pending.get((scope, row.slug))
+        if pending:
+            action = {"link": "Enable all extensions", "unlink": "Disable all extensions", "reset": "Reset extension policy"}[pending]
+            details.append(f"Pending: {action} ({scope}). Ctrl+S → apply")
+        elif current.compatible and current.resources:
+            action = "Disable" if current.enabled else "Enable"
+            details.append(f"Space → queue {action} all extensions; Ctrl+S → apply")
+        else:
+            details.append("Install/repair this scope first; toggles never download packages.")
+        details.extend([
+            f"Selection affects this package's {len(current.resources)} extension entrypoints.",
+            "Enable/Disable changes native package filters only; files and declarations are retained.",
+            "Bundled skills, prompts and themes are unchanged by this checkbox.",
+            "R → queue reset of this scope's extension filter; Ctrl+S → apply.",
+        ])
+        if scope == "project" and current.mode in ("inherit", "override"):
+            details.append("Reset restores global inheritance; no separate project installation is needed.")
+            details.append("To stop using this global package here, Disable here—not global uninstall.")
+        elif not current.configured and not current.installed:
+            details.append("No installation or declaration to remove in this scope.")
+        else:
+            command = ["agent-toolkit-cli", "pi-extensions", "remove", "npm:" + state.identity,
+                "--global" if scope == "global" else "--project"]
+            if current.external:
+                command.append("--external")
+                details.append("Externally installed npm package; removal needs explicit shared-installation confirmation.")
+            details.append("Remove installation/declaration: " + join(command))
+            details.append("Package removal also affects bundled resources. Other scopes and global fallback may remain active.")
+        if scope == "project":
+            details.append("Project resources still require Pi project trust; Toolkit does not grant it.")
+        details.append("No Toolkit npm registration or second unregister step. Running Pi sessions are unchanged.")
+        return escape("\n".join(details))
 
     def _scope_info_body(self, *, row: PiExtensionRow, scope: str) -> str:
         from pathlib import Path
@@ -382,31 +421,13 @@ class PiGrid(Vertical):
         loaded = row.global_cell.global_loaded if scope == "global" else row.project_cell.project_loaded
 
         if row.origin == "npm":
-            if not row.managed:
-                if scope == "global":
-                    path = row.global_config_path or row.project_config_path or "Pi settings.json"
-                    spec = row.global_package_spec or row.project_package_spec or row.source
-                else:
-                    path = row.project_config_path or row.global_config_path or "Pi settings.json"
-                    spec = row.project_package_spec or row.global_package_spec or row.source
-                return (
-                    "Toolkit did not register this npm reference; toggles are unavailable.\n"
-                    + escape(f"Manual removal: edit {path} and remove the packages[] entry "
-                             f"whose source is {spec!r} (or the matching string entry).\n"
-                             "This removes only the reference, not package files.")
-                )
-            target = "global Pi settings" if scope == "global" else "this project's Pi settings"
-            effect = (
-                f"Enable adds the package to {target}.\n"
-                "Disable removes that reference, not package files."
-            )
-        else:
-            link = pi_extension_dir(row.slug, scope=scope, home=home, project=project)
-            effect = (
-                "Enable connects the library source to Pi.\n"
-                "Disable removes the connection, not source files.\n"
-                f"Pi path: {escape(str(link))}"
-            )
+            return self._npm_info_body(row, scope)
+        link = pi_extension_dir(row.slug, scope=scope, home=home, project=project)
+        effect = (
+            "Enable connects the library source to Pi.\n"
+            "Disable removes the connection, not source files.\n"
+            f"Pi path: {escape(str(link))}"
+        )
 
         if pending:
             action = "Enable" if pending == "link" else "Disable"
@@ -432,10 +453,10 @@ class PiGrid(Vertical):
         if row.origin == "local-package":
             return
 
-        if row.origin == "npm" and not row.managed:
+        if row.origin == "npm" and row.npm_state is None:
             try:
                 self.app.notify(
-                    "npm reference not registered by Toolkit: see Info for removal",
+                    "Native npm state unavailable: refresh before changing selection",
                     severity="warning",
                 )
             except Exception:
@@ -454,6 +475,7 @@ class PiGrid(Vertical):
         if key in self._pending:
             del self._pending[key]
             self._local_targets.pop(key, None)
+            self._npm_snapshots.pop(key, None)
         else:
             loaded = (
                 row.global_cell.global_loaded
@@ -465,6 +487,8 @@ class PiGrid(Vertical):
             self._pending[key] = "unlink" if loaded else "link"
             if row.origin == "untracked":
                 self._local_targets[key] = row.local_state.paths_for(scope) if row.local_state else ()
+            elif row.npm_state is not None:
+                self._npm_snapshots[key] = row.npm_state.snapshot
 
         try:
             table = self.query_one("#pi-table", DataTable)
@@ -475,6 +499,24 @@ class PiGrid(Vertical):
 
 
         table.refresh()
+
+    def action_reset_npm_selection(self) -> None:
+        table = self.query_one("#pi-table", DataTable)
+        visible = self._visible_rows()
+        if table.cursor_coordinate.row >= len(visible):
+            return
+        row = visible[table.cursor_coordinate.row]
+        if row.npm_state is None:
+            return
+        key = (self._scope, row.slug)
+        if self._pending.get(key) == "reset":
+            self._pending.pop(key)
+            self._npm_snapshots.pop(key, None)
+        else:
+            self._pending[key] = "reset"
+            self._npm_snapshots.setdefault(key, row.npm_state.snapshot)
+        self._rebuild(table)
+        self._notify_pending()
 
     def _rebuild(self, table: DataTable) -> None:
         saved = table.cursor_coordinate
@@ -536,6 +578,9 @@ class PiGrid(Vertical):
 
     @staticmethod
     def _selection_label(row: PiExtensionRow, scope: str) -> str:
+        if row.npm_state:
+            current = row.npm_state.for_scope(scope)
+            return current.status + (" (inherited global)" if scope == "project" and current.mode == "inherit" else "")
         if row.local_state:
             package_paths = row.local_state.global_package_paths if scope == "global" else row.local_state.project_package_paths
             if package_paths:
@@ -561,6 +606,12 @@ class PiGrid(Vertical):
             base = _PENDING_LINK
         elif pending == "unlink":
             base = _PENDING_UNLINK
+        elif pending == "reset":
+            base = "[yellow]↺[/]"
+        elif row.npm_state and row.npm_state.for_scope(scope).missing:
+            base = "[yellow]![/]"
+        elif row.npm_state and row.npm_state.for_scope(scope).mixed:
+            base = _MIXED_GLYPH
         elif row.local_state and (row.local_state.global_package_paths if scope == "global" else row.local_state.project_package_paths):
             base = _UNTRACKED_GLYPH
         elif row.local_state and (row.local_state.global_mixed if scope == "global" else row.local_state.project_mixed):

@@ -20,3 +20,21 @@ def seed_package(home: Path, project: Path, *, scope="global", name="demo", vers
     if configured:
         write_json(base / "settings.json", {"packages": [f"npm:{name}@{version}"]})
     return root
+
+
+def display_state(identity, global_enabled=False, project_enabled=False):
+    """Complete renderer-only state. Apply tests use real seed_package + Pi."""
+    from agent_toolkit_cli.pi_npm import NpmState, NpmScope
+    root = Path("/tmp/pi-npm-renderer") / identity
+    entry = root / "index.ts"
+    source = "npm:" + identity
+    metadata = {"name": identity, "version": "1.0.0", "pi": {"extensions": ["index.ts"]}}
+    shared = dict(source=source, root=root, version="1.0.0", metadata=metadata,
+                  compatible=True, configured=True, resources=(entry,))
+    global_scope = NpmScope(**shared, record=source if global_enabled else {"source": source, "extensions": []},
+                           entries=((entry, global_enabled),), mode="owned", scope_root=root,
+                           scope_version="1.0.0", scope_compatible=True)
+    differs = global_enabled != project_enabled
+    record = {"source": source, "autoload": False, "extensions": ["+index.ts" if project_enabled else "-index.ts"]} if differs else None
+    project_scope = NpmScope(**shared, record=record, entries=((entry, project_enabled),), mode="override" if differs else "inherit")
+    return NpmState(identity, global_scope, project_scope, f"renderer-{identity}-{global_enabled}-{project_enabled}")

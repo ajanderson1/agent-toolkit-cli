@@ -10,6 +10,7 @@ from textual.app import App, ComposeResult
 
 from agent_toolkit_tui.pi_extension_state import build_pi_rows
 from agent_toolkit_tui.widgets.pi_grid import PiGrid
+from tests.pi_npm_fixtures import seed_package
 
 
 def _settings(path: Path, **values) -> None:
@@ -100,7 +101,7 @@ def test_project_reference_does_not_change_global_native_selection(tmp_path, mon
 
 
 @pytest.mark.parametrize("scope", ["global", "project"])
-def test_npm_package_files_do_not_enable_a_registered_package(tmp_path, monkeypatch, scope):
+def test_legacy_npm_registration_cannot_hide_a_loose_extension(tmp_path, monkeypatch, scope):
     home = tmp_path / "home"
     project = tmp_path / "project"
     monkeypatch.setenv("HOME", str(home))
@@ -114,9 +115,9 @@ def test_npm_package_files_do_not_enable_a_registered_package(tmp_path, monkeypa
 
     row, = build_pi_rows(home=home, project=project)
 
-    assert row.origin == "npm"
-    assert row.global_cell.global_loaded is False
-    assert row.project_cell.project_loaded is False
+    assert row.origin == "untracked"
+    assert row.global_cell.global_loaded is (scope == "global")
+    assert row.project_cell.project_loaded is True
     assert package.is_dir()
 
 
@@ -140,19 +141,20 @@ def test_library_connection_requires_its_own_symlink_not_a_package_reference(
         target.mkdir(exist_ok=True)
         projection.symlink_to(target)
 
-    row, = build_pi_rows(home=home)
-
+    rows = {row.slug: row for row in build_pi_rows(home=home)}
+    row = rows["dual"]
+    assert rows["npm:dual"].npm_state.global_scope.missing
     assert row.origin == "store-owned"
     assert row.global_cell.global_loaded is want
 
 
 @pytest.mark.parametrize("global_packages,project_packages,want", [
-    ([], [], (False, False)),
-    (["npm:context-mode"], [], (True, False)),
+    ([], [], None),
+    (["npm:context-mode"], [], (True, True)),
     ([], [{"source": "npm:context-mode"}], (False, True)),
     (["npm:context-mode"], ["npm:context-mode"], (True, True)),
 ])
-def test_npm_registration_stays_visible_while_enablement_tracks_scope_settings(
+def test_npm_native_footprints_define_visibility_and_scope_state(
     tmp_path, monkeypatch, global_packages, project_packages, want,
 ):
     home = tmp_path / "home"
@@ -161,10 +163,18 @@ def test_npm_registration_stays_visible_while_enablement_tracks_scope_settings(
     _settings(home / ".agent-toolkit/pi-extensions-lock.json", version=1, skills={
         "context-mode": {"source": "npm:context-mode", "sourceType": "npm"},
     })
+    if global_packages:
+        seed_package(home, project, name="context-mode", configured=False)
+    if project_packages:
+        seed_package(home, project, scope="project", name="context-mode", configured=False)
     _settings(home / ".pi/agent/settings.json", packages=global_packages)
     _settings(project / ".pi/settings.json", packages=project_packages)
 
-    row, = build_pi_rows(home=home, project=project)
+    rows = build_pi_rows(home=home, project=project)
+    if want is None:
+        assert rows == []
+        return
+    row, = rows
 
     assert row.slug == "context-mode"
     assert (row.global_cell.global_loaded, row.project_cell.project_loaded) == want

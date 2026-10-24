@@ -6,7 +6,6 @@ never installs or imports extension code. Missing native support is explicit.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from functools import lru_cache
 import hashlib
 import json
 import os
@@ -33,6 +32,9 @@ class NpmScope:
     entries: tuple[tuple[Path, bool], ...] = ()
     resources: tuple[Path, ...] = ()
     external: bool = False
+    scope_root: Path | None = None
+    scope_version: str | None = None
+    scope_compatible: bool = False
 
     @property
     def enabled(self) -> bool:
@@ -61,6 +63,8 @@ class NpmScope:
             "configured": self.configured, "version": self.version,
             "root": str(self.root) if self.root else None, "source": self.source,
             "mixed": self.mixed, "external": self.external,
+            "scopeRoot": str(self.scope_root) if self.scope_root else None,
+            "scopeVersion": self.scope_version,
             "entrypoints": [{"path": str(path), "enabled": enabled} for path, enabled in self.entries]}
 
 
@@ -90,7 +94,6 @@ def _json_object(path: Path) -> dict:
         return {}
 
 
-@lru_cache(maxsize=8)
 def _pi_root(override: str | None, executable: str | None) -> Path:
     candidates = [Path(override)] if override else []
     if executable:
@@ -102,15 +105,15 @@ def _pi_root(override: str | None, executable: str | None) -> Path:
     raise PiSettingsError("native npm controls require installed Pi (set AGENT_TOOLKIT_PI_PACKAGE for a nonstandard installation)")
 
 
-@lru_cache(maxsize=8)
 def _system_global_npm(npm: str | None, home: str, prefix: str | None) -> tuple[str | None, tuple[str, ...]]:
     if npm is None:
         return None, ()
     try:
         # Explicit system binary, never a command read from project settings.
-        env = {**os.environ, "HOME": home}
-        root = subprocess.run([npm, "root", "-g"], capture_output=True, text=True, env=env, timeout=10, check=True).stdout.strip()
-        result = subprocess.run([npm, "ls", "-g", "--depth=0", "--json"], capture_output=True, text=True, env=env, timeout=10)
+        env = {**os.environ, "HOME": home, "NPM_CONFIG_OFFLINE": "true",
+            "NPM_CONFIG_IGNORE_SCRIPTS": "true", "NPM_CONFIG_UPDATE_NOTIFIER": "false", "NPM_CONFIG_LOGS_MAX": "0"}
+        root = subprocess.run([npm, "root", "-g"], cwd=home, capture_output=True, text=True, env=env, timeout=10, check=True).stdout.strip()
+        result = subprocess.run([npm, "ls", "-g", "--depth=0", "--json"], cwd=home, capture_output=True, text=True, env=env, timeout=10)
         dependencies = json.loads(result.stdout).get("dependencies", {})
         return root, tuple(dependencies) if isinstance(dependencies, dict) else ()
     except (OSError, ValueError, subprocess.SubprocessError):
@@ -166,6 +169,7 @@ def _scope_from_json(value: dict | None) -> NpmScope:
         return NpmScope()
     return NpmScope(**{**value,
         "root": Path(value["root"]) if value.get("root") else None,
+        "scope_root": Path(value["scope_root"]) if value.get("scope_root") else None,
         "entries": tuple((Path(e["path"]), bool(e["enabled"])) for e in value["entries"]),
         "resources": tuple(Path(p) for p in value["resources"]),
     })
@@ -193,7 +197,15 @@ def read_npm_states(
     global_data = _pi_settings._load(_pi_settings.settings_path(scope="global", home=home))
     legacy_root, legacy_names = _legacy_npm(home, global_data)
     if legacy_root:
-        identities.update(_identity(name) for name in legacy_names if _has_extensions(legacy_root / name))
+        for name in legacy_names:
+            if not _has_extensions(legacy_root / name):
+                continue
+            name = _identity(name)
+            identities.add(name)
+            root = legacy_root / name
+            version = _json_object(root / "package.json").get("version")
+            source = f"npm:{name}@file:{root.resolve()}" if root.is_symlink() else f"npm:{name}@{version}" if isinstance(version, str) else f"npm:{name}"
+            candidates["global"].setdefault(name, source)
     if not identities:
         return {}
     native_root = _pi_root(os.environ.get("AGENT_TOOLKIT_PI_PACKAGE"), shutil.which("pi"))
@@ -248,14 +260,16 @@ def _change_selection(
                 if scope == "project" and state.global_scope.configured:
                     record = {"source": state.global_scope.source, "autoload": False}
                 else:
-                    record = {"source": current.source}
+                    # A checkbox activates extensions only. A newly declared
+                    # package must not also activate its bundled resource kinds.
+                    record = {"source": current.source, "skills": [], "prompts": [], "themes": []}
                 index = len(records)
                 records.append(record)
             record = dict(records[index])
             delta = record.get("autoload") is False
             if enabled is None:
                 record.pop("extensions", None)
-                if delta and scope == "project" and set(record) <= {"source", "autoload"}:
+                if delta and scope == "project" and current.mode in ("inherit", "override") and set(record) <= {"source", "autoload"}:
                     records.pop(index)
                 else:
                     records[index] = record
@@ -292,6 +306,7 @@ def set_npm_enabled(
 
 def reset_npm_override(
     *, identity: str, scope: Scope, home: Path, project: Path | None,
+    expected_snapshot: str | None = None,
 ) -> None:
     """Reset extension policy only, keeping owned installs and other deltas."""
-    _change_selection(identity=identity, enabled=None, scope=scope, home=home, project=project)
+    _change_selection(identity=identity, enabled=None, scope=scope, home=home, project=project, expected_snapshot=expected_snapshot)

@@ -78,26 +78,6 @@ async def _deselect_global_and_apply(home, slug):
 
 
 @pytest.mark.asyncio
-async def test_npm_global_deselect_apply_stays_removed(tmp_path, monkeypatch):
-    monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.chdir(tmp_path)
-    # Seed canonical "npm:foo" (inventory reads slug "foo" as loaded) + a drifted
-    # prefix-less "foo@1.2.3" variant. Pre-apply, slug "foo" is global_loaded=True.
-    _seed_npm(tmp_path, "foo", "npm:foo", ["npm:foo", "foo@1.2.3", "npm:keep"])
-    assert any(  # guard: the row really is loaded before we deselect it
-        r.slug == "foo" and r.global_loaded for r in build_inventory(home=tmp_path)
-    )
-    loaded = await _deselect_global_and_apply(tmp_path, "foo")
-    # Load-bearing now: "foo" was loaded; after deselect+apply the row stays
-    # unchecked (the reported "reverts to installed" symptom must NOT happen).
-    assert loaded is False
-    body = json.loads((tmp_path / ".pi" / "agent" / "settings.json").read_text())
-    # Drift guard: identity-based removal drops BOTH "npm:foo" and "foo@1.2.3";
-    # the pre-fix exact-match path left "foo@1.2.3" behind.
-    assert body["packages"] == ["npm:keep"]
-
-
-@pytest.mark.asyncio
 async def test_store_owned_global_deselect_apply_stays_removed(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.chdir(tmp_path)

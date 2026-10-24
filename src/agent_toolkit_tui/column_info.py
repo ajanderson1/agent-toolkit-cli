@@ -89,7 +89,8 @@ _HARNESS_SENTENCES: dict[tuple[str, str], str] = {
     ("pi-extension", "pi"): (
         "Loose local extensions are enabled by native discovery unless settings exclude them; "
         "project selection includes inherited global resources. ◐ means mixed entrypoints. "
-        "Packages use settings references; library rows show symlink connections (linked). "
+        "npm packages use native resource filters with project inheritance; declarations and files are retained. "
+        "R resets the selected npm scope's extension policy. Library rows show symlink connections (linked). "
         "Space queues Enable/Disable; Ctrl+S applies it without deleting source files."
     ),
 }
@@ -289,10 +290,10 @@ def _pi_extension_origin(_context: dict[str, object]) -> ColumnInfo:
         lines=[
             "• library — Toolkit-managed central source in the agent-toolkit library. "
             "Disable removes the connection, not the source.",
-            "• local — existing files used in place; no TUI toggles or deletion. "
+            "• local — loose files have native selector controls; filesystem packages remain read-only. "
             "Info shows paths and manual removal instructions.",
-            "• npm — Enable/Disable adds/removes its reference in Pi settings. "
-            "Other references stay read-only.",
+            "• npm — native Pi/npm inventory; no Toolkit registration. Enable/Disable changes only "
+            "extension filters, not package files or bundled skills/prompts/themes. Project scope can override global policy.",
             "Info shows each scope’s state, controls and removal commands.",
             "Updates use Pi package handling, not Toolkit Git update. "
             "Running Pi sessions are unchanged.",

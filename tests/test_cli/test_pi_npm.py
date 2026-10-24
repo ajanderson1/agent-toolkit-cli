@@ -82,6 +82,41 @@ def test_native_identity_cannot_disappear_as_a_javascript_prototype_key(tmp_path
     assert "__proto__" in {r.slug for r in build_inventory(home=home, project=project)}
 
 
+def test_external_npm_discovery_refreshes_direct_installations(tmp_path, monkeypatch):
+    import os
+    import sys
+    from agent_toolkit_cli.pi_npm import read_npm_states
+    home, project = tmp_path / "home", tmp_path / "project"
+    home.mkdir(); project.mkdir()
+    root = tmp_path / "prefix/lib/node_modules"
+    write_json(root / "demo/package.json", {"name": "demo", "version": "1.0.0", "pi": {"extensions": ["index.ts"]}})
+    (root / "demo/index.ts").write_text("throw new Error('never execute')")
+    listing = tmp_path / "listing.json"
+    write_json(listing, {"dependencies": {}})
+    binary = tmp_path / "bin/npm"; binary.parent.mkdir()
+    binary.write_text(f"#!{sys.executable}\nimport sys\nfrom pathlib import Path\nif sys.argv[1:]==['root','-g']: print({str(root)!r})\nelif sys.argv[1:]==['ls','-g','--depth=0','--json']: print(Path({str(listing)!r}).read_text())\nelse: sys.exit(3)\n")
+    binary.chmod(0o755)
+    monkeypatch.setenv("PATH", str(binary.parent) + os.pathsep + os.environ["PATH"])
+    monkeypatch.delenv("AGENT_TOOLKIT_NPM_GLOBAL_ROOT")
+    assert read_npm_states(home=home, project=project) == {}
+    write_json(listing, {"dependencies": {"demo": {"version": "1.0.0"}}})
+    assert "demo" in read_npm_states(home=home, project=project)
+
+
+def test_external_local_link_keeps_its_source_instead_of_guessing_registry(tmp_path, monkeypatch):
+    from agent_toolkit_cli.pi_npm import read_npm_states
+    home, project = tmp_path / "home", tmp_path / "project"
+    root = tmp_path / "local-source"
+    write_json(root / "package.json", {"name": "demo", "version": "1.0.0", "pi": {"extensions": ["index.ts"]}})
+    (root / "index.ts").write_text("throw new Error('never execute')")
+    legacy = tmp_path / "legacy"; legacy.mkdir()
+    (legacy / "demo").symlink_to(root, target_is_directory=True)
+    monkeypatch.setenv("AGENT_TOOLKIT_NPM_GLOBAL_ROOT", str(legacy))
+    current = read_npm_states(home=home, project=project)["demo"]
+    assert current.global_scope.source == "npm:demo@file:" + str(root)
+    assert current.global_scope.external and not current.global_scope.configured
+
+
 def test_configured_missing_source_remains_visible_without_fetch(tmp_path):
     home = tmp_path / "home"
     config = home / ".pi/agent/settings.json"

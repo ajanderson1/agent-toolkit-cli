@@ -68,7 +68,7 @@ def install_npm(*, source: str, scope: Scope, home: Path, project: Path | None) 
     if result.returncode:
         raise PiSettingsError(result.stderr.strip() or result.stdout.strip() or "native Pi install failed")
     state = pi_npm.read_npm_states(home=home, project=project).get(identity)
-    if state is None or state.for_scope(scope).record is None or not state.for_scope(scope).compatible:
+    if state is None or state.for_scope(scope).record is None or not state.for_scope(scope).scope_compatible:
         raise PiSettingsError(f"{identity}: native install returned without a compatible scoped installation/declaration")
 
 
@@ -115,7 +115,6 @@ def remove_npm(*, identity: str, scope: Scope, home: Path, project: Path | None,
         if current.root.exists():
             raise PiSettingsError("external npm returned without removing the selected installation")
         _drop_declaration(identity, scope=scope, home=home, project=project)
-        pi_npm._system_global_npm.cache_clear()
         return
     record = current.record
     source = record if isinstance(record, str) else record["source"] if record else current.source
