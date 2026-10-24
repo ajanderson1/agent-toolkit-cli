@@ -52,6 +52,23 @@ def doctor_cmd(
         raise click.ClickException(
             f"invalid external skill projection registry: {exc}",
         ) from exc
+    # Catalog listings are observations, never missing installation records.
+    from agent_toolkit_cli.skill_catalog import read_catalog
+    from agent_toolkit_cli.skill_update_check import read_check
+    from agent_toolkit_cli.skill_paths import library_lock_path
+    snapshot = read_catalog(home=home)
+    if snapshot is not None:
+        if snapshot.error:
+            click.echo(f"Catalog warning: {snapshot.error}; local diagnosis continues.")
+        else:
+            library = read_lock(library_lock_path(home=home))
+            for item in snapshot.skills:
+                if item.key not in library.skills and (not slugs or item.key in slugs):
+                    click.echo(f"{item.key}: catalog listing only; no local backing expected.")
+    for slug in slugs or tuple(read_lock(lock_path).skills):
+        observed = read_check(slug, scope=scope, home=home, project=project_root)
+        if observed:
+            click.echo(f"{slug}: upstream {observed['status']} (historical check {observed['checked_at']}; advisory)")
     if not findings:
         click.echo("✓ all clean")
         return
