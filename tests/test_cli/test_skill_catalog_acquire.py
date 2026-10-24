@@ -78,6 +78,18 @@ def test_catalog_only_list_hides_when_offline_but_keeps_acquired(tmp_path, sandb
     assert (sandbox / ".agents/skills/demo").is_symlink()
 
 
+def test_matching_record_with_foreign_backing_origin_is_not_adopted(tmp_path, sandbox):
+    upstream, cat = subscribed(tmp_path)
+    invoke("skills", "catalog", "add", "demo")
+    canonical = sandbox / ".agent-toolkit/skills/demo"
+    git(canonical, "remote", "set-url", "origin", "https://foreign.invalid/unrelated.git")
+    lockpath = sandbox / ".agent-toolkit/skills-lock.json"
+    before = lockpath.read_bytes()
+    result = CliRunner().invoke(main, ["skills", "catalog", "add", "demo"])
+    assert result.exit_code != 0
+    assert lockpath.read_bytes() == before
+
+
 def test_changed_selection_and_invalid_target_refuse_before_acquire(tmp_path, sandbox):
     upstream, cat = subscribed(tmp_path)
     from agent_toolkit_cli.skill_catalog_ops import resolve_catalog_skill

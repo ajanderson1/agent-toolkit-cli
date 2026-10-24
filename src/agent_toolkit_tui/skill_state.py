@@ -22,6 +22,7 @@ from typing import Literal
 import yaml
 
 from agent_toolkit_cli import skill_git
+from agent_toolkit_cli.skill_catalog import CatalogSkill, CatalogSnapshot
 from agent_toolkit_cli.paperclip_paths import detect_paperclip_company
 from agent_toolkit_cli.skill_doctor import discover_unmanaged_skills as _discover_unmanaged_skills
 from agent_toolkit_cli.skill_install import _should_skip_symlink
@@ -40,7 +41,7 @@ from agent_toolkit_tui.composition import skills_nonstandard_main
 # + working canonical) but the slug is missing from the library lock — e.g.
 # after `skill remove <slug>` at global scope. Functional, rendered with a
 # warning tint. See the module docstring for the row-universe contract.
-State = Literal["clean", "dirty", "missing", "copy", "library", "unlisted"]
+State = Literal["clean", "dirty", "missing", "copy", "library", "unlisted", "catalog"]
 Scope = Literal["global", "project"]
 
 def interactive_agents(
@@ -76,6 +77,10 @@ class SkillRow:
     is_collection: bool = False
     skill_path: str = ""
     collection_error: str = ""
+    catalog_item: CatalogSkill | None = None
+    catalog_url: str = ""
+    origin: str = "library"
+    catalog_warning: str = ""
 
 
 def _read_skill_description(canonical: Path) -> str:
@@ -206,6 +211,7 @@ def build_skill_rows(
     home: Path | None,
     project: Path | None,
     selection: tuple[str, ...] | None = None,
+    catalog_snapshot: CatalogSnapshot | None = None,
 ) -> list[SkillRow]:
     # Row universe = union(library lock, scope lock) + filesystem.
     # At global scope the library lock IS the scope lock, so the union is a
@@ -394,4 +400,32 @@ def build_skill_rows(
                 description=description,
             ))
 
+    if catalog_snapshot is not None:
+        return merge_catalog_rows(rows, catalog_snapshot, scope=scope, home=home, project=project, selection=selection)
     return rows
+
+
+def merge_catalog_rows(rows: list[SkillRow], snapshot: CatalogSnapshot, *, scope: Scope, home: Path | None, project: Path | None, selection: tuple[str, ...] | None = None) -> list[SkillRow]:
+    """Pure catalog join over local observations; no acquisition or network."""
+    from agent_toolkit_cli.skill_catalog_ops import catalog_match
+    result = list(rows)
+    entries = dict(read_lock(library_lock_path(home=home)).skills)
+    if scope == "project":
+        entries.update(read_lock(lock_file_path(scope=scope, home=home, project=project)).skills)
+    by_slug = {r.slug: r for r in result}
+    for item in snapshot.skills:
+        matches = [slug for slug, entry in entries.items() if catalog_match(entry, item)]
+        if len(matches) == 1 and matches[0] in by_slug:
+            row = by_slug[matches[0]]
+            index = result.index(row)
+            result[index] = replace(row, catalog_item=item, catalog_url=snapshot.url)
+            by_slug[row.slug] = result[index]
+            continue
+        if item.key in by_slug or len(matches) > 1:
+            if item.key in by_slug:
+                row = by_slug[item.key]
+                result[result.index(row)] = replace(row, catalog_warning="Catalog identity conflicts with local backing; use CLI to inspect. Local content retained.")
+            continue
+        cells = {(agent, scope): _cell_for(item.key, agent, scope=scope, home=home, project=project) for agent in interactive_agents(selection)}
+        result.append(SkillRow(slug=item.key, source=item.source.url, ref=item.source.ref or "(default)", state="catalog", cells=cells, description=item.description, skill_path=item.source.subpath or ".", catalog_item=item, catalog_url=snapshot.url, origin="catalog"))
+    return result

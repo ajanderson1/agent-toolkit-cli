@@ -680,6 +680,35 @@ class TUIApp(App):
             )
         )
         grid.restore_pending(saved)
+        self._skill_catalog_generation = getattr(self, "_skill_catalog_generation", 0) + 1
+        generation = self._skill_catalog_generation
+        from agent_toolkit_cli.behavior import _read_config
+        from agent_toolkit_cli.skill_catalog import read_catalog
+        try:
+            subscribed = _read_config(home).get("skillCatalog") is not None
+        except (RuntimeError, OSError, ValueError):
+            self.notify("Invalid catalog subscription; local skills retained.", severity="warning")
+            return
+        if subscribed:
+            def fetch():
+                snapshot = read_catalog(home=home)
+                try:
+                    self.call_from_thread(self._finish_skill_catalog, generation, scope, home, project, snapshot)
+                except RuntimeError:
+                    pass  # App stopped while the bounded read was in flight.
+            self.run_worker(fetch, thread=True, group="skill-catalog", exclusive=True)
+
+    def _finish_skill_catalog(self, generation, scope, home, project, snapshot) -> None:
+        if generation != getattr(self, "_skill_catalog_generation", 0):
+            return
+        grid = self.query_one("#skill-grid", SkillGrid)
+        pending = grid.pending_entries()
+        grid.set_rows(build_skill_rows(scope=scope, home=home, project=project, selection=self._tui_settings.harnesses, catalog_snapshot=snapshot))
+        grid.restore_pending(pending)
+        if snapshot is not None and snapshot.error:
+            self.notify(f"{snapshot.error}; catalog-only skills hidden.", title="Skill catalog", severity="warning")
+        self._refresh_pending_label()
+        self._refresh_status_bar()
 
     # ----- command-view -----------------------------------------------------
 
@@ -1373,6 +1402,28 @@ class TUIApp(App):
         ok = failed = 0
         errors: list[str] = []
         failed_groups: set[tuple[str, str]] = set()
+        # Only remote-only selections need catalog connectivity. Local operations
+        # remain usable even if the catalog is offline or no longer subscribed.
+        from agent_toolkit_cli.skill_catalog_ops import resolve_catalog_skill, acquire_catalog_skill
+        catalog_pending = grid.pending_catalog_entries()
+        catalog_groups = {(key[0], key[2]) for key in catalog_pending}
+        for selected_scope, selected_slug in catalog_groups:
+            keys = {key for key in catalog_pending if key[0] == selected_scope and key[2] == selected_slug}
+            url, expected = catalog_pending[next(iter(keys))]
+            selected_project = None if selected_scope == "global" else self._skill_project_root()
+            try:
+                validate_projection_context(slug=selected_slug, target_agents=tuple(key[1] for key in keys), scope=selected_scope, home=Path.home(), project=selected_project)
+                snapshot, item = resolve_catalog_skill(expected.key, expected=expected)
+                if snapshot.url != url:
+                    raise ValueError("Catalog subscription changed; refresh and reselect")
+                actual = acquire_catalog_skill(item, catalog_url=snapshot.url)
+                if actual != selected_slug:
+                    raise ValueError("Library slug changed; refresh and reselect")
+            except (ValueError, RuntimeError, OSError) as exc:
+                failed_keys.update(keys)
+                failed += len(keys)
+                errors.append(f"{selected_slug}: {exc}")
+        pending = {key: op for key, op in pending.items() if key not in failed_keys}
         for scope in {k[0] for k in pending}:
             home = Path.home()
             project = None if scope == "global" else self._skill_project_root()
@@ -1474,10 +1525,12 @@ class TUIApp(App):
             if failed
             else {}
         )
+        saved_catalog = {key: value for key, value in catalog_pending.items() if key in saved}
         grid.clear_pending()
         self._refresh_skill_view()
         if saved:
             grid.restore_pending(saved)
+            grid._catalog_pending.update(saved_catalog)
         self._refresh_pending_label()
         self._refresh_status_bar()
         if errors:

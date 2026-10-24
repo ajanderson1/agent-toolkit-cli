@@ -50,11 +50,15 @@ def acquire_catalog_skill(item: CatalogSkill, *, catalog_url: str, home: Path | 
         slug = item.key
         if slug in lock.skills:
             raise ValueError(f"{slug}: library source/ref/path conflicts with catalog; existing content retained")
-        # Reuse the real library-only registration path, including monorepo guards.
+    # Reuse registration even for exact recorded matches: it verifies backing
+    # ownership/ref without advancing it or discarding local work.
+    try:
         with contextlib.redirect_stdout(io.StringIO()), click.Context(add) as ctx:
             ctx.invoke(add, source=item.source.url, source_option=None, slug=slug,
                        ref=item.source.ref, skill_name_flag=None, owned=False,
                        skill_path_flag=item.source.subpath)
+    except click.ClickException as exc:
+        raise ValueError(exc.format_message()) from exc
     # Re-read: registration may update sibling entries or encounter another writer.
     lock = read_lock(lock_path)
     if slug not in lock.skills or not catalog_match(lock.skills[slug], item):
