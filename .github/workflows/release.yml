@@ -97,13 +97,13 @@ jobs:
         run: uv run python scripts/build_and_verify_release.py --tag "$RELEASE_TAG" --expected-sha "$EXPECTED_SHA" --dist-dir dist
 
       - name: Upload release assets
-        uses: softprops/action-gh-release@c062e08bd532815e2082a85e87e3ef29c3e6d191 # v2.0.8
-        with:
-          generate_release_notes: true
-          tag_name: ${{ steps.target.outputs.tag }}
-          files: |
-            ${{ steps.build.outputs.wheel }}
-            ${{ steps.build.outputs.sdist }}
-            ${{ steps.build.outputs.receipt }}
-            ${{ steps.build.outputs.sums }}
-          fail_on_unmatched_files: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.target.outputs.tag }}
+          WHEEL: ${{ steps.build.outputs.wheel }}
+          SDIST: ${{ steps.build.outputs.sdist }}
+          RECEIPT: ${{ steps.build.outputs.receipt }}
+          SUMS: ${{ steps.build.outputs.sums }}
+        run: |
+          set -euo pipefail
+          gh release upload "$RELEASE_TAG" "$WHEEL" "$SDIST" "$RECEIPT" "$SUMS"
