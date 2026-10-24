@@ -1569,7 +1569,16 @@ class TUIApp(App):
         remaining = {}
         glob_lock = None
         _Scope = Literal["global", "project"]
-        for (scope_str, slug), op in pending.items():
+        operations = list(pending.items())
+        # Project snapshots bind inherited global filters. Apply those intents
+        # first rather than weakening freshness checks for our own global edit.
+        for index, (key, _op) in enumerate(operations):
+            if key[0] == "global" and key in npm_snapshots:
+                project_key = ("project", key[1])
+                other = next((i for i, (candidate, _) in enumerate(operations) if candidate == project_key), -1)
+                if other > index and project_key in npm_snapshots:
+                    operations[index], operations[other] = operations[other], operations[index]
+        for (scope_str, slug), op in operations:
             scope = cast(_Scope, scope_str)
             key = (scope_str, slug)
             try:

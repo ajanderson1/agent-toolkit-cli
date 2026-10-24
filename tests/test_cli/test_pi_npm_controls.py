@@ -186,6 +186,36 @@ def test_queued_intent_refuses_a_changed_settings_symlink_target(setup, tmp_path
     assert config.is_symlink() and other.read_bytes() == before
 
 
+@pytest.mark.parametrize("changed", ["global-package-filter", "global-top-level-filter", "project-top-level-filter"])
+def test_project_snapshot_rejects_concurrent_native_filter_edits(setup, changed):
+    home, project, root = setup
+    snapshot = state(home, project).snapshot_for("project")
+    global_config = home / ".pi/agent/settings.json"
+    project_config = project / ".pi/settings.json"
+    if changed == "global-package-filter":
+        write_json(global_config, {"packages": [{"source": "npm:demo@1.0.0", "extensions": []}]})
+    elif changed == "global-top-level-filter":
+        write_json(global_config, {"packages": ["npm:demo@1.0.0"], "extensions": ["-" + str(root / "extensions/main.ts")]})
+    else:
+        write_json(project_config, {"extensions": ["-" + str(root / "extensions/main.ts")]})
+    before = project_config.read_bytes() if project_config.exists() else None
+    with pytest.raises(PiSettingsError, match="changed"):
+        toggle(home, project, False, "project", expected_snapshot=snapshot)
+    assert (project_config.read_bytes() if project_config.exists() else None) == before
+
+
+def test_project_change_refuses_busy_global_policy_lock(setup):
+    home, project, _ = setup
+    lock = home / ".pi/agent/settings.json.lock"
+    lock.mkdir()
+    try:
+        with pytest.raises(PiSettingsError, match="locked"):
+            toggle(home, project, False, "project")
+        assert not (project / ".pi/settings.json").exists()
+    finally:
+        lock.rmdir()
+
+
 def test_reset_delta_preserves_other_resource_overrides(setup):
     home, project, root = setup
     config = project / ".pi/settings.json"

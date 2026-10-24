@@ -5,6 +5,7 @@ never installs or imports extension code. Missing native support is explicit.
 """
 from __future__ import annotations
 
+from contextlib import ExitStack
 from dataclasses import dataclass, field
 import hashlib
 import json
@@ -37,6 +38,7 @@ class NpmScope:
     scope_compatible: bool = False
     ambiguous: bool = False
     settings_destination: Path | None = None
+    selection_inputs: dict = field(default_factory=dict)
 
     @property
     def enabled(self) -> bool:
@@ -83,10 +85,10 @@ class NpmState:
         return self.global_scope if scope == "global" else self.project_scope
 
     def snapshot_for(self, scope: str) -> str:
-        """Bind scoped intent without invalidating it on our other-scope Apply.
+        """Bind intent to scoped and inherited native selection inputs.
 
-        Project all/none is explicit policy, independent of the global enabled
-        bit. Global source/version/path changes still invalidate its targets.
+        Apply orders project edits before same-package global edits, so strict
+        filter freshness need not be weakened to accommodate our own batch.
         """
         current = self.for_scope(scope)
         record = {"source": current.record} if isinstance(current.record, str) else current.record
@@ -94,12 +96,13 @@ class NpmState:
         value = {"record": relevant, "source": current.source, "mode": current.mode,
             "root": current.root, "version": current.version, "metadata": current.metadata,
             "compatible": current.compatible, "resources": current.resources,
-            "entries": [path for path, _ in current.entries],
+            "entries": current.entries, "selection_inputs": current.selection_inputs,
             "scope_root": current.scope_root, "scope_version": current.scope_version,
             "ambiguous": current.ambiguous, "settings_destination": current.settings_destination}
         if scope == "project" and (current.mode in ("inherit", "override") or record and record.get("autoload") is False):
             base = self.global_scope.record
-            value["global_base"] = base if isinstance(base, str) else base.get("source") if base else None
+            base = {"source": base} if isinstance(base, str) else base
+            value["global_base"] = {key: base[key] for key in ("source", "autoload", "extensions") if key in base} if base else None
         return hashlib.sha256(json.dumps(value, sort_keys=True, default=str).encode()).hexdigest()
 
 
@@ -294,6 +297,9 @@ def read_npm_states(
     for name, value in values.items():
         for scope, destination in locations.items():
             value[scope]["settings_destination"] = str(destination)
+            value[scope]["selection_inputs"] = {"global_extensions": settings["global"].get("extensions", [])}
+            if scope == "project":
+                value[scope]["selection_inputs"]["project_extensions"] = settings.get("project", {}).get("extensions", [])
         snapshot = hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
         states[name] = NpmState(name, _scope_from_json(value["global"]), _scope_from_json(value["project"]), snapshot)
     return states
@@ -308,7 +314,12 @@ def _change_selection(
     identity = _identity(identity)
     path = ensure_scope_writable(scope=scope, home=home, project=project)
     try:
-        with _settings_lock(path):
+        with ExitStack() as locks:
+            # A project policy depends on global filters. Lock in global→project
+            # order so neither native input can change between read and write.
+            if scope == "project":
+                locks.enter_context(_settings_lock(settings_path(scope="global", home=home)))
+            locks.enter_context(_settings_lock(path))
             state = read_npm_states(home=home, project=project).get(identity)
             if state is None:
                 raise PiSettingsError(f"{identity}: no native installation or declaration; install first")

@@ -83,6 +83,30 @@ def test_explicit_project_install_allowed_when_global_already_installed(local_so
     assert (home / ".pi/agent/settings.json").read_bytes() == before
 
 
+@pytest.mark.parametrize("scope", ["global", "project"])
+def test_removal_reports_actual_remaining_scope_and_global_fallback(local_source, tmp_path, scope):
+    from agent_toolkit_cli import pi_npm
+    from agent_toolkit_cli.pi_npm_lifecycle import install_npm, remove_npm
+    home, project, source = local_source
+    second = tmp_path / "source-v2"
+    write_json(second / "package.json", {"name": "native-local-demo", "version": "2.0.0", "pi": {"extensions": ["index.ts"]}})
+    (second / "index.ts").write_text("throw new Error('Never execute extension code')")
+    install_npm(source=source, scope="global", home=home, project=project)
+    install_npm(source="npm:native-local-demo@file:" + str(second), scope="project", home=home, project=project)
+    other = "project" if scope == "global" else "global"
+    before = pi_npm.read_npm_states(home=home, project=project)["native-local-demo"].for_scope(other)
+    metadata = (before.scope_root / "package.json").read_bytes()
+    result = remove_npm(identity="native-local-demo", scope=scope, home=home, project=project)
+    after = pi_npm.read_npm_states(home=home, project=project)["native-local-demo"]
+    assert result.files_removed and result.other_scope_configured
+    assert after.for_scope(other).enabled
+    assert (before.scope_root / "package.json").read_bytes() == metadata
+    assert result.fallback_status == ("Enabled" if scope == "project" else None)
+    if scope == "project":
+        assert after.project_scope.mode == "inherit" and after.project_scope.enabled
+    assert (tmp_path / "source/index.ts").exists() and (second / "index.ts").exists()
+
+
 def test_real_installer_failure_is_not_normalized_into_success(local_source):
     from agent_toolkit_cli.pi_npm_lifecycle import remove_npm
     from agent_toolkit_cli._pi_settings import PiSettingsError
@@ -196,6 +220,104 @@ def test_reset_selection_cli_restores_global_inheritance_without_removing_files(
     assert current.project_scope.mode == "inherit" and current.project_scope.enabled
     assert (home / ".pi/agent/settings.json").read_bytes() == before
     assert not (project / ".pi/npm").exists()
+
+
+@pytest.mark.parametrize("verb", ["install", "remove", "uninstall"])
+@pytest.mark.parametrize("slug", ["old-alias", "old#alias"])
+def test_legacy_only_slugs_do_not_grant_native_lifecycle_authority(local_source, verb, slug):
+    home, project, source = local_source
+    lock = home / ".agent-toolkit/pi-extensions-lock.json"
+    write_json(lock, {"version": 1, "skills": {slug: {"source": source, "sourceType": "npm"}}})
+    before = lock.read_bytes()
+    result = CliRunner().invoke(main, ["pi-extensions", verb, slug] + (["--yes"] if verb != "install" else []))
+    assert result.exit_code != 0, result.output
+    assert "retired" in result.output or "native identity" in result.output
+    assert not (home / ".pi/agent/npm").exists()
+    assert lock.read_bytes() == before
+
+
+@pytest.mark.parametrize("aged", [False, True])
+def test_external_removal_refuses_busy_settings_before_deleting_files(local_source, tmp_path, monkeypatch, aged):
+    import shutil
+    import subprocess
+    from agent_toolkit_cli.pi_npm_lifecycle import remove_npm
+    from agent_toolkit_cli._pi_settings import PiSettingsError
+    home, project, source = local_source
+    prefix = tmp_path / "external-prefix"
+    root = prefix / "lib/node_modules"
+    subprocess.run([shutil.which("npm"), "install", "--global", "--prefix", str(prefix), source.removeprefix("npm:")], check=True, capture_output=True, text=True)
+    monkeypatch.setenv("AGENT_TOOLKIT_NPM_GLOBAL_ROOT", str(root))
+    config = home / ".pi/agent/settings.json"
+    write_json(config, {"packages": ["npm:native-local-demo"]})
+    lock = config.with_name(config.name + ".lock"); lock.mkdir()
+    if aged:
+        import os
+        os.utime(lock, (0, 0))  # Even an old lock must not be stolen.
+    before = config.read_bytes()
+    with pytest.raises(PiSettingsError, match="locked"):
+        remove_npm(identity="native-local-demo", scope="global", home=home, project=project, external=True)
+    assert (root / "native-local-demo/package.json").exists()
+    assert config.read_bytes() == before and lock.is_dir()
+
+
+def test_external_lock_heartbeats_and_interoperates_with_native_proper_lockfile(local_source):
+    import os
+    import shutil
+    import subprocess
+    import time
+    from agent_toolkit_cli import pi_npm
+    from agent_toolkit_cli.pi_npm_lifecycle import _external_settings_lock
+    home, project, _ = local_source
+    config = home / ".pi/agent/settings.json"
+    lock = config.with_name(config.name + ".lock")
+    native = pi_npm._pi_root(os.environ.get("AGENT_TOOLKIT_PI_PACKAGE"), shutil.which("pi"))
+    code = '''import {createRequire} from 'node:module';
+const require=createRequire(process.argv[1]+'/package.json');
+const lockfile=require('proper-lockfile');
+try { const release=await lockfile.lock(process.argv[2],{realpath:false,stale:2000,retries:0}); await release(); console.log('stolen'); }
+catch(error) { if(error.code!=='ELOCKED') throw error; console.log('blocked'); }'''
+    with _external_settings_lock(config) as check:
+        initial = lock.stat().st_mtime_ns
+        time.sleep(2.3)
+        check()
+        assert lock.stat().st_mtime_ns > initial
+        contender = subprocess.run([shutil.which("node"), "--input-type=module", "-e", code, str(native), str(config)], capture_output=True, text=True, check=True)
+        assert contender.stdout.strip() == "blocked"
+    assert not lock.exists()
+
+
+@pytest.mark.parametrize("surface", ["api", "remove", "uninstall"])
+def test_removal_reports_files_retained_as_another_packages_dependency(local_source, tmp_path, surface):
+    import shutil
+    import subprocess
+    from agent_toolkit_cli.pi_npm_lifecycle import install_npm, remove_npm
+    home, project, source = local_source
+    packed = tmp_path / "packed"; packed.mkdir()
+    npm = shutil.which("npm")
+    first = subprocess.run([npm, "pack", "--ignore-scripts", "--pack-destination", str(packed), str(tmp_path / "source")], check=True, capture_output=True, text=True)
+    tarball = packed / first.stdout.strip().splitlines()[-1]
+    consumer = tmp_path / "consumer"
+    write_json(consumer / "package.json", {"name": "native-consumer", "version": "1.0.0", "dependencies": {"native-local-demo": "file:" + str(tarball)}})
+    second = subprocess.run([npm, "pack", "--ignore-scripts", "--pack-destination", str(packed), str(consumer)], check=True, capture_output=True, text=True)
+    consumer_tarball = packed / second.stdout.strip().splitlines()[-1]
+    install_npm(source="npm:native-local-demo@file:" + str(tarball), scope="global", home=home, project=project)
+    install_npm(source="npm:native-consumer@file:" + str(consumer_tarball), scope="global", home=home, project=project)
+    package = home / ".pi/agent/npm/node_modules/native-local-demo"
+    if surface == "api":
+        result = remove_npm(identity="native-local-demo", scope="global", home=home, project=project)
+        assert result.files_remain and not result.files_removed
+        assert result.declaration_removed and result.direct_removed
+        repeated = remove_npm(identity="native-local-demo", scope="global", home=home, project=project)
+        assert repeated.files_remain and "files remain" in repeated.describe()
+        assert not repeated.declaration_removed and not repeated.direct_removed
+    else:
+        result = CliRunner().invoke(main, ["pi-extensions", surface, "native-local-demo", "--yes"])
+        assert result.exit_code == 0, result.output
+        assert "files remain" in result.output
+        assert "package files removed" not in result.output
+    assert package.exists()
+    dependencies = json.loads((home / ".pi/agent/npm/package.json").read_text())["dependencies"]
+    assert "native-local-demo" not in dependencies and "native-consumer" in dependencies
 
 
 def test_legacy_migration_is_explicit_backup_only(local_source):

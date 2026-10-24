@@ -66,7 +66,12 @@ Global removal leaves project declarations/overrides intact; an orphaned native
 project declaration can cause Pi to install a project copy later. Inspect remaining
 project state rather than assuming removal means disabled everywhere. Pi's misleading
 “No matching package” is accepted only when its known no-reference case and observed
-removal postconditions agree; genuine installer errors remain errors.
+removal postconditions agree; genuine installer errors remain errors. Removal reports
+observed declarations, direct dependency records, retained files (including transitive
+dependencies), remaining scopes and restored global inheritance separately. It does
+not claim retained dependency files were deleted. External removal acquires the
+selected settings lock before deleting anything and keeps a native heartbeat for
+slow npm operations; busy or old locks are never stolen.
 
 Native npm controls require Node.js and an installed Pi SDK (verified against
 Pi **1.4.0**, whose Node requirement is **>=22.19.0**). Nonstandard SDK installations
@@ -80,6 +85,8 @@ Use Pi's package update commands, not Toolkit Git update, for npm updates.
 Legacy npm entries in Toolkit locks are ignored immediately. A package with no
 native configuration or direct installation disappears without an unregister step.
 Nothing is automatically downloaded, enabled, deleted or migrated during upgrade.
+A legacy-only alias cannot install or remove a package; use an explicit `npm:` source
+or a currently discovered native identity, and migrate the old record separately.
 
 ```bash
 agent-toolkit-cli pi-extensions migrate-npm-records           # dry-run
@@ -136,7 +143,10 @@ Native npm and loose-local drafts survive refresh/scope switches with their orig
 target snapshots; **Ctrl+Z** discards them. Failed changes stay pending; successful
 ones clear individually. Settings writes use Pi-compatible locking, reread under
 lock, merge unrelated entries and preserve symlinks/modes. Changed source/version,
-entrypoints or settings pointers refuse stale Apply. Global/project settings that
+entrypoints, native package/top-level filters or settings pointers refuse stale Apply.
+Project intents run before same-package global intents so one Apply can safely change
+both without ignoring concurrent inherited-policy edits. Project selection also locks
+the global policy while reading/writing, in global→project order. Global/project settings that
 alias one file cannot support independent scoped changes and are refused.
 
 Doctor does not register discovered local assets or rewrite their settings/source,

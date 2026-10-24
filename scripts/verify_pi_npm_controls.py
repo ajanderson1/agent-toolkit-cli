@@ -77,7 +77,7 @@ async def workflows():
         table.cursor_coordinate = Coordinate(grid.row_slugs.index(NAME), 1); table.focus()
         return grid
 
-    cases = ["global", "project", "project-on/global-off", "reset", "available", "mixed", "stale", "multi-scope", "missing"]
+    cases = ["global", "project", "project-on/global-off", "reset", "available", "mixed", "stale", "stale-inherited", "multi-scope", "missing"]
     for case in cases:
         with tempfile.TemporaryDirectory(prefix="atk-npm-ui-") as directory:
             parent = Path(directory); home, project = parent / "home", parent / "project"
@@ -85,7 +85,7 @@ async def workflows():
             root = seed(home, project, configured=case != "available")
             source_bytes = (root / "extensions/main.ts").read_bytes()
             config = home / ".pi/agent/settings.json"
-            scope = "project" if case in ("project", "project-on/global-off", "reset", "multi-scope") else "global"
+            scope = "project" if case in ("project", "project-on/global-off", "reset", "multi-scope", "stale-inherited") else "global"
             if case == "project-on/global-off":
                 pi_npm.set_npm_enabled(identity=NAME, enabled=False, scope="global", home=home, project=project)
             if case in ("reset", "multi-scope"):
@@ -107,13 +107,15 @@ async def workflows():
                     await pilot.press("space")
                 if case == "multi-scope":
                     grid = select(app, "project"); await pilot.press("space")
-                if case == "stale":
-                    app.action_scope("project"); app.action_scope("global"); app.action_refresh()
+                if case in ("stale", "stale-inherited"):
+                    app.action_scope("global"); app.action_scope(scope); app.action_refresh()
                     data = json.loads(config.read_text()); data["packages"] = [{"source": f"npm:{NAME}@1.0.0", "extensions": []}]; put(config, data)
                     before = config.read_bytes()
                 await pilot.press("ctrl+s"); await pilot.pause()
-                if case in ("stale", "missing"):
+                if case in ("stale", "stale-inherited", "missing"):
                     assert grid.pending_entries() and config.read_bytes() == before
+                    if case == "stale-inherited":
+                        assert not (project / ".pi/settings.json").exists()
                 else:
                     assert not grid.pending_entries()
                     wanted = case not in ("global", "project")
@@ -140,7 +142,7 @@ async def workflows():
 def installations():
     from agent_toolkit_cli import pi_npm
     from agent_toolkit_cli.pi_npm_lifecycle import install_npm, remove_npm
-    for route in ("pi", "npm", "toolkit"):
+    for route in ("pi", "npm", "toolkit", "external-npm"):
         with tempfile.TemporaryDirectory(prefix="atk-npm-install-") as directory:
             parent = Path(directory); home, project, source = parent / "home", parent / "project", parent / "source"
             environment(home, project)
@@ -152,15 +154,23 @@ def installations():
                 install_npm(source=specification, scope="global", home=home, project=project)
             else:
                 argv = ["pi", "install", specification] if route == "pi" else ["npm", "install", "--prefix", str(home / ".pi/agent/npm"), specification.removeprefix("npm:")]
+                if route == "external-npm":
+                    prefix = parent / "external-prefix"
+                    os.environ["AGENT_TOOLKIT_NPM_GLOBAL_ROOT"] = str(prefix / "lib/node_modules")
+                    argv = ["npm", "install", "--global", "--prefix", str(prefix), specification.removeprefix("npm:")]
                 subprocess.run(argv, check=True, capture_output=True, text=True, timeout=60)
             state = pi_npm.read_npm_states(home=home, project=project)[NAME]
-            assert state.global_scope.installed and state.global_scope.enabled is (route != "npm")
-            remove_npm(identity=NAME, scope="global", home=home, project=project)
+            assert state.global_scope.installed and state.global_scope.enabled is (route in ("pi", "toolkit"))
+            if route == "external-npm":
+                pi_npm.set_npm_enabled(identity=NAME, enabled=True, scope="global", home=home, project=project)
+                assert pi_npm.read_npm_states(home=home, project=project)[NAME].global_scope.enabled
+            result = remove_npm(identity=NAME, scope="global", home=home, project=project, external=route == "external-npm")
+            assert result.files_removed and not result.files_remain
             assert NAME not in pi_npm.read_npm_states(home=home, project=project)
             assert (source / "index.ts").read_text() == "throw new Error('Do not execute extension code')"
             assert not (home / ".agent-toolkit/pi-extensions-lock.json").exists()
             print("PASS offline install/remove:", route)
-    return 3
+    return 4
 
 
 if __name__ == "__main__":

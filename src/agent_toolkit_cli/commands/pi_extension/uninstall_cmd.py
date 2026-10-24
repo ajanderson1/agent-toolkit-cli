@@ -30,8 +30,8 @@ def uninstall_cmd(
         source = npm_source_for(slug, scope=native_scope, home=native_home, project=native_project)
         if source is not None:
             confirm_npm_removal(source, scope=native_scope, yes=yes, external=external)
-            remove_npm(identity=source, scope=native_scope, home=native_home, project=native_project, external=external)
-            click.echo(f"removed scoped npm installation/declaration: {slug} [{native_scope}]; other scopes/global fallback may remain")
+            result = remove_npm(identity=source, scope=native_scope, home=native_home, project=native_project, external=external)
+            click.echo(result.describe())
             return
     except _pi_settings.PiSettingsError as exc:
         raise click.ClickException(str(exc)) from exc

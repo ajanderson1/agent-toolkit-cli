@@ -31,8 +31,8 @@ def remove_cmd(ctx, slug: str, force: bool, global_: bool, project_flag: bool, y
         source = npm_source_for(slug, scope=scope, home=home, project=project)
         if source is not None:
             confirm_npm_removal(source, scope=scope, yes=yes, external=external)
-            remove_npm(identity=source, scope=scope, home=home, project=project, external=external)
-            click.echo(f"removed scoped npm installation/declaration: {slug} [{scope}]; other scopes/global fallback may remain")
+            result = remove_npm(identity=source, scope=scope, home=home, project=project, external=external)
+            click.echo(result.describe())
             return
     except PiSettingsError as exc:
         raise click.ClickException(str(exc)) from exc
