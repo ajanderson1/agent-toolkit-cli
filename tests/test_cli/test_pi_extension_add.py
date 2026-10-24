@@ -16,18 +16,6 @@ from agent_toolkit_cli.pi_extension_lock import read_lock
 from agent_toolkit_tui.pi_extension_state import build_pi_rows
 
 
-def test_add_npm_records_registry_entry_no_clone(tmp_path, monkeypatch):
-    monkeypatch.setenv("HOME", str(tmp_path))
-    pea.add(source="npm:@scope/rpiv-i18n", slug=None, env={})
-    lock = read_lock(pep.library_lock_path(env={}))
-    entry = lock.skills["@scope/rpiv-i18n"]
-    assert entry.source == "npm:@scope/rpiv-i18n"
-    assert entry.source_type == "npm"
-    assert entry.pi_extension_path is None  # not stored
-    # No store dir created.
-    assert not pep.library_pi_extension_path("@scope/rpiv-i18n", env={}).exists()
-
-
 def test_add_store_owned_clones_and_records(tmp_path, monkeypatch, git_sandbox):
     monkeypatch.setenv("HOME", str(tmp_path))
     # git_sandbox.upstream is a bare repo seeded with SKILL.md; reuse as a
@@ -48,14 +36,6 @@ def test_add_lock_written_only_after_clone(tmp_path, monkeypatch):
         pea.add(source="/nonexistent/does-not-exist-xyz", slug="ghost", env={})
     lock = read_lock(pep.library_lock_path(env={}))
     assert "ghost" not in lock.skills
-
-
-def test_add_npm_idempotent(tmp_path, monkeypatch):
-    monkeypatch.setenv("HOME", str(tmp_path))
-    pea.add(source="npm:foo", slug=None, env={})
-    pea.add(source="npm:foo", slug=None, env={})
-    lock = read_lock(pep.library_lock_path(env={}))
-    assert list(lock.skills) == ["foo"]
 
 
 @pytest.mark.parametrize("ref,expected", [

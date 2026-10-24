@@ -18,9 +18,29 @@ from agent_toolkit_cli.pi_extension_paths import library_lock_path, library_pi_e
 
 @click.command("remove")
 @click.argument("slug")
-@click.option("--force", is_flag=True, help="Remove even if the store copy is dirty.")
-def remove_cmd(slug: str, force: bool) -> None:
-    """Remove a Pi extension from the global library."""
+@click.option("--force", is_flag=True, help="Remove even if the Git store copy is dirty.")
+@click.option("-g", "--global", "global_", is_flag=True)
+@click.option("-p", "--project", "project_flag", is_flag=True)
+@click.option("--yes", is_flag=True, help="Confirm physical npm removal.")
+@click.option("--external", is_flag=True, help="Explicitly remove a shared external npm installation.")
+@click.pass_context
+def remove_cmd(ctx, slug: str, force: bool, global_: bool, project_flag: bool, yes: bool, external: bool) -> None:
+    """Remove a Git library source, or a scoped native npm installation/declaration."""
+    from agent_toolkit_cli.commands.pi_extension.native_cmd import npm_roots, confirm_npm_removal
+    from agent_toolkit_cli.pi_npm_lifecycle import npm_source_for, remove_npm
+    from agent_toolkit_cli._pi_settings import PiSettingsError
+    scope, home, project = npm_roots(ctx, global_, project_flag)
+    try:
+        source = npm_source_for(slug, scope=scope, home=home, project=project)
+        if source is not None:
+            confirm_npm_removal(source, scope=scope, yes=yes, external=external)
+            remove_npm(identity=source, scope=scope, home=home, project=project, external=external)
+            click.echo(f"removed scoped npm installation/declaration: {slug} [{scope}]; other scopes/global fallback may remain")
+            return
+    except PiSettingsError as exc:
+        raise click.ClickException(str(exc)) from exc
+    if project_flag:
+        raise click.UsageError("Git library removal is global-only")
     lock_path = library_lock_path(env={})
     lock = read_lock(lock_path)
     entry = lock.skills.get(slug)

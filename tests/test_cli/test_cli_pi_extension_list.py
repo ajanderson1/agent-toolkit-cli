@@ -73,7 +73,8 @@ def test_list_project_json(tmp_path, monkeypatch):
     assert result.exit_code == 0
     rows = {r["slug"]: r for r in _json.loads(result.output)}
     assert rows["@scope/proj-only"]["origin"] == "npm"
-    assert rows["@scope/proj-only"]["projectLoaded"] is True
+    assert rows["@scope/proj-only"]["projectLoaded"] is False
+    assert rows["@scope/proj-only"]["npmProject"]["status"] == "Missing"
     assert rows["@scope/proj-only"]["globalLoaded"] is False
 
 
@@ -99,15 +100,15 @@ def test_list_and_status_render_user_facing_origin_labels(tmp_path, monkeypatch)
     table = CliRunner().invoke(main, ["pi-extension", "list", "-g"], catch_exceptions=False)
     assert table.exit_code == 0
     assert "library" in table.output
-    assert "npm managed" in table.output
-    assert "npm unmanaged" in table.output
+    assert "managed-pkg" in table.output and "unmanaged-pkg" in table.output
+    assert "npm managed" not in table.output and "npm unmanaged" not in table.output
     assert "store-owned" not in table.output
 
     status = CliRunner().invoke(main, ["pi-extension", "status", "-g"], catch_exceptions=False)
     assert status.exit_code == 0
     assert "library" in status.output
-    assert "npm managed" in status.output
-    assert "npm unmanaged" in status.output
+    assert "managed-pkg" in status.output and "unmanaged-pkg" in status.output
+    assert "npm managed" not in status.output and "npm unmanaged" not in status.output
     assert "store-owned" not in status.output
 
 
@@ -129,7 +130,7 @@ def test_list_json_includes_npm_managed_fields(tmp_path, monkeypatch):
     rows = _json.loads(out)
     row = next(r for r in rows if r["slug"] == "pi-title-renamer")
     assert row["origin"] == "npm"
-    assert row["displayOrigin"] == "npm unmanaged"
+    assert row["displayOrigin"] == "npm"
     assert row["managed"] is False
     assert row["globalConfigPath"].endswith(".pi/agent/settings.json")
     assert row["globalPackageSpec"] == "npm:pi-title-renamer"

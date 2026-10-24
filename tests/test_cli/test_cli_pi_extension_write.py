@@ -36,18 +36,11 @@ def _add_store_owned(tmp_path: Path, env: dict[str, str], upstream: Path) -> Non
 # ---------------------------------------------------------------------------
 
 
-def test_add_npm_via_cli(tmp_path, monkeypatch):
+def test_git_library_add_rejects_project_scope(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
-    r = CliRunner().invoke(main, ["pi-extension", "add", "npm:@scope/foo"])
-    assert r.exit_code == 0, r.output
-    lock = read_lock(pep.library_lock_path(env={}))
-    assert lock.skills["@scope/foo"].source_type == "npm"
-
-
-def test_add_has_no_project_flag(tmp_path, monkeypatch):
-    monkeypatch.setenv("HOME", str(tmp_path))
-    r = CliRunner().invoke(main, ["pi-extension", "add", "npm:x", "-p"])
-    assert r.exit_code != 0  # global-only: -p is not a valid option
+    r = CliRunner().invoke(main, ["pi-extension", "add", "github.com/o/repo", "-p"])
+    assert r.exit_code != 0
+    assert "global-only" in r.output
 
 
 # ---------------------------------------------------------------------------
@@ -128,72 +121,6 @@ def test_double_uninstall_is_safe(tmp_path, monkeypatch, git_sandbox):
     assert r1.exit_code == 0 and r2.exit_code == 0, (r1.output, r2.output)
 
 
-def test_npm_install_uninstall_global_round_trip(tmp_path, monkeypatch):
-    monkeypatch.setenv("HOME", str(tmp_path))
-    CliRunner().invoke(main, ["pi-extension", "add", "npm:@scope/foo"])
-
-    r = CliRunner().invoke(main, ["pi-extension", "install", "@scope/foo", "-g"])
-    assert r.exit_code == 0, r.output
-    assert "npm:@scope/foo" in _pi_settings.read_packages(scope="global", home=tmp_path)
-
-    r = CliRunner().invoke(main, ["pi-extension", "uninstall", "@scope/foo", "-g"])
-    assert r.exit_code == 0, r.output
-    assert "npm:@scope/foo" not in _pi_settings.read_packages(scope="global", home=tmp_path)
-
-
-def test_npm_install_uninstall_preserves_current_pi_package_objects(
-    tmp_path,
-    monkeypatch,
-):
-    monkeypatch.setenv("HOME", str(tmp_path))
-    settings = tmp_path / ".pi" / "agent" / "settings.json"
-    settings.parent.mkdir(parents=True)
-    settings.write_text(
-        json.dumps(
-            {
-                "theme": "dark",
-                "packages": [{"source": "npm:existing", "skills": []}],
-            }
-        )
-    )
-    CliRunner().invoke(main, ["pi-extension", "add", "npm:@scope/foo"])
-
-    installed = CliRunner().invoke(
-        main,
-        ["pi-extension", "install", "@scope/foo", "-g"],
-    )
-    assert installed.exit_code == 0, installed.output
-    assert json.loads(settings.read_text()) == {
-        "theme": "dark",
-        "packages": [
-            {"source": "npm:existing", "skills": []},
-            {"source": "npm:@scope/foo"},
-        ],
-    }
-
-    removed = CliRunner().invoke(
-        main,
-        ["pi-extension", "uninstall", "@scope/foo", "-g"],
-    )
-    assert removed.exit_code == 0, removed.output
-    assert json.loads(settings.read_text()) == {
-        "theme": "dark",
-        "packages": [{"source": "npm:existing", "skills": []}],
-    }
-
-
-def test_npm_install_project_scope(tmp_path, monkeypatch):
-    monkeypatch.setenv("HOME", str(tmp_path))
-    CliRunner().invoke(main, ["pi-extension", "add", "npm:bar"])
-    proj = tmp_path / "proj"
-    proj.mkdir()
-    monkeypatch.chdir(proj)  # scope_and_roots falls back to cwd for -p
-    r = CliRunner().invoke(main, ["pi-extension", "install", "bar", "-p"])
-    assert r.exit_code == 0, r.output
-    assert "npm:bar" in _pi_settings.read_packages(scope="project", project=proj)
-    # global settings untouched
-    assert "npm:bar" not in _pi_settings.read_packages(scope="global", home=tmp_path)
-
 
 def test_install_refuses_foreign_dir_at_cli(tmp_path, monkeypatch, git_sandbox):
     monkeypatch.setenv("HOME", str(tmp_path))
@@ -230,14 +157,6 @@ def test_remove_drops_store_and_lock(tmp_path, monkeypatch, git_sandbox):
     assert not canonical.exists()
     lock = read_lock(pep.library_lock_path(env={}))
     assert "demo" not in lock.skills
-
-
-def test_remove_npm_drops_lock_no_store(tmp_path, monkeypatch):
-    monkeypatch.setenv("HOME", str(tmp_path))
-    CliRunner().invoke(main, ["pi-extension", "add", "npm:foo"])
-    r = CliRunner().invoke(main, ["pi-extension", "remove", "foo"])
-    assert r.exit_code == 0, r.output
-    assert "foo" not in read_lock(pep.library_lock_path(env={})).skills
 
 
 def test_remove_dirty_store_refused_without_force(tmp_path, monkeypatch, git_sandbox):
@@ -311,32 +230,6 @@ def test_full_loop_store_owned_then_inventory(tmp_path, monkeypatch, git_sandbox
     out = runner.invoke(main, ["pi-extension", "list", "-g", "--json"])
     slugs = {r["slug"] for r in json.loads(out.output)}
     assert "demo" not in slugs
-
-
-def test_full_loop_npm_then_inventory(tmp_path, monkeypatch):
-    monkeypatch.setenv("HOME", str(tmp_path))
-    runner = CliRunner()
-    assert runner.invoke(main, ["pi-extension", "add", "npm:@scope/foo"]).exit_code == 0
-    assert runner.invoke(main, ["pi-extension", "install", "@scope/foo", "-g"]).exit_code == 0
-    out = runner.invoke(main, ["pi-extension", "list", "-g", "--json"])
-    rows = {r["slug"]: r for r in json.loads(out.output)}
-    assert rows["@scope/foo"]["origin"] == "npm"
-    assert rows["@scope/foo"]["globalLoaded"] is True
-
-
-def test_npm_global_uninstall_removes_drifted_packages_entry(tmp_path, monkeypatch):
-    """#333: uninstall -g must remove a packages[] entry even when it drifted
-    from the lock's stored source (here: version-pinned + no npm: prefix)."""
-    monkeypatch.setenv("HOME", str(tmp_path))
-    # lock records npm:foo (via add); user/Pi wrote a drift variant into settings.
-    CliRunner().invoke(main, ["pi-extension", "add", "npm:foo"])
-    settings = tmp_path / ".pi" / "agent" / "settings.json"
-    settings.parent.mkdir(parents=True, exist_ok=True)
-    settings.write_text(json.dumps({"packages": ["foo@1.2.3", "npm:keep"]}) + "\n")
-
-    r = CliRunner().invoke(main, ["pi-extension", "uninstall", "foo", "-g"])
-    assert r.exit_code == 0, r.output
-    assert json.loads(settings.read_text())["packages"] == ["npm:keep"]
 
 
 def test_npm_global_uninstall_malformed_settings_is_clean_error(tmp_path, monkeypatch):
@@ -451,17 +344,3 @@ def test_store_owned_project_install_fails_when_global_loaded(tmp_path, monkeypa
     assert not pep.pi_extension_dir("demo", scope="project", project=proj).exists()
 
 
-def test_npm_project_install_fails_when_global_loaded(tmp_path, monkeypatch):
-    monkeypatch.setenv("HOME", str(tmp_path))
-    CliRunner().invoke(main, ["pi-extension", "add", "npm:bar"])
-    proj = tmp_path / "proj"
-    proj.mkdir()
-    monkeypatch.chdir(proj)
-
-    r_global = CliRunner().invoke(main, ["pi-extension", "install", "bar", "-g"])
-    assert r_global.exit_code == 0, r_global.output
-
-    r_project = CliRunner().invoke(main, ["pi-extension", "install", "bar", "-p"])
-    assert r_project.exit_code != 0
-    assert "already installed at global scope" in r_project.output
-    assert "npm:bar" not in _pi_settings.read_packages(scope="project", project=proj)

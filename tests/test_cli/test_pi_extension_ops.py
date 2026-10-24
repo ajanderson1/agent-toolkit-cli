@@ -49,16 +49,6 @@ def _seed_store_owned(home, slug):
     return canonical
 
 
-def test_uninstall_npm_global_removes_drifted_entry(tmp_path, monkeypatch):
-    monkeypatch.setenv("HOME", str(tmp_path))
-    _seed_npm_lock("foo", "npm:foo")
-    # settings has a version-pinned, prefix-less drift variant.
-    _seed_settings(tmp_path, {"packages": ["foo@1.2.3", "npm:keep"]})
-    ops.uninstall(slug="foo", scope="global", home=tmp_path, project=None)
-    body = json.loads(_global_settings(tmp_path).read_text())
-    assert body["packages"] == ["npm:keep"]
-
-
 def test_uninstall_store_owned_global_drops_symlink_keeps_lock(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     canonical = _seed_store_owned(tmp_path, "demo")
@@ -73,43 +63,6 @@ def test_uninstall_store_owned_global_drops_symlink_keeps_lock(tmp_path, monkeyp
     lock = read_lock(pep.library_lock_path(env={}))
     assert "demo" in lock.skills                   # lock entry retained (not remove)
 
-
-def test_install_npm_global_adds_package(tmp_path, monkeypatch):
-    monkeypatch.setenv("HOME", str(tmp_path))
-    _seed_npm_lock("foo", "npm:foo")
-    ops.install(slug="foo", scope="global", home=tmp_path, project=None)
-    body = json.loads(_global_settings(tmp_path).read_text())
-    assert body["packages"] == ["npm:foo"]
-
-def test_uninstall_unmanaged_npm_raises_with_advice(tmp_path, monkeypatch):
-    monkeypatch.setenv("HOME", str(tmp_path))
-    settings = tmp_path / ".pi" / "agent" / "settings.json"
-    settings.parent.mkdir(parents=True)
-    settings.write_text(json.dumps({"packages": ["npm:pi-title-renamer"]}))
-
-    with pytest.raises(pi_extension_install.InstallError) as excinfo:
-        ops.uninstall(slug="pi-title-renamer", scope="global", home=tmp_path)
-
-    message = str(excinfo.value)
-    assert "unmanaged npm package" in message
-    assert "will not remove packages it did not add" in message
-    assert str(settings) in message
-    assert 'remove "npm:pi-title-renamer" from packages[]' in message
-
-def test_uninstall_unmanaged_npm_project_scope_raises(tmp_path, monkeypatch):
-    monkeypatch.setenv("HOME", str(tmp_path))
-    settings = tmp_path / ".pi" / "settings.json"
-    settings.parent.mkdir(parents=True)
-    settings.write_text(json.dumps({"packages": ["npm:pi-title-renamer"]}))
-
-    with pytest.raises(pi_extension_install.InstallError) as excinfo:
-        ops.uninstall(slug="pi-title-renamer", scope="project", project=tmp_path)
-
-    message = str(excinfo.value)
-    assert "unmanaged npm package" in message
-    assert "will not remove packages it did not add" in message
-    assert str(settings) in message
-    assert 'remove "npm:pi-title-renamer" from packages[]' in message
 
 def test_project_install_store_owned_fails_when_global_loaded(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
@@ -126,35 +79,6 @@ def test_project_install_store_owned_fails_when_global_loaded(tmp_path, monkeypa
     project_link = pep.pi_extension_dir("demo", scope="project", project=project)
     assert not project_link.exists()
     assert canonical.exists()
-
-
-def test_project_install_npm_fails_when_global_loaded(tmp_path, monkeypatch):
-    monkeypatch.setenv("HOME", str(tmp_path))
-    _seed_npm_lock("foo", "npm:foo")
-
-    ops.install(slug="foo", scope="global", home=tmp_path, project=None)
-    project = tmp_path / "proj"
-    project.mkdir()
-
-    with pytest.raises(ops.pi_extension_install.InstallError) as exc:
-        ops.install(slug="foo", scope="project", home=tmp_path, project=project)
-
-    assert "already installed at global scope" in str(exc.value)
-    project_settings = project / ".pi" / "settings.json"
-    assert not project_settings.exists()
-
-
-def test_project_install_npm_fails_when_global_package_identity_loaded(tmp_path, monkeypatch):
-    monkeypatch.setenv("HOME", str(tmp_path))
-    _seed_npm_lock("foo", "npm:foo")
-    _seed_settings(tmp_path, {"packages": ["foo@1.2.3"]})
-    project = tmp_path / "proj"
-    project.mkdir()
-
-    with pytest.raises(ops.pi_extension_install.InstallError) as exc:
-        ops.install(slug="foo", scope="project", home=tmp_path, project=project)
-
-    assert "already installed at global scope" in str(exc.value)
 
 
 def test_project_install_succeeds_after_global_uninstall(tmp_path, monkeypatch):

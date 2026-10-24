@@ -46,6 +46,23 @@ class NpmScope:
     def installed(self) -> bool:
         return self.root is not None and self.version is not None
 
+    @property
+    def status(self) -> str:
+        if self.missing:
+            return "Needs repair" if self.installed else "Missing"
+        if not self.configured:
+            return "Available" if self.installed else "Not installed"
+        if not self.resources:
+            return "No extensions"
+        return "Mixed" if self.mixed else "Enabled" if self.enabled else "Disabled"
+
+    def summary(self) -> dict:
+        return {"status": self.status, "mode": self.mode, "installed": self.installed,
+            "configured": self.configured, "version": self.version,
+            "root": str(self.root) if self.root else None, "source": self.source,
+            "mixed": self.mixed, "external": self.external,
+            "entrypoints": [{"path": str(path), "enabled": enabled} for path, enabled in self.entries]}
+
 
 @dataclass(frozen=True)
 class NpmState:

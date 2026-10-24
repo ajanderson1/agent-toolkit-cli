@@ -58,6 +58,10 @@ def _setup_sandbox() -> Path:
     os.environ["VIBE_HOME"] = str(fake_home / ".vibe")
     os.environ["PI_CODING_AGENT_DIR"] = str(fake_home / ".pi" / "agent")
     os.environ["AGENT_TOOLKIT_NPM_GLOBAL_ROOT"] = str(fake_home / "empty-global-npm")
+    os.environ["NPM_CONFIG_OFFLINE"] = "true"
+    os.environ["NPM_CONFIG_IGNORE_SCRIPTS"] = "true"
+    os.environ["NPM_CONFIG_AUDIT"] = "false"
+    os.environ["NPM_CONFIG_FUND"] = "false"
 
     # Strip potential escaping overrides from inherited host environment
     for var in (

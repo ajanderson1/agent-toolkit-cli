@@ -22,7 +22,18 @@ def install_cmd(
     global_: bool,
     project_flag: bool,
 ) -> None:
-    """Project a Pi extension into the chosen scope."""
+    """Link a Git library extension, or perform native npm installation (default global)."""
+    from agent_toolkit_cli.commands.pi_extension.native_cmd import npm_roots
+    from agent_toolkit_cli.pi_npm_lifecycle import npm_source_for, install_npm
+    native_scope, native_home, native_project = npm_roots(ctx, global_, project_flag)
+    try:
+        source = npm_source_for(slug, scope=native_scope, home=native_home, project=native_project)
+        if source is not None:
+            install_npm(source=source, scope=native_scope, home=native_home, project=native_project)
+            click.echo(f"installed {slug} [{native_scope}] through Pi")
+            return
+    except _pi_settings.PiSettingsError as exc:
+        raise click.ClickException(str(exc)) from exc
     scope, home, project, _implicit = scope_and_roots(
         global_, project_flag,
         ctx.obj.get("project_root") if ctx.obj else None,

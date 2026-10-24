@@ -52,6 +52,9 @@ def add(
     source: str,
     slug: str | None,
     env: dict[str, str] | None = None,
+    scope: str = "global",
+    home: Path | None = None,
+    project: Path | None = None,
 ) -> str:
     """Add a Pi extension to the global library. Returns the slug.
 
@@ -63,12 +66,16 @@ def add(
     lock_path = library_lock_path(env={})
 
     if source.startswith("npm:"):
-        ext_slug = slug or _npm_slug(source)
-        lock = read_lock(lock_path)
-        if ext_slug in lock.skills and lock.skills[ext_slug].source == source:
-            return ext_slug  # idempotent
-        entry = LockEntry(source=source, source_type="npm")
-        write_lock(lock_path, add_entry(lock, ext_slug, entry))
+        from agent_toolkit_cli.pi_npm import _identity
+        from agent_toolkit_cli.pi_npm_lifecycle import install_npm
+        from agent_toolkit_cli._pi_settings import PiSettingsError
+        ext_slug = _identity(source)
+        if slug is not None and slug != ext_slug:
+            raise AddError("npm identities come from Pi; custom --slug registration is no longer supported")
+        try:
+            install_npm(source=source, scope=scope, home=home or Path.home(), project=project)
+        except PiSettingsError as exc:
+            raise AddError(str(exc)) from exc
         return ext_slug
 
     # Store-owned: parse + clone into the library, THEN write the lock.

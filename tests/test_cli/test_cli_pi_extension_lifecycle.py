@@ -148,7 +148,7 @@ def test_update_project_scope(tmp_path, monkeypatch, git_sandbox):
 
 def test_update_npm_is_noop(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
-    CliRunner().invoke(main, ["pi-extension", "add", "npm:foo"])
+    write_lock(pep.library_lock_path(env={}), LockFile(version=1, skills={"foo": LockEntry(source="npm:foo", source_type="npm")}))
     r = CliRunner().invoke(main, ["pi-extension", "update", "foo", "-g"])
     assert r.exit_code == 0, r.output
     assert "npm" in r.output.lower() or "no-op" in r.output.lower()
@@ -1060,8 +1060,7 @@ def test_doctor_npm_row_no_half_dir(tmp_path, monkeypatch):
     """#347: an npm (registry-tracked) row has no canonical, so it can never
     yield a half_dir finding even if a same-named dir squats the store path."""
     monkeypatch.setenv("HOME", str(tmp_path))
-    from agent_toolkit_cli import pi_extension_add as pea
-    pea.add(source="npm:@scope/widget", slug=None, env={})
+    write_lock(pep.library_lock_path(env={}), LockFile(version=1, skills={"@scope/widget": LockEntry(source="npm:@scope/widget", source_type="npm")}))
     canonical = pep.library_pi_extension_path("@scope/widget", env={})
     canonical.mkdir(parents=True)
     (canonical / "JUNK.md").write_text("leftover\n")
@@ -1071,34 +1070,3 @@ def test_doctor_npm_row_no_half_dir(tmp_path, monkeypatch):
     assert not [f for f in findings if f.finding_type == "half_dir"]
 
 
-def test_remove_unmanaged_npm_prints_advice_and_fails(tmp_path, monkeypatch):
-    monkeypatch.setenv("HOME", str(tmp_path))
-    settings = tmp_path / ".pi" / "agent" / "settings.json"
-    settings.parent.mkdir(parents=True)
-    settings.write_text('{"packages": ["npm:pi-title-renamer"]}')
-    (tmp_path / ".agent-toolkit").mkdir(parents=True, exist_ok=True)
-
-    runner = CliRunner()
-    result = runner.invoke(main, ["pi-extension", "remove", "pi-title-renamer"], catch_exceptions=False)
-
-    assert result.exit_code != 0
-    assert "not managed by agent-toolkit" in result.output
-    assert "will not remove packages it did not add" in result.output
-    assert ".pi/agent/settings.json" in result.output
-    assert 'remove "npm:pi-title-renamer" from packages[]' in result.output
-
-def test_remove_unmanaged_npm_project_scope_prints_advice_and_fails(tmp_path, monkeypatch):
-    monkeypatch.setenv("HOME", str(tmp_path / "home"))
-    monkeypatch.chdir(str(tmp_path))
-    settings = tmp_path / ".pi" / "settings.json"
-    settings.parent.mkdir(parents=True)
-    settings.write_text('{"packages": ["npm:pi-title-renamer"]}')
-
-    runner = CliRunner()
-    result = runner.invoke(main, ["pi-extension", "remove", "pi-title-renamer"], catch_exceptions=False)
-
-    assert result.exit_code != 0
-    assert "not managed by agent-toolkit" in result.output
-    assert "will not remove packages it did not add" in result.output
-    assert ".pi/settings.json" in result.output
-    assert 'remove "npm:pi-title-renamer" from packages[]' in result.output

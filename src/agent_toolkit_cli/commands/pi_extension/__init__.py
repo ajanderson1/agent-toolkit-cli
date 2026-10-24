@@ -18,11 +18,12 @@ from agent_toolkit_cli.commands.pi_extension.reset_cmd import reset_cmd
 from agent_toolkit_cli.commands.pi_extension.status_cmd import status_cmd
 from agent_toolkit_cli.commands.pi_extension.uninstall_cmd import uninstall_cmd
 from agent_toolkit_cli.commands.pi_extension.update_cmd import update_cmd
+from agent_toolkit_cli.commands.pi_extension.native_cmd import enable_cmd, disable_cmd, reset_selection_cmd, migrate_npm_cmd
 
 
 @click.group(name="pi-extension", cls=AliasedGroup)
 def pi_extension() -> None:
-    """Manage Pi extensions via owned git repos + pi-extensions-lock.json."""
+    """Manage Git library extensions and native Pi npm packages."""
 
 
 pi_extension.add_command(list_cmd)
@@ -37,3 +38,7 @@ pi_extension.add_command(push_cmd)
 pi_extension.add_command(import_cmd)
 pi_extension.add_command(reset_cmd)
 pi_extension.add_command(doctor_cmd)
+pi_extension.add_command(enable_cmd)
+pi_extension.add_command(disable_cmd)
+pi_extension.add_command(reset_selection_cmd)
+pi_extension.add_command(migrate_npm_cmd)

@@ -96,6 +96,11 @@ def install(
 ) -> None:
     """Project `slug` into `scope`. Raises InstallError / PiSettingsError."""
     home = home or Path.home()
+    from agent_toolkit_cli.pi_npm_lifecycle import npm_source_for, install_npm
+    source = npm_source_for(slug, scope=scope, home=home, project=project)
+    if source is not None:
+        install_npm(source=source, scope=scope, home=home, project=project)
+        return
     entry = _global_entry(slug)
     if entry is None:
         raise pi_extension_install.InstallError(
@@ -105,10 +110,6 @@ def install(
     _reject_project_install_if_global_loaded(
         slug=slug, entry=entry, scope=scope, home=home
     )
-
-    if entry.source_type == "npm":
-        _pi_settings.add_package(entry.source, scope=scope, home=home, project=project)
-        return
 
     p = pi_extension_install.plan(
         slug=slug, scope=scope, action="install", home=home, project=project
@@ -138,13 +139,12 @@ def uninstall(
     store-owned: unlink the projection. Global keeps the library lock entry;
     project scope prunes the project lock."""
     home = home or Path.home()
-    entry = _global_entry(slug)
-
-    if entry is not None and entry.source_type == "npm":
-        _pi_settings.remove_package_by_identity(
-            entry.source, scope=scope, home=home, project=project
-        )
+    from agent_toolkit_cli.pi_npm_lifecycle import npm_source_for, remove_npm
+    source = npm_source_for(slug, scope=scope, home=home, project=project)
+    if source is not None:
+        remove_npm(identity=source, scope=scope, home=home, project=project)
         return
+    entry = _global_entry(slug)
 
     if entry is None:
         advice = unmanaged_npm_advice(

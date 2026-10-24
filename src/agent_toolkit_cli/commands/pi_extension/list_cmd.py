@@ -19,7 +19,7 @@ def _origin_label(record: InventoryRecord) -> str:
     if record.origin == "store-owned":
         return "library"
     if record.origin == "npm":
-        return "npm managed" if record.managed else "npm unmanaged"
+        return "npm"
     if record.origin == "local-package":
         return "local-package untracked"
     return record.origin
@@ -65,6 +65,8 @@ def list_cmd(
                 "projectConfigPath": str(r.project_config_path) if r.project_config_path else None,
                 "globalPackageMetadata": r.global_package_metadata,
                 "projectPackageMetadata": r.project_package_metadata,
+                "npmGlobal": r.npm_state.global_scope.summary() if r.npm_state else None,
+                "npmProject": r.npm_state.project_scope.summary() if r.npm_state else None,
             }
             for r in records
         ], indent=2))
