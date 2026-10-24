@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 from agent_toolkit_cli.pi_extension_inventory import build_inventory
+from tests.pi_npm_fixtures import seed_package
 
 
 def _pi_global(home: Path) -> Path:
@@ -50,7 +51,7 @@ def test_local_package_is_visible_and_not_npm_managed(tmp_path, monkeypatch):
     assert rec.global_config_path == settings
 
 
-def test_npm_package_is_tracked_registry(tmp_path):
+def test_npm_missing_configuration_is_visible_not_loaded(tmp_path):
     s = tmp_path / ".pi" / "agent" / "settings.json"
     s.parent.mkdir(parents=True)
     s.write_text(json.dumps({"packages": ["npm:@scope/rpiv-i18n"]}))
@@ -58,7 +59,8 @@ def test_npm_package_is_tracked_registry(tmp_path):
     rec = {r.slug: r for r in records}["@scope/rpiv-i18n"]
     assert rec.origin == "npm"
     assert rec.source == "npm:@scope/rpiv-i18n"
-    assert rec.global_loaded is True
+    assert rec.global_loaded is False
+    assert rec.npm_state.global_scope.missing
 
 
 def test_store_owned_from_lock(tmp_path, monkeypatch):
@@ -119,10 +121,12 @@ def test_project_scope_surfaces_project_rows(tmp_path, monkeypatch):
 
     # Global fixtures: a loose dir + an npm package, both global-only.
     _seed_loose_dir(home / ".pi" / "agent" / "extensions", "global-loose")
+    seed_package(home, project, name="@scope/global-npm", configured=False)
     _seed_packages(home / ".pi" / "agent" / "settings.json", "npm:@scope/global-npm")
 
     # Project fixtures: a loose dir + an npm package, both project-only.
     _seed_loose_dir(_pi_project(project), "proj-loose")
+    seed_package(home, project, scope="project", name="@scope/proj-npm", configured=False)
     _seed_packages(project / ".pi" / "settings.json", "npm:@scope/proj-npm")
 
     # A slug present in BOTH scopes (loose dir in each).
@@ -133,7 +137,7 @@ def test_project_scope_surfaces_project_rows(tmp_path, monkeypatch):
 
     # Mirror the reviewer's manual check: (global_loaded, project_loaded).
     assert (rows["@scope/global-npm"].global_loaded,
-            rows["@scope/global-npm"].project_loaded) == (True, False)
+            rows["@scope/global-npm"].project_loaded) == (True, True)
     assert (rows["@scope/proj-npm"].global_loaded,
             rows["@scope/proj-npm"].project_loaded) == (False, True)
     assert (rows["global-loose"].global_loaded,
@@ -164,8 +168,11 @@ def test_npm_pass_does_not_downgrade_store_owned(tmp_path, monkeypatch):
     # Store-owned wins over npm: origin/source are NOT clobbered...
     assert rec.origin == "store-owned"
     assert rec.source == "github.com/o/dual"
-    # ...but the npm presence is still recorded.
-    assert rec.global_loaded is True
+    # The separate npm declaration must not falsely mark the Git projection loaded.
+    assert rec.global_loaded is False
+    records = {r.slug: r for r in build_inventory(home=tmp_path)}
+    assert records["npm:@scope/dual"].origin == "npm"
+    assert records["npm:@scope/dual"].npm_state.global_scope.missing
 
 
 def test_store_owned_squatted_projection_not_loaded(tmp_path, monkeypatch):
@@ -238,7 +245,7 @@ def test_pinned_entry_records_pinned_sha(tmp_path, monkeypatch):
     records = {r.slug: r for r in build_inventory(home=tmp_path)}
     assert records["pinned"].pinned_sha == "abc1234def5678"
     assert records["tracked"].pinned_sha is None
-    assert records["regfoo"].pinned_sha is None
+    assert "regfoo" not in records  # Legacy npm registration is not native state.
 
 
 def test_npm_entry_with_hex_ref_is_not_pinned(tmp_path, monkeypatch):
@@ -261,10 +268,9 @@ def test_npm_entry_with_hex_ref_is_not_pinned(tmp_path, monkeypatch):
         }) + "\n"
     )
     records = {r.slug: r for r in build_inventory(home=tmp_path)}
-    assert records["npm-hex"].origin == "npm"
-    assert records["npm-hex"].pinned_sha is None
+    assert "npm-hex" not in records
 
-def test_npm_from_lock_and_settings_is_managed(tmp_path, monkeypatch):
+def test_npm_lock_does_not_grant_ownership_or_loading(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     lock = tmp_path / ".agent-toolkit" / "pi-extensions-lock.json"
     lock.parent.mkdir(parents=True)
@@ -279,8 +285,9 @@ def test_npm_from_lock_and_settings_is_managed(tmp_path, monkeypatch):
     rec = {r.slug: r for r in build_inventory(home=tmp_path)}["pi-recap"]
 
     assert rec.origin == "npm"
-    assert rec.managed is True
-    assert rec.global_loaded is True
+    assert rec.managed is False
+    assert rec.global_loaded is False
+    assert rec.npm_state.global_scope.missing
     assert rec.global_package_spec == "npm:pi-recap"
     assert rec.global_config_path == tmp_path / ".pi" / "agent" / "settings.json"
 
@@ -293,6 +300,7 @@ def test_npm_from_settings_without_lock_is_unmanaged(tmp_path, monkeypatch):
 
     assert rec.origin == "npm"
     assert rec.managed is False
-    assert rec.global_loaded is True
+    assert rec.global_loaded is False
+    assert rec.npm_state.global_scope.missing
     assert rec.global_package_spec == "npm:pi-title-renamer"
     assert rec.global_config_path == tmp_path / ".pi" / "agent" / "settings.json"

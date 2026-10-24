@@ -51,50 +51,43 @@ def _string_list(data: dict[str, object], key: str, path: Path) -> list[str]:
     return value
 
 
+class _PackageRecord(dict):
+    """Retain each native entry's string/object form outside its JSON fields."""
+
+    def __init__(self, value: dict, *, string_form: bool = False):
+        super().__init__(value)
+        self.string_form = string_form
+
+
 def _package_sources(
-    data: dict[str, object],
-    path: Path,
-) -> tuple[list[dict[str, object]], Literal["strings", "objects"]]:
-    """Decode package declarations while retaining object resource filters."""
+    data: dict[str, object], path: Path,
+) -> tuple[list[dict[str, object]], str]:
     value = data.get("packages", [])
     if not isinstance(value, list):
-        raise PiSettingsError(
-            f"{path}: `packages` is not a list of strings or source objects"
-        )
-    if all(isinstance(item, str) for item in value):
-        return [{"source": item} for item in value], "strings"
-
-    # Pi's current package schema supports these resource selectors.
-    allowed_keys = {"source", "extensions", "skills", "prompts", "themes", "autoload"}
-    if all(
-        isinstance(item, dict)
-        and set(item) <= allowed_keys
-        and isinstance(item.get("source"), str)
-        and all(
-            isinstance(item.get(key), list)
-            and all(isinstance(resource, str) for resource in item[key])
-            for key in ("extensions", "skills", "prompts", "themes")
-            if key in item
-        )
-        and ("autoload" not in item or isinstance(item["autoload"], bool))
-        for item in value
-    ):
-        return [dict(item) for item in value], "objects"
-
-    raise PiSettingsError(
-        f"{path}: `packages` is not a uniform list of strings or source objects"
-    )
+        raise PiSettingsError(f"{path}: `packages` is not a list of strings or source objects")
+    records = []
+    for item in value:
+        if isinstance(item, str):
+            records.append(_PackageRecord({"source": item}, string_form=True))
+            continue
+        if not isinstance(item, dict) or not isinstance(item.get("source"), str):
+            raise PiSettingsError(f"{path}: invalid package source object")
+        for key in ("extensions", "skills", "prompts", "themes"):
+            if key in item and (not isinstance(item[key], list) or not all(isinstance(v, str) for v in item[key])):
+                raise PiSettingsError(f"{path}: invalid package `{key}` filter")
+        if "autoload" in item and not isinstance(item["autoload"], bool):
+            raise PiSettingsError(f"{path}: invalid package `autoload`")
+        records.append(_PackageRecord(item))
+    style = "strings" if all(isinstance(item, str) for item in value) else "objects" if all(isinstance(item, dict) for item in value) else "mixed"
+    return records, style
 
 
-def _encode_packages(
-    packages: list[dict[str, object]],
-    style: Literal["strings", "objects"],
-) -> list[object]:
-    if style == "objects":
-        encoded: list[object] = []
-        encoded.extend(packages)
-        return encoded
-    return [package["source"] for package in packages]
+def _encode_packages(packages: list[dict[str, object]], style: str) -> list[object]:
+    return [
+        package["source"] if set(package) == {"source"} and getattr(package, "string_form", style == "strings")
+        else dict(package)
+        for package in packages
+    ]
 
 
 def _package_specs(packages: list[dict[str, object]]) -> list[str]:

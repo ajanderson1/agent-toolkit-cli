@@ -81,14 +81,11 @@ def test_read_packages_accepts_package_objects_with_resource_filters(tmp_path):
 @pytest.mark.parametrize(
     "packages",
     [
-        ["npm:foo", {"source": "npm:bar"}],
-        [{"source": "npm:foo", "token": "secret"}],
-        [{"source": "npm:foo", "unknown": True}],
         [{"source": 42}],
         [{}],
     ],
 )
-def test_read_packages_rejects_mixed_or_malformed_objects(tmp_path, packages):
+def test_read_packages_rejects_malformed_objects(tmp_path, packages):
     _write(tmp_path / ".pi" / "agent" / "settings.json", {"packages": packages})
     with pytest.raises(ps.PiSettingsError):
         ps.read_packages(scope="global", home=tmp_path)

@@ -270,7 +270,7 @@ def _resolve_local_states(
             else:
                 root = _lexical(base / _normalize_pattern(spec.strip(), home))
                 identity = "local:" + str(root)
-            sources[identity] = (root, None if style == "strings" else record)
+            sources[identity] = (root, None if getattr(record, "string_form", style == "strings") else record)
         packages[scope] = sources
 
     def resolve(with_project: bool) -> dict[Path, tuple[bool, bool]]:

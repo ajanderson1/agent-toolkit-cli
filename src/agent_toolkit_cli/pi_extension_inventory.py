@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Literal
 
 from agent_toolkit_cli import _pi_settings
+from agent_toolkit_cli.pi_npm import NpmState, read_npm_states
 from agent_toolkit_cli.pi_local_extensions import discover_local_extensions, read_local_extension_states
 from agent_toolkit_cli.pi_extension_lock import read_lock
 from agent_toolkit_cli.pi_extension_paths import (
@@ -37,6 +38,7 @@ class InventoryRecord:
     project_config_path: Path | None = None
     global_package_metadata: dict[str, object] | None = None
     project_package_metadata: dict[str, object] | None = None
+    npm_state: NpmState | None = None
 
 
 def _extensions_root(*, scope: Scope, home: Path | None, project: Path | None) -> Path:
@@ -119,6 +121,8 @@ def build_inventory(
         except FileNotFoundError:
             continue
         for slug, entry in lock.skills.items():
+            if entry.source_type == "npm":
+                continue  # Legacy registrations are not native installation facts.
             origin: Origin = "npm" if entry.source_type == "npm" else "store-owned"
             # `ref_looks_pinned` is origin-aware (an npm row carrying a hex
             # `ref` is not a pin), so status never renders a phantom pin column
@@ -167,6 +171,8 @@ def build_inventory(
         for package in packages:
             spec = package["source"]
             is_npm = _is_npm_spec(spec)
+            if is_npm:
+                continue  # Native facade supplies selection, versions and inheritance.
             slug = _package_slug(spec)
             metadata = None if is_npm else _package_metadata(spec, settings_path=config_path)
             origin: Origin = "npm" if is_npm else "local-package"
@@ -199,4 +205,17 @@ def build_inventory(
                 or any(entry.path not in states[slug].project_package_paths for entry in states[slug].project_entries)
             ))
         }
+    for identity, state in read_npm_states(home=home, project=project).items():
+        slug = identity if identity not in by_slug else f"npm:{identity}"
+        global_scope, project_scope = state.global_scope, state.project_scope
+        by_slug[slug] = InventoryRecord(
+            slug=slug, origin="npm", source=global_scope.source if global_scope.configured or global_scope.installed else project_scope.source,
+            global_loaded=global_scope.enabled, project_loaded=project_scope.enabled,
+            managed=False, npm_state=state,
+            global_package_spec=global_scope.source if global_scope.configured else None,
+            project_package_spec=project_scope.source if project_scope.configured else None,
+            global_config_path=_pi_settings.settings_path(scope="global", home=home) if global_scope.configured else None,
+            project_config_path=_pi_settings.settings_path(scope="project", project=project) if project is not None and project_scope.configured else None,
+            global_package_metadata=global_scope.metadata, project_package_metadata=project_scope.metadata,
+        )
     return [by_slug[k] for k in sorted(by_slug)]

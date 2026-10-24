@@ -57,6 +57,7 @@ def _setup_sandbox() -> Path:
     os.environ["CLAUDE_CONFIG_DIR"] = str(fake_home / ".claude")
     os.environ["VIBE_HOME"] = str(fake_home / ".vibe")
     os.environ["PI_CODING_AGENT_DIR"] = str(fake_home / ".pi" / "agent")
+    os.environ["AGENT_TOOLKIT_NPM_GLOBAL_ROOT"] = str(fake_home / "empty-global-npm")
 
     # Strip potential escaping overrides from inherited host environment
     for var in (
