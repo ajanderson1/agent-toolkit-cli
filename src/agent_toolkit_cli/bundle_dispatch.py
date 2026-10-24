@@ -220,6 +220,29 @@ def install_member(
     after a real add+install. project_root threads the top-level --project (F8).
     """
     _check_member(member)
+    if member.asset_type == "pi-extension" and member.source.startswith("npm:"):
+        from agent_toolkit_cli import pi_npm
+        from agent_toolkit_cli._pi_settings import PiSettingsError
+        identity = pi_npm._identity(member.source)
+        if member.slug is not None and member.slug != identity:
+            raise DispatchError("npm bundle members use native package identity, not custom registration slugs")
+        project = Path(project_root) if project_root else Path.cwd()
+        home = Path.home()
+        try:
+            state = pi_npm.read_npm_states(home=home, project=project).get(identity)
+            current = state.for_scope(scope) if state else None
+            if current is not None and current.record is not None:
+                source = current.record if isinstance(current.record, str) else current.record["source"]
+                if source == member.source and current.scope_compatible:
+                    return "already_present"
+                raise DispatchError("existing native npm declaration needs explicit install/repair outside the bundle; refusing to modify preexisting state")
+            base = pi_npm.agent_dir(home) if scope == "global" else project / ".pi"
+            if (base / "npm/node_modules" / identity).exists() or current is not None and current.scope_root is not None:
+                raise DispatchError("preexisting npm installation: configure it explicitly before bundle installation so rollback cannot remove it")
+            _invoke_cli(_project_prefix(scope, project_root) + ["pi-extension", "add", _scope_flag(scope), "--", member.source])
+        except PiSettingsError as exc:
+            raise DispatchError(str(exc)) from exc
+        return None
     if _lock_has_member(member):
         return "already_present"
     prefix = _project_prefix(scope, project_root)
@@ -256,6 +279,12 @@ def uninstall_member(
     the correct project root from ctx.obj.
     """
     _check_member(member)
+    if member.asset_type == "pi-extension" and member.source.startswith("npm:"):
+        try:
+            _invoke_cli(_project_prefix(scope, project_root) + ["pi-extension", "uninstall", _scope_flag(scope), "--yes", "--", member.source])
+        except (Exception, SystemExit) as exc:
+            raise DispatchError(f"native npm rollback failed: {exc}") from exc
+        return
     slug = member.slug or _derive_slug(member.source)
     try:
         if scope == "project" and project_root is not None:

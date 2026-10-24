@@ -1,4 +1,4 @@
-"""`pi-extension add <source>` — global-only (mirror `skill add`)."""
+"""Git source registration, or native scoped npm installation/configuration."""
 from __future__ import annotations
 
 import click

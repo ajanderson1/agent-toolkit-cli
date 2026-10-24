@@ -46,6 +46,7 @@ def npm_source_for(target: str, *, scope: Scope, home: Path, project: Path | Non
 
 
 def _run_pi(verb: str, source: str, *, scope: Scope, home: Path, project: Path | None) -> subprocess.CompletedProcess:
+    pi_npm.ensure_scope_writable(scope=scope, home=home, project=project)
     executable = shutil.which("pi")
     if executable is None:
         raise PiSettingsError("native npm lifecycle requires installed Pi")
@@ -54,7 +55,7 @@ def _run_pi(verb: str, source: str, *, scope: Scope, home: Path, project: Path |
     home.mkdir(parents=True, exist_ok=True)
     try:
         return subprocess.run([executable, verb, source] + (["-l"] if scope == "project" else []),
-            cwd=project or home, env={**os.environ, "HOME": str(home), "PI_CODING_AGENT_DIR": str(home / ".pi/agent")},
+            cwd=project or home, env={**os.environ, "HOME": str(home), "PI_CODING_AGENT_DIR": str(pi_npm.agent_dir(home))},
             capture_output=True, text=True, timeout=300)
     except (OSError, subprocess.SubprocessError) as exc:
         raise PiSettingsError(f"native Pi {verb} failed: {exc}") from exc
@@ -73,7 +74,7 @@ def install_npm(*, source: str, scope: Scope, home: Path, project: Path | None) 
 
 
 def _drop_declaration(identity: str, *, scope: Scope, home: Path, project: Path | None) -> None:
-    path = _pi_settings.settings_path(scope=scope, home=home, project=project)
+    path = pi_npm.settings_path(scope=scope, home=home, project=project)
     with _settings_lock(path):
         data = _pi_settings._load(path)
         records, style = _pi_settings._package_sources(data, path)
@@ -85,23 +86,29 @@ def _drop_declaration(identity: str, *, scope: Scope, home: Path, project: Path 
 
 def remove_npm(*, identity: str, scope: Scope, home: Path, project: Path | None, external: bool = False) -> None:
     identity = pi_npm._identity(identity)
+    pi_npm.ensure_scope_writable(scope=scope, home=home, project=project)
     state = pi_npm.read_npm_states(home=home, project=project).get(identity)
     if state is None:
         return
     current = state.for_scope(scope)
-    base = home / ".pi/agent" if scope == "global" else project / ".pi"
+    base = pi_npm.agent_dir(home) if scope == "global" else project / ".pi"
     if scope == "project" and current.record is None and identity not in pi_npm._direct_names(base):
         raise PiSettingsError(f"{identity}: inherited global package; disable here instead of uninstalling a nonexistent project installation")
     if current.external and scope == "global":
         if not external:
             raise PiSettingsError(f"{identity}: installed by external npm at {current.root}; use --external with --yes to remove that shared installation")
-        settings = _pi_settings._load(_pi_settings.settings_path(scope="global", home=home))
+        settings = _pi_settings._load(pi_npm.settings_path(scope="global", home=home))
         if settings.get("npmCommand") not in (None, ["npm"]):
             raise PiSettingsError("external removal requires the actual custom installer; not guessing an npm command")
         legacy, _ = pi_npm._legacy_npm(home, settings)
         if legacy is None or legacy.name != "node_modules" or current.root != legacy / identity:
             raise PiSettingsError("cannot establish the external npm installation prefix safely")
-        prefix = legacy.parent.parent if legacy.parent.name == "lib" else legacy.parent
+        if legacy.parent.name == "lib":
+            prefix = legacy.parent.parent
+        elif os.name == "nt":
+            prefix = legacy.parent
+        else:
+            raise PiSettingsError("external root is not an npm global prefix; use its actual installer instead of guessing")
         npm = shutil.which("npm")
         if npm is None:
             raise PiSettingsError("npm is required to remove this external installation")
@@ -119,7 +126,8 @@ def remove_npm(*, identity: str, scope: Scope, home: Path, project: Path | None,
     record = current.record
     source = record if isinstance(record, str) else record["source"] if record else current.source
     result = _run_pi("uninstall", source, scope=scope, home=home, project=project)
-    remaining_records = _pi_settings.read_package_records(scope=scope, home=home, project=project)
+    config = pi_npm.settings_path(scope=scope, home=home, project=project)
+    remaining_records, _ = _pi_settings._package_sources(_pi_settings._load(config), config)
     declared = any(p["source"].startswith("npm:") and pi_npm._identity(p["source"]) == identity for p in remaining_records)
     still_direct = identity in pi_npm._direct_names(base)
     if result.returncode:

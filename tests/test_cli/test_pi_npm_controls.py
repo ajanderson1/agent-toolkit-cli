@@ -149,6 +149,43 @@ def test_project_overlay_does_not_hide_a_separate_unused_installation(setup):
     assert current.scope_root == project_root and current.scope_version == "2.0.0"
 
 
+def test_scoped_changes_refuse_shared_global_project_settings_file(setup):
+    home, project, root = setup
+    global_config = home / ".pi/agent/settings.json"
+    project_config = project / ".pi/settings.json"
+    project_config.parent.mkdir(parents=True)
+    project_config.symlink_to(global_config)
+    before = global_config.read_bytes()
+    with pytest.raises(PiSettingsError, match="share|alias"):
+        toggle(home, project, False, "project")
+    assert global_config.read_bytes() == before
+    assert project_config.is_symlink()
+
+
+def test_duplicate_project_declarations_refuse_ambiguous_bulk_writes(setup):
+    home, project, root = setup
+    seed_package(home, project, scope="project")
+    config = project / ".pi/settings.json"
+    write_json(config, {"packages": ["npm:demo@1.0.0", "npm:demo@1.0.0"]})
+    before = config.read_bytes()
+    with pytest.raises(PiSettingsError, match="multiple|ambiguous"):
+        toggle(home, project, False, "project")
+    assert config.read_bytes() == before
+
+
+def test_queued_intent_refuses_a_changed_settings_symlink_target(setup, tmp_path):
+    home, project, root = setup
+    config = home / ".pi/agent/settings.json"
+    snapshot = state(home, project).snapshot_for("global")
+    other = tmp_path / "other-profile.json"
+    other.write_bytes(config.read_bytes())
+    config.unlink(); config.symlink_to(other)
+    before = other.read_bytes()
+    with pytest.raises(PiSettingsError, match="changed"):
+        toggle(home, project, False, expected_snapshot=snapshot)
+    assert config.is_symlink() and other.read_bytes() == before
+
+
 def test_reset_delta_preserves_other_resource_overrides(setup):
     home, project, root = setup
     config = project / ".pi/settings.json"

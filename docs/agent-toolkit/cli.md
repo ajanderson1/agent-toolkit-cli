@@ -12,7 +12,7 @@ Plural names are canonical; singular aliases remain accepted, including `instruc
 | `agents` | `agent` | add, install, uninstall, list, status, update, push, reset, remove, import, doctor |
 | `commands` | `command` | add, install, uninstall, list, status, update, push, reset, remove, import, doctor |
 | `instructions` | `instruction` | install, uninstall, list, status, doctor |
-| `pi-extensions` | `pi-extension` | add, install, uninstall, list, status, update, push, reset, remove, import, doctor |
+| `pi-extensions` | `pi-extension` | add, install, uninstall, enable, disable, reset-selection, migrate-npm-records, list, status, update, push, reset, remove, import, doctor |
 | `mcps` | `mcp` | add, install, uninstall, list, status, update, remove, import, migrate, doctor |
 | `bundles` | `bundle` | install, validate |
 
@@ -24,11 +24,13 @@ There is **no blanket global default** and no rule that merely being in a Git re
 
 | Commands | No-flag scope |
 |---|---|
-| Skills add/remove/import; agents add/remove/import; Pi extensions add/remove/import | Global library only; no scope flags. |
+| Skills add/remove/import; agents add/remove/import; Pi extensions Git add/remove/import | Global library. Pi Git add/remove accept `-g` but reject `-p`; Git import has no scope flags. |
 | Skills list/status/update/push/reset/doctor | Project if `skills-lock.json` exists in the consumer directory, otherwise global. A detected Paperclip company selects project even without that lock. |
 | Skills install/uninstall | Global, except project inside a detected Paperclip company. Use `--scope project` or `-p`; global uses `--scope global` (not `-g`). |
-| Agents and Pi extensions list/status/update/push/reset/doctor | Project if that kind's project lock exists, otherwise global. |
-| Agents and Pi extensions install/uninstall | Project. Pass `-g` for user-level projections. |
+| Agents list/status/update/push/reset/doctor; Pi extensions Git update/push/reset/doctor | Project if that kind's project lock exists, otherwise global. |
+| Pi extensions list/status | Unified global/current-project discovery without requiring a Toolkit project lock; `-g` restricts discovery to global. |
+| Agents install/uninstall; Pi extensions Git install/uninstall | Project. Pass `-g` for user-level projections. |
+| Pi extensions npm add/install/remove/uninstall/enable/disable/reset-selection; migrate-npm-records | Global like Pi; `-p` selects project. No lock-based scope inference. |
 | Commands scope-aware verbs | `_paths_core.default_scope`: project if **any** of skills/agents/commands/Pi extensions project locks exists in the consumer directory; otherwise global. |
 | Instructions | Project; use `--scope global` (no `-g/-p`). |
 | MCP list/status/doctor | Project if `mcps-lock.json` exists, otherwise global. |
@@ -123,18 +125,21 @@ Canonical is user-authored `<project>/AGENTS.md` or `~/.agent-toolkit/AGENTS.md`
 ## Pi extensions
 
 ```text
-agent-toolkit-cli pi-extensions add SOURCE [--slug SLUG]
-agent-toolkit-cli pi-extensions install SLUG [-g|-p]
-agent-toolkit-cli pi-extensions uninstall SLUG [-g|-p]
+agent-toolkit-cli pi-extensions add SOURCE [--slug GIT_SLUG] [-g|-p]
+agent-toolkit-cli pi-extensions install SLUG_OR_NPM_SOURCE [-g|-p]
+agent-toolkit-cli pi-extensions uninstall SLUG_OR_NPM_SOURCE [-g|-p] [--yes] [--external]
+agent-toolkit-cli pi-extensions enable|disable NPM_ID [-g|-p]
+agent-toolkit-cli pi-extensions reset-selection NPM_ID [-g|-p]
+agent-toolkit-cli pi-extensions migrate-npm-records [-g|-p] [--apply]
 agent-toolkit-cli pi-extensions list [-g|-p] [--json]
 agent-toolkit-cli pi-extensions status|update|push [SLUGS]... [-g|-p]
 agent-toolkit-cli pi-extensions reset SLUGS... [-g|-p] [--force]
-agent-toolkit-cli pi-extensions remove SLUG [--force]
+agent-toolkit-cli pi-extensions remove SLUG_OR_NPM_SOURCE [-g|-p] [--force] [--yes] [--external]
 agent-toolkit-cli pi-extensions import FILE [--latest]
 agent-toolkit-cli pi-extensions doctor [SLUGS]... [-g|-p] [--no-fix] [--repair]
 ```
 
-Push also accepts `--direct`. Git refs are part of SOURCE (`@ref`), not a `--ref` option. Inventory includes git-backed, loose local and npm/package registrations. Local filesystem packages declared in Pi settings are visible as `local` in the TUI, with manual reference-removal guidance and no toggle/deletion action. Doctor does not register discovered local packages, even with `--repair`. Doctor does not rewrite settings or source. [Pi extensions](../asset-types/pi-extensions.md).
+Push also accepts `--direct`. Git refs are part of SOURCE (`@ref`), not a `--ref` option. Inventory includes Git-backed sources, loose files and native Pi/npm facts—not Toolkit npm registration. npm add/install delegates to Pi and may download/activate package resources; enable/disable changes extension filters only. npm remove/uninstall physically removes the scoped installation and declaration, with confirmation (`--yes` for automation); `--external` explicitly selects external global npm removal. `--force` remains a Git dirty-source option, not an npm confirmation bypass. These are breaking npm lifecycle changes; use disable to retain files. Native project overrides support inheritance/on/off; reset-selection removes only extension overrides. Legacy npm lock records are ignored, explicit migration backs up/prunes them, and old npm imports are skipped. Git lifecycle behavior is unchanged. Local filesystem packages declared in Pi settings are visible as `local` in the TUI, with manual reference-removal guidance and no toggle/deletion action. Doctor does not register discovered local packages, even with `--repair`. Doctor does not rewrite settings or source. [Pi extensions](../asset-types/pi-extensions.md).
 
 ## MCP servers
 
@@ -176,7 +181,7 @@ agent-toolkit-cli pi-extensions import ~/sync/pi-extensions-lock.json
 agent-toolkit-cli mcps import ~/sync/mcps-library.json
 ```
 
-Imports are additive and skip existing slugs; they do **not** install harness projections. Install separately with explicit scope/targets. Project-scoped state and local-only commits/uncommitted edits are not transported. Source-backed imports use recorded upstream SHAs by default (`--latest` selects ref HEAD); Commands currently attempts the recorded SHA but may fall back to the cloned ref if that checkout fails. Shared parent constraints can refuse incompatible pins. Per-entry failures are reported while other entries continue. MCP import skips local entries and quarantines secrets; `--latest` re-resolves versioned specs. Instructions has no import: move/version your canonical content yourself.
+Imports are additive and skip existing slugs; they do **not** install harness projections. Retired Pi npm records are skipped without recreating a Toolkit catalogue or installing packages; carry native Pi configuration separately and use explicit Pi/npm installation commands. Install separately with explicit scope/targets. Project-scoped state and local-only commits/uncommitted edits are not transported. Source-backed imports use recorded upstream SHAs by default (`--latest` selects ref HEAD); Commands currently attempts the recorded SHA but may fall back to the cloned ref if that checkout fails. Shared parent constraints can refuse incompatible pins. Per-entry failures are reported while other entries continue. MCP import skips local entries and quarantines secrets; `--latest` re-resolves versioned specs. Instructions has no import: move/version your canonical content yourself.
 
 ## Pre-v2 surface
 

@@ -35,6 +35,8 @@ class NpmScope:
     scope_root: Path | None = None
     scope_version: str | None = None
     scope_compatible: bool = False
+    ambiguous: bool = False
+    settings_destination: Path | None = None
 
     @property
     def enabled(self) -> bool:
@@ -50,6 +52,8 @@ class NpmScope:
 
     @property
     def status(self) -> str:
+        if self.ambiguous:
+            return "Ambiguous"
         if self.missing:
             return "Needs repair" if self.installed else "Missing"
         if not self.configured:
@@ -64,7 +68,7 @@ class NpmScope:
             "root": str(self.root) if self.root else None, "source": self.source,
             "mixed": self.mixed, "external": self.external,
             "scopeRoot": str(self.scope_root) if self.scope_root else None,
-            "scopeVersion": self.scope_version,
+            "scopeVersion": self.scope_version, "ambiguous": self.ambiguous,
             "entrypoints": [{"path": str(path), "enabled": enabled} for path, enabled in self.entries]}
 
 
@@ -77,6 +81,60 @@ class NpmState:
 
     def for_scope(self, scope: str) -> NpmScope:
         return self.global_scope if scope == "global" else self.project_scope
+
+    def snapshot_for(self, scope: str) -> str:
+        """Bind scoped intent without invalidating it on our other-scope Apply.
+
+        Project all/none is explicit policy, independent of the global enabled
+        bit. Global source/version/path changes still invalidate its targets.
+        """
+        current = self.for_scope(scope)
+        record = {"source": current.record} if isinstance(current.record, str) else current.record
+        relevant = {key: record[key] for key in ("source", "autoload", "extensions") if key in record} if record is not None else None
+        value = {"record": relevant, "source": current.source, "mode": current.mode,
+            "root": current.root, "version": current.version, "metadata": current.metadata,
+            "compatible": current.compatible, "resources": current.resources,
+            "entries": [path for path, _ in current.entries],
+            "scope_root": current.scope_root, "scope_version": current.scope_version,
+            "ambiguous": current.ambiguous, "settings_destination": current.settings_destination}
+        if scope == "project" and (current.mode in ("inherit", "override") or record and record.get("autoload") is False):
+            base = self.global_scope.record
+            value["global_base"] = base if isinstance(base, str) else base.get("source") if base else None
+        return hashlib.sha256(json.dumps(value, sort_keys=True, default=str).encode()).hexdigest()
+
+
+def agent_dir(home: Path) -> Path:
+    """Honor Pi's user override; an explicitly different HOME stays isolated."""
+    override = os.environ.get("PI_CODING_AGENT_DIR") if home == Path.home() else None
+    return Path(override).expanduser().absolute() if override else home / ".pi/agent"
+
+
+def settings_path(*, scope: Scope, home: Path, project: Path | None = None) -> Path:
+    if scope == "global":
+        return agent_dir(home) / "settings.json"
+    if scope != "project" or project is None:
+        raise PiSettingsError("scope must be global or project; project scope requires a project directory")
+    return project / ".pi/settings.json"
+
+
+def _settings_destination(path: Path) -> Path:
+    try:
+        return path.resolve()
+    except (OSError, RuntimeError) as exc:
+        raise PiSettingsError(f"cannot resolve settings pointer: {exc}") from exc
+
+
+def ensure_scope_writable(*, scope: Scope, home: Path, project: Path | None) -> Path:
+    path = settings_path(scope=scope, home=home, project=project)
+    if project is not None:
+        try:
+            if settings_path(scope="global", home=home).resolve() == settings_path(scope="project", home=home, project=project).resolve():
+                raise PiSettingsError("global and project settings share one file; a scoped change would also change the other scope")
+        except (OSError, RuntimeError) as exc:
+            if isinstance(exc, PiSettingsError):
+                raise
+            raise PiSettingsError(f"cannot establish settings scope isolation: {exc}") from exc
+    return path
 
 
 def _identity(source: str) -> str:
@@ -170,6 +228,7 @@ def _scope_from_json(value: dict | None) -> NpmScope:
     return NpmScope(**{**value,
         "root": Path(value["root"]) if value.get("root") else None,
         "scope_root": Path(value["scope_root"]) if value.get("scope_root") else None,
+        "settings_destination": Path(value["settings_destination"]) if value.get("settings_destination") else None,
         "entries": tuple((Path(e["path"]), bool(e["enabled"])) for e in value["entries"]),
         "resources": tuple(Path(p) for p in value["resources"]),
     })
@@ -179,14 +238,16 @@ def read_npm_states(
     *, home: Path, project: Path | None, overrides: dict[str, dict] | None = None,
 ) -> dict[str, NpmState]:
     """Union direct installations and configured npm sources, resolved offline."""
-    bases = {"global": home / ".pi/agent"}
+    bases = {"global": agent_dir(home)}
     if project is not None:
         bases["project"] = project / ".pi"
     settings = {}
     identities = set()
     candidates = {}
+    locations = {}
     for scope, base in bases.items():
-        path = _pi_settings.settings_path(scope=scope, home=home, project=project)
+        path = settings_path(scope=scope, home=home, project=project)
+        locations[scope] = _settings_destination(path)
         data = overrides[scope] if overrides and scope in overrides else _pi_settings._load(path)
         records, _ = _pi_settings._package_sources(data, path)
         identities.update(_identity(p["source"]) for p in records if p["source"].startswith("npm:"))
@@ -194,7 +255,7 @@ def read_npm_states(
         settings[scope] = {key: data[key] for key in ("packages", "extensions") if key in data}
         candidates[scope] = _direct_sources(base)
         identities.update(name for name in candidates[scope] if _has_extensions(base / "npm/node_modules" / name))
-    global_data = _pi_settings._load(_pi_settings.settings_path(scope="global", home=home))
+    global_data = _pi_settings._load(settings_path(scope="global", home=home))
     legacy_root, legacy_names = _legacy_npm(home, global_data)
     if legacy_root:
         for name in legacy_names:
@@ -226,8 +287,13 @@ def read_npm_states(
         values = json.loads(result.stdout)
     except (OSError, ValueError, subprocess.SubprocessError) as exc:
         raise PiSettingsError(f"native Pi inventory failed: {exc}") from exc
+    for scope, destination in locations.items():
+        if destination != _settings_destination(settings_path(scope=scope, home=home, project=project)):
+            raise PiSettingsError("settings pointer changed during inventory; refresh and retry")
     states = {}
     for name, value in values.items():
+        for scope, destination in locations.items():
+            value[scope]["settings_destination"] = str(destination)
         snapshot = hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
         states[name] = NpmState(name, _scope_from_json(value["global"]), _scope_from_json(value["project"]), snapshot)
     return states
@@ -240,15 +306,17 @@ def _change_selection(
     from agent_toolkit_cli.pi_local_extensions import _settings_lock, _write_settings
 
     identity = _identity(identity)
-    path = _pi_settings.settings_path(scope=scope, home=home, project=project)
+    path = ensure_scope_writable(scope=scope, home=home, project=project)
     try:
         with _settings_lock(path):
             state = read_npm_states(home=home, project=project).get(identity)
             if state is None:
                 raise PiSettingsError(f"{identity}: no native installation or declaration; install first")
-            if expected_snapshot is not None and state.snapshot != expected_snapshot:
+            if expected_snapshot is not None and expected_snapshot not in (state.snapshot, state.snapshot_for(scope)):
                 raise PiSettingsError(f"{identity}: native package or filters changed; revert, refresh and queue again")
             current = state.for_scope(scope)
+            if current.ambiguous:
+                raise PiSettingsError(f"{identity}: multiple native declarations are ambiguous; resolve them in Pi settings before changing selection")
             if enabled is True and (not current.compatible or not current.resources):
                 raise PiSettingsError(f"{identity}: install or repair this scope before enabling; toggle does not download packages")
             data = _pi_settings._load(path)

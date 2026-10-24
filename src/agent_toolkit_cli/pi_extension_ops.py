@@ -1,13 +1,9 @@
-"""Toggle a pi-extension projection on/off — the single source of truth
-shared by the CLI (`pi-extension install`/`uninstall`) and the TUI
-(`_apply_pi_pending`). Lifted out of the Click commands so the two surfaces
-cannot diverge (#333).
+"""Git projection lifecycle plus native npm installation/removal.
 
-npm rows  -> packages[] in settings.json (add verbatim / remove by identity).
-store-owned -> one symlink per scope via pi_extension_install (lock-after-
-projection). Global uninstall drops the symlink but KEEPS the global library
-lock entry — deleting the library copy is the `remove` verb's job, not
-`uninstall`'s (PR #306 two-verb contract)."""
+Npm lifecycle delegates to Pi without Toolkit registration. Settings-only npm
+checkboxes and CLI enable/disable/reset use pi_npm instead of these operations.
+Git uninstall retains the source/library record; Git remove owns source deletion.
+"""
 from __future__ import annotations
 
 from pathlib import Path

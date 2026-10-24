@@ -117,6 +117,26 @@ def test_external_local_link_keeps_its_source_instead_of_guessing_registry(tmp_p
     assert current.global_scope.external and not current.global_scope.configured
 
 
+def test_managed_prefix_is_not_misclassified_as_external_when_roots_overlap(tmp_path, monkeypatch):
+    from agent_toolkit_cli.pi_npm import read_npm_states
+    home, project = tmp_path / "home", tmp_path / "project"
+    seed_package(home, project)
+    monkeypatch.setenv("AGENT_TOOLKIT_NPM_GLOBAL_ROOT", str(home / ".pi/agent/npm/node_modules"))
+    assert not read_npm_states(home=home, project=project)["demo"].global_scope.external
+
+
+def test_duplicate_global_versions_follow_native_first_declaration(tmp_path):
+    from agent_toolkit_cli.pi_npm import read_npm_states
+    home, project = tmp_path / "home", tmp_path / "project"
+    root = seed_package(home, project)
+    write_json(home / ".pi/agent/settings.json", {"packages": ["npm:demo@1.0.0", "npm:demo@2.0.0"]})
+    current = read_npm_states(home=home, project=project)["demo"]
+    assert current.global_scope.record == "npm:demo@1.0.0"
+    assert current.global_scope.source == "npm:demo@1.0.0"
+    assert current.global_scope.enabled
+    assert current.global_scope.ambiguous
+
+
 def test_configured_missing_source_remains_visible_without_fetch(tmp_path):
     home = tmp_path / "home"
     config = home / ".pi/agent/settings.json"

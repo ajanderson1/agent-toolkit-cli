@@ -36,6 +36,8 @@ def sandbox_environment(home):
         os.environ[variable] = str(home / suffix)
     for variable in ("AGENT_TOOLKIT_SKILLS_ROOT", "AGENT_TOOLKIT_TUI_SETTINGS"):
         os.environ.pop(variable, None)
+    os.environ["AGENT_TOOLKIT_NPM_GLOBAL_ROOT"] = str(home / "empty-global-npm")
+    os.environ["AGENT_TOOLKIT_PI_PACKAGE"] = str(PI_PACKAGE)
 
 
 def put(path, value):

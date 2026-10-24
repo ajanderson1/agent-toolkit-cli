@@ -131,6 +131,9 @@ def _strip_git_env(monkeypatch: pytest.MonkeyPatch) -> None:
     # deleting from it would be undefined behaviour.
     for var in [k for k in os.environ if k.startswith("GIT_")]:
         monkeypatch.delenv(var, raising=False)
+    # Individual tests commonly change HOME again. Do not retain an agent-dir
+    # override tied to the session's earlier sandbox; custom-dir tests opt in.
+    monkeypatch.delenv("PI_CODING_AGENT_DIR", raising=False)
 
 
 @pytest.fixture

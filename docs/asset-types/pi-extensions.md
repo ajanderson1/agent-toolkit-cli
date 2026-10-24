@@ -1,44 +1,156 @@
 # Pi extensions
 
-This kind manages **Pi** extensions only; it does not classify other harnesses' plugin systems. Inventory includes Git-backed library packages, npm registrations and local extensions/packages.
+This kind manages **Pi** extensions only. Inventory combines Git-backed library
+extensions, native npm packages, loose extensions and declared filesystem packages.
+Configuration selection is not a report of code loaded in a running Pi session.
 
-## Storage and loading
+## Native npm packages
 
-- Git-backed library: `~/.agent-toolkit/pi-extensions/<slug>`; source/ref/observed commit metadata in `pi-extensions-lock.json`.
-- Library projection: `~/.pi/agent/extensions/<slug>` globally or `<project>/.pi/extensions/<slug>` in a project. Both scopes link to the global library copy; new project skills also use central backing.
-- npm registrations use Pi settings/package handling rather than a library symlink. Toolkit-registered enable/disable adds/removes the settings reference, not package files. Updates use Pi package handling, not Toolkit Git update. References Toolkit did not register cannot be toggled; Info explains native Pi removal and the exact manual settings edit. A registered npm row does not prove package files are downloaded. Info shows global and project enablement separately: Yes means a reference in that scope’s `settings.json`, not running-session status.
-- Loose extensions in Pi’s conventional global/project extension directories are labeled `local` and enabled by default, unless native `extensions[]` selectors exclude them. Project state includes inherited global resources. **Space → Ctrl+S** enables/disables these resources through settings only: exact `+path`/`-path` selectors; a project override also names an inherited file by its absolute path. No registration, source-file changes, projections or Toolkit lock are required.
-- A directory can resolve several manifest entrypoints. Its checkbox is checked when all are enabled, empty when none are, and **◐** when mixed. Space on a mixed row queues Enable for every entrypoint; Info lists them. Merely viewing a mixed row changes nothing. Discovery follows Pi’s manifest/index, ignore and duplicate-resource rules; `package.json` alone does not make a directory loadable.
-- Local filesystem packages declared through `packages[]` remain a separate, read-only surface; they are not converted to loose extensions. Package-selected resources do not gain duplicate loose controls. If a package starts selecting an already-queued loose resource, Apply refuses the loose change without rewriting settings or losing the intent. In a row spanning both scopes, a package-controlled cell stays read-only while the other scope may retain loose controls. Info gives exact paths and manual removal guidance. Deleting a file/directory is permanent; unlinking a symlink keeps its target; removing a package reference keeps its files. Never delete a shared parent checkout to remove one child.
+**Pi settings and npm installation metadata are authoritative. There is no
+Toolkit npm registration or installation lock.** Relevant direct installations
+and configured npm sources form the inventory; transitive dependencies and caches
+do not create package rows. Package identity retains scoped names but excludes
+version suffixes. Info and JSON inventory distinguish requested source, selected
+installation/version, separate scope-local copies and project inheritance.
 
-Library symlink states are shown as **Linked**, not settings enablement, and counted separately. The TUI uses **Enable/Disable** for controls, including pending actions, rather than Install/Uninstall. Space queues the selected scope’s change; Ctrl+S applies it. Disabling keeps downloaded files. To remove an npm package with native Pi, use `pi uninstall npm:<package>` globally, or `pi uninstall npm:<package> -l` from the project directory. Pi removes its package and settings reference, but does not remove Toolkit registration; the row may remain visible. Info uses the recorded package spec, including any version. These actions do not change an already-running Pi session.
+| Operation | npm behavior |
+|---|---|
+| `add npm:SOURCE` / `install npm:SOURCE` | Delegate installation/configuration to Pi, default global; `-p` selects the consumer project. Existing native filters are preserved. |
+| `enable ID` / `disable ID` | Change only native extension filters; retain declaration, files, source/version and bundled resource policies. No downloads. |
+| `reset-selection ID -p` | Remove extension-specific project overrides; inherit global policy when using a global package. An owned project declaration/install is retained. |
+| `remove ID` / `uninstall ID` | Remove the selected installation/declaration; ask for confirmation (`--yes` for automation). Other scopes or global fallback can remain. |
 
-## Use
+This is a **breaking npm CLI change**: add is no longer catalogue-only and
+uninstall is no longer a settings-only disable. Use `disable` to retain files.
+Git library add/install/uninstall/remove retain their existing meanings.
+
+```bash
+agent-toolkit-cli pi-extensions add npm:@scope/package@1.2.3
+agent-toolkit-cli pi-extensions add npm:@scope/package@1.2.3 -p
+agent-toolkit-cli pi-extensions disable @scope/package -p
+agent-toolkit-cli pi-extensions enable @scope/package -p
+agent-toolkit-cli pi-extensions reset-selection @scope/package -p
+agent-toolkit-cli pi-extensions list --json
+agent-toolkit-cli pi-extensions remove npm:@scope/package -p --yes
+```
+
+Global policy applies to projects that inherit it. A project may explicitly enable
+or disable extensions regardless of global selection, using native `autoload:false`
+package deltas without downloading a duplicate. A normal project package declaration
+instead replaces that global package and can select another version. Native install
+preserves existing filters, including delta mode: downloading a project copy does
+not silently replace an existing inheritance policy. Info distinguishes an unused
+scope-local copy from the installation Pi actually selects.
+
+A checkbox is checked when all package extensions are selected, empty when none
+are, and **◐** when mixed. Space on mixed enables all. Package-wide off also covers
+new and hidden entrypoints after updates. **R → Ctrl+S** resets this scope's extension
+filter. Available, missing/repair-needed and ambiguous declarations are distinct
+from enabled state. Duplicate declarations are reported; resolve them in Pi settings
+before bulk changes. Project resources still require Pi trust, which Toolkit does
+not grant.
+
+Raw `npm install` supplies files, not Pi configuration. Compatible direct installs
+appear as available, unchecked. Enabling previously unconfigured files activates
+extensions only, leaving bundled skills/prompts/themes off. Unsupported locations
+require explicit native installation; Toolkit does not relocate files or invent
+local-path aliases. External global discovery uses the system npm command, never a
+command from project settings. Custom installer roots can be supplied explicitly
+with `AGENT_TOOLKIT_NPM_GLOBAL_ROOT`; physical removal refuses unsupported installer
+layouts instead of guessing a prefix.
+
+Externally installed global packages require `remove --external` and confirmation.
+Toolkit uses their actual npm prefix rather than claiming `pi uninstall` removed
+external files. Whole-package removal can affect bundled skills, prompts and themes.
+Global removal leaves project declarations/overrides intact; an orphaned native
+project declaration can cause Pi to install a project copy later. Inspect remaining
+project state rather than assuming removal means disabled everywhere. Pi's misleading
+“No matching package” is accepted only when its known no-reference case and observed
+removal postconditions agree; genuine installer errors remain errors.
+
+Native npm controls require Node.js and an installed Pi SDK (verified against
+Pi **1.4.0**, whose Node requirement is **>=22.19.0**). Nonstandard SDK installations
+can use `AGENT_TOOLKIT_PI_PACKAGE`. Native npm state and operations honor
+`PI_CODING_AGENT_DIR`; project settings stay at `<consumer>/.pi/settings.json`.
+Inventory is offline and never imports extension code or installs missing packages.
+Use Pi's package update commands, not Toolkit Git update, for npm updates.
+
+### Retiring old npm records
+
+Legacy npm entries in Toolkit locks are ignored immediately. A package with no
+native configuration or direct installation disappears without an unregister step.
+Nothing is automatically downloaded, enabled, deleted or migrated during upgrade.
+
+```bash
+agent-toolkit-cli pi-extensions migrate-npm-records           # dry-run
+agent-toolkit-cli pi-extensions migrate-npm-records --apply   # back up, then prune npm records
+```
+
+Use `-p` for a project lock. Non-npm entries and unknown metadata are preserved.
+Old npm lock imports are skipped rather than recreating the retired catalogue.
+Bundles install npm members once in the selected scope and roll back only their
+new scoped installation. Preexisting native installations/declarations are retained;
+conflicts or repair needs require explicit handling outside the bundle.
+
+## Git-backed library extensions
+
+- Canonical source: `~/.agent-toolkit/pi-extensions/<slug>`; source/ref/observed commit
+  metadata remains in `pi-extensions-lock.json`.
+- Global projection: `~/.pi/agent/extensions/<slug>`; project projection:
+  `<project>/.pi/extensions/<slug>`. Both link to the global library source.
+- Connections are shown as **Linked**, counted separately from native enablement.
 
 ```bash
 agent-toolkit-cli pi-extensions add owner/repo@main --slug my-extension
 agent-toolkit-cli pi-extensions install my-extension -p
-agent-toolkit-cli pi-extensions list -p --json
 agent-toolkit-cli pi-extensions doctor -p --no-fix
 agent-toolkit-cli pi-extensions uninstall my-extension -p
 ```
 
-Add takes a ref as part of SOURCE, **not `--ref`**. Add/remove/import operate on the global library. Install/uninstall default project; list/status/update/push/reset/doctor infer project from `pi-extensions-lock.json`, otherwise global. Git-backed update merges; push uses a PR by default; reset requires explicit slugs. Registry-backed entries do not acquire Git ownership just because these verbs exist. [Exact CLI surface](../agent-toolkit/cli.md#pi-extensions).
+Git refs belong in SOURCE, not `--ref`. Git add/remove/import operate on the global
+library; install/uninstall default project. Git lifecycle read/update verbs retain
+their existing lock-based scope selection. Add accepts repository-root sources only;
+subdirectories are rejected. An orphan checkout is registered only if its origin
+matches the requested source; missing/mismatched origins leave the checkout intact.
+Install refuses foreign links/files. Uninstall removes only the matching projection;
+remove retains its dirty-source guard.
 
-Git-backed add accepts repository-root sources only. Subdirectory sources such as `https://github.com/obra/superpowers/tree/main/.pi/extensions` are rejected rather than silently projecting the repository root. A root URL with `/tree/REF` remains supported.
+## Loose files and filesystem packages
 
-If a checkout already exists but its lock entry is missing, add registers it only when its `origin` matches the requested repository (equivalent SSH/HTTPS URLs are accepted). A missing or mismatched origin produces an error without deleting or changing the checkout. Existing matching registrations remain idempotent. Registration makes the extension visible in CLI/TUI inventory; activation still requires a separate install.
+Loose extensions in conventional Pi extension directories are enabled by native
+discovery unless `extensions[]` selectors exclude them. Project selection includes
+global inheritance. **Space → Ctrl+S** writes exact native selectors without
+registration, file changes or projections. Mixed manifest directories show **◐**;
+Space enables all current entrypoints. Discovery follows native manifest/index,
+ignore and duplicate rules; `package.json` alone does not make a directory loadable.
 
-## Safety
+Declared local filesystem packages remain read-only, separate from loose controls.
+Package-selected resources do not gain duplicate loose controls. Apply rejects a
+new package overlap without losing the queued loose intent. Removing a reference
+keeps files; deleting a file/directory is permanent; unlinking a symlink keeps its
+target. Never delete a shared parent checkout to remove one child.
 
-Local toggles preserve unrelated settings, source files and Toolkit locks. Apply refuses invalid settings, busy native settings locks, or entrypoints that changed since queueing. Failed intents stay pending; successful ones clear. Refresh preserves queued loose-local Pi intents and their original targets; **Ctrl+Z** discards them. Settings writes are serialized with native Pi and reread under the lock. Explicit plain resource references are retained so disabling a selected symlink alias does not activate a different alias. A failed refresh keeps the grid aligned with the visible scope.
+## Safety and verification
 
-Library installation refuses foreign links or regular destination files; uninstall removes only the matching owned projection. Doctor reports orphaned `extensions[]` overrides but does not edit that settings array. Local discovery remains report-only even with `--repair`: doctor does not register local packages or rewrite their settings/source. Ordinary source registration, lock-file import and unrelated repairs remain supported. Registry packages and settings values that cannot be represented losslessly remain report-only. `--no-fix` is read-only.
+Native npm and loose-local drafts survive refresh/scope switches with their original
+target snapshots; **Ctrl+Z** discards them. Failed changes stay pending; successful
+ones clear individually. Settings writes use Pi-compatible locking, reread under
+lock, merge unrelated entries and preserve symlinks/modes. Changed source/version,
+entrypoints or settings pointers refuse stale Apply. Global/project settings that
+alias one file cannot support independent scoped changes and are refused.
 
-To recheck native compatibility from a source checkout, run
-`uv run python scripts/verify_pi_local_controls.py --pi-package /path/to/pi-coding-agent`.
-It drives real keys against disposable assets, compares both scopes with the
-installed Pi resolver, and checks native settings-lock contention. It never
-loads extension code or changes your live configuration.
+Doctor does not register discovered local assets or rewrite their settings/source,
+even with `--repair`; unrelated Git repairs and `--no-fix` behavior are unchanged.
+
+Run the installed-wheel checks against disposable assets:
+
+```bash
+uv run python scripts/verify_pi_npm_controls.py --pi-package /path/to/pi-coding-agent
+uv run python scripts/verify_pi_local_controls.py --pi-package /path/to/pi-coding-agent
+```
+
+These drive actual controls and compare native resolution without executing
+extensions or changing live settings. Restart an already-open Toolkit TUI after
+upgrading its binary; configuration changes do not unload running Pi sessions.
 
 [Pi harness](../harnesses/pi.md) · [Locks](../agent-toolkit/lock-files.md) · [TUI](../agent-toolkit/tui.md)

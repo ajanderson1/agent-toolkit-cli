@@ -35,8 +35,10 @@ Record the source commit and wheel hash: the version string alone is insufficien
 - `src/agent_toolkit_cli/cli.py`: plural group registration and singular aliases.
 - `commands/{skill,agent,command,instructions,pi_extension,mcp,bundle}/`: actual verb surfaces.
 - `<kind>_install.py`, adapter packages and source/path/lock modules: per-kind facades.
-- Skills/Agents/Commands/Pi extensions use source-backed locks; Instructions uses
-  actual canonical-file pointers, **no installation lock**. MCP library authority
+- Skills/Agents/Commands/Git-backed Pi extensions use source-backed locks. Pi npm
+  uses native Pi settings/direct npm installations, **no Toolkit npm registry**;
+  `pi_npm.py`, `pi_npm_lifecycle.py` and `data/pi_npm_bridge.mjs` share CLI/TUI behavior.
+  Instructions uses actual canonical-file pointers, **no installation lock**. MCP library authority
   is `mcps-library.json`; its per-scope locks record projections.
 - `behavior.py`, `project_backing.py`: shared CLI/TUI backing configuration;
   new projects use central sources by default, preserving existing private copies.

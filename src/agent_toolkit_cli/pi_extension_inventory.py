@@ -1,8 +1,8 @@
-"""Build the unified pi-extension inventory (spec §5): one record per
-extension Pi could load, across three surfaces — the asset-type lock
-(store-owned + tracked npm), loose entries in Pi's extensions/ dir
-(untracked), and packages[] in settings.json (npm). Origin is a field,
-not a gate. Read-only; PR2 adds projection/state."""
+"""Unified Pi inventory: Git library locks, loose files and native packages.
+
+npm facts come exclusively from Pi settings/direct installations, not Toolkit
+registration. Discovery is read-only; configuration and runtime are distinct.
+"""
 from __future__ import annotations
 
 import json
@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Literal
 
 from agent_toolkit_cli import _pi_settings
-from agent_toolkit_cli.pi_npm import NpmState, read_npm_states
+from agent_toolkit_cli.pi_npm import NpmState, read_npm_states, settings_path as npm_settings_path
 from agent_toolkit_cli.pi_local_extensions import discover_local_extensions, read_local_extension_states
 from agent_toolkit_cli.pi_extension_lock import read_lock
 from agent_toolkit_cli.pi_extension_paths import (
@@ -214,8 +214,8 @@ def build_inventory(
             managed=False, npm_state=state,
             global_package_spec=global_scope.source if global_scope.configured else None,
             project_package_spec=(project_scope.record if isinstance(project_scope.record, str) else project_scope.record["source"]) if project_scope.record is not None else None,
-            global_config_path=_pi_settings.settings_path(scope="global", home=home) if global_scope.configured else None,
-            project_config_path=_pi_settings.settings_path(scope="project", project=project) if project is not None and project_scope.record is not None else None,
+            global_config_path=npm_settings_path(scope="global", home=home) if global_scope.configured else None,
+            project_config_path=npm_settings_path(scope="project", home=home, project=project) if project is not None and project_scope.record is not None else None,
             global_package_metadata=global_scope.metadata, project_package_metadata=project_scope.metadata,
         )
     return [by_slug[k] for k in sorted(by_slug)]

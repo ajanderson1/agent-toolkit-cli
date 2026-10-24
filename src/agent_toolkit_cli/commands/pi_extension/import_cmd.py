@@ -87,17 +87,10 @@ def import_cmd(ctx: click.Context, file: Path, latest: bool) -> None:
             continue
 
         if entry.source_type == "npm":
-            # npm row: just record the lock entry, no clone needed.
-            new_entry = LockEntry(
-                source=entry.source,
-                source_type="npm",
-                ref=entry.ref,
-                pi_extension_path=None,
-            )
-            current = add_entry(current, slug, new_entry)
-            write_lock(library_lock_path(env={}), current)
-            click.echo(f"  added    {slug}  (npm: {entry.source})")
-            added.append(slug)
+            # Retired registrations are not native installations. Import must
+            # neither recreate a catalogue nor activate/download old packages.
+            click.echo(f"  skipped  {slug}  (legacy npm record; install an explicit npm: source through Pi/add)")
+            skipped.append(slug)
             continue
 
         # Store-owned: clone into the library.

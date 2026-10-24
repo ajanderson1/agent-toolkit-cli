@@ -58,7 +58,7 @@ def add(
 ) -> str:
     """Add a Pi extension to the global library. Returns the slug.
 
-    npm:<spec>  -> registry-tracked lock entry only (no clone).
+    npm:<spec> -> native Pi install/configure in selected scope; no Toolkit lock.
     everything else -> store-owned: clone or verify an orphan checkout, then register.
     Subdirectory sources are rejected: projections target the repository root.
     Lock is written ONLY after clone/adoption succeeds (#283 class of bug).

@@ -11,5 +11,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install pinned native Pi oracle (no lifecycle scripts)
+        run: npm install --global @earendil-works/pi-coding-agent@1.4.0 --ignore-scripts --no-audit --no-fund
       - run: uv sync --all-extras
       - run: uv run pytest -q

@@ -1106,8 +1106,10 @@ class TUIApp(App):
         pending = self._get_all_pending_edits()
         n_link = sum(1 for op in pending.values() if op == "link")
         n_unlink = sum(1 for op in pending.values() if op == "unlink")
+        n_reset = sum(1 for op in pending.values() if op == "reset")
+        resets = f", {n_reset} would-reset" if n_reset else ""
         self.query_one("#footer-pending", Static).update(
-            f"diff: {n_link} would-link, {n_unlink} would-unlink{_scope_tag(pending.keys())}"
+            f"diff: {n_link} would-link, {n_unlink} would-unlink{resets}{_scope_tag(pending.keys())}"
         )
 
     def _apply_for_asset_type(self, asset_type: str) -> ApplyResult | None:

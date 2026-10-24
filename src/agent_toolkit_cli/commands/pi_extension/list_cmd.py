@@ -48,7 +48,10 @@ def list_cmd(
         scope, implicit=implicit, lock_path=lock_path,
         count=len(read_lock(lock_path).skills), err=as_json,
     )
-    records = build_inventory(home=home, project=project_root)
+    # Discovery includes the current native project even without a Toolkit lock.
+    from pathlib import Path
+    inventory_project = None if global_ else project_root or (ctx.obj or {}).get("project_root") or Path.cwd()
+    records = build_inventory(home=home, project=inventory_project)
     if as_json:
         click.echo(json.dumps([
             {

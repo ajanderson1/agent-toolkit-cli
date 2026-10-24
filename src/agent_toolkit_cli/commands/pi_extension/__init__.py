@@ -1,7 +1,4 @@
-"""`agent-toolkit-cli pi-extension <verb>` — manage Pi extensions as owned
-git repos (store-owned) or tracked npm packages. PR1 ships read-only verbs
-(list/status); PR2a adds add/install/uninstall/remove; PR2b adds the git
-lifecycle verbs (import/update/push/reset/doctor)."""
+"""Pi Git library management and native npm lifecycle/configuration controls."""
 from __future__ import annotations
 
 import click

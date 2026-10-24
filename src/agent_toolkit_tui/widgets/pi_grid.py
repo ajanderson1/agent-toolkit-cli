@@ -19,7 +19,7 @@ internal flag mechanism and produces a "bool is not callable" error from
 compose. All glyph helpers are named `_cell_glyph`, `_origin_glyph`, etc.
 
 Loose local rows configure native Pi selectors without taking file ownership.
-Filesystem packages and unregistered npm references remain read-only.
+Filesystem packages remain read-only; native npm controls need no registration.
 """
 from __future__ import annotations
 
@@ -253,7 +253,7 @@ class PiGrid(Vertical):
             CellInfoScreen(
                 title=f"{row.slug} · {asset_type_label('pi-extension')}",
                 body_markup="\n".join([
-                    f"Source: {escape(row.source)}",
+                    f"Source: {escape(row.npm_state.for_scope(self._scope).source if row.npm_state else row.source)}",
                     "",
                     f"{state} globally: {self._selection_label(row, 'global')}",
                     f"{state} for this project: {self._selection_label(row, 'project')}",
@@ -323,6 +323,8 @@ class PiGrid(Vertical):
         if pending:
             action = {"link": "Enable all extensions", "unlink": "Disable all extensions", "reset": "Reset extension policy"}[pending]
             details.append(f"Pending: {action} ({scope}). Ctrl+S → apply")
+        elif current.ambiguous:
+            details.append("Resolve multiple declarations for this npm identity in Pi settings before changing selection.")
         elif current.compatible and current.resources:
             action = "Disable" if current.enabled else "Enable"
             details.append(f"Space → queue {action} all extensions; Ctrl+S → apply")
@@ -332,7 +334,7 @@ class PiGrid(Vertical):
             f"Selection affects this package's {len(current.resources)} extension entrypoints.",
             "Enable/Disable changes native package filters only; files and declarations are retained.",
             "Bundled skills, prompts and themes are unchanged by this checkbox.",
-            "R → queue reset of this scope's extension filter; Ctrl+S → apply.",
+            "R → queue reset of this scope's extension filter; Ctrl+S → apply." if not current.ambiguous else "Selection/reset controls are unavailable for ambiguous declarations.",
         ])
         if scope == "project" and current.mode in ("inherit", "override"):
             details.append("Reset restores global inheritance; no separate project installation is needed.")
@@ -466,6 +468,9 @@ class PiGrid(Vertical):
         if coord.column != _COL_SCOPE:
             return
         scope = self._scope
+        if row.npm_state and row.npm_state.for_scope(scope).ambiguous and (scope, row.slug) not in self._pending:
+            self.app.notify("Multiple native npm declarations; resolve them in Pi settings first", severity="warning")
+            return
         package_paths = (row.local_state.global_package_paths if scope == "global" else row.local_state.project_package_paths) if row.local_state else ()
         if package_paths and (scope, row.slug) not in self._pending:
             self.app.notify("Selected through packages[]; see Info for package configuration", severity="warning")
@@ -488,7 +493,7 @@ class PiGrid(Vertical):
             if row.origin == "untracked":
                 self._local_targets[key] = row.local_state.paths_for(scope) if row.local_state else ()
             elif row.npm_state is not None:
-                self._npm_snapshots[key] = row.npm_state.snapshot
+                self._npm_snapshots[key] = row.npm_state.snapshot_for(scope)
 
         try:
             table = self.query_one("#pi-table", DataTable)
@@ -509,12 +514,15 @@ class PiGrid(Vertical):
         if row.npm_state is None:
             return
         key = (self._scope, row.slug)
+        if row.npm_state.for_scope(self._scope).ambiguous and self._pending.get(key) != "reset":
+            self.app.notify("Multiple native npm declarations; resolve them in Pi settings first", severity="warning")
+            return
         if self._pending.get(key) == "reset":
             self._pending.pop(key)
             self._npm_snapshots.pop(key, None)
         else:
             self._pending[key] = "reset"
-            self._npm_snapshots.setdefault(key, row.npm_state.snapshot)
+            self._npm_snapshots.setdefault(key, row.npm_state.snapshot_for(self._scope))
         self._rebuild(table)
         self._notify_pending()
 
@@ -544,7 +552,7 @@ class PiGrid(Vertical):
                 Text(row.slug, no_wrap=True, overflow="ellipsis"),
                 self._cell_glyph(row=row, scope=self._scope),
                 self._origin_glyph(row),
-                Text(row.source, no_wrap=True, overflow="ellipsis"),
+                Text(row.npm_state.for_scope(self._scope).source if row.npm_state else row.source, no_wrap=True, overflow="ellipsis"),
             ]
             table.add_row(*cells, key=f"pi:{row.slug}")
 
@@ -608,7 +616,7 @@ class PiGrid(Vertical):
             base = _PENDING_UNLINK
         elif pending == "reset":
             base = "[yellow]↺[/]"
-        elif row.npm_state and row.npm_state.for_scope(scope).missing:
+        elif row.npm_state and (row.npm_state.for_scope(scope).missing or row.npm_state.for_scope(scope).ambiguous):
             base = "[yellow]![/]"
         elif row.npm_state and row.npm_state.for_scope(scope).mixed:
             base = _MIXED_GLYPH

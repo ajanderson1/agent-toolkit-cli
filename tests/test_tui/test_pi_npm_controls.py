@@ -91,6 +91,35 @@ async def test_native_draft_survives_refresh_scope_and_rejects_changed_filters(e
         assert grid.pending_entries() == {}
 
 
+async def test_one_apply_can_change_global_and_project_policy_for_same_package(environment):
+    home, project, root = environment
+    pi_npm.set_npm_enabled(identity="demo", enabled=False, scope="project", home=home, project=project)
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        grid, table = select(app, "global")
+        await pilot.press("space")
+        grid, table = select(app, "project")
+        await pilot.press("space")
+        assert grid.pending_entries() == {("global", "demo"): "unlink", ("project", "demo"): "link"}
+        await pilot.press("ctrl+s"); await pilot.pause()
+        assert grid.pending_entries() == {}
+        current = pi_npm.read_npm_states(home=home, project=project)["demo"]
+        assert not current.global_scope.enabled and current.project_scope.enabled
+
+
+async def test_source_column_follows_selected_scope_and_its_version(environment):
+    home, project, root = environment
+    seed_package(home, project, scope="project", version="2.0.0")
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        grid, table = select(app, "global")
+        await pilot.pause()
+        assert str(table.get_cell_at(Coordinate(table.cursor_coordinate.row, 3))) == "npm:demo@1.0.0"
+        grid, table = select(app, "project")
+        await pilot.pause()
+        assert str(table.get_cell_at(Coordinate(table.cursor_coordinate.row, 3))) == "npm:demo@2.0.0"
+
+
 async def test_project_reset_key_restores_global_default_without_uninstall(environment):
     home, project, root = environment
     pi_npm.set_npm_enabled(identity="demo", enabled=False, scope="project", home=home, project=project)
@@ -99,6 +128,8 @@ async def test_project_reset_key_restores_global_default_without_uninstall(envir
         grid, table = select(app, "project")
         await pilot.press("r")
         assert grid.pending_entries() == {("project", "demo"): "reset"}
+        await pilot.press("ctrl+d"); await pilot.pause()
+        assert "1 would-reset" in str(app.query_one("#footer-pending", Static).render())
         await pilot.press("ctrl+s"); await pilot.pause()
         assert grid.pending_entries() == {}
         current = pi_npm.read_npm_states(home=home, project=project)["demo"]

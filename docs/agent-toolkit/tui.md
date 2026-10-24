@@ -61,7 +61,7 @@ Pi Extensions uses its existing Origin column. Git-change and health badges
 |---|---|
 | `library` | Toolkit-managed central source connected through the existing installation mechanism. Disable removes the connection, not the source. |
 | `local` | Existing files used in place, outside Toolkit library management. Skills/Agents stay outside toggle queues. Loose Pi extensions have settings-only Enable/Disable controls; local filesystem packages remain read-only. No TUI deletion, moving or registration. |
-| `npm` | Toolkit-registered packages have Enable/Disable controls; other references stay read-only with removal guidance in Info. |
+| `npm` | Native Pi/npm inventory, without Toolkit registration. Settings-only Enable/Disable works for native packages regardless of installer; Info separates installed files, selected version, scope policy and removal. |
 
 Press ++i++ for the actual source path and linking/update behavior. For local
 files, Info gives the exact manual removal command and warns when it
@@ -76,24 +76,32 @@ enabled by default; project state includes global inheritance. **Space** queues
 Enable/Disable in the selected scope; **Ctrl+S** writes exact selectors without
 changing or registering source files. A mixed multi-entry directory shows **◐**;
 Space queues Enable for all its entrypoints, listed in Info. Failed changes stay
-pending, while successful changes clear. Refresh preserves loose-local Pi intents and their
-original targets; **Ctrl+Z** discards them.
+pending, while successful changes clear. Refresh preserves loose-local and native npm
+Pi intents and their original targets; **Ctrl+Z** discards them.
 
-For npm/local filesystem packages, enabled means a `packages[]` reference in
-that scope; local packages and unregistered npm references remain read-only.
+For npm packages, enabled follows native package resource filters and scope
+precedence, not reference presence. Project scope inherits global selection unless
+an explicit override or project installation replaces it. **R → Ctrl+S** resets
+extension policy; for a global package's project delta this restores inheritance.
+Mixed packages show **◐** and a separate mixed count. Missing/repair-needed or
+ambiguous declarations are visible rather than falsely reported as enabled.
+Local filesystem packages remain read-only.
 Package-selected resources do not acquire duplicate loose controls. A loose row
 can be package-controlled in one scope and configurable in the other; Info
 identifies that boundary.
 Library rows show **Linked** for their symlink connections and are counted
 separately in the status bar. None of these states observes a running Pi session.
 
-npm enable/disable adds/removes a reference in Pi settings—not an extension
-symlink or package-file deletion. Info also shows the native removal command:
-`pi uninstall npm:<package>` globally or `pi uninstall npm:<package> -l` from
-the project directory. This removes Pi’s package and settings reference, but
-keeps Toolkit registration; a registered row may remain visible. Info preserves
-the exact configured package spec and identifies the applicable scope. Updates
-use Pi package handling, not Toolkit Git update. Running Pi sessions are unchanged.
+npm Enable/Disable retains the declaration and changes only extension filters;
+package files and bundled resource policies remain intact. Enabling raw, previously
+unconfigured files activates extensions only. A missing scope installation requires
+explicit install/repair, never an automatic download from Space or Refresh.
+Info gives scope- and origin-specific removal guidance through the CLI, with
+confirmation for physical deletion and an explicit flag for external npm installs.
+There is no second Toolkit unregister step. Another scope, a retained override or
+global fallback can legitimately keep the row visible after removal. Updates use
+Pi package handling, not Toolkit Git update. Running Pi sessions are unchanged.
+See [native npm lifecycle and compatibility changes](../asset-types/pi-extensions.md#native-npm-packages).
 
 Skill, agent, and command grids retain their existing lock/filesystem inventory.
 Registered multi-skill sources group real children into collections; discovery
@@ -110,7 +118,8 @@ registration, lock-file import and unrelated repairs are unchanged.
 |---|---|---|
 | ++ctrl+s++ | **Apply** | Run pending edits across all asset types through the CLI facade. |
 | ++ctrl+d++ | **Diff** | Preview the pending queue (`N would-link, M would-unlink`) across all asset types without applying. |
-| ++ctrl+r++ | **Refresh** | Clear the active grid's pending edits (both scopes), then re-read its inventory; other kinds' queues survive. |
+| ++ctrl+r++ | **Refresh** | Re-read the active inventory; keep native npm/loose-local Pi drafts and targets, otherwise discard the active grid's drafts. Other kinds' queues survive. |
+| ++r++ | **Reset npm policy** | In the Pi grid, queue reset of this scope's extension filter; Ctrl+S applies. An inherited package returns to global policy; owned installations remain. |
 | ++ctrl+z++ | **Revert** | Clear the pending queue across all asset types — both scopes. |
 | ++slash++ | **Filter** | Focus the fuzzy filter box over the grid. |
 | ++ctrl+g++ | **Scope toggle** | Switch project ⇄ global. |
@@ -155,8 +164,9 @@ Toggling a cell **queues** a pending edit; nothing touches disk until you
 
 1. Toggle cells across rows, across scopes, and across asset types to build a pending queue.
 2. ++ctrl+d++ to preview, or ++ctrl+z++ to throw the queue away.
-3. ++ctrl+s++ to apply — the TUI calls the same install/uninstall facades the
-   CLI uses across all queued asset types. Failed operations retain pending edits
+3. ++ctrl+s++ to apply — the TUI calls shared CLI facades: npm uses the same
+   settings-only enable/disable/reset backend as explicit CLI selection commands,
+   not physical install/uninstall. Other kinds retain their projection facades. Failed operations retain pending edits
    for retry; completed unrelated operations remain completed. A legacy collection
    reconciles its complete sibling selection before ordinary per-skill work,
    with targeted rollback on failure. Source-backed kinds retain their
@@ -177,7 +187,7 @@ Quitting with unapplied edits raises a confirm-discard prompt.
 
 - Apply runs queued kinds in order: Instructions, Commands, Skills, Agents, MCPs, Pi Extensions. Completed work is not globally rolled back when another kind fails.
 - Per-kind retry handling differs: Instructions retains only unsatisfied pointer intents; some source-backed grids retain a failed batch's queue, including already completed idempotent operations. Inspect actual state and diagnostics before retrying.
-- Switching kinds/scopes uses internal queue-preserving refreshes. User **Refresh** explicitly discards the active grid's queue; it is not equivalent to switching tabs. Revert clears all kinds/both scopes without undoing already applied filesystem work.
+- Switching kinds/scopes preserves drafts. User **Refresh** also retains native npm and loose-local Pi drafts, including original snapshots; other active-grid drafts retain their discard policy. Revert clears all kinds/both scopes without undoing already applied work. Stale target/source/settings-pointer changes fail visibly rather than applying to a different configuration.
 - Main-harness preference changes require confirmed discard of all queued edits; changing theme preserves them. Presentation preferences do not install adapters or change Standard coverage.
 - Long paths retain existing single-row clipping; bold final directory is not a new truncation feature. Use Info for full source/ref/path identity.
 - The grid shows supported main-harness columns; use the CLI for the long tail. Unavailable cells cannot be toggled. Collection control is bounded by actual harness/scope exposure, not a universal loader guarantee.

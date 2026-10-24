@@ -1,18 +1,5 @@
-"""#333: deselecting a pi extension at global scope, applying, and refreshing
-must leave it removed — the row stays unchecked. Drives the real TUIApp's
-_apply_pi_pending against a seeded tmp HOME for both origins.
-
-This is the round-trip regression: it exercises the actual delegated path
-(_apply_pi_pending -> pi_extension_ops.uninstall) against on-disk state, then
-asserts the extension is genuinely gone via build_inventory.
-
-The npm case seeds BOTH the canonical "npm:foo" (which build_inventory reads as
-global_loaded=True for slug "foo", so `loaded is False` after apply genuinely
-guards the user-visible "row stays unchecked" symptom) AND a prefix-less drifted
-"foo@1.2.3" variant. The on-disk `packages == ["npm:keep"]` assertion is the
-proven RED: the pre-fix inline exact-match remove_package("npm:foo") removed only
-the literal "npm:foo" and left the drifted "foo@1.2.3" behind, so identity-based
-removal is what this guards.
+"""Git projection round-trip. Native npm real-key round-trips live in
+ test_pi_npm_controls.py and retain declarations/files rather than removing them.
 """
 from __future__ import annotations
 

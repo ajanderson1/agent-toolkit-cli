@@ -1,8 +1,4 @@
-"""`pi-extension install <slug> [-g/-p]` — toggle a projection ON.
-
-store-owned -> symlink into Pi's extensions/ dir (lock-after-projection).
-npm         -> add the spec to settings.json packages[] (no symlink).
-Delegates to pi_extension_ops (#333)."""
+"""Link a Git library source, or delegate scoped npm installation to native Pi."""
 from __future__ import annotations
 
 import click

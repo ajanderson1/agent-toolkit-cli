@@ -1,7 +1,4 @@
-"""`pi-extension remove <slug>` — drop the store copy + global lock entry.
-
-Dirty-guard: refuse if the store copy has uncommitted git changes unless
---force. npm rows: just drop the lock entry (nothing stored)."""
+"""Dirty-guarded Git library removal or confirmed native npm removal."""
 from __future__ import annotations
 
 import shutil

@@ -1,7 +1,4 @@
-"""`pi-extension uninstall <slug> [-g/-p]` — toggle a projection OFF.
-
-Keeps the store copy (and the global library lock entry). npm -> drop the
-matching packages[] entry. Delegates to pi_extension_ops (#333)."""
+"""Unlink Git projections; remove npm installations with explicit confirmation."""
 from __future__ import annotations
 
 import click

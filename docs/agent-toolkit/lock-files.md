@@ -2,14 +2,16 @@
 
 Source-backed asset types record state in a per-scope JSON **lock file**.
 Instructions is intentionally different: actual symlinks to canonical `AGENTS.md`
-are its installation truth, with no installation record.
+are its installation truth, with no installation record. Pi npm packages also
+have no Toolkit installation lock: native Pi settings and direct npm installations
+are authoritative; Pi's Git-backed library extensions still use their source lock.
 
 | Asset type | Lock file | Top-level key | Entry shape |
 |---|---|---|---|
 | [skill](../asset-types/skills.md) | `skills-lock.json` | `skills` | slug → entry |
 | [agent](../asset-types/agents.md) | `agents-lock.json` | `skills` ⚠️ | slug → entry |
 | [command](../asset-types/commands.md) | `commands-lock.json` | `skills` ⚠️ | slug → entry (`commandPath`) |
-| [pi-extension](../asset-types/pi-extensions.md) | `pi-extensions-lock.json` | `skills` ⚠️ | slug → entry |
+| [pi-extension](../asset-types/pi-extensions.md) | `pi-extensions-lock.json` (Git/library sources only) | `skills` ⚠️ | slug → entry |
 | [mcp](../asset-types/mcp.md) | `mcps-lock.json` | `mcps` | slug → **list** of entries |
 | [instructions](../asset-types/instructions.md) | none — actual symlinks | — | — |
 
@@ -118,6 +120,16 @@ The list is sorted by harness, and slugs are sorted — deterministic diffs. The
 `pin` key is omitted entirely when null. Unlike the shared envelope, the MCP
 reader **fails loud** on malformed JSON rather than returning an empty lock. See
 the [MCP asset-type page](../asset-types/mcp.md) for the projection mechanism.
+
+## Pi npm packages: native state, no Toolkit lock
+
+Native `packages[]` declarations/resource filters and direct npm installation
+metadata define inventory and selection. npm's own dependency lockfiles remain
+npm-owned. Retired `sourceType: "npm"` Toolkit entries do not keep rows visible or
+grant permissions. Explicit `pi-extensions migrate-npm-records --apply` creates a
+private original-byte backup and prunes only npm records; ordinary inventory,
+upgrade and import do not activate packages. Old npm imports are skipped.
+[Lifecycle, scope inheritance and compatibility](../asset-types/pi-extensions.md).
 
 ## Instructions: no lock
 

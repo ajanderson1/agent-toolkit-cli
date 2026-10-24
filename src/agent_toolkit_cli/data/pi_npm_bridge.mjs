@@ -38,8 +38,10 @@ try {
   const spec = record => typeof record === 'string' ? record : record.source;
   const records = settings => (settings.packages || []).filter(p => spec(p).startsWith('npm:'));
   const identity = source => globalPM.parseSource(source).name;
-  const globalRecords = new Map(records(request.global).map(p => [identity(spec(p)), p]));
-  const projectRecords = new Map(records(request.projectSettings).map(p => [identity(spec(p)), p]));
+  const globalList = records(request.global), projectList = records(request.projectSettings);
+  const scopedRecords = (list, scope) => globalPM.dedupePackages(list.map(pkg => ({ pkg, scope }))).map(e => e.pkg);
+  const globalRecords = new Map(scopedRecords(globalList, 'user').map(p => [identity(spec(p)), p]));
+  const projectRecords = new Map(scopedRecords(projectList, 'project').map(p => [identity(spec(p)), p]));
   const states = Object.create(null);
   const candidate = (scope, name) => Object.hasOwn(request.candidates[scope] || {}, name) ? request.candidates[scope][name] : `npm:${name}`;
   for (const name of request.identities) {
@@ -73,10 +75,13 @@ try {
       }
       return { record: record || null, source, root: root || null, version, metadata,
         compatible, scope_root: scopeRoot || null, scope_version: scopeVersion, scope_compatible: scopeCompatible,
+        ambiguous: (scope === 'global' ? globalList : projectList).filter(p => identity(spec(p)) === name).length > 1 ||
+          (inherits && globalList.filter(p => identity(spec(p)) === name).length > 1),
         configured: !!selected, missing: !!selected && !compatible,
         mode: inherits ? (record && Object.hasOwn(record, 'extensions') ? 'override' : 'inherit') : record ? 'owned' : 'available',
         entries, resources,
-        external: !!root && !!request.legacyRoot && root.startsWith(request.legacyRoot + '/') };
+        external: !!root && !!request.legacyRoot && root === join(request.legacyRoot, name) &&
+          root !== pm.getManagedNpmInstallPath(pm.parseSource(source), storageScope) };
     };
     states[name] = {
       global: await scopeState('global', g, globalResolved),
