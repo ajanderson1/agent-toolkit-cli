@@ -1,5 +1,30 @@
 # Changelog
 
+## [6.0.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v5.13.0...v6.0.0) (2026-10-24)
+
+
+### ⚠ BREAKING CHANGES
+
+* **pi:** npm add/install now perform native installation; npm remove/uninstall remove the scoped installation with explicit confirmation. Use enable/disable for settings-only selection. Legacy npm registration no longer controls inventory.
+
+### Features
+
+* **pi:** add native scoped npm enable and disable controls ([dcd870d](https://github.com/ajanderson1/agent-toolkit-cli/commit/dcd870d798e28e88575215d920222e6ac27c7075))
+* **pi:** derive npm inventory from native Pi state ([3eb83c7](https://github.com/ajanderson1/agent-toolkit-cli/commit/3eb83c78f610a3a35ef34232e3b5b88533ec92f9))
+* **pi:** unify npm CLI lifecycle with native Pi ([545c4f9](https://github.com/ajanderson1/agent-toolkit-cli/commit/545c4f904031b9e067ca82b0138191bd8053cd5d))
+* **tui:** use native npm scope and lifecycle state ([3ba1cfe](https://github.com/ajanderson1/agent-toolkit-cli/commit/3ba1cfe5c314d59f5c59eb90032018c9dd59e06e))
+
+
+### Bug Fixes
+
+* **pi:** address native npm lifecycle review findings ([340051b](https://github.com/ajanderson1/agent-toolkit-cli/commit/340051b1d559b6afd32ba52d0b860687961aa8bc))
+* **pi:** harden native npm integration and scoped safety ([587a9c1](https://github.com/ajanderson1/agent-toolkit-cli/commit/587a9c18cc42422062efbbec8efbbe38582e98e3))
+
+
+### Documentation
+
+* specify native Pi npm lifecycle and delivery plan ([3d3b8a3](https://github.com/ajanderson1/agent-toolkit-cli/commit/3d3b8a38a94783c6643515a9882dcf861be2c8fc))
+
 ## [5.13.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v5.12.2...v5.13.0) (2026-10-23)
 
 
