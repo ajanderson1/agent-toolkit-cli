@@ -8,7 +8,7 @@ Plural names are canonical; singular aliases remain accepted, including `instruc
 
 | Group | Singular alias | Shipped verbs |
 |---|---|---|
-| `skills` | `skill` | add, install, uninstall, list, status, update, push, reset, remove, import, doctor |
+| `skills` | `skill` | add, install, uninstall, list, status, check, update, push, reset, remove, import, doctor, catalog |
 | `agents` | `agent` | add, install, uninstall, list, status, update, push, reset, remove, import, doctor |
 | `commands` | `command` | add, install, uninstall, list, status, update, push, reset, remove, import, doctor |
 | `instructions` | `instruction` | install, uninstall, list, status, doctor |
@@ -25,7 +25,7 @@ There is **no blanket global default** and no rule that merely being in a Git re
 | Commands | No-flag scope |
 |---|---|
 | Skills add/remove/import; agents add/remove/import; Pi extensions Git add/remove/import | Global library. Pi Git add/remove accept `-g` but reject `-p`; Git import has no scope flags. |
-| Skills list/status/update/push/reset/doctor | Project if `skills-lock.json` exists in the consumer directory, otherwise global. A detected Paperclip company selects project even without that lock. |
+| Skills list/status/check/update/push/reset/doctor | Project if `skills-lock.json` exists in the consumer directory, otherwise global. A detected Paperclip company selects project even without that lock. |
 | Skills install/uninstall | Global, except project inside a detected Paperclip company. Use `--scope project` or `-p`; global uses `--scope global` (not `-g`). |
 | Agents list/status/update/push/reset/doctor; Pi extensions Git update/push/reset/doctor | Project if that kind's project lock exists, otherwise global. |
 | Pi extensions list/status | Unified global/current-project discovery without requiring a Toolkit project lock; `-g` restricts discovery to global. |
@@ -56,6 +56,12 @@ agent-toolkit-cli skills install [SLUG] [--source owner/repo] [--agents NAMES] [
 agent-toolkit-cli skills uninstall [SLUG] [--source owner/repo] [--agents NAMES] [--scope global|project] [-p]
 agent-toolkit-cli skills list [-g|-p] [--agent NAME] [--json]
 agent-toolkit-cli skills status [SLUGS]... [-g|-p]
+agent-toolkit-cli skills check [SLUGS]... [-g|-p] [--json]
+agent-toolkit-cli skills catalog subscribe URL [--ref REF]
+agent-toolkit-cli skills catalog unsubscribe
+agent-toolkit-cli skills catalog list [--json]
+agent-toolkit-cli skills catalog add KEY
+agent-toolkit-cli skills catalog enable KEY [--scope global|project] [--agents NAMES]
 agent-toolkit-cli skills update [SLUGS]... [-g|-p]
 agent-toolkit-cli skills push [SLUGS]... [-g|-p] [--direct]
 agent-toolkit-cli skills reset SLUGS... [-g|-p] [--force]
@@ -63,6 +69,14 @@ agent-toolkit-cli skills remove [SLUGS]... [--source owner/repo] [--force]
 agent-toolkit-cli skills import FILE [--latest]
 agent-toolkit-cli skills doctor [SLUGS]... [-g|-p] [--no-fix] [--repair] [--repair-foreign]
 ```
+
+`catalog` is optional and user-global: subscribe validates a live `catalog.json`
+before saving configuration, without acquiring skills. Catalog enable defaults
+to global/Standard; select project scope explicitly. Acquired skills keep working
+after unsubscribe. `check` records timestamped, read-only upstream revision
+observations for catalog-associated library/scoped entries; failed checks exit
+nonzero. `update` remains the explicit content-changing command. The TUI only
+shows check results and commands. [Catalog behavior and format](../asset-types/skills.md#optional-shared-git-catalog).
 
 Use a positional source or `--source`, not both. Repository-wide add registers real skills including a genuine root; `--skill NAME`, an explicit source subpath, or `--path PATH` selects one child. `--path` names an exact safe repository-relative directory (including `.` for a real root) independently of its frontmatter name or custom slug; it is library-only and cannot be combined with another child selector or batch `--source`. `install --source` selects persisted children of the exact source across registered refs, whereas a TUI collection controls one source/ref group. It does not discover or autoactivate later upstream children. Remove without arguments opens an interactive selection.
 
