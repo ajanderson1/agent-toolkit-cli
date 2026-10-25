@@ -74,7 +74,8 @@ agent-toolkit-cli skills doctor [SLUGS]... [-g|-p] [--no-fix] [--repair] [--repa
 before saving configuration, without acquiring skills. Catalog enable defaults
 to global/Standard; select project scope explicitly. Acquired skills keep working
 after unsubscribe. `check` records timestamped, read-only upstream revision
-observations for catalog-associated library/scoped entries; failed checks exit
+observations for registered Git-backed library/scoped entries, without requiring
+catalog provenance; failed checks exit
 nonzero. `update` remains the explicit content-changing command. The TUI only
 shows check results and commands. [Catalog behavior and format](../asset-types/skills.md#optional-shared-git-catalog).
 

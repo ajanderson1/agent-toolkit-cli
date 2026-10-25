@@ -41,9 +41,11 @@ def catalog_skill_info(slug: str, *, scope: str, home: Path, project: Path | Non
     provenance = entry.extras.get("catalog", {}) if entry else {}
     if not isinstance(provenance, dict):
         provenance = {}
-    if not provenance and item is None:
+    if entry is None and item is None:
         return []
-    lines = [f"Catalog: {escape(catalog_url or str(provenance.get('url', '(not currently connected)')))}"]
+    lines = []
+    if provenance or item is not None:
+        lines.append(f"Catalog: {escape(catalog_url or str(provenance.get('url', '(not currently connected)')))}")
     if item is not None:
         lines += [f"Upstream: {escape(item.source.url)}", f"Directory: {escape(item.source.subpath or '.')}"]
     elif provenance:

@@ -151,6 +151,16 @@ Multi-skill repositories appear as an expandable **collection** with short child
 
 Each available parent cell summarizes effective selection: unchecked = none, checked = all, **cyan `−` = mixed**. A mixed parent selects all when toggled. Child cells remain independent. The **yellow `-` on a child means pending removal**, not mixed selection. Parent actions include every member, even collapsed or filter-hidden children, and stay within that source/ref, harness and scope. A child filter keeps the parent visible for context. Column-wide toggles visit children once.
 
+Catalogue-only and acquired children share these collection controls when their
+normalized Git repository and configured ref match. Existing library rows retain
+their identity and local content; advertisement expansion never acquires anything.
+Apply acquires only selected missing children, then projects the desired selection
+for the collection/scope across its requested harnesses in one transaction. A failed
+child prevents exposure changes for that unit, but safe library acquisitions remain.
+Failed intents retain their original identities for retry/Revert. Independent
+collections can still succeed. Refreshes cannot silently broaden a queued All to
+newly advertised children, and local-only controls do not need catalogue access.
+
 Linked/broken counts reflect actual real-child payload health, not just link presence; pending controls represent desired selection. A missing referenced `SKILL.md` is unhealthy, and Apply refuses it instead of creating a false clean state.
 
 Legacy whole-repo exposure is recognized without writing. The first selection-changing Apply targeting it replaces the owned wrapper with the complete desired set of child links, preserving active checkout contents and history. This happens inside normal Apply: there is no conversion button, setup step or extra confirmation. Read/refresh, filters, expansion, toggles, Revert, no-op Apply and unrelated Apply do not reconcile assets. Other harnesses/scopes remain unchanged. A real root skill can make independent nested isolation uncertain; unsupported root-on/nested-off selections fail before writes rather than pretending a nested skill is disabled.

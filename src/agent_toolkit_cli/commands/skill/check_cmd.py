@@ -14,13 +14,13 @@ from ._common import scope_and_roots
 @click.option("--json", "as_json", is_flag=True)
 @click.pass_context
 def check_cmd(ctx, slugs, global_, project_flag, as_json):
-    """Check catalog-associated skills' upstream revisions without updating files."""
+    """Check registered skills' Git upstream revisions without updating files."""
     scope, home, project, _ = scope_and_roots(global_, project_flag, ctx.obj.get("project_root") if ctx.obj else None, read_only=True)
     rows = check_skills(slugs, scope=scope, home=home, project=project)
     if as_json:
         click.echo(json.dumps(rows))
     elif not rows:
-        click.echo("(no catalog-associated skills in this scope)")
+        click.echo("(no registered skills in this scope)")
     else:
         for row in rows:
             label = "upstream revision differs (check before updating)" if row["status"] == "different" else row["status"]

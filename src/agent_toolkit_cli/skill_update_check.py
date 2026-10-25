@@ -1,4 +1,4 @@
-"""Explicit, read-only upstream revision checks for catalog-associated skills."""
+"""Explicit, read-only upstream revision checks for registered Git-backed skills."""
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -42,7 +42,7 @@ def _key(slug, scope, project):
 
 def check_skills(slugs: tuple[str, ...], *, scope: str, home: Path | None, project: Path | None) -> list[dict]:
     lock = read_lock(lock_file_path(scope=scope, home=home, project=project))
-    targets = slugs or tuple(s for s, e in sorted(lock.skills.items()) if isinstance(e.extras.get("catalog"), dict))
+    targets = slugs or tuple(sorted(lock.skills))
     state = _load(home)
     rows = []
     remotes = {}
@@ -50,8 +50,8 @@ def check_skills(slugs: tuple[str, ...], *, scope: str, home: Path | None, proje
         entry = _entry(slug, scope, home, project)
         row = dict(slug=slug, checked_at=datetime.now(timezone.utc).isoformat(), status="unknown", local_sha=None, remote_sha=None, local_changes=False, error=None)
         try:
-            if entry is None or not isinstance(entry.extras.get("catalog"), dict):
-                raise ValueError("not a catalog-associated skill in this scope")
+            if entry is None:
+                raise ValueError("not a registered skill in this scope")
             canonical = canonical_skill_dir(slug, scope=scope, home=home, project=project)
             row["identity"] = _identity(entry, canonical)
             actual_origin = run_git(["remote", "get-url", "origin"], cwd=canonical)

@@ -54,21 +54,36 @@ CLI inventory, global-only library candidates retain their actual global record
 scope rather than being labeled as project registrations. Explicit catalog
 acquisition records provenance, while browsing does not mutate library records.
 
-`skills check [SLUGS...] -g|-p [--json]` checks catalog-associated downloaded
-skills against their recorded upstream selector without updating content. Results
+Advertised siblings and acquired children from the same normalized Git repository
+and configured ref share one expandable TUI collection. Child identity includes
+its relative directory, not just its name. Expanding acquires nothing; selecting
+children and applying acquires only those missing children before enabling them.
+Parent All/None includes supported collapsed/filter-hidden members from the observed
+set; later advertisements do not silently join a queued selection. Failed selected
+acquisition leaves that collection/scope's enablement unchanged across its requested
+harnesses. Safely acquired library content remains, and failed selections stay queued.
+Other independent collections may succeed. Local-only controls keep working offline.
+
+`skills check [SLUGS...] -g|-p [--json]` checks registered Git-backed
+skills, whether added directly or through the catalog, against their recorded upstream selector without updating content. Results
 are timestamped in a private `skills-update-checks.json` beside the global library
 lock, including observations keyed to individual project backings. This cache is
 not project configuration and is not transported when a project moves. Unequal
 commits mean the upstream revision differs, not proof of ancestry or a change in
 that particular monorepo child. Local changes are preserved. A failed check is
 unknown; changed local HEAD/source makes an old result stale. Fixed commit pins
-remain pinned. Checks work from recorded provenance even after unsubscription.
+remain pinned. Checks use the recorded Git selector and do not require a catalog subscription or association.
 
 TUI Info displays those observations and CLI guidance; the TUI does not check
 skill upstreams automatically or apply updates. Use `skills update SLUG -g|-p`
 where existing backing/scope support permits. Catalog refresh never changes an
 acquired source or ref. Doctor distinguishes catalog availability from local
 corruption; it never acquires, enables or updates because of a catalog listing.
+
+Removing unused library content leaves its shared catalog advertisement available.
+Disable consumers before deleting shared library backing: the existing library
+Remove path does not enumerate or clean up project links and can leave them broken.
+This collection feature does not redesign that deletion policy.
 
 LiteLLM, well-known endpoints, multiple catalogs, automatic checks and automatic
 source/ref adoption are deliberately outside this feature.
