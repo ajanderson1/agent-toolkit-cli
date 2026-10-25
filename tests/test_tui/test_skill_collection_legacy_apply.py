@@ -28,7 +28,7 @@ async def test_legacy_uncheck_materializes_complete_siblings_before_wrapper_reti
         }
         app.action_apply()
         await pilot.pause()
-        assert grid.pending_entries() == {}
+        assert grid.pending_entries() == {}, str(app.query_one('#footer-pending', Static).render())
         root = Path.home() / ".agents/skills"
         assert not (root / "wrapper").exists()
         assert len(list(root.glob("workflow-*"))) == 10

@@ -1041,6 +1041,11 @@ def _count_linked(slug: str, scope: str, home: Path | None, project: Path | None
     return ", ".join(linked[:3]) + ("..." if len(linked) > 3 else "")
 
 
+from .catalog_cmd import catalog_cmd
+from .check_cmd import check_cmd
+
+skill.add_command(check_cmd)
+skill.add_command(catalog_cmd)
 skill.add_command(import_cmd)
 skill.add_command(list_cmd)
 skill.add_command(status_cmd)

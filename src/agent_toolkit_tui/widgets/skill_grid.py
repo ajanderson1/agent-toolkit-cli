@@ -18,7 +18,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal
 
-from agent_toolkit_tui.asset_info import library_info, local_path_info
+from agent_toolkit_tui.asset_info import library_info, local_path_info, catalog_skill_info
 
 from textual.app import ComposeResult
 from textual.binding import Binding
@@ -38,7 +38,7 @@ from agent_toolkit_tui.display_names import (
     standard_column_header,
 )
 from agent_toolkit_tui.composition import skills_nonstandard_main
-from agent_toolkit_tui.skill_state import SkillRow
+from agent_toolkit_tui.skill_state import SkillRow, SkillIntent
 from agent_toolkit_tui.widgets._support import (
     adjust_source_column_width,
     set_source_column_width,
@@ -51,6 +51,7 @@ _STATE_MARKUP = {
     "dirty":   "[yellow]dirty[/]",
     "missing": "[red]missing[/]",
     "copy":    "[blue]copy[/]",
+    "catalog": "[cyan]catalog[/]",
     # "library" = in the library, not yet installed in this project. Normal
     # pre-install state. Rendered dim so it doesn't look alarming.
     "library": "[dim]library[/]",
@@ -105,6 +106,8 @@ class SkillGrid(Vertical):
         self._scope: Literal["global", "project"] = "global"
         # (scope, agent_name, slug) -> op
         self._pending: dict[tuple[str, str, str], Op] = {}
+        self._catalog_pending: dict[tuple[str, str, str], tuple] = {}
+        self._skill_intents: dict[tuple[str, str, str], SkillIntent] = {}
         self._selection: tuple[str, ...] | None = None
         # Case-insensitive substring filter on slug (#249). "" = show all.
         self._filter: str = ""
@@ -137,7 +140,6 @@ class SkillGrid(Vertical):
 
     def set_rows(self, rows: list[SkillRow]) -> None:
         self._rows = sorted(rows, key=lambda r: r.slug)
-        self._pending.clear()
         try:
             table = self.query_one("#skill-table", DataTable)
         except Exception:
@@ -151,6 +153,12 @@ class SkillGrid(Vertical):
     def pending_entries(self) -> dict[tuple[str, str, str], Op]:
         return dict(self._pending)
 
+    def pending_skill_intents(self) -> dict[tuple[str, str, str], SkillIntent]:
+        return {key: value for key, value in self._skill_intents.items() if key in self._pending}
+
+    def pending_catalog_entries(self) -> dict:
+        return {key: value for key, value in self._catalog_pending.items() if self._pending.get(key) == "link"}
+
     def _notify_pending(self) -> None:
         """Announce the current pending count so the App can refresh the footer.
 
@@ -163,18 +171,38 @@ class SkillGrid(Vertical):
         message here would clobber that summary on the next event-loop turn.
         Posting a message is safe even before mount (Textual queues it).
         """
+        rows = {r.slug: r for r in self._rows}
+        for key, op in self._pending.items():
+            row = rows.get(key[2])
+            if row is not None and row.identity is not None:
+                advertised = op == "link" and row.origin == "catalog"
+                self._skill_intents.setdefault(key, SkillIntent(
+                    row.identity,
+                    row.catalog_url if advertised else None,
+                    row.catalog_ref if advertised else None,
+                    row.catalog_item if advertised else None,
+                    frozenset(r.identity for r in self._rows if r.identity is not None and r.identity[:2] == row.identity[:2]),
+                ))
+            if op == "link" and row is not None and row.origin == "catalog" and row.catalog_item is not None:
+                self._catalog_pending.setdefault(key, (row.catalog_url, row.catalog_item))
+        self._catalog_pending = {key: value for key, value in self._catalog_pending.items() if self._pending.get(key) == "link"}
+        self._skill_intents = {key: value for key, value in self._skill_intents.items() if key in self._pending}
         self.post_message(self.PendingChanged(len(self._pending)))
 
     def clear_pending(self) -> None:
         self._pending.clear()
+        self._catalog_pending.clear()
+        self._skill_intents.clear()
         try:
             table = self.query_one("#skill-table", DataTable)
             self._rebuild(table)
         except Exception:
             pass
 
-    def restore_pending(self, pending: dict[tuple[str, str, str], Op]) -> None:
+    def restore_pending(self, pending: dict[tuple[str, str, str], Op], *, intents: dict[tuple[str, str, str], SkillIntent] | None = None) -> None:
         self._pending.update(pending)
+        if intents is not None:
+            self._skill_intents.update({key: value for key, value in intents.items() if key in pending})
         try:
             table = self.query_one("#skill-table", DataTable)
             self._rebuild(table)
@@ -305,6 +333,8 @@ class SkillGrid(Vertical):
 
         if row.ref == "(untracked)":
             details = local_path_info(Path(row.source))
+        elif row.origin == "catalog":
+            details = ["Origin: catalog", "Not downloaded; nothing is exposed to a harness."]
         else:
             member = self._members(row)[0] if row.is_collection else row
             source_path = canonical_skill_dir(
@@ -318,6 +348,10 @@ class SkillGrid(Vertical):
                 for _ in Path(member.skill_path).parts:
                     source_path = source_path.parent
             details = library_info(source_path)
+        if not row.is_collection and row.ref != "(untracked)":
+            details += catalog_skill_info(row.slug, scope=self._scope, home=Path.home(), project=normalize_skill_project_root(Path.cwd()) if self._scope == "project" else None, item=row.catalog_item, catalog_url=row.catalog_url)
+            if row.catalog_warning:
+                details.append(escape(row.catalog_warning))
         self.app.push_screen(
             CellInfoScreen(
                 title=f"{row.slug} · {asset_type_label('skill')}",
@@ -672,7 +706,7 @@ class SkillGrid(Vertical):
             for agent in active:
                 cells.append(self._cell_glyph(row=row, agent=agent))
             cells.append("collection" if row.is_collection else "[dim]local[/]" if row.ref == "(untracked)" else _STATE_MARKUP.get(row.state, row.state))
-            origin = "local" if row.ref == "(untracked)" else "library"
+            origin = "local" if row.ref == "(untracked)" else row.origin
             source = row.collection_label if row.is_collection else row.source
             cells.append(Text(f"{origin} · {source}", no_wrap=True, overflow="ellipsis"))
             table.add_row(*cells, key=f"skill:{row.slug}")

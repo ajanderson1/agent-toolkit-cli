@@ -1,5 +1,18 @@
 # Changelog
 
+## [6.1.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v6.0.0...v6.1.0) (2026-10-25)
+
+
+### Features
+
+* **skills:** add optional shared Git-backed catalog ([53e16dc](https://github.com/ajanderson1/agent-toolkit-cli/commit/53e16dc81ba511e40dc33856439557e0c30287cb))
+
+
+### Bug Fixes
+
+* **ci:** install native Pi in release gate ([5b74896](https://github.com/ajanderson1/agent-toolkit-cli/commit/5b74896c55b6900e1a26b0178e3d01180e92e740))
+* **release:** upload verified assets without release update ([92800e1](https://github.com/ajanderson1/agent-toolkit-cli/commit/92800e1de9704698d6619590d0514730e519c2a8))
+
 ## [6.0.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v5.13.0...v6.0.0) (2026-10-24)
 
 
