@@ -181,6 +181,7 @@ class SkillGrid(Vertical):
                     row.catalog_url if advertised else None,
                     row.catalog_ref if advertised else None,
                     row.catalog_item if advertised else None,
+                    frozenset(r.identity for r in self._rows if r.identity is not None and r.identity[:2] == row.identity[:2]),
                 ))
             if op == "link" and row is not None and row.origin == "catalog" and row.catalog_item is not None:
                 self._catalog_pending.setdefault(key, (row.catalog_url, row.catalog_item))

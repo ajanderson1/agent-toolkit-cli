@@ -70,6 +70,7 @@ class SkillIntent:
     catalog_url: str | None = None
     catalog_ref: str | None = None
     catalog_item: CatalogSkill | None = None
+    members: frozenset[SkillIdentity] = frozenset()
 
 
 @dataclass
@@ -425,8 +426,11 @@ def merge_catalog_rows(rows: list[SkillRow], snapshot: CatalogSnapshot, *, scope
     if scope == "project":
         entries.update(read_lock(lock_file_path(scope=scope, home=home, project=project)).skills)
     by_slug = {r.slug: r for r in result}
+    associated_keys = {e.extras['catalog'].get('key') for e in entries.values()
+                       if isinstance(e.extras.get('catalog'), dict) and isinstance(e.extras['catalog'].get('key'), str)
+                       and e.extras['catalog'].get('url') == snapshot.url}
     seen: set[SkillIdentity] = set()
-    for item in sorted(snapshot.skills, key=lambda item: item.key):
+    for item in sorted(snapshot.skills, key=lambda item: (item.key not in associated_keys, item.key)):
         identity = catalog_identity(item)
         if identity in seen:
             continue

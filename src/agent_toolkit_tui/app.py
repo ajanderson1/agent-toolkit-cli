@@ -1404,25 +1404,16 @@ class TUIApp(App):
         failed_groups: set[tuple[str, str]] = set()
         # Only remote-only selections need catalog connectivity. Local operations
         # remain usable even if the catalog is offline or no longer subscribed.
-        from agent_toolkit_cli.skill_catalog_ops import resolve_catalog_skill, acquire_catalog_skill
+        from agent_toolkit_tui.skill_catalog_apply import prepare_catalog_acquisitions
         catalog_pending = grid.pending_catalog_entries()
-        catalog_groups = {(key[0], key[2]) for key in catalog_pending}
-        for selected_scope, selected_slug in catalog_groups:
-            keys = {key for key in catalog_pending if key[0] == selected_scope and key[2] == selected_slug}
-            url, expected = catalog_pending[next(iter(keys))]
-            selected_project = None if selected_scope == "global" else self._skill_project_root()
-            try:
-                validate_projection_context(slug=selected_slug, target_agents=tuple(key[1] for key in keys), scope=selected_scope, home=Path.home(), project=selected_project)
-                snapshot, item = resolve_catalog_skill(expected.key, expected=expected)
-                if snapshot.url != url:
-                    raise ValueError("Catalog subscription changed; refresh and reselect")
-                actual = acquire_catalog_skill(item, catalog_url=snapshot.url)
-                if actual != selected_slug:
-                    raise ValueError("Library slug changed; refresh and reselect")
-            except (ValueError, RuntimeError, OSError) as exc:
-                failed_keys.update(keys)
-                failed += len(keys)
-                errors.append(f"{selected_slug}: {exc}")
+        intents = grid.pending_skill_intents()
+        prepared = prepare_catalog_acquisitions(
+            pending, intents, home=Path.home(),
+            project=self._skill_project_root() if any(k[0] == 'project' for k in pending) else None,
+        )
+        failed_keys.update(prepared.blocked)
+        failed += len(prepared.blocked)
+        errors.extend(prepared.errors)
         pending = {key: op for key, op in pending.items() if key not in failed_keys}
         for scope in {k[0] for k in pending}:
             home = Path.home()
@@ -1440,29 +1431,40 @@ class TUIApp(App):
             from agent_toolkit_cli.skill_paths import lock_file_path
             records = {**read_lock(library_lock_path()).skills,
                        **read_lock(lock_file_path(scope=scope, home=home, project=project)).skills}
+            # One registered child still needs a transaction spanning all requested
+            # harnesses; display-only advertised siblings must never enter it.
+            from agent_toolkit_cli.skill_collections import Collection, Child
+            from agent_toolkit_cli.skill_paths import canonical_skill_dir
+            covered = {n for group in groups for n in group.children}
+            for slug, entry in records.items():
+                if entry.parent_url is not None and slug not in covered and any(k[0] == scope and k[2] == slug for k in pending):
+                    groups.append(Collection(entry.source, entry.ref, children={slug: Child(slug, entry, canonical_skill_dir(slug, scope=scope, home=home, project=project).resolve())}))
             owners = {n: (e.source, e.ref) for n, e in records.items()}
             for group in groups:
                 for name in group.children:
                     owners.setdefault(name, group.key)
             for group in groups:
                 agents = {k[1] for k in pending if k[0] == scope and k[2] in group.children and owners.get(k[2]) == group.key}
+                keys = {k for k in pending if k[0] == scope and k[1] in agents and k[2] in group.children and owners.get(k[2]) == group.key}
+                if not keys:
+                    continue
+                handled.update(keys)
+                selections = {}
                 for agent in agents:
-                    keys = {k for k in pending if k[0] == scope and k[1] == agent and k[2] in group.children and owners.get(k[2]) == group.key}
-                    handled.update(keys)
                     selected = {n for n, c in group.children.items() if exposed(
                         c, group, agent, scope=scope, home=home, project=project)}
                     for key in keys:
-                        if pending[key] == "link":
-                            selected.add(key[2])
-                        else:
-                            selected.discard(key[2])
-                    try:
-                        apply_selection(group, {agent: selected}, scope=scope, home=home, project=project)
-                        ok += len(keys)
-                    except (InstallError, OSError) as exc:
-                        failed_keys.update(keys)
-                        failed += len(keys)
-                        errors.append(f"{group.label}/{agent}: {exc}")
+                        if key[1] == agent:
+                            if pending[key] == "link": selected.add(key[2])
+                            else: selected.discard(key[2])
+                    selections[agent] = selected
+                try:
+                    apply_selection(group, selections, scope=scope, home=home, project=project)
+                    ok += len(keys)
+                except (InstallError, OSError) as exc:
+                    failed_keys.update(keys)
+                    failed += len(keys)
+                    errors.append(f"{group.label}: {exc}")
         by_slug: dict[tuple[str, str], tuple[set[str], set[str]]] = defaultdict(
             lambda: (set(), set())
         )
@@ -1526,10 +1528,13 @@ class TUIApp(App):
             else {}
         )
         saved_catalog = {key: value for key, value in catalog_pending.items() if key in saved}
+        saved_intents = {key: value for key, value in intents.items() if key in saved}
+        if failed and prepared.acquired:
+            errors.append('Retained in library: ' + ', '.join(prepared.acquired))
         grid.clear_pending()
         self._refresh_skill_view()
         if saved:
-            grid.restore_pending(saved)
+            grid.restore_pending(saved, intents=saved_intents)
             grid._catalog_pending.update(saved_catalog)
         self._refresh_pending_label()
         self._refresh_status_bar()

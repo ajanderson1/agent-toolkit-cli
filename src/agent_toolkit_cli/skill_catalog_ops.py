@@ -49,8 +49,9 @@ def catalog_target(entries: dict[str, LockEntry], item: CatalogSkill, catalog_ur
     return None, ""
 
 
-def resolve_catalog_skill(key: str, *, expected: CatalogSkill | None = None, home: Path | None = None) -> tuple[CatalogSnapshot, CatalogSkill]:
-    snapshot = read_catalog(home=home)
+def resolve_catalog_skill(key: str, *, expected: CatalogSkill | None = None, home: Path | None = None, snapshot: CatalogSnapshot | None = None) -> tuple[CatalogSnapshot, CatalogSkill]:
+    if snapshot is None:
+        snapshot = read_catalog(home=home)
     if snapshot is None or snapshot.error:
         raise ValueError(snapshot.error if snapshot else "no skill catalog subscription")
     item = next((s for s in snapshot.skills if s.key == key), None)
