@@ -79,6 +79,8 @@ catalog provenance; failed checks exit
 nonzero. `update` remains the explicit content-changing command. The TUI only
 shows check results and commands. [Catalog behavior and format](../asset-types/skills.md#optional-shared-git-catalog).
 
+`reset SLUG -g --force` discards local commits and tracked edits, restoring the configured commit pin, tag or latest fetched branch tip. It does not switch a pin to `main` or run `git clean`. A monorepo reset affects the **entire shared parent checkout**, including sibling skills. `status` scopes each child's clean/dirty result to its own directory, independently of read-only/owned status.
+
 Use a positional source or `--source`, not both. Repository-wide add registers real skills including a genuine root; `--skill NAME`, an explicit source subpath, or `--path PATH` selects one child. `--path` names an exact safe repository-relative directory (including `.` for a real root) independently of its frontmatter name or custom slug; it is library-only and cannot be combined with another child selector or batch `--source`. `install --source` selects persisted children of the exact source across registered refs, whereas a TUI collection controls one source/ref group. It does not discover or autoactivate later upstream children. Remove without arguments opens an interactive selection.
 
 Sources accept `owner/repo`, `owner/repo@ref`, subpaths, HTTPS/SSH URLs, local paths and skills.sh URLs. Combine ref+subpath using `--ref` or a GitHub `/tree/<ref>/<subpath>` URL; ambiguous `owner/repo@ref/subpath` is refused. Slash-containing refs require `--ref`. [Skill storage, ownership and update](skill-lock.md) · [Collections and legacy exposure](tui.md#skill-collections).

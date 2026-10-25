@@ -147,7 +147,7 @@ override, failure handling, and the explicit CLI boundary.
 
 ## Skill collections
 
-Multi-skill repositories appear as an expandable **collection** with short child names. The header counts real skills and collections, not extra parent rows. Click the parent name (or press Space/Enter there) to expand/collapse; Info retains full source/ref/path identity.
+Multi-skill repositories appear as an expandable **collection** with short child names. The header counts real skills and collections, not extra parent rows. Acquired children's clean/dirty badges inspect only their own directories. A parent with known local Git backing reports repository-wide clean/dirty state, including root files and filter-hidden children; advertisement-only parents retain the `collection` label without probing asset repositories. Clean describes uncommitted Git changes, not whether upstream has advanced. Click the parent name (or press Space/Enter there) to expand/collapse; Info retains full source/ref/path identity.
 
 Each available parent cell summarizes effective selection: unchecked = none, checked = all, **cyan `−` = mixed**. A mixed parent selects all when toggled. Child cells remain independent. The **yellow `-` on a child means pending removal**, not mixed selection. Parent actions include every member, even collapsed or filter-hidden children, and stay within that source/ref, harness and scope. A child filter keeps the parent visible for context. Column-wide toggles visit children once.
 

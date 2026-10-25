@@ -149,7 +149,7 @@ def update_cmd(
             continue
         after = skill_git.head_sha(canonical, env=None)
         entry.local_sha = after
-        entry.upstream_sha = skill_git.remote_head_sha(
+        entry.upstream_sha = skill_git.ref_commit(
             canonical, ref=ref, env=None,
         )
         if entry.ref is None:

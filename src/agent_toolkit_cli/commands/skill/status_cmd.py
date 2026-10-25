@@ -101,14 +101,23 @@ def status_cmd(
                 env=None,
                 root=parents_root,
             )
+            # Central project backing may live in the global checkout rather
+            # than the project's legacy _parents directory. Prefer the actual
+            # canonical only when its Git origin proves the recorded source.
+            actual_parent = canonical.resolve()
+            for _ in Path(entry.skill_path or ".").parts:
+                actual_parent = actual_parent.parent
+            if skill_git.is_git_repo(actual_parent) and skill_git.remote_matches(
+                actual_parent, entry.parent_url, None,
+            ):
+                parent_dir = actual_parent
             if not skill_git.is_git_repo(parent_dir):
                 click.echo(f"{slug}\tcopy")
                 continue
+            wt = skill_git.status_path(parent_dir, entry.skill_path or ".", env=None)
             if not entry.read_only:
-                # Owned monorepo: scope dirty state to this skill's subpath so
-                # sibling edits don't bleed in, and mark it writable.
-                subpath = entry.skill_path or "."
-                wt = skill_git.status_path(parent_dir, subpath, env=None)
+                # Owned entries retain their writable/divergence annotation;
+                # every child's working-tree badge is scoped to its own path.
                 state = (
                     "dirty" if wt == skill_git.GitWorkingTreeStatus.DIRTY
                     else "clean"
@@ -124,7 +133,6 @@ def status_cmd(
                 )
                 click.echo(f"{slug}\t{state} (owned){suffix}")
                 continue
-            wt = skill_git.status(parent_dir, env=None)
         elif not skill_git.is_git_repo(canonical):
             click.echo(f"{slug}\tcopy")
             continue

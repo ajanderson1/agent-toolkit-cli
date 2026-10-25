@@ -31,13 +31,14 @@ def reset_cmd(
     project_flag: bool,
     force: bool,
 ) -> None:
-    """Force-sync each named skill to upstream HEAD.
+    """Reset each named skill to its configured branch, tag or commit pin.
 
-    Runs `git fetch` + `git reset --hard origin/<ref>` in the library clone
-    for each slug, discarding local commits and uncommitted edits. Refuses
-    to operate on a dirty working tree unless --force is given (mirrors
-    `skill remove --force`). After a successful reset, updates the lock
-    entry's `local_sha` and `upstream_sha`.
+    Fetches origin, then hard-resets to the exact pinned commit, peeled tag,
+    or latest fetched branch tip. Discards local commits and tracked edits;
+    --force permits discarding a dirty working tree. Does not run git clean.
+    For monorepos this resets the ENTIRE shared parent checkout, including
+    sibling skills, not only the named child's files. The configured ref
+    remains unchanged. Successful resets refresh the lock's revision record.
 
     At least one slug must be given — there is intentionally no implicit
     "reset everything" form. Run `skill list` to see installed slugs.
@@ -148,7 +149,7 @@ def reset_cmd(
             ) from exc
 
         entry.local_sha = skill_git.head_sha(canonical, env=None)
-        entry.upstream_sha = skill_git.remote_head_sha(
+        entry.upstream_sha = skill_git.ref_commit(
             canonical, ref=ref, env=None,
         )
         if entry.ref is None:

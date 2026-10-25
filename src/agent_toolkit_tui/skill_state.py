@@ -93,6 +93,7 @@ class SkillRow:
     catalog_warning: str = ""
     identity: SkillIdentity | None = None
     catalog_ref: str | None = None
+    repository_state: Literal["clean", "dirty"] | None = None
 
 
 def _read_skill_description(canonical: Path) -> str:
@@ -260,7 +261,18 @@ def build_skill_rows(
             managed_paths.add(child.path.resolve())
     harnesses = interactive_agents(selection)
     rows: list[SkillRow] = []
+    repository_states = {}
+
+    def repository_state(backing):
+        if backing not in repository_states:
+            repository_states[backing] = (
+                "dirty" if skill_git.status(backing, env=None)
+                == skill_git.GitWorkingTreeStatus.DIRTY else "clean"
+            )
+        return repository_states[backing]
+
     for slug in sorted(universe):
+        repo_state = None
         entry = universe[slug]
         canonical = canonical_skill_dir(
             slug, scope=scope, home=home, project=project,
@@ -276,7 +288,9 @@ def build_skill_rows(
             state = "library"
         elif slug in membership and membership[slug][0].backing is not None:
             backing = membership[slug][0].backing
-            state = "dirty" if skill_git.status(backing, env=None) == skill_git.GitWorkingTreeStatus.DIRTY else "clean"
+            repo_state = repository_state(backing)
+            subpath = str(membership[slug][1].path.relative_to(backing))
+            state = "dirty" if skill_git.status_path(backing, subpath, env=None) == skill_git.GitWorkingTreeStatus.DIRTY else "clean"
         elif not canonical.exists():
             # Project scope: slug is in the library but not yet installed here.
             # Global scope: library entry recorded but directory was deleted.
@@ -298,7 +312,8 @@ def build_skill_rows(
                 # materialised: copy with no parent available.
                 state = "copy"
             else:
-                wt = skill_git.status(parent_dir, env=None)
+                repo_state = repository_state(parent_dir)
+                wt = skill_git.status_path(parent_dir, entry.skill_path or ".", env=None)
                 state = (
                     "dirty" if wt == skill_git.GitWorkingTreeStatus.DIRTY
                     else "clean"
@@ -373,6 +388,7 @@ def build_skill_rows(
             slug=slug, source=entry.source, ref=entry.ref or "(default)",
             identity=skill_identity(entry),
             state=state, cells=cells,
+            repository_state=repo_state,
             description=description,
             collection_error=membership[slug][0].error if slug in membership else "",
             skill_path=entry.skill_path or "",

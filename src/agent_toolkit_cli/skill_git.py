@@ -214,8 +214,35 @@ _DEFAULT_IDENTITY = (
 )
 
 
+def ref_commit(repo: Path, *, ref: str, env: dict[str, str] | None) -> str:
+    """Resolve the configured target from local objects after the caller fetches.
+
+    Commit pins stay exact. A short hex-named checked-out branch still uses
+    its remote tip; ordinary branches never resolve to a locally edited tip.
+    Tags are peeled to commits. No fetch, fallback to main or worktree writes.
+    """
+    safe = _guard_ref(ref)
+    branch = current_branch(repo, env=env)
+    if looks_like_sha(safe) and (len(safe) == 40 or branch != safe):
+        targets = [safe]
+    elif branch == safe:
+        # A deleted tracked branch must not silently become a same-named tag.
+        targets = [f"refs/remotes/origin/{safe}"]
+    else:
+        targets = [f"refs/remotes/origin/{safe}", f"refs/tags/{safe}"]
+    for target in targets:
+        try:
+            return _run(
+                ["git", "-C", str(repo), "rev-parse", "--verify",
+                 "--end-of-options", f"{target}^{{commit}}"], env=env,
+            ).stdout.strip()
+        except GitError as exc:
+            failure = exc
+    raise failure
+
+
 def merge(repo: Path, *, ref: str, env: dict[str, str] | None) -> GitResult:
-    """Merge `origin/<ref>` into the current branch.
+    """Merge the configured branch, tag or pinned commit into the current branch.
 
     Pins a synthetic `user.name`/`user.email` via `-c` so the merge commit
     can be created without relying on the host's global git config — agents,
@@ -227,7 +254,7 @@ def merge(repo: Path, *, ref: str, env: dict[str, str] | None) -> GitResult:
     """
     proc = _run(
         ["git", "-C", str(repo), *_DEFAULT_IDENTITY,
-         "merge", "--no-edit", f"origin/{_guard_ref(ref)}"],
+         "merge", "--no-edit", ref_commit(repo, ref=ref, env=env)],
         env=env,
     )
     return GitResult(stdout=proc.stdout, stderr=proc.stderr)
@@ -236,7 +263,7 @@ def merge(repo: Path, *, ref: str, env: dict[str, str] | None) -> GitResult:
 def reset_hard(
     repo: Path, *, ref: str, env: dict[str, str] | None,
 ) -> GitResult:
-    """Hard-reset `repo`'s working tree to `origin/<ref>`.
+    """Hard-reset `repo` to its configured branch, tag or pinned commit.
 
     Discards local commits and uncommitted changes. Goes through `_run` so
     GIT_* env vars are scrubbed identically to every other git call
@@ -244,7 +271,7 @@ def reset_hard(
     would otherwise redirect the operation into the parent repo).
     """
     proc = _run(
-        ["git", "-C", str(repo), "reset", "--hard", f"origin/{_guard_ref(ref)}"],
+        ["git", "-C", str(repo), "reset", "--hard", ref_commit(repo, ref=ref, env=env)],
         env=env,
     )
     return GitResult(stdout=proc.stdout, stderr=proc.stderr)
@@ -349,10 +376,11 @@ def clone_pinned_or_branch(
 
 def current_branch(repo: Path, *, env: dict[str, str] | None) -> str:
     proc = _run(
-        ["git", "-C", str(repo), "rev-parse", "--abbrev-ref", "HEAD"],
+        ["git", "-C", str(repo), "rev-parse", "--symbolic-full-name", "HEAD"],
         env=env,
     )
-    return proc.stdout.strip()
+    # Abbreviated refs can become "heads/main" when a tag is also named main.
+    return proc.stdout.strip().removeprefix("refs/heads/")
 
 
 def remote_url(repo: Path, *, env: dict[str, str] | None) -> str:
@@ -633,7 +661,8 @@ def status_path(
     parent clone. Goes through _run so GIT_* env is scrubbed (the #209 trap).
     """
     proc = _run(
-        ["git", "-C", str(repo), "status", "--porcelain", "--", path],
+        ["git", "--no-optional-locks", "-C", str(repo), "status",
+         "--porcelain", "--", path],
         env=env,
     )
     return (

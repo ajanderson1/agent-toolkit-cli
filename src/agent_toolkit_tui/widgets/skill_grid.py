@@ -266,9 +266,12 @@ class SkillGrid(Vertical):
                         or self._filter in (r.slug + ' ' + r.display_name).lower()]
             if not matching:
                 continue
+            repo_states = {r.repository_state for r in members if r.repository_state}
+            repo_state = "dirty" if "dirty" in repo_states else "clean" if repo_states else None
             parent = SkillRow(
                 slug=f"collection:{key!r}", source=row.source, ref=row.ref,
-                state="clean", collection_key=key, collection_label=row.collection_label,
+                state=repo_state or "clean", repository_state=repo_state,
+                collection_key=key, collection_label=row.collection_label,
                 display_name=row.collection_label, is_collection=True,
                 collection_error=row.collection_error,
                 description="Collection controls affect every child, including collapsed/filter-hidden skills. "
@@ -705,7 +708,7 @@ class SkillGrid(Vertical):
             cells: list[str | Text] = [Text(name, no_wrap=True, overflow="ellipsis")]
             for agent in active:
                 cells.append(self._cell_glyph(row=row, agent=agent))
-            cells.append("collection" if row.is_collection else "[dim]local[/]" if row.ref == "(untracked)" else _STATE_MARKUP.get(row.state, row.state))
+            cells.append("collection" if row.is_collection and row.repository_state is None else "[dim]local[/]" if row.ref == "(untracked)" else _STATE_MARKUP.get(row.state, row.state))
             origin = "local" if row.ref == "(untracked)" else row.origin
             source = row.collection_label if row.is_collection else row.source
             cells.append(Text(f"{origin} · {source}", no_wrap=True, overflow="ellipsis"))

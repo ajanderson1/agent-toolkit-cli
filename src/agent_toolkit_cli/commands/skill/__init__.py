@@ -111,7 +111,7 @@ def _reconstruct_single(
     if skill_git.is_git_repo(library_dir):
         local_sha = skill_git.head_sha(library_dir, env=None)
         upstream_sha = (
-            local_sha if ref_is_full_sha else skill_git.remote_head_sha(
+            local_sha if ref_is_full_sha else skill_git.ref_commit(
                 library_dir,
                 ref=skill_git.resolve_ref(parsed.ref, library_dir),
                 env=None,
@@ -446,7 +446,7 @@ def _add_single(parsed: ParsedSource, slug: str | None) -> None:
             raise click.ClickException(f"clone failed: {exc}") from exc
 
     if skill_git.is_git_repo(library_dir):
-        upstream_sha = skill_git.remote_head_sha(
+        upstream_sha = skill_git.ref_commit(
             library_dir,
             ref=skill_git.resolve_ref(parsed.ref, library_dir),
             env=None,
