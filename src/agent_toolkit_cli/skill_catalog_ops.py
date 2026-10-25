@@ -13,14 +13,20 @@ from agent_toolkit_cli.skill_lock import LockEntry, clone_url_from_entry, read_l
 from agent_toolkit_cli.skill_paths import library_lock_path, library_skill_path
 
 
-def catalog_match(entry: LockEntry, item: CatalogSkill) -> bool:
+SkillIdentity = tuple[str, str | None, str]
+
+
+def skill_identity(entry: LockEntry) -> SkillIdentity:
     path = entry.skill_path or "SKILL.md"
-    path = "." if path == "SKILL.md" else path
-    return (
-        normalise_git_url(clone_url_from_entry(entry)) == normalise_git_url(item.source.url)
-        and path == item.source.subpath
-        and entry.ref == item.source.ref
-    )
+    return normalise_git_url(clone_url_from_entry(entry)), entry.ref, "." if path == "SKILL.md" else path
+
+
+def catalog_identity(item: CatalogSkill) -> SkillIdentity:
+    return normalise_git_url(item.source.url), item.source.ref, item.source.subpath or "."
+
+
+def catalog_match(entry: LockEntry, item: CatalogSkill) -> bool:
+    return skill_identity(entry) == catalog_identity(item)
 
 
 def catalog_target(entries: dict[str, LockEntry], item: CatalogSkill, catalog_url: str) -> tuple[str | None, str]:

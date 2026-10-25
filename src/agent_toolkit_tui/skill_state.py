@@ -23,6 +23,7 @@ import yaml
 
 from agent_toolkit_cli import skill_git
 from agent_toolkit_cli.skill_catalog import CatalogSkill, CatalogSnapshot
+from agent_toolkit_cli.skill_catalog_ops import SkillIdentity, skill_identity, catalog_identity
 from agent_toolkit_cli.paperclip_paths import detect_paperclip_company
 from agent_toolkit_cli.skill_doctor import discover_unmanaged_skills as _discover_unmanaged_skills
 from agent_toolkit_cli.skill_install import _should_skip_symlink
@@ -81,6 +82,8 @@ class SkillRow:
     catalog_url: str = ""
     origin: str = "library"
     catalog_warning: str = ""
+    identity: SkillIdentity | None = None
+    catalog_ref: str | None = None
 
 
 def _read_skill_description(canonical: Path) -> str:
@@ -359,6 +362,7 @@ def build_skill_rows(
             description = _read_skill_description(library_skill_path(slug))
         rows.append(SkillRow(
             slug=slug, source=entry.source, ref=entry.ref or "(default)",
+            identity=skill_identity(entry),
             state=state, cells=cells,
             description=description,
             collection_error=membership[slug][0].error if slug in membership else "",
@@ -413,7 +417,12 @@ def merge_catalog_rows(rows: list[SkillRow], snapshot: CatalogSnapshot, *, scope
     if scope == "project":
         entries.update(read_lock(lock_file_path(scope=scope, home=home, project=project)).skills)
     by_slug = {r.slug: r for r in result}
-    for item in snapshot.skills:
+    seen: set[SkillIdentity] = set()
+    for item in sorted(snapshot.skills, key=lambda item: item.key):
+        identity = catalog_identity(item)
+        if identity in seen:
+            continue
+        seen.add(identity)
         matched, warning = catalog_target(entries, item, snapshot.url)
         if matched is not None and matched in by_slug:
             row = by_slug[matched]
@@ -427,5 +436,15 @@ def merge_catalog_rows(rows: list[SkillRow], snapshot: CatalogSnapshot, *, scope
                 result[result.index(row)] = replace(row, catalog_warning="Catalog identity conflicts with local backing; use CLI to inspect. Local content retained.")
             continue
         cells = {(agent, scope): _cell_for(item.key, agent, scope=scope, home=home, project=project) for agent in interactive_agents(selection)}
-        result.append(SkillRow(slug=item.key, source=item.source.url, ref=item.source.ref or "(default)", state="catalog", cells=cells, description=item.description, skill_path=item.source.subpath or ".", catalog_item=item, catalog_url=snapshot.url, origin="catalog"))
+        result.append(SkillRow(slug=item.key, source=item.source.url, ref=item.source.ref or "(default)", state="catalog", cells=cells, description=item.description, skill_path=item.source.subpath or ".", catalog_item=item, catalog_url=snapshot.url, origin="catalog", identity=identity))
+    groups: dict[tuple[str, str | None], list[SkillRow]] = {}
+    for row in result:
+        if row.identity is not None and row.ref != "(untracked)":
+            groups.setdefault(row.identity[:2], []).append(row)
+    for key, members in groups.items():
+        if len(members) > 1 or any(row.collection_key is not None for row in members):
+            for row in members:
+                row.collection_key = key
+                row.collection_label = f"{row.source} @ {key[1] or 'default'}"
+                row.display_name = '(root)' if row.identity[2] == '.' else Path(row.identity[2]).name
     return result
