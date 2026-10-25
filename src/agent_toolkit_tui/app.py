@@ -1435,17 +1435,29 @@ class TUIApp(App):
             # harnesses; display-only advertised siblings must never enter it.
             from agent_toolkit_cli.skill_collections import Collection, Child
             from agent_toolkit_cli.skill_paths import canonical_skill_dir
+            from agent_toolkit_cli.skill_catalog_ops import skill_identity
             covered = {n for group in groups for n in group.children}
+            covered.update(n for group in groups for n in (*group.containers, *group.container_conflicts, group.wrapper) if n is not None)
             for slug, entry in records.items():
-                if entry.parent_url is not None and slug not in covered and any(k[0] == scope and k[2] == slug for k in pending):
-                    groups.append(Collection(entry.source, entry.ref, children={slug: Child(slug, entry, canonical_skill_dir(slug, scope=scope, home=home, project=project).resolve())}))
-            owners = {n: (e.source, e.ref) for n, e in records.items()}
+                identity = skill_identity(entry)[:2]
+                has_nested = any(e.parent_url is not None and skill_identity(e)[:2] == identity for e in records.values())
+                requested = any(k[0] == scope and k[2] in records and skill_identity(records[k[2]])[:2] == identity for k in pending)
+                if slug in covered or not requested or (entry.parent_url is None and not has_nested):
+                    continue
+                group = next((g for g in groups if g.wrapper is None and all(skill_identity(c.entry)[:2] == identity for c in g.children.values())), None)
+                if group is None:
+                    group = Collection(entry.source, entry.ref)
+                    groups.append(group)
+                group.children[slug] = Child(slug, entry, canonical_skill_dir(slug, scope=scope, home=home, project=project).resolve())
+                covered.add(slug)
+            owners = {n: skill_identity(e)[:2] for n, e in records.items()}
             for group in groups:
-                for name in group.children:
-                    owners.setdefault(name, group.key)
+                for name, child in group.children.items():
+                    owners.setdefault(name, skill_identity(child.entry)[:2])
             for group in groups:
-                agents = {k[1] for k in pending if k[0] == scope and k[2] in group.children and owners.get(k[2]) == group.key}
-                keys = {k for k in pending if k[0] == scope and k[1] in agents and k[2] in group.children and owners.get(k[2]) == group.key}
+                identity = skill_identity(next(iter(group.children.values())).entry)[:2]
+                agents = {k[1] for k in pending if k[0] == scope and k[2] in group.children and owners.get(k[2]) == identity}
+                keys = {k for k in pending if k[0] == scope and k[1] in agents and k[2] in group.children and owners.get(k[2]) == identity}
                 if not keys:
                     continue
                 handled.update(keys)

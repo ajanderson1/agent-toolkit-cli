@@ -256,6 +256,77 @@ def _remaining_wrapper(
     return False
 
 
+def _apply_preserved_canonicals(group, selections, *, scope, home, project):
+    """Journal projections of registered canonicals without inferring one parent.
+
+    Flat-root checkouts and retained materialised children can coexist at different
+    canonical paths. Their exposure is transactional; their content is never moved.
+    """
+    from agent_toolkit_cli.project_backing import check_creation
+    from agent_toolkit_cli._paths_core import SKILL_BINDING
+
+    lock_path = lock_file_path(scope=scope, home=home, project=project)
+    library_path = library_lock_path(home=home)
+    scoped = checked_lock(lock_path)
+    library = checked_lock(library_path)
+    before, after, sources, links = {}, {}, {}, {}
+    for name, child in sorted(group.children.items()):
+        old = scoped.skills.get(name)
+        source = old if old is not None else library.skills.get(name)
+        if source is None or source != child.entry:
+            raise InstallError(f"{name}: preserved canonical record changed")
+        canonical = _canonical(name, scope, home, project)
+        if not (canonical / "SKILL.md").is_file():
+            raise InstallError(f"{name}: preserved canonical is missing SKILL.md")
+        retained = not canonical.is_symlink() and (
+            source.extras.get("materialised") == "copy"
+            or (source.parent_url is not None and not skill_git.is_git_repo(canonical))
+        )
+        if not retained:
+            backing = canonical.resolve()
+            if source.parent_url is not None and source.skill_path != ".":
+                for _ in Path(source.skill_path).parts:
+                    backing = backing.parent
+            if not _owned_backing(backing, source):
+                raise InstallError(f"{name}: cannot prove preserved backing ownership")
+        if scope == "project":
+            check_creation(SKILL_BINDING, name, project, home=home)
+        before[name] = old
+        after[name] = old
+        if old is None:
+            sources[name] = source
+            if any(name in chosen for chosen in selections.values()):
+                after[name] = dataclasses.replace(
+                    source,
+                    extras={
+                        **source.extras,
+                        "projectBacking": "central"
+                        if canonical == library_skill_path(name, home=home)
+                        else "isolated",
+                    },
+                )
+        for agent, selected in selections.items():
+            path = projection(name, agent, scope=scope, home=home, project=project)
+            current = link_state(path)
+            if current is not None and path.resolve() != canonical.resolve():
+                raise InstallError(f"{name}: projection ownership conflict at {path}")
+            desired = (current or canonical) if name in selected else None
+            if path in links and links[path][1] != desired:
+                raise InstallError(f"{name}: shared projection selection conflict")
+            links[path] = current, desired
+    journal = Journal()
+    journal.expect(lock_path, before)
+    if sources:
+        journal.expect(library_path, sources)
+    journal.expect_paths(links)
+    try:
+        for path, (current, desired) in links.items():
+            journal.link(path, current, desired)
+        journal.write(lock_path, before, after)
+    except (OSError, InstallError) as exc:
+        raise journal.fail(exc) from exc
+
+
 def apply_selection(
     group: Collection,
     selections: dict[str, set[str]],
@@ -285,11 +356,19 @@ def apply_selection(
             home=home,
             project=project,
         )
-        roots = {n for n, c in group.children.items() if c.entry.skill_path == "."}
+        roots = {n for n, c in group.children.items() if c.entry.skill_path == "." or (c.entry.parent_url is None and c.entry.skill_path in (None, 'SKILL.md'))}
         if roots & selected and selected != set(group.children):
             raise InstallError(
                 "Cannot prove independent nested isolation while the real root remains projected for this target; unselect the root first. No files changed."
             )
+    if group.wrapper is None and any(
+        c.entry.parent_url is None
+        or (not _canonical(n, scope, home, project).is_symlink()
+            and _canonical(n, scope, home, project).is_dir())
+        for n, c in group.children.items()
+    ):
+        _apply_preserved_canonicals(group, selections, scope=scope, home=home, project=project)
+        return
     backing = group.backing
     if backing is not None:
         wrapper_entry = lock.skills.get(group.wrapper)
