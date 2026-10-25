@@ -53,12 +53,12 @@
 - Add optional `identity: SkillIdentity | None` and `catalog_ref: str | None` row fields, preserving existing constructors.
 - Keep `build_skill_rows(...) -> list[SkillRow]` and `merge_catalog_rows(...) -> list[SkillRow]` signatures. Their subscribed result assigns collection keys from repository/ref identity and preserves acquired row identity.
 
-- [ ] Write failing tests `test_catalog_only_siblings_form_one_collection`, `test_mixed_collection_reuses_custom_slug_without_writes`, and `test_distinct_hosts_refs_and_slug_conflicts_do_not_merge`. Assert one derived parent, exact real child count, zero new locks/clones, local row wins, and distinct configured refs/hosts remain separate.
-- [ ] Add `test_exact_selector_aliases_have_one_actionable_row`: repeated catalogue selectors collapse to one deterministic representative without writing provenance; conflicting selectors/local identities remain blocked rather than adopted.
-- [ ] Add `test_individual_add_then_full_repo_add_folds_without_reacquisition`: custom slug, enabled project child, parent HEAD/index/local file unchanged, new siblings registered but not enabled. Add unused-child removal showing its still-present advertisement again.
-- [ ] Run `uv run pytest -q tests/test_tui/test_skill_catalog_collections.py tests/test_cli/test_skill_collection_registration.py tests/test_cli/test_skill_catalog_acquire.py`; confirm the new collection tests fail for missing grouping/identity behavior.
-- [ ] Implement identity-based dedup/grouping after the safe join. Leave unmanaged rows and unsupported/ambiguous backing protected. Preserve no-subscription inventory behavior and avoid displaying redundant catalogue membership on acquired children.
-- [ ] Rerun the command to green; commit `feat(skills): fold advertised and library children into collections`.
+- [x] Write failing tests `test_catalog_only_siblings_form_one_collection`, `test_mixed_collection_reuses_custom_slug_without_writes`, and `test_distinct_hosts_refs_and_slug_conflicts_do_not_merge`. Assert one derived parent, exact real child count, zero new locks/clones, local row wins, and distinct configured refs/hosts remain separate.
+- [x] Add `test_exact_selector_aliases_have_one_actionable_row`: repeated catalogue selectors collapse to one deterministic representative without writing provenance; conflicting selectors/local identities remain blocked rather than adopted.
+- [x] Add `test_individual_add_then_full_repo_add_folds_without_reacquisition`: custom slug, enabled project child, parent HEAD/index/local file unchanged, new siblings registered but not enabled. Add unused-child removal showing its still-present advertisement again.
+- [x] Run `uv run pytest -q tests/test_tui/test_skill_catalog_collections.py tests/test_cli/test_skill_collection_registration.py tests/test_cli/test_skill_catalog_acquire.py`; confirm the new collection tests fail for missing grouping/identity behavior.
+- [x] Implement identity-based dedup/grouping after the safe join. Leave unmanaged rows and unsupported/ambiguous backing protected. Preserve no-subscription inventory behavior and avoid displaying redundant catalogue membership on acquired children.
+- [x] Rerun the command to green; commit `feat(skills): fold advertised and library children into collections`.
 
 ### Task 2: Freeze exact child selection across view changes
 
@@ -69,11 +69,11 @@
 - Preserve pending operation keys `(scope, harness, slug)` and link/unlink values. Add `SkillGrid.pending_skill_intents() -> dict[tuple[str, str, str], SkillIntent]`.
 - Extend `restore_pending(..., *, intents=None)` compatibly; existing callers remain valid. Row refresh/regrouping must carry original metadata, not regenerate it against changed identities.
 
-- [ ] Write failing tests `test_parent_all_captures_hidden_supported_children`, `test_collapse_filter_and_late_snapshot_preserve_exact_intents`, and `test_new_advertisement_does_not_join_pending_all`. Assert exact operation keys, original selectors and scopes, no acquisition, correct mixed indicator and unchanged queue after a new child appears.
-- [ ] Add `test_revert_has_no_library_effect` and stale local/catalogue identity cases. Failed/removed selections must remain explicit pending failures rather than attach to a replacement row with the same slug. Preserve existing cross-scope pending semantics.
-- [ ] Run `uv run pytest -q tests/test_tui/test_skill_catalog_collections.py tests/test_tui/test_skill_grid_collections.py tests/test_tui/test_skill_catalog.py`; confirm the new pending-preservation tests fail.
-- [ ] Capture intent when controls queue work. Preserve metadata through inventory/worker refresh and regrouping; exclude unavailable/skipped/unmanaged cells. Keep parent operations over the observed member set and existing collapse/filter behavior.
-- [ ] Rerun to green; commit `fix(tui): preserve exact skill collection selection intents`.
+- [x] Write failing tests `test_parent_all_captures_hidden_supported_children`, `test_collapse_filter_and_late_snapshot_preserve_exact_intents`, and `test_new_advertisement_does_not_join_pending_all`. Assert exact operation keys, original selectors and scopes, no acquisition, correct mixed indicator and unchanged queue after a new child appears.
+- [x] Add `test_revert_has_no_library_effect` and stale local/catalogue identity cases. Failed/removed selections must remain explicit pending failures rather than attach to a replacement row with the same slug. Preserve existing cross-scope pending semantics.
+- [x] Run `uv run pytest -q tests/test_tui/test_skill_catalog_collections.py tests/test_tui/test_skill_grid_collections.py tests/test_tui/test_skill_catalog.py`; confirm the new pending-preservation tests fail.
+- [x] Capture intent when controls queue work. Preserve metadata through inventory/worker refresh and regrouping; exclude unavailable/skipped/unmanaged cells. Keep parent operations over the observed member set and existing collapse/filter behavior.
+- [x] Rerun to green; commit `fix(tui): preserve exact skill collection selection intents`.
 
 ### Task 3: Apply selected acquisitions with collection-level failure isolation
 
@@ -85,13 +85,13 @@
 - Extend `resolve_catalog_skill` with an optional already-fetched snapshot while preserving its existing live-read default. Never interpret an error/absent subscription as a valid empty snapshot.
 - Preparation groups keys by normalized repository/ref/scope and blocks all requested keys in a failed unit; it retains acquired content and does not project. App integration handles projection from actual acquired/scoped entries only, batching all requested harness sets for each unit in one existing transaction.
 
-- [ ] Write failing tests `test_all_fetches_catalog_once_and_acquires_only_selected_children`, `test_one_failed_acquisition_leaves_collection_enablement_unchanged`, and `test_unrelated_collection_can_succeed`. Assert retained safe library acquisitions, exact unchanged old exposure for the failed unit, and failed intents retained.
-- [ ] Add stale subscription URL/ref, removed/changed selected child, alias/slug conflict, root/nested refusal and foreign destination cases. Invalid metadata/preflight must refuse before relevant acquisition/projection; catalogue outages must not block local-only changes.
-- [ ] Add `test_projection_failure_restores_all_requested_harnesses_and_retry_succeeds`: force an owned projection failure after an earlier target write, verify journal recovery preserves old links/records and unrelated work, correct the failure and retry without advancing HEAD/reacquiring backing.
-- [ ] Run `uv run pytest -q tests/test_tui/test_skill_catalog_collections.py tests/test_tui/test_skill_catalog.py tests/test_cli/test_skill_collection_recovery.py tests/test_cli/test_skill_collection_review_regressions.py`; confirm new failure-boundary tests fail.
-- [ ] Implement one-snapshot preparation, exact intent validation, selected acquisition and per-unit failure bookkeeping. Before exposing anything, form desired sets from current actual records plus the original explicit operations. Do not materialize unselected advertisements. Preserve failed queues after refresh; report retained library acquisitions separately from exposure outcomes.
-- [ ] Ensure singleton selected children and multiple harnesses obey the same failure contract without inventing virtual persisted parents or rewriting private backing. Preserve standalone/legacy engine paths where no catalogue collection is involved.
-- [ ] Rerun to green; commit `fix(skills): isolate catalog collection apply failures`.
+- [x] Write failing tests `test_all_fetches_catalog_once_and_acquires_only_selected_children`, `test_one_failed_acquisition_leaves_collection_enablement_unchanged`, and `test_unrelated_collection_can_succeed`. Assert retained safe library acquisitions, exact unchanged old exposure for the failed unit, and failed intents retained.
+- [x] Add stale subscription URL/ref, removed/changed selected child, alias/slug conflict, root/nested refusal and foreign destination cases. Invalid metadata/preflight must refuse before relevant acquisition/projection; catalogue outages must not block local-only changes.
+- [x] Add `test_projection_failure_restores_all_requested_harnesses_and_retry_succeeds`: force an owned projection failure after an earlier target write, verify journal recovery preserves old links/records and unrelated work, correct the failure and retry without advancing HEAD/reacquiring backing.
+- [x] Run `uv run pytest -q tests/test_tui/test_skill_catalog_collections.py tests/test_tui/test_skill_catalog.py tests/test_cli/test_skill_collection_recovery.py tests/test_cli/test_skill_collection_review_regressions.py`; confirm new failure-boundary tests fail.
+- [x] Implement one-snapshot preparation, exact intent validation, selected acquisition and per-unit failure bookkeeping. Before exposing anything, form desired sets from current actual records plus the original explicit operations. Do not materialize unselected advertisements. Preserve failed queues after refresh; report retained library acquisitions separately from exposure outcomes.
+- [x] Ensure singleton selected children and multiple harnesses obey the same failure contract without inventing virtual persisted parents or rewriting private backing. Preserve standalone/legacy engine paths where no catalogue collection is involved.
+- [x] Rerun to green; commit `fix(skills): isolate catalog collection apply failures`.
 
 ### Task 4: Catalogue-independent Git checks, references and final gates
 
@@ -99,19 +99,19 @@
 
 **Interfaces:** Preserve `check_skills(...) -> list[dict]`, `read_check(...) -> dict | None`, check JSON/cache schema and existing command flags. Reuse `catalog_skill_info(...)` compatibly or split its Git-only subsection behind a small helper; catalogue-free rows must not acquire a fictitious catalogue label.
 
-- [ ] Write failing tests `test_check_named_and_default_git_library_without_catalog`, `test_check_missing_or_non_git_backing_is_not_clean`, and `test_info_without_catalog_shows_local_revision_and_observation`. Assert explicit/default scope, preserved files/HEAD, actual backing, timestamps/commands and no catalogue dependency.
-- [ ] Cover SHA pins, private/central backing, origin mismatch, shared-parent query batching, stale observations after identity/HEAD change and failed probes replacing old green results. Keep existing catalogue check tests intact.
-- [ ] Run `uv run pytest -q tests/test_cli/test_skill_check_library.py tests/test_cli/test_skill_catalog_check.py tests/test_tui/test_skill_catalog.py`; confirm the new non-catalogue tests fail.
-- [ ] Remove provenance as a Git-check eligibility gate, retain recorded-selector/origin validation and honest revision semantics, and expose Git information without a catalogue association. Update CLI help/empty results and current docs for expansion, All semantics, retained acquisition on failure, and explicit Git checks. State the existing deletion-safety limitation without claiming it repaired.
-- [ ] Rerun focused tests to green; commit `feat(skills): check Git library revisions independently of catalog`.
-- [ ] Run clean-baseline/full regression gates as applicable: `uv sync --all-extras`, `uv run pytest -q`, `make docs-build`, `uv build`, `git diff --check`. Inspect outputs and record actual counts/source/wheel hash; do not claim tests/builds that were not run.
-- [ ] Review the whole diff against the design and five Review Focus cases; use independent review only with user authorization. Address findings with regression tests. Confirm original checkout, old demo, live HOME/config/assets and separate multi-kind design unchanged by this branch. Commit any final docs/test corrections conventionally; no merge/release/install.
+- [x] Write failing tests `test_check_named_and_default_git_library_without_catalog`, `test_check_missing_or_non_git_backing_is_not_clean`, and `test_info_without_catalog_shows_local_revision_and_observation`. Assert explicit/default scope, preserved files/HEAD, actual backing, timestamps/commands and no catalogue dependency.
+- [x] Cover SHA pins, private/central backing, origin mismatch, shared-parent query batching, stale observations after identity/HEAD change and failed probes replacing old green results. Keep existing catalogue check tests intact.
+- [x] Run `uv run pytest -q tests/test_cli/test_skill_check_library.py tests/test_cli/test_skill_catalog_check.py tests/test_tui/test_skill_catalog.py`; confirm the new non-catalogue tests fail.
+- [x] Remove provenance as a Git-check eligibility gate, retain recorded-selector/origin validation and honest revision semantics, and expose Git information without a catalogue association. Update CLI help/empty results and current docs for expansion, All semantics, retained acquisition on failure, and explicit Git checks. State the existing deletion-safety limitation without claiming it repaired.
+- [x] Rerun focused tests to green; commit `feat(skills): check Git library revisions independently of catalog`.
+- [x] Run clean-baseline/full regression gates as applicable: `uv sync --all-extras`, `uv run pytest -q`, `make docs-build`, `uv build`, `git diff --check`. Inspect outputs and record actual counts/source/wheel hash; do not claim tests/builds that were not run.
+- [x] Review the whole diff against the design and five Review Focus cases; use independent review only with user authorization. Address findings with regression tests. Confirm original checkout, old demo, live HOME/config/assets and separate multi-kind design unchanged by this branch. Commit any final docs/test corrections conventionally; no merge/release/install.
 
 ## Handoff and status
 
 - [x] Feasibility checked against canonical 6.1.0; approved behavior and failure unit recorded.
 - [x] Plan self-reviewed for spec coverage, interface consistency, identity/ownership hazards and scope boundaries.
-- [ ] AJ reviews the written plan and confirms native execution (same-session implementation); independent whole-branch review requires authorization.
-- [ ] Establish clean local baseline, then execute tasks 1–4 with RED/GREEN evidence and commits.
+- [x] AJ reviews the written plan and confirms native execution (same-session implementation); independent whole-branch review requires authorization.
+- [x] Establish clean local baseline, then execute tasks 1–4 with RED/GREEN evidence and commits.
 
 The separate active-consumer library-removal defect remains recorded, not hidden or fixed by this plan. Any expansion into its deletion-policy redesign or the multi-kind proposal must be raised before implementation.

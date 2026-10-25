@@ -1,6 +1,6 @@
 # Expanded skill catalogue collections
 
-Date: 2026-10-25. Scope and failure policy approved by AJ in conversation; implementation plan pending review.
+Date: 2026-10-25. Scope, plan and failure policy approved by AJ. Implemented on `feat/catalog-collections`; independently reviewed, consequential findings fixed and verified. Not merged, released or installed live.
 Baseline: canonical GitHub `origin/main`, `74a41448cab89586fc4b048bd4d423da455e61a1` (6.1.0).
 
 ## Intent
