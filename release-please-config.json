@@ -4,7 +4,14 @@
   "packages": {
     ".": {
       "package-name": "agent-toolkit",
-      "include-component-in-tag": false
+      "include-component-in-tag": false,
+      "extra-files": [
+        {
+          "type": "toml",
+          "path": "uv.lock",
+          "jsonpath": "$.package[?(@.name=='agent-toolkit' || @.name.value=='agent-toolkit')].version"
+        }
+      ]
     }
   },
   "include-v-in-tag": true,

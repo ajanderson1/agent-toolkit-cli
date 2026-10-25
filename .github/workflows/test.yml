@@ -16,5 +16,5 @@ jobs:
           node-version: '24'
       - name: Install pinned native Pi oracle (no lifecycle scripts)
         run: npm install --global @earendil-works/pi-coding-agent@1.4.0 --ignore-scripts --no-audit --no-fund
-      - run: uv sync --all-extras
+      - run: uv sync --locked --all-extras
       - run: uv run pytest -q
