@@ -5,6 +5,14 @@ harnesses: Skills, Agents, Commands, Instructions, Pi extensions and MCP servers
 Bundles is a separate installation utility, not a seventh kind. Canonical CLI
 groups are plural; singular aliases remain accepted.
 
+## Terminology — read first
+
+Read [GLOSSARY.md](GLOSSARY.md) before discussing, documenting or changing lifecycle
+behavior. **Add/remove** means global library membership; **enable/disable** means
+harness exposure. Use those terms in explanations, not install/uninstall. Preserve
+exact shipped command tokens in runnable examples and distinguish per-kind
+exceptions; terminology does not imply an unimplemented CLI rename.
+
 ## Source of truth
 
 This checkout and `https://github.com/ajanderson1/agent-toolkit-cli` are the

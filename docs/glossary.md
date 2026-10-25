@@ -1,6 +1,8 @@
 # Glossary
 
 Vocabulary shared by the [matrix](matrix.md), harness pages and asset guides.
+The repository's [GLOSSARY.md](https://github.com/ajanderson1/agent-toolkit-cli/blob/main/GLOSSARY.md)
+is authoritative for product terminology; this page adds implementation detail.
 
 ## Verb model { #verb-model }
 
@@ -8,12 +10,18 @@ For **source-backed kinds**, two separate axes matter:
 
 | Axis | Add | Take away | Effect |
 |---|---|---|---|
-| Library membership | `add` | `remove` | Register/delete canonical source and its library record; removal can destroy local work. |
-| Harness visibility | `install` | `uninstall` | Project/retract an asset in a selected harness/scope; uninstall keeps the library source. |
+| Global library membership | **add** | **remove** | Register/remove canonical source and its library record; removal can destroy local work. |
+| Harness exposure | **enable** | **disable** | Project/retract an asset in a selected harness/scope; disabling keeps the library source. |
 
-**Exceptions:** Instructions has no source library or installation lock, only user-owned canonical content and pointer operations. MCP add authors a global manifest entry; MCP remove removes locked projections at the selected scope but **keeps library membership/files**. Bundles is a utility with install/validate, not a seventh kind. Verbs and flags are not uniform: see the [CLI reference](agent-toolkit/cli.md).
+Use **add/remove** for global library membership and **enable/disable** for harness
+exposure in explanations. Current source-backed CLI commands spell exposure
+operations `install`/`uninstall`; retain those exact tokens in runnable examples,
+without treating them as the product vocabulary. This does not introduce new CLI
+verbs or aliases.
 
-`update` refreshes source (merge-aware for skills/agents/Git Pi extensions; Commands has its own update behavior; MCP re-resolves and re-projects). `push` publishes owned source edits, normally through a PR. `reset` can discard local Git work; it is **not** a synonym for rebuilding visibility. `status` inspects; doctor behavior depends on kind. A proposed enable/disable naming scheme is [unshipped](agent-toolkit/roadmap.md#verb-remap-enable-disable-for-projection).
+**Exceptions:** Instructions has no source library or installation lock, only user-owned canonical content and pointer operations. MCP `add` authors a global manifest entry; the current MCP `remove` command retracts scoped projections but **keeps library membership/files**. Native Pi npm has no Toolkit library registry: `add`/`install` downloads/configures packages and may activate resources, `remove`/`uninstall` removes the scoped installation/declaration, and `enable`/`disable` changes extension filters while retaining files. Bundles is a utility with `install`/`validate`, not a seventh kind. Verbs and flags are not uniform: see the [CLI reference](agent-toolkit/cli.md).
+
+`update` refreshes source (merge-aware for skills/agents/Git Pi extensions; Commands has its own update behavior; MCP re-resolves and re-projects). `push` publishes owned source edits, normally through a PR. `reset` can discard local Git work; it is **not** a synonym for rebuilding visibility. `status` inspects; doctor behavior depends on kind. Enable/disable is the product terminology; a CLI command rename remains [unshipped](agent-toolkit/roadmap.md#verb-remap-enable-disable-for-projection).
 
 ## Core model
 
@@ -30,7 +38,7 @@ For **source-backed kinds**, two separate axes matter:
 :   Code/internal shorthand for asset type.
 
 **Collection** { #collection }
-:   A derived source/ref group of real skill children. The TUI parent is not an installable skill or extra lock entry; controls include full membership even when children are collapsed/filter-hidden.
+:   A derived source/ref group of real skill children. The TUI parent is not a separate skill to enable or an extra lock entry; controls include full membership even when children are collapsed/filter-hidden.
 
 ## Conventions and storage
 
@@ -53,13 +61,13 @@ For **source-backed kinds**, two separate axes matter:
 :   A real skill subpath in a shared repository checkout. `parentUrl`/`skillPath` locate it; canonical usually symlinks into the parent. Ref and observed upstream SHA are different metadata, not interchangeable pins. [Details](agent-toolkit/skill-lock.md).
 
 **`_parents/` cache** { #parents-cache }
-:   Shared source/ref backing checkouts, normally `~/.agent-toolkit/skills/_parents/<owner>/<repo>[@<ref>]/`; projects use their separate external backing store. Referenced checkout history/index/local work is not disposable cache noise.
+:   Shared source/ref backing checkouts, normally `~/.agent-toolkit/skills/_parents/<owner>/<repo>[@<ref>]/`. New projects share central library backing by default; recorded legacy private backing remains supported. Referenced checkout history/index/local work is not disposable cache noise.
 
 **Owned / read-only (monorepo)** { #owned }
 :   Publishing permission classification: recognized owned owner or explicit `--owned` allows subpath-only PR publishing; `readOnly: true` refuses push. Update still merges rather than intentionally discarding local work.
 
 **Scope** { #scope }
-:   Global user-level visibility versus one consumer project's visibility. Defaults vary by verb; [scope rules](agent-toolkit/cli.md#scope-and-target-selection). A Git repository alone does not establish the default.
+:   Global user-level exposure versus one consumer project's exposure; neither is library membership. Defaults vary by verb; [scope rules](agent-toolkit/cli.md#scope-and-target-selection). A Git repository alone does not establish the default.
 
 **General** { #general }
 :   Older terminology for shared convergence placement. The CLI token is `standard`, not `general` or `universal`.

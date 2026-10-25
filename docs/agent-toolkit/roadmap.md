@@ -49,10 +49,12 @@ installable bundle members today. See [bundle limits](bundles.md).
 
 ### Verb remap: `enable`/`disable` for projection { #verb-remap-enable-disable-for-projection }
 
-**Idea, not committed or implemented.** The proposal would rename the projection
-axis from install/uninstall to enable/disable while retaining add/remove for
-library membership. Compatibility aliases, clarity and migration cost would need
-a separate decision. Current scripts must continue using shipped verbs.
+**Product terminology is enable/disable for harness exposure and add/remove for
+global library membership.** See the [glossary](../glossary.md#verb-model).
+Renaming the source-backed CLI commands from `install`/`uninstall` to
+`enable`/`disable` remains unimplemented. Compatibility aliases and migration
+require separate implementation work. Current scripts must continue using shipped
+command spellings; they do not redefine the product vocabulary.
 
 ### Other open questions
 

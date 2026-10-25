@@ -12,16 +12,37 @@ The toolkit creates symlinks, translates Markdown, or edits named configuration 
 
 [Documentation](https://ajanderson1.github.io/agent-toolkit-cli/) · [Compatibility matrix](docs/matrix.md) · [CLI reference](docs/agent-toolkit/cli.md) · [TUI reference](docs/agent-toolkit/tui.md)
 
+## What's new in 7.0
+
+- **Expandable skill collections:** advertised and acquired children of the same Git repository/ref appear together. Browsing does not download skill content; explicit enablement acquires only selected missing children.
+- **Safer queued changes:** collection selections retain their original identities across refreshes, filters and collapse. Apply isolates failures by collection and scope, retaining safely acquired library content for retry.
+- **Precise Git state:** child clean/dirty badges inspect their own directories; parent badges describe the whole checkout. Explicit `skills check` works for registered Git-backed skills without requiring a catalogue subscription.
+- **Pinned reset support:** force reset restores the configured commit pin, tag or latest fetched branch tip—not an invented `origin/<SHA>` branch.
+
+The catalogue remains optional and currently supports **Skills only**. Existing command spellings remain supported: **add/remove** describe library membership; **enable/disable** describe harness exposure, currently spelled `install`/`uninstall` for source-backed kinds. Version 7.0 does not introduce that proposed CLI rename.
+
+[Full changelog](CHANGELOG.md) · [Release assets and receipts](https://github.com/ajanderson1/agent-toolkit-cli/releases/tag/v7.0.0)
+
 ## Installation
 
 Requires **Python 3.12+**, [uv](https://docs.astral.sh/uv/) and Git. Install the **toolkit package** (both binaries):
 
 ```bash
-uv tool install --from git+https://github.com/ajanderson1/agent-toolkit-cli agent-toolkit
+uv tool install --from git+https://github.com/ajanderson1/agent-toolkit-cli@v7.0.0 agent-toolkit
 agent-toolkit-cli --version
 ```
 
-This tracks the repository's default branch. For an immutable release, append its tag to the Git URL. Verified wheel/sdist assets are available on [GitHub Releases](https://github.com/ajanderson1/agent-toolkit-cli/releases); no PyPI publication is configured. The incompatible pre-v2 commands remain frozen at `v1.0.0`; see [legacy installation](docs/agent-toolkit/cli.md#pre-v2-surface).
+This selects the tagged release rather than a moving development branch. To upgrade an existing installation to this release:
+
+```bash
+uv tool install --force --from git+https://github.com/ajanderson1/agent-toolkit-cli@v7.0.0 agent-toolkit
+agent-toolkit-cli --version
+agent-toolkit-tui --version
+```
+
+Restart an already-running TUI after upgrading. For development builds, omit `@v7.0.0` to use the repository's default branch.
+
+Verified wheel/sdist assets, `SHA256SUMS` and a source-commit/artifact receipt are available on [GitHub Releases](https://github.com/ajanderson1/agent-toolkit-cli/releases). Verify the checksums before installing a downloaded wheel; identify builds by commit and wheel SHA-256, not version alone. No PyPI publication is configured. The incompatible pre-v2 commands remain frozen at `v1.0.0`; see [legacy installation](docs/agent-toolkit/cli.md#pre-v2-surface).
 
 ## Quickstart
 
@@ -29,7 +50,7 @@ This tracks the repository's default branch. For an immutable release, append it
 # 1. Add source to the library — does not make it visible to a harness.
 agent-toolkit-cli skills add anthropics/skills --skill pdf
 
-# 2. Install a projection in the current project; the library remains separate.
+# 2. Enable it in the current project (the shipped command is install).
 agent-toolkit-cli skills install pdf --agents claude-code --scope project
 agent-toolkit-cli skills list -p
 
@@ -46,9 +67,12 @@ Choose scope explicitly in scripts. Defaults differ across kinds and verbs: a Gi
 agent-toolkit-cli skills add --source owner/repo --ref main
 agent-toolkit-cli skills install --source owner/repo --agents standard --scope global
 
-# Inspect local edits, merge upstream, then publish an owned skill through a PR.
+# Inspect local edits and explicitly check upstream, then merge updates.
 agent-toolkit-cli skills status pdf -g
+agent-toolkit-cli skills check pdf -g
 agent-toolkit-cli skills update pdf -g
+
+# Publish an owned skill through a PR; third-party read-only sources refuse push.
 agent-toolkit-cli skills push my-owned-skill -g
 
 # Share an existing user-authored project AGENTS.md with Claude Code.
@@ -60,7 +84,32 @@ agent-toolkit-cli mcps --help
 agent-toolkit-cli bundles --help
 ```
 
-Canonical groups are `skills`, `agents`, `commands`, `instructions`, `pi-extensions`, `mcps`, and `bundles`; singular aliases still work. `uninstall` removes visibility without forgetting source-backed library content; `remove` can delete that content. **MCP is an exception:** remove retains its library manifest and files. See the [verb model](docs/glossary.md#verb-model), [six asset guides](docs/index.md#asset-types), and [skill ownership workflow](docs/agent-toolkit/skill-lock.md).
+### Optional shared skill catalogue
+
+Subscribe to a publisher's Git catalogue, replacing the example URL and `KEY` with its values:
+
+```bash
+agent-toolkit-cli skills catalog subscribe ssh://git@git.example.org/team/skill-catalog.git --ref main
+agent-toolkit-cli skills catalog list
+agent-toolkit-cli skills catalog add KEY
+agent-toolkit-cli skills catalog enable KEY --scope project --agents claude-code
+```
+
+`add` acquires library content without enabling it. Explicit catalogue `enable` can also acquire a missing selected skill before creating its harness exposure. The TUI provides the same workflow: expand a collection, press **Space** to queue changes, **Ctrl+S** to Apply, **Ctrl+Z** to Revert, and **i** for Info. Upstream checks and updates remain CLI-only.
+
+Listing refreshes fetch the catalogue, not its advertised asset repositories. A failed refresh hides catalogue-only offers with a warning rather than showing stale listings; acquired skills remain usable. Disabling, publisher delisting or `skills catalog unsubscribe` does not delete acquired content. Unsubscribing does not retract existing exposure. [Catalogue format and lifecycle](docs/asset-types/skills.md#optional-shared-git-catalog).
+
+### Discarding local Git work
+
+Use this only when you intend to discard local commits and tracked edits:
+
+```bash
+agent-toolkit-cli skills reset SLUG -g --force
+```
+
+**For a shared monorepo, this resets the entire parent checkout, including sibling skills.** A commit pin stays at that exact commit; a branch uses its latest fetched tip. Reset does not run `git clean` or purge unrelated untracked files. Normal `update` merges instead of intentionally discarding edits. A clean working tree does not mean it is the latest upstream revision.
+
+Canonical groups are `skills`, `agents`, `commands`, `instructions`, `pi-extensions`, `mcps`, and `bundles`; singular aliases still work. For source-backed kinds, `uninstall` disables harness exposure without forgetting library content; `remove` can delete that content. **MCP is an exception:** remove retains its library manifest and files. See the [verb model](docs/glossary.md#verb-model), [six asset guides](docs/index.md#asset-types), and [skill ownership workflow](docs/agent-toolkit/skill-lock.md).
 
 ## Configuration
 
