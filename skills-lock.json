@@ -1,10 +1,46 @@
 {
   "version": 1,
   "skills": {
+    "frontend-design": {
+      "source": "anthropics/skills",
+      "sourceType": "github",
+      "ref": "dbd4588f9e1033efb41dad4bef2f7947c8993d44",
+      "skillPath": "skills/frontend-design",
+      "parentUrl": "https://github.com/anthropics/skills",
+      "readOnly": true,
+      "catalog": {
+        "url": "ssh://gitlab@broadpeak.tailbf2225.ts.net:2424/ajanderson/skill-catalog.git",
+        "key": "frontend-design",
+        "source": "https://github.com/anthropics/skills",
+        "path": "skills/frontend-design",
+        "ref": "dbd4588f9e1033efb41dad4bef2f7947c8993d44"
+      },
+      "projectBacking": "central"
+    },
+    "skill-creator": {
+      "source": "anthropics/skills",
+      "sourceType": "github",
+      "ref": "dbd4588f9e1033efb41dad4bef2f7947c8993d44",
+      "skillPath": "skills/skill-creator",
+      "upstreamSha": "dbd4588f9e1033efb41dad4bef2f7947c8993d44",
+      "parentUrl": "https://github.com/anthropics/skills",
+      "readOnly": true,
+      "catalog": {
+        "url": "ssh://gitlab@broadpeak.tailbf2225.ts.net:2424/ajanderson/skill-catalog.git",
+        "key": "skill-creator",
+        "source": "https://github.com/anthropics/skills",
+        "path": "skills/skill-creator",
+        "ref": "dbd4588f9e1033efb41dad4bef2f7947c8993d44"
+      },
+      "projectBacking": "central"
+    },
     "skills-workflow": {
       "source": "ajanderson1/skills-workflow",
       "sourceType": "github",
-      "skillPath": "SKILL.md"
+      "ref": "main",
+      "skillPath": "SKILL.md",
+      "upstreamSha": "81a43526a5ef8cde167e81d9a101c0bdd00aa3e1",
+      "localSha": "81a43526a5ef8cde167e81d9a101c0bdd00aa3e1"
     }
   }
 }
