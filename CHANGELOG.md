@@ -1,5 +1,35 @@
 # Changelog
 
+## [7.0.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v6.1.0...v7.0.0) (2026-10-25)
+
+
+### Features
+
+* **skills:** check Git library revisions independently of catalog ([9d5f24f](https://github.com/ajanderson1/agent-toolkit-cli/commit/9d5f24f49766ef2743138b5ff5794591fc708eba))
+* **skills:** fold advertised and library children into collections ([14ad844](https://github.com/ajanderson1/agent-toolkit-cli/commit/14ad844dd18fd79790e6f4ede20d8fab09b37390))
+* **skills:** merge expanded catalog collections ([79caf00](https://github.com/ajanderson1/agent-toolkit-cli/commit/79caf00deeb1092c3087d1e177e20f42486b55d0))
+
+
+### Bug Fixes
+
+* **skills:** honor pinned resets and isolate child dirty state ([16bc02c](https://github.com/ajanderson1/agent-toolkit-cli/commit/16bc02c278238a3894f4c9bc6a063855e0a85220))
+* **skills:** isolate catalog collection apply failures ([bed75d6](https://github.com/ajanderson1/agent-toolkit-cli/commit/bed75d6d65d72c4dc2accf01565d15238bb54aab))
+* **skills:** journal preserved canonical collection projections ([cea677c](https://github.com/ajanderson1/agent-toolkit-cli/commit/cea677c6fa73c3cdbfe4a679357e550e576c9ff2))
+* **tui:** preserve exact skill collection selection intents ([f0ce2e7](https://github.com/ajanderson1/agent-toolkit-cli/commit/f0ce2e7b647018b01f4a5387e3fbc0539c9dbb84))
+
+
+### Documentation
+
+* **catalog:** plan expandable advertised skill collections ([05c930a](https://github.com/ajanderson1/agent-toolkit-cli/commit/05c930a162f6028cc25706eb4f4d8db903ce1ce6))
+* **catalog:** record collection verification and review ([f76837f](https://github.com/ajanderson1/agent-toolkit-cli/commit/f76837fab743bf86f7d18832090b0c2b7d44dfe5))
+* **catalog:** specify agents commands and Pi extension discovery ([5875b54](https://github.com/ajanderson1/agent-toolkit-cli/commit/5875b5426e28e6ecc46c3a9e4818db228a1dd899))
+* explain 7.0 collections, lifecycle terms and upgrades ([d2519be](https://github.com/ajanderson1/agent-toolkit-cli/commit/d2519beeec5b3afab1fe3ca1c3e6139525b7d7d0))
+
+
+### Build
+
+* **release:** synchronize root lock versions through ReleasePlease ([f3e1b13](https://github.com/ajanderson1/agent-toolkit-cli/commit/f3e1b13eba061ebd53c7fb8d848fd1ec976fb0e8))
+
 ## [6.1.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v6.0.0...v6.1.0) (2026-10-25)
 
 
