@@ -18,6 +18,61 @@ agent-toolkit-cli skills uninstall my-skill --scope project --agents standard
 
 Scope defaults differ by verb; add/remove/import are library-only. Read/update/push/reset/doctor scope depends on the skills project lock; install/uninstall default global except for detected Paperclip companies. [Exact flags and defaults](../agent-toolkit/cli.md#scope-and-target-selection).
 
+## Optional shared Git catalog
+
+Subscribe to one user-global Git catalog without downloading or enabling its skills:
+
+```bash
+agent-toolkit-cli skills catalog subscribe ssh://git@example-tailnet/org/skill-catalog.git --ref main
+agent-toolkit-cli skills catalog list
+agent-toolkit-cli skills list -g
+agent-toolkit-cli skills catalog add my-skill
+agent-toolkit-cli skills catalog enable my-skill --scope project --agents standard
+agent-toolkit-cli skills check -g
+agent-toolkit-cli skills catalog unsubscribe
+```
+
+`catalog add` acquires library content only; `catalog enable` also enables the
+explicit scope/harness targets. Existing `skills add` and `install` are unchanged.
+The subscription lives in `~/.agent-toolkit/config.json` under `skillCatalog`.
+No subscription means the existing CLI/TUI behavior with no catalog network calls.
+
+Each inventory load/explicit refresh reads a fresh catalog revision. If access
+fails or its manifest is invalid, catalog-only entries are hidden with a warning;
+no stale listing fallback is used. Downloaded library skills remain visible and
+usable. Removing a listing or subscription never deletes content or disables it.
+
+The catalog repository supplies `catalog.json` with `version: 1` and a `skills`
+array. Entries have a unique `key`, `description`, Git repository `source`, safe
+relative `path` (`.` for root), and optional branch/tag/commit `ref`. No payloads,
+credentials or activation state belong in the catalog. Nested children use their
+exact directory and existing shared-parent machinery. Matching source/path/ref
+reuses a library row; names alone never authorize replacement. Existing catalog
+provenance also retains that association when a listing's selector changes; the
+changed selector is reported rather than acquired a second time. In subscribed
+CLI inventory, global-only library candidates retain their actual global record
+scope rather than being labeled as project registrations. Explicit catalog
+acquisition records provenance, while browsing does not mutate library records.
+
+`skills check [SLUGS...] -g|-p [--json]` checks catalog-associated downloaded
+skills against their recorded upstream selector without updating content. Results
+are timestamped in a private `skills-update-checks.json` beside the global library
+lock, including observations keyed to individual project backings. This cache is
+not project configuration and is not transported when a project moves. Unequal
+commits mean the upstream revision differs, not proof of ancestry or a change in
+that particular monorepo child. Local changes are preserved. A failed check is
+unknown; changed local HEAD/source makes an old result stale. Fixed commit pins
+remain pinned. Checks work from recorded provenance even after unsubscription.
+
+TUI Info displays those observations and CLI guidance; the TUI does not check
+skill upstreams automatically or apply updates. Use `skills update SLUG -g|-p`
+where existing backing/scope support permits. Catalog refresh never changes an
+acquired source or ref. Doctor distinguishes catalog availability from local
+corruption; it never acquires, enables or updates because of a catalog listing.
+
+LiteLLM, well-known endpoints, multiple catalogs, automatic checks and automatic
+source/ref adoption are deliberately outside this feature.
+
 ## Collections and ownership
 
 Repository-wide add registers all real children (including a genuine root); explicit subpaths, `--skill NAME` or `--path PATH` select one. `--path` selects the recorded repository-relative directory even when its slug differs from its frontmatter name; `--path .` selects a real root. This is library-only registration and cannot be combined with `--source`, `--skill` or a source child selector. Absolute/traversal/escaping paths and conflicting source/ref/path/slug identities are refused; local Git repositories use `file://`. Parent checkouts are shared by source/ref under `skills/_parents/`. A TUI collection groups these real entries rather than introducing another kind or lock schema. Source-batch install uses persisted membership, not future upstream discovery.
