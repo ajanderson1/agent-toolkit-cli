@@ -28,6 +28,7 @@ class CatalogSnapshot:
     revision: str = ""
     skills: tuple[CatalogSkill, ...] = ()
     error: str | None = None
+    ref: str | None = None
 
 
 def write_json(path: Path, value: dict) -> None:
@@ -116,7 +117,7 @@ def fetch_catalog(url: str, ref: str | None = None) -> CatalogSnapshot:
             run_git(["fetch", "--quiet", "--depth=1", "--", parsed.url, selected], cwd=root)
             revision = run_git(["rev-parse", "FETCH_HEAD"], cwd=root)
             body = run_git(["show", "FETCH_HEAD:catalog.json"], cwd=root)
-            return CatalogSnapshot(url, revision, parse_catalog(json.loads(body)))
+            return CatalogSnapshot(url, revision, parse_catalog(json.loads(body)), ref=ref)
     except (ValueError, OSError, subprocess.SubprocessError) as exc:
         message = "catalog request timed out" if isinstance(exc, subprocess.TimeoutExpired) else "catalog unavailable or invalid; check access and catalog.json"
         return CatalogSnapshot("(invalid source)" if _has_credentials(url) else url, error=message)

@@ -7,6 +7,8 @@ import pytest
 from agent_toolkit_cli.skill_catalog import read_catalog, parse_catalog, CatalogSnapshot
 from agent_toolkit_tui.skill_state import build_skill_rows
 from agent_toolkit_tui.widgets.skill_grid import SkillGrid
+from agent_toolkit_tui.app import TUIApp
+from textual.coordinate import Coordinate
 from tests.test_cli.test_reground import sandbox, git, invoke
 from tests.test_cli.test_skill_catalog_acquire import subscribed
 
@@ -92,3 +94,61 @@ def test_individual_add_then_full_repo_add_folds_without_reacquisition(tmp_path,
     invoke('skills','remove','other','--force')
     offered = next(r for r in rows(sandbox, project) if r.slug=='other')
     assert offered.origin == 'catalog'
+
+
+@pytest.mark.asyncio
+async def test_parent_all_captures_hidden_supported_children(tmp_path, sandbox, monkeypatch):
+    upstream, cat = subscribed(tmp_path); advertise(cat, upstream)
+    monkeypatch.chdir(tmp_path)
+    async with TUIApp().run_test() as pilot:
+        app = pilot.app
+        await app.workers.wait_for_complete(); await pilot.pause()
+        grid = app.query_one(SkillGrid)
+        grid.set_filter('demo')
+        grid._toggle_at(Coordinate(0, 0))  # collapse does not narrow membership
+        grid._toggle_at(Coordinate(0, 1))
+        assert grid.pending_entries() == {('project','standard','demo'):'link',('project','standard','other'):'link'}
+        intents = grid.pending_skill_intents()
+        assert intents[('project','standard','other')].identity[2] == 'skills/other'
+        assert not (sandbox/'.agent-toolkit/skills-lock.json').exists()
+        app.action_revert()
+        assert not grid.pending_entries()
+        assert not grid.pending_skill_intents()
+        assert not (sandbox/'.agent-toolkit/skills-lock.json').exists()
+
+
+@pytest.mark.asyncio
+async def test_collapse_filter_and_late_snapshot_preserve_exact_intents(tmp_path, sandbox, monkeypatch):
+    upstream, cat = subscribed(tmp_path); advertise(cat, upstream)
+    monkeypatch.chdir(tmp_path)
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        await app.workers.wait_for_complete(); await pilot.pause()
+        grid = app.query_one(SkillGrid)
+        grid.cursor_to_cell(row_slug='demo',agent_name='standard'); grid.action_toggle_cell()
+        original = grid.pending_skill_intents()
+        assert original[('project','standard','demo')].identity[2]=='skills/demo'
+        grid.set_filter('other')
+        advertise(cat, upstream, ('other',))
+        app._refresh_skill_view()
+        await app.workers.wait_for_complete(); await pilot.pause()
+        assert grid.pending_entries()=={('project','standard','demo'):'link'}
+        assert grid.pending_skill_intents()==original
+        assert not (sandbox/'.agent-toolkit/skills-lock.json').exists()
+
+
+@pytest.mark.asyncio
+async def test_new_advertisement_does_not_join_pending_all(tmp_path, sandbox, monkeypatch):
+    upstream, cat = subscribed(tmp_path); advertise(cat, upstream)
+    monkeypatch.chdir(tmp_path)
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        await app.workers.wait_for_complete(); await pilot.pause()
+        grid = app.query_one(SkillGrid); grid._toggle_at(Coordinate(0, 1))
+        before = grid.pending_entries()
+        advertise(cat, upstream, ('demo','other','later'))
+        app._refresh_skill_view()
+        await app.workers.wait_for_complete(); await pilot.pause()
+        assert grid.pending_entries()==before
+        assert set(grid.pending_skill_intents())==set(before)
+        assert ('project','standard','later') not in grid.pending_entries()

@@ -64,6 +64,14 @@ class SkillCell:
     payload_missing: bool = False
 
 
+@dataclass(frozen=True)
+class SkillIntent:
+    identity: SkillIdentity
+    catalog_url: str | None = None
+    catalog_ref: str | None = None
+    catalog_item: CatalogSkill | None = None
+
+
 @dataclass
 class SkillRow:
     slug: str
@@ -427,7 +435,7 @@ def merge_catalog_rows(rows: list[SkillRow], snapshot: CatalogSnapshot, *, scope
         if matched is not None and matched in by_slug:
             row = by_slug[matched]
             index = result.index(row)
-            result[index] = replace(row, catalog_item=None if warning else item, catalog_url=snapshot.url, catalog_warning=warning)
+            result[index] = replace(row, catalog_item=None if warning else item, catalog_url=snapshot.url, catalog_ref=snapshot.ref, catalog_warning=warning)
             by_slug[row.slug] = result[index]
             continue
         if item.key in by_slug or warning:
@@ -436,7 +444,7 @@ def merge_catalog_rows(rows: list[SkillRow], snapshot: CatalogSnapshot, *, scope
                 result[result.index(row)] = replace(row, catalog_warning="Catalog identity conflicts with local backing; use CLI to inspect. Local content retained.")
             continue
         cells = {(agent, scope): _cell_for(item.key, agent, scope=scope, home=home, project=project) for agent in interactive_agents(selection)}
-        result.append(SkillRow(slug=item.key, source=item.source.url, ref=item.source.ref or "(default)", state="catalog", cells=cells, description=item.description, skill_path=item.source.subpath or ".", catalog_item=item, catalog_url=snapshot.url, origin="catalog", identity=identity))
+        result.append(SkillRow(slug=item.key, source=item.source.url, ref=item.source.ref or "(default)", state="catalog", cells=cells, description=item.description, skill_path=item.source.subpath or ".", catalog_item=item, catalog_url=snapshot.url, origin="catalog", identity=identity, catalog_ref=snapshot.ref))
     groups: dict[tuple[str, str | None], list[SkillRow]] = {}
     for row in result:
         if row.identity is not None and row.ref != "(untracked)":

@@ -38,7 +38,7 @@ from agent_toolkit_tui.display_names import (
     standard_column_header,
 )
 from agent_toolkit_tui.composition import skills_nonstandard_main
-from agent_toolkit_tui.skill_state import SkillRow
+from agent_toolkit_tui.skill_state import SkillRow, SkillIntent
 from agent_toolkit_tui.widgets._support import (
     adjust_source_column_width,
     set_source_column_width,
@@ -107,6 +107,7 @@ class SkillGrid(Vertical):
         # (scope, agent_name, slug) -> op
         self._pending: dict[tuple[str, str, str], Op] = {}
         self._catalog_pending: dict[tuple[str, str, str], tuple] = {}
+        self._skill_intents: dict[tuple[str, str, str], SkillIntent] = {}
         self._selection: tuple[str, ...] | None = None
         # Case-insensitive substring filter on slug (#249). "" = show all.
         self._filter: str = ""
@@ -139,7 +140,6 @@ class SkillGrid(Vertical):
 
     def set_rows(self, rows: list[SkillRow]) -> None:
         self._rows = sorted(rows, key=lambda r: r.slug)
-        self._pending.clear()
         try:
             table = self.query_one("#skill-table", DataTable)
         except Exception:
@@ -152,6 +152,9 @@ class SkillGrid(Vertical):
 
     def pending_entries(self) -> dict[tuple[str, str, str], Op]:
         return dict(self._pending)
+
+    def pending_skill_intents(self) -> dict[tuple[str, str, str], SkillIntent]:
+        return {key: value for key, value in self._skill_intents.items() if key in self._pending}
 
     def pending_catalog_entries(self) -> dict:
         return {key: value for key, value in self._catalog_pending.items() if self._pending.get(key) == "link"}
@@ -171,22 +174,34 @@ class SkillGrid(Vertical):
         rows = {r.slug: r for r in self._rows}
         for key, op in self._pending.items():
             row = rows.get(key[2])
+            if row is not None and row.identity is not None:
+                advertised = op == "link" and row.origin == "catalog"
+                self._skill_intents.setdefault(key, SkillIntent(
+                    row.identity,
+                    row.catalog_url if advertised else None,
+                    row.catalog_ref if advertised else None,
+                    row.catalog_item if advertised else None,
+                ))
             if op == "link" and row is not None and row.origin == "catalog" and row.catalog_item is not None:
                 self._catalog_pending.setdefault(key, (row.catalog_url, row.catalog_item))
         self._catalog_pending = {key: value for key, value in self._catalog_pending.items() if self._pending.get(key) == "link"}
+        self._skill_intents = {key: value for key, value in self._skill_intents.items() if key in self._pending}
         self.post_message(self.PendingChanged(len(self._pending)))
 
     def clear_pending(self) -> None:
         self._pending.clear()
         self._catalog_pending.clear()
+        self._skill_intents.clear()
         try:
             table = self.query_one("#skill-table", DataTable)
             self._rebuild(table)
         except Exception:
             pass
 
-    def restore_pending(self, pending: dict[tuple[str, str, str], Op]) -> None:
+    def restore_pending(self, pending: dict[tuple[str, str, str], Op], *, intents: dict[tuple[str, str, str], SkillIntent] | None = None) -> None:
         self._pending.update(pending)
+        if intents is not None:
+            self._skill_intents.update({key: value for key, value in intents.items() if key in pending})
         try:
             table = self.query_one("#skill-table", DataTable)
             self._rebuild(table)
