@@ -1,5 +1,12 @@
 # Changelog
 
+## [7.1.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v7.0.1...v7.1.0) (2026-10-26)
+
+
+### Features
+
+* **cli:** ship short commands, self-updates and shell completion ([82bfe43](https://github.com/ajanderson1/agent-toolkit-cli/commit/82bfe436bf5ca53368ff0b4aec150f2bb81c62a2))
+
 ## [7.0.1](https://github.com/ajanderson1/agent-toolkit-cli/compare/v7.0.0...v7.0.1) (2026-10-26)
 
 
