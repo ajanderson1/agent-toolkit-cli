@@ -37,7 +37,7 @@ fanout is authorized or needed.
 6. [x] Update current CLI/TUI/asset docs and the separate catalogue guide; preserve
    every existing key/source/path/ref if converting its manifest to version 2. No
    new upstream assets are silently admitted merely to demonstrate the feature.
-7. [ ] Run focused CLI/TUI regressions, full pytest, strict docs, wheel build and
+7. [x] Run focused CLI/TUI regressions, full pytest, strict docs, wheel build and
    disposable installed-artifact smoke checks. Record commit/artifact identity;
    inspect final diffs and leave a clear local handoff without pushing or deploying.
 
@@ -67,4 +67,7 @@ backing. Catalogue entry removal leaves acquired library content/exposure intact
   reports zero new/changed selectors. No historical quality approvals were invented.
 - Publication gate requires full reviewed Git commit pins; one version is selected
   per npm package identity, avoiding ambiguous duplicate native inventory rows.
-- Wheel/source identity and installed-artifact smoke are the remaining check.
+- `uv build` and the disposable installed-wheel smoke passed. Exact source commit,
+  SHA-256, test logs and remaining limits are recorded in
+  `../reviews/2026-10-26-multi-kind-catalog-verification.md`. Both local feature
+  branches are ready for review; nothing was published, deployed or merged into CLI main.
