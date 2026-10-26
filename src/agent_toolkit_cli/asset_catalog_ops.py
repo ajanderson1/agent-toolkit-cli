@@ -87,14 +87,17 @@ def validate_pi_content(canonical):
             continue
         tree[relative.as_posix()] = ("120000" if path.is_symlink() else
             "040000" if path.is_dir() else "100644" if path.is_file() else "unsupported")
-    package = {}
-    if "package.json" in tree:
-        _regular_entry(tree, "package.json")
-        package = json.loads((canonical / "package.json").read_text())
-        if not isinstance(package, dict):
-            raise ValueError("invalid Pi package.json")
+    def read_package(relative):
+        _regular_entry(tree, relative)
+        path = canonical / relative
+        if path.stat().st_size > 1024 * 1024:
+            raise ValueError("Pi package manifest is too large")
+        return json.loads(path.read_text())
+    package = read_package("package.json") if "package.json" in tree else {}
+    if not isinstance(package, dict):
+        raise ValueError("invalid Pi package.json")
     files = {name for name, mode in tree.items() if mode == "100644"}
-    for relative in _pi_entries(files, package):
+    for relative in _pi_entries(files, package, tree=tree, read_package=read_package):
         _regular_entry(tree, relative)
 
 
