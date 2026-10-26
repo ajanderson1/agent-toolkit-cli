@@ -65,7 +65,13 @@ maintenance. Catalogue Add/Enable does not install npm packages, and no Toolkit 
 lock is created. Use ordinary native enable/disable controls after installation.
 
 Git Pi catalogue actions validate regular entrypoints and safe declared paths before
-registration and on reuse, without executing extension code. A rejected fresh
+registration and on reuse, without executing extension code. Directory declarations
+in `pi.extensions` are supported: a directory's manifest or `index.ts` (preferred
+over `index.js`) takes precedence; otherwise discovery selects immediate `.ts`/`.js`
+files and child directories with their own index/manifest, not arbitrary deep files.
+Nested manifests are read as bounded JSON data. Unsafe paths, selected symlinks,
+cyclic directory declarations and unsupported nested-manifest glob/override syntax
+are refused rather than followed or silently assumed safe. A rejected fresh
 checkout can remain unregistered for inspection; validation does not discard
 preexisting edits or commits.
 
