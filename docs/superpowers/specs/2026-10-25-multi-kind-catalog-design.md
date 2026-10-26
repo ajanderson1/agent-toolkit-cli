@@ -34,7 +34,9 @@ explicit exception, not a Toolkit library registration.
 - One user-global subscription, shared across projects and the four kinds.
 - Live, read-only discovery in CLI and existing per-kind TUI grids.
 - Exact source matching, clear provenance and safe explicit acquisition.
-- Preserve 6.1.0 skills behavior, command syntax, configuration and acquired data.
+- Preserve acquired data and existing lifecycle semantics. Older clients and
+  catalogue formats are not compatibility requirements: AJ controls all consumer
+  environments and can require an update.
 - Cover both Git-backed and native npm Pi extensions, without inventing an npm
   library or treating package installation as an exposure-only operation.
 - Preserve local work, existing scope/backing, pins and unsupported-adapter limits.
@@ -42,14 +44,15 @@ explicit exception, not a Toolkit library registration.
 Not included: MCPs, Instructions, bundle cataloguing, multiple catalogues,
 project-specific subscriptions, full-text remote search, automatic updates,
 background upstream checks, source adoption, dependency solving, CLI lifecycle
-renames or a new TUI screen. No host access or catalogue hosting changes.
+renames or a new TUI screen. No host access or catalogue hosting changes. No
+older-client support or staged rollout/rollback plan is required.
 
 A technically working implementation is still a failure if browsing acquires
 assets, enabling silently updates existing Git backing, npm rows recreate retired
 Toolkit registrations, or catalogue metadata becomes authority to replace local
 content or activate unsupported harnesses.
 
-## Shared subscription and compatibility
+## Shared subscription
 
 Retain the existing `skillCatalog` configuration key and its URL/ref shape for
 this increment. Its historical name is an implementation compatibility detail;
@@ -78,11 +81,10 @@ without labeling catalogue-only rows as local library records.
 
 ## Manifest
 
-Read both the existing version 1 skill manifest and a new version 2 manifest.
-Normalize version 1 entries internally as `kind: skill`, `sourceType: git`.
-Version 1's validation and skills-only meaning stay unchanged.
-
-Version 2 uses `entries`; there is no parallel `skills` array:
+Use a version 2 manifest with typed `entries`; there is no parallel `skills`
+array. Supporting version 1 manifests is not required. AJ can require all
+consumer environments to update; do not add a legacy parser solely for older
+clients. Existing acquired library records and local work still remain intact.
 
 ```json
 {
@@ -135,7 +137,7 @@ Version 2 uses `entries`; there is no parallel `skills` array:
 }
 ```
 
-These coordinates illustrate the format; they are not verified recommendations.
+These coordinates illustrate the format; they are not verified catalogue entries.
 
 Rules:
 
@@ -167,17 +169,51 @@ Rules:
   newly supported. Unsupported source/path forms must be refused, not fetched
   from some other directory or reinterpreted as npm.
 - npm sources use native `npm:` syntax with an explicit exact published version;
-  tags, ranges and unversioned recommendations are deferred. There is no `path`
+  tags, ranges and unversioned catalogue entries are deferred. There is no `path`
   or `ref`, custom install alias or embedded registry credential. The catalogue
   key is only a listing ID; native package identity remains `@scope/name`.
 - No payloads, machine paths, enabled state, credentials, shell commands or
   installer arguments in the manifest. Unknown non-selector metadata may be
   ignored; unknown source-selector fields must not silently change acquisition.
 
-Old 6.1.0 clients reject version 2 rather than silently misread it. Updating the
-actual shared repository to version 2 is a separate explicit operation after
-client rollout; this feature does not rewrite or publish it. Version 1 remains
-supported indefinitely within this increment.
+Updating the actual shared repository remains a separate authorized operation;
+writing this spec does not authorize publishing or changing deployed environments.
+Older-client compatibility is not a design constraint.
+
+## Adding entries to the shared catalogue
+
+Every upstream asset must be inspected before its entry is accepted into the
+shared catalogue. This is the curator's publication gate, not the consumer's
+`catalog add` command, which adds an already-listed asset to a local library.
+A syntactically valid manifest alone is not sufficient for publication.
+
+For each proposed entry:
+
+- Obtain the selected upstream revision/package in an isolated inspection area.
+  Record the exact Git commit or npm version and integrity information inspected.
+- Check source accessibility, required entry files, directory/file shape, supporting
+  resources and compatibility with Toolkit's actual source and projection rules.
+  Refuse unsupported packaging rather than publish an entry that acquisition cannot use.
+- Inspect the content for its stated purpose and quality. Exercise representative
+  use in a disposable supported harness setup where feasible; syntax or file
+  existence is not proof that an agent, command, skill or extension works well.
+  Unverified claims must not be presented as verified support.
+- Inspect code/scripts and dependencies for evident unsafe behavior, required
+  permissions, external services/credentials, license constraints and installation
+  side effects. Execute functional checks only deliberately in an isolated test
+  environment, never through ordinary browsing or against production settings.
+- Keep a catalogue-side review record of the reviewer, date, inspected revision,
+  supported harness/scope, checks performed, outcome and known limitations. The
+  builder may choose its simple file format; no new approval service is needed.
+  Failed or incomplete required inspection blocks publication.
+
+This validates the inspected asset and its claimed fit, not every future upstream
+revision or every possible model response. Changing a listed source, selected
+version/ref/path or agent shape requires renewed inspection before publication.
+A moving Git branch can change independently; a review record must not imply that
+uninspected later commits were checked. Consumer-side source/ownership checks are
+still required because catalogue inspection cannot validate each machine's local
+state.
 
 ## Acquisition and exposure
 
@@ -223,7 +259,20 @@ HEAD. Agent monorepo re-add can currently refresh a shared parent; catalogue reu
 must instead use a non-advancing validation path. Catalogue enabling is not an
 implicit update. Command/Pi facades also need explicit origin/ref/path/content
 preflight where current idempotence shortcuts are weaker than this contract.
-These are bounded safety seams, not a lifecycle redesign.
+These are bounded safety seams, not a lifecycle redesign. Concrete 6.1.0 cases:
+
+- Re-registering an existing monorepo agent on a moving branch can call
+  `refresh_agent_repo` and advance its shared checkout. Catalogue Enable must not
+  update that agent or its siblings as an incidental step.
+- Git Pi extension add returns an existing same-source registration without
+  comparing the requested ref with the recorded ref. A catalogue entry selecting
+  a release tag must not report exact reuse of a different branch/tag/commit.
+- Command monorepo re-add compares the existing repository and command path but
+  not its recorded ref. Catalogue identity validation must include that ref before
+  allowing the existing entry to satisfy the request.
+
+Admission inspection checks the upstream asset; these checks protect the actual
+local content and records at the moment of acquisition/exposure.
 
 A failed projection may leave successfully acquired Git library content; report
 acquisition and each target's outcome separately. Never claim successful exposure
@@ -248,11 +297,15 @@ acquisition; preserve the local row and display the conflict.
 A changed Git catalogue selector is advisory. Keep acquired source/ref/path,
 content and exposure; reject catalogue acquisition of the changed selector and
 point to explicit CLI maintenance. Removing a listing, changing subscription or
-unsubscribing never removes acquired content or exposure. Existing managed assets
-remain operable offline through their ordinary commands.
+unsubscribing never removes acquired content or exposure. For example, if a user
+adds `reviewer` to their library and enables it in Pi, deleting its catalogue entry
+only removes it from catalogue discovery: the library asset and Pi exposure remain.
+Catalogue membership and local library membership are separate; the catalogue is
+not a remote removal switch. Existing managed assets remain operable offline
+through their ordinary commands.
 
 Npm matching uses native package identity, requested source/version, selected
-installation and actual scope/inheritance. Exact matching recommendations attach
+installation and actual scope/inheritance. Exact matching catalogue entries attach
 read-only listing context to native inventory; never persist npm provenance in
 Toolkit installation locks. A different installed/requested version is a visible
 mismatch, not consent to upgrade, replace a declaration or select a local unused
@@ -262,7 +315,7 @@ and directs users to native maintenance. Catalogue removal has no npm side effec
 ## CLI/TUI discovery, pending changes and diagnostics
 
 Retain the four existing grids and their native target columns. Catalogue-only Git
-rows are visibly not acquired and not enabled; npm recommendations are visibly not
+rows are visibly not acquired and not enabled; npm catalogue entries are visibly not
 installed, distinct from native rows. Catalogue membership never implies adapter
 support. Directory agents remain Pi-only where that is the current supported form;
 flat agents retain their existing adapter set. Commands project only their prompt
@@ -276,7 +329,7 @@ results from an old scope/refresh generation. No subscription means no catalogue
 network calls. A failed/invalid refresh drops all catalogue-only rows with one
 shared warning; acquired/native inventory remains. Never serve stale listings as
 a successful live catalogue. Do not fetch asset repositories or npm metadata to
-render recommendations.
+render catalogue entries.
 
 Git checkboxes queue intents only. Apply re-reads the live catalogue once for the
 catalogue-dependent batch and validates the subscription URL/ref and each selected
@@ -312,7 +365,7 @@ Git entries in that scope. Npm is excluded from batch Git checks; an explicitly
 named npm identity returns a clear unsupported/native-guidance error.
 
 Checks compare local backing with its recorded Git selector, not the current
-catalogue recommendation, and work after unsubscription using provenance. Reuse
+catalogue entry, and work after unsubscription using provenance. Reuse
 current/different/pinned/unknown semantics: a different revision is not proof a
 monorepo child changed or that a safe fast-forward exists. Retain local edits,
 timestamp results, invalidate observations after source/ref/path/entry-file/local-HEAD change,
@@ -359,9 +412,10 @@ is exercised; do not execute test extension code.
 
 Required coverage:
 
-1. Version 1 compatibility, unchanged skill JSON/verbs/provenance and no-subscription
-   behavior; version 2 mixed manifests, cross-kind same keys, duplicate selectors,
-   malformed types/versions/paths/refs and unsupported shapes.
+1. Version 2 mixed manifests, cross-kind same keys, duplicate selectors, malformed
+   types/versions/paths/refs and unsupported shapes. Preserve existing local assets,
+   provenance and no-subscription behavior; older-client/manifest compatibility is
+   not an acceptance requirement.
 2. One shared subscription and one fetch per refresh; all four inventories offline,
    auth failure, timeout, invalid manifest, late worker result and no stale fallback.
 3. Git root/nested selection for supported sources; flat and directory agents;
@@ -383,6 +437,9 @@ Required coverage:
 8. Info/help/docs accurately state scopes, acquisition vs exposure, Git-vs-npm
    differences, directory-agent limits, command resource limits and native trust.
    Doctor retains kind-specific safety and performs no catalogue-driven repair.
+9. Catalogue admission rejects assets without completed fit/content-quality
+   inspection. Review records identify actual inspected revisions, tested targets,
+   outcomes and limitations; changed selectors require renewed inspection.
 
 Before shipping implementation: run focused tests, full `uv run pytest -q`, and
 strict `make docs-build`. Update current CLI/TUI and affected asset reference docs;
@@ -393,11 +450,11 @@ and wheel hash if building/installing a validation artifact.
 
 ## Suggested delivery order
 
-1. Shared snapshot/version 2 parser and subscription CLI, with all version 1 and
-   existing skills regression tests green.
+1. Shared snapshot/version 2 parser and subscription CLI, preserving existing local
+   skills and relevant lifecycle regression tests.
 2. Git agent/command/Pi adapters and safe reuse, CLI acquisition and checks.
 3. Shared TUI discovery/Apply/Info across four grids, preserving pending semantics.
-4. Npm recommendation matching and explicit confirmed native CLI installation.
+4. Npm catalogue matching and explicit confirmed native CLI installation.
 5. End-to-end tests, current reference docs, installed-artifact verification.
 
 These are planning seams, not authorization to implement or edit the hosted
