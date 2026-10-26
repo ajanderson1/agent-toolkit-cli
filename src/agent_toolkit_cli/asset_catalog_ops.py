@@ -4,6 +4,7 @@ from __future__ import annotations
 import contextlib
 from dataclasses import replace
 import io
+import json
 from pathlib import Path, PurePosixPath
 
 import click
@@ -75,6 +76,28 @@ def resolve_catalog_entry(kind, key, *, expected=None, snapshot=None, home=None)
     return snapshot, item
 
 
+def validate_pi_content(canonical):
+    """Check local entrypoint shape without importing or executing extension code."""
+    from agent_toolkit_cli.catalog_admission import _pi_entries, _regular_entry
+
+    tree = {}
+    for path in canonical.rglob("*"):
+        relative = path.relative_to(canonical)
+        if relative.parts[0] == ".git":
+            continue
+        tree[relative.as_posix()] = ("120000" if path.is_symlink() else
+            "040000" if path.is_dir() else "100644" if path.is_file() else "unsupported")
+    package = {}
+    if "package.json" in tree:
+        _regular_entry(tree, "package.json")
+        package = json.loads((canonical / "package.json").read_text())
+        if not isinstance(package, dict):
+            raise ValueError("invalid Pi package.json")
+    files = {name for name, mode in tree.items() if mode == "100644"}
+    for relative in _pi_entries(files, package):
+        _regular_entry(tree, relative)
+
+
 def validate_backing(kind, slug, entry, *, scope="global", home=None, project=None):
     """Check actual content, origin, selection and containment without fetching."""
     locks, _, _, canonical_dir = backing_modules(kind)
@@ -101,6 +124,8 @@ def validate_backing(kind, slug, entry, *, scope="global", home=None, project=No
     elif kind == "command":
         relative = entry.command_path if entry.parent_url else "COMMAND.md"
         checked_agent_content(root, relative or "COMMAND.md", slug)
+    elif kind == "pi-extension":
+        validate_pi_content(canonical)
     return canonical
 
 
@@ -137,7 +162,8 @@ def acquire_catalog_entry(item: CatalogEntry, *, catalog_url: str, home=None):
                 (_add_monorepo if parsed.subpath else _add_single)(parsed, slug)
             else:
                 from agent_toolkit_cli.pi_extension_add import add
-                add(source=parsed.url, slug=slug, parsed_source=parsed)
+                add(source=parsed.url, slug=slug, parsed_source=parsed,
+                    content_validator=validate_pi_content)
     lock = locks.read_lock(lock_path)
     if slug not in lock.skills or entry_identity(item.kind, slug, lock.skills[slug]) != item.selector:
         raise ValueError(f"{slug}: acquired source identity did not match catalog")

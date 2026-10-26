@@ -10,6 +10,7 @@ successful clone or verified adoption (store-owned) — never before (#283)."""
 from __future__ import annotations
 
 import shutil
+from collections.abc import Callable
 from pathlib import Path
 
 from agent_toolkit_cli import skill_git
@@ -56,6 +57,7 @@ def add(
     home: Path | None = None,
     project: Path | None = None,
     parsed_source: ParsedSource | None = None,
+    content_validator: Callable[[Path], None] | None = None,
 ) -> str:
     """Add a Pi extension to the global library. Returns the slug.
 
@@ -111,6 +113,8 @@ def add(
                     f"({existing.source!r}); run `pi-extension remove {ext_slug}` first"
                 )
             if existing is not None:
+                if content_validator is not None:
+                    content_validator(canonical)
                 return ext_slug
             # #542: an orphan checkout is not registered yet. Verify its
             # provenance before adopting it; never reclone or delete local work.
@@ -155,6 +159,11 @@ def add(
             except skill_git.GitError:
                 shutil.rmtree(canonical, ignore_errors=True)
                 raise
+
+    # Catalogue callers can require valid entrypoints before registration.
+    # On rejection retain the checkout for inspection; never register/expose it.
+    if content_validator is not None:
+        content_validator(canonical)
 
     # Clone succeeded or existing checkout verified -> safe to register.
     if skill_git.is_git_repo(canonical):
