@@ -1,5 +1,18 @@
 # Changelog
 
+## [7.1.1](https://github.com/ajanderson1/agent-toolkit-cli/compare/v7.1.0...v7.1.1) (2026-10-26)
+
+
+### Bug Fixes
+
+* **catalog:** inspect Pi directory entrypoints safely ([fbad27a](https://github.com/ajanderson1/agent-toolkit-cli/commit/fbad27aced9db6baf7c1c3be35aa8aa42be455a7))
+* **catalog:** merge safe Pi directory entrypoint inspection ([aa6522e](https://github.com/ajanderson1/agent-toolkit-cli/commit/aa6522e8d8f73094d7e043e1ddcdff105cab7788))
+
+
+### Documentation
+
+* comprehensively document 7.1 installation updates and completion ([f5ec6c4](https://github.com/ajanderson1/agent-toolkit-cli/commit/f5ec6c448f0568257e9a1133af51ee505ef0544b))
+
 ## [7.1.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v7.0.1...v7.1.0) (2026-10-26)
 
 
