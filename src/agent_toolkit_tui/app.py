@@ -458,6 +458,14 @@ class TUIApp(App):
         # Focus the filter box on open (#249) via the same path as every
         # asset-type switch (#477), so startup and switch cannot drift.
         self._focus_filter(self._active_asset_type)
+        if not self.is_headless:
+            self.run_worker(self._check_toolkit_update, thread=True, group="toolkit-update", exclusive=True)
+
+    def _check_toolkit_update(self) -> None:
+        from agent_toolkit_cli.self_update import startup_notice
+        notice = startup_notice()
+        if notice:
+            self.call_from_thread(self.notify, notice, title="Toolkit update", timeout=15)
 
     # ----- asset-type switching -----------------------------------------------------
 
@@ -2200,14 +2208,8 @@ class TUIApp(App):
 
 
 def main() -> int:
-    import sys
-
-    argv = sys.argv[1:]
-    if argv and argv[0] in ("--version", "-V"):
-        print(f"agent-toolkit-tui, version {__version__}")
-        return 0
-    TUIApp().run()
-    return 0
+    from agent_toolkit_tui.launcher import main as launch
+    return launch()
 
 
 if __name__ == "__main__":

@@ -9,11 +9,13 @@ import click
 from agent_toolkit_cli.commands.agent import agent
 from agent_toolkit_cli.commands.bundle import bundle
 from agent_toolkit_cli.commands.command import command
+from agent_toolkit_cli.commands.completion import completion
 from agent_toolkit_cli.commands.catalog import catalog
 from agent_toolkit_cli.commands.instructions import instructions
 from agent_toolkit_cli.commands.mcp import mcp
 from agent_toolkit_cli.commands.pi_extension import pi_extension
 from agent_toolkit_cli.commands.skill import skill
+from agent_toolkit_cli.commands.update import update
 
 
 try:
@@ -35,6 +37,10 @@ _ASSET_COMMAND_ALIASES = {
 
 class AssetCommandGroup(click.Group):
     """Expose plural canonical asset groups while accepting singular aliases."""
+
+    def parse_args(self, ctx: click.Context, args: list[str]) -> list[str]:
+        ctx.meta["toolkit_raw_args"] = tuple(args)
+        return super().parse_args(ctx, args)
 
     def invoke(self, ctx: click.Context):
         from agent_toolkit_cli._install_core import InstallError
@@ -77,6 +83,8 @@ def main(ctx: click.Context, project_root: Path | None) -> None:
     """agent-toolkit-cli."""
     ctx.ensure_object(dict)
     ctx.obj["project_root"] = Path(project_root) if project_root else None
+    from agent_toolkit_cli.self_update import cli_startup_notice
+    cli_startup_notice(ctx.meta.get("toolkit_raw_args", ()))
 
 
 main.add_command(skill, name="skills")
@@ -86,6 +94,8 @@ main.add_command(mcp, name="mcps")
 main.add_command(pi_extension, name="pi-extensions")
 main.add_command(bundle, name="bundles")
 main.add_command(instructions)
+main.add_command(update)
+main.add_command(completion)
 main.add_command(catalog)
 
 

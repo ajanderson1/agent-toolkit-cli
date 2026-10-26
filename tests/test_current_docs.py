@@ -61,6 +61,7 @@ def test_documentation_images_are_current_png_and_identical():
 
 
 def test_all_registered_help_is_read_only(tmp_path, monkeypatch):
+    from click import Group
     from click.testing import CliRunner
     from agent_toolkit_cli.cli import main
 
@@ -68,8 +69,9 @@ def test_all_registered_help_is_read_only(tmp_path, monkeypatch):
     monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(tmp_path / "skills"))
     monkeypatch.chdir(tmp_path)
     runner = CliRunner()
-    for name, group in main.commands.items():
-        for verb in [None, *group.commands]:
+    for name, command in main.commands.items():
+        verbs = [None, *command.commands] if isinstance(command, Group) else [None]
+        for verb in verbs:
             args = [name, *([verb] if verb else []), "--help"]
             result = runner.invoke(main, args)
             assert result.exit_code == 0, (args, result.output)

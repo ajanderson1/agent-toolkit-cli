@@ -10,8 +10,19 @@ It ships alongside the CLI from the same `uv tool install`, as a separate
 binary:
 
 ```bash
-agent-toolkit-tui
+att  # or agent-toolkit-tui
 ```
+
+`att` is a packaged executable, not a shell alias. On interactive startup, a
+background check shows a notification when a newer stable release is available:
+**New update available — run `atc update` to update.** Checks are cached for six
+hours, fail silently offline, and never update automatically. Set
+`AGENT_TOOLKIT_NO_UPDATE_CHECK=1` to disable them. Headless runs do not check.
+
+Run `att update` (or `atc update`) from your shell to update both applications
+without opening the TUI. `att update --check` checks immediately without changes;
+`--main` explicitly selects development commits instead of stable releases.
+Restart a running TUI after updating. [Requirements, provenance and safety](cli.md#toolkit-package-updates).
 
 ![Current TUI: expanded skill collection and queued changes in an isolated fixture](../assets/screenshots/tui-overview.png)
 

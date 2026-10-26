@@ -2,6 +2,117 @@
 
 `agent-toolkit-cli [--project DIRECTORY] GROUP VERB ...` targets a consumer directory (default: current directory). Top-level `--project DIRECTORY` selects the directory; a verb's `-p/--project` selects **scope**, not a path. `--version` / `-V` prints the installed package version.
 
+## Toolkit package updates
+
+`atc` is a packaged executable equivalent to `agent-toolkit-cli`; `att` opens
+`agent-toolkit-tui`. Both long names remain supported. No shell configuration is
+required (an existing shell alias can still shadow an executable).
+
+```bash
+atc update --check          # Force a fresh stable-release check; no changes
+atc update                 # Update both CLI and TUI to the latest stable release
+att update                 # Same updater, without launching the TUI
+atc update --main --check   # Compare the newest main commit with installed provenance
+atc update --main           # Explicitly build the newest canonical main commit
+```
+
+`agent-toolkit-cli update` and `agent-toolkit-tui update` accept the same options.
+This top-level command updates the **Toolkit package**, not library assets or
+harness exposure. Stable checks use the canonical repository’s latest published,
+non-prerelease GitHub release. Stable updates do not downgrade an equal/newer
+installed version. `--main` compares commit SHAs, because development commits can
+share a version number; unknown provenance is reported as unknown, not current.
+
+### Automatic notices
+
+Interactive CLI startup checks only when both stdout and stderr are terminals;
+notices go to stderr. JSON/explicit formats (`--json`, `--format`), help/version, completion and explicit
+update invocations suppress automatic checks. The TUI checks in a background
+worker after mounting; a notification shows the version change and `atc update`.
+Headless TUI runs never check. A CLI cache miss/stale entry uses a one-second
+network socket timeout; the TUI uses the same checker without blocking its UI.
+
+Results are cached for **six hours** in
+`${XDG_CACHE_HOME:-~/.cache}/agent-toolkit/update.json`. Failed checks back off
+for **15 minutes**, retaining any known release. Offline/rate-limit failures are
+silent during automatic checks and do not prevent normal use. Explicit checks
+always refresh, report failures with a nonzero exit status, and work even when
+`AGENT_TOOLKIT_NO_UPDATE_CHECK=1` disables automatic checks. GitHub receives only
+public repository metadata requests, not local asset information. No automatic
+update or checkout modification occurs.
+
+### Update safety and provenance
+
+Self-update requires Git, uv, and a **non-editable `uv tool` installation**.
+Other environments are refused with guidance; `update --check` works without
+these requirements. Update editable development checkouts with their normal Git
+workflow and `uv sync`, and other installations with their original manager.
+
+The updater resolves the release tag (or explicit `main`) to a canonical commit,
+fetches exactly that SHA into a temporary checkout, verifies it, and builds a
+wheel using `uv build`. A stable wheel must match the selected release version.
+Only then does it invoke `uv tool install` to replace the package. Build/fetch
+failures leave the existing tool untouched; installation errors are reported,
+not hidden. There is no automatic rollback of a failed package-manager operation.
+
+The built wheel and `receipt.json` remain under
+`${XDG_STATE_HOME:-~/.local/state}/agent-toolkit/updates/`, recording the canonical
+repository, ref, full commit, wheel SHA-256 and build time. This is a **locally
+built artifact**, not a claim that its hash matches a published release wheel.
+Keep the wheel/receipt for provenance; `--main` checks only trust a receipt bound
+to the installed wheel’s URL and hash. When uv omits a local archive hash, the
+checker verifies the retained wheel hash and compares its contents with the
+installed package (excluding installer-rewritten `RECORD`). Concurrent updates are refused. After a
+hard interruption, the error identifies the stale `.update-lock` directory;
+remove it only after confirming no updater is running.
+
+Restart any running TUI after updating. Existing managed assets, configuration
+and operator checkouts are not migrated or changed by package updates.
+
+## Shell completion
+
+Toolkit uses Click’s dynamic shell completion for command names, nested verbs,
+flags, declared choice values (such as scopes/harnesses), and path arguments.
+It supports `atc`, `att`, `agent-toolkit-cli`, and `agent-toolkit-tui`. Asset slug
+and remote repository discovery are not completion sources; pressing TAB never
+fetches Git repositories, checks for package updates, or authors asset state.
+
+Like Worktrunk’s `wt config shell install`, an explicit setup command adds a
+small, marked block to your shell startup file:
+
+```bash
+atc completion install --shell zsh
+source ~/.zshrc
+# Try: atc sk<TAB>, atc skills in<TAB>, atc update --<TAB>
+# Or:  att up<TAB>
+```
+
+Omit `--shell` to detect it from `$SHELL`. Supported shells: **Zsh**, **Bash
+4.4+**, and **Fish**. Zsh setup initializes `compinit` only if needed and honors
+`$ZDOTDIR/.zshrc` (otherwise `~/.zshrc`). Bash uses `~/.bashrc`; login Bash shells
+must source that file from `~/.bash_profile`. Fish uses
+`${XDG_CONFIG_HOME:-~/.config}/fish/conf.d/agent-toolkit-completion.fish`.
+Use `--rc-file PATH` with install/uninstall for another configuration location.
+
+Setup is idempotent and preserves unrelated text, existing file permissions,
+and symlinked dotfile layouts. It does not add aliases or replace `wt` setup.
+Incomplete/duplicated Toolkit markers cause a refusal rather than a guessed
+edit. Shell files change **only** when you explicitly run install/uninstall.
+
+```bash
+atc completion uninstall --shell zsh  # Remove only Toolkit’s managed block
+atc completion init zsh              # Print shell code; no file changes
+```
+
+Open a new shell after uninstalling to clear already-loaded functions. For
+manual Zsh setup, initialize `compinit`, then evaluate
+`eval "$(atc completion init zsh)"`; Bash uses
+`eval "$(atc completion init bash)"`, and Fish uses
+`atc completion init fish | source`. Do not add both manual and managed setup.
+`att completion ...` also provides the same utility. Completions query the
+current executable on each TAB, so new commands appear after a package update
+without regenerating a static command list.
+
 ## Groups and verbs
 
 Plural names are canonical; singular aliases remain accepted, including `instruction` → `instructions`.

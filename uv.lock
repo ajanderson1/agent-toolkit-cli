@@ -9,6 +9,7 @@ source = { editable = "." }
 default-groups = ["dev", "docs"]
 dependencies = [
     { name = "click" },
+    { name = "packaging" },
     { name = "pathspec" },
     { name = "pyyaml" },
     { name = "questionary" },
@@ -31,6 +32,7 @@ docs = [
 [package.metadata]
 requires-dist = [
     { name = "click", specifier = ">=8.1" },
+    { name = "packaging", specifier = ">=24.0" },
     { name = "pathspec", specifier = ">=0.12" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "questionary", specifier = ">=2.0" },

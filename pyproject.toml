@@ -5,6 +5,7 @@ license = { file = "LICENSE" }
 requires-python = ">=3.12"
 dependencies = [
     "click>=8.1",
+    "packaging>=24.0",
     "textual>=0.79",
     "questionary>=2.0",
     "pyyaml>=6.0",
@@ -19,6 +20,8 @@ Repository = "https://github.com/ajanderson1/agent-toolkit-cli"
 [project.scripts]
 agent-toolkit-cli = "agent_toolkit_cli.cli:main"
 agent-toolkit-tui = "agent_toolkit_tui.app:main"
+atc = "agent_toolkit_cli.cli:main"
+att = "agent_toolkit_tui.app:main"
 
 [dependency-groups]
 dev = [

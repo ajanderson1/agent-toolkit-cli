@@ -204,6 +204,9 @@ def verify_artifacts(wheel_path: Path, sdist_path: Path, version: str) -> None:
             raise ValueError("Wheel entry_points.txt missing agent-toolkit-cli console script")
         if "agent-toolkit-tui = agent_toolkit_tui.app:main" not in ep_content:
             raise ValueError("Wheel entry_points.txt missing agent-toolkit-tui console script")
+        for alias, target in (("atc", "agent_toolkit_cli.cli:main"), ("att", "agent_toolkit_tui.app:main")):
+            if f"{alias} = {target}" not in ep_content:
+                raise ValueError(f"Wheel entry_points.txt missing {alias} console script")
 
     # Inspect sdist contents
     with tarfile.open(sdist_path) as tf:
@@ -349,6 +352,17 @@ def smoke_test_installed_wheel(
             f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
         )
     results["tui_version"] = "pass"
+
+    # Packaged aliases must work without shell configuration.
+    for alias in ("atc", "att"):
+        for flag in ("--version", "--help"):
+            proc = subprocess.run(
+                [str(venv_dir / bindir / alias), flag], cwd=workdir, env=env,
+                capture_output=True, text=True, timeout=30,
+            )
+            expected = version if flag == "--version" else "Usage:"
+            if proc.returncode != 0 or expected not in proc.stdout:
+                raise RuntimeError(f"{alias} {flag} failed: {proc.stdout}\n{proc.stderr}")
 
     # Smoke 5: TUI headless Textual pilot
     pilot_code = (

@@ -12,7 +12,13 @@ The toolkit creates symlinks, translates Markdown, or edits named configuration 
 
 [Documentation](https://ajanderson1.github.io/agent-toolkit-cli/) · [Compatibility matrix](docs/matrix.md) · [CLI reference](docs/agent-toolkit/cli.md) · [TUI reference](docs/agent-toolkit/tui.md)
 
-## What's new in 7.0.1 and 7.0
+## What's new in 7.1.0
+
+- **Short commands:** `atc` and `att` ship as real package executables; existing long names remain supported.
+- **Toolkit updates:** cached CLI/TUI startup notices and explicit `atc update` / `att update` use stable GitHub releases by default, with `--main` as an opt-in. Builds retain source-commit and wheel-hash provenance.
+- **Shell completion:** `atc completion install --shell zsh` sets up TAB completion for commands, flags, choices and paths across all four executable names. Bash and Fish are also supported.
+
+### Previous 7.0 releases
 
 - **Shared asset catalogue (7.0.1):** one optional subscription now covers Skills, Agents, Commands and Git/native npm Pi extensions. New or changed publisher entries require revision-bound inspection evidence; browsing never acquires or enables assets.
 - **Guarded catalogue actions (7.0.1):** explicit per-kind acquisition, selector-only pending validation, non-advancing Git reuse and regular Pi entrypoint checks preserve local work. Native npm installation remains explicit and confirmed, without a Toolkit npm registry.
@@ -25,28 +31,55 @@ The catalogue remains optional. Version 7.0.1 extends its original skills-only
 format to **Skills, Agents, Commands and Pi extensions**, with explicit acquisition
 and revision-bound publishing checks. [Shared catalogue](docs/agent-toolkit/catalog.md). Existing command spellings remain supported: **add/remove** describe library membership; **enable/disable** describe harness exposure, currently spelled `install`/`uninstall` for source-backed kinds. Version 7.0 does not introduce that proposed CLI rename.
 
-[Full changelog](CHANGELOG.md) · [Release assets and receipts](https://github.com/ajanderson1/agent-toolkit-cli/releases/tag/v7.0.1)
+[Full changelog](CHANGELOG.md) · [Release assets and receipts](https://github.com/ajanderson1/agent-toolkit-cli/releases/tag/v7.1.0)
 
 ## Installation
 
 Requires **Python 3.12+**, [uv](https://docs.astral.sh/uv/) and Git. Install the **toolkit package** (both binaries):
 
 ```bash
-uv tool install --from git+https://github.com/ajanderson1/agent-toolkit-cli@v7.0.1 agent-toolkit
+uv tool install --from git+https://github.com/ajanderson1/agent-toolkit-cli@v7.1.0 agent-toolkit
 agent-toolkit-cli --version
 ```
 
 This selects the tagged release rather than a moving development branch. To upgrade an existing installation to this release:
 
 ```bash
-uv tool install --force --from git+https://github.com/ajanderson1/agent-toolkit-cli@v7.0.1 agent-toolkit
+uv tool install --force --from git+https://github.com/ajanderson1/agent-toolkit-cli@v7.1.0 agent-toolkit
 agent-toolkit-cli --version
 agent-toolkit-tui --version
 ```
 
-Restart an already-running TUI after upgrading. For development builds, omit `@v7.0.1` to use the repository's default branch.
+The package also ships **`atc`** (CLI) and **`att`** (TUI) executables; no shell aliases are needed. Older releases need a one-time upgrade to a release containing these entry points.
+
+```bash
+atc update --check   # Check the latest stable GitHub release now
+atc update           # Update both CLI and TUI from that release
+att update           # Same updater, without opening the TUI
+atc update --main    # Explicit opt-in to the newest development commit
+```
+
+Interactive CLI invocations and TUI startup check for newer stable releases, caching results for six hours. Notices say `Run atc update to update`; checks never update automatically. Set `AGENT_TOOLKIT_NO_UPDATE_CHECK=1` to disable automatic checks. Pipes, JSON, help/version, completion and headless TUI runs do not check; explicit `update --check` still does.
+
+Self-update supports non-editable `uv tool` installations only. It builds a pinned canonical commit in a temporary checkout and retains the wheel plus a source-commit/SHA-256 receipt under `${XDG_STATE_HOME:-~/.local/state}/agent-toolkit/updates/`. It never changes your development checkout or managed assets. Restart an already-running TUI after upgrading. See [update behavior and limits](docs/agent-toolkit/cli.md#toolkit-package-updates). For manual development builds, omit the release tag in the installation command to use the repository's default branch.
 
 Verified wheel/sdist assets, `SHA256SUMS` and a source-commit/artifact receipt are available on [GitHub Releases](https://github.com/ajanderson1/agent-toolkit-cli/releases). Verify the checksums before installing a downloaded wheel; identify builds by commit and wheel SHA-256, not version alone. No PyPI publication is configured. The incompatible pre-v2 commands remain frozen at `v1.0.0`; see [legacy installation](docs/agent-toolkit/cli.md#pre-v2-surface).
+
+### Shell completion
+
+Like `wt`, Toolkit can configure shell TAB completion with a one-time command:
+
+```bash
+atc completion install --shell zsh
+source ~/.zshrc
+```
+
+This adds a marked, reversible shell-integration block—not command aliases.
+Completion covers commands, flags, choice values and paths for `atc`, `att`, and
+both long executable names. Bash and Fish are also supported. Use
+`atc completion uninstall --shell zsh` to remove the block, or
+`atc completion init zsh` to print integration code without changing any files.
+[Shell setup and custom dotfiles](docs/agent-toolkit/cli.md#shell-completion).
 
 ## Quickstart
 

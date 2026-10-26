@@ -108,6 +108,8 @@ def test_build_artifacts_and_verify_contents(tmp_path):
         ep_content = zf.read(entry_points[0]).decode("utf-8")
         assert "agent-toolkit-cli = agent_toolkit_cli.cli:main" in ep_content
         assert "agent-toolkit-tui = agent_toolkit_tui.app:main" in ep_content
+        assert "atc = agent_toolkit_cli.cli:main" in ep_content
+        assert "att = agent_toolkit_tui.app:main" in ep_content
 
     # Verify sdist members
     with tarfile.open(sdist_path) as tf:
