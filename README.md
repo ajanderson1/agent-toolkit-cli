@@ -12,37 +12,39 @@ The toolkit creates symlinks, translates Markdown, or edits named configuration 
 
 [Documentation](https://ajanderson1.github.io/agent-toolkit-cli/) · [Compatibility matrix](docs/matrix.md) · [CLI reference](docs/agent-toolkit/cli.md) · [TUI reference](docs/agent-toolkit/tui.md)
 
-## What's new in 7.0
+## What's new in 7.0.1 and 7.0
 
+- **Shared asset catalogue (7.0.1):** one optional subscription now covers Skills, Agents, Commands and Git/native npm Pi extensions. New or changed publisher entries require revision-bound inspection evidence; browsing never acquires or enables assets.
+- **Guarded catalogue actions (7.0.1):** explicit per-kind acquisition, selector-only pending validation, non-advancing Git reuse and regular Pi entrypoint checks preserve local work. Native npm installation remains explicit and confirmed, without a Toolkit npm registry.
 - **Expandable skill collections:** advertised and acquired children of the same Git repository/ref appear together. Browsing does not download skill content; explicit enablement acquires only selected missing children.
 - **Safer queued changes:** collection selections retain their original identities across refreshes, filters and collapse. Apply isolates failures by collection and scope, retaining safely acquired library content for retry.
 - **Precise Git state:** child clean/dirty badges inspect their own directories; parent badges describe the whole checkout. Explicit `skills check` works for registered Git-backed skills without requiring a catalogue subscription.
 - **Pinned reset support:** force reset restores the configured commit pin, tag or latest fetched branch tip—not an invented `origin/<SHA>` branch.
 
-The catalogue remains optional. The current source extends its original skills-only
+The catalogue remains optional. Version 7.0.1 extends its original skills-only
 format to **Skills, Agents, Commands and Pi extensions**, with explicit acquisition
 and revision-bound publishing checks. [Shared catalogue](docs/agent-toolkit/catalog.md). Existing command spellings remain supported: **add/remove** describe library membership; **enable/disable** describe harness exposure, currently spelled `install`/`uninstall` for source-backed kinds. Version 7.0 does not introduce that proposed CLI rename.
 
-[Full changelog](CHANGELOG.md) · [Release assets and receipts](https://github.com/ajanderson1/agent-toolkit-cli/releases/tag/v7.0.0)
+[Full changelog](CHANGELOG.md) · [Release assets and receipts](https://github.com/ajanderson1/agent-toolkit-cli/releases/tag/v7.0.1)
 
 ## Installation
 
 Requires **Python 3.12+**, [uv](https://docs.astral.sh/uv/) and Git. Install the **toolkit package** (both binaries):
 
 ```bash
-uv tool install --from git+https://github.com/ajanderson1/agent-toolkit-cli@v7.0.0 agent-toolkit
+uv tool install --from git+https://github.com/ajanderson1/agent-toolkit-cli@v7.0.1 agent-toolkit
 agent-toolkit-cli --version
 ```
 
 This selects the tagged release rather than a moving development branch. To upgrade an existing installation to this release:
 
 ```bash
-uv tool install --force --from git+https://github.com/ajanderson1/agent-toolkit-cli@v7.0.0 agent-toolkit
+uv tool install --force --from git+https://github.com/ajanderson1/agent-toolkit-cli@v7.0.1 agent-toolkit
 agent-toolkit-cli --version
 agent-toolkit-tui --version
 ```
 
-Restart an already-running TUI after upgrading. For development builds, omit `@v7.0.0` to use the repository's default branch.
+Restart an already-running TUI after upgrading. For development builds, omit `@v7.0.1` to use the repository's default branch.
 
 Verified wheel/sdist assets, `SHA256SUMS` and a source-commit/artifact receipt are available on [GitHub Releases](https://github.com/ajanderson1/agent-toolkit-cli/releases). Verify the checksums before installing a downloaded wheel; identify builds by commit and wheel SHA-256, not version alone. No PyPI publication is configured. The incompatible pre-v2 commands remain frozen at `v1.0.0`; see [legacy installation](docs/agent-toolkit/cli.md#pre-v2-surface).
 

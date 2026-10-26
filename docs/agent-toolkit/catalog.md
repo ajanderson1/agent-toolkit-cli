@@ -64,6 +64,11 @@ Conflicting installed/requested versions or ambiguous declarations require nativ
 maintenance. Catalogue Add/Enable does not install npm packages, and no Toolkit npm
 lock is created. Use ordinary native enable/disable controls after installation.
 
+Git Pi catalogue actions validate regular entrypoints and safe declared paths before
+registration and on reuse, without executing extension code. A rejected fresh
+checkout can remain unregistered for inspection; validation does not discard
+preexisting edits or commits.
+
 ## TUI and updates
 
 The existing four grids share one fresh catalogue read per refresh generation.
@@ -101,8 +106,9 @@ assets. Existing per-kind update and private/shared-backing limitations still ap
 
 ## Manifest format
 
-New catalogues use version 2. The existing small version-1 skills parser remains
-accepted, but older Toolkit clients cannot consume version 2. The version string
+New catalogues use version 2, supported by the official **7.0.1** release. The
+existing small version-1 skills parser remains accepted, but older Toolkit clients
+cannot consume version 2. The version string
 alone is not proof that a particular build contains this feature.
 
 ```json
