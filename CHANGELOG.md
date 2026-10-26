@@ -1,5 +1,28 @@
 # Changelog
 
+## [7.0.1](https://github.com/ajanderson1/agent-toolkit-cli/compare/v7.0.0...v7.0.1) (2026-10-26)
+
+
+### Features
+
+* **catalog:** cover agents commands and Pi extensions with admission checks ([52947ad](https://github.com/ajanderson1/agent-toolkit-cli/commit/52947add96ff9b333221766ce51b70a155cc4501))
+
+
+### Bug Fixes
+
+* **catalog:** validate Pi entrypoints and preserve selector-only intents ([94f5084](https://github.com/ajanderson1/agent-toolkit-cli/commit/94f5084026bcf746aa6e444237336eb21ac41f10))
+
+
+### Documentation
+
+* **catalog:** record full-suite and installed-wheel verification ([34c9962](https://github.com/ajanderson1/agent-toolkit-cli/commit/34c9962df39a440899c4c016a370c1bd679dd052))
+* **catalog:** require asset inspection and drop legacy support ([15132c5](https://github.com/ajanderson1/agent-toolkit-cli/commit/15132c5d6785a35c152cb1749a4b7bd48341ff36))
+
+
+### Chores
+
+* **release:** prepare 7.0.1 catalogue release ([3f2699f](https://github.com/ajanderson1/agent-toolkit-cli/commit/3f2699fdb3e0db9c432d286fa13d2f10b01d6b15))
+
 ## [7.0.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v6.1.0...v7.0.0) (2026-10-25)
 
 
