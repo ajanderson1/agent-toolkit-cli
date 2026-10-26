@@ -629,10 +629,12 @@ class TUIApp(App):
             return None
 
     def _refresh_active_view(self) -> None:
+        if getattr(self, "_catalog_scope", None) != self._scope:
+            self._start_catalog_refresh()
         if self._active_asset_type == "instruction":
             self._refresh_instruction_view()
         elif self._active_asset_type == "skill":
-            self._refresh_skill_view()
+            self._refresh_skill_view(reload_catalog=False)
         elif self._active_asset_type == "command":
             self._refresh_command_view()
         elif self._active_asset_type == "pi-extension":
@@ -661,7 +663,9 @@ class TUIApp(App):
 
     # ----- skill-view --------------------------------------------------------
 
-    def _refresh_skill_view(self) -> None:
+    def _refresh_skill_view(self, *, reload_catalog: bool = True) -> None:
+        if reload_catalog:
+            self._start_catalog_refresh()
         try:
             grid = self.query_one("#skill-grid", SkillGrid)
         except NoMatches:
@@ -677,9 +681,16 @@ class TUIApp(App):
                 home=home,
                 project=project,
                 selection=self._tui_settings.harnesses,
+                catalog_snapshot=getattr(self, "_catalog_snapshot", None),
             )
         )
         grid.restore_pending(saved)
+
+    def _start_catalog_refresh(self) -> None:
+        self._catalog_snapshot = None
+        self._catalog_scope = self._scope
+        scope, home, _ = self._scope_to_roots()
+        project = None if scope == "global" else self._skill_project_root()
         self._skill_catalog_generation = getattr(self, "_skill_catalog_generation", 0) + 1
         generation = self._skill_catalog_generation
         from agent_toolkit_cli.behavior import _read_config
@@ -687,7 +698,7 @@ class TUIApp(App):
         try:
             subscribed = _read_config(home).get("skillCatalog") is not None
         except (RuntimeError, OSError, ValueError):
-            self.notify("Invalid catalog subscription; local skills retained.", severity="warning")
+            self.notify("Invalid shared catalog subscription; local assets retained.", severity="warning")
             return
         if subscribed:
             def fetch():
@@ -701,12 +712,15 @@ class TUIApp(App):
     def _finish_skill_catalog(self, generation, scope, home, project, snapshot) -> None:
         if generation != getattr(self, "_skill_catalog_generation", 0):
             return
-        grid = self.query_one("#skill-grid", SkillGrid)
-        pending = grid.pending_entries()
-        grid.set_rows(build_skill_rows(scope=scope, home=home, project=project, selection=self._tui_settings.harnesses, catalog_snapshot=snapshot))
-        grid.restore_pending(pending)
+        if scope != self._scope:
+            return
+        self._catalog_snapshot = snapshot
+        self._refresh_skill_view(reload_catalog=False)
+        self._refresh_command_view()
+        self._refresh_agent_view()
+        self._refresh_pi_view()
         if snapshot is not None and snapshot.error:
-            self.notify(f"{snapshot.error}; catalog-only skills hidden.", title="Skill catalog", severity="warning")
+            self.notify(f"{snapshot.error}; catalog-only entries hidden.", title="Shared catalog", severity="warning")
         self._refresh_pending_label()
         self._refresh_status_bar()
 
@@ -718,16 +732,13 @@ class TUIApp(App):
         except NoMatches:
             return
         scope, home, project = self._scope_to_roots()
+        saved = grid.pending_entries()
         grid.set_harness_selection(self._tui_settings.harnesses)
-        grid.set_scope(scope)  # type: ignore[arg-type]
-        grid.set_rows(
-            build_command_rows(
-                scope=scope,
-                home=home,
-                project=project,
-                selection=self._tui_settings.harnesses,
-            )
-        )  # type: ignore[arg-type]
+        grid.set_scope(scope)
+        grid.set_rows(build_command_rows(scope=scope, home=home, project=project,
+            selection=self._tui_settings.harnesses,
+            catalog_snapshot=getattr(self, "_catalog_snapshot", None)))
+        grid.restore_pending(saved)
 
     # ----- pi-view -----------------------------------------------------------
 
@@ -744,7 +755,8 @@ class TUIApp(App):
         # Scope follows the visible application toggle even if rebuilding fails.
         grid.set_scope(self._scope)  # type: ignore[arg-type]
         try:
-            rows = build_pi_rows(home=Path.home(), project=Path.cwd())
+            rows = build_pi_rows(home=Path.home(), project=Path.cwd(),
+                catalog_snapshot=getattr(self, "_catalog_snapshot", None))
         except (PiSettingsError, OSError, ValueError) as exc:
             grid.restore_pending(pending, local_targets=local_targets, npm_snapshots=npm_snapshots)
             self.notify(str(exc), title="Pi refresh failed", severity="error", timeout=12)
@@ -760,16 +772,13 @@ class TUIApp(App):
         except NoMatches:
             return
         scope, home, project = self._scope_to_roots()
+        saved = grid.pending_entries()
         grid.set_harness_selection(self._tui_settings.harnesses)
-        grid.set_scope(scope)  # type: ignore[arg-type]
-        grid.set_rows(
-            build_agent_rows(
-                scope=scope,
-                home=home,
-                project=project,
-                selection=self._tui_settings.harnesses,
-            )
-        )  # type: ignore[arg-type]
+        grid.set_scope(scope)
+        grid.set_rows(build_agent_rows(scope=scope, home=home, project=project,
+            selection=self._tui_settings.harnesses,
+            catalog_snapshot=getattr(self, "_catalog_snapshot", None)))
+        grid.restore_pending(saved)
 
     # ----- mcp-view ----------------------------------------------------------
 
@@ -1099,6 +1108,12 @@ class TUIApp(App):
         return True
 
     def action_refresh(self) -> None:
+        self._start_catalog_refresh()
+        # Drop previous live listings across all four grids while the new read runs.
+        self._refresh_skill_view(reload_catalog=False)
+        self._refresh_command_view()
+        self._refresh_agent_view()
+        self._refresh_pi_view()
         grid = self._active_grid()
         # Local Pi intents carry a target snapshot. Keep those only; other
         # assets retain their existing refresh-discard behavior.
@@ -1177,11 +1192,17 @@ class TUIApp(App):
 
         order = ("instruction", "command", "skill", "agent", "mcp", "pi-extension")
         results: list[ApplyResult] = []
-        for asset_type in order:
-            if asset_type in pending_types:
-                res = self._apply_for_asset_type(asset_type)
-                if isinstance(res, ApplyResult):
-                    results.append(res)
+        from agent_toolkit_cli.skill_catalog import read_catalog
+        needs_catalog = any(getattr(grid, "pending_catalog_entries", lambda: {})() for grid in self._all_grids())
+        self._catalog_apply_snapshot = read_catalog() if needs_catalog else None
+        try:
+            for asset_type in order:
+                if asset_type in pending_types:
+                    res = self._apply_for_asset_type(asset_type)
+                    if isinstance(res, ApplyResult):
+                        results.append(res)
+        finally:
+            del self._catalog_apply_snapshot
 
         if len(results) > 1:
             total_ok = sum(r.ok for r in results)
@@ -1323,6 +1344,9 @@ class TUIApp(App):
         ok = failed = 0
         errors: list[str] = []
         failed_groups: set[tuple[str, str]] = set()
+        from agent_toolkit_tui.catalog_apply import prepare_entry, snapshot_for
+        catalog_pending = grid.pending_catalog_entries()
+        snapshot = snapshot_for(self, catalog_pending)
         for (scope, slug), (adds, removes) in by_slug.items():
             n_writes = len(adds) + len(removes)
             _, apply_home, project = self._scope_to_roots(scope)
@@ -1335,6 +1359,9 @@ class TUIApp(App):
                 remove_agents=tuple(sorted(removes)),
             )
             try:
+                if adds:
+                    prepare_entry("command", slug, intents=catalog_pending, snapshot=snapshot,
+                        targets=adds, scope=scope, home=apply_home or Path.home(), project=project)
                 result = command_install.apply(p, home=apply_home, project=project)
                 ok += len(result.created) + len(result.removed)
             except (InstallError, ValueError) as exc:
@@ -1351,11 +1378,11 @@ class TUIApp(App):
             if failed
             else {}
         )
-        if failed == 0:
-            grid.clear_pending()
+        grid.clear_pending()
         self._refresh_command_view()
         if saved:
             grid.restore_pending(saved)
+        grid.restore_catalog_pending(catalog_pending)
         self._refresh_pending_label()
         self._refresh_status_bar()
         if errors:
@@ -1410,6 +1437,7 @@ class TUIApp(App):
         prepared = prepare_catalog_acquisitions(
             pending, intents, home=Path.home(),
             project=self._skill_project_root() if any(k[0] == 'project' for k in pending) else None,
+            **({"snapshot": self._catalog_apply_snapshot} if hasattr(self, "_catalog_apply_snapshot") else {}),
         )
         failed_keys.update(prepared.blocked)
         failed += len(prepared.blocked)
@@ -1636,6 +1664,9 @@ class TUIApp(App):
 
         local_targets = grid.pending_local_targets()
         npm_snapshots = grid.pending_npm_snapshots()
+        catalog_pending = grid.pending_catalog_entries()
+        from agent_toolkit_tui.catalog_apply import prepare_entry, snapshot_for
+        snapshot = snapshot_for(self, catalog_pending)
         remaining = {}
         glob_lock = None
         _Scope = Literal["global", "project"]
@@ -1665,6 +1696,11 @@ class TUIApp(App):
                         expected_paths=local_targets[key],
                     )
                 else:
+                    if key in catalog_pending:
+                        prepare_entry("pi-extension", slug, intents=catalog_pending, snapshot=snapshot,
+                            targets=("pi",), scope=scope, home=home,
+                            project=Path.cwd() if scope == "project" else None)
+                        glob_lock = None  # Acquisition may have added a new library record.
                     if glob_lock is None:
                         try:
                             glob_lock = read_lock(library_lock_path(env={}))
@@ -1676,13 +1712,13 @@ class TUIApp(App):
                         )
                     project = Path.cwd() if scope == "project" else None
                     if op == "link":
-                        pi_extension_ops.install(slug=slug, scope=scope, home=home, project=project)
+                        pi_extension_ops.install(slug=slug, scope=scope, home=home, project=project, git_only=True)
                     else:
-                        pi_extension_ops.uninstall(slug=slug, scope=scope, home=home, project=project)
+                        pi_extension_ops.uninstall(slug=slug, scope=scope, home=home, project=project, git_only=True)
                 ok += 1
             except (
                 pi_extension_install.InstallError,
-                _pi_settings.PiSettingsError,
+                _pi_settings.PiSettingsError, ValueError, RuntimeError,
             ) as exc:
                 errors.append(f"{slug}: {exc}")
                 failed += 1
@@ -1690,6 +1726,7 @@ class TUIApp(App):
 
         grid.clear_pending()
         grid.restore_pending(remaining, local_targets=local_targets, npm_snapshots=npm_snapshots)
+        grid.restore_catalog_pending(catalog_pending)
         self._refresh_pi_view()
         self._refresh_pending_label()
         self._refresh_status_bar()
@@ -1738,6 +1775,10 @@ class TUIApp(App):
         ok = failed = 0
         errors: list[str] = []
         refusal_msgs: list[str] = []
+        agent_failed_keys = set()
+        catalog_pending = grid.pending_catalog_entries()
+        from agent_toolkit_tui.catalog_apply import prepare_entry, snapshot_for
+        snapshot = snapshot_for(self, catalog_pending)
 
         for (scope, slug), (adds, removes) in by_slug.items():
             # Global scope MUST pass home=Path.home() so adapters' {HOME}
@@ -1745,6 +1786,15 @@ class TUIApp(App):
             effective_home = Path.home() if scope == "global" else None
             project = None if scope == "global" else Path.cwd()
 
+            if adds:
+                try:
+                    prepare_entry("agent", slug, intents=catalog_pending, snapshot=snapshot,
+                        targets=adds, scope=scope, home=Path.home(), project=project)
+                except (ValueError, RuntimeError, OSError) as exc:
+                    errors.append(f"{slug}: {exc}")
+                    failed += len(adds)
+                    agent_failed_keys.update((scope, harness, slug) for harness in adds)
+                    adds = set()
             # Adds → agent_install.apply()
             if adds:
                 p = InstallPlan(
@@ -1771,11 +1821,13 @@ class TUIApp(App):
                     # double it ("my-agent: my-agent: ...").
                     errors.append(str(exc))
                     failed += len(adds)
+                    agent_failed_keys.update((scope, harness, slug) for harness in adds)
                 except ValueError as exc:
                     # A ValueError NOT routed through the seam (e.g. a bad
                     # scope/home arg) carries no slug — prefix it ourselves.
                     errors.append(f"{slug}: {exc}")
                     failed += len(adds)
+                    agent_failed_keys.update((scope, harness, slug) for harness in adds)
 
             # Removes → agent_install.uninstall() DIRECTLY.
             # Do NOT use apply().removed — it is ALWAYS EMPTY (the #268-class gap).
@@ -1808,17 +1860,19 @@ class TUIApp(App):
                     # #373: seam already prefixed the slug — do not double it.
                     errors.append(str(exc))
                     failed += len(removes)
+                    agent_failed_keys.update((scope, harness, slug) for harness in removes)
                 except ValueError as exc:
                     # ValueError bypasses the seam — prefix the slug ourselves.
                     errors.append(f"{slug}: {exc}")
                     failed += len(removes)
+                    agent_failed_keys.update((scope, harness, slug) for harness in removes)
 
-        saved = grid.pending_entries() if failed else {}
-        if failed == 0:
-            grid.clear_pending()
+        saved = {key: op for key, op in pending.items() if key in agent_failed_keys}
+        grid.clear_pending()
         self._refresh_agent_view()
         if saved:
             grid.restore_pending(saved)
+        grid.restore_catalog_pending(catalog_pending)
         self._refresh_pending_label()
         self._refresh_status_bar()
         if refusal_msgs:

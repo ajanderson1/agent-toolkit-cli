@@ -196,6 +196,7 @@ nav:
   - Reference:
     - CLI reference: agent-toolkit/cli.md
     - TUI reference: agent-toolkit/tui.md
+    - Shared asset catalogue: agent-toolkit/catalog.md
     - TUI settings schema: agent-toolkit/tui-settings.md
     - Bundles: agent-toolkit/bundles.md
     - Lock files: agent-toolkit/lock-files.md

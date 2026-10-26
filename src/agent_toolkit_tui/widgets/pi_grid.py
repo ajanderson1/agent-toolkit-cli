@@ -65,6 +65,7 @@ _GLOBAL_GLYPH    = "🌐"
 
 _ORIGIN_MARKUP = {
     "store-owned": "[blue]library[/]",
+    "catalog": "[cyan]catalog[/]",
     "untracked":   "[dim]local[/]",
     "local-package": "[dim]local[/]",
 }
@@ -83,8 +84,13 @@ _ORIGIN_COLUMN_WIDTH = 12
 _FIXED_COLUMN_WIDTH = 24 + 14 + 12
 
 
-class PiGrid(Vertical):
+from agent_toolkit_tui.widgets.catalog_pending import CatalogPendingMixin
+
+
+class PiGrid(CatalogPendingMixin, Vertical):
     """One row per Pi extension; interactive cells for global + project scopes."""
+
+    catalog_kind = "pi-extension"
 
     class PendingChanged(Message):
         """Posted whenever the pending toggle set changes."""
@@ -157,6 +163,7 @@ class PiGrid(Vertical):
         return dict(self._npm_snapshots)
 
     def clear_pending(self) -> None:
+        self._catalog_pending = {}
         self._pending.clear()
         self._local_targets.clear()
         self._npm_snapshots.clear()
@@ -172,6 +179,7 @@ class PiGrid(Vertical):
         npm_snapshots: dict[tuple[str, str], str] | None = None,
     ) -> None:
         self._pending.update(pending)
+        self._capture_catalog_pending()
         if local_targets is not None:
             self._local_targets.update({key: paths for key, paths in local_targets.items() if key in pending})
         if npm_snapshots is not None:
@@ -186,6 +194,7 @@ class PiGrid(Vertical):
         return row.origin not in ("untracked", "npm") and self._scope == "project" and row.global_cell.global_loaded and not loaded
 
     def _notify_pending(self) -> None:
+        self._capture_catalog_pending()
         self.post_message(self.PendingChanged(len(self._pending)))
 
     def compose(self) -> ComposeResult:
@@ -298,8 +307,11 @@ class PiGrid(Vertical):
         return "\n".join(info.lines)
 
     def _info_body(self, *, row: PiExtensionRow, scope: str) -> str:
+        catalog = "\n".join(self._catalog_info(row))
+        if row.catalog_only:
+            return catalog
         return "\n\n".join(section for section in (
-            self._extension_info_body(row), self._scope_info_body(row=row, scope=scope),
+            self._extension_info_body(row), self._scope_info_body(row=row, scope=scope), catalog,
         ) if section)
 
     def _npm_info_body(self, row: PiExtensionRow, scope: str) -> str:
@@ -451,6 +463,9 @@ class PiGrid(Vertical):
             return
         row = visible[coord.row]
 
+        # Catalogue npm rows never enter the native selection or acquisition queue.
+        if row.catalog_only and row.catalog_item.source_type == "npm":
+            return
         # Filesystem packages retain their separate package/filter semantics.
         if row.origin == "local-package":
             return
@@ -586,6 +601,8 @@ class PiGrid(Vertical):
 
     @staticmethod
     def _selection_label(row: PiExtensionRow, scope: str) -> str:
+        if row.catalog_only:
+            return "Not installed" if row.catalog_item.source_type == "npm" else "Not acquired"
         if row.npm_state:
             current = row.npm_state.for_scope(scope)
             return current.status + (" (inherited global)" if scope == "project" and current.mode == "inherit" else "")
@@ -601,7 +618,7 @@ class PiGrid(Vertical):
 
     def _cell_glyph(self, *, row: PiExtensionRow, scope: str) -> str:
         """Return the display glyph for a scope cell. Never named _render_*."""
-        if row.origin == "local-package":
+        if row.origin == "local-package" or (row.catalog_only and row.catalog_item.source_type == "npm"):
             return _UNTRACKED_GLYPH
 
         loaded = (

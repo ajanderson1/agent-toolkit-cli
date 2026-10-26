@@ -20,6 +20,7 @@ from agent_toolkit_cli.skill_paths import (
 from agent_toolkit_tui.skill_state import SkillIntent
 
 SkillKey = tuple[str, str, str]
+_UNSET = object()
 
 
 @dataclass
@@ -35,6 +36,7 @@ def prepare_catalog_acquisitions(
     *,
     home: Path,
     project: Path | None,
+    snapshot=_UNSET,
 ) -> CatalogPreparation:
     """Validate each collection before acquisition; never write projections here."""
     units: dict[tuple[str, str, str | None], list[SkillKey]] = {}
@@ -44,7 +46,8 @@ def prepare_catalog_acquisitions(
     needs_catalog = any(
         intents[k].catalog_item is not None for keys in units.values() for k in keys
     )
-    snapshot = read_catalog(home=home) if needs_catalog else None
+    if snapshot is _UNSET:
+        snapshot = read_catalog(home=home) if needs_catalog else None
     blocked: set[SkillKey] = set()
     acquired: list[str] = []
     errors: list[str] = []

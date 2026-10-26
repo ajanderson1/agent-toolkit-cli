@@ -1,5 +1,11 @@
 # Agents (subagents)
 
+The optional [shared catalogue](../agent-toolkit/catalog.md) lists agents without
+acquiring or enabling them. Use this kind's `catalog list` / `catalog add` /
+`catalog enable` commands for Git entries; native Pi npm uses explicit confirmed
+`pi-extensions catalog install`, not library registration.
+
+
 Agents are delegable assistant definitions: canonical Markdown with frontmatter, stored in a source-backed library and projected into supported harness slots. `agents-lock.json` uses the shared `skills` envelope. Source metadata is not proof that the projected file still exists.
 
 ## Projection and scope

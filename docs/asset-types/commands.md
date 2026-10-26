@@ -1,5 +1,11 @@
 # Commands
 
+The optional [shared catalogue](../agent-toolkit/catalog.md) lists commands without
+acquiring or enabling them. Use this kind's `catalog list` / `catalog add` /
+`catalog enable` commands for Git entries; native Pi npm uses explicit confirmed
+`pi-extensions catalog install`, not library registration.
+
+
 The `commands` group (`command` alias) manages the Commands asset type: reusable slash-command prompts. Commands live in the toolkit library as `COMMAND.md` folders and are projected into harness-specific command or prompt-template locations.
 
 - **Lock file:** `commands-lock.json`

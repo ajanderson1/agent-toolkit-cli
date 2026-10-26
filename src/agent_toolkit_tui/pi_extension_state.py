@@ -15,10 +15,11 @@ from typing import Literal
 
 from agent_toolkit_cli.pi_local_extensions import LocalExtensionState, read_local_extension_states
 from agent_toolkit_cli.pi_npm import NpmState
+from agent_toolkit_tui.catalog_state import CatalogFields, merge_catalog_rows
 from agent_toolkit_cli.pi_extension_inventory import InventoryRecord, build_inventory
 from agent_toolkit_cli.pi_extension_paths import library_pi_extension_path, pi_extension_dir
 
-Origin = Literal["store-owned", "npm", "untracked", "local-package"]
+Origin = Literal["store-owned", "npm", "untracked", "local-package", "catalog"]
 
 
 @dataclass(frozen=True)
@@ -34,7 +35,7 @@ class PiCell:
 
 
 @dataclass
-class PiExtensionRow:
+class PiExtensionRow(CatalogFields):
     """One row per Pi extension slug."""
 
     slug: str
@@ -91,6 +92,7 @@ def build_pi_rows(
     *,
     home: Path | None = None,
     project: Path | None = None,
+    catalog_snapshot=None,
 ) -> list[PiExtensionRow]:
     """Separate native local selection from package settings and library links."""
     home = home or Path.home()
@@ -121,4 +123,5 @@ def build_pi_rows(
         if record.origin == "untracked":
             row.local_state = local_states.get(record.slug, LocalExtensionState())
         rows.append(row)
-    return rows
+    return merge_catalog_rows("pi-extension", rows, catalog_snapshot,
+        scope="project" if project else "global", home=home, project=project)

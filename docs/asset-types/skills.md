@@ -20,7 +20,9 @@ Scope defaults differ by verb; add/remove/import are library-only. Read/update/p
 
 ## Optional shared Git catalog
 
-Subscribe to one user-global Git catalog without downloading or enabling its skills:
+Subscribe to one user-global Git catalog without downloading or enabling its skills.
+The [shared catalogue](../agent-toolkit/catalog.md) also supports Agents, Commands
+and Pi extensions; subscription changes affect all four kinds:
 
 ```bash
 agent-toolkit-cli skills catalog subscribe ssh://git@example-tailnet/org/skill-catalog.git --ref main
@@ -42,9 +44,10 @@ fails or its manifest is invalid, catalog-only entries are hidden with a warning
 no stale listing fallback is used. Downloaded library skills remain visible and
 usable. Removing a listing or subscription never deletes content or disables it.
 
-The catalog repository supplies `catalog.json` with `version: 1` and a `skills`
-array. Entries have a unique `key`, `description`, Git repository `source`, safe
-relative `path` (`.` for root), and optional branch/tag/commit `ref`. No payloads,
+The catalog repository supplies `catalog.json`. Version 2 uses typed `entries`;
+skills have `kind: skill`, `sourceType: git`, a unique `key`, `description`, Git
+repository `source`, safe relative `path` (`.` for root), and optional
+branch/tag/commit `ref`. Existing version-1 `skills` arrays remain readable. No payloads,
 credentials or activation state belong in the catalog. Nested children use their
 exact directory and existing shared-parent machinery. Matching source/path/ref
 reuses a library row; names alone never authorize replacement. Existing catalog

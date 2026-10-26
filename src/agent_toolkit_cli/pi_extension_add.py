@@ -55,6 +55,7 @@ def add(
     scope: str = "global",
     home: Path | None = None,
     project: Path | None = None,
+    parsed_source: ParsedSource | None = None,
 ) -> str:
     """Add a Pi extension to the global library. Returns the slug.
 
@@ -80,7 +81,7 @@ def add(
 
     # Store-owned: parse + clone into the library, THEN write the lock.
     try:
-        parsed = parse_source(source)
+        parsed = parsed_source if parsed_source is not None else parse_source(source)
     except SourceParseError as exc:
         raise AddError(str(exc)) from exc
     if parsed.subpath:
@@ -103,7 +104,7 @@ def add(
             # skill add). Idempotent success ONLY over a valid repo.
             lock = read_lock(lock_path)
             existing = lock.skills.get(ext_slug)
-            requested = parsed.owner_repo or parsed.url
+            requested = parsed.identity
             if existing is not None and existing.source != requested:
                 raise AddError(
                     f"{ext_slug}: library already has a different source "
@@ -175,7 +176,7 @@ def add(
 
     lock = read_lock(lock_path)
     entry = LockEntry(
-        source=parsed.owner_repo or parsed.url,
+        source=parsed.identity,
         source_type=parsed.type,
         ref=parsed.ref,
         pi_extension_path=ext_slug,

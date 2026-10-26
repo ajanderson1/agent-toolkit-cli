@@ -4,6 +4,7 @@ from __future__ import annotations
 import click
 
 from agent_toolkit_cli._group import AliasedGroup
+from agent_toolkit_cli.commands.catalog import kind_catalog, check_command
 from agent_toolkit_cli.commands.pi_extension.add_cmd import add_cmd
 from agent_toolkit_cli.commands.pi_extension.doctor_cmd import doctor_cmd
 from agent_toolkit_cli.commands.pi_extension.import_cmd import import_cmd
@@ -35,6 +36,8 @@ pi_extension.add_command(push_cmd)
 pi_extension.add_command(import_cmd)
 pi_extension.add_command(reset_cmd)
 pi_extension.add_command(doctor_cmd)
+pi_extension.add_command(kind_catalog("pi-extension"))
+pi_extension.add_command(check_command("pi-extension"))
 pi_extension.add_command(enable_cmd)
 pi_extension.add_command(disable_cmd)
 pi_extension.add_command(reset_selection_cmd)

@@ -89,11 +89,12 @@ def install(
     scope: Scope,
     home: Path | None = None,
     project: Path | None = None,
+    git_only: bool = False,
 ) -> None:
     """Project `slug` into `scope`. Raises InstallError / PiSettingsError."""
     home = home or Path.home()
     from agent_toolkit_cli.pi_npm_lifecycle import npm_source_for, install_npm
-    source = npm_source_for(slug, scope=scope, home=home, project=project)
+    source = None if git_only else npm_source_for(slug, scope=scope, home=home, project=project)
     if source is not None:
         install_npm(source=source, scope=scope, home=home, project=project)
         return
@@ -119,6 +120,7 @@ def install(
             write_lock(proj_lock_path, add_entry(proj_lock, slug, LockEntry(
                 source=entry.source, source_type=entry.source_type,
                 ref=entry.ref, pi_extension_path=entry.pi_extension_path,
+                extras=dict(entry.extras),
             )))
 
 
@@ -128,6 +130,7 @@ def uninstall(
     scope: Scope,
     home: Path | None = None,
     project: Path | None = None,
+    git_only: bool = False,
 ) -> None:
     """Drop `slug`'s projection from `scope`. Raises InstallError / PiSettingsError.
 
@@ -136,7 +139,7 @@ def uninstall(
     project scope prunes the project lock."""
     home = home or Path.home()
     from agent_toolkit_cli.pi_npm_lifecycle import npm_source_for, remove_npm
-    source = npm_source_for(slug, scope=scope, home=home, project=project)
+    source = None if git_only else npm_source_for(slug, scope=scope, home=home, project=project)
     if source is not None:
         remove_npm(identity=source, scope=scope, home=home, project=project)
         return

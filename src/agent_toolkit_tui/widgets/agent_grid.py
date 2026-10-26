@@ -62,13 +62,19 @@ _STATE_MARKUP = {
     "installed": "[dim]—[/]",
     "library": "[dim]library[/]",
     "unlisted": "[yellow]unlisted[/]",
+    "catalog": "[cyan]catalog[/]",
 }
 
 Op = Literal["link", "unlink"]
 
 
-class AgentGrid(Vertical):
+from agent_toolkit_tui.widgets.catalog_pending import CatalogPendingMixin
+
+
+class AgentGrid(CatalogPendingMixin, Vertical):
     """One row per locked agent with selection-aware harness cells."""
+
+    catalog_kind = "agent"
 
     class PendingChanged(Message):
         """Posted whenever the pending toggle set changes.
@@ -147,9 +153,11 @@ class AgentGrid(Vertical):
         (clear_pending / restore_pending / set_rows / set_scope) deliberately
         do NOT notify: their callers already set the footer line explicitly.
         """
+        self._capture_catalog_pending()
         self.post_message(self.PendingChanged(len(self._pending)))
 
     def clear_pending(self) -> None:
+        self._catalog_pending = {}
         self._pending.clear()
         try:
             table = self.query_one("#agent-table", DataTable)
@@ -159,6 +167,7 @@ class AgentGrid(Vertical):
 
     def restore_pending(self, pending: dict[tuple[str, str, str], Op]) -> None:
         self._pending.update(pending)
+        self._capture_catalog_pending()
         try:
             table = self.query_one("#agent-table", DataTable)
             self._rebuild(table)
@@ -235,7 +244,9 @@ class AgentGrid(Vertical):
         row = visible[table.cursor_coordinate.row]
         from agent_toolkit_cli.agent_paths import canonical_agent_dir, library_agent_path
 
-        if row.ref == "(untracked)":
+        if row.catalog_only:
+            details = []
+        elif row.ref == "(untracked)":
             details = local_path_info(Path(row.source))
         else:
             source_path = canonical_agent_dir(
@@ -245,14 +256,15 @@ class AgentGrid(Vertical):
             if not source_path.exists():
                 source_path = library_agent_path(row.slug)
             details = library_info(source_path)
+        details += self._catalog_info(row)
         self.app.push_screen(
             CellInfoScreen(
                 title=f"{row.slug} · {asset_type_label('agent')}",
                 body_markup=asset_info_body(
                     asset_label=asset_type_label("agent"),
                     slug=row.slug,
-                    description=None,
-                    description_location="agent definition",
+                    description=row.description or None,
+                    description_location="catalog" if row.catalog_item else "agent definition",
                     source=escape(row.source),
                     ref=None if row.ref == "(untracked)" else row.ref,
                     state="local files (read-only)" if row.ref == "(untracked)" else row.state,

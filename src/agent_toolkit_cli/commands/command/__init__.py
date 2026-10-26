@@ -3,6 +3,7 @@ from __future__ import annotations
 import click
 
 from agent_toolkit_cli._group import AliasedGroup
+from agent_toolkit_cli.commands.catalog import kind_catalog, check_command
 from agent_toolkit_cli.commands.command.add_cmd import add_cmd
 from agent_toolkit_cli.commands.command.doctor_cmd import doctor_cmd
 from agent_toolkit_cli.commands.command.import_cmd import import_cmd
@@ -33,3 +34,5 @@ command.add_command(push_cmd)
 command.add_command(import_cmd)
 command.add_command(reset_cmd)
 command.add_command(doctor_cmd)
+command.add_command(kind_catalog("command"))
+command.add_command(check_command("command"))

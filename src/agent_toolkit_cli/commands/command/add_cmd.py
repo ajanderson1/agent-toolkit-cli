@@ -99,7 +99,13 @@ def _add_monorepo(parsed, final_slug: str) -> None:
     if not skill_git.remote_matches(parent, parsed.url, None):
         raise click.ClickException(f"{final_slug}: foreign parent origin at {parent}")
     command_root = parent / parsed.subpath
-    content = command_root / "COMMAND.md"
+    from agent_toolkit_cli.agent_paths import checked_agent_content
+    if parsed.ref is not None and not skill_git._checked_out_at_ref(parent, parsed.ref, None):
+        raise click.ClickException(f"{final_slug}: shared parent ref conflict; existing checkout retained")
+    try:
+        content = checked_agent_content(parent, f"{parsed.subpath}/COMMAND.md", final_slug)
+    except RuntimeError as exc:
+        raise click.ClickException(str(exc)) from exc
     if content.is_symlink() or not content.is_file():
         raise click.ClickException(f"{final_slug}: COMMAND.md not found at {parsed.subpath}/COMMAND.md in {parsed.owner_repo}")
     command_path = f"{parsed.subpath}/COMMAND.md"
@@ -107,7 +113,7 @@ def _add_monorepo(parsed, final_slug: str) -> None:
     lock = read_lock(lock_path)
     existing = lock.skills.get(final_slug)
     if existing is not None:
-        if existing.source != parsed.owner_repo or existing.command_path != command_path:
+        if existing.source != parsed.owner_repo or existing.command_path != command_path or existing.ref != parsed.ref:
             raise click.ClickException(f"{final_slug}: library entry exists; refusing to overwrite. Run `command remove {final_slug}` first.")
         click.echo(f"already in library: {final_slug}")
         return

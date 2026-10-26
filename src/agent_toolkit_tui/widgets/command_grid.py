@@ -61,13 +61,19 @@ _STATE_MARKUP = {
     "installed": "[dim]—[/]",
     "library": "[dim]library[/]",
     "unlisted": "[yellow]unlisted[/]",
+    "catalog": "[cyan]catalog[/]",
 }
 
 Op = Literal["link", "unlink"]
 
 
-class CommandGrid(Vertical):
+from agent_toolkit_tui.widgets.catalog_pending import CatalogPendingMixin
+
+
+class CommandGrid(CatalogPendingMixin, Vertical):
     """One row per locked command with selection-aware harness cells."""
+
+    catalog_kind = "command"
 
     class PendingChanged(Message):
         """Posted whenever the pending toggle set changes.
@@ -147,9 +153,11 @@ class CommandGrid(Vertical):
         (clear_pending / restore_pending / set_rows / set_scope) deliberately
         do NOT notify: their callers already set the footer line explicitly.
         """
+        self._capture_catalog_pending()
         self.post_message(self.PendingChanged(len(self._pending)))
 
     def clear_pending(self) -> None:
+        self._catalog_pending = {}
         self._pending.clear()
         try:
             table = self.query_one("#command-table", DataTable)
@@ -159,6 +167,7 @@ class CommandGrid(Vertical):
 
     def restore_pending(self, pending: dict[tuple[str, str, str], Op]) -> None:
         self._pending.update(pending)
+        self._capture_catalog_pending()
         try:
             table = self.query_one("#command-table", DataTable)
             self._rebuild(table)
@@ -239,12 +248,13 @@ class CommandGrid(Vertical):
                 body_markup=asset_info_body(
                     asset_label=asset_type_label("command"),
                     slug=row.slug,
-                    description=None,
-                    description_location="command markdown",
+                    description=row.description or None,
+                    description_location="catalog" if row.catalog_item else "command markdown",
                     source=row.source,
                     ref=row.ref,
                     state=row.state,
                     scope=self._scope,
+                    extra_lines=self._catalog_info(row),
                 ),
             )
         )

@@ -9,6 +9,7 @@ import click
 from agent_toolkit_cli.commands.agent import agent
 from agent_toolkit_cli.commands.bundle import bundle
 from agent_toolkit_cli.commands.command import command
+from agent_toolkit_cli.commands.catalog import catalog
 from agent_toolkit_cli.commands.instructions import instructions
 from agent_toolkit_cli.commands.mcp import mcp
 from agent_toolkit_cli.commands.pi_extension import pi_extension
@@ -85,6 +86,7 @@ main.add_command(mcp, name="mcps")
 main.add_command(pi_extension, name="pi-extensions")
 main.add_command(bundle, name="bundles")
 main.add_command(instructions)
+main.add_command(catalog)
 
 
 if __name__ == "__main__":

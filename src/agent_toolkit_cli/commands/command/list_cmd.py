@@ -31,11 +31,14 @@ def list_cmd(ctx, json_, global_, project_flag):
             "scope": scope,
             "harnesses": list(e.harnesses),
         })
+    from pathlib import Path
+    from agent_toolkit_cli.asset_catalog_ops import join_inventory
+    rows = join_inventory("command", rows, scope=scope, home=home or Path.home(), project=project)
     if json_:
         click.echo(json.dumps(rows, indent=2))
     else:
         for r in rows:
-            harnesses = ",".join(r["harnesses"]) if r["harnesses"] else "(none)"
+            harnesses = "(catalog; not acquired)" if r.get("origin") == "catalog" else ",".join(r["harnesses"]) if r["harnesses"] else "(none)"
             click.echo(
                 f"{r['slug']}\t{r['source']}\t{r['ref'] or '(default)'}\t{harnesses}"
             )

@@ -167,6 +167,19 @@ Legacy whole-repo exposure is recognized without writing. The first selection-ch
 
 Conflicts leave failed edits queued. A collection failure restores only its affected links/records against fresh locks, preserving unrelated work; failed recovery stays prominent with the remaining ownership conflict. Correct the conflict and retry, or Revert the queued request. Referenced backing checkouts remain preserved even after the final fake wrapper record is retired. A matching library-only rootless container does not reappear as a broken project skill after Apply, Refresh or restart. This presentation identity is separate from authority to mutate the active scope. Real missing child documents, foreign projections and distinct-copy ambiguity remain visible. If an unregistered wrapper projection still exists—even pointing to the retained backing—it remains a visible exposure warning and blocks unsafe collection changes; no library record authorizes silently retiring it.
 
+## Shared catalogue rows
+
+Skills, Agents, Commands and Pi extensions share one live Git catalogue snapshot.
+Catalogue-only Git rows start unacquired and disabled; Space queues acquisition and
+exposure, Apply revalidates the selected source/subscription, and Revert downloads
+nothing. Npm catalogue-only rows are read-only; Info gives an explicit confirmed
+native installation command. Once installed, native npm selection controls apply.
+
+A failed catalogue refresh hides catalogue-only rows, not acquired assets. Removing
+an entry or unsubscribing does not delete library content or disable exposure.
+Info shows source/provenance and timestamped Git checks; there are no automatic
+upstream updates. [Full catalogue behavior](catalog.md).
+
 ## How edits flow
 
 Toggling a cell **queues** a pending edit; nothing touches disk until you

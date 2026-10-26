@@ -99,7 +99,7 @@ def add_cmd(source: str, slug: str | None, ref: str | None) -> None:
         _add_single(parsed, slug)
 
 
-def _add_single(parsed: ParsedSource, slug: str | None) -> None:
+def _add_single(parsed: ParsedSource, slug: str | None, *, expected_entry_file: str | None = None) -> None:
     """Single-repo add: clone the whole repo as the canonical (current model)."""
     final_slug = slug or _derive_slug(parsed)
     if not final_slug:
@@ -155,6 +155,10 @@ def _add_single(parsed: ParsedSource, slug: str | None) -> None:
     # Prefer the actual flat entry when present; directory packages have only
     # AGENTS.md and record that choice explicitly.
     content_file = canonical / (f"{final_slug}.md" if (canonical / f"{final_slug}.md").is_file() else "AGENTS.md")
+    if expected_entry_file is not None and content_file.name != expected_entry_file:
+        if fresh_clone:
+            shutil.rmtree(canonical, ignore_errors=True)
+        raise click.ClickException(f"{final_slug}: source agent shape does not match catalog entryFile")
     if not content_file.exists():
         if fresh_clone:
             shutil.rmtree(canonical, ignore_errors=True)
@@ -200,7 +204,8 @@ def _add_single(parsed: ParsedSource, slug: str | None) -> None:
     click.echo(f"added {final_slug} to library <- {parsed.url}")
 
 
-def _add_monorepo(parsed: ParsedSource, slug: str | None) -> None:
+def _add_monorepo(parsed: ParsedSource, slug: str | None, *,
+                  expected_entry_file: str | None = None, refresh_existing_parent: bool = True) -> None:
     """Category-repo add: clone the parent once, symlink the agent subdir in.
 
     Mirrors `commands/skill/__init__.py:_add_monorepo`. The agent lives at
@@ -256,7 +261,7 @@ def _add_monorepo(parsed: ParsedSource, slug: str | None) -> None:
             raise click.ClickException(f"{final_slug}: shared parent ref conflict at {parent_dir}")
         from agent_toolkit_cli.skill_lock import looks_like_sha
         try:
-            if looks_like_sha(parsed.ref):
+            if looks_like_sha(parsed.ref) or not refresh_existing_parent:
                 chosen = validate_agent_revision(parent_dir, skill_git.head_sha(parent_dir, env=None), paths, new_agent=new_agent)
             else:
                 _head, chosen = refresh_agent_repo(parent_dir, source_url=parsed.url, ref=parsed.ref,
@@ -267,6 +272,8 @@ def _add_monorepo(parsed: ParsedSource, slug: str | None) -> None:
     agent_root = parent_dir / subpath
     content_rel = existing_entry.agent_path if existing_entry is not None else chosen
     filename = Path(content_rel).name
+    if expected_entry_file is not None and filename != expected_entry_file:
+        raise click.ClickException(f"{final_slug}: source agent shape does not match catalog entryFile")
     if not (agent_root / filename).is_file():
         # Do NOT rmtree the shared parent on a missing content file.
         raise click.ClickException(

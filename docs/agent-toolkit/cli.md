@@ -9,14 +9,32 @@ Plural names are canonical; singular aliases remain accepted, including `instruc
 | Group | Singular alias | Shipped verbs |
 |---|---|---|
 | `skills` | `skill` | add, install, uninstall, list, status, check, update, push, reset, remove, import, doctor, catalog |
-| `agents` | `agent` | add, install, uninstall, list, status, update, push, reset, remove, import, doctor |
-| `commands` | `command` | add, install, uninstall, list, status, update, push, reset, remove, import, doctor |
+| `agents` | `agent` | add, install, uninstall, list, status, check, update, push, reset, remove, import, doctor, catalog |
+| `commands` | `command` | add, install, uninstall, list, status, check, update, push, reset, remove, import, doctor, catalog |
 | `instructions` | `instruction` | install, uninstall, list, status, doctor |
-| `pi-extensions` | `pi-extension` | add, install, uninstall, enable, disable, reset-selection, migrate-npm-records, list, status, update, push, reset, remove, import, doctor |
+| `pi-extensions` | `pi-extension` | add, install, uninstall, enable, disable, reset-selection, migrate-npm-records, list, status, check, update, push, reset, remove, import, doctor, catalog |
 | `mcps` | `mcp` | add, install, uninstall, list, status, update, remove, import, migrate, doctor |
 | `bundles` | `bundle` | install, validate |
 
 Each group supports `list` as `ls` where list exists, **except Instructions**. Skills also accepts `rm` for remove. Bundles is a utility, not another asset kind. Flags and argument cardinality are deliberately nonuniform; use `GROUP VERB --help` for the exact surface.
+
+## Shared catalogue utility
+
+`catalog subscribe URL [--ref REF]`, `catalog unsubscribe`, and
+`catalog list [--kind skills|agents|commands|pi-extensions] [--json]` manage one
+shared subscription. Each kind has `catalog list`; Git catalogue acquisition uses
+`catalog add KEY` or `catalog enable KEY`. New agent/command exposure commands
+require `--scope global|project --harnesses NAMES`; new Git Pi exposure requires
+`--scope`. Existing skills syntax is unchanged. Native npm instead uses
+`pi-extensions catalog install KEY --scope global|project [--yes]`, with explicit
+confirmation and no Toolkit npm registration.
+
+`catalog validate FILE [--admission] [--base FILE] [--reviews DIR]` distinguishes
+schema validation from revision-bound source/curator admission checks. This is a
+publishing utility, not another asset kind. [Full format, safety and examples](catalog.md).
+
+Agents, Commands and Git Pi also expose `check [SLUGS...] [-g|-p] [--json]` for
+catalogue-associated backing. Native npm is excluded; use Pi package updates.
 
 ## Scope and target selection
 

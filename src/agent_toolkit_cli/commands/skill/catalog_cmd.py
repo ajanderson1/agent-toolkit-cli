@@ -9,7 +9,7 @@ from agent_toolkit_cli.skill_catalog import configure_catalog, read_catalog
 
 @click.group("catalog")
 def catalog_cmd() -> None:
-    """Subscribe to one shared Git catalog; no automatic skill activation."""
+    """Skill entries in the shared catalog; subscription changes affect all four kinds."""
 
 
 @catalog_cmd.command("subscribe")
@@ -21,14 +21,14 @@ def subscribe(url: str, ref: str | None) -> None:
         configure_catalog(url, ref)
     except (ValueError, RuntimeError, OSError) as exc:
         raise click.ClickException(str(exc)) from exc
-    click.echo("Skill catalog subscribed; no skills downloaded or enabled.")
+    click.echo("Shared catalog subscribed for all four kinds; no assets downloaded or enabled.")
 
 
 @catalog_cmd.command("unsubscribe")
 def unsubscribe() -> None:
     """Remove subscription only; keep acquired skills and projections."""
     configure_catalog(None)
-    click.echo("Skill catalog unsubscribed; library skills retained.")
+    click.echo("Shared catalog unsubscribed for all four kinds; acquired assets retained.")
 
 
 @catalog_cmd.command("list")

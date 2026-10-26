@@ -52,8 +52,7 @@ def list_cmd(
     from pathlib import Path
     inventory_project = None if global_ else project_root or (ctx.obj or {}).get("project_root") or Path.cwd()
     records = build_inventory(home=home, project=inventory_project)
-    if as_json:
-        click.echo(json.dumps([
+    rows = [
             {
                 "slug": r.slug,
                 "origin": r.origin,
@@ -72,14 +71,18 @@ def list_cmd(
                 "npmProject": r.npm_state.project_scope.summary() if r.npm_state else None,
             }
             for r in records
-        ], indent=2))
+    ]
+    from agent_toolkit_cli.asset_catalog_ops import join_inventory
+    rows = join_inventory("pi-extension", rows, scope=scope, home=home or Path.home(), project=inventory_project)
+    if as_json:
+        click.echo(json.dumps(rows, indent=2))
         return
-    if not records:
+    if not rows:
         click.echo("no pi extensions found")
         return
-    rows = [
-        [r.slug, "✔" if r.global_loaded else "☐", "✔" if r.project_loaded else "☐",
-         _origin_label(r), r.source]
-        for r in records
+    table_rows = [
+        [r["slug"], "✔" if r["globalLoaded"] else "☐", "✔" if r["projectLoaded"] else "☐",
+         r.get("displayOrigin", r["origin"]), r["source"]]
+        for r in rows
     ]
-    click.echo(render_table(rows))
+    click.echo(render_table(table_rows))

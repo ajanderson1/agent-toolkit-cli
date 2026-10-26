@@ -37,6 +37,9 @@ verbs or aliases.
 **Kind** { #kind }
 :   Code/internal shorthand for asset type.
 
+**Shared asset catalogue** { #shared-asset-catalogue }
+:   An optional Git-backed list of upstream skills, agents, commands and Pi extensions. Catalogue-only inventory has origin `catalog`, not local library membership. Admission inspection checks an upstream asset before publication; consumer acquisition is a separate action. Removing an entry does not delete or disable acquired assets. This is distinct from the harness compatibility matrix. [Reference](agent-toolkit/catalog.md).
+
 **Collection** { #collection }
 :   A derived source/ref group of real skill children. The TUI parent is not a separate skill to enable or an extra lock entry; controls include full membership even when children are collapsed/filter-hidden.
 

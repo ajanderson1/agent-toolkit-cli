@@ -102,29 +102,30 @@ def list_cmd(
         count=len(lock.skills), err=as_json,
     )
 
+    records = []
+    for slug, entry in sorted(lock.skills.items()):
+        projected = _count_projections(slug, scope, home, project_root) > 0
+        records.append(dict(slug=slug, source=entry.source, sourceType=entry.source_type,
+            ref=entry.ref, projected=projected, scope=scope))
+    from pathlib import Path
+    from agent_toolkit_cli.asset_catalog_ops import join_inventory
+    records = join_inventory("agent", records, scope=scope, home=home or Path.home(), project=project_root)
+    for record in records:
+        if record.get("origin") == "library":
+            record["projected"] = _count_projections(record["slug"], "global", Path.home(), None) > 0
     if as_json:
-        records = []
-        for slug, entry in sorted(lock.skills.items()):
-            projected = _count_projections(slug, scope, home, project_root) > 0
-            records.append({
-                "slug": slug,
-                "source": entry.source,
-                "sourceType": entry.source_type,
-                "ref": entry.ref,
-                "projected": projected,
-                "scope": scope,
-            })
         click.echo(json.dumps(records, indent=2))
         return
-
-    if not lock.skills:
+    if not records:
         click.echo("no agents found")
         return
-
     rows = []
-    for slug, entry in sorted(lock.skills.items()):
-        n = _count_projections(slug, scope, home, project_root)
-        marker = "✔" if n > 0 else "☐"
-        ref_display = f"@{entry.ref}" if entry.ref else ""
-        rows.append([marker, slug, f"{entry.source}{ref_display}", f"[{n} harnesses]"])
+    for record in records:
+        catalog_only = record.get("origin") == "catalog"
+        actual_scope = record["scope"]
+        n = 0 if catalog_only else _count_projections(record["slug"], actual_scope, Path.home(),
+            project_root if actual_scope == "project" else None)
+        marker = "catalog" if catalog_only else "✔" if n > 0 else "☐"
+        ref_display = f"@{record['ref']}" if record.get("ref") else ""
+        rows.append([marker, record["slug"], f"{record['source']}{ref_display}", f"[{n} harnesses]"])
     click.echo(render_table(rows))

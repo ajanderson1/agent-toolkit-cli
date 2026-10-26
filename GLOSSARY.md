@@ -57,7 +57,7 @@ Do not assume every asset type implements the same lifecycle:
 | Harness | A coding assistant that can discover/load supported assets; catalog presence does not prove adapter support. |
 | Inventory | Known or discovered assets within the locations Toolkit inspected. Presence in inventory does not imply management or enablement. |
 | Discovery | Read-only inspection of records, content and harness configuration. It does not add, enable or adopt assets. |
-| Origin | Where an inventory item comes from: `library` for Toolkit library content, `local` for discovered local content, or `npm` for native Pi/npm packages where applicable. Not a visibility scope. |
+| Origin | Where an inventory item comes from: `library` for Toolkit library content, `local` for discovered local content, `npm` for native Pi/npm packages, or `catalog` for an unacquired shared-catalogue entry. Not a visibility scope or proof of enablement. |
 | Source | The recorded origin used to identify or obtain content or a server definition. |
 | Canonical | Authoritative asset content to which projections refer; not a separate copy per harness. |
 | Collection | A derived source/ref group of real skill children, not an extra skill, asset type or lock entry. |

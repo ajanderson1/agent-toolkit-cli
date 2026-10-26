@@ -14,9 +14,10 @@ from agent_toolkit_cli.command_paths import (
     project_store_root,
 )
 from agent_toolkit_tui.composition import commands_main
+from agent_toolkit_tui.catalog_state import CatalogFields, merge_catalog_rows
 
 Scope = Literal["global", "project"]
-State = Literal["installed", "library", "unlisted"]
+State = Literal["installed", "library", "unlisted", "catalog"]
 
 
 def interactive_harnesses(
@@ -33,7 +34,7 @@ class CommandCell:
 
 
 @dataclass
-class CommandRow:
+class CommandRow(CatalogFields):
     slug: str
     source: str
     ref: str
@@ -64,6 +65,7 @@ def build_command_rows(
     home: Path | None,
     project: Path | None,
     selection: tuple[str, ...] | None = None,
+    catalog_snapshot=None,
 ) -> list[CommandRow]:
     lib = dict(read_lock(library_lock_path()).skills)
     scoped = dict(read_lock(lock_file_path(scope=scope, home=home, project=project)).skills)
@@ -141,4 +143,5 @@ def build_command_rows(
             cells=cells,
         ))
 
-    return rows
+    return merge_catalog_rows("command", rows, catalog_snapshot, scope=scope,
+        home=home, project=project, selection=selection)

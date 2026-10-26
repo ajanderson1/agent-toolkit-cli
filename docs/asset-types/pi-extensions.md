@@ -1,5 +1,11 @@
 # Pi extensions
 
+The optional [shared catalogue](../agent-toolkit/catalog.md) lists pi extensions without
+acquiring or enabling them. Use this kind's `catalog list` / `catalog add` /
+`catalog enable` commands for Git entries; native Pi npm uses explicit confirmed
+`pi-extensions catalog install`, not library registration.
+
+
 This kind manages **Pi** extensions only. Inventory combines Git-backed library
 extensions, native npm packages, loose extensions and declared filesystem packages.
 Configuration selection is not a report of code loaded in a running Pi session.

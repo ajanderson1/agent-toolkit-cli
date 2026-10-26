@@ -26,9 +26,10 @@ from agent_toolkit_cli.agent_adapters import UnsupportedMechanismError, get_adap
 from agent_toolkit_cli.agent_lock import read_lock
 from agent_toolkit_cli.agent_paths import lock_file_path
 from agent_toolkit_tui.composition import agents_nonstandard_main
+from agent_toolkit_tui.catalog_state import CatalogFields, merge_catalog_rows
 
 Scope = Literal["global", "project"]
-State = Literal["installed", "library", "unlisted"]
+State = Literal["installed", "library", "unlisted", "catalog"]
 
 def interactive_harnesses(
     scope: str,
@@ -46,7 +47,7 @@ class AgentCell:
 
 
 @dataclass
-class AgentRow:
+class AgentRow(CatalogFields):
     """One row per slug in union(library lock, scope lock)."""
 
     slug: str
@@ -92,6 +93,7 @@ def build_agent_rows(
     home: Path | None,
     project: Path | None,
     selection: tuple[str, ...] | None = None,
+    catalog_snapshot=None,
 ) -> list[AgentRow]:
     """Build AgentRow list from union(library lock, scope lock) + filesystem.
 
@@ -188,4 +190,5 @@ def build_agent_rows(
             cells=cells,
         ))
 
-    return rows
+    return merge_catalog_rows("agent", rows, catalog_snapshot, scope=scope,
+        home=home, project=project, selection=selection)

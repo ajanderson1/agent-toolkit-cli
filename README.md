@@ -19,7 +19,9 @@ The toolkit creates symlinks, translates Markdown, or edits named configuration 
 - **Precise Git state:** child clean/dirty badges inspect their own directories; parent badges describe the whole checkout. Explicit `skills check` works for registered Git-backed skills without requiring a catalogue subscription.
 - **Pinned reset support:** force reset restores the configured commit pin, tag or latest fetched branch tip—not an invented `origin/<SHA>` branch.
 
-The catalogue remains optional and currently supports **Skills only**. Existing command spellings remain supported: **add/remove** describe library membership; **enable/disable** describe harness exposure, currently spelled `install`/`uninstall` for source-backed kinds. Version 7.0 does not introduce that proposed CLI rename.
+The catalogue remains optional. The current source extends its original skills-only
+format to **Skills, Agents, Commands and Pi extensions**, with explicit acquisition
+and revision-bound publishing checks. [Shared catalogue](docs/agent-toolkit/catalog.md). Existing command spellings remain supported: **add/remove** describe library membership; **enable/disable** describe harness exposure, currently spelled `install`/`uninstall` for source-backed kinds. Version 7.0 does not introduce that proposed CLI rename.
 
 [Full changelog](CHANGELOG.md) · [Release assets and receipts](https://github.com/ajanderson1/agent-toolkit-cli/releases/tag/v7.0.0)
 
@@ -84,20 +86,20 @@ agent-toolkit-cli mcps --help
 agent-toolkit-cli bundles --help
 ```
 
-### Optional shared skill catalogue
+### Optional shared asset catalogue
 
 Subscribe to a publisher's Git catalogue, replacing the example URL and `KEY` with its values:
 
 ```bash
-agent-toolkit-cli skills catalog subscribe ssh://git@git.example.org/team/skill-catalog.git --ref main
-agent-toolkit-cli skills catalog list
+agent-toolkit-cli catalog subscribe ssh://git@git.example.org/team/skill-catalog.git --ref main
+agent-toolkit-cli catalog list
 agent-toolkit-cli skills catalog add KEY
 agent-toolkit-cli skills catalog enable KEY --scope project --agents claude-code
 ```
 
 `add` acquires library content without enabling it. Explicit catalogue `enable` can also acquire a missing selected skill before creating its harness exposure. The TUI provides the same workflow: expand a collection, press **Space** to queue changes, **Ctrl+S** to Apply, **Ctrl+Z** to Revert, and **i** for Info. Upstream checks and updates remain CLI-only.
 
-Listing refreshes fetch the catalogue, not its advertised asset repositories. A failed refresh hides catalogue-only offers with a warning rather than showing stale listings; acquired skills remain usable. Disabling, publisher delisting or `skills catalog unsubscribe` does not delete acquired content. Unsubscribing does not retract existing exposure. [Catalogue format and lifecycle](docs/asset-types/skills.md#optional-shared-git-catalog).
+Listing refreshes fetch the catalogue, not its advertised asset repositories. A failed refresh hides catalogue-only offers with a warning rather than showing stale listings; acquired skills remain usable. Disabling, publisher delisting or `skills catalog unsubscribe` does not delete acquired content. Unsubscribing does not retract existing exposure. [Catalogue format, per-kind actions and admission](docs/agent-toolkit/catalog.md).
 
 ### Discarding local Git work
 
