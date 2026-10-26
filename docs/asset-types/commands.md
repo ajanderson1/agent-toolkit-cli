@@ -1,5 +1,10 @@
 # Commands
 
+Examples use `atc`, the packaged CLI name; `agent-toolkit-cli` still works.
+[Install/verify](../agent-toolkit/installation.md) ·
+[Shell completion](../agent-toolkit/shell-completion.md). Root `atc update`
+updates the **application**, not this asset; see [package updates](../agent-toolkit/updates.md).
+
 The optional [shared catalogue](../agent-toolkit/catalog.md) lists commands without
 acquiring or enabling them. Use this kind's `catalog list` / `catalog add` /
 `catalog enable` commands for Git entries; native Pi npm uses explicit confirmed
@@ -58,11 +63,11 @@ Supporting files may live beside `COMMAND.md` for authorship, but first-cut proj
 ## CLI
 
 ```text
-agent-toolkit-cli commands add <source> [--slug <slug>] [--ref <ref>]
-agent-toolkit-cli commands install <slug> [-g|-p] [--harnesses standard,pi,gemini-cli]
-agent-toolkit-cli commands uninstall <slug> [-g|-p] [--harnesses <h>[,<h>...]]
-agent-toolkit-cli commands list [-g|-p] [--json]
-agent-toolkit-cli commands status|update|push|import|reset|remove|doctor ...
+atc commands add <source> [--slug <slug>] [--ref <ref>]
+atc commands install <slug> [-g|-p] [--harnesses standard,pi,gemini-cli]
+atc commands uninstall <slug> [-g|-p] [--harnesses <h>[,<h>...]]
+atc commands list [-g|-p] [--json]
+atc commands status|update|push|import|reset|remove|doctor ...
 ```
 
 - Default install: `standard,pi,gemini-cli`.

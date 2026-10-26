@@ -7,6 +7,14 @@ original context rather than being rewritten as current reference.
 
 ## Shipped baseline
 
+- Packaged `atc` / `att` entry points alongside the supported long names; no
+  command aliases are required. [Installation and verification](installation.md).
+- Cached stable-release startup notices, opt-out and explicit package self-update
+  for non-editable uv tools; opt-in `--main` uses commit identity. No automatic
+  package replacement. [Package updates](updates.md).
+- Dynamic command/flag/declared-choice/path completion for all four names, with
+  explicit managed setup/removal for Zsh, Bash 4.4+ and Fish.
+  [Shell completion](shell-completion.md).
 - Source-backed Skills, Agents, Commands and Pi extensions, with distinct
   library/projection operations and per-kind support limits.
 - Lockless Instructions: user-owned canonical content, actual filesystem pointer
@@ -58,6 +66,8 @@ command spellings; they do not redefine the product vocabulary.
 
 ### Other open questions
 
+- Dynamic asset-slug, catalogue-key or remote-source completion; current TAB
+  completion does not discover these values or fetch their sources.
 - Surface dirty owned content at session end without obscuring more urgent state.
 - A convenience skill diff command (not currently shipped).
 - Explicit handling of other installers' copied assets beyond supported bounded

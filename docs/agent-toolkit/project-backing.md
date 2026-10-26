@@ -63,14 +63,22 @@ copied gitfiles pointing at another worktree are refused. A branch checked out
 in multiple worktrees also blocks mutation, even with `--force`. There is no
 fallback to resetting central or another worktree.
 
+## Package updates do not migrate backing
+
+Root `atc update` / `att update` replaces the Toolkit application, not these
+libraries or project records. It leaves existing central/private decisions and
+harness exposure intact. New package versions do not implicitly convert private
+copies to central backing; use the explicit guarded operation below when that
+is your intended change. [Package updates and supported installations](updates.md).
+
 ## Explicit migration
 
 For one existing project installation:
 
 ```bash
-agent-toolkit-cli skills install my-skill -p --migrate-to-central
-agent-toolkit-cli agents install my-agent -p --harnesses pi --migrate-to-central
-agent-toolkit-cli commands install my-command -p --harnesses pi --migrate-to-central
+atc skills install my-skill -p --migrate-to-central
+atc agents install my-agent -p --harnesses pi --migrate-to-central
+atc commands install my-command -p --harnesses pi --migrate-to-central
 ```
 
 Targets/context are validated before migration. The requested single-asset

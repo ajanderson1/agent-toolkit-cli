@@ -1,5 +1,10 @@
 # Pi extensions
 
+Examples use `atc`, the packaged CLI name; `agent-toolkit-cli` still works.
+[Install/verify](../agent-toolkit/installation.md) ·
+[Shell completion](../agent-toolkit/shell-completion.md). Root `atc update`
+updates the **application**, not this asset; see [package updates](../agent-toolkit/updates.md).
+
 The optional [shared catalogue](../agent-toolkit/catalog.md) lists pi extensions without
 acquiring or enabling them. Use this kind's `catalog list` / `catalog add` /
 `catalog enable` commands for Git entries; native Pi npm uses explicit confirmed
@@ -31,13 +36,13 @@ uninstall is no longer a settings-only disable. Use `disable` to retain files.
 Git library add/install/uninstall/remove retain their existing meanings.
 
 ```bash
-agent-toolkit-cli pi-extensions add npm:@scope/package@1.2.3
-agent-toolkit-cli pi-extensions add npm:@scope/package@1.2.3 -p
-agent-toolkit-cli pi-extensions disable @scope/package -p
-agent-toolkit-cli pi-extensions enable @scope/package -p
-agent-toolkit-cli pi-extensions reset-selection @scope/package -p
-agent-toolkit-cli pi-extensions list --json
-agent-toolkit-cli pi-extensions remove npm:@scope/package -p --yes
+atc pi-extensions add npm:@scope/package@1.2.3
+atc pi-extensions add npm:@scope/package@1.2.3 -p
+atc pi-extensions disable @scope/package -p
+atc pi-extensions enable @scope/package -p
+atc pi-extensions reset-selection @scope/package -p
+atc pi-extensions list --json
+atc pi-extensions remove npm:@scope/package -p --yes
 ```
 
 Global policy applies to projects that inherit it. A project may explicitly enable
@@ -95,8 +100,8 @@ A legacy-only alias cannot install or remove a package; use an explicit `npm:` s
 or a currently discovered native identity, and migrate the old record separately.
 
 ```bash
-agent-toolkit-cli pi-extensions migrate-npm-records           # dry-run
-agent-toolkit-cli pi-extensions migrate-npm-records --apply   # back up, then prune npm records
+atc pi-extensions migrate-npm-records           # dry-run
+atc pi-extensions migrate-npm-records --apply   # back up, then prune npm records
 ```
 
 Use `-p` for a project lock. Non-npm entries and unknown metadata are preserved.
@@ -114,10 +119,10 @@ conflicts or repair needs require explicit handling outside the bundle.
 - Connections are shown as **Linked**, counted separately from native enablement.
 
 ```bash
-agent-toolkit-cli pi-extensions add owner/repo@main --slug my-extension
-agent-toolkit-cli pi-extensions install my-extension -p
-agent-toolkit-cli pi-extensions doctor -p --no-fix
-agent-toolkit-cli pi-extensions uninstall my-extension -p
+atc pi-extensions add owner/repo@main --slug my-extension
+atc pi-extensions install my-extension -p
+atc pi-extensions doctor -p --no-fix
+atc pi-extensions uninstall my-extension -p
 ```
 
 Git refs belong in SOURCE, not `--ref`. Git add/remove/import operate on the global

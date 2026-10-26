@@ -2,173 +2,249 @@
 
 ![Tests](https://github.com/ajanderson1/agent-toolkit-cli/actions/workflows/test.yml/badge.svg) ![License](https://img.shields.io/badge/license-MIT%20%2B%20Commons%20Clause-blue) ![Release](https://img.shields.io/github/v/release/ajanderson1/agent-toolkit-cli)
 
-Keep AI-agent assets under your control across coding harnesses.
-
 ## Overview
 
-Manage **skills, agents, commands, instructions, Pi extensions, and MCP servers** from a Python CLI or Textual terminal interface. Keep source-backed assets in a library, then choose which harnesses can see them at project or global scope. Local skill improvements are real Git work: update by merging upstream and publish through a pull request.
+Manage AI-agent assets across coding harnesses with **`atc`** (CLI) and **`att`**
+(Textual terminal UI). Keep source content in a library, then independently
+choose which projects and harnesses can see it.
 
-The toolkit creates symlinks, translates Markdown, or edits named configuration entries as each harness requires. **Support and verbs vary by kind and scope**; catalog membership is not universal support. Instructions uses your canonical `AGENTS.md` and actual filesystem pointers, not a lock. Bundles are an installation utility for skills, agents, and Pi extensions, not a seventh asset kind.
-
-[Documentation](https://ajanderson1.github.io/agent-toolkit-cli/) · [Compatibility matrix](docs/matrix.md) · [CLI reference](docs/agent-toolkit/cli.md) · [TUI reference](docs/agent-toolkit/tui.md)
+[Documentation](https://ajanderson1.github.io/agent-toolkit-cli/) ·
+[Installation](docs/agent-toolkit/installation.md) ·
+[CLI reference](docs/agent-toolkit/cli.md) · [TUI reference](docs/agent-toolkit/tui.md) ·
+[Compatibility matrix](docs/matrix.md)
 
 ## What's new in 7.1.0
 
-- **Short commands:** `atc` and `att` ship as real package executables; existing long names remain supported.
-- **Toolkit updates:** cached CLI/TUI startup notices and explicit `atc update` / `att update` use stable GitHub releases by default, with `--main` as an opt-in. Builds retain source-commit and wheel-hash provenance.
-- **Shell completion:** `atc completion install --shell zsh` sets up TAB completion for commands, flags, choices and paths across all four executable names. Bash and Fish are also supported.
+- **Packaged short commands:** `atc` and `att` are real executable entry points,
+  not Zsh aliases. Both long names remain supported.
+- **Package updates:** CLI/TUI startup notices and explicit `atc update` /
+  `att update`, stable releases by default, optional `--main`, and retained
+  source-commit/wheel-hash provenance. No automatic package replacement.
+- **Dynamic TAB completion:** commands, flags, declared choices and paths for
+  all four executable names. Explicit, reversible setup for Zsh, Bash and Fish.
 
-### Previous 7.0 releases
-
-- **Shared asset catalogue (7.0.1):** one optional subscription now covers Skills, Agents, Commands and Git/native npm Pi extensions. New or changed publisher entries require revision-bound inspection evidence; browsing never acquires or enables assets.
-- **Guarded catalogue actions (7.0.1):** explicit per-kind acquisition, selector-only pending validation, non-advancing Git reuse and regular Pi entrypoint checks preserve local work. Native npm installation remains explicit and confirmed, without a Toolkit npm registry.
-- **Expandable skill collections:** advertised and acquired children of the same Git repository/ref appear together. Browsing does not download skill content; explicit enablement acquires only selected missing children.
-- **Safer queued changes:** collection selections retain their original identities across refreshes, filters and collapse. Apply isolates failures by collection and scope, retaining safely acquired library content for retry.
-- **Precise Git state:** child clean/dirty badges inspect their own directories; parent badges describe the whole checkout. Explicit `skills check` works for registered Git-backed skills without requiring a catalogue subscription.
-- **Pinned reset support:** force reset restores the configured commit pin, tag or latest fetched branch tip—not an invented `origin/<SHA>` branch.
-
-The catalogue remains optional. Version 7.0.1 extends its original skills-only
-format to **Skills, Agents, Commands and Pi extensions**, with explicit acquisition
-and revision-bound publishing checks. [Shared catalogue](docs/agent-toolkit/catalog.md). Existing command spellings remain supported: **add/remove** describe library membership; **enable/disable** describe harness exposure, currently spelled `install`/`uninstall` for source-backed kinds. Version 7.0 does not introduce that proposed CLI rename.
-
-[Full changelog](CHANGELOG.md) · [Release assets and receipts](https://github.com/ajanderson1/agent-toolkit-cli/releases/tag/v7.1.0)
+The shared catalogue introduced in 7.0.1 still covers Skills, Agents, Commands
+and Git/native npm Pi extensions. Catalogue browsing does not acquire or enable
+assets. [Catalogue workflow](docs/agent-toolkit/catalog.md) ·
+[Full changelog](CHANGELOG.md) ·
+[7.1.0 release assets and receipt](https://github.com/ajanderson1/agent-toolkit-cli/releases/tag/v7.1.0).
 
 ## Installation
 
-Requires **Python 3.12+**, [uv](https://docs.astral.sh/uv/) and Git. Install the **toolkit package** (both binaries):
+Requires **Python 3.12+**, [uv](https://docs.astral.sh/uv/) and Git for source
+installation/self-updates. This installs both applications in one tool environment:
+
+```bash
+uv tool install --from git+https://github.com/ajanderson1/agent-toolkit-cli@v7.1.0 agent-toolkit
+atc --version
+att --version
+```
+
+| Short name | Equivalent long name | Use |
+|---|---|---|
+| `atc` | `agent-toolkit-cli` | Asset CLI, package updates and completion setup. |
+| `att` | `agent-toolkit-tui` | Open the TUI; also run `update` or `completion` from the shell. |
+
+No shell aliases are required. Ensure uv's executable directory is on `PATH`
+(`uv tool dir --bin`; `uv tool update-shell` can configure it), then open a new
+terminal if needed. There is **no configured PyPI publication**; use this
+canonical repository or the official GitHub release assets.
+
+### Upgrade a pre-7.1.0 client
+
+Older clients have neither the short names nor the package updater. Perform a
+one-time package-manager upgrade first:
 
 ```bash
 uv tool install --from git+https://github.com/ajanderson1/agent-toolkit-cli@v7.1.0 agent-toolkit
 agent-toolkit-cli --version
-```
-
-This selects the tagged release rather than a moving development branch. To upgrade an existing installation to this release:
-
-```bash
-uv tool install --force --from git+https://github.com/ajanderson1/agent-toolkit-cli@v7.1.0 agent-toolkit
-agent-toolkit-cli --version
 agent-toolkit-tui --version
 ```
 
-The package also ships **`atc`** (CLI) and **`att`** (TUI) executables; no shell aliases are needed. Older releases need a one-time upgrade to a release containing these entry points.
+Inspect executable collisions and obsolete user-authored aliases rather than
+blindly overwriting another tool with `--force`. Restart an already-running TUI.
+[PATH, development environments and installation troubleshooting](docs/agent-toolkit/installation.md).
+
+### Verify a release build
+
+Official releases include a wheel, sdist, `SHA256SUMS` and a
+`deployment-receipt.json` binding the artifacts to the canonical source commit.
+Verify checksums **before** installing a downloaded wheel; keep its durable
+source path and receipt. A version string alone is insufficient build identity.
+
+For **7.1.0**, canonical source is
+`4c7196db8764ac1ad3b9b7bc50584c28026d7f41` and the official wheel SHA-256 is
+`d9d4cd0308e9c36c75b7b90eea9a08b8c6d971308a8343d339efff69b4564aff`.
+[Download, verify and install the official wheel](docs/agent-toolkit/installation.md#verify-a-published-wheel).
+
+## Keep Toolkit current
 
 ```bash
-atc update --check   # Check the latest stable GitHub release now
-atc update           # Update both CLI and TUI from that release
-att update           # Same updater, without opening the TUI
-atc update --main    # Explicit opt-in to the newest development commit
+atc update --check          # Fresh stable-release check, without replacement
+atc update                 # Update both applications
+att update                 # Same updater; does not open the TUI
+atc update --main --check   # Explicit development-commit comparison
+atc update --main           # Explicit opt-in to the newest canonical main commit
 ```
 
-Interactive CLI invocations and TUI startup check for newer stable releases, caching results for six hours. Notices say `Run atc update to update`; checks never update automatically. Set `AGENT_TOOLKIT_NO_UPDATE_CHECK=1` to disable automatic checks. Pipes, JSON, help/version, completion and headless TUI runs do not check; explicit `update --check` still does.
+- Automatic checks share a **six-hour** cache. Failures back off for **15 minutes**
+  and do not stop normal use. TUI checks run off the UI thread; interactive CLI
+  notices go to stderr. Pipes, explicit output formats, help/version and
+  completion do not trigger checks.
+- Set `AGENT_TOOLKIT_NO_UPDATE_CHECK=1` to disable automatic checks. Explicit
+  `update --check` still refreshes; it returns zero for a successful check even
+  when a newer release exists, and nonzero on errors.
+- Replacement requires a **non-editable `uv tool` installation**. Other environments
+  are refused with guidance. The updater builds a pinned canonical commit in a
+  temporary checkout and retains its wheel and source/hash receipt. Its local
+  wheel is not assumed to have the same hash as a published release wheel.
+- Stable mode does not downgrade an equal/newer installed version. `--main`
+  compares commits because development builds can share a version number.
+- Package updates do **not** refresh asset backing, migrate project data,
+  change subscriptions/exposure, or apply TUI edits. They have no automatic
+  package-manager rollback. Restart running TUIs after updating.
 
-Self-update supports non-editable `uv tool` installations only. It builds a pinned canonical commit in a temporary checkout and retains the wheel plus a source-commit/SHA-256 receipt under `${XDG_STATE_HOME:-~/.local/state}/agent-toolkit/updates/`. It never changes your development checkout or managed assets. Restart an already-running TUI after upgrading. See [update behavior and limits](docs/agent-toolkit/cli.md#toolkit-package-updates). For manual development builds, omit the release tag in the installation command to use the repository's default branch.
+[Channels, cache/timeout behavior, privacy, provenance and recovery](docs/agent-toolkit/updates.md).
 
-Verified wheel/sdist assets, `SHA256SUMS` and a source-commit/artifact receipt are available on [GitHub Releases](https://github.com/ajanderson1/agent-toolkit-cli/releases). Verify the checksums before installing a downloaded wheel; identify builds by commit and wheel SHA-256, not version alone. No PyPI publication is configured. The incompatible pre-v2 commands remain frozen at `v1.0.0`; see [legacy installation](docs/agent-toolkit/cli.md#pre-v2-surface).
+<a id="shell-completion"></a>
 
-### Shell completion
+## Enable TAB completion
 
-Like `wt`, Toolkit can configure shell TAB completion with a one-time command:
+For Zsh:
 
 ```bash
 atc completion install --shell zsh
 source ~/.zshrc
 ```
 
-This adds a marked, reversible shell-integration block—not command aliases.
-Completion covers commands, flags, choice values and paths for `atc`, `att`, and
-both long executable names. Bash and Fish are also supported. Use
-`atc completion uninstall --shell zsh` to remove the block, or
-`atc completion init zsh` to print integration code without changing any files.
-[Shell setup and custom dotfiles](docs/agent-toolkit/cli.md#shell-completion).
+Use the configuration path printed by the command for custom dotfiles. Bash
+**4.4+** uses `--shell bash` and `~/.bashrc`; Fish uses `--shell fish` and its
+`conf.d` directory. Omitting `--shell` detects `$SHELL`.
+
+Setup adds one marked, reversible completion block—not command aliases. It
+preserves unrelated text, permissions and symlinked layouts; it does **not**
+create an automatic backup. Package installation alone does not edit shell files.
+
+```bash
+atc completion init zsh                 # Print integration code; no file changes
+atc completion uninstall --shell zsh    # Remove only the managed block
+```
+
+TAB queries the installed Click command tree, so new commands become available
+after package updates without a static-list rebuild. It does not start the TUI,
+check for updates, fetch repositories, or discover asset slugs/catalogue keys.
+[All shells, custom paths, implementation and troubleshooting](docs/agent-toolkit/shell-completion.md).
 
 ## Quickstart
 
+Run from your consumer project, or supply CLI `--project DIRECTORY`:
+
 ```bash
-# 1. Add source to the library — does not make it visible to a harness.
-agent-toolkit-cli skills add anthropics/skills --skill pdf
+# Acquire one skill into the global library; do not enable it yet.
+atc skills add anthropics/skills --skill pdf
 
-# 2. Enable it in the current project (the shipped command is install).
-agent-toolkit-cli skills install pdf --agents claude-code --scope project
-agent-toolkit-cli skills list -p
+# Enable it for the project's Standard readers; install is the shipped verb.
+atc skills install pdf --agents standard --scope project
+atc skills list -p
 
-# 3. Inspect or queue visibility changes in the terminal UI.
-agent-toolkit-tui
+# Open the terminal interface in the current directory.
+att
 ```
 
-Choose scope explicitly in scripts. Defaults differ across kinds and verbs: a Git repository alone does not select project scope. See [scope rules](docs/agent-toolkit/cli.md#scope-and-target-selection).
+**Add/remove** means global library membership. **Enable/disable** means harness
+exposure; source-backed kinds currently spell those operations
+`install`/`uninstall`. Use the shipped tokens in scripts. **MCP is an exception:**
+its current `remove` retracts scoped projections but retains library membership.
+Native Pi npm has its own installation/selection rules.
+[Verb model and exceptions](docs/glossary.md#verb-model).
+
+Choose scope explicitly in automation: a Git repository alone does not choose
+project scope, and defaults differ across kinds/verbs. CLI `--project DIRECTORY`
+selects a directory, whereas a verb's `-p` selects scope. The TUI uses its launch
+directory and its visible scope control. [Scope and target rules](docs/agent-toolkit/cli.md#scope-and-target-selection).
 
 ## Usage
 
-```bash
-# Register a repository's real skills; install its registered children together.
-agent-toolkit-cli skills add --source owner/repo --ref main
-agent-toolkit-cli skills install --source owner/repo --agents standard --scope global
+### Six asset kinds
 
-# Inspect local edits and explicitly check upstream, then merge updates.
-agent-toolkit-cli skills status pdf -g
-agent-toolkit-cli skills check pdf -g
-agent-toolkit-cli skills update pdf -g
+| Kind | Model and guide |
+|---|---|
+| [Skills](docs/asset-types/skills.md) | Real `SKILL.md` folders, standalone/shared Git backing, harness projections. |
+| [Agents](docs/asset-types/agents.md) | Subagent definitions; file and supported Pi directory projections. |
+| [Commands](docs/asset-types/commands.md) | Reusable prompt definitions, translated where supported. |
+| [Instructions](docs/asset-types/instructions.md) | Pointers to user-owned canonical `AGENTS.md`; no installation lock. |
+| [Pi extensions](docs/asset-types/pi-extensions.md) | Git library sources, native npm state, and supported local resources. |
+| [MCP servers](docs/asset-types/mcp.md) | Authoritative library manifest and per-harness configuration projections. |
 
-# Publish an owned skill through a PR; third-party read-only sources refuse push.
-agent-toolkit-cli skills push my-owned-skill -g
+Support varies by kind, harness and scope; a catalogue entry is not proof that
+an adapter is enabled. [Matrix and per-harness guides](docs/matrix.md).
+**Bundles**, catalogue utilities, package updates and completion are not additional
+asset kinds. [Bundle schema and limits](docs/agent-toolkit/bundles.md).
 
-# Share an existing user-authored project AGENTS.md with Claude Code.
-agent-toolkit-cli instructions install --scope project --harness claude-code
+### Optional shared catalogue
 
-# Discover each group's actual verbs and flags.
-agent-toolkit-cli commands --help
-agent-toolkit-cli mcps --help
-agent-toolkit-cli bundles --help
-```
-
-### Optional shared asset catalogue
-
-Subscribe to a publisher's Git catalogue, replacing the example URL and `KEY` with its values:
+Replace the sample URL and `KEY` with your publisher's values:
 
 ```bash
-agent-toolkit-cli catalog subscribe ssh://git@git.example.org/team/skill-catalog.git --ref main
-agent-toolkit-cli catalog list
-agent-toolkit-cli skills catalog add KEY
-agent-toolkit-cli skills catalog enable KEY --scope project --agents claude-code
+atc catalog subscribe ssh://git@git.example.org/team/skill-catalog.git --ref main
+atc catalog list
+atc skills catalog add KEY
+atc skills catalog enable KEY --scope project --agents claude-code
 ```
 
-`add` acquires library content without enabling it. Explicit catalogue `enable` can also acquire a missing selected skill before creating its harness exposure. The TUI provides the same workflow: expand a collection, press **Space** to queue changes, **Ctrl+S** to Apply, **Ctrl+Z** to Revert, and **i** for Info. Upstream checks and updates remain CLI-only.
+`catalog add` acquires content only; explicit `catalog enable` can also acquire a
+missing selected asset before enabling it. Catalogue refresh fetches the catalogue,
+not every advertised source. Failed refreshes hide catalogue-only offers with a
+warning; acquired assets remain usable. Delisting/unsubscription does not delete
+acquired content or retract existing exposure. [Per-kind behavior and publisher admission](docs/agent-toolkit/catalog.md).
 
-Listing refreshes fetch the catalogue, not its advertised asset repositories. A failed refresh hides catalogue-only offers with a warning rather than showing stale listings; acquired skills remain usable. Disabling, publisher delisting or `skills catalog unsubscribe` does not delete acquired content. Unsubscribing does not retract existing exposure. [Catalogue format, per-kind actions and admission](docs/agent-toolkit/catalog.md).
-
-### Discarding local Git work
-
-Use this only when you intend to discard local commits and tracked edits:
+### Update assets, not the application
 
 ```bash
-agent-toolkit-cli skills reset SLUG -g --force
+atc skills status pdf -g
+atc skills check pdf -g
+atc skills update pdf -g
+atc skills push my-owned-skill -g
 ```
 
-**For a shared monorepo, this resets the entire parent checkout, including sibling skills.** A commit pin stays at that exact commit; a branch uses its latest fetched tip. Reset does not run `git clean` or purge unrelated untracked files. Normal `update` merges instead of intentionally discarding edits. A clean working tree does not mean it is the latest upstream revision.
-
-Canonical groups are `skills`, `agents`, `commands`, `instructions`, `pi-extensions`, `mcps`, and `bundles`; singular aliases still work. For source-backed kinds, `uninstall` disables harness exposure without forgetting library content; `remove` can delete that content. **MCP is an exception:** remove retains its library manifest and files. See the [verb model](docs/glossary.md#verb-model), [six asset guides](docs/index.md#asset-types), and [skill ownership workflow](docs/agent-toolkit/skill-lock.md).
+These are distinct from root `atc update`. Skills update merges upstream rather
+than intentionally discarding local edits; owned-source push normally opens a PR.
+A clean tree does not prove it is current. Explicit `skills reset SLUG -g --force`
+can discard tracked edits/commits across a **whole shared parent checkout**, including
+siblings; it is not ordinary update or projection repair and does not run `git clean`.
+[Git ownership, pins and recovery](docs/agent-toolkit/skill-lock.md).
 
 ## Configuration
 
-- Source-backed libraries and global locks normally live under `~/.agent-toolkit/`; new project skill/agent/command installations share central backing. Existing private installations remain usable. [Storage reference](docs/agent-toolkit/lock-files.md) · [Backing configuration and explicit migration](docs/agent-toolkit/project-backing.md).
-- Shared CLI/TUI behavior config is `~/.agent-toolkit/config.json`: `projectBacking` defaults to `"central"`; creating isolated projects requires both `"isolated"` and `allowIsolatedProjects: true`.
-- Pi directory-agent installation preserves `AGENTS.md`, memory, nested skills and resources; non-Pi directory adapters remain unsupported. This does not by itself activate native Pi roles or memory. [Agent support](docs/asset-types/agents.md).
-- Instructions canonical content is user-owned: project `AGENTS.md` or `~/.agent-toolkit/AGENTS.md`. Install does not author it. [Instructions safety](docs/asset-types/instructions.md).
-- TUI theme and main-harness columns are preferences, not CLI install targets. Use **Ctrl+P → Theme / Main harnesses**. [Settings schema and overrides](docs/agent-toolkit/tui-settings.md).
+- Libraries/global asset locks normally live under `~/.agent-toolkit/`. New project
+  Skills/Agents/Commands use central backing; existing private copies remain
+  usable. [Storage](docs/agent-toolkit/lock-files.md) ·
+  [Explicit backing migration](docs/agent-toolkit/project-backing.md).
+- Shared behavior configuration is `~/.agent-toolkit/config.json`;
+  `projectBacking` defaults to `"central"`. New isolated projects require both
+  `"isolated"` and `allowIsolatedProjects: true`. Catalogue subscription is separate.
+- TUI theme/main-harness preferences live in `~/.agent-toolkit/tui-settings.json`.
+  They do not select CLI install targets or configure package checks.
+  [Preference schema and override](docs/agent-toolkit/tui-settings.md).
+- Update metadata uses `${XDG_CACHE_HOME:-~/.cache}/agent-toolkit/update.json`;
+  self-built wheels/receipts use `${XDG_STATE_HOME:-~/.local/state}/agent-toolkit/updates/`.
+  Neither is an asset lock or library source.
+- Instructions content remains user-owned. Native Pi settings and npm metadata
+  remain authoritative for npm packages; Toolkit has no npm library registry.
 
-## Screenshot
+<a id="screenshot"></a>
 
-![Current TUI with an expanded skill collection, mixed selection, plural sidebar, repository path and queued changes](assets/agent-toolkit-cli-tui.png)
+## Terminal interface
 
-Fresh disposable-fixture capture of this source tree, not operator assets. Collection controls include collapsed and filter-hidden members; **Apply** runs queues across all six kinds, **Revert** clears them, and failures remain visible for retry. Apply is not a cross-kind atomic transaction. [Controls and limits](docs/agent-toolkit/tui.md) · [Reproduce the capture](docs/assets/screenshots/README.md).
+![Toolkit TUI with an expanded skill collection, mixed selections, plural sidebar, repository path and queued edits](assets/agent-toolkit-cli-tui.png)
 
-## Architecture
-
-- `src/agent_toolkit_cli/`: Click groups, canonical libraries, locks, Git operations and harness adapters.
-- `src/agent_toolkit_tui/`: Textual grids over the same inventory and installation facades.
-- `docs/agent-toolkit/harness-matrix.md`: packaged compatibility data; `scripts/gen_harness_docs.py` generates matrix/harness views from it and maintained catalog/support tables.
-
-[Storage model](docs/agent-toolkit/lock-files.md) · [Compatibility data](docs/agent-toolkit/harness-matrix.md) · [Unshipped ideas](docs/agent-toolkit/roadmap.md)
+The real source-asserted screenshot uses disposable local Git/assets, not operator
+state. Six grids share cross-kind pending queues: **Space** queues, **Ctrl+S**
+applies, **Ctrl+Z** reverts, and **i** shows Info. Apply is not a cross-kind atomic
+transaction. Failures stay visible for inspection/retry. Upstream **asset** checks
+and updates remain CLI operations; a package-update notification does not run them.
+[TUI controls and limits](docs/agent-toolkit/tui.md) ·
+[Capture reproduction](docs/assets/screenshots/README.md).
 
 ## Contributing
 
@@ -176,19 +252,34 @@ Fresh disposable-fixture capture of this source tree, not operator assets. Colle
 git clone https://github.com/ajanderson1/agent-toolkit-cli
 cd agent-toolkit-cli
 uv sync --all-extras
+uv run atc --help
+uv run att
 uv run pytest -q
 uv run python scripts/gen_harness_docs.py
 make docs-build
 ```
 
-This repository is the canonical CLI/TUI source; the separate REGROUND checkout is historical. Identify installed builds by canonical commit and wheel SHA-256, not version alone.
+`uv run` uses this editable checkout, not the global tool; update development
+sources through their normal Git workflow and `uv sync`, not package self-update.
+`uv build` builds distributions. The mandatory pre-push hook runs the full pytest
+suite. [Open an issue](https://github.com/ajanderson1/agent-toolkit-cli/issues) for defects.
 
-`lefthook.yml` runs the full pytest suite on **pre-push**. Update affected docs with behavior changes; regenerate harness pages rather than editing generated output. [Open an issue](https://github.com/ajanderson1/agent-toolkit-cli/issues) for defects or compatibility gaps.
+### Architecture
+
+This repository is the canonical CLI/TUI source; the separate REGROUND checkout
+is historical. `src/agent_toolkit_cli/` owns shared behavior and per-kind facades;
+`src/agent_toolkit_tui/` owns Textual presentation. The packaged machine-read
+harness matrix and maintained support tables feed `scripts/gen_harness_docs.py`.
+Regenerate matrix/harness views; never hand-edit generated outputs. Historical
+plans/reviews are not current reference. [Roadmap and non-goals](docs/agent-toolkit/roadmap.md).
 
 ## License
 
-[MIT with Commons Clause](LICENSE): use, modify and distribute, but do not sell the software or products/services whose value derives substantially from it.
+[MIT with Commons Clause](LICENSE): use, modify and distribute, but do not sell
+the software or products/services whose value derives substantially from it.
 
 ## Acknowledgements
 
-The skills catalog and compatible lock format build on [vercel-labs/skills](https://github.com/vercel-labs/skills). The terminal interface uses [Textual](https://textual.textualize.io/).
+The skills catalogue and compatible lock format build on
+[vercel-labs/skills](https://github.com/vercel-labs/skills). The terminal interface
+uses [Textual](https://textual.textualize.io/).

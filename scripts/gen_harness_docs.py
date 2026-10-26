@@ -296,6 +296,12 @@ row beneath them for the rest, alphabetically. Derived from the machine-read
 by `scripts/gen_harness_docs.py` — edit the SSOT, then regenerate; never edit
 this page by hand.
 
+Use the packaged **`atc` CLI** / **`att` TUI**; long executable names remain supported.
+[Install and verify](agent-toolkit/installation.md) ·
+[Package updates](agent-toolkit/updates.md) ·
+[Shell completion](agent-toolkit/shell-completion.md).
+Package utilities do not change these per-kind/scope support verdicts.
+
 **Legend:** ✅ researched support (check scope and enabled adapter on the harness page) ·
 — toolkit gap · N/A — no concept in this integration ·
 ? unknown (no public evidence recorded).
@@ -612,6 +618,12 @@ def write_harness_page(slug: str, agents: dict[str, AgentRow], instrs: dict[str,
 # {title}
 
 `{slug}` · one row of the [compatibility matrix](../matrix.md)
+
+Use the packaged **`atc` CLI** / **`att` TUI**; long executable names remain supported.
+[Install and verify](../agent-toolkit/installation.md) ·
+[Package updates](../agent-toolkit/updates.md) ·
+[Shell completion](../agent-toolkit/shell-completion.md).
+These application utilities do not enable assets or expand this harness's supported scopes.
 
 | Asset type | Support | How |
 |---|:-:|---|

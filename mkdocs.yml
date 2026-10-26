@@ -1,6 +1,6 @@
 # Requires the `docs` dependency group: uv sync (mkdocs-material)
 site_name: agent-toolkit-cli
-site_description: Python CLI and Textual TUI for scoped skills, agents, commands, instructions, Pi extensions and MCP servers
+site_description: Agent Toolkit atc CLI and att TUI — installation, package updates, shell completion and six scoped AI-agent asset kinds
 site_url: https://ajanderson1.github.io/agent-toolkit-cli/
 repo_url: https://github.com/ajanderson1/agent-toolkit-cli
 
@@ -124,6 +124,10 @@ extra_javascript:
 
 nav:
   - Home: index.md
+  - Getting started:
+    - Install and verify: agent-toolkit/installation.md
+    - Package updates: agent-toolkit/updates.md
+    - Shell completion: agent-toolkit/shell-completion.md
   - Compatibility:
     - Matrix: matrix.md
     - Asset types:

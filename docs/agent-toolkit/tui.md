@@ -1,28 +1,56 @@
 # TUI reference
 
-`agent-toolkit-tui` is the interactive [Textual](https://textual.textualize.io/)
+**`att`** (equivalently `agent-toolkit-tui`) is the interactive [Textual](https://textual.textualize.io/)
 cockpit over the same surface the [CLI](cli.md) drives. It reads the lock files
 and filesystem directly (Instructions uses filesystem pointers only) and applies your edits by calling the shipped CLI
 facades in-process. Inventories are snapshots, not a guarantee against later
 filesystem changes or partially failed operations; reload actual state after errors.
 
-It ships alongside the CLI from the same `uv tool install`, as a separate
-binary:
+## Launch and shell utilities
+
+[Install the package](installation.md) to get both applications and all four
+short/long entry points. No shell alias is needed. Launch in the consumer directory:
 
 ```bash
-att  # or agent-toolkit-tui
+cd /path/to/project
+att
 ```
 
-`att` is a packaged executable, not a shell alias. On interactive startup, a
-background check shows a notification when a newer stable release is available:
-**New update available — run `atc update` to update.** Checks are cached for six
-hours, fail silently offline, and never update automatically. Set
-`AGENT_TOOLKIT_NO_UPDATE_CHECK=1` to disable them. Headless runs do not check.
+The TUI uses its launch directory and visible scope selector. It does **not**
+accept the CLI's `--project DIRECTORY` option. These separate shell invocations
+exit without opening the interface:
 
-Run `att update` (or `atc update`) from your shell to update both applications
-without opening the TUI. `att update --check` checks immediately without changes;
-`--main` explicitly selects development commits instead of stable releases.
-Restart a running TUI after updating. [Requirements, provenance and safety](cli.md#toolkit-package-updates).
+| Invocation | Effect |
+|---|---|
+| `att --help` | Launcher help and available shell utilities. |
+| `att --version` or `att -V` | Installed package version. |
+| `att update --check` | Fresh stable-release check, without package replacement. |
+| `att update` | Update both CLI and TUI in a supported non-editable uv tool environment. |
+| `att update --main --check` / `att update --main` | Explicit development-commit check/update. |
+| `att completion ...` | The same completion utility as `atc completion ...`. |
+
+[Shell completion](shell-completion.md) covers these commands and does not
+launch the TUI when TAB is pressed. Completion setup is explicit; package
+installation itself does not edit shell files.
+
+## Startup update notification
+
+After mounting, an interactive TUI checks stable release metadata in a background
+worker. A newer version produces a **Toolkit update** notification, normally for
+15 seconds, with the installed/latest versions and `Run atc update to update`.
+The current version remains in the header. Checks are cached for six hours;
+network failures silently back off for 15 minutes. They never replace the package
+or run upstream asset updates. Headless sessions do not check.
+
+Set `AGENT_TOOLKIT_NO_UPDATE_CHECK=1` in the environment to disable automatic
+checks; this is not a TUI preference/command-palette setting. An explicit shell
+`att update --check` still refreshes. An absent notification is not proof a fresh
+network check succeeded. [Cache, privacy, channel and failure rules](updates.md).
+
+Package replacement is a **shell command**, not a grid/Apply action. Save/apply
+only intended asset drafts before closing, run the update, and restart any
+already-running TUI. Updating the package does not apply, migrate or preserve
+in-memory drafts across a restart; its processes do not hot-reload.
 
 ![Current TUI: expanded skill collection and queued changes in an isolated fixture](../assets/screenshots/tui-overview.png)
 
@@ -62,7 +90,7 @@ Footer (key hints)
   [scope](../glossary.md#scope). The grid re-reads at the new scope; pending
   edits queued in the other scope are kept, not discarded.
 
-### Library, local and npm origins
+### Library, catalogue, local and npm origins { #library-local-and-npm-origins }
 
 Skills and Agents prefix the existing Source column with `library` or `local`;
 Pi Extensions uses its existing Origin column. Git-change and health badges
@@ -70,7 +98,8 @@ Pi Extensions uses its existing Origin column. Git-change and health badges
 
 | Origin | Meaning and controls |
 |---|---|
-| `library` | Toolkit-managed central source connected through the existing installation mechanism. Disable removes the connection, not the source. |
+| `library` | Toolkit-managed backing; central by default, with recorded private backing retained. Disable removes the connection, not the source. |
+| `catalog` | Advertised, unacquired offer. Git offers can queue explicit acquisition/exposure; npm offers provide an explicit confirmed installation command instead. Browsing does not acquire either. |
 | `local` | Existing files used in place, outside Toolkit library management. Skills/Agents stay outside toggle queues. Loose Pi extensions have settings-only Enable/Disable controls; local filesystem packages remain read-only. No TUI deletion, moving or registration. |
 | `npm` | Native Pi/npm inventory, without Toolkit registration. Settings-only Enable/Disable works for native packages regardless of installer; Info separates installed files, selected version, scope policy and removal. |
 
@@ -146,7 +175,7 @@ Open ++ctrl+p++ and choose **Theme** or **Main harnesses**.
 
 - **Theme** opens Textual's theme chooser; selecting a theme persists it to
   `tui-settings.json` and updates the app live.
-- **Main harnesses** lists all catalogued harnesses; selecting one toggles its
+- **Main harnesses** lists the compatibility harness catalog (not subscribed asset offers); selecting one toggles its
   presence as a standalone column across all supported asset grids. If unapplied
   pending edits are queued, a confirmation prompt asks before discarding them.
 
@@ -193,8 +222,10 @@ upstream updates. [Full catalogue behavior](catalog.md).
 
 ## How edits flow
 
-Toggling a cell **queues** a pending edit; nothing touches disk until you
-**Apply** (++ctrl+s++). This mirrors a staged-changes model:
+Toggling an asset cell **queues** a pending edit; the requested asset/exposure
+change does not run until you **Apply** (++ctrl+s++). This mirrors a staged-changes
+model, not a promise of zero disk/network I/O elsewhere: catalogue refresh,
+package-check metadata and explicitly saved presentation preferences are separate.
 
 1. Toggle cells across rows, across scopes, and across asset types to build a pending queue.
 2. ++ctrl+d++ to preview, or ++ctrl+z++ to throw the queue away.

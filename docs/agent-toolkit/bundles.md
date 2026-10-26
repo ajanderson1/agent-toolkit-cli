@@ -3,6 +3,12 @@
 A bundle is a toolkit-native JSON manifest that declares a set of asset pointers
 and sequences their addition/installation in one command, with rollback attempts on failure.
 
+The examples use `atc`, the packaged short name for `agent-toolkit-cli`.
+[Install Toolkit](installation.md) · [Enable shell completion](shell-completion.md).
+A bundle adds/enables supported **assets**, not the Toolkit Python package;
+use root `atc update` for [application updates](updates.md). Package and shell
+completion utilities are not bundle members or additional asset kinds.
+
 ## What a bundle is (and is not)
 
 v1 is a **stateless shortcut**, not a package format.  Running `bundle install`
@@ -20,8 +26,8 @@ are currently present. No durable bundle membership/drift record is kept.
 ## Verbs
 
 ```text
-agent-toolkit-cli bundles install  <manifest.json> [--global | --project]
-agent-toolkit-cli bundles validate <manifest.json>
+atc bundles install  <manifest.json> [--global | --project]
+atc bundles validate <manifest.json>
 ```
 
 ### `bundle install`
@@ -115,13 +121,13 @@ rejected with a clear message.
 Install at project scope:
 
 ```bash
-agent-toolkit-cli bundles install --project ./team-review.bundle.json
+atc bundles install --project ./team-review.bundle.json
 ```
 
 Validate structure without installing:
 
 ```bash
-agent-toolkit-cli bundles validate ./team-review.bundle.json
+atc bundles validate ./team-review.bundle.json
 ```
 
 ## Behaviour details

@@ -12,6 +12,18 @@ are rejected with a visible diagnostic and never resolve against the current
 working directory. The CLI never reads this file: CLI output and install
 targets remain independent of TUI presentation preferences.
 
+## Package checks and completion are separate
+
+`att` and `agent-toolkit-tui` use this same preferences file; short names do not
+create another settings scope. Package update checks are shared with the CLI:
+use `AGENT_TOOLKIT_NO_UPDATE_CHECK=1` to disable automatic checks, not a new
+JSON field here. Release metadata caches and update wheel receipts live outside
+the presentation file. [Package update configuration](updates.md#startup-notices).
+
+Shell completion uses its own explicitly managed startup-file block and
+`completion install/uninstall`; it is neither a TUI theme preference nor a
+command-palette action. [Completion setup](shell-completion.md).
+
 ## Schema v1
 
 ```json

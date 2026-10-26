@@ -1,5 +1,10 @@
 # Instructions
 
+Examples use `atc`, the packaged CLI name; `agent-toolkit-cli` still works.
+[Install/verify](../agent-toolkit/installation.md) ·
+[Shell completion](../agent-toolkit/shell-completion.md). Root `atc update`
+updates the **application**, not this asset; see [package updates](../agent-toolkit/updates.md).
+
 The `instructions` [asset type](../glossary.md#asset-type) shares one user-authored
 `AGENTS.md` per [scope](../glossary.md#scope) across coding assistants. It has **no
 installation lock**: the actual pointer symlink determines whether it is installed.
@@ -43,12 +48,12 @@ unchanged, even if malformed. No replacement registry is created.
 ## CLI
 
 ```bash
-agent-toolkit-cli instructions install --harness claude-code
-agent-toolkit-cli instructions install --scope global --harness pi
-agent-toolkit-cli instructions list --scope global
-agent-toolkit-cli instructions status
-agent-toolkit-cli instructions doctor --no-fix
-agent-toolkit-cli instructions uninstall --scope project
+atc instructions install --harness claude-code
+atc instructions install --scope global --harness pi
+atc instructions list --scope global
+atc instructions status
+atc instructions doctor --no-fix
+atc instructions uninstall --scope project
 ```
 
 `status` inspects every supported pointer slot: `ok`, `missing` (uninstalled),

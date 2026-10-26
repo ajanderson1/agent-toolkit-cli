@@ -1,5 +1,10 @@
 # MCP servers
 
+Examples use `atc`, the packaged CLI name; `agent-toolkit-cli` still works.
+[Install/verify](../agent-toolkit/installation.md) ·
+[Shell completion](../agent-toolkit/shell-completion.md). Root `atc update`
+updates the **application**, not this asset; see [package updates](../agent-toolkit/updates.md).
+
 The `mcps` group (`mcp` alias) manages MCP (Model Context Protocol) server
 registrations as an [asset type](../glossary.md#asset-type) — authoring each server once into a local library,
 then projecting it into the harnesses that read MCP config.
@@ -75,16 +80,16 @@ detected; pass `--force` to override. Project-scope writes are not gated.
 ## CLI
 
 ```bash
-agent-toolkit-cli mcps add --npx|--uvx|--docker|--url|--local <source> [--slug <slug>] [--bearer-token-env <NAME>]
-agent-toolkit-cli mcps migrate                    # adopt a legacy global library
-agent-toolkit-cli mcps install <slug>   [--harness <name>]... [-g|-p] [--force]
-agent-toolkit-cli mcps uninstall <slug> [--harness <name>]... [-g|-p]
-agent-toolkit-cli mcps remove <slug>    [-g|-p]   # all locked projections at this scope
-agent-toolkit-cli mcps update <slug> [--bearer-token-env <NAME>] # re-resolve + re-project
-agent-toolkit-cli mcps list   [-g|-p]            # alias: ls
-agent-toolkit-cli mcps status [<slug>...] [-g|-p]
-agent-toolkit-cli mcps import <file> [--latest] # global manifest import, skips local entries
-agent-toolkit-cli mcps doctor [-g|-p]           # read-only library + projection report
+atc mcps add --npx|--uvx|--docker|--url|--local <source> [--slug <slug>] [--bearer-token-env <NAME>]
+atc mcps migrate                    # adopt a legacy global library
+atc mcps install <slug>   [--harness <name>]... [-g|-p] [--force]
+atc mcps uninstall <slug> [--harness <name>]... [-g|-p]
+atc mcps remove <slug>    [-g|-p]   # all locked projections at this scope
+atc mcps update <slug> [--bearer-token-env <NAME>] # re-resolve + re-project
+atc mcps list   [-g|-p]            # alias: ls
+atc mcps status [<slug>...] [-g|-p]
+atc mcps import <file> [--latest] # global manifest import, skips local entries
+atc mcps doctor [-g|-p]           # read-only library + projection report
 ```
 
 See also: [Skills](skills.md) · [Agents](agents.md) ·

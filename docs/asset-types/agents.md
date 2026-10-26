@@ -1,5 +1,10 @@
 # Agents (subagents)
 
+Examples use `atc`, the packaged CLI name; `agent-toolkit-cli` still works.
+[Install/verify](../agent-toolkit/installation.md) ·
+[Shell completion](../agent-toolkit/shell-completion.md). Root `atc update`
+updates the **application**, not this asset; see [package updates](../agent-toolkit/updates.md).
+
 The optional [shared catalogue](../agent-toolkit/catalog.md) lists agents without
 acquiring or enabling them. Use this kind's `catalog list` / `catalog add` /
 `catalog enable` commands for Git entries; native Pi npm uses explicit confirmed
@@ -42,11 +47,11 @@ preserved. See [configuration and explicit migration](../agent-toolkit/project-b
 ## Use
 
 ```bash
-agent-toolkit-cli agents add owner/repo/path/to/agent --slug reviewer
-agent-toolkit-cli agents install reviewer -p --harnesses standard
-agent-toolkit-cli agents list -p --json
-agent-toolkit-cli agents doctor -p --no-fix
-agent-toolkit-cli agents uninstall reviewer -p --harnesses standard
+atc agents add owner/repo/path/to/agent --slug reviewer
+atc agents install reviewer -p --harnesses standard
+atc agents list -p --json
+atc agents doctor -p --no-fix
+atc agents uninstall reviewer -p --harnesses standard
 ```
 
 Add/remove/import are global-library operations. Install/uninstall default project; other scope-aware verbs infer from the agent project lock. Update fast-forwards clean, source-matching backing; push opens a PR unless `--direct`; reset requires explicit slugs and can discard local work. [CLI reference](../agent-toolkit/cli.md#agents).

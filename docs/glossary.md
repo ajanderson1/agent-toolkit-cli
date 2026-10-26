@@ -23,6 +23,34 @@ verbs or aliases.
 
 `update` refreshes source (merge-aware for skills/agents/Git Pi extensions; Commands has its own update behavior; MCP re-resolves and re-projects). `push` publishes owned source edits, normally through a PR. `reset` can discard local Git work; it is **not** a synonym for rebuilding visibility. `status` inspects; doctor behavior depends on kind. Enable/disable is the product terminology; a CLI command rename remains [unshipped](agent-toolkit/roadmap.md#verb-remap-enable-disable-for-projection).
 
+## Toolkit application and distribution
+
+**Toolkit package** { #toolkit-package }
+:   The Python distribution `agent-toolkit`, containing the CLI and TUI.
+    Root `atc update` / `att update` replaces this application; it does not
+    refresh asset backing, change harness exposure, or migrate project data.
+    [Package update rules](agent-toolkit/updates.md).
+
+**Packaged entry point** { #packaged-entry-point }
+:   An executable shipped by that distribution. `atc` and `att` are equivalent
+    to `agent-toolkit-cli` and `agent-toolkit-tui`, respectively; they are not
+    shell aliases and require no shell startup edits just to run. This is
+    separate from singular asset-group aliases such as `skill` → `skills`.
+
+**Shell completion** { #shell-completion }
+:   Explicit shell integration for TAB suggestions from the current Click
+    command tree. Supports commands, flags, declared choices and paths, not
+    asset-name discovery or remote fetching. Its managed startup-file block is
+    not an asset projection or application preference.
+    [Setup and internals](agent-toolkit/shell-completion.md).
+
+**Build receipt / provenance** { #build-receipt }
+:   A record binding an artifact to source identity and its wheel hash. GitHub
+    `deployment-receipt.json` describes published release artifacts; updater
+    `receipt.json` describes a locally built wheel from a pinned canonical
+    commit. Neither is an asset lock. A version string alone does not prove
+    either source or artifact identity. [Verification](agent-toolkit/installation.md#verify-a-published-wheel).
+
 ## Core model
 
 **Harness** { #harness }

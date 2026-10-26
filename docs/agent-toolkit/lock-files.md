@@ -139,6 +139,33 @@ installed or uninstalled. Legacy `instructions-lock.json` / `instructions.lock`
 files are ignored and preserved, even when malformed. They can be removed manually
 after checking that no older toolkit version still uses them.
 
+## Toolkit package state is not an asset lock
+
+The application package, shell integration and asset data have separate lifecycles.
+Root `atc update` replaces Toolkit; it does not update any lock in the table above
+or migrate existing backing. `atc skills update`, `atc agents update`, and the
+other per-kind verbs act on assets instead.
+
+| State | Default location | Owner/meaning |
+|---|---|---|
+| Shared CLI/TUI behavior | `~/.agent-toolkit/config.json` | Central/private backing choices and an optional catalogue subscription; not update-check settings. |
+| TUI presentation | `~/.agent-toolkit/tui-settings.json` | Theme and main-harness columns; `AGENT_TOOLKIT_TUI_SETTINGS` can override the path. |
+| Stable release observation | `~/.cache/agent-toolkit/update.json` | Shared six-hour cache / 15-minute failure backoff; `XDG_CACHE_HOME` changes the cache root. |
+| Self-built package wheels and `receipt.json` | `~/.local/state/agent-toolkit/updates/<commit-prefix>-<unique-id>/` | Canonical source SHA, local wheel hash and build identity; `XDG_STATE_HOME` changes the state root. |
+| Active package-update guard | `~/.local/state/agent-toolkit/updates/.update-lock/` | A directory preventing concurrent replacements, not an asset lock. |
+| Completion integration | Shell-specific startup file | Explicit marked block; see [paths](shell-completion.md#options-and-default-paths). |
+
+`AGENT_TOOLKIT_SKILLS_ROOT` relocates skill storage and associated asset state,
+**not** package-update caches/receipts. `XDG_CONFIG_HOME` selects Fish's completion
+configuration root, but does not relocate the shared behavior or default TUI
+preferences files. Do not edit cache timestamps as an asset-management operation.
+Use `atc update --check` for an explicit fresh release observation.
+
+Keep the currently installed wheel/receipt when managing updater artifacts.
+A self-update receipt is not a published GitHub `deployment-receipt.json` or an
+asset source lock. [Build identity and recovery](updates.md#build-and-installation-provenance) ·
+[Official release verification](installation.md#verify-a-published-wheel).
+
 ## Invariants
 
 - **Source-backed kinds use locks.** `doctor` reconciles recorded and actual

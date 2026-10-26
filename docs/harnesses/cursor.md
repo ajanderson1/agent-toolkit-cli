@@ -2,6 +2,12 @@
 
 `cursor` · one row of the [compatibility matrix](../matrix.md)
 
+Use the packaged **`atc` CLI** / **`att` TUI**; long executable names remain supported.
+[Install and verify](../agent-toolkit/installation.md) ·
+[Package updates](../agent-toolkit/updates.md) ·
+[Shell completion](../agent-toolkit/shell-completion.md).
+These application utilities do not enable assets or expand this harness's supported scopes.
+
 | Asset type | Support | How |
 |---|:-:|---|
 | [Instructions](../asset-types/instructions.md) | [✅](#instructions) | research: native; toolkit pointer scopes: none |

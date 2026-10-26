@@ -30,7 +30,11 @@ are clean, global scope and two pending edits are visible, and REPO/final
 `demo-project` component are bold. At this viewport the Source cell clips long
 text; Info retains full identity. This is actual UI behavior, not edited media.
 
-The image reflects the final feature base, not a relabeled historical screenshot.
+The current image was recaptured from the 7.1.0 source UI, not relabeled from a
+historical screenshot. Its header shows the installed source package version.
+The capture runs headlessly, so automatic package-update checks are suppressed;
+no update toast is fabricated or painted into the image. Interactive startup
+notification behavior is documented in [the TUI guide](../../agent-toolkit/tui.md#startup-update-notification).
 The package version in the header is the source package's current version;
 ReleasePlease owns subsequent version changes. Only synthetic `example/workflows`
 assets and disposable `/tmp` paths appear. Do not substitute live operator state.

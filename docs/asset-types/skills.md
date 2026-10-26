@@ -1,6 +1,11 @@
 # Skills
 
-Skills are `SKILL.md` folders with optional references, scripts and supporting files. **Add registers library content; install makes it visible.** Canonicals are standalone Git checkouts or symlinks into shared parent checkouts; harness projections point to those canonicals.
+Examples use `atc`, the packaged CLI name; `agent-toolkit-cli` still works.
+[Install/verify](../agent-toolkit/installation.md) ·
+[Shell completion](../agent-toolkit/shell-completion.md). Root `atc update`
+updates the **application**, not this asset; see [package updates](../agent-toolkit/updates.md).
+
+Skills are `SKILL.md` folders with optional references, scripts and supporting files. **Add acquires/registers library content; enablement makes it visible** (currently spelled `install`). Canonicals are standalone Git checkouts or symlinks into shared parent checkouts; harness projections point to those canonicals.
 
 - Global library: `~/.agent-toolkit/skills/`; global lock: `~/.agent-toolkit/skills-lock.json`.
 - New project projections share the central library; project lock: `<project>/skills-lock.json`. Recorded legacy private stores remain usable. See [project backing and explicit migration](../agent-toolkit/project-backing.md).
@@ -10,10 +15,10 @@ Skills are `SKILL.md` folders with optional references, scripts and supporting f
 ## Use
 
 ```bash
-agent-toolkit-cli skills add owner/repo --skill my-skill
-agent-toolkit-cli skills install my-skill --scope project --agents standard
-agent-toolkit-cli skills status my-skill -p
-agent-toolkit-cli skills uninstall my-skill --scope project --agents standard
+atc skills add owner/repo --skill my-skill
+atc skills install my-skill --scope project --agents standard
+atc skills status my-skill -p
+atc skills uninstall my-skill --scope project --agents standard
 ```
 
 Scope defaults differ by verb; add/remove/import are library-only. Read/update/push/reset/doctor scope depends on the skills project lock; install/uninstall default global except for detected Paperclip companies. [Exact flags and defaults](../agent-toolkit/cli.md#scope-and-target-selection).
@@ -25,13 +30,13 @@ The [shared catalogue](../agent-toolkit/catalog.md) also supports Agents, Comman
 and Pi extensions; subscription changes affect all four kinds:
 
 ```bash
-agent-toolkit-cli skills catalog subscribe ssh://git@example-tailnet/org/skill-catalog.git --ref main
-agent-toolkit-cli skills catalog list
-agent-toolkit-cli skills list -g
-agent-toolkit-cli skills catalog add my-skill
-agent-toolkit-cli skills catalog enable my-skill --scope project --agents standard
-agent-toolkit-cli skills check -g
-agent-toolkit-cli skills catalog unsubscribe
+atc skills catalog subscribe ssh://git@example-tailnet/org/skill-catalog.git --ref main
+atc skills catalog list
+atc skills list -g
+atc skills catalog add my-skill
+atc skills catalog enable my-skill --scope project --agents standard
+atc skills check -g
+atc skills catalog unsubscribe
 ```
 
 `catalog add` acquires library content only; `catalog enable` also enables the

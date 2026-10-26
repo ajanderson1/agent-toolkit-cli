@@ -76,3 +76,70 @@ def test_all_registered_help_is_read_only(tmp_path, monkeypatch):
             result = runner.invoke(main, args)
             assert result.exit_code == 0, (args, result.output)
     assert not list(tmp_path.iterdir()), "help must not author library/config state"
+
+
+def test_package_guides_are_discoverable_from_nav_home_and_readme():
+    config = (ROOT / "mkdocs.yml").read_text()
+    home = (ROOT / "docs/index.md").read_text()
+    readme = (ROOT / "README.md").read_text()
+    for filename in ("installation.md", "updates.md", "shell-completion.md"):
+        assert (ROOT / "docs/agent-toolkit" / filename).is_file()
+        assert f"agent-toolkit/{filename}" in config
+        assert f"agent-toolkit/{filename}" in home
+        assert f"docs/agent-toolkit/{filename}" in readme
+
+
+def test_package_option_reference_matches_shipped_commands():
+    from agent_toolkit_cli.commands.update import update
+    from agent_toolkit_cli.commands.completion import completion, SHELLS, _block
+    from agent_toolkit_tui.launcher import launcher
+
+    updates = (ROOT / "docs/agent-toolkit/updates.md").read_text()
+    complete = (ROOT / "docs/agent-toolkit/shell-completion.md").read_text()
+    tui = (ROOT / "docs/agent-toolkit/tui.md").read_text()
+    for parameter in update.params:
+        for option in parameter.opts:
+            assert option in updates
+    for name in ("init", "install", "uninstall"):
+        assert f"atc completion {name}" in complete
+        for parameter in completion.commands[name].params:
+            for option in parameter.opts:
+                if option.startswith("-"):
+                    assert option in complete
+    for shell in SHELLS:
+        assert f"--shell {shell}" in complete
+    assert _block("zsh").strip() in complete
+    for parameter in launcher.params:
+        for option in parameter.opts:
+            assert option in tui
+
+
+def test_documented_update_defaults_and_storage_match_runtime(tmp_path, monkeypatch):
+    from agent_toolkit_cli import self_update
+
+    text = (ROOT / "docs/agent-toolkit/updates.md").read_text()
+    assert self_update.CACHE_SECONDS == 6 * 60 * 60 and "**six hours**" in text
+    assert self_update.RETRY_SECONDS == 15 * 60 and "**15 minutes**" in text
+    assert self_update.STARTUP_TIMEOUT == 1.0 and "**one-second network socket timeout**" in text
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.delenv("XDG_CACHE_HOME", raising=False)
+    monkeypatch.delenv("XDG_STATE_HOME", raising=False)
+    assert self_update.cache_path() == tmp_path / ".cache/agent-toolkit/update.json"
+    assert self_update.state_dir() == tmp_path / ".local/state/agent-toolkit/updates"
+    assert "${XDG_CACHE_HOME:-~/.cache}/agent-toolkit/update.json" in text
+    assert "${XDG_STATE_HOME:-~/.local/state}/agent-toolkit/updates/" in text
+
+
+def test_all_generated_compatibility_pages_link_package_guides():
+    pages = [ROOT / "docs/matrix.md", *sorted((ROOT / "docs/harnesses").glob("*.md"))]
+    for page in pages:
+        text = page.read_text()
+        assert "**`atc` CLI** / **`att` TUI**" in text, page
+        for guide in ("installation.md", "updates.md", "shell-completion.md"):
+            assert f"agent-toolkit/{guide}" in text, page
+
+
+def test_asset_and_current_cli_examples_use_the_packaged_short_name():
+    pages = [ROOT / "docs/agent-toolkit/cli.md", *sorted((ROOT / "docs/asset-types").glob("*.md"))]
+    for page in pages:
+        assert not any(line.startswith("agent-toolkit-cli ") for line in page.read_text().splitlines()), page

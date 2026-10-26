@@ -1,6 +1,6 @@
 # Skills: library, Git ownership and locks
 
-**Add registers source; install chooses visibility.** A skill is a real `SKILL.md` folder, either a standalone checkout or a child of a shared parent checkout. Locks record source/ref/SHA metadata; the actual canonical and projection paths still need to exist and be healthy. [All lock formats](lock-files.md) · [Exact CLI surface and defaults](cli.md).
+**Add acquires/registers library content; enablement chooses visibility** (currently spelled `install`). A skill is a real `SKILL.md` folder, either a standalone checkout or a child of a shared parent checkout. Locks record source/ref/SHA metadata; the actual canonical and projection paths still need to exist and be healthy. [All lock formats](lock-files.md) · [Exact CLI surface and defaults](cli.md).
 
 ## On-disk layout
 
@@ -9,7 +9,7 @@
 ├── skills-lock.json
 ├── skills/<slug>/                         # standalone clone or child symlink
 ├── skills/_parents/<owner>/<repo>[@<ref>]/ # shared monorepo checkout
-└── projects/<id>/skills/                   # separate project backing store
+└── projects/<id>/skills/                   # retained/explicit private backing only
     ├── <slug>/
     └── _parents/...
 
@@ -18,19 +18,19 @@
 <project>/.claude/skills/<slug>            # explicit Claude visibility symlink
 ```
 
-Global projections are equivalent paths under the user's home. Standard writes `~/.agents/skills/<slug>` globally; several harnesses (including Pi) read that shared slot. Per-project canonicals live **outside** the consumer repository; only the lock and visibility links live inside it. `AGENT_TOOLKIT_SKILLS_ROOT` overrides the global skill library root; its parent holds the global lock and project store. Parent caches are under the **skills** root, not directly under `~/.agent-toolkit/`.
+Global projections are equivalent paths under the user's home. Standard writes `~/.agents/skills/<slug>` globally; several harnesses (including Pi) read that shared slot. **New project projections share the central library backing by default**; project locks and visibility links live inside the consumer project. The `projects/<id>/skills/` store describes retained or explicitly requested private backing, not the new-project default. [Configuration and guarded migration](project-backing.md). `AGENT_TOOLKIT_SKILLS_ROOT` overrides the global skill library root; its parent holds the global lock and project store. Parent caches are under the **skills** root, not directly under `~/.agent-toolkit/`.
 
 ## Normal workflow
 
 ```bash
-agent-toolkit-cli skills add owner/repo --skill my-skill
-agent-toolkit-cli skills install my-skill --scope global --agents standard
-agent-toolkit-cli skills list -g
+atc skills add owner/repo --skill my-skill
+atc skills install my-skill --scope global --agents standard
+atc skills list -g
 
 # Edit the canonical SKILL.md or supporting files, then inspect and publish.
-agent-toolkit-cli skills status my-skill -g
-agent-toolkit-cli skills update my-skill -g
-agent-toolkit-cli skills push my-skill -g
+atc skills status my-skill -g
+atc skills update my-skill -g
+atc skills push my-skill -g
 ```
 
 Add is global-library only and does not install projections. Remove is also a library operation (no `-g/-p`); uninstall chooses scope and keeps library content. List/status/update/push/reset/doctor infer project from a skills project lock, otherwise global (Paperclip company detection is an exception). Install/uninstall default global except in detected Paperclip company projects. Prefer explicit scope; do not infer it from Git membership.
@@ -38,7 +38,7 @@ Add is global-library only and does not install projections. Remove is also a li
 | Operation | Effect / risk |
 |---|---|
 | `add` | Clone/register real skills; no harness visibility. Repeated registration preserves existing local work. |
-| `install` / `uninstall` | Add/remove requested visibility; project install prepares separate backing content. |
+| `install` / `uninstall` | Enable/disable requested exposure; new projects share central backing, while recorded private backing remains private. |
 | `status` | Inspect local Git state, scoped to the child subpath for owned monorepos. |
 | `update` | Fetch and merge upstream; real conflicts remain for manual Git resolution. |
 | `push` | Commit local changes and publish a PR branch by default; read-only monorepos refuse. |
@@ -51,10 +51,10 @@ Add is global-library only and does not install projections. Remove is also a li
 Sources accept `owner/repo`, Git URLs (HTTPS/SSH), local paths, skills.sh URLs and explicit repository subpaths. Select by frontmatter `name:` using `--skill NAME`, use `owner/repo/path/to/skill`, or supply `SOURCE --path path/to/skill` for an exact directory (including `.` for a real root skill). `--ref` selects a branch/tag/ref; `owner/repo@ref` is suitable only for unambiguous refs. Use `--ref` for slash-containing refs or a ref combined with a subpath.
 
 ```bash
-agent-toolkit-cli skills add owner/repo/path/to/skill --ref main
-agent-toolkit-cli skills add owner/repo --path packs/child --slug custom-child --ref feature/work
-agent-toolkit-cli skills add --source owner/repo --ref main
-agent-toolkit-cli skills install --source owner/repo --scope global --agents standard
+atc skills add owner/repo/path/to/skill --ref main
+atc skills add owner/repo --path packs/child --slug custom-child --ref feature/work
+atc skills add --source owner/repo --ref main
+atc skills install --source owner/repo --scope global --agents standard
 ```
 
 Repository-wide add discovers all supported real skills, including a genuine root skill. Each is an ordinary persisted child; the TUI's **collection** is a derived source/ref group, not a fake skill or new schema. Source install selects already registered children for the exact source (across refs); it does not fetch and activate later upstream additions.
@@ -70,6 +70,14 @@ Project-only legacy conversion registers the complete sibling set in the project
 Ordinary project-only entries can still produce an optional library-inclusion warning. Doctor does not infer project corruption from missing library membership. When offered, **add to library** uses the displayed command with the recorded child path, ref and custom slug. A recorded genuine root uses `--path .`, not repository-wide discovery, even if nested siblings now exist. It changes only global library registration/content: no project lock/projection repair, no global harness installation, and no copying of local project edits. Missing payloads, source conflicts and foreign projections remain diagnostic. Inspect any conflict before retrying; registration never resets an existing checkout.
 
 Separate existing global clones (for example an old wrapper plus a doctor-added child) remain intact. Conflicting physical child identities retain conservative ambiguity diagnostics; no automatic deduplication or old-copy cleanup is performed.
+
+## Package updates are separate
+
+`atc skills update SLUG -g` refreshes selected skill backing using this page's
+Git rules. Root `atc update` instead updates the Toolkit application and does
+not advance skill refs, rewrite locks, migrate private projects, or enable assets.
+Package build receipts/cache files are not skill locks.
+[Application updates](updates.md) · [Storage separation](lock-files.md#toolkit-package-state-is-not-an-asset-lock).
 
 ## Git ownership and publishing
 

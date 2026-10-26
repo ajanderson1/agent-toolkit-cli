@@ -8,12 +8,12 @@ membership, harness support or proof that code is loaded in a running session.
 ## Browse and acquire
 
 ```bash
-agent-toolkit-cli catalog subscribe ssh://git@example-tailnet/org/catalog.git --ref main
-agent-toolkit-cli catalog list --json
-agent-toolkit-cli catalog list --kind agents
-agent-toolkit-cli agents catalog list
-agent-toolkit-cli commands catalog list
-agent-toolkit-cli pi-extensions catalog list
+atc catalog subscribe ssh://git@example-tailnet/org/catalog.git --ref main
+atc catalog list --json
+atc catalog list --kind agents
+atc agents catalog list
+atc commands catalog list
+atc pi-extensions catalog list
 ```
 
 The subscription is user-global, shared across projects and these four kinds.
@@ -27,10 +27,10 @@ For Git assets, Add obtains global library backing without enabling it. Enable
 obtains missing backing and enables only the explicit scope and harness targets:
 
 ```bash
-agent-toolkit-cli agents catalog add reviewer
-agent-toolkit-cli agents catalog enable reviewer --scope project --harnesses pi
-agent-toolkit-cli commands catalog enable summarize --scope project --harnesses standard
-agent-toolkit-cli pi-extensions catalog enable git-tools --scope project
+atc agents catalog add reviewer
+atc agents catalog enable reviewer --scope project --harnesses pi
+atc commands catalog enable summarize --scope project --harnesses standard
+atc pi-extensions catalog enable git-tools --scope project
 ```
 
 The new exposure commands require `--scope`; agents/commands also require
@@ -52,9 +52,9 @@ source migration or npm version replacement.
 Catalogue npm entries are metadata, not Toolkit registrations. Install explicitly:
 
 ```bash
-agent-toolkit-cli pi-extensions catalog install native-tools --scope project
+atc pi-extensions catalog install native-tools --scope project
 # Automation must explicitly confirm side effects:
-agent-toolkit-cli pi-extensions catalog install native-tools --scope project --yes
+atc pi-extensions catalog install native-tools --scope project --yes
 ```
 
 Installation delegates to native Pi, can execute package lifecycle scripts and may
@@ -87,10 +87,10 @@ For example, delisting an agent already enabled in Pi leaves that agent in the
 library and enabled in Pi: the catalogue is not a remote removal switch.
 
 ```bash
-agent-toolkit-cli agents check reviewer -g --json
-agent-toolkit-cli commands check summarize -g
-agent-toolkit-cli pi-extensions check git-tools -g
-agent-toolkit-cli catalog unsubscribe
+atc agents check reviewer -g --json
+atc commands check summarize -g
+atc pi-extensions check git-tools -g
+atc catalog unsubscribe
 ```
 
 These new checks apply to catalogue-associated Git backings and compare their
@@ -104,9 +104,23 @@ Info shows source/provenance, actual backing/scope, local revision and check tim
 Checks/updates remain CLI-only; neither TUI refresh nor doctor acquires or updates
 assets. Existing per-kind update and private/shared-backing limitations still apply.
 
+## Toolkit updates and catalogue refresh are different
+
+Root `atc update` replaces the application package; it neither changes the
+subscription nor updates advertised/acquired asset backing. A catalogue refresh
+fetches its manifest, not every source repository. Per-kind `check`/`update`
+commands have their own recorded-source and scope rules.
+
+`AGENT_TOOLKIT_NO_UPDATE_CHECK=1` disables automatic **package** checks only.
+It does not disable a subscribed catalogue's fetches, and no subscription does
+not imply all application network checks are disabled. Shell completion does
+not fetch either the catalogue or its sources and does not suggest catalogue keys.
+[Package check/privacy rules](updates.md) · [Completion limits](shell-completion.md#what-completes).
+
 ## Manifest format
 
-New catalogues use version 2, supported by the official **7.0.1** release. The
+New catalogues use version 2, introduced in the official **7.0.1** release and
+supported by **7.1.0**. The
 existing small version-1 skills parser remains accepted, but older Toolkit clients
 cannot consume version 2. The version string
 alone is not proof that a particular build contains this feature.
@@ -163,11 +177,11 @@ library. Adding an entry to the **shared catalogue** is a separate curator workf
 
 ```bash
 # Syntax only; explicitly does NOT certify source fit or content quality:
-agent-toolkit-cli catalog validate catalog.json
+atc catalog validate catalog.json
 # Every entry requires review if no previously accepted base is supplied:
-agent-toolkit-cli catalog validate catalog.json --admission
+atc catalog validate catalog.json --admission
 # Compare with a saved, previously accepted manifest:
-agent-toolkit-cli catalog validate catalog.json --admission --base previous-catalog.json
+atc catalog validate catalog.json --admission --base previous-catalog.json
 ```
 
 A review is version 1 with `selector` equal to the normalized entry JSON excluding
