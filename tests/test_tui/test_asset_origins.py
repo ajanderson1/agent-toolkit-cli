@@ -5,6 +5,7 @@ import shlex
 import pytest
 from rich.text import Text
 from textual.app import App, ComposeResult
+from textual.containers import VerticalScroll
 from textual.coordinate import Coordinate
 from textual.widgets import DataTable
 
@@ -89,7 +90,7 @@ async def test_local_info_explains_exact_manual_removal(kind, shape, tmp_path):
         body = Text.from_markup(grid.app.screen._body_markup).plain
         assert "Origin: local" in body
         assert str(path) in body
-        assert f"Source: {path}" in body
+        assert f"Full source: {path}" in body
         assert "unlisted" not in body
         assert "not moved or registered" in body
         assert "Edit/update these files directly" in body
@@ -153,8 +154,9 @@ async def test_long_local_info_can_scroll_to_removal_guidance(tmp_path):
         panel = screen.children[0]
         assert panel.region.bottom <= screen.size.height
         assert panel.region.right <= screen.size.width
-        assert panel.max_scroll_y > 0
-        panel.scroll_end(animate=False, force=True)
+        scroll = screen.query_one(VerticalScroll)
+        assert scroll.max_scroll_y > 0
+        scroll.scroll_end(animate=False, force=True)
         await pilot.pause()
         footer = screen.query_one("#cell-info-footer")
         assert 0 <= footer.region.y < screen.size.height

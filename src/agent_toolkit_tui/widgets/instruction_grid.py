@@ -246,6 +246,7 @@ class InstructionGrid(Vertical):
                     description=None,
                     description_location="AGENTS.md",
                     source=row.source,
+                    origin="canonical file",
                     ref=None,
                     state="canonical present" if row.canonical_exists else "canonical missing",
                     scope=self._scope,

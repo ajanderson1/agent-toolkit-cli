@@ -310,9 +310,11 @@ async def test_agent_i_opens_asset_info_from_harness_column():
         await pilot.pause()
         assert isinstance(app.screen, CellInfoScreen)
         assert app.screen._title == "alpha · Agent"
-        assert "Source: ajanderson1/alpha" in app.screen._body_markup
-        assert "Ref:    main" in app.screen._body_markup
-        assert "State (global): installed" in app.screen._body_markup
+        from rich.text import Text
+        body = Text.from_markup(app.screen._body_markup).plain
+        assert "Source: ajanderson1/alpha" in body
+        assert "Ref:    main" in body
+        assert "State:  installed" in body and "Scope:  global" in body
 
 
 # ---------------------------------------------------------------------------

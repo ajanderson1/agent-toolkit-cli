@@ -79,6 +79,14 @@ Footer (key hints)
 - **Grid** — one row per asset, columns vary by type (slug, source, ref, state,
   per-harness cells). Press ++i++ for the selected asset; click a glyphed column
   header for column-level information.
+- **Info panes** — asset and column Info lead with **At a glance** facts and then
+  use labelled Description, Source & location, Availability, Update status and
+  Available actions sections when those details apply. Long paths, refs and
+  commands retain their full value in Technical details or a distinct command
+  line after a compact summary. Warnings and manual file-removal guidance are
+  separated from ordinary availability text. Use ++up++/++down++ or
+  ++pageup++/++pagedown++ to scroll; the pane footer repeats these keys and its
+  close keys (++esc++, ++q++ for assets, or ++i++).
 - **Repository path** — the row above the status bar shows a bold **REPO:**
   label, a regular-weight parent path, and a bold final displayed directory.
   It shows the launch directory (including a repository subdirectory), not a

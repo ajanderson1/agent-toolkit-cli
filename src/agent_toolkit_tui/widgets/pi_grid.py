@@ -257,18 +257,42 @@ class PiGrid(CatalogPendingMixin, Vertical):
         if table.cursor_coordinate.row >= len(visible):
             return
         row = visible[table.cursor_coordinate.row]
-        state = "Linked" if row.origin == "store-owned" else "Enabled"
+        from agent_toolkit_tui.screens.cell_info import asset_info_body
+
+        state_label = "Linked" if row.origin == "store-owned" else "Enabled"
+        selection = self._selection_label(row, self._scope)
+        glance_state = (
+            selection if row.catalog_only or row.origin in ("npm", "local-package")
+            else f"{state_label}: {selection}"
+        )
+        origin = {
+            "store-owned": "library",
+            "npm": "npm",
+            "untracked": "local",
+            "local-package": "local",
+            "catalog": "catalog",
+        }[row.origin]
+        source = row.npm_state.for_scope(self._scope).source if row.npm_state else row.source
         self.app.push_screen(
             CellInfoScreen(
                 title=f"{row.slug} · {asset_type_label('pi-extension')}",
-                body_markup="\n".join([
-                    f"Source: {escape(row.npm_state.for_scope(self._scope).source if row.npm_state else row.source)}",
-                    "",
-                    f"{state} globally: {self._selection_label(row, 'global')}",
-                    f"{state} for this project: {self._selection_label(row, 'project')}",
-                    "",
-                    self._info_body(row=row, scope=self._scope),
-                ]),
+                body_markup=asset_info_body(
+                    asset_label=asset_type_label("pi-extension"),
+                    slug=row.slug,
+                    description=None,
+                    description_location="Pi extension metadata",
+                    source=source,
+                    origin=origin,
+                    ref=None,
+                    state=glance_state,
+                    scope=self._scope,
+                    show_ref=False,
+                    extra_lines=[
+                        f"{state_label} globally: {self._selection_label(row, 'global')}",
+                        f"{state_label} for this project: {self._selection_label(row, 'project')}",
+                        self._info_body(row=row, scope=self._scope),
+                    ],
+                ),
             )
         )
 
@@ -323,7 +347,6 @@ class PiGrid(CatalogPendingMixin, Vertical):
         mode = {"inherit": "Inherited global policy", "override": "Project override of global package",
             "owned": "Scope-owned declaration", "available": "Available, not configured"}[current.mode]
         details = [f"Native Pi selection: {current.status}", mode,
-            f"Source: {current.source}",
             f"Installed version: {current.version or 'not installed'}",
             f"Installation: {current.root or 'missing in this scope'}"]
         if current.record is not None:
@@ -419,7 +442,7 @@ class PiGrid(CatalogPendingMixin, Vertical):
             candidate = Path(spec).expanduser()
             if not candidate.is_absolute():
                 candidate = Path(path).parent / candidate
-            return escape(
+            return (
                 f"Source path: {candidate}\n"
                 "Existing local filesystem package; files are not moved or registered.\n"
                 "No TUI enable/disable or deletion; edit/update the local files directly.\n"
@@ -440,7 +463,7 @@ class PiGrid(CatalogPendingMixin, Vertical):
         effect = (
             "Enable connects the library source to Pi.\n"
             "Disable removes the connection, not source files.\n"
-            f"Pi path: {escape(str(link))}"
+            f"Pi path: {link}"
         )
 
         if pending:

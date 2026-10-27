@@ -108,11 +108,14 @@ async def test_i_explains_the_asset_not_selected_cell_state(row: SkillRow) -> No
         await pilot.pause()
         screen = await _open_skill_info(app, pilot, column=2)
         body = screen._body_markup
+        from rich.text import Text
+        plain = Text.from_markup(body).plain
 
         assert screen._title == "journal · Skill"
-        assert "Source: x/journal" in body
-        assert "Ref:    main" in body
-        assert "State (global): clean" in body
+        assert "At a glance" in plain
+        assert "Source: x/journal" in plain
+        assert "Ref:    main" in plain
+        assert "State:  clean" in plain and "Scope:  global" in plain
         assert "skill doctor" not in body
         assert "Press [b]space" not in body
 
@@ -129,7 +132,7 @@ async def test_asset_info_includes_description_when_present() -> None:
     async with app.run_test() as pilot:
         await pilot.pause()
         screen = await _open_skill_info(app, pilot)
-        assert "Description:" in screen._body_markup
+        assert "[b]Description[/]" in screen._body_markup
         assert "An atomic-note journal skill." in screen._body_markup
 
 
@@ -143,8 +146,8 @@ async def test_asset_info_plainly_reports_missing_description() -> None:
     async with app.run_test() as pilot:
         await pilot.pause()
         screen = await _open_skill_info(app, pilot)
-        assert "No description in SKILL.md." in screen._body_markup
-        assert "Description:" not in screen._body_markup
+        assert "No description in SKILL.md." not in screen._body_markup
+        assert "[b]Description[/]" not in screen._body_markup
 
 
 @pytest.mark.asyncio
@@ -158,7 +161,8 @@ async def test_asset_info_names_the_scope_and_row_state(state: str) -> None:
     async with app.run_test() as pilot:
         await pilot.pause()
         screen = await _open_skill_info(app, pilot)
-        assert f"State (global): {state}" in screen._body_markup
+        from rich.text import Text
+        assert f"State:  {state}" in Text.from_markup(screen._body_markup).plain
 
 
 def test_asset_info_body_uses_em_dash_when_ref_is_unavailable() -> None:
@@ -168,9 +172,12 @@ def test_asset_info_body_uses_em_dash_when_ref_is_unavailable() -> None:
         description=None,
         description_location="MCP definition",
         source="npx",
+        origin="library manifest",
         ref=None,
         state="installed",
         scope="project",
     )
-    assert "Ref:    —" in body
-    assert "State (project): installed" in body
+    from rich.text import Text
+    plain = Text.from_markup(body).plain
+    assert "Ref:    —" in plain
+    assert "State:  installed" in plain and "Scope:  project" in plain

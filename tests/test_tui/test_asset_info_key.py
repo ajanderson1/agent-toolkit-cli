@@ -154,14 +154,15 @@ async def test_i_opens_an_asset_panel_for_every_grid(case: _Case) -> None:
 
         assert isinstance(app.screen, CellInfoScreen)
         assert app.screen._title == case.expected_title
-        body = app.screen._body_markup
+        from rich.text import Text
+        body = Text.from_markup(app.screen._body_markup).plain
         assert "Source:" in body
         if case.name == "pi-extension":
             assert "Linked globally: No" in body
             assert "Linked for this project: No" in body
         else:
             assert "Ref:" in body
-            assert "State (global):" in body
+            assert "State:" in body and "Scope:" in body
 
 
 @pytest.mark.asyncio
@@ -230,7 +231,7 @@ async def test_i_says_when_a_skill_has_no_description() -> None:
         await pilot.pause()
 
         assert isinstance(app.screen, CellInfoScreen)
-        assert "No description in SKILL.md." in app.screen._body_markup
+        assert "[b]Description[/]" not in app.screen._body_markup
 
 
 @pytest.mark.asyncio

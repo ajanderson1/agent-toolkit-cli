@@ -8,7 +8,7 @@ from rich.markup import escape
 def local_path_info(path: Path, *, configurable: bool = False) -> list[str]:
     lines = [
         "Origin: local",
-        f"Source path: {escape(str(path))}",
+        f"Source path: {path}",
         "Existing files are used where they are, not moved or registered.",
         ("Enable/Disable changes Pi settings only; source files are kept. No TUI deletion."
          if configurable else "Local assets cannot be enabled, disabled or deleted in the TUI."),
@@ -16,7 +16,7 @@ def local_path_info(path: Path, *, configurable: bool = False) -> list[str]:
     ]
     if path.is_symlink():
         lines += [
-            f"Symlink target: {escape(str(path.resolve()))}",
+            f"Symlink target: {path.resolve()}",
             "Manual removal removes only this symlink; target files are kept:",
             escape(f"  rm -- {quote(str(path))}"),
         ]
@@ -45,11 +45,11 @@ def catalog_skill_info(slug: str, *, scope: str, home: Path, project: Path | Non
         return []
     lines = []
     if provenance or item is not None:
-        lines.append(f"Catalog: {escape(catalog_url or str(provenance.get('url', '(not currently connected)')))}")
+        lines.append(f"Catalog: {catalog_url or str(provenance.get('url', '(not currently connected)'))}")
     if item is not None:
-        lines += [f"Upstream: {escape(item.source.url)}", f"Directory: {escape(item.source.subpath or '.')}"]
+        lines += [f"Upstream: {item.source.url}", f"Directory: {item.source.subpath or '.'}"]
     elif provenance:
-        lines += [f"Upstream: {escape(str(provenance.get('source', '')))}", f"Directory: {escape(str(provenance.get('path', '.')))}"]
+        lines += [f"Upstream: {str(provenance.get('source', ''))}", f"Directory: {str(provenance.get('path', '.'))}"]
     if entry is None:
         return lines + ["Not downloaded. Enable to acquire the selected upstream skill."]
     check_scope, check_project = scope, project
@@ -94,7 +94,7 @@ def catalog_skill_info(slug: str, *, scope: str, home: Path, project: Path | Non
 def library_info(path: Path) -> list[str]:
     return [
         "Origin: library",
-        f"Source path: {escape(str(path.resolve()))}",
+        f"Source path: {path.resolve()}",
         "Toolkit-managed central source, connected through the existing installation mechanism.",
         "Disable removes the connection, not the source.",
         "Updates use Toolkit source update handling; Git changes and health are shown separately.",
