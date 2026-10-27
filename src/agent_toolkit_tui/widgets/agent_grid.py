@@ -431,7 +431,6 @@ class AgentGrid(CatalogPendingMixin, Vertical):
         table.add_column(f"State {_INFO_GLYPH}", width=10)
         # Source column — passive, no info popup.
         table.add_column("Source", width=source_width)
-        self._adjust_source_column_width(table)
 
         visible = self._visible_rows()
         for row in visible:
@@ -442,6 +441,7 @@ class AgentGrid(CatalogPendingMixin, Vertical):
             origin = "local" if row.ref == "(untracked)" else "library"
             cells.append(Text(f"{origin} · {row.source}", no_wrap=True, overflow="ellipsis"))
             table.add_row(*cells, key=f"agent:{row.slug}")
+        self._adjust_source_column_width(table)
 
         if visible:
             max_row = len(visible) - 1

@@ -77,7 +77,8 @@ Footer (key hints)
   Labels have no number prefixes or separators. With the sidebar focused, keys
   **1–6** still select these types in order.
 - **Grid** — one row per asset, columns vary by type (slug, source, ref, state,
-  per-harness cells). Press ++i++ for the selected asset; click a glyphed column
+  per-harness cells). The Source column fits its displayed values when terminal
+  space permits. Press ++i++ for the selected asset; click a glyphed column
   header for column-level information.
 - **Repository path** — the row above the status bar shows a bold **REPO:**
   label, a regular-weight parent path, and a bold final displayed directory.
@@ -161,7 +162,7 @@ registration, lock-file import and unrelated repairs are unchanged.
 | ++ctrl+r++ | **Refresh** | Re-read the active inventory; keep native npm/loose-local Pi drafts and targets, otherwise discard the active grid's drafts. Other kinds' queues survive. |
 | ++r++ | **Reset npm policy** | In the Pi grid, queue reset of this scope's extension filter; Ctrl+S applies. An inherited package returns to global policy; owned installations remain. |
 | ++ctrl+z++ | **Revert** | Clear the pending queue across all asset types — both scopes. |
-| ++slash++ | **Filter** | Focus the fuzzy filter box over the grid. |
+| ++slash++ | **Filter** | Focus the fuzzy filter box over the grid. Escape clears it; Alt+Backspace deletes the preceding word. |
 | ++ctrl+g++ | **Scope toggle** | Switch project ⇄ global. |
 | ++ctrl+p++ | **Command palette** | Choose **Theme** or **Main harnesses** to customize themes or standalone columns. |
 | ++i++ | **Info** | Open information for the selected asset, regardless of column. |
@@ -187,7 +188,7 @@ override, failure handling, and the explicit CLI boundary.
 
 ## Skill collections
 
-Multi-skill repositories appear as an expandable **collection** with short child names. The header counts real skills and collections, not extra parent rows. Acquired children's clean/dirty badges inspect only their own directories. A parent with known local Git backing reports repository-wide clean/dirty state, including root files and filter-hidden children; advertisement-only parents retain the `collection` label without probing asset repositories. Clean describes uncommitted Git changes, not whether upstream has advanced. Click the parent name (or press Space/Enter there) to expand/collapse; Info retains full source/ref/path identity.
+Multi-skill repositories appear as an expandable **collection** with short child names. The header counts real skills and collections, not extra parent rows. Acquired children's clean/dirty badges inspect only their own directories. A parent with known local Git backing reports repository-wide clean/dirty state, including root files and filter-hidden children; advertisement-only parents retain the `collection` label without probing asset repositories. Clean describes uncommitted Git changes, not whether upstream has advanced. Click the parent name (or press Space/Enter there) to expand/collapse; Left from the leftmost column collapses the selected parent or its selected child’s parent. Info retains full source/ref/path identity.
 
 Each available parent cell summarizes effective selection: unchecked = none, checked = all, **cyan `−` = mixed**. A mixed parent selects all when toggled. Child cells remain independent. The **yellow `-` on a child means pending removal**, not mixed selection. Parent actions include every member, even collapsed or filter-hidden children, and stay within that source/ref, harness and scope. A child filter keeps the parent visible for context. Column-wide toggles visit children once.
 

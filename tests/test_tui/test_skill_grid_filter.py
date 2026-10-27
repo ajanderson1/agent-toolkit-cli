@@ -106,6 +106,55 @@ async def test_typing_narrows_rows():
 
 
 @pytest.mark.asyncio
+async def test_escape_clears_filter_and_restores_rows():
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        g = app.query_one("#skill-grid", SkillGrid)
+        g.set_rows([_row("alpha"), _row("beta")])
+        filter_box = app.query_one("#skill-filter", Input)
+        filter_box.focus()
+        await pilot.press("b", "e")
+        await pilot.pause()
+        assert _slugs(g) == ["beta"]
+
+        await pilot.press("escape")
+        await pilot.pause()
+
+        assert filter_box.value == ""
+        assert _slugs(g) == ["alpha", "beta"]
+
+
+@pytest.mark.asyncio
+async def test_alt_backspace_deletes_word_before_filter_cursor():
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        filter_box = app.query_one("#skill-filter", Input)
+        filter_box.value = "keep remove"
+        filter_box.cursor_position = len(filter_box.value)
+        filter_box.focus()
+
+        await pilot.press("alt+backspace")
+        await pilot.pause()
+
+        assert filter_box.value == "keep "
+
+
+@pytest.mark.asyncio
+async def test_left_moves_filter_cursor_without_collapsing_collection():
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        filter_box = app.query_one("#skill-filter", Input)
+        filter_box.value = "alpha"
+        filter_box.cursor_position = len(filter_box.value)
+        filter_box.focus()
+
+        await pilot.press("left")
+        await pilot.pause()
+
+        assert filter_box.cursor_position == len("alpha") - 1
+
+
+@pytest.mark.asyncio
 async def test_toggle_after_filter_targets_visible_row():
     """Filter to one slug, move into the table, space — pending key is that slug.
 

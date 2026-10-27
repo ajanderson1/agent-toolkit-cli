@@ -559,7 +559,6 @@ class PiGrid(CatalogPendingMixin, Vertical):
         table.add_column(f"Pi {_INFO_GLYPH}", width=_SCOPE_COLUMN_WIDTH)
         table.add_column(f"Origin {_INFO_GLYPH}", width=_ORIGIN_COLUMN_WIDTH)
         table.add_column("Source", width=source_width)
-        self._adjust_source_column_width(table)
 
         visible = self._visible_rows()
         for row in visible:
@@ -570,6 +569,7 @@ class PiGrid(CatalogPendingMixin, Vertical):
                 Text(row.npm_state.for_scope(self._scope).source if row.npm_state else row.source, no_wrap=True, overflow="ellipsis"),
             ]
             table.add_row(*cells, key=f"pi:{row.slug}")
+        self._adjust_source_column_width(table)
 
         if visible:
             max_row = len(visible) - 1

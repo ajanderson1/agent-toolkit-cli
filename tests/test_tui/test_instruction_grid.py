@@ -92,8 +92,8 @@ def _conflict_row(slug: str = "AGENTS.md", *, scope: str = "global") -> Instruct
 
 
 @pytest.mark.asyncio
-async def test_instruction_grid_resize_adjusts_source_column_width():
-    """InstructionGrid resize delegates remaining width to Source."""
+async def test_instruction_grid_resize_fits_source_text_when_room_permits():
+    """InstructionGrid sizes Source to its displayed text."""
 
     class _A(App):
         def compose(self) -> ComposeResult:
@@ -109,8 +109,7 @@ async def test_instruction_grid_resize_adjusts_source_column_width():
         g.on_resize(event)
 
         source = list(table.columns.values())[-1]
-        fixed_width = 22 + 16 + (14 * len(g._active_harnesses()))
-        assert source.width == max(10, 140 - fixed_width)
+        assert source.width == 10
 
 
 @pytest.mark.asyncio
