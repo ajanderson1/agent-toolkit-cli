@@ -729,6 +729,11 @@ class TUIApp(App):
         self._refresh_pi_view()
         if snapshot is not None and snapshot.error:
             self.notify(f"{snapshot.error}; catalog-only entries hidden.", title="Shared catalog", severity="warning")
+        elif snapshot is not None and snapshot.revision:
+            revision = snapshot.revision[:12]
+            message = (f"Retrieved catalogue {snapshot.ref} ({revision})" if snapshot.ref
+                       else f"Retrieved catalogue revision {revision}")
+            self.notify(message)
         self._refresh_pending_label()
         self._refresh_status_bar()
 

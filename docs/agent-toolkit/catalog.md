@@ -86,9 +86,12 @@ remain pending with refresh/reselect guidance; independent successful changes cl
 Npm catalogue-only rows are read-only and their Info panel gives the explicit
 installation command. Installed native npm rows keep their normal controls.
 
-Failed refresh hides catalogue-only rows across all four kinds with a warning;
-local assets stay usable. There is no stale-listing fallback. Unsubscribing or
-removing a catalogue entry never deletes library content or disables exposure.
+A successful TUI retrieval reports its configured ref (when present) and short
+fetched Git SHA. Refs such as branches and tags can be retargeted; the fetched SHA
+is the immutable identity of the catalogue content. Failed refresh hides
+catalogue-only rows across all four kinds with a warning; local assets stay usable.
+There is no stale-listing fallback. Unsubscribing or removing a catalogue entry
+never deletes library content or disables exposure.
 For example, delisting an agent already enabled in Pi leaves that agent in the
 library and enabled in Pi: the catalogue is not a remote removal switch.
 
