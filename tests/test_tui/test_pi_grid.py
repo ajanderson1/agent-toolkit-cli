@@ -213,7 +213,7 @@ async def test_pi_grid_resize_shrinks_source_column_to_remaining_width():
         table = app.query_one("#pi-table", DataTable)
 
         grid.on_resize(Resize(Size(72, 20), Size(72, 20)))
-        assert list(table.columns.values())[-1].width == 22
+        assert list(table.columns.values())[-1].width == 14
 
         grid.on_resize(Resize(Size(40, 20), Size(40, 20)))
         assert list(table.columns.values())[-1].width == 10

@@ -1,3 +1,4 @@
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -43,6 +44,74 @@ async def test_hierarchy_mixed_parent_hidden_members_and_column_deduplication(le
         grid.action_toggle_column()
         assert not grid.pending_entries()
         assert (Path.home() / ".agents/skills/wrapper").exists()
+
+
+@pytest.mark.asyncio
+async def test_left_from_nonleftmost_column_keeps_table_navigation(legacy):
+    app = TUIApp()
+    app._scope = "global"
+    async with app.run_test(size=(180, 50)) as pilot:
+        app.action_asset_type("skill")
+        await pilot.pause()
+        grid = app.query_one("#skill-grid", SkillGrid)
+        table = grid.query_one("#skill-table", DataTable)
+
+        table.focus()
+        table.cursor_coordinate = Coordinate(0, 0)
+        await pilot.press("right", "left")
+        await pilot.pause()
+
+        assert table.cursor_coordinate == Coordinate(0, 0)
+        assert len(grid._visible_rows()) == 12
+
+
+@pytest.mark.asyncio
+async def test_left_in_leftmost_column_collapses_collection_or_selected_child_parent(legacy):
+    app = TUIApp()
+    app._scope = "global"
+    async with app.run_test(size=(180, 50)) as pilot:
+        app.action_asset_type("skill")
+        await pilot.pause()
+        grid = app.query_one("#skill-grid", SkillGrid)
+        table = grid.query_one("#skill-table", DataTable)
+
+        parent_slug = grid._visible_rows()[0].slug
+        table.focus()
+        table.cursor_coordinate = Coordinate(0, 0)
+        await pilot.press("left")
+        await pilot.pause()
+        assert len(grid._visible_rows()) == 1
+
+        grid._collapsed.clear()
+        second_key = ("other/repo", None)
+        second_child = replace(
+            grid._rows[0],
+            slug="z-second-child",
+            collection_key=second_key,
+            collection_label="other/repo",
+            display_name="second-child",
+        )
+        standalone = replace(
+            grid._rows[0],
+            slug="z-standalone",
+            collection_key=None,
+            collection_label="",
+            display_name="z-standalone",
+        )
+        grid.set_rows([*grid._rows, second_child, standalone])
+        table.focus()
+        table.cursor_coordinate = Coordinate(1, 0)
+        await pilot.press("left")
+        await pilot.pause()
+
+        assert [row.slug for row in grid._visible_rows()] == [
+            parent_slug,
+            f"collection:{second_key!r}",
+            "z-second-child",
+            "z-standalone",
+        ]
+        assert table.cursor_coordinate == Coordinate(0, 0)
+        assert app.focused is table
 
 
 @pytest.mark.asyncio
