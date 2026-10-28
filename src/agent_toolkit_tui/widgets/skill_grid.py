@@ -75,6 +75,25 @@ _GLOBAL_GLYPH   = "🌐"
 Op = Literal["link", "unlink"]
 
 
+class SkillDataTable(DataTable):
+    """Name-column arrows expand/collapse before horizontal navigation."""
+
+    def action_cursor_right(self) -> None:
+        grid = self.parent
+        if self.cursor_coordinate.column == 0 and isinstance(grid, SkillGrid):
+            if grid.expand_selected_collection():
+                return
+        super().action_cursor_right()
+
+    def action_cursor_left(self) -> None:
+        if self.cursor_coordinate.column != 0:
+            super().action_cursor_left()
+            return
+        grid = self.parent
+        if isinstance(grid, SkillGrid):
+            grid.action_collapse_collection()
+
+
 class SkillGrid(Vertical):
     """One row per locked skill with selection-aware harness cells."""
 
@@ -112,7 +131,7 @@ class SkillGrid(Vertical):
         self._selection: tuple[str, ...] | None = None
         # Case-insensitive substring filter on slug (#249). "" = show all.
         self._filter: str = ""
-        self._collapsed: set[tuple[str, str | None]] = set()
+        self._collapsed = {r.collection_key for r in self._rows if r.collection_key is not None}
 
     def _active_agents(self) -> tuple[str, ...]:
         # Standard column + non-covered main harnesses. The long tail is
@@ -152,6 +171,9 @@ class SkillGrid(Vertical):
                 self._collection_names.setdefault(row.source.rsplit("/", 1)[-1], set()).add(row.collection_key)
 
     def set_rows(self, rows: list[SkillRow]) -> None:
+        previous = {r.collection_key for r in self._rows if r.collection_key is not None}
+        current = {r.collection_key for r in rows if r.collection_key is not None}
+        self._collapsed = (self._collapsed & current) | (current - previous)
         self._set_row_index(rows)
         try:
             table = self.query_one("#skill-table", DataTable)
@@ -228,6 +250,10 @@ class SkillGrid(Vertical):
         except Exception:
             return
         col_idx = self._column_index(agent_name)
+        target = next((row for row in self._rows if row.slug == row_slug), None)
+        if not self._filter and target is not None and target.collection_key in self._collapsed:
+            self._collapsed.remove(target.collection_key)
+            self._rebuild(table)
         # The table only renders visible rows, so the cursor row index must be
         # the slug's position in the *visible* list, not the full set (#249).
         visible_slugs = [r.slug for r in self._visible_rows()]
@@ -245,7 +271,7 @@ class SkillGrid(Vertical):
         # Filter box on top, table below — mirrors the v1 layout (#249).
         yield GridFilterInput(table_selector="#skill-table", id="skill-filter",
                               placeholder="Filter · parent affects ALL children · mixed − ≠ pending -")
-        table = DataTable(id="skill-table", cursor_type="cell", zebra_stripes=True)
+        table = SkillDataTable(id="skill-table", cursor_type="cell", zebra_stripes=True)
         yield table
 
     # ----- filter ---------------------------------------------------------
@@ -292,7 +318,8 @@ class SkillGrid(Vertical):
                 collection_error=row.collection_error,
                 description="Collection controls affect every child, including collapsed/filter-hidden skills. "
                             "Mixed (cyan −) means some selected; yellow - means pending removal. "
-                            "Click the name or press Space/Enter there to expand/collapse. " + row.collection_error,
+                            "Right expands; Left collapses from the name column. "
+                            "Click the name or press Space/Enter there to toggle. " + row.collection_error,
             )
             visible.append(parent)
             if key not in self._collapsed or self._filter:
@@ -335,6 +362,44 @@ class SkillGrid(Vertical):
             return
         self._toggle_at(table.cursor_coordinate)
 
+    def expand_selected_collection(self) -> bool:
+        """Consume Right only when it reveals a collapsed parent’s children."""
+        table = self.query_one("#skill-table", DataTable)
+        coord = table.cursor_coordinate
+        visible = self._visible_rows()
+        if self._filter or coord.column != 0 or not 0 <= coord.row < len(visible):
+            return False
+        row = visible[coord.row]
+        if not row.is_collection or row.collection_key not in self._collapsed:
+            return False
+        self._collapsed.remove(row.collection_key)
+        self._rebuild(table)
+        return True
+
+    def action_collapse_collection(self) -> None:
+        """Collapse the selected collection from its name column."""
+        try:
+            table = self.query_one("#skill-table", DataTable)
+        except Exception:
+            return
+        coord = table.cursor_coordinate
+        if coord.column != 0:
+            return
+        visible = self._visible_rows()
+        if not 0 <= coord.row < len(visible):
+            return
+        row = visible[coord.row]
+        if row.collection_key is None or row.collection_key in self._collapsed:
+            return
+        parent_index = next(
+            index
+            for index, candidate in enumerate(visible)
+            if candidate.is_collection and candidate.collection_key == row.collection_key
+        )
+        self._collapsed.add(row.collection_key)
+        table.cursor_coordinate = Coordinate(parent_index, 0)
+        self._rebuild(table)
+
     def action_info(self) -> None:
         """Open the selected skill's asset panel, regardless of column (#479)."""
         from agent_toolkit_tui.screens.cell_info import CellInfoScreen, asset_info_body
@@ -371,6 +436,9 @@ class SkillGrid(Vertical):
             details += catalog_skill_info(row.slug, scope=self._scope, home=Path.home(), project=normalize_skill_project_root(Path.cwd()) if self._scope == "project" else None, item=row.catalog_item, catalog_url=row.catalog_url)
             if row.catalog_warning:
                 details.append(escape(row.catalog_warning))
+        if row.skill_path:
+            from agent_toolkit_tui.info_presentation import InfoFact
+            details.append(InfoFact("Skill path", row.skill_path))
         self.app.push_screen(
             CellInfoScreen(
                 title=f"{row.slug} · {asset_type_label('skill')}",
@@ -379,12 +447,13 @@ class SkillGrid(Vertical):
                     slug=row.slug,
                     description=row.description,
                     description_location="SKILL.md",
-                    source=escape(row.source),
+                    source=row.source,
+                    origin="local" if row.ref == "(untracked)" else row.origin,
                     ref=None if row.ref == "(untracked)" else row.ref,
                     state="local files (read-only)" if row.ref == "(untracked)" else row.state,
                     scope=self._scope,
                     extra_lines=details,
-                ) + (f"\n\nSkill path: {row.skill_path}" if row.skill_path else ""),
+                ),
             )
         )
 
@@ -411,7 +480,7 @@ class SkillGrid(Vertical):
         if getattr(cell, "exposure_reason", ""):
             return f"[yellow]Exposure uncertain.[/]\n{cell.exposure_reason}"
         if row.ref == "(untracked)":
-            return "\n".join(local_path_info(Path(row.source)))
+            return "\n".join(map(str, local_path_info(Path(row.source))))
         # Unavailable cells (e.g. company-only Paperclip outside a company)
         # have no projection to describe; explain the context requirement
         # before any path resolver that would raise.

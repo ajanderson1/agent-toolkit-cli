@@ -252,6 +252,7 @@ class CommandGrid(CatalogPendingMixin, Vertical):
                     description=row.description or None,
                     description_location="catalog" if row.catalog_item else "command markdown",
                     source=row.source,
+                    origin="catalog" if row.catalog_only else "library",
                     ref=row.ref,
                     state=row.state,
                     scope=self._scope,

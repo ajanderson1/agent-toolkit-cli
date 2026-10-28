@@ -213,7 +213,7 @@ async def test_pi_grid_resize_shrinks_source_column_to_remaining_width():
         table = app.query_one("#pi-table", DataTable)
 
         grid.on_resize(Resize(Size(72, 20), Size(72, 20)))
-        assert list(table.columns.values())[-1].width == 22
+        assert list(table.columns.values())[-1].width == 14
 
         grid.on_resize(Resize(Size(40, 20), Size(40, 20)))
         assert list(table.columns.values())[-1].width == 10
@@ -267,9 +267,10 @@ async def test_pi_grid_origin_and_extension_info_use_library_copy():
         table.focus()
         await pilot.press("i")
         await pilot.pause()
-        assert "Origin: library" in app.screen._body_markup
-        assert "Store path" not in app.screen._body_markup
-        assert "store-owned" not in app.screen._body_markup
+        body = app.screen.query_one("#cell-info-body", Static).render().plain
+        assert "Origin: library" in body
+        assert "Store path" not in body
+        assert "store-owned" not in body
 
 
 @pytest.mark.asyncio

@@ -5,8 +5,9 @@ import shlex
 import pytest
 from rich.text import Text
 from textual.app import App, ComposeResult
+from textual.containers import VerticalScroll
 from textual.coordinate import Coordinate
-from textual.widgets import DataTable
+from textual.widgets import DataTable, Static
 
 from agent_toolkit_tui.agent_state import AgentCell, AgentRow, build_agent_rows
 from agent_toolkit_tui.skill_state import SkillCell, SkillRow, build_skill_rows
@@ -89,7 +90,7 @@ async def test_local_info_explains_exact_manual_removal(kind, shape, tmp_path):
         body = Text.from_markup(grid.app.screen._body_markup).plain
         assert "Origin: local" in body
         assert str(path) in body
-        assert f"Source: {path}" in body
+        assert f"Full source: {path}" in body
         assert "unlisted" not in body
         assert "not moved or registered" in body
         assert "Edit/update these files directly" in body
@@ -153,8 +154,9 @@ async def test_long_local_info_can_scroll_to_removal_guidance(tmp_path):
         panel = screen.children[0]
         assert panel.region.bottom <= screen.size.height
         assert panel.region.right <= screen.size.width
-        assert panel.max_scroll_y > 0
-        panel.scroll_end(animate=False, force=True)
+        scroll = screen.query_one(VerticalScroll)
+        assert scroll.max_scroll_y > 0
+        scroll.scroll_end(animate=False, force=True)
         await pilot.pause()
         footer = screen.query_one("#cell-info-footer")
         assert 0 <= footer.region.y < screen.size.height
@@ -299,6 +301,47 @@ def test_discovered_skill_child_retains_actual_path(tmp_path, monkeypatch):
     row = next(r for r in build_skill_rows(scope="global", home=tmp_path, project=None)
                if r.slug == "bundle:one")
     assert row.source == str(child)
+
+
+@pytest.mark.asyncio
+async def test_discovered_skill_newline_path_renders_as_one_literal_source_fact(tmp_path, monkeypatch):
+    """Discovery-to-SkillGrid flow preserves newline-containing local paths."""
+    root = tmp_path / ".agent-toolkit/skills"
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(root))
+    child = root / "local\n[/b]"
+    child.mkdir(parents=True)
+    (child / "SKILL.md").write_text("---\ndescription: local\n---\n")
+    row = next(r for r in build_skill_rows(scope="global", home=tmp_path, project=None)
+               if r.source == str(child))
+    grid = SkillGrid([row])
+
+    async with GridApp(grid).run_test() as pilot:
+        await pilot.pause()
+        grid.action_info()
+        await pilot.pause()
+        plain = grid.app.screen.query_one("#cell-info-body", Static).render().plain
+
+    assert f"Full source: {child}" in plain
+    assert f"Source path: {child}" not in plain  # Deduplicated against full source.
+
+
+@pytest.mark.asyncio
+async def test_discovered_pi_newline_path_renders_as_literal_source_fact(tmp_path, monkeypatch):
+    """Pi discovery-to-info flow preserves a local path containing newline markup."""
+    home = tmp_path / "home\n[" / "b]"
+    extension = home / ".pi/agent/extensions/local/index.ts"
+    extension.parent.mkdir(parents=True)
+    extension.write_text("export default () => {}")
+    monkeypatch.setenv("HOME", str(home))
+    grid = PiGrid(build_pi_rows(home=home))
+
+    async with GridApp(grid).run_test() as pilot:
+        await pilot.pause()
+        grid.action_info()
+        await pilot.pause()
+        plain = grid.app.screen.query_one("#cell-info-body", Static).render().plain
+
+    assert str(extension.parent) in plain
 
 
 def test_discovered_agent_retains_actual_path(tmp_path, monkeypatch):

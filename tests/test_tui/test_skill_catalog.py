@@ -2,9 +2,17 @@
 import json
 
 import pytest
+from rich.text import Text
+from textual.widgets import Static
 
+from agent_toolkit_tui.info_presentation import detail_sections, sections_markup
 from tests.test_cli.test_reground import sandbox, git, invoke
 from tests.test_cli.test_skill_catalog_acquire import subscribed
+
+
+def _render_info_lines(lines) -> str:
+    """Exercise the structured info renderer used by SkillGrid.action_info."""
+    return Text.from_markup(sections_markup(detail_sections(lines)), emoji=False).plain
 
 
 def test_catalog_rows_dedup_and_no_network_in_local_builder(tmp_path, sandbox):
@@ -26,10 +34,104 @@ def test_info_shows_current_local_revision_before_any_upstream_check(tmp_path, s
     invoke("skills", "catalog", "add", "demo")
     sha = git(sandbox / ".agent-toolkit/skills/demo", "rev-parse", "HEAD")
     from agent_toolkit_tui.asset_info import catalog_skill_info
-    info = "\n".join(catalog_skill_info("demo", scope="global", home=sandbox, project=None))
+    info = _render_info_lines(catalog_skill_info("demo", scope="global", home=sandbox, project=None))
     assert sha in info
     assert "not checked" in info.lower()
     assert not (sandbox / ".agent-toolkit/skills-update-checks.json").exists()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("size", [(80, 24), (120, 40)])
+async def test_catalogue_release_status_is_one_line_bottom_right(tmp_path, sandbox, monkeypatch, size):
+    upstream, cat = subscribed(tmp_path)
+    git(cat, "tag", "v1.1.0")
+    invoke("catalog", "subscribe", cat.as_uri(), "--ref", "v1.1.0")
+    revision = git(cat, "rev-parse", "v1.1.0")
+    monkeypatch.chdir(tmp_path)
+    from agent_toolkit_tui.app import TUIApp
+
+    app = TUIApp()
+    notifications = []
+    original_notify = app.notify
+
+    def spy_notify(message, *args, **kwargs):
+        notifications.append((message, kwargs))
+        return original_notify(message, *args, **kwargs)
+
+    monkeypatch.setattr(app, "notify", spy_notify)
+    async with app.run_test(size=size) as pilot:
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        badge = app.query_one("#catalog-status", Static)
+        assert str(badge.render()) == "Catalogue: v1.1.0"
+        assert badge.region.height == 1
+        assert badge.region.right == app.screen.size.width
+        assert badge.region.y == app.query_one("#footer-pending", Static).region.y
+        assert app._catalog_snapshot.ref == "v1.1.0"
+        assert app._catalog_snapshot.revision == revision
+        app.action_asset_type("agent")
+        app._refresh_pending_label()
+        await pilot.pause()
+        assert str(badge.render()) == "Catalogue: v1.1.0"
+
+    assert all(not message.startswith("Retrieved catalogue") for message, _ in notifications)
+    assert all(revision[:12] not in message for message, _ in notifications)
+
+
+@pytest.mark.asyncio
+async def test_catalogue_status_refreshes_version_without_a_configured_ref(tmp_path, sandbox, monkeypatch):
+    upstream, cat = subscribed(tmp_path)
+    git(cat, "tag", "v1.2.0")
+    revision = git(cat, "rev-parse", "HEAD")
+    monkeypatch.chdir(tmp_path)
+    from agent_toolkit_tui.app import TUIApp
+
+    app = TUIApp()
+    notifications = []
+    original_notify = app.notify
+
+    def spy_notify(message, *args, **kwargs):
+        notifications.append((message, kwargs))
+        return original_notify(message, *args, **kwargs)
+
+    monkeypatch.setattr(app, "notify", spy_notify)
+    async with app.run_test() as pilot:
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        badge = app.query_one("#catalog-status", Static)
+        assert str(badge.render()) == "Catalogue: v1.2.0"
+        assert app._catalog_snapshot.ref is None
+        assert app._catalog_snapshot.revision == revision
+        git(cat, "-c", "user.name=Test", "-c", "user.email=test@example.test",
+            "commit", "--allow-empty", "-m", "unreleased catalogue update")
+        app._start_catalog_refresh()
+        assert str(badge.render()) == "Catalogue: refreshing…"
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        assert str(badge.render()) == "Catalogue: unversioned"
+        assert app._catalog_snapshot.revision == git(cat, "rev-parse", "HEAD")
+
+    assert all(not message.startswith("Retrieved catalogue") for message, _ in notifications)
+
+
+@pytest.mark.asyncio
+async def test_no_subscription_does_not_report_catalog_retrieval(sandbox, monkeypatch):
+    from agent_toolkit_tui.app import TUIApp
+
+    app = TUIApp()
+    notifications = []
+    original_notify = app.notify
+
+    def spy_notify(message, *args, **kwargs):
+        notifications.append((message, kwargs))
+        return original_notify(message, *args, **kwargs)
+
+    monkeypatch.setattr(app, "notify", spy_notify)
+    async with app.run_test() as pilot:
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+
+    assert all(not message.startswith("Retrieved catalogue") for message, _ in notifications)
 
 
 @pytest.mark.asyncio
@@ -76,16 +178,29 @@ async def test_offline_refresh_hides_only_catalog_rows(tmp_path, sandbox, monkey
     from agent_toolkit_tui.app import TUIApp
     from agent_toolkit_tui.widgets.skill_grid import SkillGrid
     app = TUIApp()
+    notifications = []
+    original_notify = app.notify
+
+    def spy_notify(message, *args, **kwargs):
+        notifications.append((message, kwargs))
+        return original_notify(message, *args, **kwargs)
+
+    monkeypatch.setattr(app, "notify", spy_notify)
     async with app.run_test() as pilot:
         await app.workers.wait_for_complete()
         await pilot.pause()
         grid = app.query_one(SkillGrid)
         assert "demo" in grid.row_slugs
+        notifications.clear()
         cat.rename(tmp_path / "offline")
         app._refresh_skill_view()
         await app.workers.wait_for_complete()
         await pilot.pause()
         assert grid.row_slugs == []
+        assert str(app.query_one("#catalog-status", Static).render()) == "Catalogue: unavailable"
+
+    assert all(not message.startswith("Retrieved catalogue") for message, _ in notifications)
+    assert any(kwargs.get("severity") == "warning" for _, kwargs in notifications)
 
 
 @pytest.mark.asyncio

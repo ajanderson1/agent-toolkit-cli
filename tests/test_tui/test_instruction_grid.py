@@ -92,8 +92,8 @@ def _conflict_row(slug: str = "AGENTS.md", *, scope: str = "global") -> Instruct
 
 
 @pytest.mark.asyncio
-async def test_instruction_grid_resize_adjusts_source_column_width():
-    """InstructionGrid resize delegates remaining width to Source."""
+async def test_instruction_grid_resize_fits_source_text_when_room_permits():
+    """InstructionGrid sizes Source to its displayed text."""
 
     class _A(App):
         def compose(self) -> ComposeResult:
@@ -109,8 +109,7 @@ async def test_instruction_grid_resize_adjusts_source_column_width():
         g.on_resize(event)
 
         source = list(table.columns.values())[-1]
-        fixed_width = 22 + 16 + (14 * len(g._active_harnesses()))
-        assert source.width == max(10, 140 - fixed_width)
+        assert source.width == 10
 
 
 @pytest.mark.asyncio
@@ -431,10 +430,11 @@ async def test_asset_info_shows_canonical_path_from_harness_column(
         from agent_toolkit_tui.screens.cell_info import CellInfoScreen
 
         assert isinstance(app.screen, CellInfoScreen)
-        body = app.screen._body_markup
+        from rich.text import Text
+        body = Text.from_markup(app.screen._body_markup).plain
         assert str(canonical) in body
         assert str(home / ".claude" / "CLAUDE.md") not in body
-        assert "State (global): canonical present" in body
+        assert "State:  canonical present" in body and "Scope:  global" in body
 
 
 @pytest.mark.asyncio
@@ -495,8 +495,10 @@ async def test_instruction_i_opens_asset_info_from_harness_column():
         await pilot.pause()
         assert isinstance(app.screen, CellInfoScreen)
         assert app.screen._title == "AGENTS.md · Instruction"
-        assert "Source: AGENTS.md" in app.screen._body_markup
-        assert "State (global): canonical present" in app.screen._body_markup
+        from rich.text import Text
+        body = Text.from_markup(app.screen._body_markup).plain
+        assert "Source: AGENTS.md" in body
+        assert "State:  canonical present" in body and "Scope:  global" in body
 
 
 # ---------------------------------------------------------------------------

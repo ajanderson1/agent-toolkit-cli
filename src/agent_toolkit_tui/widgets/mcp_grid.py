@@ -39,8 +39,12 @@ from textual.message import Message
 from textual.widgets import DataTable, Input
 from textual.events import Resize
 from rich.text import Text
-from agent_toolkit_tui.widgets._support import sync_table
-from agent_toolkit_tui.widgets._support import adjust_source_column_width, current_source_column_width
+from agent_toolkit_tui.widgets._support import (
+    adjust_source_column_width,
+    current_source_column_width,
+    set_source_column_width,
+    sync_table,
+)
 
 from agent_toolkit_tui.column_info import get_column_info
 from agent_toolkit_tui.display_names import (
@@ -49,7 +53,6 @@ from agent_toolkit_tui.display_names import (
     standard_column_header,
 )
 from agent_toolkit_tui.mcp_state import McpRow, mcp_interactive_harnesses
-from agent_toolkit_tui.widgets._support import adjust_source_column_width
 from agent_toolkit_tui.widgets.column_info_modal import ColumnInfoModal
 from agent_toolkit_tui.widgets.filter_input import GridFilterInput
 
@@ -249,6 +252,7 @@ class McpGrid(Vertical):
                     description=None,
                     description_location="MCP definition",
                     source=row.source,
+                    origin="scope configuration" if row.state == "unlisted" else "library manifest",
                     ref=row.pin,
                     state=row.state,
                     scope=self._scope,
@@ -434,6 +438,8 @@ class McpGrid(Vertical):
             table_rows.append((f"mcp:{row.slug}", cells))
 
         sync_table(table, columns, table_rows)
+        if self.size.width > 0:
+            set_source_column_width(table, self.size.width, self._fixed_column_width())
 
         if visible:
             max_row = len(visible) - 1

@@ -31,6 +31,8 @@ async def test_info_shows_scope_enablement_without_repeating_presence(global_ena
         grid.query_one(DataTable).focus()
         await pilot.press("i"); await pilot.pause()
         body = Text.from_markup(grid.app.screen._body_markup).plain
+        expected = "Enabled" if global_enabled else "Disabled"
+        assert f"State:  {expected}" in body
         assert f"Enabled globally: {'Enabled' if global_enabled else 'Disabled'}" in body
         assert f"Enabled for this project: {'Enabled' if project_enabled else 'Disabled'}" in body
         assert "Registered in Toolkit" not in body
@@ -47,6 +49,7 @@ async def test_library_symlink_is_not_reported_as_settings_enablement():
     async with GridApp().run_test() as pilot:
         grid.action_info(); await pilot.pause()
         body = Text.from_markup(grid.app.screen._body_markup).plain
+        assert "State:  Linked: Yes" in body
         assert "Linked globally: Yes" in body
         assert "Linked for this project: No" in body
         assert "Enabled globally" not in body

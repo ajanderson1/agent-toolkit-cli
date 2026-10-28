@@ -220,5 +220,7 @@ async def test_mcp_i_opens_asset_info_from_harness_column():
         await pilot.pause()
         assert isinstance(app.screen, CellInfoScreen)
         assert app.screen._title == "ctx7 · MCP"
-        assert "Source: npx" in app.screen._body_markup
-        assert "State (project): installed" in app.screen._body_markup
+        from rich.text import Text
+        body = Text.from_markup(app.screen._body_markup).plain
+        assert "Source: npx" in body
+        assert "State:  installed" in body and "Scope:  project" in body

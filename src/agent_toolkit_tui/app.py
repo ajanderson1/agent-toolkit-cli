@@ -403,6 +403,7 @@ class TUIApp(App):
         self._last_ctrl_c_quit_at: float | None = None
         self._tui_settings = TuiSettings()
         self._settings_diagnostics: tuple[str, ...] = ()
+        self._catalog_status_label: Static | None = None
         self.sub_title = f"v{__version__}"
 
     def compose(self) -> ComposeResult:
@@ -431,7 +432,10 @@ class TUIApp(App):
                 yield McpGrid([], id="mcp-grid")
         yield Static(self._build_proj_path_markup(), id="proj-path")
         yield Static("", id="status-bar")
-        yield Static("", id="footer-pending")
+        with Horizontal(id="footer-status"):
+            yield Static("", id="footer-pending")
+            self._catalog_status_label = Static("Catalogue: not subscribed", id="catalog-status", markup=False)
+            yield self._catalog_status_label
         yield Footer()
 
     @property
@@ -694,6 +698,10 @@ class TUIApp(App):
         )
         grid.restore_pending(saved)
 
+    def _set_catalog_status(self, status: str) -> None:
+        if self._catalog_status_label is not None:
+            self._catalog_status_label.update(f"Catalogue: {status}")
+
     def _start_catalog_refresh(self) -> None:
         self._catalog_snapshot = None
         self._catalog_scope = self._scope
@@ -706,9 +714,11 @@ class TUIApp(App):
         try:
             subscribed = _read_config(home).get("skillCatalog") is not None
         except (RuntimeError, OSError, ValueError):
+            self._set_catalog_status("unavailable")
             self.notify("Invalid shared catalog subscription; local assets retained.", severity="warning")
             return
         if subscribed:
+            self._set_catalog_status("refreshing…")
             def fetch():
                 snapshot = read_catalog(home=home)
                 try:
@@ -716,6 +726,8 @@ class TUIApp(App):
                 except RuntimeError:
                     pass  # App stopped while the bounded read was in flight.
             self.run_worker(fetch, thread=True, group="skill-catalog", exclusive=True)
+        else:
+            self._set_catalog_status("not subscribed")
 
     def _finish_skill_catalog(self, generation, scope, home, project, snapshot) -> None:
         if generation != getattr(self, "_skill_catalog_generation", 0):
@@ -728,7 +740,12 @@ class TUIApp(App):
         self._refresh_agent_view()
         self._refresh_pi_view()
         if snapshot is not None and snapshot.error:
+            self._set_catalog_status("unavailable")
             self.notify(f"{snapshot.error}; catalog-only entries hidden.", title="Shared catalog", severity="warning")
+        elif snapshot is not None:
+            self._set_catalog_status(snapshot.version or "unversioned")
+        else:
+            self._set_catalog_status("not subscribed")
         self._refresh_pending_label()
         self._refresh_status_bar()
 

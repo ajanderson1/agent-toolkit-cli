@@ -29,6 +29,7 @@ from typing import Literal
 from rich.markup import escape
 
 from agent_toolkit_tui.asset_info import library_info, local_path_info
+from agent_toolkit_tui.info_presentation import InfoFact
 
 from textual.app import ComposeResult
 from textual.binding import Binding
@@ -258,18 +259,42 @@ class PiGrid(CatalogPendingMixin, Vertical):
         if table.cursor_coordinate.row >= len(visible):
             return
         row = visible[table.cursor_coordinate.row]
-        state = "Linked" if row.origin == "store-owned" else "Enabled"
+        from agent_toolkit_tui.screens.cell_info import asset_info_body
+
+        state_label = "Linked" if row.origin == "store-owned" else "Enabled"
+        selection = self._selection_label(row, self._scope)
+        glance_state = (
+            selection if row.catalog_only or row.origin in ("npm", "local-package")
+            else f"{state_label}: {selection}"
+        )
+        origin = {
+            "store-owned": "library",
+            "npm": "npm",
+            "untracked": "local",
+            "local-package": "local",
+            "catalog": "catalog",
+        }[row.origin]
+        source = row.npm_state.for_scope(self._scope).source if row.npm_state else row.source
         self.app.push_screen(
             CellInfoScreen(
                 title=f"{row.slug} · {asset_type_label('pi-extension')}",
-                body_markup="\n".join([
-                    f"Source: {escape(row.npm_state.for_scope(self._scope).source if row.npm_state else row.source)}",
-                    "",
-                    f"{state} globally: {self._selection_label(row, 'global')}",
-                    f"{state} for this project: {self._selection_label(row, 'project')}",
-                    "",
-                    self._info_body(row=row, scope=self._scope),
-                ]),
+                body_markup=asset_info_body(
+                    asset_label=asset_type_label("pi-extension"),
+                    slug=row.slug,
+                    description=None,
+                    description_location="Pi extension metadata",
+                    source=source,
+                    origin=origin,
+                    ref=None,
+                    state=glance_state,
+                    scope=self._scope,
+                    show_ref=False,
+                    extra_lines=[
+                        f"{state_label} globally: {self._selection_label(row, 'global')}",
+                        f"{state_label} for this project: {self._selection_label(row, 'project')}",
+                        *self._info_detail_lines(row=row, scope=self._scope),
+                    ],
+                ),
             )
         )
 
@@ -296,24 +321,35 @@ class PiGrid(CatalogPendingMixin, Vertical):
             )
         )
 
-    def _extension_info_body(self, row: PiExtensionRow) -> str:
+    def _extension_info_lines(self, row: PiExtensionRow) -> list[str | InfoFact]:
         if row.origin == "store-owned":
             from agent_toolkit_cli.pi_extension_paths import library_pi_extension_path
 
-            return "\n".join(library_info(library_pi_extension_path(row.slug)))
-        return ""
+            return library_info(library_pi_extension_path(row.slug))
+        return []
+
+    def _extension_info_body(self, row: PiExtensionRow) -> str:
+        """Legacy markup helper; action_info keeps structured facts instead."""
+        return "\n".join(map(str, self._extension_info_lines(row)))
 
     def _origin_info_body(self) -> str:
         info = get_column_info("origin", asset_type="pi-extension", context={"scope": self._scope})
         return "\n".join(info.lines)
 
-    def _info_body(self, *, row: PiExtensionRow, scope: str) -> str:
-        catalog = "\n".join(self._catalog_info(row))
+    def _info_detail_lines(self, *, row: PiExtensionRow, scope: str) -> list[str | InfoFact]:
+        """Structured action_info input; never stringify dynamic facts here."""
+        catalog = self._catalog_info(row)
         if row.catalog_only:
             return catalog
-        return "\n\n".join(section for section in (
-            self._extension_info_body(row), self._scope_info_body(row=row, scope=scope), catalog,
-        ) if section)
+        return [
+            *self._extension_info_lines(row),
+            *self._scope_info_lines(row=row, scope=scope),
+            *catalog,
+        ]
+
+    def _info_body(self, *, row: PiExtensionRow, scope: str) -> str:
+        """Legacy markup helper retained for direct callers and existing tests."""
+        return "\n\n".join(map(str, self._info_detail_lines(row=row, scope=scope)))
 
     def _npm_info_body(self, row: PiExtensionRow, scope: str) -> str:
         from shlex import join
@@ -324,7 +360,6 @@ class PiGrid(CatalogPendingMixin, Vertical):
         mode = {"inherit": "Inherited global policy", "override": "Project override of global package",
             "owned": "Scope-owned declaration", "available": "Available, not configured"}[current.mode]
         details = [f"Native Pi selection: {current.status}", mode,
-            f"Source: {current.source}",
             f"Installed version: {current.version or 'not installed'}",
             f"Installation: {current.root or 'missing in this scope'}"]
         if current.record is not None:
@@ -367,7 +402,7 @@ class PiGrid(CatalogPendingMixin, Vertical):
         details.append("No Toolkit npm registration or second unregister step. Running Pi sessions are unchanged.")
         return escape("\n".join(details))
 
-    def _scope_info_body(self, *, row: PiExtensionRow, scope: str) -> str:
+    def _scope_info_lines(self, *, row: PiExtensionRow, scope: str) -> list[str | InfoFact]:
         from pathlib import Path
         from agent_toolkit_cli.pi_extension_paths import (
             pi_extension_dir,
@@ -388,9 +423,9 @@ class PiGrid(CatalogPendingMixin, Vertical):
                 controls = controls + "\n" + guidance if pending else guidance
             if len(paths) > 1:
                 controls += f"\n{action} affects all {len(paths)} entrypoints."
-            details = [controls]
+            details: list[str | InfoFact] = [controls]
             if len(paths) > 1:
-                details.append("Entrypoints:\n" + "\n".join(escape(str(path)) for path in paths))
+                details.append(InfoFact("Entrypoints", "\n".join(str(path) for path in paths)))
             found = False
             for location in (scope, "global" if scope == "project" else "project"):
                 base = pi_extension_dir(
@@ -400,35 +435,16 @@ class PiGrid(CatalogPendingMixin, Vertical):
                 for path in (base, base.with_name(base.name + ".ts"), base.with_name(base.name + ".js")):
                     if path.exists() or path.is_symlink():
                         found = True
-                        details.append("\n".join([f"Location ({location}):", *local_path_info(path, configurable=True)]))
+                        details.append(f"Location ({location}):")
+                        details.extend(local_path_info(path, configurable=True))
             if not found:
-                details.extend("\n".join(local_path_info(path, configurable=True)) for path in paths)
+                for path in paths:
+                    details.extend(local_path_info(path, configurable=True))
             details.append("Running Pi sessions are unchanged.")
-            return "\n\n".join(details)
+            return details
 
         if row.origin == "local-package":
-            path = (
-                row.global_config_path
-                if scope == "global"
-                else row.project_config_path
-            ) or row.global_config_path or row.project_config_path or "Pi settings.json"
-            spec = (
-                row.global_package_spec
-                if scope == "global"
-                else row.project_package_spec
-            ) or row.source
-            candidate = Path(spec).expanduser()
-            if not candidate.is_absolute():
-                candidate = Path(path).parent / candidate
-            return escape(
-                f"Source path: {candidate}\n"
-                "Existing local filesystem package; files are not moved or registered.\n"
-                "No TUI enable/disable or deletion; edit/update the local files directly.\n"
-                f"Manual removal: edit {path} and remove the packages[] entry\n"
-                f"whose source is {spec!r} (or the matching string entry).\n"
-                "This removes only the settings reference; it does not delete package files.\n"
-                "Removing a reference does not unload an already-running session."
-            )
+            return self._local_package_info_lines(row=row, scope=scope)
 
         home = Path.home()
         project = Path.cwd() if scope == "project" else None
@@ -436,13 +452,8 @@ class PiGrid(CatalogPendingMixin, Vertical):
         loaded = row.global_cell.global_loaded if scope == "global" else row.project_cell.project_loaded
 
         if row.origin == "npm":
-            return self._npm_info_body(row, scope)
+            return [self._npm_info_body(row, scope)]
         link = pi_extension_dir(row.slug, scope=scope, home=home, project=project)
-        effect = (
-            "Enable connects the library source to Pi.\n"
-            "Disable removes the connection, not source files.\n"
-            f"Pi path: {escape(str(link))}"
-        )
 
         if pending:
             action = "Enable" if pending == "link" else "Disable"
@@ -456,7 +467,41 @@ class PiGrid(CatalogPendingMixin, Vertical):
         else:
             action = "Disable" if loaded else "Enable"
             controls = f"[b]Space[/] → queue {action} ({scope})\n[b]Ctrl+S[/] → apply"
-        return f"{controls}\n\n{effect}\nRunning Pi sessions are unchanged."
+        return [
+            controls,
+            "Enable connects the library source to Pi.",
+            "Disable removes the connection, not source files.",
+            InfoFact("Pi path", str(link)),
+            "Running Pi sessions are unchanged.",
+        ]
+
+    def _scope_info_body(self, *, row: PiExtensionRow, scope: str) -> str:
+        """Legacy markup helper; action_info keeps structured facts instead."""
+        return "\n".join(map(str, self._scope_info_lines(row=row, scope=scope)))
+
+    def _local_package_info_lines(self, *, row: PiExtensionRow, scope: str) -> list[str | InfoFact]:
+        path = (
+            row.global_config_path
+            if scope == "global"
+            else row.project_config_path
+        ) or row.global_config_path or row.project_config_path or "Pi settings.json"
+        spec = (
+            row.global_package_spec
+            if scope == "global"
+            else row.project_package_spec
+        ) or row.source
+        candidate = Path(spec).expanduser()
+        if not candidate.is_absolute():
+            candidate = Path(path).parent / candidate
+        return [
+            InfoFact("Source path", str(candidate)),
+            "Existing local filesystem package; files are not moved or registered.",
+            "No TUI enable/disable or deletion; edit/update the local files directly.",
+            f"Manual removal: edit {escape(path)} and remove the packages[] entry",
+            f"whose source is {escape(repr(spec))} (or the matching string entry).",
+            "This removes only the settings reference; it does not delete package files.",
+            "Removing a reference does not unload an already-running session.",
+        ]
 
     def _toggle_at(self, coord: Coordinate) -> None:
         visible = self._visible_rows()

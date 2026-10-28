@@ -162,8 +162,26 @@ DataTable > .datatable--cursor {
     padding: 0 2;
 }
 
+#footer-status {
+    height: 1;
+    background: $panel;
+}
+
+#catalog-status {
+    height: 1;
+    width: auto;
+    max-width: 50%;
+    color: $text-muted;
+    background: $panel;
+    padding: 0 2;
+    text-align: right;
+    text-wrap: nowrap;
+    text-overflow: ellipsis;
+}
+
 #footer-pending {
     height: 1;
+    width: 1fr;
     color: $accent;
     background: $panel;
     padding: 0 2;

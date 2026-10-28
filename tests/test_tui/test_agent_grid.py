@@ -310,9 +310,11 @@ async def test_agent_i_opens_asset_info_from_harness_column():
         await pilot.pause()
         assert isinstance(app.screen, CellInfoScreen)
         assert app.screen._title == "alpha · Agent"
-        assert "Source: ajanderson1/alpha" in app.screen._body_markup
-        assert "Ref:    main" in app.screen._body_markup
-        assert "State (global): installed" in app.screen._body_markup
+        from rich.text import Text
+        body = Text.from_markup(app.screen._body_markup).plain
+        assert "Source: ajanderson1/alpha" in body
+        assert "Ref:    main" in body
+        assert "State:  installed" in body and "Scope:  global" in body
 
 
 # ---------------------------------------------------------------------------
@@ -776,8 +778,8 @@ async def test_state_column_rendered():
 
 
 @pytest.mark.asyncio
-async def test_agent_grid_resize_gives_source_remaining_width():
-    """Resize shrinks Source column to remaining width instead of fixed 30."""
+async def test_agent_grid_resize_fits_source_text_when_room_permits():
+    """Resize uses the displayed Source text instead of a fixed width."""
 
     class _A(App):
         def compose(self) -> ComposeResult:
@@ -789,7 +791,7 @@ async def test_agent_grid_resize_gives_source_remaining_width():
         g = app.query_one("#g", AgentGrid)
         table = app.query_one("#agent-table", DataTable)
 
-        g.on_resize(SimpleNamespace(size=SimpleNamespace(width=120)))
+        g.on_resize(SimpleNamespace(size=SimpleNamespace(width=140)))
 
         source_column = list(table.columns.values())[-1]
-        assert source_column.width == 32
+        assert source_column.width == len("library · ajanderson1/alpha")

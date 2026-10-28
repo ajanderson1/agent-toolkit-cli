@@ -52,7 +52,7 @@ async def test_modal_escape_closes():
 async def test_long_modal_body_scrolls_in_a_small_terminal():
     """The 39-harness Instructions panel must remain fully reachable (#479)."""
     from textual.app import App
-    from textual.containers import Vertical
+    from textual.containers import VerticalScroll
 
     info = get_column_info(
         "standard",
@@ -67,7 +67,7 @@ async def test_long_modal_body_scrolls_in_a_small_terminal():
     app = _A()
     async with app.run_test(size=(80, 24)) as pilot:
         await pilot.pause()
-        panel = app.screen.query_one(Vertical)
+        panel = app.screen.query_one(VerticalScroll)
         assert panel.virtual_size.height > panel.size.height
         assert panel.allow_vertical_scroll
 

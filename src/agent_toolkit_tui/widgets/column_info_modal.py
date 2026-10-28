@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Vertical
+from textual.containers import Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Static
 
@@ -26,8 +26,13 @@ class ColumnInfoModal(ModalScreen[None]):
         border: round $primary;
         padding: 1 2;
         width: 60;
+        max-width: 95%;
         height: auto;
         max-height: 80%;
+    }
+    ColumnInfoModal > Vertical > VerticalScroll {
+        width: 100%;
+        height: 1fr;
         overflow-y: auto;
     }
     ColumnInfoModal #column-info-title {
@@ -41,11 +46,19 @@ class ColumnInfoModal(ModalScreen[None]):
         width: 100%;
         height: auto;
     }
+    ColumnInfoModal #column-info-footer {
+        margin-top: 1;
+        color: $text;
+    }
     """
 
     BINDINGS = [
         Binding("escape", "close", "Close"),
         Binding("i", "close", "Close"),
+        Binding("up", "scroll_up", show=False),
+        Binding("down", "scroll_down", show=False),
+        Binding("pageup", "scroll_page_up", show=False),
+        Binding("pagedown", "scroll_page_down", show=False),
     ]
 
     def __init__(self, info: ColumnInfo) -> None:
@@ -54,8 +67,22 @@ class ColumnInfoModal(ModalScreen[None]):
 
     def compose(self) -> ComposeResult:
         with Vertical():
-            yield Static(self._info.title, id="column-info-title")
-            yield Static("\n".join(self._info.lines), id="column-info-body")
+            with VerticalScroll():
+                yield Static(self._info.title, id="column-info-title")
+                yield Static(self._info.body_markup, id="column-info-body", markup=True)
+            yield Static("↑/↓ or PgUp/PgDn scroll · Esc / i close", id="column-info-footer")
 
     def action_close(self) -> None:
         self.dismiss(None)
+
+    def action_scroll_up(self) -> None:
+        self.query_one(VerticalScroll).scroll_relative(y=-1, animate=False)
+
+    def action_scroll_down(self) -> None:
+        self.query_one(VerticalScroll).scroll_relative(y=1, animate=False)
+
+    def action_scroll_page_up(self) -> None:
+        self.query_one(VerticalScroll).scroll_relative(y=-self.size.height + 3, animate=False)
+
+    def action_scroll_page_down(self) -> None:
+        self.query_one(VerticalScroll).scroll_relative(y=self.size.height - 3, animate=False)

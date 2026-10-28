@@ -12,6 +12,7 @@ from typing import Callable
 
 from agent_toolkit_tui.composition import MAIN_HARNESS_CANDIDATES
 from agent_toolkit_tui.display_names import asset_type_label, harness_label
+from agent_toolkit_tui.info_presentation import InfoSection, column_sections, facts, sections_markup
 
 
 @dataclass(frozen=True)
@@ -20,6 +21,17 @@ class ColumnInfo:
 
     title: str
     lines: list[str]
+    section_data: tuple[InfoSection, ...] = ()
+
+    @property
+    def sections(self) -> tuple[InfoSection, ...]:
+        """Structured presentation while retaining authored copy for API callers."""
+
+        return self.section_data or column_sections(self.title, self.lines)
+
+    @property
+    def body_markup(self) -> str:
+        return sections_markup(self.sections)
 
 
 Factory = Callable[[dict[str, object]], ColumnInfo]
@@ -256,14 +268,31 @@ def _standard_commands(context: dict[str, object]) -> ColumnInfo:
     )
 
 
-def _harness_info(asset_type: str, harness: str, _context: dict[str, object]) -> ColumnInfo:
+def _harness_info(asset_type: str, harness: str, context: dict[str, object]) -> ColumnInfo:
     sentence = _HARNESS_SENTENCES.get((asset_type, harness))
     if not sentence:
         sentence = f"Manages {asset_type_label(asset_type, plural=True).lower()} for {harness_label(harness)}."
-    return ColumnInfo(
-        title=f"{harness_label(harness)} — {asset_type_label(asset_type, plural=True)}",
-        lines=[sentence],
-    )
+    title = f"{harness_label(harness)} — {asset_type_label(asset_type, plural=True)}"
+    if asset_type == "pi-extension" and harness == "pi":
+        return ColumnInfo(
+            title=title,
+            lines=[sentence],
+            section_data=(
+                InfoSection("At a glance", facts(("Column", "Pi"), ("Scope", _scope(context, default="global")))),
+                InfoSection("Availability", (
+                    "Loose local extensions use native discovery; project selection includes inherited global resources.",
+                    "Library rows show symlink connections as linked.",
+                    "npm packages use native resource filters; declarations and package files are retained.",
+                )),
+                InfoSection("Key meanings", ("◐ means a directory or package has mixed extension entrypoints.",)),
+                InfoSection("Available actions", (
+                    "Space queues Enable/Disable for the selected scope.",
+                    "Ctrl+S applies the queued selection without deleting source files.",
+                    "R resets the selected npm scope's extension policy.",
+                ), "commands"),
+            ),
+        )
+    return ColumnInfo(title=title, lines=[sentence])
 
 
 def _skill_state(_context: dict[str, object]) -> ColumnInfo:
@@ -284,7 +313,7 @@ def _three_badge_state(asset_type: str, _context: dict[str, object]) -> ColumnIn
     )
 
 
-def _pi_extension_origin(_context: dict[str, object]) -> ColumnInfo:
+def _pi_extension_origin(context: dict[str, object]) -> ColumnInfo:
     return ColumnInfo(
         title="Origin — Pi Extensions",
         lines=[
@@ -298,6 +327,21 @@ def _pi_extension_origin(_context: dict[str, object]) -> ColumnInfo:
             "Updates use Pi package handling, not Toolkit Git update. "
             "Running Pi sessions are unchanged.",
         ],
+        section_data=(
+            InfoSection("At a glance", facts(("Column", "Origin"), ("Scope", _scope(context, default="global")))),
+            InfoSection("Origins", (
+                "• library — Toolkit-managed central source. Disable removes its connection, not the source.",
+                "• local — loose files have native selector controls; filesystem packages stay read-only.",
+                "• npm — native Pi/npm inventory, with no Toolkit registration.",
+            )),
+            InfoSection("Available actions", (
+                "Info shows each scope's state, controls, paths, and removal commands.",
+                "Enable/Disable changes npm extension filters only; package files and bundled resources are retained.",
+            ), "commands"),
+            InfoSection("Update status", (
+                "Updates use Pi package handling, not Toolkit Git update. Running Pi sessions are unchanged.",
+            )),
+        ),
     )
 
 
