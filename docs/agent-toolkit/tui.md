@@ -99,6 +99,19 @@ Footer (key hints)
   [scope](../glossary.md#scope). The grid re-reads at the new scope; pending
   edits queued in the other scope are kept, not discarded.
 
+### Interaction responsiveness
+
+Checkbox changes update changed table cells in place when the row and column
+structure is unchanged. State badges, sources, global indicators and pending
+markers are still recomputed; this does not add an inventory cache or delay
+freshness checks. Filtering and structural changes rebuild the table as needed.
+Skill collection membership is indexed per view instead of scanning the entire
+inventory for every collection cell. These changes preserve the existing
+controls, Info panels, cursor and viewport behavior.
+
+Inventory reads and Apply still run synchronously, so slow filesystem or Git
+operations can still delay navigation or refresh.
+
 ### Library, catalogue, local and npm origins { #library-local-and-npm-origins }
 
 Skills and Agents prefix the existing Source column with `library` or `local`;

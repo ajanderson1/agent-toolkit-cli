@@ -40,6 +40,7 @@ from textual.message import Message
 from textual.widgets import DataTable, Input
 from textual.events import Resize
 from rich.text import Text
+from agent_toolkit_tui.widgets._support import sync_table
 from agent_toolkit_tui.widgets._support import current_source_column_width
 
 from agent_toolkit_tui.column_info import get_column_info
@@ -598,14 +599,15 @@ class PiGrid(CatalogPendingMixin, Vertical):
             table, _COL_EXTENSION, self._text_width_for_extension_column()
         )
         source_width = current_source_column_width(table)
-        table.clear(columns=True)
+        columns: list[tuple[str, int]] = []
         # The asset column is explained by `i`, not header click (#479).
-        table.add_column(asset_type_label("pi-extension"), width=extension_width)
-        table.add_column(f"Pi {_INFO_GLYPH}", width=_SCOPE_COLUMN_WIDTH)
-        table.add_column(f"Origin {_INFO_GLYPH}", width=_ORIGIN_COLUMN_WIDTH)
-        table.add_column("Source", width=source_width)
+        columns.append((asset_type_label("pi-extension"), extension_width))
+        columns.append((f"Pi {_INFO_GLYPH}", _SCOPE_COLUMN_WIDTH))
+        columns.append((f"Origin {_INFO_GLYPH}", _ORIGIN_COLUMN_WIDTH))
+        columns.append(("Source", source_width))
 
         visible = self._visible_rows()
+        table_rows: list[tuple[str, list[str | Text]]] = []
         for row in visible:
             cells: list[str | Text] = [
                 Text(row.slug, no_wrap=True, overflow="ellipsis"),
@@ -613,7 +615,9 @@ class PiGrid(CatalogPendingMixin, Vertical):
                 self._origin_glyph(row),
                 Text(row.npm_state.for_scope(self._scope).source if row.npm_state else row.source, no_wrap=True, overflow="ellipsis"),
             ]
-            table.add_row(*cells, key=f"pi:{row.slug}")
+            table_rows.append((f"pi:{row.slug}", cells))
+
+        sync_table(table, columns, table_rows)
         self._adjust_source_column_width(table)
 
         if visible:

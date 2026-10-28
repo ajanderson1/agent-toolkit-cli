@@ -29,6 +29,7 @@ from textual.widgets import DataTable, Input
 from textual.events import Resize
 from rich.markup import escape
 from rich.text import Text
+from agent_toolkit_tui.widgets._support import sync_table
 from agent_toolkit_tui.widgets._support import adjust_source_column_width, current_source_column_width
 
 from agent_toolkit_tui.column_info import get_column_info
@@ -121,7 +122,7 @@ class SkillGrid(Vertical):
 
     def __init__(self, rows: list[SkillRow], *, id: str | None = None) -> None:
         super().__init__(id=id)
-        self._rows = sorted(rows, key=lambda r: r.slug)
+        self._set_row_index(rows)
         self._scope: Literal["global", "project"] = "global"
         # (scope, agent_name, slug) -> op
         self._pending: dict[tuple[str, str, str], Op] = {}
@@ -151,17 +152,29 @@ class SkillGrid(Vertical):
 
     @property
     def collection_count(self) -> int:
-        return len({r.collection_key for r in self._rows if r.collection_key is not None})
+        return len(self._collection_members)
 
     @property
     def row_slugs(self) -> list[str]:
         return [r.slug for r in self._rows]
 
+    def _set_row_index(self, rows: list[SkillRow]) -> None:
+        self._rows = sorted(rows, key=lambda r: r.slug)
+        self._index_collections()
+
+    def _index_collections(self) -> None:
+        self._collection_members: dict[tuple[str, str | None], list[SkillRow]] = {}
+        self._collection_names: dict[str, set[tuple[str, str | None]]] = {}
+        for row in self._rows:
+            if row.collection_key is not None:
+                self._collection_members.setdefault(row.collection_key, []).append(row)
+                self._collection_names.setdefault(row.source.rsplit("/", 1)[-1], set()).add(row.collection_key)
+
     def set_rows(self, rows: list[SkillRow]) -> None:
         previous = {r.collection_key for r in self._rows if r.collection_key is not None}
         current = {r.collection_key for r in rows if r.collection_key is not None}
         self._collapsed = (self._collapsed & current) | (current - previous)
-        self._rows = sorted(rows, key=lambda r: r.slug)
+        self._set_row_index(rows)
         try:
             table = self.query_one("#skill-table", DataTable)
         except Exception:
@@ -272,9 +285,12 @@ class SkillGrid(Vertical):
         self._rebuild(table)
 
     def _members(self, parent: SkillRow) -> list[SkillRow]:
-        return [r for r in self._rows if r.collection_key == parent.collection_key]
+        return self._collection_members.get(parent.collection_key, [])
 
     def _visible_rows(self) -> list[SkillRow]:
+        # Rows are mutable (e.g. discovered origins gain collection metadata).
+        # One linear pass per view keeps the index current without per-cell scans.
+        self._index_collections()
         visible = []
         seen = set()
         for row in self._rows:
@@ -728,6 +744,7 @@ class SkillGrid(Vertical):
         adjust_source_column_width(table, event, fixed_width)
 
     def _rebuild(self, table: DataTable) -> None:
+        visible = self._visible_rows()
         saved = table.cursor_coordinate
         # Preserve the viewport: clear() resets scroll to the top, so a toggle
         # would jump the pane (#321). Save the offset and restore it below.
@@ -740,9 +757,9 @@ class SkillGrid(Vertical):
         # clamped cursor — acceptable (cursor stays visible), not the toggle case.
         saved_scroll = (table.scroll_x, table.scroll_y)
         source_width = current_source_column_width(table)
-        table.clear(columns=True)
+        columns: list[tuple[str, int]] = []
         # The asset column is explained by `i`, not header click (#479).
-        table.add_column(asset_type_label("skill"), width=self._name_width())
+        columns.append((asset_type_label("skill"), self._name_width()))
         active = self._active_agents()
         standard_header = standard_column_header("skill", self._scope)
         assert standard_header is not None, "skills always have a standard slot"
@@ -757,17 +774,17 @@ class SkillGrid(Vertical):
             base = headers.get(agent, harness_label(agent))
             if agent == "standard" and self._harness_width() < 14:
                 base = "Standard"
-            table.add_column(f"{base} {_INFO_GLYPH}", width=self._harness_width())
+            columns.append((f"{base} {_INFO_GLYPH}", self._harness_width()))
         # State has a column-info modal → glyph it.
-        table.add_column(f"State {_INFO_GLYPH}", width=10)
+        columns.append((f"State {_INFO_GLYPH}", 10))
         # Source is passive — no info panel, no glyph.
-        table.add_column("Source", width=source_width)
-        visible = self._visible_rows()
+        columns.append(("Source", source_width))
+        table_rows: list[tuple[str, list[str | Text]]] = []
         for row in visible:
             if row.is_collection:
                 disclosure = "▸" if row.collection_key in self._collapsed else "▾"
                 base = row.source.rsplit("/", 1)[-1]
-                identities = {r.collection_key for r in self._rows if r.collection_key and r.source.rsplit("/", 1)[-1] == base}
+                identities = self._collection_names.get(base, set())
                 if len(identities) > 1:
                     base = f"{row.source}@{row.collection_key[1] or 'default'}"
                 name = f"{disclosure} {base} · collection"
@@ -780,8 +797,10 @@ class SkillGrid(Vertical):
             origin = "local" if row.ref == "(untracked)" else row.origin
             source = row.collection_label if row.is_collection else row.source
             cells.append(Text(f"{origin} · {source}", no_wrap=True, overflow="ellipsis"))
-            table.add_row(*cells, key=f"skill:{row.slug}")
+            table_rows.append((f"skill:{row.slug}", cells))
+        sync_table(table, columns, table_rows)
         self._adjust_source_column_width(table)
+
         if visible:
             max_row = len(visible) - 1
             # Layout: slug + N agent cols + state + source.

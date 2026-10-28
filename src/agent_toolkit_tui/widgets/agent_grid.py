@@ -32,6 +32,7 @@ from textual.widgets import DataTable, Input
 from textual.events import Resize
 from rich.markup import escape
 from rich.text import Text
+from agent_toolkit_tui.widgets._support import sync_table
 from agent_toolkit_tui.widgets._support import adjust_source_column_width, current_source_column_width
 
 from agent_toolkit_tui.agent_state import AgentRow, interactive_harnesses
@@ -415,9 +416,9 @@ class AgentGrid(CatalogPendingMixin, Vertical):
         # no-op and the offset holds. See skill_grid._rebuild for the full note.
         saved_scroll = (table.scroll_x, table.scroll_y)
         source_width = current_source_column_width(table)
-        table.clear(columns=True)
+        columns: list[tuple[str, int]] = []
         # The asset column is explained by `i`, not header click (#479).
-        table.add_column(asset_type_label("agent"), width=22)
+        columns.append((asset_type_label("agent"), 22))
         # Per-harness columns. "standard" is the .claude/agents slot (#361),
         # not a catalog harness. The Standard column leads; everything after it
         # is implicitly non-standard.
@@ -427,13 +428,14 @@ class AgentGrid(CatalogPendingMixin, Vertical):
         harnesses = self._harnesses()
         for harness in harnesses:
             base = headers.get(harness, harness_label(harness))
-            table.add_column(f"{base} {_INFO_GLYPH}", width=14)
+            columns.append((f"{base} {_INFO_GLYPH}", 14))
         # State column — explains its asset-type-specific badges (#479).
-        table.add_column(f"State {_INFO_GLYPH}", width=10)
+        columns.append((f"State {_INFO_GLYPH}", 10))
         # Source column — passive, no info popup.
-        table.add_column("Source", width=source_width)
+        columns.append(("Source", source_width))
 
         visible = self._visible_rows()
+        table_rows: list[tuple[str, list[str | Text]]] = []
         for row in visible:
             cells: list[str | Text] = [row.slug]
             for harness in harnesses:
@@ -441,7 +443,9 @@ class AgentGrid(CatalogPendingMixin, Vertical):
             cells.append("[dim]local[/]" if row.ref == "(untracked)" else _STATE_MARKUP.get(row.state, row.state))
             origin = "local" if row.ref == "(untracked)" else "library"
             cells.append(Text(f"{origin} · {row.source}", no_wrap=True, overflow="ellipsis"))
-            table.add_row(*cells, key=f"agent:{row.slug}")
+            table_rows.append((f"agent:{row.slug}", cells))
+
+        sync_table(table, columns, table_rows)
         self._adjust_source_column_width(table)
 
         if visible:

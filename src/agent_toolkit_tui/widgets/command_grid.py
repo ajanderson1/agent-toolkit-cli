@@ -31,6 +31,7 @@ from textual.message import Message
 from textual.widgets import DataTable, Input
 from textual.events import Resize
 from rich.text import Text
+from agent_toolkit_tui.widgets._support import sync_table
 from agent_toolkit_tui.widgets._support import adjust_source_column_width, current_source_column_width
 
 from agent_toolkit_tui.command_state import CommandRow, interactive_harnesses
@@ -393,9 +394,9 @@ class CommandGrid(CatalogPendingMixin, Vertical):
         # no-op and the offset holds. See skill_grid._rebuild for the full note.
         saved_scroll = (table.scroll_x, table.scroll_y)
         source_width = current_source_column_width(table)
-        table.clear(columns=True)
+        columns: list[tuple[str, int]] = []
         # The asset column is explained by `i`, not header click (#479).
-        table.add_column("Command", width=_COMMAND_COL_WIDTH)
+        columns.append(("Command", _COMMAND_COL_WIDTH))
         # Standard-first: Standard (N) then Pi/Gemini (#482).
         harnesses = self._harnesses()
         for harness in harnesses:
@@ -405,20 +406,23 @@ class CommandGrid(CatalogPendingMixin, Vertical):
                 label = f"{header} {_INFO_GLYPH}"
             else:
                 label = f"{harness_label(harness)} {_INFO_GLYPH}"
-            table.add_column(label, width=_HARNESS_COL_WIDTH)
+            columns.append((label, _HARNESS_COL_WIDTH))
         # State column — explains its asset-type-specific badges (#479).
-        table.add_column(f"State {_INFO_GLYPH}", width=_STATE_COL_WIDTH)
+        columns.append((f"State {_INFO_GLYPH}", _STATE_COL_WIDTH))
         # Source column — passive, no info popup.
-        table.add_column("Source", width=source_width)
+        columns.append(("Source", source_width))
 
         visible = self._visible_rows()
+        table_rows: list[tuple[str, list[str | Text]]] = []
         for row in visible:
             cells: list[str | Text] = [row.slug]
             for harness in harnesses:
                 cells.append(self._cell_glyph(row=row, harness=harness))
             cells.append(_STATE_MARKUP.get(row.state, row.state))
             cells.append(Text(row.source, no_wrap=True, overflow="ellipsis"))
-            table.add_row(*cells, key=f"command:{row.slug}")
+            table_rows.append((f"command:{row.slug}", cells))
+
+        sync_table(table, columns, table_rows)
         self._adjust_source_column_width(table)
 
         if visible:

@@ -43,6 +43,7 @@ from agent_toolkit_tui.widgets._support import (
     adjust_source_column_width,
     current_source_column_width,
     set_source_column_width,
+    sync_table,
 )
 
 from agent_toolkit_tui.column_info import get_column_info
@@ -398,9 +399,9 @@ class McpGrid(Vertical):
         # the top, so a toggle would jump the pane. Restore the offset below.
         saved_scroll = (table.scroll_x, table.scroll_y)
         source_width = current_source_column_width(table)
-        table.clear(columns=True)
+        columns: list[tuple[str, int]] = []
         # The asset column is explained by `i`, not header click (#479).
-        table.add_column(asset_type_label("mcp"), width=22)
+        columns.append((asset_type_label("mcp"), 22))
         # Per-harness columns, derived per scope. "standard" is the project
         # .mcp.json projection (#399, #398), not a catalog harness — label it
         # with the covered count so the fold is legible without pressing `i`
@@ -420,20 +421,23 @@ class McpGrid(Vertical):
             headers = {"standard": standard_header}
         for harness in harnesses:
             base = headers.get(harness, harness_label(harness))
-            table.add_column(f"{base} {_INFO_GLYPH}", width=16)
+            columns.append((f"{base} {_INFO_GLYPH}", 16))
         # State column — explains its asset-type-specific badges (#479).
-        table.add_column(f"State {_INFO_GLYPH}", width=10)
+        columns.append((f"State {_INFO_GLYPH}", 10))
         # Source column — passive, no info popup.
-        table.add_column("Source", width=source_width)
+        columns.append(("Source", source_width))
 
         visible = self._visible_rows()
+        table_rows: list[tuple[str, list[str | Text]]] = []
         for row in visible:
             cells: list[str | Text] = [row.slug]
             for harness in self._harnesses():
                 cells.append(self._cell_glyph(row=row, harness=harness))
             cells.append(_STATE_MARKUP.get(row.state, row.state))
             cells.append(Text(row.source, no_wrap=True, overflow="ellipsis"))
-            table.add_row(*cells, key=f"mcp:{row.slug}")
+            table_rows.append((f"mcp:{row.slug}", cells))
+
+        sync_table(table, columns, table_rows)
         if self.size.width > 0:
             set_source_column_width(table, self.size.width, self._fixed_column_width())
 
