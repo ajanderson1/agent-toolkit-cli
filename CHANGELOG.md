@@ -1,5 +1,19 @@
 # Changelog
 
+## [7.2.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v7.1.1...v7.2.0) (2026-10-28)
+
+
+### Features
+
+* improve TUI search and collection navigation ([#556](https://github.com/ajanderson1/agent-toolkit-cli/issues/556)) ([98202cf](https://github.com/ajanderson1/agent-toolkit-cli/commit/98202cfaf2e76cd25576cf9969918cdf2d5439a5))
+* **tui:** show retrieved catalogue revision ([#558](https://github.com/ajanderson1/agent-toolkit-cli/issues/558)) ([8e5ae41](https://github.com/ajanderson1/agent-toolkit-cli/commit/8e5ae413210b33c9facf52081bcb8c63cd5b52ef))
+
+
+### Bug Fixes
+
+* **deps:** update certifi trust store ([#560](https://github.com/ajanderson1/agent-toolkit-cli/issues/560)) ([696ff71](https://github.com/ajanderson1/agent-toolkit-cli/commit/696ff7109d2ebdce06e30f86ca39bac940dc24bd))
+* **tui:** preserve literal text in info panes ([#559](https://github.com/ajanderson1/agent-toolkit-cli/issues/559)) ([a42da59](https://github.com/ajanderson1/agent-toolkit-cli/commit/a42da5967b8008c5addd979be061b56a57b7941c))
+
 ## [7.1.1](https://github.com/ajanderson1/agent-toolkit-cli/compare/v7.1.0...v7.1.1) (2026-10-26)
 
 
