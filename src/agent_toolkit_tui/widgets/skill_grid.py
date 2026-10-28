@@ -29,6 +29,7 @@ from textual.widgets import DataTable, Input
 from textual.events import Resize
 from rich.markup import escape
 from rich.text import Text
+from agent_toolkit_tui.widgets._support import sync_table
 from agent_toolkit_tui.widgets._support import adjust_source_column_width, current_source_column_width
 
 from agent_toolkit_tui.column_info import get_column_info
@@ -671,9 +672,9 @@ class SkillGrid(Vertical):
         # clamped cursor — acceptable (cursor stays visible), not the toggle case.
         saved_scroll = (table.scroll_x, table.scroll_y)
         source_width = current_source_column_width(table)
-        table.clear(columns=True)
+        columns: list[tuple[str, int]] = []
         # The asset column is explained by `i`, not header click (#479).
-        table.add_column(asset_type_label("skill"), width=self._name_width())
+        columns.append((asset_type_label("skill"), self._name_width()))
         active = self._active_agents()
         standard_header = standard_column_header("skill", self._scope)
         assert standard_header is not None, "skills always have a standard slot"
@@ -688,13 +689,13 @@ class SkillGrid(Vertical):
             base = headers.get(agent, harness_label(agent))
             if agent == "standard" and self._harness_width() < 14:
                 base = "Standard"
-            table.add_column(f"{base} {_INFO_GLYPH}", width=self._harness_width())
+            columns.append((f"{base} {_INFO_GLYPH}", self._harness_width()))
         # State has a column-info modal → glyph it.
-        table.add_column(f"State {_INFO_GLYPH}", width=10)
+        columns.append((f"State {_INFO_GLYPH}", 10))
         # Source is passive — no info panel, no glyph.
-        table.add_column("Source", width=source_width)
-        self._adjust_source_column_width(table)
+        columns.append(("Source", source_width))
         visible = self._visible_rows()
+        table_rows: list[tuple[str, list[str | Text]]] = []
         for row in visible:
             if row.is_collection:
                 disclosure = "▸" if row.collection_key in self._collapsed else "▾"
@@ -712,7 +713,10 @@ class SkillGrid(Vertical):
             origin = "local" if row.ref == "(untracked)" else row.origin
             source = row.collection_label if row.is_collection else row.source
             cells.append(Text(f"{origin} · {source}", no_wrap=True, overflow="ellipsis"))
-            table.add_row(*cells, key=f"skill:{row.slug}")
+            table_rows.append((f"skill:{row.slug}", cells))
+        sync_table(table, columns, table_rows)
+        self._adjust_source_column_width(table)
+
         if visible:
             max_row = len(visible) - 1
             # Layout: slug + N agent cols + state + source.

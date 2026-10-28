@@ -29,6 +29,7 @@ from textual.message import Message
 from textual.widgets import DataTable, Input
 from textual.events import Resize
 from rich.text import Text
+from agent_toolkit_tui.widgets._support import sync_table
 from agent_toolkit_tui.widgets._support import adjust_source_column_width, current_source_column_width
 
 from agent_toolkit_cli import instructions_paths
@@ -405,35 +406,35 @@ class InstructionGrid(Vertical):
         # no-op and the offset holds. See skill_grid._rebuild for the full note.
         saved_scroll = (table.scroll_x, table.scroll_y)
         source_width = current_source_column_width(table)
-        table.clear(columns=True)
+        columns: list[tuple[str, int]] = []
         # The asset column is explained by `i`, not header click (#479).
-        table.add_column(asset_type_label("instruction"), width=_INSTRUCTION_COL_WIDTH)
+        columns.append((asset_type_label("instruction"), _INSTRUCTION_COL_WIDTH))
         # Standard column — read-only canonical status. It leads; everything
         # after it is implicitly non-standard (group-tag header row removed
         # per AJ demo feedback, #351).
         standard_header = standard_column_header("instruction", self._scope)
         assert standard_header is not None, "instructions always have a standard slot"
-        table.add_column(
-            f"{standard_header} {_INFO_GLYPH}",
-            width=_STANDARD_COL_WIDTH,
-        )
+        columns.append((f"{standard_header} {_INFO_GLYPH}", _STANDARD_COL_WIDTH))
         # Per-harness interactive columns.
         active = self._active_harnesses()
         for harness in active:
             display = harness_label(harness)
-            table.add_column(f"{display} {_INFO_GLYPH}", width=_HARNESS_COL_WIDTH)
+            columns.append((f"{display} {_INFO_GLYPH}", _HARNESS_COL_WIDTH))
         # Source column — passive.
-        table.add_column("Source", width=source_width)
-        self._adjust_source_column_width(table)
+        columns.append(("Source", source_width))
 
         visible = self._visible_rows()
+        table_rows: list[tuple[str, list[str | Text]]] = []
         for row in visible:
             cells: list[str | Text] = [row.slug]
             cells.append(self._standard_glyph(row))
             for harness in active:
                 cells.append(self._cell_glyph(row=row, harness=harness))
             cells.append(Text(row.source, no_wrap=True, overflow="ellipsis"))
-            table.add_row(*cells, key=f"instruction:{row.slug}")
+            table_rows.append((f"instruction:{row.slug}", cells))
+
+        sync_table(table, columns, table_rows)
+        self._adjust_source_column_width(table)
 
         if visible:
             max_row = len(visible) - 1
