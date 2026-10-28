@@ -4,11 +4,13 @@ from shlex import quote
 
 from rich.markup import escape
 
+from agent_toolkit_tui.info_presentation import InfoFact
 
-def local_path_info(path: Path, *, configurable: bool = False) -> list[str]:
-    lines = [
+
+def local_path_info(path: Path, *, configurable: bool = False) -> list[str | InfoFact]:
+    lines: list[str | InfoFact] = [
         "Origin: local",
-        f"Source path: {path}",
+        InfoFact("Source path", str(path)),
         "Existing files are used where they are, not moved or registered.",
         ("Enable/Disable changes Pi settings only; source files are kept. No TUI deletion."
          if configurable else "Local assets cannot be enabled, disabled or deleted in the TUI."),
@@ -16,7 +18,7 @@ def local_path_info(path: Path, *, configurable: bool = False) -> list[str]:
     ]
     if path.is_symlink():
         lines += [
-            f"Symlink target: {path.resolve()}",
+            InfoFact("Symlink target", str(path.resolve())),
             "Manual removal removes only this symlink; target files are kept:",
             escape(f"  rm -- {quote(str(path))}"),
         ]
@@ -91,10 +93,10 @@ def catalog_skill_info(slug: str, *, scope: str, home: Path, project: Path | Non
     return lines
 
 
-def library_info(path: Path) -> list[str]:
+def library_info(path: Path) -> list[str | InfoFact]:
     return [
         "Origin: library",
-        f"Source path: {path.resolve()}",
+        InfoFact("Source path", str(path.resolve())),
         "Toolkit-managed central source, connected through the existing installation mechanism.",
         "Disable removes the connection, not the source.",
         "Updates use Toolkit source update handling; Git changes and health are shown separately.",

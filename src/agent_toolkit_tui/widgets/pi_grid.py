@@ -29,6 +29,7 @@ from typing import Literal
 from rich.markup import escape
 
 from agent_toolkit_tui.asset_info import library_info, local_path_info
+from agent_toolkit_tui.info_presentation import InfoFact
 
 from textual.app import ComposeResult
 from textual.binding import Binding
@@ -290,7 +291,7 @@ class PiGrid(CatalogPendingMixin, Vertical):
                     extra_lines=[
                         f"{state_label} globally: {self._selection_label(row, 'global')}",
                         f"{state_label} for this project: {self._selection_label(row, 'project')}",
-                        self._info_body(row=row, scope=self._scope),
+                        *self._info_detail_lines(row=row, scope=self._scope),
                     ],
                 ),
             )
@@ -323,12 +324,17 @@ class PiGrid(CatalogPendingMixin, Vertical):
         if row.origin == "store-owned":
             from agent_toolkit_cli.pi_extension_paths import library_pi_extension_path
 
-            return "\n".join(library_info(library_pi_extension_path(row.slug)))
+            return "\n".join(map(str, library_info(library_pi_extension_path(row.slug))))
         return ""
 
     def _origin_info_body(self) -> str:
         info = get_column_info("origin", asset_type="pi-extension", context={"scope": self._scope})
         return "\n".join(info.lines)
+
+    def _info_detail_lines(self, *, row: PiExtensionRow, scope: str) -> list[str | InfoFact]:
+        if row.origin == "local-package":
+            return self._local_package_info_lines(row=row, scope=scope)
+        return [self._info_body(row=row, scope=scope)]
 
     def _info_body(self, *, row: PiExtensionRow, scope: str) -> str:
         catalog = "\n".join(self._catalog_info(row))
@@ -422,37 +428,14 @@ class PiGrid(CatalogPendingMixin, Vertical):
                 for path in (base, base.with_name(base.name + ".ts"), base.with_name(base.name + ".js")):
                     if path.exists() or path.is_symlink():
                         found = True
-                        details.append("\n".join([f"Location ({location}):", *local_path_info(path, configurable=True)]))
+                        details.append("\n".join([f"Location ({location}):", *map(str, local_path_info(path, configurable=True))]))
             if not found:
-                details.extend("\n".join(local_path_info(path, configurable=True)) for path in paths)
+                details.extend("\n".join(map(str, local_path_info(path, configurable=True))) for path in paths)
             details.append("Running Pi sessions are unchanged.")
             return "\n\n".join(details)
 
         if row.origin == "local-package":
-            path = (
-                row.global_config_path
-                if scope == "global"
-                else row.project_config_path
-            ) or row.global_config_path or row.project_config_path or "Pi settings.json"
-            spec = (
-                row.global_package_spec
-                if scope == "global"
-                else row.project_package_spec
-            ) or row.source
-            candidate = Path(spec).expanduser()
-            if not candidate.is_absolute():
-                candidate = Path(path).parent / candidate
-            # ``Source path`` is a raw fact: detail_sections compacts and escapes
-            # it once. Dynamic prose is escaped at this interpolation boundary.
-            return (
-                f"Source path: {candidate}\n"
-                "Existing local filesystem package; files are not moved or registered.\n"
-                "No TUI enable/disable or deletion; edit/update the local files directly.\n"
-                f"Manual removal: edit {escape(path)} and remove the packages[] entry\n"
-                f"whose source is {escape(repr(spec))} (or the matching string entry).\n"
-                "This removes only the settings reference; it does not delete package files.\n"
-                "Removing a reference does not unload an already-running session."
-            )
+            return "\n".join(map(str, self._local_package_info_lines(row=row, scope=scope)))
 
         home = Path.home()
         project = Path.cwd() if scope == "project" else None
@@ -481,6 +464,30 @@ class PiGrid(CatalogPendingMixin, Vertical):
             action = "Disable" if loaded else "Enable"
             controls = f"[b]Space[/] → queue {action} ({scope})\n[b]Ctrl+S[/] → apply"
         return f"{controls}\n\n{effect}\nRunning Pi sessions are unchanged."
+
+    def _local_package_info_lines(self, *, row: PiExtensionRow, scope: str) -> list[str | InfoFact]:
+        path = (
+            row.global_config_path
+            if scope == "global"
+            else row.project_config_path
+        ) or row.global_config_path or row.project_config_path or "Pi settings.json"
+        spec = (
+            row.global_package_spec
+            if scope == "global"
+            else row.project_package_spec
+        ) or row.source
+        candidate = Path(spec).expanduser()
+        if not candidate.is_absolute():
+            candidate = Path(path).parent / candidate
+        return [
+            InfoFact("Source path", str(candidate)),
+            "Existing local filesystem package; files are not moved or registered.",
+            "No TUI enable/disable or deletion; edit/update the local files directly.",
+            f"Manual removal: edit {escape(path)} and remove the packages[] entry",
+            f"whose source is {escape(repr(spec))} (or the matching string entry).",
+            "This removes only the settings reference; it does not delete package files.",
+            "Removing a reference does not unload an already-running session.",
+        ]
 
     def _toggle_at(self, coord: Coordinate) -> None:
         visible = self._visible_rows()

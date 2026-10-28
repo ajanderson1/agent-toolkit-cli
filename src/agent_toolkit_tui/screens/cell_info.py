@@ -12,6 +12,7 @@ from textual.widgets import Label, Static
 from rich.markup import escape
 
 from agent_toolkit_tui.info_presentation import (
+    InfoFact,
     InfoSection,
     compact_detail,
     detail_sections,
@@ -31,7 +32,7 @@ def asset_info_body(
     ref: str | None,
     state: str,
     scope: str,
-    extra_lines: list[str] | None = None,
+    extra_lines: list[str | InfoFact] | None = None,
     show_ref: bool = True,
 ) -> str:
     """Render the shared, progressively disclosed asset panel body for every grid."""
@@ -135,7 +136,7 @@ class CellInfoScreen(ModalScreen[None]):
                 # Info producers emit Rich markup. Parse it with Rich rather than
                 # Textual's separate markup parser so Rich.escape preserves literal
                 # backslash runs and bracket-like paths exactly as documented.
-                yield Static(Text.from_markup(self._body_markup), id="cell-info-body")
+                yield Static(Text.from_markup(self._body_markup, emoji=False), id="cell-info-body")
             yield Static("↑/↓ or PgUp/PgDn scroll · Esc / q / i close", id="cell-info-footer")
 
     def action_dismiss_modal(self) -> None:

@@ -7,7 +7,7 @@ from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.containers import VerticalScroll
 from textual.coordinate import Coordinate
-from textual.widgets import DataTable
+from textual.widgets import DataTable, Static
 
 from agent_toolkit_tui.agent_state import AgentCell, AgentRow, build_agent_rows
 from agent_toolkit_tui.skill_state import SkillCell, SkillRow, build_skill_rows
@@ -301,6 +301,28 @@ def test_discovered_skill_child_retains_actual_path(tmp_path, monkeypatch):
     row = next(r for r in build_skill_rows(scope="global", home=tmp_path, project=None)
                if r.slug == "bundle:one")
     assert row.source == str(child)
+
+
+@pytest.mark.asyncio
+async def test_discovered_skill_newline_path_renders_as_one_literal_source_fact(tmp_path, monkeypatch):
+    """Discovery-to-SkillGrid flow preserves newline-containing local paths."""
+    root = tmp_path / ".agent-toolkit/skills"
+    monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(root))
+    child = root / "local\n[/b]"
+    child.mkdir(parents=True)
+    (child / "SKILL.md").write_text("---\ndescription: local\n---\n")
+    row = next(r for r in build_skill_rows(scope="global", home=tmp_path, project=None)
+               if r.source == str(child))
+    grid = SkillGrid([row])
+
+    async with GridApp(grid).run_test() as pilot:
+        await pilot.pause()
+        grid.action_info()
+        await pilot.pause()
+        plain = grid.app.screen.query_one("#cell-info-body", Static).render().plain
+
+    assert f"Full source: {child}" in plain
+    assert f"Source path: {child}" not in plain  # Deduplicated against full source.
 
 
 def test_discovered_agent_retains_actual_path(tmp_path, monkeypatch):

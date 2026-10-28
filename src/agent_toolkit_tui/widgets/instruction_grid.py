@@ -34,6 +34,7 @@ from agent_toolkit_tui.widgets._support import adjust_source_column_width, curre
 from agent_toolkit_cli import instructions_paths
 from agent_toolkit_tui.column_info import get_column_info
 from agent_toolkit_tui.composition import instructions_nonstandard_main
+from agent_toolkit_tui.info_presentation import InfoFact
 from agent_toolkit_tui.display_names import (
     asset_type_label,
     harness_label,
@@ -250,7 +251,7 @@ class InstructionGrid(Vertical):
                     ref=None,
                     state="canonical present" if row.canonical_exists else "canonical missing",
                     scope=self._scope,
-                    extra_lines=[f"Canonical: {canonical_path}"],
+                    extra_lines=[InfoFact("Canonical", str(canonical_path))],
                 ),
             )
         )

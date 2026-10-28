@@ -391,6 +391,9 @@ class SkillGrid(Vertical):
             details += catalog_skill_info(row.slug, scope=self._scope, home=Path.home(), project=normalize_skill_project_root(Path.cwd()) if self._scope == "project" else None, item=row.catalog_item, catalog_url=row.catalog_url)
             if row.catalog_warning:
                 details.append(escape(row.catalog_warning))
+        if row.skill_path:
+            from agent_toolkit_tui.info_presentation import InfoFact
+            details.append(InfoFact("Skill path", row.skill_path))
         self.app.push_screen(
             CellInfoScreen(
                 title=f"{row.slug} · {asset_type_label('skill')}",
@@ -405,7 +408,7 @@ class SkillGrid(Vertical):
                     state="local files (read-only)" if row.ref == "(untracked)" else row.state,
                     scope=self._scope,
                     extra_lines=details,
-                ) + (f"\n\nSkill path: {row.skill_path}" if row.skill_path else ""),
+                ),
             )
         )
 
@@ -432,7 +435,7 @@ class SkillGrid(Vertical):
         if getattr(cell, "exposure_reason", ""):
             return f"[yellow]Exposure uncertain.[/]\n{cell.exposure_reason}"
         if row.ref == "(untracked)":
-            return "\n".join(local_path_info(Path(row.source)))
+            return "\n".join(map(str, local_path_info(Path(row.source))))
         # Unavailable cells (e.g. company-only Paperclip outside a company)
         # have no projection to describe; explain the context requirement
         # before any path resolver that would raise.

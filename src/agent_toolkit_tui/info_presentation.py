@@ -16,6 +16,17 @@ class InfoSection:
     variant: str = "text"
 
 
+@dataclass(frozen=True)
+class InfoFact:
+    """A dynamic labelled value that must remain whole until it is escaped."""
+
+    label: str
+    value: str
+
+    def __str__(self) -> str:
+        return f"{self.label}: {self.value}"
+
+
 def facts(*items: tuple[str, str]) -> tuple[str, ...]:
     """Render aligned fact labels without making values a prose paragraph."""
 
@@ -48,8 +59,13 @@ def compact_detail(value: str, *, limit: int = 58) -> tuple[str, str | None]:
     return f"{value[:head]}…{value[-tail:]}", value
 
 
-def detail_sections(lines: Iterable[str], *, source: str | None = None) -> tuple[InfoSection, ...]:
-    """Classify existing lifecycle guidance without changing its wording."""
+def detail_sections(lines: Iterable[str | InfoFact], *, source: str | None = None) -> tuple[InfoSection, ...]:
+    """Classify existing lifecycle guidance without changing its wording.
+
+    ``InfoFact`` keeps raw dynamic values intact through classification,
+    compaction, and the single Rich-escaping boundary. Plain strings retain
+    their trusted static Rich markup and are split only as legacy prose.
+    """
 
     groups: dict[str, list[str]] = {
         "Source & location": [],
@@ -59,7 +75,26 @@ def detail_sections(lines: Iterable[str], *, source: str | None = None) -> tuple
         "Warning": [],
         "Technical details": [],
     }
+    fact_labels = (
+        "source path", "symlink target", "catalog", "upstream", "directory",
+        "canonical", "location", "pi path", "skill path",
+    )
+
+    def add_fact(label: str, value: str) -> None:
+        if label.lower() == "source path" and source and value == source:
+            return
+        summary, full = compact_detail(value)
+        groups["Source & location"].append(f"{label}: {escape(summary)}")
+        if full:
+            groups["Technical details"].append(f"{label}: {escape(full)}")
+
     for item in lines:
+        if isinstance(item, InfoFact):
+            if item.label.lower() in fact_labels:
+                add_fact(item.label, item.value)
+            else:
+                groups["Availability"].append(f"{item.label}: {escape(item.value)}")
+            continue
         for line in item.splitlines() or [item]:
             if not line:
                 continue
@@ -73,12 +108,9 @@ def detail_sections(lines: Iterable[str], *, source: str | None = None) -> tuple
                 groups["Warning"].append(line)
             elif (line.startswith("  rm ") or lowered.startswith(("rm ", "check:", "update:", "space", "ctrl+s", "r →", "remove installation", "manual removal"))):
                 groups["Available actions"].append(line)
-            elif lowered.startswith(("source path:", "symlink target:", "catalog:", "upstream:", "directory:", "canonical:", "location", "pi path:")):
-                label, separator, _ = line.partition(":")
-                summary, full = compact_detail(value) if separator else (line, None)
-                groups["Source & location"].append(f"{label}:{' ' if separator else ''}{escape(summary)}")
-                if full:
-                    groups["Technical details"].append(f"{label}: {escape(full)}")
+            elif lowered.startswith(tuple(f"{label}:" for label in fact_labels)) or lowered.startswith("location"):
+                label, _, _ = line.partition(":")
+                add_fact(label, value)
             elif lowered.startswith(("installed revision", "upstream status", "last checked", "pinned commit")) or "update" in lowered:
                 groups["Update status"].append(line)
             else:

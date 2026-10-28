@@ -200,6 +200,61 @@ async def test_catalogue_info_renders_brackets_and_backslashes_once(grid_kind: s
     assert "Technical details" in plain
 
 
+async def test_skill_info_renders_colon_emoji_path_as_literal_text(tmp_path: Path) -> None:
+    """CellInfoScreen must not apply Rich emoji substitution to source paths."""
+    from agent_toolkit_tui.skill_state import SkillCell, SkillRow
+    from agent_toolkit_tui.widgets.skill_grid import SkillGrid
+
+    path = tmp_path / ":warning:"
+    grid = SkillGrid([SkillRow(
+        "literal", str(path), "(untracked)", "unlisted",
+        {("standard", "global"): SkillCell(False, False, False)},
+    )])
+
+    class _App(App[None]):
+        def compose(self) -> ComposeResult:
+            yield grid
+
+    async with _App().run_test() as pilot:
+        await pilot.pause()
+        grid.action_info()
+        await pilot.pause()
+        plain = grid.app.screen.query_one("#cell-info-body", Static).render().plain
+
+    assert str(path) in plain
+    assert "⚠" not in plain
+
+
+async def test_skill_catalogue_info_renders_literal_skill_path() -> None:
+    """SkillGrid.action_info must escape catalogue subpaths at their boundary."""
+    from dataclasses import replace
+
+    from agent_toolkit_cli.skill_catalog import CatalogSkill, safe_source
+    from agent_toolkit_tui.skill_state import SkillCell, SkillRow
+    from agent_toolkit_tui.widgets.skill_grid import SkillGrid
+
+    source = replace(safe_source("https://example/owner/repo"), subpath="[/b]")
+    item = CatalogSkill("literal", "", source)
+    grid = SkillGrid([SkillRow(
+        "literal", source.url, "main", "catalog",
+        {("standard", "global"): SkillCell(False, False, False)},
+        skill_path="[/b]", catalog_item=item, catalog_url="https://example/catalog",
+        origin="catalog",
+    )])
+
+    class _App(App[None]):
+        def compose(self) -> ComposeResult:
+            yield grid
+
+    async with _App().run_test() as pilot:
+        await pilot.pause()
+        grid.action_info()
+        await pilot.pause()
+        plain = grid.app.screen.query_one("#cell-info-body", Static).render().plain
+
+    assert "Skill path: [/b]" in plain
+
+
 async def test_instruction_info_preserves_raw_backslash_bracket_canonical_path(monkeypatch: pytest.MonkeyPatch) -> None:
     from agent_toolkit_tui.instruction_state import InstructionRow
     from agent_toolkit_tui.widgets.instruction_grid import InstructionGrid
