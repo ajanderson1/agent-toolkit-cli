@@ -61,6 +61,7 @@ class CatalogSnapshot:
     error: str | None = None
     ref: str | None = None
     assets: tuple[CatalogEntry, ...] = ()
+    version: str | None = None
 
     @property
     def entries(self) -> tuple[CatalogEntry, ...]:
@@ -215,6 +216,24 @@ def run_git(args: list[str], *, cwd: Path | None = None) -> str:
     return result.stdout.strip()
 
 
+def _release_version(root: Path, url: str, revision: str) -> str | None:
+    """Resolve stable tags without downloading their histories into the shallow fetch."""
+    try:
+        advertised = run_git(["ls-remote", "--tags", "--", url], cwd=root)
+    except (ValueError, OSError, subprocess.SubprocessError):
+        return None  # Optional version metadata must not hide valid catalogue entries.
+    refs = {}
+    for line in advertised.splitlines():
+        sha, name = line.split("\t", 1)
+        refs[name] = sha
+    versions = {}
+    for name, sha in refs.items():
+        match = re.fullmatch(r"refs/tags/v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", name)
+        if match and refs.get(name + "^{}", sha) == revision:
+            versions[tuple(map(int, match.groups()))] = "v" + ".".join(match.groups())
+    return versions[max(versions)] if versions else None
+
+
 def fetch_catalog(url: str, ref: str | None = None) -> CatalogSnapshot:
     try:
         if ref is not None and not isinstance(ref, str):
@@ -232,7 +251,8 @@ def fetch_catalog(url: str, ref: str | None = None) -> CatalogSnapshot:
             entries = parse_catalog_entries(json.loads(body))
             return CatalogSnapshot(url, revision,
                 tuple(item for item in entries if item.kind == "skill"), ref=ref,
-                assets=tuple(item for item in entries if item.kind != "skill"))
+                assets=tuple(item for item in entries if item.kind != "skill"),
+                version=_release_version(root, parsed.url, revision))
     except (ValueError, OSError, subprocess.SubprocessError) as exc:
         message = "catalog request timed out" if isinstance(exc, subprocess.TimeoutExpired) else "catalog unavailable or invalid; check access and catalog.json"
         return CatalogSnapshot("(invalid source)" if _has_credentials(url) else url, error=message)

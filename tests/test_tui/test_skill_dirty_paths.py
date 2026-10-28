@@ -86,6 +86,10 @@ async def test_parent_and_child_badges_render_actual_git_states(legacy, change):
         await pilot.pause()
         grid = app.query_one(SkillGrid)
         table = grid.query_one(DataTable)
+        assert table.row_count == 1
+        table.focus()
+        await pilot.press("right")
+        assert table.row_count == 12
         states = [Text.from_markup(str(table.get_row_at(i)[-2])).plain for i in range(table.row_count)]
         assert states == ['dirty', 'dirty' if change == 'child' else 'clean'] + ['clean']*10
 

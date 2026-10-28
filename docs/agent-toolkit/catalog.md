@@ -86,9 +86,16 @@ remain pending with refresh/reselect guidance; independent successful changes cl
 Npm catalogue-only rows are read-only and their Info panel gives the explicit
 installation command. Installed native npm rows keep their normal controls.
 
-A successful TUI retrieval reports its configured ref (when present) and short
-fetched Git SHA. Refs such as branches and tags can be retargeted; the fetched SHA
-is the immutable identity of the catalogue content. Failed refresh hides
+The TUI keeps a single-line catalogue status at the bottom right, for example
+`Catalogue: v1.1.0`, rather than a transient success notification or commit ID.
+The version comes from a stable `vMAJOR.MINOR.PATCH` (or `MAJOR.MINOR.PATCH`) Git tag
+pointing at the **exact fetched commit**, including annotated tags; it is not the
+manifest's schema version. Multiple matching releases use the highest numeric
+version. Without a verified release tag it shows `Catalogue: unversioned`; failure
+to look up optional tags does not hide an otherwise valid catalogue. The fetched
+SHA remains the immutable snapshot identity used internally for validation.
+Refreshing, unavailable and unsubscribed states replace the badge immediately.
+Failed refresh hides
 catalogue-only rows across all four kinds with a warning; local assets stay usable.
 There is no stale-listing fallback. Unsubscribing or removing a catalogue entry
 never deletes library content or disables exposure.
