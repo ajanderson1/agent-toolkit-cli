@@ -10,12 +10,8 @@ from agent_toolkit_tui.command_state import interactive_harnesses, CommandCell, 
 from agent_toolkit_tui.widgets.command_grid import CommandGrid
 
 
-def _resize(width: int) -> SimpleNamespace:
-    return SimpleNamespace(size=SimpleNamespace(width=width))
-
-
 @pytest.mark.asyncio
-async def test_command_grid_resize_adjusts_source_column_width():
+async def test_command_grid_sizes_source_column_to_text_when_room_permits():
     row = CommandRow(
         slug="demo",
         source="owner/repo-with-a-long-source-name",
@@ -28,13 +24,13 @@ async def test_command_grid_resize_adjusts_source_column_width():
             yield CommandGrid([row], id="g")
 
     app = _A()
-    async with app.run_test() as pilot:
+    async with app.run_test(size=(220, 40)) as pilot:
         await pilot.pause()
         grid = app.query_one("#g", CommandGrid)
         table = app.query_one("#command-table", DataTable)
 
-        grid.on_resize(_resize(220))
-
         source_col = list(table.columns.values())[-1]
-        fixed_width = 22 + (14 * len(interactive_harnesses("global"))) + 10
-        assert source_col.width == 220 - fixed_width
+        assert source_col.width == len(row.source)
+
+        grid.on_resize(SimpleNamespace(size=SimpleNamespace(width=80)))
+        assert source_col.width == 10

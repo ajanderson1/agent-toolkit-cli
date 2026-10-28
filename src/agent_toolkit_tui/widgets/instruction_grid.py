@@ -425,7 +425,6 @@ class InstructionGrid(Vertical):
             table.add_column(f"{display} {_INFO_GLYPH}", width=_HARNESS_COL_WIDTH)
         # Source column — passive.
         table.add_column("Source", width=source_width)
-        self._adjust_source_column_width(table)
 
         visible = self._visible_rows()
         for row in visible:
@@ -435,6 +434,7 @@ class InstructionGrid(Vertical):
                 cells.append(self._cell_glyph(row=row, harness=harness))
             cells.append(Text(row.source, no_wrap=True, overflow="ellipsis"))
             table.add_row(*cells, key=f"instruction:{row.slug}")
+        self._adjust_source_column_width(table)
 
         if visible:
             max_row = len(visible) - 1

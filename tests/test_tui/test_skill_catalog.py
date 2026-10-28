@@ -33,6 +33,74 @@ def test_info_shows_current_local_revision_before_any_upstream_check(tmp_path, s
 
 
 @pytest.mark.asyncio
+async def test_successful_catalog_refresh_reports_configured_ref_and_fetched_revision(tmp_path, sandbox, monkeypatch):
+    upstream, cat = subscribed(tmp_path)
+    git(cat, "tag", "catalog-release")
+    invoke("catalog", "subscribe", cat.as_uri(), "--ref", "catalog-release")
+    revision = git(cat, "rev-parse", "catalog-release")
+    monkeypatch.chdir(tmp_path)
+    from agent_toolkit_tui.app import TUIApp
+
+    app = TUIApp()
+    notifications = []
+    original_notify = app.notify
+
+    def spy_notify(message, *args, **kwargs):
+        notifications.append((message, kwargs))
+        return original_notify(message, *args, **kwargs)
+
+    monkeypatch.setattr(app, "notify", spy_notify)
+    async with app.run_test() as pilot:
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+
+    assert (f"Retrieved catalogue catalog-release ({revision[:12]})", {}) in notifications
+
+
+@pytest.mark.asyncio
+async def test_successful_catalog_refresh_reports_fetched_revision_without_ref(tmp_path, sandbox, monkeypatch):
+    upstream, cat = subscribed(tmp_path)
+    revision = git(cat, "rev-parse", "HEAD")
+    monkeypatch.chdir(tmp_path)
+    from agent_toolkit_tui.app import TUIApp
+
+    app = TUIApp()
+    notifications = []
+    original_notify = app.notify
+
+    def spy_notify(message, *args, **kwargs):
+        notifications.append((message, kwargs))
+        return original_notify(message, *args, **kwargs)
+
+    monkeypatch.setattr(app, "notify", spy_notify)
+    async with app.run_test() as pilot:
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+
+    assert (f"Retrieved catalogue revision {revision[:12]}", {}) in notifications
+
+
+@pytest.mark.asyncio
+async def test_no_subscription_does_not_report_catalog_retrieval(sandbox, monkeypatch):
+    from agent_toolkit_tui.app import TUIApp
+
+    app = TUIApp()
+    notifications = []
+    original_notify = app.notify
+
+    def spy_notify(message, *args, **kwargs):
+        notifications.append((message, kwargs))
+        return original_notify(message, *args, **kwargs)
+
+    monkeypatch.setattr(app, "notify", spy_notify)
+    async with app.run_test() as pilot:
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+
+    assert all(not message.startswith("Retrieved catalogue") for message, _ in notifications)
+
+
+@pytest.mark.asyncio
 async def test_tui_pending_revert_apply_and_info(tmp_path, sandbox, monkeypatch):
     upstream, cat = subscribed(tmp_path)
     monkeypatch.chdir(tmp_path)
@@ -76,16 +144,28 @@ async def test_offline_refresh_hides_only_catalog_rows(tmp_path, sandbox, monkey
     from agent_toolkit_tui.app import TUIApp
     from agent_toolkit_tui.widgets.skill_grid import SkillGrid
     app = TUIApp()
+    notifications = []
+    original_notify = app.notify
+
+    def spy_notify(message, *args, **kwargs):
+        notifications.append((message, kwargs))
+        return original_notify(message, *args, **kwargs)
+
+    monkeypatch.setattr(app, "notify", spy_notify)
     async with app.run_test() as pilot:
         await app.workers.wait_for_complete()
         await pilot.pause()
         grid = app.query_one(SkillGrid)
         assert "demo" in grid.row_slugs
+        notifications.clear()
         cat.rename(tmp_path / "offline")
         app._refresh_skill_view()
         await app.workers.wait_for_complete()
         await pilot.pause()
         assert grid.row_slugs == []
+
+    assert all(not message.startswith("Retrieved catalogue") for message, _ in notifications)
+    assert any(kwargs.get("severity") == "warning" for _, kwargs in notifications)
 
 
 @pytest.mark.asyncio

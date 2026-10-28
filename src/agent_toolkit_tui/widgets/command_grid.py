@@ -410,7 +410,6 @@ class CommandGrid(CatalogPendingMixin, Vertical):
         table.add_column(f"State {_INFO_GLYPH}", width=_STATE_COL_WIDTH)
         # Source column — passive, no info popup.
         table.add_column("Source", width=source_width)
-        self._adjust_source_column_width(table)
 
         visible = self._visible_rows()
         for row in visible:
@@ -420,6 +419,7 @@ class CommandGrid(CatalogPendingMixin, Vertical):
             cells.append(_STATE_MARKUP.get(row.state, row.state))
             cells.append(Text(row.source, no_wrap=True, overflow="ellipsis"))
             table.add_row(*cells, key=f"command:{row.slug}")
+        self._adjust_source_column_width(table)
 
         if visible:
             max_row = len(visible) - 1

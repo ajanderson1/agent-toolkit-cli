@@ -74,6 +74,18 @@ _GLOBAL_GLYPH   = "🌐"
 Op = Literal["link", "unlink"]
 
 
+class SkillDataTable(DataTable):
+    """Table that reserves Left-at-name for collection collapse."""
+
+    def action_cursor_left(self) -> None:
+        if self.cursor_coordinate.column != 0:
+            super().action_cursor_left()
+            return
+        grid = self.parent
+        if isinstance(grid, SkillGrid):
+            grid.action_collapse_collection()
+
+
 class SkillGrid(Vertical):
     """One row per locked skill with selection-aware harness cells."""
 
@@ -232,7 +244,7 @@ class SkillGrid(Vertical):
         # Filter box on top, table below — mirrors the v1 layout (#249).
         yield GridFilterInput(table_selector="#skill-table", id="skill-filter",
                               placeholder="Filter · parent affects ALL children · mixed − ≠ pending -")
-        table = DataTable(id="skill-table", cursor_type="cell", zebra_stripes=True)
+        table = SkillDataTable(id="skill-table", cursor_type="cell", zebra_stripes=True)
         yield table
 
     # ----- filter ---------------------------------------------------------
@@ -318,6 +330,30 @@ class SkillGrid(Vertical):
         except Exception:
             return
         self._toggle_at(table.cursor_coordinate)
+
+    def action_collapse_collection(self) -> None:
+        """Collapse the selected collection from its name column."""
+        try:
+            table = self.query_one("#skill-table", DataTable)
+        except Exception:
+            return
+        coord = table.cursor_coordinate
+        if coord.column != 0:
+            return
+        visible = self._visible_rows()
+        if not 0 <= coord.row < len(visible):
+            return
+        row = visible[coord.row]
+        if row.collection_key is None or row.collection_key in self._collapsed:
+            return
+        parent_index = next(
+            index
+            for index, candidate in enumerate(visible)
+            if candidate.is_collection and candidate.collection_key == row.collection_key
+        )
+        self._collapsed.add(row.collection_key)
+        table.cursor_coordinate = Coordinate(parent_index, 0)
+        self._rebuild(table)
 
     def action_info(self) -> None:
         """Open the selected skill's asset panel, regardless of column (#479)."""
@@ -694,7 +730,6 @@ class SkillGrid(Vertical):
         table.add_column(f"State {_INFO_GLYPH}", width=10)
         # Source is passive — no info panel, no glyph.
         table.add_column("Source", width=source_width)
-        self._adjust_source_column_width(table)
         visible = self._visible_rows()
         for row in visible:
             if row.is_collection:
@@ -714,6 +749,7 @@ class SkillGrid(Vertical):
             source = row.collection_label if row.is_collection else row.source
             cells.append(Text(f"{origin} · {source}", no_wrap=True, overflow="ellipsis"))
             table.add_row(*cells, key=f"skill:{row.slug}")
+        self._adjust_source_column_width(table)
         if visible:
             max_row = len(visible) - 1
             # Layout: slug + N agent cols + state + source.
