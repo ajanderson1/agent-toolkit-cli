@@ -1,5 +1,17 @@
 # Changelog
 
+## [7.3.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v7.2.0...v7.3.0) (2026-10-28)
+
+
+### Features
+
+* **tui:** refine collection navigation and catalogue status ([#561](https://github.com/ajanderson1/agent-toolkit-cli/issues/561)) ([1f55fbc](https://github.com/ajanderson1/agent-toolkit-cli/commit/1f55fbc0dd1e3fbdd214e3fd7ca65e01b49eadfe))
+
+
+### Performance
+
+* **tui:** improve grid responsiveness without hiding state ([#563](https://github.com/ajanderson1/agent-toolkit-cli/issues/563)) ([c88938f](https://github.com/ajanderson1/agent-toolkit-cli/commit/c88938f46a46320b4087861f991121ef2e79e899))
+
 ## [7.2.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v7.1.1...v7.2.0) (2026-10-28)
 
 
