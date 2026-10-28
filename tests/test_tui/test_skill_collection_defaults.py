@@ -56,3 +56,22 @@ async def test_navigation_to_hidden_child_expands_its_collection_without_queuing
         assert table.cursor_coordinate == Coordinate(8, 1)
         assert app.focused is table
         assert not grid.pending_entries()
+
+
+@pytest.mark.asyncio
+async def test_navigation_to_filter_revealed_child_preserves_collapsed_choice(legacy):
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        app.action_asset_type("skill")
+        await pilot.pause()
+        grid = app.query_one("#skill-grid", SkillGrid)
+        key = grid._visible_rows()[0].collection_key
+        grid.set_filter("workflow-07")
+        assert len(grid._visible_rows()) == 2
+        assert key in grid._collapsed
+        grid.cursor_to_cell(row_slug="workflow-07", agent_name="standard")
+        assert grid.query_one(DataTable).cursor_coordinate == Coordinate(1, 1)
+        assert key in grid._collapsed
+        grid.set_filter("")
+        assert len(grid._visible_rows()) == 1
+        assert not grid.pending_entries()

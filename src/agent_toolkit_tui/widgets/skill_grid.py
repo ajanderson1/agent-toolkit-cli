@@ -238,7 +238,7 @@ class SkillGrid(Vertical):
             return
         col_idx = self._column_index(agent_name)
         target = next((row for row in self._rows if row.slug == row_slug), None)
-        if target is not None and target.collection_key in self._collapsed:
+        if not self._filter and target is not None and target.collection_key in self._collapsed:
             self._collapsed.remove(target.collection_key)
             self._rebuild(table)
         # The table only renders visible rows, so the cursor row index must be
