@@ -184,6 +184,7 @@ registration, lock-file import and unrelated repairs are unchanged.
 | ++r++ | **Reset npm policy** | In the Pi grid, queue reset of this scope's extension filter; Ctrl+S applies. An inherited package returns to global policy; owned installations remain. |
 | ++ctrl+z++ | **Revert** | Clear the pending queue across all asset types — both scopes. |
 | ++slash++ | **Filter** | Focus the fuzzy filter box over the grid. Escape clears it; Alt+Backspace deletes the preceding word. |
+| ++esc++ | **Return to filter** | From the list or sidebar, focus the active grid's text search without clearing it. When search is focused, clear it; in dialogs, close the dialog instead. |
 | ++ctrl+g++ | **Scope toggle** | Switch project ⇄ global. |
 | ++ctrl+p++ | **Command palette** | Choose **Theme** or **Main harnesses** to customize themes or standalone columns. |
 | ++i++ | **Info** | Open information for the selected asset, regardless of column. |

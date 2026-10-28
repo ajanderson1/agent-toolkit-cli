@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import pytest
 
-from agent_toolkit_tui.app import TUIApp
+from textual.widgets import Input
+
+from agent_toolkit_tui.app import ConfirmDiscardScreen, TUIApp
 
 CASES = [
     ("instruction", "instruction-filter"),
@@ -23,6 +25,57 @@ async def test_action_asset_type_focuses_that_tabs_filter(asset_type, filter_id)
         await pilot.pause()
         assert app.focused is not None
         assert app.focused.id == filter_id
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("asset_type", "filter_id"), CASES)
+@pytest.mark.parametrize("from_sidebar", [False, True], ids=["list", "sidebar"])
+async def test_escape_focuses_search_without_changing_state(
+    asset_type, filter_id, from_sidebar
+):
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        app.action_asset_type(asset_type)
+        await pilot.pause()
+        search = app.query_one(f"#{filter_id}", Input)
+        search.value = "demo"
+        await pilot.pause()
+        grid = app._active_grid()
+        table = app.query_one(f"#{filter_id.replace('-filter', '-table')}")
+        pending_before = dict(grid.pending_entries())
+        scope_before = grid._scope
+        cursor_before = table.cursor_coordinate
+        origin = app.query_one("#asset-types-list") if from_sidebar else table
+        origin.focus()
+        await pilot.pause()
+        assert app.focused is origin
+
+        await pilot.press("escape")
+        await pilot.pause()
+
+        assert app.focused is search
+        assert search.value == "demo"
+        assert dict(grid.pending_entries()) == pending_before
+        assert grid._scope == scope_before
+        assert table.cursor_coordinate == cursor_before
+
+
+@pytest.mark.asyncio
+async def test_escape_dismisses_dialog_without_focusing_search():
+    app = TUIApp()
+    async with app.run_test() as pilot:
+        sidebar = app.query_one("#asset-types-list")
+        sidebar.focus()
+        await pilot.pause()
+        app.push_screen(ConfirmDiscardScreen(n_pending=1))
+        await pilot.pause()
+        assert isinstance(app.screen, ConfirmDiscardScreen)
+
+        await pilot.press("escape")
+        await pilot.pause()
+
+        assert not isinstance(app.screen, ConfirmDiscardScreen)
+        assert app.focused is sidebar
 
 
 @pytest.mark.asyncio

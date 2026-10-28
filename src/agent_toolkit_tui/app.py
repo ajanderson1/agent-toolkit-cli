@@ -380,6 +380,7 @@ class TUIApp(App):
         Binding("ctrl+r", "refresh", "Refresh", priority=True),
         Binding("ctrl+z", "revert", "Revert", priority=True),
         Binding("slash", "focus_filter", "Filter", priority=True),
+        Binding("escape", "focus_filter", "Filter", show=False),
         Binding("ctrl+w", "focus_sidebar", "Focus Sidebar", priority=True),
         Binding("ctrl+g", "scope_toggle", "toggle scope", priority=True),
         Binding("i", "info_pass", "Info"),
@@ -1011,7 +1012,7 @@ class TUIApp(App):
             return
 
     def action_focus_filter(self) -> None:
-        """`/` re-focuses the active asset pane's filter box."""
+        """`/` or Escape re-focuses the active asset pane's filter box."""
         self._focus_filter(self._active_asset_type)
 
     def action_info_pass(self) -> None:
