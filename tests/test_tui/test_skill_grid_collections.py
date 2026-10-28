@@ -58,7 +58,7 @@ async def test_left_from_nonleftmost_column_keeps_table_navigation(legacy):
 
         table.focus()
         table.cursor_coordinate = Coordinate(0, 0)
-        await pilot.press("right", "left")
+        await pilot.press("right", "right", "left")
         await pilot.pause()
 
         assert table.cursor_coordinate == Coordinate(0, 0)
@@ -99,6 +99,7 @@ async def test_left_in_leftmost_column_collapses_collection_or_selected_child_pa
             display_name="z-standalone",
         )
         grid.set_rows([*grid._rows, second_child, standalone])
+        grid.cursor_to_cell(row_slug="z-second-child", agent_name="standard")
         table.focus()
         table.cursor_coordinate = Coordinate(1, 0)
         await pilot.press("left")

@@ -130,7 +130,7 @@ class SkillGrid(Vertical):
         self._selection: tuple[str, ...] | None = None
         # Case-insensitive substring filter on slug (#249). "" = show all.
         self._filter: str = ""
-        self._collapsed: set[tuple[str, str | None]] = set()
+        self._collapsed = {r.collection_key for r in self._rows if r.collection_key is not None}
 
     def _active_agents(self) -> tuple[str, ...]:
         # Standard column + non-covered main harnesses. The long tail is
@@ -158,6 +158,9 @@ class SkillGrid(Vertical):
         return [r.slug for r in self._rows]
 
     def set_rows(self, rows: list[SkillRow]) -> None:
+        previous = {r.collection_key for r in self._rows if r.collection_key is not None}
+        current = {r.collection_key for r in rows if r.collection_key is not None}
+        self._collapsed = (self._collapsed & current) | (current - previous)
         self._rows = sorted(rows, key=lambda r: r.slug)
         try:
             table = self.query_one("#skill-table", DataTable)
@@ -234,6 +237,10 @@ class SkillGrid(Vertical):
         except Exception:
             return
         col_idx = self._column_index(agent_name)
+        target = next((row for row in self._rows if row.slug == row_slug), None)
+        if target is not None and target.collection_key in self._collapsed:
+            self._collapsed.remove(target.collection_key)
+            self._rebuild(table)
         # The table only renders visible rows, so the cursor row index must be
         # the slug's position in the *visible* list, not the full set (#249).
         visible_slugs = [r.slug for r in self._visible_rows()]
@@ -295,7 +302,8 @@ class SkillGrid(Vertical):
                 collection_error=row.collection_error,
                 description="Collection controls affect every child, including collapsed/filter-hidden skills. "
                             "Mixed (cyan −) means some selected; yellow - means pending removal. "
-                            "Click the name or press Space/Enter there to expand/collapse. " + row.collection_error,
+                            "Right expands; Left collapses from the name column. "
+                            "Click the name or press Space/Enter there to toggle. " + row.collection_error,
             )
             visible.append(parent)
             if key not in self._collapsed or self._filter:
