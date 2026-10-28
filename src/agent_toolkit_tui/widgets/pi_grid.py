@@ -320,29 +320,35 @@ class PiGrid(CatalogPendingMixin, Vertical):
             )
         )
 
-    def _extension_info_body(self, row: PiExtensionRow) -> str:
+    def _extension_info_lines(self, row: PiExtensionRow) -> list[str | InfoFact]:
         if row.origin == "store-owned":
             from agent_toolkit_cli.pi_extension_paths import library_pi_extension_path
 
-            return "\n".join(map(str, library_info(library_pi_extension_path(row.slug))))
-        return ""
+            return library_info(library_pi_extension_path(row.slug))
+        return []
+
+    def _extension_info_body(self, row: PiExtensionRow) -> str:
+        """Legacy markup helper; action_info keeps structured facts instead."""
+        return "\n".join(map(str, self._extension_info_lines(row)))
 
     def _origin_info_body(self) -> str:
         info = get_column_info("origin", asset_type="pi-extension", context={"scope": self._scope})
         return "\n".join(info.lines)
 
     def _info_detail_lines(self, *, row: PiExtensionRow, scope: str) -> list[str | InfoFact]:
-        if row.origin == "local-package":
-            return self._local_package_info_lines(row=row, scope=scope)
-        return [self._info_body(row=row, scope=scope)]
-
-    def _info_body(self, *, row: PiExtensionRow, scope: str) -> str:
-        catalog = "\n".join(self._catalog_info(row))
+        """Structured action_info input; never stringify dynamic facts here."""
+        catalog = self._catalog_info(row)
         if row.catalog_only:
             return catalog
-        return "\n\n".join(section for section in (
-            self._extension_info_body(row), self._scope_info_body(row=row, scope=scope), catalog,
-        ) if section)
+        return [
+            *self._extension_info_lines(row),
+            *self._scope_info_lines(row=row, scope=scope),
+            *catalog,
+        ]
+
+    def _info_body(self, *, row: PiExtensionRow, scope: str) -> str:
+        """Legacy markup helper retained for direct callers and existing tests."""
+        return "\n\n".join(map(str, self._info_detail_lines(row=row, scope=scope)))
 
     def _npm_info_body(self, row: PiExtensionRow, scope: str) -> str:
         from shlex import join
@@ -395,7 +401,7 @@ class PiGrid(CatalogPendingMixin, Vertical):
         details.append("No Toolkit npm registration or second unregister step. Running Pi sessions are unchanged.")
         return escape("\n".join(details))
 
-    def _scope_info_body(self, *, row: PiExtensionRow, scope: str) -> str:
+    def _scope_info_lines(self, *, row: PiExtensionRow, scope: str) -> list[str | InfoFact]:
         from pathlib import Path
         from agent_toolkit_cli.pi_extension_paths import (
             pi_extension_dir,
@@ -416,9 +422,9 @@ class PiGrid(CatalogPendingMixin, Vertical):
                 controls = controls + "\n" + guidance if pending else guidance
             if len(paths) > 1:
                 controls += f"\n{action} affects all {len(paths)} entrypoints."
-            details = [controls]
+            details: list[str | InfoFact] = [controls]
             if len(paths) > 1:
-                details.append("Entrypoints:\n" + "\n".join(escape(str(path)) for path in paths))
+                details.append(InfoFact("Entrypoints", "\n".join(str(path) for path in paths)))
             found = False
             for location in (scope, "global" if scope == "project" else "project"):
                 base = pi_extension_dir(
@@ -428,14 +434,16 @@ class PiGrid(CatalogPendingMixin, Vertical):
                 for path in (base, base.with_name(base.name + ".ts"), base.with_name(base.name + ".js")):
                     if path.exists() or path.is_symlink():
                         found = True
-                        details.append("\n".join([f"Location ({location}):", *map(str, local_path_info(path, configurable=True))]))
+                        details.append(f"Location ({location}):")
+                        details.extend(local_path_info(path, configurable=True))
             if not found:
-                details.extend("\n".join(map(str, local_path_info(path, configurable=True))) for path in paths)
+                for path in paths:
+                    details.extend(local_path_info(path, configurable=True))
             details.append("Running Pi sessions are unchanged.")
-            return "\n\n".join(details)
+            return details
 
         if row.origin == "local-package":
-            return "\n".join(map(str, self._local_package_info_lines(row=row, scope=scope)))
+            return self._local_package_info_lines(row=row, scope=scope)
 
         home = Path.home()
         project = Path.cwd() if scope == "project" else None
@@ -443,13 +451,8 @@ class PiGrid(CatalogPendingMixin, Vertical):
         loaded = row.global_cell.global_loaded if scope == "global" else row.project_cell.project_loaded
 
         if row.origin == "npm":
-            return self._npm_info_body(row, scope)
+            return [self._npm_info_body(row, scope)]
         link = pi_extension_dir(row.slug, scope=scope, home=home, project=project)
-        effect = (
-            "Enable connects the library source to Pi.\n"
-            "Disable removes the connection, not source files.\n"
-            f"Pi path: {link}"
-        )
 
         if pending:
             action = "Enable" if pending == "link" else "Disable"
@@ -463,7 +466,17 @@ class PiGrid(CatalogPendingMixin, Vertical):
         else:
             action = "Disable" if loaded else "Enable"
             controls = f"[b]Space[/] → queue {action} ({scope})\n[b]Ctrl+S[/] → apply"
-        return f"{controls}\n\n{effect}\nRunning Pi sessions are unchanged."
+        return [
+            controls,
+            "Enable connects the library source to Pi.",
+            "Disable removes the connection, not source files.",
+            InfoFact("Pi path", str(link)),
+            "Running Pi sessions are unchanged.",
+        ]
+
+    def _scope_info_body(self, *, row: PiExtensionRow, scope: str) -> str:
+        """Legacy markup helper; action_info keeps structured facts instead."""
+        return "\n".join(map(str, self._scope_info_lines(row=row, scope=scope)))
 
     def _local_package_info_lines(self, *, row: PiExtensionRow, scope: str) -> list[str | InfoFact]:
         path = (

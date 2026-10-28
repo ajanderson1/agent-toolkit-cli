@@ -6,6 +6,8 @@ from shlex import join
 
 from rich.markup import escape
 
+from agent_toolkit_tui.info_presentation import InfoFact
+
 
 class CatalogPendingMixin:
     def _capture_catalog_pending(self):
@@ -63,7 +65,7 @@ def catalog_info(row, *, scope, kind):
     if item is None:
         return []
     lines = [
-        f"Catalog: {url}",
+        InfoFact("Catalog", url),
         f"Description: {escape(item.description)}",
         f"Kind: {escape(item.kind)}; source type: {escape(item.source_type)}",
     ]
@@ -78,8 +80,8 @@ def catalog_info(row, *, scope, kind):
         ]
     else:
         lines += [
-            f"Upstream: {item.source.url}",
-            f"Directory: {item.source.subpath}",
+            InfoFact("Upstream", item.source.url),
+            InfoFact("Directory", item.source.subpath or "."),
             f"Ref: {escape(item.source.ref or '(default)')}",
         ]
         if item.entry_file:

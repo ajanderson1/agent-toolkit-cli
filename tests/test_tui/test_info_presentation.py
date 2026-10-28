@@ -159,7 +159,7 @@ async def test_catalogue_info_renders_brackets_and_backslashes_once(grid_kind: s
     from agent_toolkit_tui.widgets.pi_grid import PiGrid
 
     upstream = r"https://example/[repo]\\\\" + "branch/" * 8
-    directory = r"dir\\\\[name]"
+    directory = "dir\n[/b]"
     source = replace(safe_source("https://example/owner/repo"), url=upstream, subpath=directory)
     item = CatalogEntry("literal", "Description [/b]", source, kind=grid_kind)
     if grid_kind == "agent":
@@ -233,12 +233,12 @@ async def test_skill_catalogue_info_renders_literal_skill_path() -> None:
     from agent_toolkit_tui.skill_state import SkillCell, SkillRow
     from agent_toolkit_tui.widgets.skill_grid import SkillGrid
 
-    source = replace(safe_source("https://example/owner/repo"), subpath="[/b]")
+    source = replace(safe_source("https://example/owner/repo"), subpath="dir\n[/b]")
     item = CatalogSkill("literal", "", source)
     grid = SkillGrid([SkillRow(
         "literal", source.url, "main", "catalog",
         {("standard", "global"): SkillCell(False, False, False)},
-        skill_path="[/b]", catalog_item=item, catalog_url="https://example/catalog",
+        skill_path="dir\n[/b]", catalog_item=item, catalog_url="https://example/catalog",
         origin="catalog",
     )])
 
@@ -252,7 +252,7 @@ async def test_skill_catalogue_info_renders_literal_skill_path() -> None:
         await pilot.pause()
         plain = grid.app.screen.query_one("#cell-info-body", Static).render().plain
 
-    assert "Skill path: [/b]" in plain
+    assert "Skill path: dir\n[/b]" in plain
 
 
 async def test_instruction_info_preserves_raw_backslash_bracket_canonical_path(monkeypatch: pytest.MonkeyPatch) -> None:

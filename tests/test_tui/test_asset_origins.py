@@ -325,6 +325,25 @@ async def test_discovered_skill_newline_path_renders_as_one_literal_source_fact(
     assert f"Source path: {child}" not in plain  # Deduplicated against full source.
 
 
+@pytest.mark.asyncio
+async def test_discovered_pi_newline_path_renders_as_literal_source_fact(tmp_path, monkeypatch):
+    """Pi discovery-to-info flow preserves a local path containing newline markup."""
+    home = tmp_path / "home\n[" / "b]"
+    extension = home / ".pi/agent/extensions/local/index.ts"
+    extension.parent.mkdir(parents=True)
+    extension.write_text("export default () => {}")
+    monkeypatch.setenv("HOME", str(home))
+    grid = PiGrid(build_pi_rows(home=home))
+
+    async with GridApp(grid).run_test() as pilot:
+        await pilot.pause()
+        grid.action_info()
+        await pilot.pause()
+        plain = grid.app.screen.query_one("#cell-info-body", Static).render().plain
+
+    assert str(extension.parent) in plain
+
+
 def test_discovered_agent_retains_actual_path(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     path = tmp_path / ".claude/agents/local.md"
