@@ -29,6 +29,13 @@ class CatalogPendingMixin:
 
 
 def catalog_info(row, *, scope, kind):
+    """Return catalogue lines for ``detail_sections``.
+
+    Catalog, Upstream, and Directory are raw facts: their shared consumer
+    compacts and escapes each complete value exactly once. Every other dynamic
+    value is escaped where it joins prose or a command, so it remains literal
+    when the consumer preserves trusted static Rich markup.
+    """
     from agent_toolkit_cli.asset_catalog_ops import backing_modules
     from agent_toolkit_cli.skill_catalog import CatalogEntry, safe_source, run_git
     item, url = row.catalog_item, row.catalog_url
@@ -55,36 +62,52 @@ def catalog_info(row, *, scope, kind):
                     pass
     if item is None:
         return []
-    lines = [f"Catalog: {url}", f"Description: {item.description}",
-             f"Kind: {item.kind}; source type: {item.source_type}"]
+    lines = [
+        f"Catalog: {url}",
+        f"Description: {escape(item.description)}",
+        f"Kind: {escape(item.kind)}; source type: {escape(item.source_type)}",
+    ]
     if row.catalog_warning:
-        lines.append(row.catalog_warning)
+        lines.append(escape(row.catalog_warning))
     if item.source_type == "npm":
-        lines += [f"Requested source: {item.npm_source}",
-                  "Not installed; catalogue browsing never downloads packages." if row.catalog_only else "Native installation and selection remain authoritative.",
-                  "Explicit native installation: " + join(["agent-toolkit-cli", "pi-extensions", "catalog", "install", item.key, "--scope", scope]),
-                  "Installation may execute lifecycle scripts and activate bundled resources; confirmation is required."]
+        lines += [
+            f"Requested source: {escape(item.npm_source or '')}",
+            "Not installed; catalogue browsing never downloads packages." if row.catalog_only else "Native installation and selection remain authoritative.",
+            escape("Explicit native installation: " + join(["agent-toolkit-cli", "pi-extensions", "catalog", "install", item.key, "--scope", scope])),
+            "Installation may execute lifecycle scripts and activate bundled resources; confirmation is required.",
+        ]
     else:
-        lines += [f"Upstream: {item.source.url}", f"Directory: {item.source.subpath}", f"Ref: {item.source.ref or '(default)'}"]
+        lines += [
+            f"Upstream: {item.source.url}",
+            f"Directory: {item.source.subpath}",
+            f"Ref: {escape(item.source.ref or '(default)')}",
+        ]
         if item.entry_file:
-            lines.append(f"Agent entry file: {item.entry_file}")
+            lines.append(f"Agent entry file: {escape(item.entry_file)}")
         group = {"agent": "agents", "command": "commands", "pi-extension": "pi-extensions"}[item.kind]
         if row.catalog_only:
-            lines += ["Not acquired; no harness exposure. Space queues acquisition and exposure for Apply.",
-                      "Add without enabling: " + join(["agent-toolkit-cli", group, "catalog", "add", item.key])]
+            lines += [
+                "Not acquired; no harness exposure. Space queues acquisition and exposure for Apply.",
+                escape("Add without enabling: " + join(["agent-toolkit-cli", group, "catalog", "add", item.key])),
+            ]
         else:
             from agent_toolkit_cli.asset_update_check import read_check
             if canonical is not None:
-                lines += [f"Local backing ({actual_scope}): {canonical}"]
+                lines += [f"Local backing ({escape(actual_scope)}): {escape(str(canonical))}"]
                 try:
-                    lines.append("Local revision: " + run_git(["rev-parse", "HEAD"], cwd=canonical))
+                    lines.append("Local revision: " + escape(run_git(["rev-parse", "HEAD"], cwd=canonical)))
                 except (ValueError, OSError, subprocess.SubprocessError):
                     lines.append("Local revision: unavailable")
             observation = read_check(kind, row.slug, scope=actual_scope, home=Path.home(),
                 project=Path.cwd() if actual_scope == "project" else None) if entry is not None else None
-            lines.append(f"Upstream check: {observation['status']} · checked {observation['checked_at']}" if observation else "Upstream: not checked")
+            lines.append(
+                f"Upstream check: {escape(str(observation['status']))} · checked {escape(str(observation['checked_at']))}"
+                if observation else "Upstream: not checked"
+            )
             flag = "-g" if actual_scope == "global" else "-p"
-            lines += ["Check: " + join(["agent-toolkit-cli", group, "check", row.slug, flag]),
-                      "Update: " + join(["agent-toolkit-cli", group, "update", row.slug, flag]),
-                      "Existing update/backing limitations apply; catalogue refresh never updates content."]
-    return [escape(line) for line in lines]
+            lines += [
+                escape("Check: " + join(["agent-toolkit-cli", group, "check", row.slug, flag])),
+                escape("Update: " + join(["agent-toolkit-cli", group, "update", row.slug, flag])),
+                "Existing update/backing limitations apply; catalogue refresh never updates content.",
+            ]
+    return lines

@@ -8,7 +8,7 @@ from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.containers import VerticalScroll
 from textual.coordinate import Coordinate
-from textual.widgets import DataTable
+from textual.widgets import DataTable, Static
 
 from agent_toolkit_tui.asset_info import local_path_info
 from agent_toolkit_tui.column_info import get_column_info
@@ -101,6 +101,105 @@ def test_escaped_extra_path_is_deduplicated_and_cannot_activate_markup(tmp_path:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("settings_path", "spec"),
+    [
+        ("/tmp/[/b]/settings.json", "../local-[/b]"),
+        (r"C:\[repo]\settings.json", r"..\\[repo]\\package"),
+    ],
+)
+async def test_pi_local_package_info_renders_settings_and_spec_as_literal_text(
+    settings_path: str, spec: str,
+) -> None:
+    """PiGrid.action_info must hand literal local-package facts to its modal."""
+    from agent_toolkit_tui.pi_extension_state import PiCell, PiExtensionRow
+    from agent_toolkit_tui.widgets.pi_grid import PiGrid
+
+    cell = PiCell(True, False, "local-package", managed=False,
+                  package_spec=spec, config_path=settings_path)
+    row = PiExtensionRow(
+        slug="local-package",
+        origin="local-package",
+        source=spec,
+        global_cell=cell,
+        project_cell=cell,
+        managed=False,
+        global_package_spec=spec,
+        global_config_path=settings_path,
+    )
+    grid = PiGrid([row])
+
+    class _App(App[None]):
+        def compose(self) -> ComposeResult:
+            yield grid
+
+    async with _App().run_test() as pilot:
+        await pilot.pause()
+        grid.query_one(DataTable).cursor_coordinate = Coordinate(0, 0)
+        grid.action_info()
+        await pilot.pause()
+        plain = grid.app.screen.query_one("#cell-info-body", Static).render().plain
+
+    assert f"Source: {spec}" in plain
+    assert f"Manual removal: edit {settings_path} and remove the packages[] entry" in plain
+    assert f"whose source is {spec!r} (or the matching string entry)." in plain
+
+
+@pytest.mark.parametrize("grid_kind", ["agent", "command", "pi-extension"])
+async def test_catalogue_info_renders_brackets_and_backslashes_once(grid_kind: str) -> None:
+    """The shared catalogue producer and each consumer preserve literal facts."""
+    from dataclasses import replace
+
+    from agent_toolkit_cli.skill_catalog import CatalogEntry, safe_source
+    from agent_toolkit_tui.agent_state import AgentCell, AgentRow
+    from agent_toolkit_tui.command_state import CommandCell, CommandRow
+    from agent_toolkit_tui.pi_extension_state import PiCell, PiExtensionRow
+    from agent_toolkit_tui.widgets.agent_grid import AgentGrid
+    from agent_toolkit_tui.widgets.command_grid import CommandGrid
+    from agent_toolkit_tui.widgets.pi_grid import PiGrid
+
+    upstream = r"https://example/[repo]\\\\" + "branch/" * 8
+    directory = r"dir\\\\[name]"
+    source = replace(safe_source("https://example/owner/repo"), url=upstream, subpath=directory)
+    item = CatalogEntry("literal", "Description [/b]", source, kind=grid_kind)
+    if grid_kind == "agent":
+        grid = AgentGrid([AgentRow(
+            slug="literal", source=upstream, ref="main", state="catalog",
+            cells={("pi", "global"): AgentCell(False)}, catalog_item=item,
+            catalog_url=upstream, catalog_only=True,
+        )])
+    elif grid_kind == "command":
+        grid = CommandGrid([CommandRow(
+            slug="literal", source=upstream, ref="main", state="catalog",
+            cells={("pi", "global"): CommandCell(False)}, catalog_item=item,
+            catalog_url=upstream, catalog_only=True,
+        )])
+    else:
+        cell = PiCell(False, False, "catalog")
+        grid = PiGrid([PiExtensionRow(
+            slug="literal", origin="catalog", source=upstream,
+            global_cell=cell, project_cell=cell, catalog_item=item,
+            catalog_url=upstream, catalog_only=True,
+        )])
+
+    class _App(App[None]):
+        def compose(self) -> ComposeResult:
+            yield grid
+
+    async with _App().run_test() as pilot:
+        await pilot.pause()
+        grid.query_one(DataTable).cursor_coordinate = Coordinate(0, 0)
+        grid.action_info()
+        await pilot.pause()
+        plain = grid.app.screen.query_one("#cell-info-body", Static).render().plain
+
+    assert f"Catalog: {upstream}" in plain
+    assert f"Upstream: {upstream}" in plain
+    assert f"Directory: {directory}" in plain
+    assert "Description [/b]" in plain
+    assert "Technical details" in plain
+
+
 async def test_instruction_info_preserves_raw_backslash_bracket_canonical_path(monkeypatch: pytest.MonkeyPatch) -> None:
     from agent_toolkit_tui.instruction_state import InstructionRow
     from agent_toolkit_tui.widgets.instruction_grid import InstructionGrid

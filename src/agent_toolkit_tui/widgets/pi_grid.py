@@ -442,12 +442,14 @@ class PiGrid(CatalogPendingMixin, Vertical):
             candidate = Path(spec).expanduser()
             if not candidate.is_absolute():
                 candidate = Path(path).parent / candidate
+            # ``Source path`` is a raw fact: detail_sections compacts and escapes
+            # it once. Dynamic prose is escaped at this interpolation boundary.
             return (
                 f"Source path: {candidate}\n"
                 "Existing local filesystem package; files are not moved or registered.\n"
                 "No TUI enable/disable or deletion; edit/update the local files directly.\n"
-                f"Manual removal: edit {path} and remove the packages[] entry\n"
-                f"whose source is {spec!r} (or the matching string entry).\n"
+                f"Manual removal: edit {escape(path)} and remove the packages[] entry\n"
+                f"whose source is {escape(repr(spec))} (or the matching string entry).\n"
                 "This removes only the settings reference; it does not delete package files.\n"
                 "Removing a reference does not unload an already-running session."
             )

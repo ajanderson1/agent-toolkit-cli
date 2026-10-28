@@ -1,6 +1,8 @@
 """CellInfoScreen — modal that renders state-specific info for a SkillGrid cell."""
 from __future__ import annotations
 
+from rich.text import Text
+
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical, VerticalScroll
@@ -130,7 +132,10 @@ class CellInfoScreen(ModalScreen[None]):
         with Vertical():
             with VerticalScroll():
                 yield Label(self._title, id="cell-info-title")
-                yield Static(self._body_markup, id="cell-info-body", markup=True)
+                # Info producers emit Rich markup. Parse it with Rich rather than
+                # Textual's separate markup parser so Rich.escape preserves literal
+                # backslash runs and bracket-like paths exactly as documented.
+                yield Static(Text.from_markup(self._body_markup), id="cell-info-body")
             yield Static("↑/↓ or PgUp/PgDn scroll · Esc / q / i close", id="cell-info-footer")
 
     def action_dismiss_modal(self) -> None:
