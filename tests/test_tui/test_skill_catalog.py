@@ -3,6 +3,7 @@ import json
 
 import pytest
 from rich.text import Text
+from textual.widgets import Static
 
 from agent_toolkit_tui.info_presentation import detail_sections, sections_markup
 from tests.test_cli.test_reground import sandbox, git, invoke
@@ -40,11 +41,12 @@ def test_info_shows_current_local_revision_before_any_upstream_check(tmp_path, s
 
 
 @pytest.mark.asyncio
-async def test_successful_catalog_refresh_reports_configured_ref_and_fetched_revision(tmp_path, sandbox, monkeypatch):
+@pytest.mark.parametrize("size", [(80, 24), (120, 40)])
+async def test_catalogue_release_status_is_one_line_bottom_right(tmp_path, sandbox, monkeypatch, size):
     upstream, cat = subscribed(tmp_path)
-    git(cat, "tag", "catalog-release")
-    invoke("catalog", "subscribe", cat.as_uri(), "--ref", "catalog-release")
-    revision = git(cat, "rev-parse", "catalog-release")
+    git(cat, "tag", "v1.1.0")
+    invoke("catalog", "subscribe", cat.as_uri(), "--ref", "v1.1.0")
+    revision = git(cat, "rev-parse", "v1.1.0")
     monkeypatch.chdir(tmp_path)
     from agent_toolkit_tui.app import TUIApp
 
@@ -57,16 +59,29 @@ async def test_successful_catalog_refresh_reports_configured_ref_and_fetched_rev
         return original_notify(message, *args, **kwargs)
 
     monkeypatch.setattr(app, "notify", spy_notify)
-    async with app.run_test() as pilot:
+    async with app.run_test(size=size) as pilot:
         await app.workers.wait_for_complete()
         await pilot.pause()
+        badge = app.query_one("#catalog-status", Static)
+        assert str(badge.render()) == "Catalogue: v1.1.0"
+        assert badge.region.height == 1
+        assert badge.region.right == app.screen.size.width
+        assert badge.region.y == app.query_one("#footer-pending", Static).region.y
+        assert app._catalog_snapshot.ref == "v1.1.0"
+        assert app._catalog_snapshot.revision == revision
+        app.action_asset_type("agent")
+        app._refresh_pending_label()
+        await pilot.pause()
+        assert str(badge.render()) == "Catalogue: v1.1.0"
 
-    assert (f"Retrieved catalogue catalog-release ({revision[:12]})", {}) in notifications
+    assert all(not message.startswith("Retrieved catalogue") for message, _ in notifications)
+    assert all(revision[:12] not in message for message, _ in notifications)
 
 
 @pytest.mark.asyncio
-async def test_successful_catalog_refresh_reports_fetched_revision_without_ref(tmp_path, sandbox, monkeypatch):
+async def test_catalogue_status_refreshes_version_without_a_configured_ref(tmp_path, sandbox, monkeypatch):
     upstream, cat = subscribed(tmp_path)
+    git(cat, "tag", "v1.2.0")
     revision = git(cat, "rev-parse", "HEAD")
     monkeypatch.chdir(tmp_path)
     from agent_toolkit_tui.app import TUIApp
@@ -83,8 +98,20 @@ async def test_successful_catalog_refresh_reports_fetched_revision_without_ref(t
     async with app.run_test() as pilot:
         await app.workers.wait_for_complete()
         await pilot.pause()
+        badge = app.query_one("#catalog-status", Static)
+        assert str(badge.render()) == "Catalogue: v1.2.0"
+        assert app._catalog_snapshot.ref is None
+        assert app._catalog_snapshot.revision == revision
+        git(cat, "-c", "user.name=Test", "-c", "user.email=test@example.test",
+            "commit", "--allow-empty", "-m", "unreleased catalogue update")
+        app._start_catalog_refresh()
+        assert str(badge.render()) == "Catalogue: refreshing…"
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        assert str(badge.render()) == "Catalogue: unversioned"
+        assert app._catalog_snapshot.revision == git(cat, "rev-parse", "HEAD")
 
-    assert (f"Retrieved catalogue revision {revision[:12]}", {}) in notifications
+    assert all(not message.startswith("Retrieved catalogue") for message, _ in notifications)
 
 
 @pytest.mark.asyncio
@@ -170,6 +197,7 @@ async def test_offline_refresh_hides_only_catalog_rows(tmp_path, sandbox, monkey
         await app.workers.wait_for_complete()
         await pilot.pause()
         assert grid.row_slugs == []
+        assert str(app.query_one("#catalog-status", Static).render()) == "Catalogue: unavailable"
 
     assert all(not message.startswith("Retrieved catalogue") for message, _ in notifications)
     assert any(kwargs.get("severity") == "warning" for _, kwargs in notifications)

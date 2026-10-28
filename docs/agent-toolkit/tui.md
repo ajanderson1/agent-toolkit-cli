@@ -219,10 +219,14 @@ Conflicts leave failed edits queued. A collection failure restores only its affe
 ## Shared catalogue rows
 
 Skills, Agents, Commands and Pi extensions share one live Git catalogue snapshot.
-A successful retrieval displays `Retrieved catalogue REF (SHA)` for a configured
-ref, or `Retrieved catalogue revision SHA` otherwise. The ref can move; the short
-fetched Git SHA identifies the immutable catalogue content. Refresh failures remain
-warnings.
+A persistent **single-line status at the bottom right** shows the loaded catalogue
+release, such as `Catalogue: v1.1.0`, without a commit ID or a success toast.
+Release numbers come from stable Git version tags at the exact fetched commit,
+not the manifest schema number or an older release. Without a verified tag the
+label reads `Catalogue: unversioned`. During refresh it reads `refreshing…`;
+failed reads show `unavailable`, and unsubscribing shows `not subscribed`.
+The status stays visible across tabs and pending-change summaries. Refresh
+failures still produce warnings; internal snapshot validation retains the full SHA.
 Catalogue-only Git rows start unacquired and disabled; Space queues acquisition and
 exposure, Apply revalidates the selected source/subscription, and Revert downloads
 nothing. Npm catalogue-only rows are read-only; Info gives an explicit confirmed

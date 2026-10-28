@@ -66,9 +66,13 @@ async def test_proj_path_layout_order(tmp_path: Path):
         proj_path = app.query_one("#proj-path", Static)
         status_bar = app.query_one("#status-bar", Static)
         footer_pending = app.query_one("#footer-pending", Static)
+        footer_status = app.query_one("#footer-status")
+        catalog_status = app.query_one("#catalog-status", Static)
         children = list(app.screen.children)
         assert children.index(status_bar) == children.index(proj_path) + 1
-        assert children.index(footer_pending) == children.index(status_bar) + 1
+        assert children.index(footer_status) == children.index(status_bar) + 1
+        assert list(footer_status.children) == [footer_pending, catalog_status]
+        assert footer_pending.region.y == catalog_status.region.y
 
 
 @pytest.mark.asyncio
