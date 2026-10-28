@@ -12,8 +12,6 @@ import statistics
 from time import perf_counter
 
 from textual.app import App, ComposeResult
-from textual.coordinate import Coordinate
-from textual.widgets import DataTable
 
 from agent_toolkit_tui.skill_state import SkillCell, SkillRow, interactive_agents
 from agent_toolkit_tui.widgets.skill_grid import SkillGrid
@@ -46,9 +44,10 @@ async def measure(count: int, samples: int, profile: str | None) -> None:
     async with app.run_test(size=(120, 36)) as pilot:
         await pilot.pause()
         grid = app.query_one(SkillGrid)
-        table = app.query_one(DataTable)
-        table.focus()
-        table.cursor_coordinate = Coordinate(1, 1)
+        # Keep the measured workload independent of collapsed-by-default UX.
+        grid._collapsed.clear()
+        grid.set_filter("")
+        grid.cursor_to_cell(row_slug=grid.row_slugs[0], agent_name="standard")
         await pilot.pause()
         profiler = cProfile.Profile() if profile else None
         if profiler:

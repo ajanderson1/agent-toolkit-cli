@@ -61,3 +61,24 @@ Final correctness gate: `uv run pytest -q` reports **3,341 passed, 11 skipped**
 fails eight regression tests, including all six grids; the original file was
 restored byte-for-byte afterward. Runtime checks use Textual's headless Pilot;
 no claim of an attended terminal or real-user performance study is made.
+
+## Integration review against main
+
+The benchmark now explicitly expands the synthetic inventory and selects a child
+before timing. This keeps its workload consistent after collections became
+collapsed by default in #561. A regression checks that twenty children plus two
+parents are rendered and each toggle changes exactly one child's pending state.
+
+After integrating main `1f55fbc`, a fresh-process baseline using that commit's
+grid and the same benchmark was compared with the integrated implementation
+(seven samples each; no checkout files modified):
+
+| Skills | Main toggle median | Integrated toggle median | Main filter/clear median | Integrated filter/clear median |
+| --- | --- | --- | --- | --- |
+| 500 | 43.98 ms | 15.30 ms | 48.38 ms | 33.55 ms |
+| 2,000 | 228.85 ms | 20.01 ms | 237.47 ms | 131.98 ms |
+
+These remain local headless medians, not real-user p95 guarantees. The full gate
+is rerun for the integrated PR; the 3,341-test result above describes the original
+pre-integration branch. Review also verified current collection defaults,
+Right-arrow navigation, literal Info facts, catalogue status and source widths.
