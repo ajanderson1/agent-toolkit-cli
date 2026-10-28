@@ -103,7 +103,7 @@ class SkillGrid(Vertical):
 
     def __init__(self, rows: list[SkillRow], *, id: str | None = None) -> None:
         super().__init__(id=id)
-        self._rows = sorted(rows, key=lambda r: r.slug)
+        self._set_row_index(rows)
         self._scope: Literal["global", "project"] = "global"
         # (scope, agent_name, slug) -> op
         self._pending: dict[tuple[str, str, str], Op] = {}
@@ -133,14 +133,23 @@ class SkillGrid(Vertical):
 
     @property
     def collection_count(self) -> int:
-        return len({r.collection_key for r in self._rows if r.collection_key is not None})
+        return len(self._collection_members)
 
     @property
     def row_slugs(self) -> list[str]:
         return [r.slug for r in self._rows]
 
-    def set_rows(self, rows: list[SkillRow]) -> None:
+    def _set_row_index(self, rows: list[SkillRow]) -> None:
         self._rows = sorted(rows, key=lambda r: r.slug)
+        self._collection_members: dict[tuple[str, str | None], list[SkillRow]] = {}
+        self._collection_names: dict[str, set[tuple[str, str | None]]] = {}
+        for row in self._rows:
+            if row.collection_key is not None:
+                self._collection_members.setdefault(row.collection_key, []).append(row)
+                self._collection_names.setdefault(row.source.rsplit("/", 1)[-1], set()).add(row.collection_key)
+
+    def set_rows(self, rows: list[SkillRow]) -> None:
+        self._set_row_index(rows)
         try:
             table = self.query_one("#skill-table", DataTable)
         except Exception:
@@ -247,7 +256,7 @@ class SkillGrid(Vertical):
         self._rebuild(table)
 
     def _members(self, parent: SkillRow) -> list[SkillRow]:
-        return [r for r in self._rows if r.collection_key == parent.collection_key]
+        return self._collection_members.get(parent.collection_key, [])
 
     def _visible_rows(self) -> list[SkillRow]:
         visible = []
@@ -700,7 +709,7 @@ class SkillGrid(Vertical):
             if row.is_collection:
                 disclosure = "▸" if row.collection_key in self._collapsed else "▾"
                 base = row.source.rsplit("/", 1)[-1]
-                identities = {r.collection_key for r in self._rows if r.collection_key and r.source.rsplit("/", 1)[-1] == base}
+                identities = self._collection_names.get(base, set())
                 if len(identities) > 1:
                     base = f"{row.source}@{row.collection_key[1] or 'default'}"
                 name = f"{disclosure} {base} · collection"

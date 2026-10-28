@@ -42,6 +42,32 @@ async def test_toggle_updates_state_without_recreating_rows():
         assert all(table.columns[key] is col for key, col in old_columns.items())
 
 
+def test_collection_members_do_not_rescan_inventory_and_refresh_with_rows():
+    class CountedRows(list):
+        iterations = 0
+
+        def __iter__(self):
+            self.iterations += 1
+            return super().__iter__()
+
+    key = ("example/repo", "main")
+    first = SkillRow("alpha", "example/repo", "main", "clean", collection_key=key)
+    second = SkillRow("beta", "example/repo", "main", "dirty", collection_key=key)
+    grid = SkillGrid([first, second])
+    parent = SkillRow("parent", "example/repo", "main", "clean", collection_key=key, is_collection=True)
+    counted = CountedRows(grid._rows)
+    grid._rows = counted
+    assert grid._members(parent) == [first, second]
+    assert grid._members(parent) == [first, second]
+    assert counted.iterations == 0
+    grid.set_rows([second])
+    assert grid._members(parent) == [second]
+    assert grid.collection_count == 1
+    grid.set_rows([])
+    assert grid._members(parent) == []
+    assert grid.collection_count == 0
+
+
 @pytest.mark.asyncio
 async def test_sync_updates_all_state_and_handles_structure_changes():
     from agent_toolkit_tui.widgets._support import sync_table
