@@ -126,3 +126,48 @@ async def test_unavailable_parent_does_not_queue(legacy):
         assert "—" in grid._cell_glyph(row=parent, agent="paperclip")
         grid._toggle_at(Coordinate(0, grid._column_index("paperclip")))
         assert not grid.pending_entries()
+
+
+@pytest.mark.asyncio
+async def test_right_expands_collapsed_parent_before_moving_to_harness_column(legacy):
+    app = TUIApp()
+    async with app.run_test(size=(180, 50)) as pilot:
+        app.action_asset_type("skill")
+        await pilot.pause()
+        grid = app.query_one("#skill-grid", SkillGrid)
+        table = grid.query_one("#skill-table", DataTable)
+        grid._collapsed.add(grid._visible_rows()[0].collection_key)
+        grid.set_filter("")
+        assert len(grid._visible_rows()) == 1
+        table.focus()
+        table.cursor_coordinate = Coordinate(0, 0)
+
+        await pilot.press("right")
+        assert len(grid._visible_rows()) == 12
+        assert table.cursor_coordinate == Coordinate(0, 0)
+        await pilot.press("right")
+        assert table.cursor_coordinate == Coordinate(0, 1)
+        await pilot.press("right")
+        assert table.cursor_coordinate == Coordinate(0, 2)
+        assert not grid.pending_entries()
+
+
+@pytest.mark.asyncio
+async def test_right_on_filter_revealed_parent_moves_without_changing_collapse_choice(legacy):
+    app = TUIApp()
+    async with app.run_test(size=(180, 50)) as pilot:
+        app.action_asset_type("skill")
+        await pilot.pause()
+        grid = app.query_one("#skill-grid", SkillGrid)
+        table = grid.query_one("#skill-table", DataTable)
+        key = grid._visible_rows()[0].collection_key
+        grid._collapsed.add(key)
+        grid.set_filter("workflow-00")
+        assert len(grid._visible_rows()) == 2
+        table.focus()
+        table.cursor_coordinate = Coordinate(0, 0)
+
+        await pilot.press("right")
+        assert table.cursor_coordinate == Coordinate(0, 1)
+        assert key in grid._collapsed
+        assert not grid.pending_entries()

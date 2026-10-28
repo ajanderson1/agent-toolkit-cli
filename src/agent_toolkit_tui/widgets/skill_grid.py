@@ -75,7 +75,14 @@ Op = Literal["link", "unlink"]
 
 
 class SkillDataTable(DataTable):
-    """Table that reserves Left-at-name for collection collapse."""
+    """Name-column arrows expand/collapse before horizontal navigation."""
+
+    def action_cursor_right(self) -> None:
+        grid = self.parent
+        if self.cursor_coordinate.column == 0 and isinstance(grid, SkillGrid):
+            if grid.expand_selected_collection():
+                return
+        super().action_cursor_right()
 
     def action_cursor_left(self) -> None:
         if self.cursor_coordinate.column != 0:
@@ -330,6 +337,20 @@ class SkillGrid(Vertical):
         except Exception:
             return
         self._toggle_at(table.cursor_coordinate)
+
+    def expand_selected_collection(self) -> bool:
+        """Consume Right only when it reveals a collapsed parent’s children."""
+        table = self.query_one("#skill-table", DataTable)
+        coord = table.cursor_coordinate
+        visible = self._visible_rows()
+        if self._filter or coord.column != 0 or not 0 <= coord.row < len(visible):
+            return False
+        row = visible[coord.row]
+        if not row.is_collection or row.collection_key not in self._collapsed:
+            return False
+        self._collapsed.remove(row.collection_key)
+        self._rebuild(table)
+        return True
 
     def action_collapse_collection(self) -> None:
         """Collapse the selected collection from its name column."""
