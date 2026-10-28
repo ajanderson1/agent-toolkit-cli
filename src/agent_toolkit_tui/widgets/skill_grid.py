@@ -141,6 +141,9 @@ class SkillGrid(Vertical):
 
     def _set_row_index(self, rows: list[SkillRow]) -> None:
         self._rows = sorted(rows, key=lambda r: r.slug)
+        self._index_collections()
+
+    def _index_collections(self) -> None:
         self._collection_members: dict[tuple[str, str | None], list[SkillRow]] = {}
         self._collection_names: dict[str, set[tuple[str, str | None]]] = {}
         for row in self._rows:
@@ -259,6 +262,9 @@ class SkillGrid(Vertical):
         return self._collection_members.get(parent.collection_key, [])
 
     def _visible_rows(self) -> list[SkillRow]:
+        # Rows are mutable (e.g. discovered origins gain collection metadata).
+        # One linear pass per view keeps the index current without per-cell scans.
+        self._index_collections()
         visible = []
         seen = set()
         for row in self._rows:
@@ -669,6 +675,7 @@ class SkillGrid(Vertical):
         adjust_source_column_width(table, event, fixed_width)
 
     def _rebuild(self, table: DataTable) -> None:
+        visible = self._visible_rows()
         saved = table.cursor_coordinate
         # Preserve the viewport: clear() resets scroll to the top, so a toggle
         # would jump the pane (#321). Save the offset and restore it below.
@@ -703,7 +710,6 @@ class SkillGrid(Vertical):
         columns.append((f"State {_INFO_GLYPH}", 10))
         # Source is passive — no info panel, no glyph.
         columns.append(("Source", source_width))
-        visible = self._visible_rows()
         table_rows: list[tuple[str, list[str | Text]]] = []
         for row in visible:
             if row.is_collection:

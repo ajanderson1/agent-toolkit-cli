@@ -66,6 +66,57 @@ def test_collection_members_do_not_rescan_inventory_and_refresh_with_rows():
     grid.set_rows([])
     assert grid._members(parent) == []
     assert grid.collection_count == 0
+    second.collection_key = None
+    grid.set_rows([second])
+    second.collection_key = key
+    grid._visible_rows()
+    assert grid._members(parent) == [second]
+    assert grid.collection_count == 1
+
+
+@pytest.mark.parametrize("kind", ["skill", "agent", "command", "instruction", "mcp", "pi"])
+@pytest.mark.asyncio
+async def test_all_grids_reuse_rows_and_refresh_source_and_pending(kind):
+    from agent_toolkit_tui.agent_state import AgentCell, AgentRow
+    from agent_toolkit_tui.command_state import CommandCell, CommandRow
+    from agent_toolkit_tui.instruction_state import InstructionCell, InstructionRow
+    from agent_toolkit_tui.mcp_state import McpCell, McpRow
+    from agent_toolkit_tui.pi_extension_state import PiCell, PiExtensionRow
+    from agent_toolkit_tui.widgets import AgentGrid, CommandGrid, InstructionGrid, McpGrid, PiGrid
+
+    cells = {("standard", "global"): SkillCell(False, False, False)}
+    definitions = {
+        "skill": (SkillGrid, SkillRow("demo", "old", "main", "clean", cells)),
+        "agent": (AgentGrid, AgentRow("demo", "old", "main", cells={("standard", "global"): AgentCell(False)})),
+        "command": (CommandGrid, CommandRow("demo", "old", "main", cells={("standard", "global"): CommandCell(False)})),
+        "instruction": (InstructionGrid, InstructionRow("demo", "old", True, {("claude-code", "global"): InstructionCell(False, False)})),
+        "mcp": (McpGrid, McpRow("demo", "old", cells={("claude-code", "global"): McpCell(False)})),
+        "pi": (PiGrid, PiExtensionRow("demo", "git", "old", PiCell(False, False, "git"), PiCell(False, False, "git"))),
+    }
+    grid_type, row = definitions[kind]
+    grid = grid_type([row])
+
+    class OneGridApp(App):
+        def compose(self) -> ComposeResult:
+            yield grid
+
+    async with OneGridApp().run_test() as pilot:
+        await pilot.pause()
+        table = grid.query_one(DataTable)
+        original_row = next(iter(table.rows.values()))
+        before = table.get_row_at(0)
+        harness = "claude-code" if kind in ("instruction", "mcp") else "standard"
+        key = ("global", "demo") if kind == "pi" else ("global", harness, "demo")
+        row.source = "new-source"
+        grid.restore_pending({key: "link"})
+        await pilot.pause()
+        assert next(iter(table.rows.values())) is original_row
+        assert "new-source" in str(table.get_row_at(0)[-1])
+        assert table.get_row_at(0) != before
+        assert grid.pending_entries() == {key: "link"}
+        grid.clear_pending()
+        assert grid.pending_entries() == {}
+        assert next(iter(table.rows.values())) is original_row
 
 
 @pytest.mark.asyncio
