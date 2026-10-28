@@ -1,5 +1,12 @@
 # Changelog
 
+## [7.3.1](https://github.com/ajanderson1/agent-toolkit-cli/compare/v7.3.0...v7.3.1) (2026-10-28)
+
+
+### Bug Fixes
+
+* **tui:** return focus to search on Escape ([7c6c466](https://github.com/ajanderson1/agent-toolkit-cli/commit/7c6c466d57495dff02d9a919473d02b3178ead84))
+
 ## [7.3.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v7.2.0...v7.3.0) (2026-10-28)
 
 
