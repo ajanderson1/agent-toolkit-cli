@@ -2,9 +2,16 @@
 import json
 
 import pytest
+from rich.text import Text
 
+from agent_toolkit_tui.info_presentation import detail_sections, sections_markup
 from tests.test_cli.test_reground import sandbox, git, invoke
 from tests.test_cli.test_skill_catalog_acquire import subscribed
+
+
+def _render_info_lines(lines) -> str:
+    """Exercise the structured info renderer used by SkillGrid.action_info."""
+    return Text.from_markup(sections_markup(detail_sections(lines)), emoji=False).plain
 
 
 def test_catalog_rows_dedup_and_no_network_in_local_builder(tmp_path, sandbox):
@@ -26,7 +33,7 @@ def test_info_shows_current_local_revision_before_any_upstream_check(tmp_path, s
     invoke("skills", "catalog", "add", "demo")
     sha = git(sandbox / ".agent-toolkit/skills/demo", "rev-parse", "HEAD")
     from agent_toolkit_tui.asset_info import catalog_skill_info
-    info = "\n".join(catalog_skill_info("demo", scope="global", home=sandbox, project=None))
+    info = _render_info_lines(catalog_skill_info("demo", scope="global", home=sandbox, project=None))
     assert sha in info
     assert "not checked" in info.lower()
     assert not (sandbox / ".agent-toolkit/skills-update-checks.json").exists()

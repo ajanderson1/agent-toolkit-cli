@@ -251,6 +251,7 @@ class McpGrid(Vertical):
                     description=None,
                     description_location="MCP definition",
                     source=row.source,
+                    origin="scope configuration" if row.state == "unlisted" else "library manifest",
                     ref=row.pin,
                     state=row.state,
                     scope=self._scope,

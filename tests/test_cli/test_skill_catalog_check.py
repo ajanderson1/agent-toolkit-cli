@@ -2,10 +2,17 @@
 import json
 
 from click.testing import CliRunner
+from rich.text import Text
 
 from agent_toolkit_cli.cli import main
+from agent_toolkit_tui.info_presentation import detail_sections, sections_markup
 from tests.test_cli.test_reground import sandbox, git, invoke
 from tests.test_cli.test_skill_catalog_acquire import subscribed
+
+
+def _render_info_lines(lines) -> str:
+    """Exercise the structured info renderer used by SkillGrid.action_info."""
+    return Text.from_markup(sections_markup(detail_sections(lines)), emoji=False).plain
 
 
 def test_check_detects_upstream_without_mutating_backing(tmp_path, sandbox):
@@ -80,7 +87,9 @@ def test_project_check_is_private_cache_and_visible_in_info(tmp_path, sandbox, m
     assert not (project / "skills-update-checks.json").exists()
     assert (sandbox / ".agent-toolkit/skills-update-checks.json").exists()
     from agent_toolkit_tui.asset_info import catalog_skill_info
-    assert row["checked_at"] in "\n".join(catalog_skill_info("demo", scope="project", home=sandbox, project=project))
+    assert row["checked_at"] in _render_info_lines(
+        catalog_skill_info("demo", scope="project", home=sandbox, project=project)
+    )
 
 
 def test_no_subscription_check_has_no_side_effects(sandbox):

@@ -430,10 +430,11 @@ async def test_asset_info_shows_canonical_path_from_harness_column(
         from agent_toolkit_tui.screens.cell_info import CellInfoScreen
 
         assert isinstance(app.screen, CellInfoScreen)
-        body = app.screen._body_markup
+        from rich.text import Text
+        body = Text.from_markup(app.screen._body_markup).plain
         assert str(canonical) in body
         assert str(home / ".claude" / "CLAUDE.md") not in body
-        assert "State (global): canonical present" in body
+        assert "State:  canonical present" in body and "Scope:  global" in body
 
 
 @pytest.mark.asyncio
@@ -494,8 +495,10 @@ async def test_instruction_i_opens_asset_info_from_harness_column():
         await pilot.pause()
         assert isinstance(app.screen, CellInfoScreen)
         assert app.screen._title == "AGENTS.md · Instruction"
-        assert "Source: AGENTS.md" in app.screen._body_markup
-        assert "State (global): canonical present" in app.screen._body_markup
+        from rich.text import Text
+        body = Text.from_markup(app.screen._body_markup).plain
+        assert "Source: AGENTS.md" in body
+        assert "State:  canonical present" in body and "Scope:  global" in body
 
 
 # ---------------------------------------------------------------------------

@@ -267,9 +267,10 @@ async def test_pi_grid_origin_and_extension_info_use_library_copy():
         table.focus()
         await pilot.press("i")
         await pilot.pause()
-        assert "Origin: library" in app.screen._body_markup
-        assert "Store path" not in app.screen._body_markup
-        assert "store-owned" not in app.screen._body_markup
+        body = app.screen.query_one("#cell-info-body", Static).render().plain
+        assert "Origin: library" in body
+        assert "Store path" not in body
+        assert "store-owned" not in body
 
 
 @pytest.mark.asyncio

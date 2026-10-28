@@ -6,11 +6,18 @@ from dataclasses import replace
 
 import pytest
 from click.testing import CliRunner
+from rich.text import Text
 
 from agent_toolkit_cli.cli import main
+from agent_toolkit_tui.info_presentation import detail_sections, sections_markup
 from agent_toolkit_cli.skill_update_check import read_check
 from agent_toolkit_tui.asset_info import catalog_skill_info
 from tests.test_cli.test_reground import sandbox, repo, git, invoke
+
+
+def _render_info_lines(lines) -> str:
+    """Exercise the structured info renderer used by SkillGrid.action_info."""
+    return Text.from_markup(sections_markup(detail_sections(lines)), emoji=False).plain
 
 
 @pytest.mark.parametrize("named", [False, True])
@@ -78,13 +85,13 @@ def test_info_without_catalog_shows_local_revision_and_observation(tmp_path, san
     source = repo(tmp_path, {"SKILL.md": "---\nname: demo\n---\n"})
     invoke("skills", "add", source.as_uri(), "--slug", "demo", "--ref", "main")
     sha = git(sandbox / ".agent-toolkit/skills/demo", "rev-parse", "HEAD")
-    text = "\n".join(
+    text = _render_info_lines(
         catalog_skill_info("demo", scope="global", home=sandbox, project=None)
     )
     assert sha in text and "not checked" in text
     assert "Catalog:" not in text
     row = json.loads(invoke("skills", "check", "demo", "-g", "--json").stdout)[0]
-    assert row["checked_at"] in "\n".join(
+    assert row["checked_at"] in _render_info_lines(
         catalog_skill_info("demo", scope="global", home=sandbox, project=None)
     )
     invoke("skills", "update", "demo", "-g")
@@ -154,7 +161,7 @@ def test_project_private_backing_and_central_checks_without_catalog(
     assert row["status"] == "current" and row["local_changes"]
     assert row["identity"]["backing"] == str(private.resolve())
     assert (private / "private.txt").read_text() == "preserve"
-    assert " -p" in "\n".join(
+    assert " -p" in _render_info_lines(
         catalog_skill_info("demo", scope="project", home=sandbox, project=project)
     )
 
