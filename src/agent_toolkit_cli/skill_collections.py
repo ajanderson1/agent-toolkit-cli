@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -73,13 +74,17 @@ def _canonical(slug, scope, home, project):
     return canonical_skill_dir(slug, scope=scope, home=home, project=project)
 
 
-def catalog(*, scope: str, home: Path | None, project: Path | None) -> list[Collection]:
+def catalog(
+    *, scope: str, home: Path | None, project: Path | None,
+    canonical_for: Callable[[str], Path] | None = None,
+) -> list[Collection]:
+    """Discover collections, optionally reusing scan-local canonical paths."""
     lib = checked_lock(library_lock_path(home=home))
     scoped = checked_lock(lock_file_path(scope=scope, home=home, project=project))
     universe = {**lib.skills, **scoped.skills}
     groups: dict[CollectionKey, Collection] = {}
     for slug, entry in universe.items():
-        canonical = _canonical(slug, scope, home, project)
+        canonical = canonical_for(slug) if canonical_for else _canonical(slug, scope, home, project)
         if not canonical.exists():
             canonical = library_skill_path(slug, home=home)
         key = entry.source, entry.ref
@@ -167,6 +172,7 @@ def _legacy_container(path: Path, entry: LockEntry) -> bool:
 
 def derived_library_children(
     *, library: LockFile, scoped: LockFile, home: Path | None, project: Path,
+    canonical_for: Callable[[str], Path] | None = None,
 ) -> set[str]:
     """Prove project children retained from a still-registered legacy container."""
     recognized = set()
@@ -174,7 +180,7 @@ def derived_library_children(
         if parent.parent_url is not None:
             continue
         library_backing = library_skill_path(wrapper, home=home)
-        backing = _canonical(wrapper, "project", home, project)
+        backing = canonical_for(wrapper) if canonical_for else _canonical(wrapper, "project", home, project)
         if not all(_legacy_container(p, parent) for p in (library_backing, backing)):
             continue
         scoped_parent = scoped.skills.get(wrapper)
@@ -199,7 +205,7 @@ def derived_library_children(
             if len(identities) != 1:
                 continue
             target = backing / path
-            canonical = _canonical(slug, "project", home, project)
+            canonical = canonical_for(slug) if canonical_for else _canonical(slug, "project", home, project)
             if (
                 target.resolve().is_relative_to(backing.resolve())
                 and canonical.is_symlink() and canonical.resolve() == target.resolve()
@@ -218,9 +224,12 @@ def exposed(
     scope: str,
     home: Path | None,
     project: Path | None,
+    canonical: Path | None = None,
 ) -> bool:
+    """Probe current projections, optionally reusing the scan's canonical path."""
     direct = projection(child.slug, agent, scope=scope, home=home, project=project)
-    canonical = _canonical(child.slug, scope, home, project)
+    if canonical is None:
+        canonical = _canonical(child.slug, scope, home, project)
     if (
         direct.is_symlink()
         and canonical.exists()

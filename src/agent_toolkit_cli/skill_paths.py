@@ -38,6 +38,7 @@ from agent_toolkit_cli.paperclip_paths import (
     require_paperclip_company,
 )
 from agent_toolkit_cli.skill_agents import AGENTS, UnknownAgentError
+from agent_toolkit_cli.skill_lock import LockFile
 
 Scope = Literal["project", "global"]
 
@@ -108,6 +109,7 @@ def canonical_skill_dir(
     scope: Scope,
     home: Path | None = None,
     project: Path | None = None,
+    project_lock: LockFile | None = None,
 ) -> Path:
     """Return the canonical on-disk path for a skill at the given scope.
 
@@ -115,14 +117,16 @@ def canonical_skill_dir(
     The library root is determined by $AGENT_TOOLKIT_SKILLS_ROOT if set;
     otherwise honors `home` when provided, falling back to Path.home().
 
-    Project scope: <store_root>/<slug> (external store; see project_store_root).
+    Project scope: recorded private backing or central library backing.
+    ``project_lock`` may supply a validated snapshot for read-only discovery;
+    callers that omit it resolve against fresh project records.
     """
     if scope == "global":
         return library_skill_path(slug, home=home)
     if project is None:
         raise ValueError("project scope requires project")
     from agent_toolkit_cli.project_backing import resolve
-    return resolve(SKILL_BINDING, slug, project, home=home)
+    return resolve(SKILL_BINDING, slug, project, home=home, lock=project_lock)
 
 
 def lock_file_path(

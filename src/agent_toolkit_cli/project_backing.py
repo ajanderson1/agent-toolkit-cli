@@ -14,6 +14,7 @@ from pathlib import Path
 from agent_toolkit_cli._install_core import InstallError
 from agent_toolkit_cli._paths_core import AssetTypeBinding, library_root_for_asset_type
 from agent_toolkit_cli.behavior import project_backing
+from agent_toolkit_cli.skill_lock import LockFile
 
 
 def _modules(binding):
@@ -35,11 +36,20 @@ def private_candidates(binding, slug, project):
     return candidates
 
 
-def resolve(binding: AssetTypeBinding, slug: str, project: Path, *, home=None) -> Path:
+def resolve(
+    binding: AssetTypeBinding, slug: str, project: Path, *, home=None,
+    lock: LockFile | None = None,
+) -> Path:
+    """Resolve backing, optionally using a validated read-only scan snapshot.
+
+    Mutating callers omit ``lock`` so ownership checks read current records.
+    """
     from agent_toolkit_cli._paths_core import validate_asset_slug
     validate_asset_slug(slug)
     paths, locks = _modules(binding)
-    entry = locks.read_lock(project / binding.lock_filename).skills.get(slug)
+    if lock is None:
+        lock = locks.read_lock(project / binding.lock_filename)
+    entry = lock.skills.get(slug)
     central = library_root_for_asset_type(binding, home=home) / slug
     if entry is not None and entry.extras.get("projectBacking") == "central":
         return central

@@ -232,6 +232,7 @@ def build_skill_rows(
     lib_lock = read_lock(library_lock_path(home=home))
     universe = dict(lib_lock.skills)
     unlisted: set[str] = set()
+    proj_lock = None
     if scope == "project":
         proj_lock = read_lock(
             lock_file_path(scope="project", home=home, project=project)
@@ -240,12 +241,25 @@ def build_skill_rows(
             if slug not in universe:
                 unlisted.add(slug)
             universe[slug] = proj_entry
+    # These snapshots and paths live for this scan only. Apply and subsequent
+    # discovery calls still resolve against fresh records.
+    canonicals: dict[str, Path] = {}
+
+    def canonical_for(slug: str) -> Path:
+        if slug not in canonicals:
+            canonicals[slug] = canonical_skill_dir(
+                slug, scope=scope, home=home, project=project,
+                project_lock=proj_lock,
+            )
+        return canonicals[slug]
+
     from agent_toolkit_cli.skill_collections import catalog, derived_library_children, exposed
     if scope == "project":
         unlisted -= derived_library_children(
             library=lib_lock, scoped=proj_lock, home=home, project=project,
+            canonical_for=canonical_for,
         )
-    groups = catalog(scope=scope, home=home, project=project)
+    groups = catalog(scope=scope, home=home, project=project, canonical_for=canonical_for)
     membership = {}
     managed_paths = set()
     container_conflicts = {slug: g.error for g in groups for slug in g.container_conflicts}
@@ -261,9 +275,11 @@ def build_skill_rows(
             managed_paths.add(child.path.resolve())
     harnesses = interactive_agents(selection)
     rows: list[SkillRow] = []
-    repository_states = {}
+    repository_states: dict[Path, Literal["clean", "dirty"]] = {}
+    verified_parents: dict[tuple[Path, str], bool] = {}
 
-    def repository_state(backing):
+    def repository_state(backing: Path) -> Literal["clean", "dirty"]:
+        backing = backing.resolve()
         if backing not in repository_states:
             repository_states[backing] = (
                 "dirty" if skill_git.status(backing, env=None)
@@ -271,12 +287,23 @@ def build_skill_rows(
             )
         return repository_states[backing]
 
+    def child_state(backing: Path, subpath: str) -> Literal["clean", "dirty"]:
+        # A clean whole checkout proves every child clean. Dirty checkouts must
+        # retain path-local checks so root/sibling changes do not bleed through.
+        if repository_state(backing) == "clean":
+            return "clean"
+        return "dirty" if skill_git.status_path(backing, subpath, env=None) == skill_git.GitWorkingTreeStatus.DIRTY else "clean"
+
+    def parent_matches(backing: Path, url: str) -> bool:
+        key = (backing.resolve(), url)
+        if key not in verified_parents:
+            verified_parents[key] = skill_git.remote_matches(backing, url, None)
+        return verified_parents[key]
+
     for slug in sorted(universe):
         repo_state = None
         entry = universe[slug]
-        canonical = canonical_skill_dir(
-            slug, scope=scope, home=home, project=project,
-        )
+        canonical = canonical_for(slug)
         if slug in unlisted:
             # Project-lock-only: functional install, library no longer tracks
             # it. Supersedes the git working-tree badge, like `library` does.
@@ -290,7 +317,7 @@ def build_skill_rows(
             backing = membership[slug][0].backing
             repo_state = repository_state(backing)
             subpath = str(membership[slug][1].path.relative_to(backing))
-            state = "dirty" if skill_git.status_path(backing, subpath, env=None) == skill_git.GitWorkingTreeStatus.DIRTY else "clean"
+            state = child_state(backing, subpath)
         elif not canonical.exists():
             # Project scope: slug is in the library but not yet installed here.
             # Global scope: library entry recorded but directory was deleted.
@@ -307,9 +334,7 @@ def build_skill_rows(
             actual_parent = canonical.resolve()
             for _ in Path(entry.skill_path or ".").parts:
                 actual_parent = actual_parent.parent
-            if skill_git.is_git_repo(actual_parent) and skill_git.remote_matches(
-                actual_parent, entry.parent_url, None,
-            ):
+            if skill_git.is_git_repo(actual_parent) and parent_matches(actual_parent, entry.parent_url):
                 parent_dir = actual_parent
             if not skill_git.is_git_repo(parent_dir):
                 # Parent clone missing — user `rm -rf`'d it, or
@@ -317,20 +342,12 @@ def build_skill_rows(
                 state = "copy"
             else:
                 repo_state = repository_state(parent_dir)
-                wt = skill_git.status_path(parent_dir, entry.skill_path or ".", env=None)
-                state = (
-                    "dirty" if wt == skill_git.GitWorkingTreeStatus.DIRTY
-                    else "clean"
-                )
+                state = child_state(parent_dir, entry.skill_path or ".")
         elif not skill_git.is_git_repo(canonical):
             # Plain-file install (e.g. `npx skills add --copy`).
             state = "copy"
         else:
-            wt = skill_git.status(canonical, env=None)
-            state = (
-                "dirty" if wt == skill_git.GitWorkingTreeStatus.DIRTY
-                else "clean"
-            )
+            state = repository_state(canonical)
         payload = membership[slug][1].path if slug in membership and membership[slug][0].backing is not None else canonical
         missing_payload = (
             slug not in container_conflicts
@@ -344,6 +361,7 @@ def build_skill_rows(
         for agent in harnesses:
             cells[(agent, scope)] = _cell_for(
                 slug, agent, scope=scope, home=home, project=project,
+                canonical=canonical,
             )
         if slug in membership:
             group, child = membership[slug]
@@ -351,12 +369,14 @@ def build_skill_rows(
                 cell = cells[(agent, scope)]
                 if cell.available and not cell.drift and not cell.stray and exposed(
                     child, group, agent, scope=scope, home=home, project=project,
+                    canonical=canonical,
                 ):
                     cells[(agent, scope)] = replace(cell, linked=True)
                 elif cell.available and not cell.linked and child.entry.skill_path != ".":
                     for root_child in group.children.values():
                         if root_child.entry.skill_path == "." and exposed(
                             root_child, group, agent, scope=scope, home=home, project=project,
+                            canonical=canonical_for(root_child.slug),
                         ):
                             cells[(agent, scope)] = replace(cell, exposure_reason="Root projection is active; independent nested isolation is unproven for this target. Apply refuses root-on/nested-off before writes.")
         if slug in container_conflicts:
