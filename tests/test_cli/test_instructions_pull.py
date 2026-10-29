@@ -113,7 +113,9 @@ def test_canonical_conflicts_never_replaced(deployment, kind):
 
 
 @pytest.mark.parametrize('body', [b'', b' \n', b'\xff', b'bad\0data', b'\x1b[31m',
-                                  '\u009b31m'.encode(), b'x' * 262145])
+                                  '\u009b31m'.encode(), b'x' * 262145],
+                         ids=['empty', 'whitespace', 'invalid-utf8', 'nul',
+                              'escape', 'c1-control', 'oversized'])
 def test_invalid_blob_leaves_existing_content_unchanged(deployment, body):
     home, repo, canonical, _, git = deployment
     canonical.parent.mkdir()

@@ -45,10 +45,11 @@ toolkit never rewrites it to make removal possible.
 Legacy `instructions-lock.json` / `instructions.lock` files are ignored and left
 unchanged, even if malformed. No replacement registry is created.
 
-## Latest host content (source checkout; unreleased)
+## Latest host content
 
 `pull` and `restore` explicitly author the **global canonical file** on macOS/Linux.
-They are separate from pointer enablement and are not available in released 7.3.1.
+They are separate from pointer enablement. Older clients such as 7.3.1 need a
+Toolkit package update before using these commands.
 
 ```bash
 # Preview this host's latest instructions on main (the default).
