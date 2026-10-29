@@ -1,4 +1,430 @@
 {
   "version": 1,
-  "skills": {}
+  "skills": {
+    "addyosmani-api-and-interface-design": {
+      "source": "addyosmani/agent-skills",
+      "sourceType": "github",
+      "ref": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+      "skillPath": "skills/api-and-interface-design",
+      "upstreamSha": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+      "parentUrl": "https://github.com/addyosmani/agent-skills",
+      "readOnly": true,
+      "catalog": {
+        "url": "ssh://gitlab@broadpeak.tailbf2225.ts.net:2424/ajanderson/skill-catalog.git",
+        "key": "addyosmani-api-and-interface-design",
+        "source": "https://github.com/addyosmani/agent-skills",
+        "path": "skills/api-and-interface-design",
+        "ref": "aeac41d4d005999432bb7312f7ff06383a91d59d"
+      },
+      "projectBacking": "central"
+    },
+    "addyosmani-browser-testing-with-devtools": {
+      "source": "addyosmani/agent-skills",
+      "sourceType": "github",
+      "ref": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+      "skillPath": "skills/browser-testing-with-devtools",
+      "upstreamSha": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+      "parentUrl": "https://github.com/addyosmani/agent-skills",
+      "readOnly": true,
+      "catalog": {
+        "url": "ssh://gitlab@broadpeak.tailbf2225.ts.net:2424/ajanderson/skill-catalog.git",
+        "key": "addyosmani-browser-testing-with-devtools",
+        "source": "https://github.com/addyosmani/agent-skills",
+        "path": "skills/browser-testing-with-devtools",
+        "ref": "aeac41d4d005999432bb7312f7ff06383a91d59d"
+      },
+      "projectBacking": "central"
+    },
+    "addyosmani-ci-cd-and-automation": {
+      "source": "addyosmani/agent-skills",
+      "sourceType": "github",
+      "ref": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+      "skillPath": "skills/ci-cd-and-automation",
+      "upstreamSha": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+      "parentUrl": "https://github.com/addyosmani/agent-skills",
+      "readOnly": true,
+      "catalog": {
+        "url": "ssh://gitlab@broadpeak.tailbf2225.ts.net:2424/ajanderson/skill-catalog.git",
+        "key": "addyosmani-ci-cd-and-automation",
+        "source": "https://github.com/addyosmani/agent-skills",
+        "path": "skills/ci-cd-and-automation",
+        "ref": "aeac41d4d005999432bb7312f7ff06383a91d59d"
+      },
+      "projectBacking": "central"
+    },
+    "addyosmani-code-review-and-quality": {
+      "source": "addyosmani/agent-skills",
+      "sourceType": "github",
+      "ref": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+      "skillPath": "skills/code-review-and-quality",
+      "upstreamSha": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+      "parentUrl": "https://github.com/addyosmani/agent-skills",
+      "readOnly": true,
+      "catalog": {
+        "url": "ssh://gitlab@broadpeak.tailbf2225.ts.net:2424/ajanderson/skill-catalog.git",
+        "key": "addyosmani-code-review-and-quality",
+        "source": "https://github.com/addyosmani/agent-skills",
+        "path": "skills/code-review-and-quality",
+        "ref": "aeac41d4d005999432bb7312f7ff06383a91d59d"
+      },
+      "projectBacking": "central"
+    },
+    "addyosmani-code-simplification": {
+      "source": "addyosmani/agent-skills",
+      "sourceType": "github",
+      "ref": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+      "skillPath": "skills/code-simplification",
+      "upstreamSha": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+      "parentUrl": "https://github.com/addyosmani/agent-skills",
+      "readOnly": true,
+      "catalog": {
+        "url": "ssh://gitlab@broadpeak.tailbf2225.ts.net:2424/ajanderson/skill-catalog.git",
+        "key": "addyosmani-code-simplification",
+        "source": "https://github.com/addyosmani/agent-skills",
+        "path": "skills/code-simplification",
+        "ref": "aeac41d4d005999432bb7312f7ff06383a91d59d"
+      },
+      "projectBacking": "central"
+    },
+    "addyosmani-constraint-driven-development": {
+      "source": "addyosmani/agent-skills",
+      "sourceType": "github",
+      "ref": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+      "skillPath": "skills/constraint-driven-development",
+      "upstreamSha": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+      "parentUrl": "https://github.com/addyosmani/agent-skills",
+      "readOnly": true,
+      "catalog": {
+        "url": "ssh://gitlab@broadpeak.tailbf2225.ts.net:2424/ajanderson/skill-catalog.git",
+        "key": "addyosmani-constraint-driven-development",
+        "source": "https://github.com/addyosmani/agent-skills",
+        "path": "skills/constraint-driven-development",
+        "ref": "aeac41d4d005999432bb7312f7ff06383a91d59d"
+      },
+      "projectBacking": "central"
+    },
+    "addyosmani-context-engineering": {
+      "source": "addyosmani/agent-skills",
+      "sourceType": "github",
+      "ref": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+      "skillPath": "skills/context-engineering",
+      "upstreamSha": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+      "parentUrl": "https://github.com/addyosmani/agent-skills",
+      "readOnly": true,
+      "catalog": {
+        "url": "ssh://gitlab@broadpeak.tailbf2225.ts.net:2424/ajanderson/skill-catalog.git",
+        "key": "addyosmani-context-engineering",
+        "source": "https://github.com/addyosmani/agent-skills",
+        "path": "skills/context-engineering",
+        "ref": "aeac41d4d005999432bb7312f7ff06383a91d59d"
+      },
+      "projectBacking": "central"
+    },
+    "addyosmani-debugging-and-error-recovery": {
+      "source": "addyosmani/agent-skills",
+      "sourceType": "github",
+      "ref": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+      "skillPath": "skills/debugging-and-error-recovery",
+      "upstreamSha": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+      "parentUrl": "https://github.com/addyosmani/agent-skills",
+      "readOnly": true,
+      "catalog": {
+        "url": "ssh://gitlab@broadpeak.tailbf2225.ts.net:2424/ajanderson/skill-catalog.git",
+        "key": "addyosmani-debugging-and-error-recovery",
+        "source": "https://github.com/addyosmani/agent-skills",
+        "path": "skills/debugging-and-error-recovery",
+        "ref": "aeac41d4d005999432bb7312f7ff06383a91d59d"
+      },
+      "projectBacking": "central"
+    },
+    "addyosmani-deprecation-and-migration": {
+      "source": "addyosmani/agent-skills",
+      "sourceType": "github",
+      "ref": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+      "skillPath": "skills/deprecation-and-migration",
+      "upstreamSha": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+      "parentUrl": "https://github.com/addyosmani/agent-skills",
+      "readOnly": true,
+      "catalog": {
+        "url": "ssh://gitlab@broadpeak.tailbf2225.ts.net:2424/ajanderson/skill-catalog.git",
+        "key": "addyosmani-deprecation-and-migration",
+        "source": "https://github.com/addyosmani/agent-skills",
+        "path": "skills/deprecation-and-migration",
+        "ref": "aeac41d4d005999432bb7312f7ff06383a91d59d"
+      },
+      "projectBacking": "central"
+    },
+    "addyosmani-documentation-and-adrs": {
+      "source": "addyosmani/agent-skills",
+      "sourceType": "github",
+      "ref": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+      "skillPath": "skills/documentation-and-adrs",
+      "upstreamSha": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+      "parentUrl": "https://github.com/addyosmani/agent-skills",
+      "readOnly": true,
+      "catalog": {
+        "url": "ssh://gitlab@broadpeak.tailbf2225.ts.net:2424/ajanderson/skill-catalog.git",
+        "key": "addyosmani-documentation-and-adrs",
+        "source": "https://github.com/addyosmani/agent-skills",
+        "path": "skills/documentation-and-adrs",
+        "ref": "aeac41d4d005999432bb7312f7ff06383a91d59d"
+      },
+      "projectBacking": "central"
+    },
+    "addyosmani-doubt-driven-development": {
+      "source": "addyosmani/agent-skills",
+      "sourceType": "github",
+      "ref": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+      "skillPath": "skills/doubt-driven-development",
+      "upstreamSha": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+      "parentUrl": "https://github.com/addyosmani/agent-skills",
+      "readOnly": true,
+      "catalog": {
+        "url": "ssh://gitlab@broadpeak.tailbf2225.ts.net:2424/ajanderson/skill-catalog.git",
+        "key": "addyosmani-doubt-driven-development",
+        "source": "https://github.com/addyosmani/agent-skills",
+        "path": "skills/doubt-driven-development",
+        "ref": "aeac41d4d005999432bb7312f7ff06383a91d59d"
+      },
+      "projectBacking": "central"
+    },
+    "addyosmani-frontend-ui-engineering": {
+      "source": "addyosmani/agent-skills",
+      "sourceType": "github",
+      "ref": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+      "skillPath": "skills/frontend-ui-engineering",
+      "upstreamSha": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+      "parentUrl": "https://github.com/addyosmani/agent-skills",
+      "readOnly": true,
+      "catalog": {
+        "url": "ssh://gitlab@broadpeak.tailbf2225.ts.net:2424/ajanderson/skill-catalog.git",
+        "key": "addyosmani-frontend-ui-engineering",
+        "source": "https://github.com/addyosmani/agent-skills",
+        "path": "skills/frontend-ui-engineering",
+        "ref": "aeac41d4d005999432bb7312f7ff06383a91d59d"
+      },
+      "projectBacking": "central"
+    },
+    "addyosmani-git-workflow-and-versioning": {
+      "source": "addyosmani/agent-skills",
+      "sourceType": "github",
+      "ref": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+      "skillPath": "skills/git-workflow-and-versioning",
+      "upstreamSha": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+      "parentUrl": "https://github.com/addyosmani/agent-skills",
+      "readOnly": true,
+      "catalog": {
+        "url": "ssh://gitlab@broadpeak.tailbf2225.ts.net:2424/ajanderson/skill-catalog.git",
+        "key": "addyosmani-git-workflow-and-versioning",
+        "source": "https://github.com/addyosmani/agent-skills",
+        "path": "skills/git-workflow-and-versioning",
+        "ref": "aeac41d4d005999432bb7312f7ff06383a91d59d"
+      },
+      "projectBacking": "central"
+    },
+    "addyosmani-idea-refine": {
+      "source": "addyosmani/agent-skills",
+      "sourceType": "github",
+      "ref": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+      "skillPath": "skills/idea-refine",
+      "upstreamSha": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+      "parentUrl": "https://github.com/addyosmani/agent-skills",
+      "readOnly": true,
+      "catalog": {
+        "url": "ssh://gitlab@broadpeak.tailbf2225.ts.net:2424/ajanderson/skill-catalog.git",
+        "key": "addyosmani-idea-refine",
+        "source": "https://github.com/addyosmani/agent-skills",
+        "path": "skills/idea-refine",
+        "ref": "aeac41d4d005999432bb7312f7ff06383a91d59d"
+      },
+      "projectBacking": "central"
+    },
+    "addyosmani-incremental-implementation": {
+      "source": "addyosmani/agent-skills",
+      "sourceType": "github",
+      "ref": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+      "skillPath": "skills/incremental-implementation",
+      "upstreamSha": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+      "parentUrl": "https://github.com/addyosmani/agent-skills",
+      "readOnly": true,
+      "catalog": {
+        "url": "ssh://gitlab@broadpeak.tailbf2225.ts.net:2424/ajanderson/skill-catalog.git",
+        "key": "addyosmani-incremental-implementation",
+        "source": "https://github.com/addyosmani/agent-skills",
+        "path": "skills/incremental-implementation",
+        "ref": "aeac41d4d005999432bb7312f7ff06383a91d59d"
+      },
+      "projectBacking": "central"
+    },
+    "addyosmani-interview-me": {
+      "source": "addyosmani/agent-skills",
+      "sourceType": "github",
+      "ref": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+      "skillPath": "skills/interview-me",
+      "upstreamSha": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+      "parentUrl": "https://github.com/addyosmani/agent-skills",
+      "readOnly": true,
+      "catalog": {
+        "url": "ssh://gitlab@broadpeak.tailbf2225.ts.net:2424/ajanderson/skill-catalog.git",
+        "key": "addyosmani-interview-me",
+        "source": "https://github.com/addyosmani/agent-skills",
+        "path": "skills/interview-me",
+        "ref": "aeac41d4d005999432bb7312f7ff06383a91d59d"
+      },
+      "projectBacking": "central"
+    },
+    "addyosmani-observability-and-instrumentation": {
+      "source": "addyosmani/agent-skills",
+      "sourceType": "github",
+      "ref": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+      "skillPath": "skills/observability-and-instrumentation",
+      "upstreamSha": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+      "parentUrl": "https://github.com/addyosmani/agent-skills",
+      "readOnly": true,
+      "catalog": {
+        "url": "ssh://gitlab@broadpeak.tailbf2225.ts.net:2424/ajanderson/skill-catalog.git",
+        "key": "addyosmani-observability-and-instrumentation",
+        "source": "https://github.com/addyosmani/agent-skills",
+        "path": "skills/observability-and-instrumentation",
+        "ref": "aeac41d4d005999432bb7312f7ff06383a91d59d"
+      },
+      "projectBacking": "central"
+    },
+    "addyosmani-performance-optimization": {
+      "source": "addyosmani/agent-skills",
+      "sourceType": "github",
+      "ref": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+      "skillPath": "skills/performance-optimization",
+      "upstreamSha": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+      "parentUrl": "https://github.com/addyosmani/agent-skills",
+      "readOnly": true,
+      "catalog": {
+        "url": "ssh://gitlab@broadpeak.tailbf2225.ts.net:2424/ajanderson/skill-catalog.git",
+        "key": "addyosmani-performance-optimization",
+        "source": "https://github.com/addyosmani/agent-skills",
+        "path": "skills/performance-optimization",
+        "ref": "aeac41d4d005999432bb7312f7ff06383a91d59d"
+      },
+      "projectBacking": "central"
+    },
+    "addyosmani-planning-and-task-breakdown": {
+      "source": "addyosmani/agent-skills",
+      "sourceType": "github",
+      "ref": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+      "skillPath": "skills/planning-and-task-breakdown",
+      "upstreamSha": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+      "parentUrl": "https://github.com/addyosmani/agent-skills",
+      "readOnly": true,
+      "catalog": {
+        "url": "ssh://gitlab@broadpeak.tailbf2225.ts.net:2424/ajanderson/skill-catalog.git",
+        "key": "addyosmani-planning-and-task-breakdown",
+        "source": "https://github.com/addyosmani/agent-skills",
+        "path": "skills/planning-and-task-breakdown",
+        "ref": "aeac41d4d005999432bb7312f7ff06383a91d59d"
+      },
+      "projectBacking": "central"
+    },
+    "addyosmani-security-and-hardening": {
+      "source": "addyosmani/agent-skills",
+      "sourceType": "github",
+      "ref": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+      "skillPath": "skills/security-and-hardening",
+      "upstreamSha": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+      "parentUrl": "https://github.com/addyosmani/agent-skills",
+      "readOnly": true,
+      "catalog": {
+        "url": "ssh://gitlab@broadpeak.tailbf2225.ts.net:2424/ajanderson/skill-catalog.git",
+        "key": "addyosmani-security-and-hardening",
+        "source": "https://github.com/addyosmani/agent-skills",
+        "path": "skills/security-and-hardening",
+        "ref": "aeac41d4d005999432bb7312f7ff06383a91d59d"
+      },
+      "projectBacking": "central"
+    },
+    "addyosmani-shipping-and-launch": {
+      "source": "addyosmani/agent-skills",
+      "sourceType": "github",
+      "ref": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+      "skillPath": "skills/shipping-and-launch",
+      "upstreamSha": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+      "parentUrl": "https://github.com/addyosmani/agent-skills",
+      "readOnly": true,
+      "catalog": {
+        "url": "ssh://gitlab@broadpeak.tailbf2225.ts.net:2424/ajanderson/skill-catalog.git",
+        "key": "addyosmani-shipping-and-launch",
+        "source": "https://github.com/addyosmani/agent-skills",
+        "path": "skills/shipping-and-launch",
+        "ref": "aeac41d4d005999432bb7312f7ff06383a91d59d"
+      },
+      "projectBacking": "central"
+    },
+    "addyosmani-source-driven-development": {
+      "source": "addyosmani/agent-skills",
+      "sourceType": "github",
+      "ref": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+      "skillPath": "skills/source-driven-development",
+      "upstreamSha": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+      "parentUrl": "https://github.com/addyosmani/agent-skills",
+      "readOnly": true,
+      "catalog": {
+        "url": "ssh://gitlab@broadpeak.tailbf2225.ts.net:2424/ajanderson/skill-catalog.git",
+        "key": "addyosmani-source-driven-development",
+        "source": "https://github.com/addyosmani/agent-skills",
+        "path": "skills/source-driven-development",
+        "ref": "aeac41d4d005999432bb7312f7ff06383a91d59d"
+      },
+      "projectBacking": "central"
+    },
+    "addyosmani-spec-driven-development": {
+      "source": "addyosmani/agent-skills",
+      "sourceType": "github",
+      "ref": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+      "skillPath": "skills/spec-driven-development",
+      "upstreamSha": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+      "parentUrl": "https://github.com/addyosmani/agent-skills",
+      "readOnly": true,
+      "catalog": {
+        "url": "ssh://gitlab@broadpeak.tailbf2225.ts.net:2424/ajanderson/skill-catalog.git",
+        "key": "addyosmani-spec-driven-development",
+        "source": "https://github.com/addyosmani/agent-skills",
+        "path": "skills/spec-driven-development",
+        "ref": "aeac41d4d005999432bb7312f7ff06383a91d59d"
+      },
+      "projectBacking": "central"
+    },
+    "addyosmani-test-driven-development": {
+      "source": "addyosmani/agent-skills",
+      "sourceType": "github",
+      "ref": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+      "skillPath": "skills/test-driven-development",
+      "upstreamSha": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+      "parentUrl": "https://github.com/addyosmani/agent-skills",
+      "readOnly": true,
+      "catalog": {
+        "url": "ssh://gitlab@broadpeak.tailbf2225.ts.net:2424/ajanderson/skill-catalog.git",
+        "key": "addyosmani-test-driven-development",
+        "source": "https://github.com/addyosmani/agent-skills",
+        "path": "skills/test-driven-development",
+        "ref": "aeac41d4d005999432bb7312f7ff06383a91d59d"
+      },
+      "projectBacking": "central"
+    },
+    "addyosmani-using-agent-skills": {
+      "source": "addyosmani/agent-skills",
+      "sourceType": "github",
+      "ref": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+      "skillPath": "skills/using-agent-skills",
+      "upstreamSha": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+      "parentUrl": "https://github.com/addyosmani/agent-skills",
+      "readOnly": true,
+      "catalog": {
+        "url": "ssh://gitlab@broadpeak.tailbf2225.ts.net:2424/ajanderson/skill-catalog.git",
+        "key": "addyosmani-using-agent-skills",
+        "source": "https://github.com/addyosmani/agent-skills",
+        "path": "skills/using-agent-skills",
+        "ref": "aeac41d4d005999432bb7312f7ff06383a91d59d"
+      },
+      "projectBacking": "central"
+    }
+  }
 }
