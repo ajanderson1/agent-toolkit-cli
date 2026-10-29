@@ -1151,7 +1151,10 @@ class TUIApp(App):
             grid.restore_pending(native_pending, local_targets=targets, npm_snapshots=npm_snapshots)
         elif grid is not None:
             grid.clear_pending()
-        self._refresh_active_view()
+        # Catalogue-aware kinds were just read above. Only the other kinds
+        # still need discovery; scanning the active kind again doubles I/O.
+        if self._active_asset_type in ("instruction", "mcp"):
+            self._refresh_active_view()
         self._refresh_proj_path()
         self._refresh_pending_label()
         self._refresh_content_header()
