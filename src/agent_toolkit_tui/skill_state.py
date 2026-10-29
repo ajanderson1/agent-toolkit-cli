@@ -303,10 +303,14 @@ def build_skill_rows(
                 owner, repo, ref=entry.ref, env=None,
                 root=project_parents_root(project) if scope == "project" else None,
             )
-            if slug in membership and canonical.exists():
-                parent_dir = canonical.resolve()
-                for _ in Path(entry.skill_path).parts if entry.skill_path != '.' else ():
-                    parent_dir = parent_dir.parent
+            # Central project backing can live outside the legacy project cache.
+            actual_parent = canonical.resolve()
+            for _ in Path(entry.skill_path or ".").parts:
+                actual_parent = actual_parent.parent
+            if skill_git.is_git_repo(actual_parent) and skill_git.remote_matches(
+                actual_parent, entry.parent_url, None,
+            ):
+                parent_dir = actual_parent
             if not skill_git.is_git_repo(parent_dir):
                 # Parent clone missing — user `rm -rf`'d it, or
                 # materialised: copy with no parent available.

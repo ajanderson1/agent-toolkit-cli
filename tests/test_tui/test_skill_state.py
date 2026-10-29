@@ -501,6 +501,43 @@ def test_build_rows_monorepo_clean_when_parent_clean(tmp_path: Path, monkeypatch
     assert row.state == "clean", row
 
 
+@pytest.mark.parametrize("dirty", [False, True])
+@pytest.mark.parametrize("matching_origin", [False, True])
+def test_project_monorepo_state_uses_central_backing(
+    tmp_path: Path, monkeypatch, dirty, matching_origin,
+):
+    from dataclasses import replace
+
+    from agent_toolkit_cli.skill_lock import read_lock, write_lock
+    from agent_toolkit_cli.skill_paths import library_lock_path, project_parents_root
+
+    parent_clone = _install_monorepo_skill(tmp_path, monkeypatch)
+    project = tmp_path / "project"
+    project.mkdir()
+    lock = read_lock(library_lock_path())
+    lock.skills = {
+        "mkdocs": replace(lock.skills["mkdocs"], extras={"projectBacking": "central"})
+    }
+    write_lock(project / "skills-lock.json", lock)
+    bundle = project / ".agents" / "skills"
+    bundle.mkdir(parents=True)
+    bundle.joinpath("mkdocs").symlink_to(tmp_path / "library" / "skills" / "mkdocs")
+    if dirty:
+        (parent_clone / "mkdocs" / "SKILL.md").write_text("local edit\n")
+    if not matching_origin:
+        subprocess.run(
+            ["git", "remote", "set-url", "origin", "https://example.invalid/other/repo"],
+            cwd=parent_clone, check=True, env=scrub_git_env(),
+        )
+    assert not project_parents_root(project).exists()
+
+    rows = build_skill_rows(scope="project", home=tmp_path, project=project)
+    row = next(r for r in rows if r.slug == "mkdocs")
+    expected = ("dirty" if dirty else "clean") if matching_origin else "copy"
+    assert row.state == expected, row
+    assert row.cells[("standard", "project")].linked
+
+
 def test_build_rows_monorepo_dirty_when_parent_has_uncommitted_change(
     tmp_path: Path, monkeypatch,
 ):
