@@ -1199,6 +1199,45 @@ class TUIApp(App):
         return None
 
     def action_apply(self) -> None:
+        from agent_toolkit_cli.pi_npm import settings_path as pi_settings_path
+        from agent_toolkit_tui.screens.pi_project_blocks import PiProjectBlocksScreen
+
+        if isinstance(self.screen, PiProjectBlocksScreen):
+            return
+        try:
+            grid = self.query_one("#pi-grid", PiGrid)
+        except NoMatches:
+            grid = None
+        blocks = grid.pending_project_blocks() if grid is not None else ()
+        if not blocks:
+            self._apply_pending_edits()
+            return
+
+        # Consent covers this exact batch and target, never edits made while
+        # the modal is open. Native Apply still enforces settings freshness.
+        pending = self._get_all_pending_edits()
+        snapshots = grid.pending_npm_snapshots()
+        project = Path.cwd()
+
+        def on_review(confirmed: bool) -> None:
+            if not confirmed:
+                return
+            if (pending != self._get_all_pending_edits()
+                    or snapshots != grid.pending_npm_snapshots()
+                    or project != Path.cwd()):
+                self.notify("Pending changes or project changed; press Ctrl+S to review again.", severity="warning")
+                return
+            self._apply_pending_edits()
+
+        self.push_screen(PiProjectBlocksScreen(
+            packages=blocks, project=project,
+            settings=pi_settings_path(scope="project", home=Path.home(), project=project),
+            pending_count=len(pending),
+            asset_types=tuple(sorted(_asset_type_label(kind, plural=True)
+                                     for kind in self._get_pending_asset_types())),
+        ), on_review)
+
+    def _apply_pending_edits(self) -> None:
         pending_types = self._get_pending_asset_types()
         if not pending_types:
             # Preserve dispatch when nothing is pending (tests / no-op)
@@ -2096,7 +2135,12 @@ class TUIApp(App):
             footer = self.query_one("#footer-pending", Static)
             if "apply failed" in str(footer.render()):
                 return
-            footer.update("")
+            grid = self.query_one("#pi-grid", PiGrid)
+            blocks = grid.pending_project_blocks()
+            footer.update(Text(
+                f"{len(blocks)} Pi project block(s) pending — Ctrl+S to review; Ctrl+Z to discard"
+                if blocks else ""
+            ))
         except Exception:
             pass
 

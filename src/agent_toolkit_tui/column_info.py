@@ -102,8 +102,11 @@ _HARNESS_SENTENCES: dict[tuple[str, str], str] = {
         "Loose local extensions are enabled by native discovery unless settings exclude them; "
         "project selection includes inherited global resources. ◐ means mixed entrypoints. "
         "npm packages use native resource filters with project inheritance; declarations and files are retained. "
-        "R resets the selected npm scope's extension policy. Library rows show symlink connections (linked). "
-        "Space queues Enable/Disable; Ctrl+S applies it without deleting source files."
+        "Project npm cells label inherit versus explicit on/off/block. "
+        "Space queues explicit Enable/Disable, not inheritance. Ctrl+S reviews persistent npm project blocks "
+        "before applying all kinds/scopes, without deleting source files. "
+        "R resets the selected npm scope's extension policy; for a global package's project override, "
+        "this restores inheritance rather than forcing on. Library rows show symlink connections (linked)."
     ),
 }
 
@@ -284,11 +287,15 @@ def _harness_info(asset_type: str, harness: str, context: dict[str, object]) -> 
                     "Library rows show symlink connections as linked.",
                     "npm packages use native resource filters; declarations and package files are retained.",
                 )),
-                InfoSection("Key meanings", ("◐ means a directory or package has mixed extension entrypoints.",)),
+                InfoSection("Key meanings", (
+                    "◐ means a directory or package has mixed extension entrypoints.",
+                    "Project npm cells: inherit follows global; on/off/block is explicit policy; policy marks mixed overrides.",
+                    "A project block persists even while the package is globally enabled.",
+                )),
                 InfoSection("Available actions", (
-                    "Space queues Enable/Disable for the selected scope.",
-                    "Ctrl+S applies the queued selection without deleting source files.",
-                    "R resets the selected npm scope's extension policy.",
+                    "Space queues explicit Enable/Disable for the selected scope, not inheritance.",
+                    "Ctrl+S reviews persistent npm project blocks before applying ALL kinds/scopes; Cancel keeps drafts.",
+                    "R resets the npm filter; a global package's project override returns to inheritance, not force-on.",
                 ), "commands"),
             ),
         )
