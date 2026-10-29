@@ -1,6 +1,5 @@
 pre-push:
-  parallel: true
   commands:
-    pytest:
-      run: PATH="/opt/homebrew/bin:~/.cargo/bin:~/.local/bin:$PATH" uv run pytest -q
-      stage_fixed: false
+    ci:
+      use_stdin: true
+      run: PATH="/opt/homebrew/bin:$HOME/.cargo/bin:$HOME/.local/bin:$PATH" python3 scripts/local_ci.py --pre-push

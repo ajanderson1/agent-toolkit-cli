@@ -36,7 +36,12 @@ Record the source commit and wheel hash: the version string alone is insufficien
 - test: `uv run pytest -q`; bootstrap: `uv sync --all-extras`.
 - lint/format/typecheck: no dedicated project script configured.
 - deploy: n/a for local CLI/TUI; GitHub workflows own release assets/docs publication.
-- `lefthook.yml` runs the full pytest suite on **pre-push**.
+- Run `make hooks` once per clone. The fail-closed **pre-push** gate checks every
+  outgoing ref in Linux using `scripts/local_ci.py`: locked sync, full pytest,
+  strict docs and wheel/sdist builds. Docker is required; use `make ci` for
+  committed HEAD. Do not bypass hooks or push first to discover CI failures.
+- GitHub test uses the same gate. Remote publishing/permissions and bot commits
+  remain remote checks, not guarantees a local run can make.
 
 ## Code map
 

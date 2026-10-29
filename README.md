@@ -251,7 +251,8 @@ and updates remain CLI operations; a package-update notification does not run th
 ```bash
 git clone https://github.com/ajanderson1/agent-toolkit-cli
 cd agent-toolkit-cli
-uv sync --all-extras
+uv sync --locked --all-extras
+make hooks
 uv run atc --help
 uv run att
 uv run pytest -q
@@ -261,8 +262,27 @@ make docs-build
 
 `uv run` uses this editable checkout, not the global tool; update development
 sources through their normal Git workflow and `uv sync`, not package self-update.
-`uv build` builds distributions. The mandatory pre-push hook runs the full pytest
-suite. [Open an issue](https://github.com/ajanderson1/agent-toolkit-cli/issues) for defects.
+`uv build` builds distributions. Run `make hooks` once per clone to enable the
+mandatory, fail-closed pre-push gate. Docker must be running. Before a push it
+checks **each outgoing commit/ref**, not dirty files or just the checked-out
+branch, in the same Linux toolchain used by GitHub's test workflow (native CPU architecture):
+locked dependency sync, full pytest (including the pinned native Pi oracle),
+strict documentation build, and wheel/sdist build. A failed check, missing Docker,
+or missing Python blocks the push. Deletion-only pushes need no checks.
+
+Use `make ci` to check committed HEAD without pushing, or
+`python3 scripts/local_ci.py REVISION` for another commit/tag. Working-tree edits
+must be committed first; they cannot accidentally make an older broken commit
+look green. The Lefthook configuration delegates to the same gate when invoked by Git;
+a manual pre-push invocation needs Git's ref input, so use `make ci` instead. Do not bypass hooks with
+`git push --no-verify`. New clones must enable hooks; Git does not distribute
+local hook configuration automatically.
+
+GitHub keeps its verification and owns publishing, Pages deployment, release
+permissions and prior-CI checks. Those remote operations, bot-created commits,
+and infrastructure/network failures cannot be guaranteed by a local preflight;
+failure notifications are not suppressed.
+[Open an issue](https://github.com/ajanderson1/agent-toolkit-cli/issues) for defects.
 
 ### Architecture
 

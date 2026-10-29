@@ -1,0 +1,6 @@
+#!/bin/sh
+# Deliberately fail closed: no optional hook-manager binary or bypass variable.
+set -eu
+export PATH="/opt/homebrew/bin:$HOME/.cargo/bin:$HOME/.local/bin:$PATH"
+root="$(git rev-parse --show-toplevel)"
+exec python3 "$root/scripts/local_ci.py" --pre-push
