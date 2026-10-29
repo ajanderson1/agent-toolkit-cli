@@ -34,6 +34,8 @@ def git(root, *args):
 
 @pytest.fixture
 def legacy(tmp_path, monkeypatch):
+    # Isolate project discovery too; HOME alone does not hide checkout locks.
+    monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("AGENT_TOOLKIT_SKILLS_ROOT", str(tmp_path / "library/skills"))
     home = tmp_path / "home"
     home.mkdir()
@@ -81,6 +83,11 @@ def apply(selected, agent="standard"):
     apply_selection(
         group(), {agent: set(selected)}, scope="global", home=Path.home(), project=None
     )
+
+
+def test_legacy_fixture_uses_disposable_project_directory(legacy, tmp_path):
+    # TUIApp also inspects project locks, independently of the fake HOME/library.
+    assert Path.cwd() == tmp_path
 
 
 def test_source_install_converts_wrapper_without_resurrecting_it(legacy):
