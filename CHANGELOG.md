@@ -1,5 +1,12 @@
 # Changelog
 
+## [7.4.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v7.3.1...v7.4.0) (2026-10-29)
+
+
+### Features
+
+* **instructions:** pull latest host content with safe backups ([#566](https://github.com/ajanderson1/agent-toolkit-cli/issues/566)) ([64efc83](https://github.com/ajanderson1/agent-toolkit-cli/commit/64efc83513ed6adfc4c3123fc02af73e95ac3f0c))
+
 ## [7.3.1](https://github.com/ajanderson1/agent-toolkit-cli/compare/v7.3.0...v7.3.1) (2026-10-28)
 
 
