@@ -103,14 +103,29 @@ Footer (key hints)
 
 Checkbox changes update changed table cells in place when the row and column
 structure is unchanged. State badges, sources, global indicators and pending
-markers are still recomputed; this does not add an inventory cache or delay
-freshness checks. Filtering and structural changes rebuild the table as needed.
+markers are still recomputed; this does not cache inventory across refreshes or
+delay freshness checks. Filtering and structural changes rebuild the table as needed.
 Skill collection membership is indexed per view instead of scanning the entire
 inventory for every collection cell. These changes preserve the existing
 controls, Info panels, cursor and viewport behavior.
 
-Inventory reads and Apply still run synchronously, so slow filesystem or Git
-operations can still delay navigation or refresh.
+Skill discovery reuses the validated project lock, canonical paths, origin checks
+and repository status within each scan. A clean shared checkout does not need a
+separate Git status process for each child; dirty checkouts retain path-local
+checks so sibling or root changes do not make every child dirty. Later scans
+read fresh records and local state, and Apply keeps its existing fresh ownership
+checks. Refresh avoids scanning the active kind twice.
+
+Inventory reads and Apply still run synchronously, so slow filesystem, Git or
+native Pi/npm operations can still delay navigation or refresh. Background
+inventory loading is not implemented by these optimizations.
+
+For a reproducible discovery benchmark from a development checkout, run
+`uv run python scripts/benchmark_tui_inventory.py --skills 60 --samples 3`.
+It creates a disposable HOME, library, local Git source and project; fixture
+creation is excluded from timings. It reports global/project scan medians, Git
+process counts and project-lock reads without inspecting your assets. The
+renderer-only benchmark remains `scripts/benchmark_tui.py`.
 
 ### Library, catalogue, local and npm origins { #library-local-and-npm-origins }
 
