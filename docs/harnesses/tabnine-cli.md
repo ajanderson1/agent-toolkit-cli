@@ -25,14 +25,14 @@ Reads a fixed own-name file (`TABNINE.md`) instead of `AGENTS.md`. This is a res
 - **Global research verdict:** symlink
 - **Installation truth:** actual filesystem pointers, no Instructions lock.
 - **Default file:** `TABNINE.md`
-- **Project / global path:** `./TABNINE.md` / unclear (no documented global `TABNINE.md` path; `~/.tabnine/guidelines/*.md` is a *directory* of guidelines, not the same file)
+- **Project / global path:** `./TABNINE.md` / `~/.tabnine/guidelines/AGENTS.md` (Toolkit pointer inside Tabnine's Markdown-guidelines directory)
 - **Reads `AGENTS.md` natively:** no
-- **Source:** [docs.tabnine.com/main/getting-started/tabnine-cli/getting-started/quickstart](https://docs.tabnine.com/main/getting-started/tabnine-cli/getting-started/quickstart) ("Add project context with a `TABNINE.md` file in your project root") and [docs.tabnine.com/main/getting-started/tabnine-cli/features/agent-skills](https://docs.tabnine.com/main/getting-started/tabnine-cli/features/agent-skills) ("Unlike `TABNINE.md` project instructions (which load automatically on every session), skills load only when relevant")
+- **Source:** [docs.tabnine.com/main/getting-started/tabnine-cli/getting-started/quickstart](https://docs.tabnine.com/main/getting-started/tabnine-cli/getting-started/quickstart) (project `TABNINE.md`) and [docs.tabnine.com/main/getting-started/tabnine-agent/guidelines](https://docs.tabnine.com/main/getting-started/tabnine-agent/guidelines) (personal/project `.tabnine/guidelines/*.md`)
 
 Research verdicts/paths above are preserved evidence, not enabled mutation targets. The shipped `instructions_install.pointer_slots` contract determines actual scope support (native discovery is separate):
 
 - **Toolkit project pointer:** `<project>/TABNINE.md`
-- **Toolkit global pointer:** `~/.tabnine/TABNINE.md`
+- **Toolkit global pointer:** `~/.tabnine/guidelines/AGENTS.md`
 
 The enabled global pointer links to user-authored `~/.agent-toolkit/AGENTS.md`. Only requested slots change; install never authors canonical content.
 

@@ -83,9 +83,9 @@ def _standard_covered_count(asset_type: str, scope: str) -> int | None:
         return len(agents_standard_covered(scope))
 
     if asset_type == "instruction":
-        from agent_toolkit_cli.instructions_matrix import instructions_matrix_rows
-
-        return sum(1 for row in instructions_matrix_rows() if row["verdict"] == "native")
+        # Instructions expose only actual per-harness pointer checkboxes; there
+        # is no separate Standard column in either scope.
+        return None
 
     if asset_type == "mcp":
         from agent_toolkit_cli.mcp_standard import mcp_standard_covered

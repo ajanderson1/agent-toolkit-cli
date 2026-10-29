@@ -25,14 +25,14 @@ Reads a fixed own-name file (`CLAUDE.md` (with `AGENTS.md` as documented fallbac
 - **Global research verdict:** symlink
 - **Installation truth:** actual filesystem pointers, no Instructions lock.
 - **Default file:** `CLAUDE.md` (with `AGENTS.md` as documented fallback)
-- **Project / global path:** `./CLAUDE.md` (workspace root) / `~/.augment/rules/` (directory loader; no fixed root file at user scope)
+- **Project / global path:** `./CLAUDE.md` (workspace root) / `~/.augment/rules/AGENTS.md` (Toolkit pointer inside Augment's recursively loaded user-rules directory)
 - **Reads `AGENTS.md` natively:** no (CLAUDE.md takes precedence over AGENTS.md per official rule chain)
 - **Source:** [docs.augmentcode.com/cli/rules](https://docs.augmentcode.com/cli/rules)
 
 Research verdicts/paths above are preserved evidence, not enabled mutation targets. The shipped `instructions_install.pointer_slots` contract determines actual scope support (native discovery is separate):
 
 - **Toolkit project pointer:** `<project>/CLAUDE.md`
-- **Toolkit global pointer:** `~/.augment/CLAUDE.md`
+- **Toolkit global pointer:** `~/.augment/rules/AGENTS.md`
 
 The enabled global pointer links to user-authored `~/.agent-toolkit/AGENTS.md`. Only requested slots change; install never authors canonical content.
 

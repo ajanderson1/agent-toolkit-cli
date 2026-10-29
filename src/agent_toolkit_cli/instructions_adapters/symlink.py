@@ -42,9 +42,9 @@ Scope = Literal["project", "global"]
 # Per-harness pointer path templates + the own-name file each harness reads.
 # Sources cited inline; full Phase A evidence in instructions-fragments/.
 CELLS: dict[str, dict[str, str]] = {
-    # CLAUDE.md is the default-loaded root file across the Auggie precedence chain.
+    # Auggie recursively loads Markdown rules from ~/.augment/rules/.
     "augment":     {"pointer_name": "CLAUDE.md",
-                    "global":  "{HOME}/.augment/CLAUDE.md",
+                    "global":  "{HOME}/.augment/rules/AGENTS.md",
                     "project": "{PROJECT}/{POINTER_NAME}"},
     # https://code.claude.com/docs/en/memory — "Claude Code reads CLAUDE.md, not AGENTS.md".
     "claude-code": {"pointer_name": "CLAUDE.md",
@@ -74,8 +74,9 @@ CELLS: dict[str, dict[str, str]] = {
     "replit":      {"pointer_name": "replit.md",
                     "global":  "",  # no global
                     "project": "{PROJECT}/{POINTER_NAME}"},
+    # Tabnine Agent recursively loads Markdown guideline files from this directory.
     "tabnine-cli": {"pointer_name": "TABNINE.md",
-                    "global":  "{HOME}/.tabnine/{POINTER_NAME}",
+                    "global":  "{HOME}/.tabnine/guidelines/AGENTS.md",
                     "project": "{PROJECT}/{POINTER_NAME}"},
 }
 

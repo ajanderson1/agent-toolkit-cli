@@ -17,6 +17,8 @@ STANDARD_RE = re.compile(r"^Standard \(\d+\)$")
 
 # (asset_type, scope) -> reason there is no standard slot. Spec R4/R5.
 NO_STANDARD_SLOT = {
+    ("instruction", "global"): "per-harness pointer checkboxes; no separate Standard column",
+    ("instruction", "project"): "per-harness pointer checkboxes; no separate Standard column",
     ("pi-extension", "global"): "single-harness asset type; no convergence dir",
     ("pi-extension", "project"): "single-harness asset type; no convergence dir",
     ("mcp", "global"): "the standard projection IS the project .mcp.json",

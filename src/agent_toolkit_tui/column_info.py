@@ -112,10 +112,6 @@ _STANDARD_SENTENCES: dict[str, str] = {
         "One skill directory at `.agents/skills/<slug>/` that every harness "
         "in this list reads natively, so a single install serves all of them."
     ),
-    "instruction": (
-        "These harnesses read the repo's top-level `AGENTS.md` directly, so no "
-        "per-harness pointer file is written for them."
-    ),
     "agent": (
         "One file at `.claude/agents/<slug>.md` — the de-facto convergence "
         "directory these harnesses read, so the slot is a single artifact, not a bundle."
@@ -209,18 +205,6 @@ def _standard_skills(context: dict[str, object]) -> ColumnInfo:
     from agent_toolkit_cli.skill_agents import get_standard_agents
 
     return _standard_info("skill", tuple(get_standard_agents()), context)
-
-
-def _standard_instructions(context: dict[str, object]) -> ColumnInfo:
-    # source: instructions_matrix.instructions_matrix_rows()
-    from agent_toolkit_cli.instructions_matrix import instructions_matrix_rows
-
-    names = tuple(
-        row["harness"]
-        for row in instructions_matrix_rows(_scope(context, default="project"))
-        if row["verdict"] == "native"
-    )
-    return _standard_info("instruction", names, context)
 
 
 def _standard_agents(context: dict[str, object]) -> ColumnInfo:
@@ -351,7 +335,6 @@ COLUMN_INFO: dict[tuple[str, str], Factory] = {
     ("skill", "hermes-agent"): lambda context: _harness_info("skill", "hermes-agent", context),
     ("skill", "paperclip"): lambda context: _harness_info("skill", "paperclip", context),
     ("skill", "state"): _skill_state,
-    ("instruction", "standard"): _standard_instructions,
     ("instruction", "claude-code"): lambda context: _harness_info("instruction", "claude-code", context),
     ("instruction", "gemini-cli"): lambda context: _harness_info("instruction", "gemini-cli", context),
     ("agent", "standard"): _standard_agents,

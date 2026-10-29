@@ -1,19 +1,16 @@
 """Interactive DataTable for the TUI's instruction tab.
 
-Columns (#351): Instruction | Standard ⓘ | <non-covered main harnesses…> ⓘ | Source.
+Columns: Instruction | selected actionable harnesses | Source.
 
 Mirrors agent_grid.py: per-harness columns, scope toggle, toggle-queue →
 pending → apply. Pending key shape: (scope, harness_name, slug) — same
-3-tuple as skill/agent.
-
-The `standard` column is read-only (canonical_exists status). It is NOT
-toggleable. Conflict cells are also not toggleable (adapter refuses; shown
-distinctly as [red]![/]). Clicking a glyphed header explains the column; `i`
-always explains the selected instruction.
+3-tuple as skill/agent. Conflict cells are not toggleable (adapter refuses;
+shown distinctly as [red]![/]). Clicking a harness header explains its pointer;
+`i` always explains the selected instruction.
 
 CRITICAL: never name any method `_render_*` — it collides with Textual's
 internal flag mechanism and produces "bool is not callable" from compose.
-All glyph helpers are named `_cell_glyph`, `_standard_glyph`, `_rebuild`.
+All glyph helpers are named `_cell_glyph`, `_rebuild`.
 """
 from __future__ import annotations
 
@@ -33,14 +30,10 @@ from agent_toolkit_tui.widgets._support import sync_table
 from agent_toolkit_tui.widgets._support import adjust_source_column_width, current_source_column_width
 
 from agent_toolkit_cli import instructions_paths
-from agent_toolkit_tui.column_info import get_column_info
 from agent_toolkit_tui.composition import instructions_nonstandard_main
+from agent_toolkit_tui.column_info import get_column_info
 from agent_toolkit_tui.info_presentation import InfoFact
-from agent_toolkit_tui.display_names import (
-    asset_type_label,
-    harness_label,
-    standard_column_header,
-)
+from agent_toolkit_tui.display_names import asset_type_label, harness_label
 from agent_toolkit_tui.instruction_state import InstructionRow
 from agent_toolkit_tui.widgets._support import (
     adjust_source_column_width,
@@ -61,12 +54,10 @@ _GLOBAL_GLYPH    = "🌐"
 
 # Column index offsets:
 #   0 = slug (INSTRUCTION)
-#   1 = standard (read-only canonical status)
-#   2..2+N-1 = active harness columns (_active_harnesses())
-#   2+N = Source
-_HARNESS_COL_OFFSET = 2
+#   1..N = selected actionable harness columns (_active_harnesses())
+#   1+N = Source
+_HARNESS_COL_OFFSET = 1
 _INSTRUCTION_COL_WIDTH = 22
-_STANDARD_COL_WIDTH = 16
 _HARNESS_COL_WIDTH = 14
 _SOURCE_COL_WIDTH = 30
 
@@ -108,8 +99,7 @@ class InstructionGrid(Vertical):
         self._filter: str = ""
 
     def _active_harnesses(self) -> tuple[str, ...]:
-        # Standard column + non-covered main harnesses. The long tail is
-        # CLI-only (#351 post-demo decision).
+        # Settings-selected main harnesses with a linkable pointer at this scope.
         return instructions_nonstandard_main(self._selection, scope=self._scope)
 
     def set_harness_selection(self, selection: tuple[str, ...]) -> None:
@@ -266,7 +256,7 @@ class InstructionGrid(Vertical):
         col = table.cursor_coordinate.column
         harness = self._harness_for_column(col)
         if harness is None:
-            # slug or standard or source — no-op.
+            # instruction label or source — no-op.
             return
         scope = self._scope
         # Determine target: if any cell in the column is effectively off → link all.
@@ -301,7 +291,7 @@ class InstructionGrid(Vertical):
         self._notify_pending()
 
     def _toggle_at(self, coord: Coordinate) -> None:
-        # Slug column (0), standard column (1), or source column → no-op.
+        # Instruction label (0) or source column → no-op.
         harness = self._harness_for_column(coord.column)
         if harness is None:
             return
@@ -332,13 +322,12 @@ class InstructionGrid(Vertical):
         """Return the harness name for a table column index, or None.
 
         Column layout:
-          0 = slug (INSTRUCTION)
-          1 = standard (read-only)
-          2..2+N-1 = _active_harnesses()
-          2+N = Source
+          0 = instruction
+          1..N = _active_harnesses()
+          1+N = Source
         """
         if col < _HARNESS_COL_OFFSET:
-            # Slug or standard — not an interactive harness column.
+            # Instruction label — not an interactive harness column.
             return None
         active = self._active_harnesses()
         idx = col - _HARNESS_COL_OFFSET
@@ -348,8 +337,6 @@ class InstructionGrid(Vertical):
 
     def _column_key_for_index(self, col: int) -> str | None:
         """Resolve every explainable header to its registry key (#479 R2)."""
-        if col == 1:
-            return "standard"
         index = col - _HARNESS_COL_OFFSET
         active = self._active_harnesses()
         if 0 <= index < len(active):
@@ -366,28 +353,14 @@ class InstructionGrid(Vertical):
                 get_column_info(
                     key,
                     asset_type="instruction",
-                    context=self._context_for(
-                        key=key,
-                        row_index=event.data_table.cursor_coordinate.row,
-                    ),
+                    context=self._context_for(),
                 )
             )
         )
 
-    def _context_for(self, *, key: str, row_index: int | None = None) -> dict[str, object]:
-        """Return live scope context; marker copy additionally needs row state."""
-        context: dict[str, object] = {"scope": self._scope}
-        if key != "standard":
-            return context
-        context["global_linked"] = False
-        visible = self._visible_rows()
-        if row_index is not None and 0 <= row_index < len(visible):
-            context["global_linked"] = any(
-                cell.linked
-                for (_harness, scope), cell in visible[row_index].cells.items()
-                if scope == "global"
-            )
-        return context
+    def _context_for(self) -> dict[str, object]:
+        """Return the scope for harness-pointer column information."""
+        return {"scope": self._scope}
 
     def on_resize(self, event: Resize) -> None:
         try:
@@ -395,8 +368,7 @@ class InstructionGrid(Vertical):
         except Exception:
             return
 
-        fixed_width = 22 + 16 + (len(self._active_harnesses()) * 14)
-        adjust_source_column_width(table, event, fixed_width)
+        adjust_source_column_width(table, event, self._source_column_fixed_width())
 
     def _rebuild(self, table: DataTable) -> None:
         """Rebuild the DataTable from current rows + pending. Never named _render_*."""
@@ -411,12 +383,6 @@ class InstructionGrid(Vertical):
         columns: list[tuple[str, int]] = []
         # The asset column is explained by `i`, not header click (#479).
         columns.append((asset_type_label("instruction"), _INSTRUCTION_COL_WIDTH))
-        # Standard column — read-only canonical status. It leads; everything
-        # after it is implicitly non-standard (group-tag header row removed
-        # per AJ demo feedback, #351).
-        standard_header = standard_column_header("instruction", self._scope)
-        assert standard_header is not None, "instructions always have a standard slot"
-        columns.append((f"{standard_header} {_INFO_GLYPH}", _STANDARD_COL_WIDTH))
         # Per-harness interactive columns.
         active = self._active_harnesses()
         for harness in active:
@@ -429,7 +395,6 @@ class InstructionGrid(Vertical):
         table_rows: list[tuple[str, list[str | Text]]] = []
         for row in visible:
             cells: list[str | Text] = [row.slug]
-            cells.append(self._standard_glyph(row))
             for harness in active:
                 cells.append(self._cell_glyph(row=row, harness=harness))
             cells.append(Text(row.source, no_wrap=True, overflow="ellipsis"))
@@ -440,7 +405,7 @@ class InstructionGrid(Vertical):
 
         if visible:
             max_row = len(visible) - 1
-            # Layout: slug + standard + N harness cols + source.
+            # Layout: instruction + N harness cols + source.
             max_col = _HARNESS_COL_OFFSET + len(active)
             table.cursor_coordinate = Coordinate(
                 row=min(saved.row, max_row),
@@ -454,7 +419,6 @@ class InstructionGrid(Vertical):
     def _source_column_fixed_width(self) -> int:
         return (
             _INSTRUCTION_COL_WIDTH
-            + _STANDARD_COL_WIDTH
             + (_HARNESS_COL_WIDTH * len(self._active_harnesses()))
         )
 
@@ -465,12 +429,6 @@ class InstructionGrid(Vertical):
                 self.size.width,
                 self._source_column_fixed_width(),
             )
-
-    def _standard_glyph(self, row: InstructionRow) -> str:
-        """Return display glyph for the standard/native AGENTS.md column."""
-        if row.canonical_exists:
-            return "[dim]AGENTS.md[/]"
-        return "[red]missing[/]"
 
     def _cell_glyph(self, *, row: InstructionRow, harness: str) -> str:
         """Return the display glyph for a harness cell. Never named _render_*."""

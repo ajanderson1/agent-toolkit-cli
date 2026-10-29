@@ -13,7 +13,7 @@ def _info(column: str, asset_type: str, scope: str = "global", **context: object
 
 def test_registry_uses_asset_type_column_pairs() -> None:
     assert ("skill", "standard") in COLUMN_INFO
-    assert ("instruction", "standard") in COLUMN_INFO
+    assert ("instruction", "standard") not in COLUMN_INFO
     assert ("agent", "standard") in COLUMN_INFO
     assert ("mcp", "standard") in COLUMN_INFO
     assert all(len(pair) == 2 for pair in COLUMN_INFO)
@@ -40,12 +40,6 @@ def test_get_column_info_unknown_pair_raises_key_error() -> None:
             "global",
             "One skill directory at `.agents/skills/<slug>/` that every harness "
             "in this list reads natively, so a single install serves all of them.",
-        ),
-        (
-            "instruction",
-            "global",
-            "These harnesses read the repo's top-level `AGENTS.md` directly, so no "
-            "per-harness pointer file is written for them.",
         ),
         (
             "agent",
@@ -81,20 +75,6 @@ def test_standard_skill_panel_uses_live_catalog_display_names() -> None:
         assert harness_label(name) in text
 
 
-def test_standard_instruction_panel_uses_live_native_readers() -> None:
-    from agent_toolkit_cli.instructions_matrix import instructions_matrix_rows
-
-    info = _info("standard", "instruction", global_linked=False)
-    text = "\n".join(info.lines)
-    native = [
-        row["harness"] for row in instructions_matrix_rows("global")
-        if row["verdict"] == "native"
-    ]
-    assert f"Covered harnesses ({len(native)}):" in text
-    for name in native:
-        assert harness_label(name) in text
-
-
 def test_standard_agent_panel_preserves_the_devin_global_note() -> None:
     global_info = _info("standard", "agent", "global", global_linked=False)
     project_info = _info("standard", "agent", "project", global_linked=False)
@@ -106,7 +86,6 @@ def test_standard_agent_panel_preserves_the_devin_global_note() -> None:
     ("asset_type", "expected_marker_line"),
     [
         ("skill", "  This skill is also installed globally,"),
-        ("instruction", "  merged with (not replaced by) the project one."),
         ("agent", "  This agent is also installed globally."),
     ],
 )

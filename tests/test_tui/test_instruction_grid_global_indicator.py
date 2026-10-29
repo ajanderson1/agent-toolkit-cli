@@ -42,9 +42,9 @@ async def _rendered_plain(app: App, pilot, harness: str) -> str:
     grid._rebuild(table)  # type: ignore[attr-defined]
     await pilot.pause()
     row_key = list(table.rows.keys())[0]
-    # Column layout: 0=slug, 1=standard, 2.. = harness cols (in
+    # Column layout: 0=instruction, 1.. = harness cols (in
     # interactive_harnesses() order), last = Source.
-    col_index = 2 + list(interactive_harnesses()).index(harness)
+    col_index = 1 + list(interactive_harnesses()).index(harness)
     col_key = list(table.columns.keys())[col_index]
     return Text.from_markup(str(table.get_cell(row_key, col_key))).plain
 
@@ -183,69 +183,17 @@ async def test_no_global_cells_no_marker_no_crash():
 
 
 @pytest.mark.asyncio
-async def test_context_for_standard_reports_global_linked_true():
-    """The standard-key context surfaces whether the focused row's slot is
-    linked globally, mirroring agent_grid._context_for (#388)."""
-    row = _row_with(
-        project_cells={_H0: InstructionCell(linked=False, conflict=False)},
-        global_cells={_H0: InstructionCell(linked=True, conflict=False)},
-    )
+async def test_context_for_harness_pointer_info_is_scope_specific():
+    """Harness pointer info receives the selected scope only."""
+    row = _row_with(project_cells={_H0: InstructionCell(linked=False, conflict=False)})
 
     class _A(App):
         def compose(self):
             yield InstructionGrid([row], id="g")
 
-    a = _A()
-    async with a.run_test() as pilot:
-        g = a.query_one("#g", InstructionGrid)
-        g.set_scope("project")
+    app = _A()
+    async with app.run_test() as pilot:
+        grid = app.query_one("#g", InstructionGrid)
+        grid.set_scope("project")
         await pilot.pause()
-        ctx = g._context_for(key="standard", row_index=0)  # type: ignore[attr-defined]
-        assert ctx == {"scope": "project", "global_linked": True}
-
-
-@pytest.mark.asyncio
-async def test_context_for_standard_reports_global_linked_false():
-    """No global cell (or out-of-range row) → global_linked False, no crash."""
-    row = _row_with(
-        project_cells={_H0: InstructionCell(linked=True, conflict=False)},
-    )
-
-    class _A(App):
-        def compose(self):
-            yield InstructionGrid([row], id="g")
-
-    a = _A()
-    async with a.run_test() as pilot:
-        g = a.query_one("#g", InstructionGrid)
-        g.set_scope("project")
-        await pilot.pause()
-        ctx = g._context_for(key="standard", row_index=0)  # type: ignore[attr-defined]
-        assert ctx == {"scope": "project", "global_linked": False}
-        oob = g._context_for(key="standard", row_index=99)  # type: ignore[attr-defined]
-        assert oob == {"scope": "project", "global_linked": False}
-
-
-def test_column_info_instructions_marker_block_present():
-    """column_info renders the 🌐 marker block for instructions when the focused
-    row is globally linked (#388)."""
-    from agent_toolkit_tui.column_info import get_column_info
-
-    info = get_column_info(
-        "standard",
-        asset_type="instruction",
-        context={"scope": "project", "global_linked": True},
-    )
-    assert any("🌐 marker" in line for line in info.lines)
-
-
-def test_column_info_instructions_marker_block_omitted_when_not_global():
-    """Block omitted when the focused row is not globally linked."""
-    from agent_toolkit_tui.column_info import get_column_info
-
-    info = get_column_info(
-        "standard",
-        asset_type="instruction",
-        context={"scope": "project", "global_linked": False},
-    )
-    assert not any("🌐 marker" in line for line in info.lines)
+        assert grid._context_for() == {"scope": "project"}  # type: ignore[attr-defined]

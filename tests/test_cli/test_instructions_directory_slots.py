@@ -68,21 +68,29 @@ def test_opposing_intents_on_distinct_hardlinked_entries(hardlinked_slots):
 def test_actual_shared_entry_alias_coalesces_or_refuses(hardlinked_slots, opposing, case_alias):
     scope, home, project, canonical, first, second = hardlinked_slots
     if scope == 'global':
-        target = first.parent.with_name('.CLAUDE') if case_alias else first.parent
+        augment = symlink._pointer_path('augment', scope, project, home)
+        tabnine = symlink._pointer_path('tabnine-cli', scope, project, home)
+        target = augment.parent.with_name('.RULES') if case_alias else augment.parent
         if not target.exists():
             pytest.skip('filesystem does not alias directory case')
-        (home / '.augment').symlink_to(target, target_is_directory=True)
+        tabnine.parent.mkdir(parents=True, exist_ok=True)
+        tabnine.parent.rmdir()
+        tabnine.parent.symlink_to(target, target_is_directory=True)
+        added, removed, shared = ('augment',), ('tabnine-cli',), augment
+    else:
+        added, removed, shared = ('augment',), ('claude-code',), first
     before = snapshot(home.parent)
     kwargs = dict(scope=scope, project_root=project, home=home)
     if opposing:
         with pytest.raises(symlink.PointerConflictError, match='opposing'):
-            ii.apply(**kwargs, add_harnesses=('augment',), remove_harnesses=('claude-code',))
+            ii.apply(**kwargs, add_harnesses=added, remove_harnesses=removed)
         assert snapshot(home.parent) == before
     else:
-        result = ii.apply(**kwargs, remove_harnesses=('augment', 'claude-code'))
+        result = ii.apply(**kwargs, remove_harnesses=(*added, *removed))
         assert len(result.actions) == 1
-        assert not first.is_symlink()
-        assert second.is_symlink()
+        assert not shared.is_symlink()
+        if scope == 'project':
+            assert second.is_symlink()
     assert canonical.read_text() == 'canonical\n'
 
 

@@ -50,14 +50,14 @@ async def test_modal_escape_closes():
 
 @pytest.mark.asyncio
 async def test_long_modal_body_scrolls_in_a_small_terminal():
-    """The 39-harness Instructions panel must remain fully reachable (#479)."""
+    """Long column-info panels remain fully reachable in small terminals."""
     from textual.app import App
     from textual.containers import VerticalScroll
 
     info = get_column_info(
         "standard",
-        asset_type="instruction",
-        context={"scope": "project", "global_linked": True},
+        asset_type="skill",
+        context={"scope": "project"},
     )
 
     class _A(App):
@@ -65,7 +65,7 @@ async def test_long_modal_body_scrolls_in_a_small_terminal():
             self.push_screen(ColumnInfoModal(info))
 
     app = _A()
-    async with app.run_test(size=(80, 24)) as pilot:
+    async with app.run_test(size=(80, 12)) as pilot:
         await pilot.pause()
         panel = app.screen.query_one(VerticalScroll)
         assert panel.virtual_size.height > panel.size.height

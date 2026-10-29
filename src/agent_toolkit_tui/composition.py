@@ -1,16 +1,13 @@
-"""Per-asset-type column composition for the Standard / Non-standard groups (#351).
+"""Per-asset-type composition of selected harness columns (#351).
 
 Derived from the catalog/SSOT at call time — never hardcoded — so adding a
-compliant harness upstream changes the grids without touching grid code.
-Asset types without a standard concept (pi-extensions) have no entry here;
-agents gained one with the .claude/agents slot (#361).
+harness upstream changes the grids without touching grid code. Standard
+columns remain appropriate for shared directory/config projections; Instructions
+instead renders each selected harness with an actionable pointer at the scope.
 
-The TUI renders ONLY the standard column plus the non-covered main harnesses;
-the long tail of harnesses is managed via the CLI (post-demo AJ decision,
-#351 — the collapsible long-tail column set was removed). The coverage
-invariant — every MAIN_HARNESSES member is either standard-covered or has its
-own rendered column, for every asset type it supports — is guarded by
-tests/test_tui/test_composition.py.
+The long tail of harnesses is managed via the CLI (post-demo AJ decision,
+#351 — the collapsible long-tail column set was removed). Composition and
+coverage invariants are guarded by tests/test_tui/test_composition.py.
 """
 from __future__ import annotations
 

@@ -11,8 +11,8 @@ from agent_toolkit_tui.column_info import get_column_info, registered_pairs
 EXPECTED = {
     ("skill", "global"): ("standard", "claude-code", "hermes-agent", "paperclip", "state"),
     ("skill", "project"): ("standard", "claude-code", "hermes-agent", "paperclip", "state"),
-    ("instruction", "global"): ("standard", "claude-code", "gemini-cli"),
-    ("instruction", "project"): ("standard", "claude-code", "gemini-cli"),
+    ("instruction", "global"): ("claude-code", "gemini-cli"),
+    ("instruction", "project"): ("claude-code", "gemini-cli"),
     ("agent", "global"): ("standard", "gemini-cli", "opencode", "pi", "state"),
     ("agent", "project"): ("standard", "gemini-cli", "opencode", "pi", "state"),
     ("mcp", "global"): ("claude-code", "codex", "opencode", "pi", "state"),

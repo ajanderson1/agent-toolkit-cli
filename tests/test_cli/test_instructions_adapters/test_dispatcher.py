@@ -46,6 +46,18 @@ def test_supported_harnesses_matches_matrix_symlink_set():
     assert SUPPORTED_HARNESSES == _matrix_symlink_set()
 
 
+def test_global_rules_directory_harnesses_use_supported_file_entries(tmp_path):
+    """Directory-based rule loaders receive the canonical file inside their directories."""
+    from agent_toolkit_cli.instructions_adapters.symlink import _pointer_path
+
+    assert _pointer_path("augment", "global", None, tmp_path) == (
+        tmp_path / ".augment" / "rules" / "AGENTS.md"
+    )
+    assert _pointer_path("tabnine-cli", "global", None, tmp_path) == (
+        tmp_path / ".tabnine" / "guidelines" / "AGENTS.md"
+    )
+
+
 def test_global_only_native_readers_have_no_project_pointer(tmp_path):
     """#499: global AGENTS.md slots do not turn project readers into pointers."""
     from agent_toolkit_cli.instructions_adapters.symlink import _pointer_path

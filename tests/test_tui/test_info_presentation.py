@@ -322,7 +322,6 @@ def test_asset_info_separates_actions_and_warnings() -> None:
 
 @pytest.mark.parametrize("asset_type,column", [
     ("skill", "standard"),
-    ("instruction", "standard"),
     ("command", "standard"),
     ("agent", "state"),
     ("mcp", "standard"),

@@ -1,9 +1,8 @@
-"""Column composition for the Standard / Non-standard split (#351).
+"""Column composition for Settings-selected, supported harnesses (#351).
 
-The TUI renders the standard column plus the non-covered MAIN_HARNESSES only;
-the long tail is CLI-only (post-demo AJ decision). The coverage guard below is
-the load-bearing invariant: every main harness must be covered — standard or
-own column — on every asset type it supports.
+Instructions render only selected harnesses with actionable pointer adapters;
+other asset types retain their existing shared Standard projections. The long
+tail is CLI-only (post-demo AJ decision).
 """
 import pytest
 
@@ -55,7 +54,8 @@ def test_paperclip_is_not_actionable_in_other_asset_compositions():
 
 
 def test_instructions_nonstandard_main_today():
-    # codex / opencode / pi / cursor / hermes-agent read AGENTS.md natively → standard.
+    # Project-native AGENTS.md readers need no project pointer; only the
+    # selected harnesses with actionable adapters receive checkbox columns.
     assert instructions_nonstandard_main() == ("claude-code", "gemini-cli")
 
 
@@ -77,8 +77,7 @@ def test_skills_coverage_guard():
 
 
 def test_instructions_coverage_guard():
-    """Every main harness that supports the instructions asset type is covered:
-    native verdict (standard column) or a rendered pointer column."""
+    """Every main harness is either project-native or has a rendered pointer column."""
     from agent_toolkit_cli.instructions_matrix import instructions_matrix_rows
 
     verdicts = {r["harness"]: r["verdict"] for r in instructions_matrix_rows()}
@@ -89,8 +88,8 @@ def test_instructions_coverage_guard():
         if verdict.startswith("unsupported") or verdict.startswith("unknown"):
             continue  # the harness can't consume the asset type at all
         assert verdict == "native" or h in rendered, (
-            f"{h} (verdict {verdict!r}) is neither native (standard) nor a "
-            f"rendered instructions column"
+            f"{h} (verdict {verdict!r}) is neither project-native nor a "
+            f"rendered instructions pointer column"
         )
 
 

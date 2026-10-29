@@ -3,7 +3,7 @@
 Covers (widget-level + app-level):
 
 Widget-level:
-1.  columns renders correctly (Instruction + Standard (N) + interactive_harnesses() + Source)
+1.  columns renders correctly (Instruction + selected actionable harnesses + Source)
 2.  row count
 3.  toggle unlinked cell queues 'link'
 4.  toggle linked cell queues 'unlink'
@@ -12,7 +12,7 @@ Widget-level:
 7.  toggle_column (action_a) queues all in column
 8.  set_scope clears pending
 9.  conflict cell is non-toggleable (no-op)
-10. standard column is non-toggleable (no-op)
+10. selected harness columns start immediately after Instruction
 
 App-level:
 11. sidebar lists six active asset types with instruction first
@@ -114,7 +114,7 @@ async def test_instruction_grid_resize_fits_source_text_when_room_permits():
 
 @pytest.mark.asyncio
 async def test_instruction_grid_mounts_with_correct_columns():
-    """Grid must show Instruction + Standard (N) + interactive_harnesses() + Source."""
+    """Grid shows Instruction, selected actionable harnesses, and Source."""
 
     class _A(App):
         def compose(self) -> ComposeResult:
@@ -125,15 +125,36 @@ async def test_instruction_grid_mounts_with_correct_columns():
         await pilot.pause()
         table = app.query_one("#instruction-table", DataTable)
         labels = [str(c.label) for c in table.columns.values()]
-        # Slug + standard + N harness cols + Source
-        assert len(labels) == len(interactive_harnesses(scope="global")) + 3
-        assert "Instruction" in labels
-        assert "Instruction ⓘ" not in labels
+        # Instruction + N selected harness columns + Source
+        assert len(labels) == len(interactive_harnesses(scope="global")) + 2
+        assert labels[0] == "Instruction"
+        assert labels[-1] == "Source"
+        assert not any(label.startswith("Standard (") for label in labels)
         assert not any("INSTRUCTION" in lbl for lbl in labels)
-        assert any(label.startswith("Standard (") for label in labels)
-        assert not any("Claude Code" in label for label in labels)
-        assert not any("Gemini CLI" in label for label in labels)
-        assert any("Source" in lbl for lbl in labels)
+        assert any("Claude" in label for label in labels)
+        assert any("Gemini" in label for label in labels)
+
+
+@pytest.mark.asyncio
+async def test_instruction_grid_columns_follow_settings_harness_selection():
+    """Only Settings-selected, supported harnesses receive checkbox columns."""
+
+    class _A(App):
+        def compose(self) -> ComposeResult:
+            yield InstructionGrid([_unlinked_row()], id="g")
+
+    app = _A()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        grid = app.query_one("#g", InstructionGrid)
+        grid.set_harness_selection(("pi", "codex"))
+        await pilot.pause()
+        labels = [
+            str(column.label)
+            for column in app.query_one("#instruction-table", DataTable).columns.values()
+        ]
+
+        assert labels == ["Instruction", "Codex ⓘ", "Pi ⓘ", "Source"]
 
 
 @pytest.mark.asyncio
@@ -166,8 +187,8 @@ async def test_toggle_unlinked_cell_queues_link():
         g = app.query_one("#g", InstructionGrid)
         g.set_scope("global")
         table = app.query_one("#instruction-table", DataTable)
-        # Column layout: [0]=slug, [1]=standard, [2]=first harness, ...
-        table.cursor_coordinate = table.cursor_coordinate.__class__(row=0, column=2)
+        # Column layout: [0]=instruction, [1]=first harness, ...
+        table.cursor_coordinate = table.cursor_coordinate.__class__(row=0, column=1)
         table.focus()
         await pilot.pause()
         await pilot.press("space")
@@ -190,7 +211,7 @@ async def test_toggle_linked_cell_queues_unlink():
         g = app.query_one("#g", InstructionGrid)
         g.set_scope("global")
         table = app.query_one("#instruction-table", DataTable)
-        table.cursor_coordinate = table.cursor_coordinate.__class__(row=0, column=2)
+        table.cursor_coordinate = table.cursor_coordinate.__class__(row=0, column=1)
         table.focus()
         await pilot.pause()
         await pilot.press("space")
@@ -213,7 +234,7 @@ async def test_toggle_twice_clears_pending():
         g = app.query_one("#g", InstructionGrid)
         g.set_scope("global")
         table = app.query_one("#instruction-table", DataTable)
-        table.cursor_coordinate = table.cursor_coordinate.__class__(row=0, column=2)
+        table.cursor_coordinate = table.cursor_coordinate.__class__(row=0, column=1)
         table.focus()
         await pilot.pause()
         await pilot.press("space")
@@ -225,39 +246,6 @@ def test_pending_changed_message_carries_count():
     """PendingChanged(count) stores the count."""
     msg = InstructionGrid.PendingChanged(5)
     assert msg.count == 5
-
-
-def test_standard_glyph_is_neutral_when_canonical_exists():
-    """Existing canonical AGENTS.md is informational, not installed status."""
-    row = InstructionRow(
-        slug="AGENTS.md",
-        source="AGENTS.md",
-        canonical_exists=True,
-        cells={},
-    )
-    grid = InstructionGrid([row])
-
-    glyph = grid._standard_glyph(row)  # type: ignore[attr-defined]
-
-    assert "✔" not in glyph
-    assert "green" not in glyph
-    assert "AGENTS.md" in glyph or "std" in glyph
-
-
-def test_standard_glyph_reports_missing_when_canonical_absent():
-    """Missing canonical AGENTS.md remains visibly actionable/error-like."""
-    row = InstructionRow(
-        slug="AGENTS.md",
-        source="AGENTS.md",
-        canonical_exists=False,
-        cells={},
-    )
-    grid = InstructionGrid([row])
-
-    glyph = grid._standard_glyph(row)  # type: ignore[attr-defined]
-
-    assert "missing" in glyph or "✘" in glyph
-    assert "red" in glyph
 
 
 @pytest.mark.asyncio
@@ -280,7 +268,7 @@ async def test_pending_changed_fires_on_toggle():
         g = app.query_one("#g", InstructionGrid)
         g.set_scope("global")
         table = app.query_one("#instruction-table", DataTable)
-        table.cursor_coordinate = table.cursor_coordinate.__class__(row=0, column=2)
+        table.cursor_coordinate = table.cursor_coordinate.__class__(row=0, column=1)
         table.focus()
         await pilot.pause()
         await pilot.press("space")
@@ -306,7 +294,7 @@ async def test_toggle_column_queues_all_in_column():
         g = app.query_one("#g", InstructionGrid)
         g.set_scope("global")
         table = app.query_one("#instruction-table", DataTable)
-        table.cursor_coordinate = table.cursor_coordinate.__class__(row=0, column=2)
+        table.cursor_coordinate = table.cursor_coordinate.__class__(row=0, column=1)
         table.focus()
         await pilot.pause()
         await pilot.press("a")
@@ -329,7 +317,7 @@ async def test_set_scope_clears_pending():
         g = app.query_one("#g", InstructionGrid)
         g.set_scope("global")
         table = app.query_one("#instruction-table", DataTable)
-        table.cursor_coordinate = table.cursor_coordinate.__class__(row=0, column=2)
+        table.cursor_coordinate = table.cursor_coordinate.__class__(row=0, column=1)
         table.focus()
         await pilot.pause()
         await pilot.press("space")
@@ -352,7 +340,7 @@ async def test_conflict_cell_is_not_toggled():
         g = app.query_one("#g", InstructionGrid)
         g.set_scope("global")
         table = app.query_one("#instruction-table", DataTable)
-        table.cursor_coordinate = table.cursor_coordinate.__class__(row=0, column=2)
+        table.cursor_coordinate = table.cursor_coordinate.__class__(row=0, column=1)
         table.focus()
         await pilot.pause()
         await pilot.press("space")
@@ -361,8 +349,8 @@ async def test_conflict_cell_is_not_toggled():
 
 
 @pytest.mark.asyncio
-async def test_standard_column_is_not_toggled():
-    """Space on the standard (column 1) is a no-op."""
+async def test_first_harness_column_is_toggleable_without_standard_column():
+    """Space on column 1 toggles the first configured harness."""
 
     class _A(App):
         def compose(self) -> ComposeResult:
@@ -374,12 +362,13 @@ async def test_standard_column_is_not_toggled():
         g = app.query_one("#g", InstructionGrid)
         g.set_scope("global")
         table = app.query_one("#instruction-table", DataTable)
-        # Column 1 = standard
+        # Column 1 is the first harness.
         table.cursor_coordinate = table.cursor_coordinate.__class__(row=0, column=1)
         table.focus()
         await pilot.pause()
         await pilot.press("space")
-        assert g.pending_entries() == {}
+        first_harness = interactive_harnesses()[0]
+        assert g.pending_entries() == {("global", first_harness, "AGENTS.md"): "link"}
 
 
 @pytest.mark.asyncio
@@ -421,7 +410,7 @@ async def test_asset_info_shows_canonical_path_from_harness_column(
         g = app.query_one("#g", InstructionGrid)
         g.set_scope("global")
         table = app.query_one("#instruction-table", DataTable)
-        table.cursor_coordinate = table.cursor_coordinate.__class__(row=0, column=2)
+        table.cursor_coordinate = table.cursor_coordinate.__class__(row=0, column=1)
         table.focus()
         await pilot.pause()
         await pilot.press("i")
@@ -488,7 +477,7 @@ async def test_instruction_i_opens_asset_info_from_harness_column():
     async with app.run_test() as pilot:
         await pilot.pause()
         table = app.query_one("#instruction-table", DataTable)
-        table.cursor_coordinate = Coordinate(row=0, column=2)  # claude-code
+        table.cursor_coordinate = Coordinate(row=0, column=1)  # claude-code
         table.focus()
         await pilot.pause()
         await pilot.press("i")

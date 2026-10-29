@@ -202,8 +202,10 @@ Open ++ctrl+p++ and choose **Theme** or **Main harnesses**.
   presence as a standalone column across all supported asset grids. If unapplied
   pending edits are queued, a confirmation prompt asks before discarding them.
 
-A harness preference hides or shows only standalone columns. It never changes
-Standard coverage, and it cannot render a harness an asset type does not support.
+A harness preference hides or shows only standalone columns. Where an asset type
+has Standard coverage, the preference does not change that coverage. For
+Instructions, there is no Standard column: each Settings-selected harness with a
+supported pointer at the active scope gets its own checkbox column.
 
 See [TUI settings schema](tui-settings.md) for the JSON fields, environment
 override, failure handling, and the explicit CLI boundary.

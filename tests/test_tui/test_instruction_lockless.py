@@ -168,7 +168,7 @@ def test_inventory_is_read_only_and_row_universe_is_local(roots, occupant):
 @pytest.mark.parametrize('scope', ['project', 'global'])
 @pytest.mark.parametrize('broken', [False, True])
 @pytest.mark.asyncio
-async def test_rendered_lockless_instruction_evidence(roots, scope, broken):
+async def test_rendered_pointer_evidence_tracks_links_not_canonical_presence(roots, scope, broken):
     project, home = roots
     ii.apply(scope='global', project_root=None, home=home, add_harnesses=('claude-code',))
     if scope == 'project':
@@ -190,8 +190,9 @@ async def test_rendered_lockless_instruction_evidence(roots, scope, broken):
         assert grid.display and table.row_count == 1
         values = table.get_row_at(0)
         visible = [v.plain if isinstance(v, Text) else str(v) for v in values]
-        assert visible[0] == 'AGENTS.md' and 'green' in visible[2]
-        assert ('red' in visible[1]) == broken
+        assert visible[0] == 'AGENTS.md'
+        assert 'green' in visible[1]
+        assert grid._rows[0].canonical_exists is (not broken)
         columns = [str(c.label) for c in table.columns.values()]
         gemini_column = next(i for i, label in enumerate(columns) if label.startswith('Gemini'))
         assert 'red' in visible[gemini_column] and '!' in visible[gemini_column]

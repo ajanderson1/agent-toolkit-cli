@@ -135,10 +135,14 @@ file. Foreign symlinks and protected canonical destinations remain report-only.
 ## Terminal interface
 
 The Instructions grid derives its one row from the selected scope's canonical
-file or occupied pointer slots, without reading a lock. The Source cell is the
-canonical filename, not provenance or an installation record. It does not list
-host files or offer revision selection; use `pull` outside the TUI for that. Global-shadow
-indicators are read-only and cannot populate a project row by themselves.
+file or occupied pointer slots, without reading a lock. It has no Standard column:
+its harness checkbox columns are the Settings-selected harnesses with actionable
+pointer adapters at that scope. Each checkbox reflects or queues the link between
+that harness's expected instruction path and the canonical file. The Source cell
+is the canonical filename, not provenance or an installation record. The grid does
+not list host files or offer revision selection; use `pull` outside the TUI for
+that. Global-shadow indicators are read-only and cannot populate a project row by
+themselves.
 
 Save applies only explicit pointer intents. Assistants sharing one physical slot
 also share its state; duplicate actions coalesce, opposing actions are refused.
