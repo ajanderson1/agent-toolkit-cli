@@ -37,6 +37,8 @@ Do not assume every asset type implements the same lifecycle:
 
 - **Instructions:** no source-library membership or installation lock. User-owned
   canonical content is exposed through pointers; removing pointers preserves it.
+  Explicit global `pull`/`restore` content deployment retains provenance/backups
+  separately; those receipts are not library membership or exposure authority.
 - **MCP:** `add` authors a global library manifest entry, but the current `remove`
   command retracts scoped projections and **retains library membership/files**.
   Describe that actual effect; do not claim it removes an MCP from the library.

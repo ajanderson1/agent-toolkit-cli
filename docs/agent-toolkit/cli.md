@@ -85,7 +85,7 @@ Plural names are canonical; singular aliases remain accepted, including `instruc
 | `skills` | `skill` | add, install, uninstall, list, status, check, update, push, reset, remove, import, doctor, catalog |
 | `agents` | `agent` | add, install, uninstall, list, status, check, update, push, reset, remove, import, doctor, catalog |
 | `commands` | `command` | add, install, uninstall, list, status, check, update, push, reset, remove, import, doctor, catalog |
-| `instructions` | `instruction` | install, uninstall, list, status, doctor |
+| `instructions` | `instruction` | pull, restore, install, uninstall, list, status, doctor |
 | `pi-extensions` | `pi-extension` | add, install, uninstall, enable, disable, reset-selection, migrate-npm-records, list, status, check, update, push, reset, remove, import, doctor, catalog |
 | `mcps` | `mcp` | add, install, uninstall, list, status, update, remove, import, migrate, doctor |
 | `bundles` | `bundle` | install, validate |
@@ -127,7 +127,7 @@ There is **no blanket global default** and no rule that merely being in a Git re
 | Agents install/uninstall; Pi extensions Git install/uninstall | Project. Pass `-g` for user-level projections. |
 | Pi extensions npm add/install/remove/uninstall/enable/disable/reset-selection; migrate-npm-records | Global like Pi; `-p` selects project. No lock-based scope inference. |
 | Commands scope-aware verbs | `_paths_core.default_scope`: project if **any** of skills/agents/commands/Pi extensions project locks exists in the consumer directory; otherwise global. |
-| Instructions | Project; use `--scope global` (no `-g/-p`). |
+| Instructions | Pointer verbs default to project; use `--scope global` (no `-g/-p`). Content `pull`/`restore` are global-only, without a scope flag. |
 | MCP list/status/doctor | Project if `mcps-lock.json` exists, otherwise global. |
 | MCP install/uninstall/remove | Project; use `-g` for global. MCP add/import/migrate are global-library operations; update has no scope flag and refreshes reachable locked projections. |
 | Bundles install | Project if any source-backed project lock above exists, otherwise global. Explicit `--global` / `--project` overrides. |
@@ -225,12 +225,16 @@ atc commands doctor [-g|-p]
 ## Instructions
 
 ```text
+atc instructions pull --source SOURCE --host HOST [--ref REF] [--replace] [--dry-run] [--yes]
+atc instructions restore DEPLOYMENT [--replace] [--dry-run] [--yes]
 atc instructions install [--scope project|global] [--harness NAME]...
 atc instructions uninstall [--scope project|global]
 atc instructions list [--scope project|global] [--format table|json]
 atc instructions status [--scope project|global]
 atc instructions doctor [--scope project|global] [--no-fix]
 ```
+
+`pull`/`restore` are unreleased source-checkout commands for explicit global content deployment on macOS/Linux. Pull reads one `AGENTS.<host>.md`, either at repository root (subtree export) or under `agents-instructions/` (workspace), refusing ambiguity if both exist. It fetches latest `main` by default; `--ref` is optional. No version numbers/tags are needed; Git revert/push and another pull provide shared rollback. The resolved commit is recorded for traceability. Preview first with `--dry-run`; replacement requires `--replace`, confirmation or `--yes`, and retains unique backups/provenance. Restore accepts the printed deployment ID and restores its previous bytes. Neither changes harness exposure. These content-writing commands refuse canonical symlinks; pointer verbs still support them.
 
 Canonical is user-authored `<project>/AGENTS.md` or `~/.agent-toolkit/AGENTS.md`, possibly itself a symlink. Install never authors canonical content or prunes unrequested links. Correct manual links count as installed; real files and foreign pointers conflict. Uninstall preflights the entire requested batch against canonical's source chain. Legacy locks are ignored/preserved. Doctor adoption requires explicit confirmation; `--no-fix` is read-only. [Pointer identity, conflicts and partial retry](../asset-types/instructions.md).
 
