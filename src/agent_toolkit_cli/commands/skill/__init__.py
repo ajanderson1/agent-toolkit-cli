@@ -146,6 +146,7 @@ def _reconstruct_monorepo(
         clone_ref = None if ref_is_full_sha else parsed.ref
         skill_git.clone(
             parsed.url, parent_dir, ref=clone_ref, env=None, depth=1,
+            recurse_submodules=True,
         )
         effective_pin = pin_sha or (parsed.ref if ref_is_full_sha else None)
         if effective_pin:

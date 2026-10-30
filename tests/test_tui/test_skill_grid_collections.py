@@ -6,8 +6,13 @@ from textual.coordinate import Coordinate
 from textual.widgets import DataTable
 
 from agent_toolkit_tui.app import TUIApp
-from agent_toolkit_tui.widgets.skill_grid import SkillGrid
+from agent_toolkit_tui.widgets.skill_grid import SkillGrid, _collection_display_name
 from tests.test_cli.test_skill_collection_reconcile import legacy
+
+
+def test_collection_display_name_strips_repository_suffix():
+    assert _collection_display_name("ssh://gitlab@example.test:2424/owner/skills-mgrs.git") == "skills-mgrs"
+    assert _collection_display_name("owner/skills-experts") == "skills-experts"
 
 
 @pytest.mark.asyncio

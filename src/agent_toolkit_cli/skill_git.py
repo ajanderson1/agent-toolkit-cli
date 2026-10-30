@@ -126,7 +126,7 @@ def _run(
 
 def clone(
     url: str, dest: Path, *, ref: str | None, env: dict[str, str] | None,
-    depth: int | None = None,
+    depth: int | None = None, recurse_submodules: bool = False,
 ) -> GitResult:
     """Clone `url` into `dest`, failing loudly rather than hanging.
 
@@ -142,11 +142,14 @@ def clone(
     only one commit's tree is ever needed (#259). Defaults to `None` (full
     clone) so every other caller is unchanged. A shallow clone has only the
     cloned ref's tree; callers that then check out an *older* pinned commit
-    must `fetch_ref()` it first.
+    must `fetch_ref()` it first. `recurse_submodules` materialises nested
+    child repositories for monorepo sources that use gitlinks.
     """
     cmd = ["git", "clone"]
     if depth is not None:
         cmd += ["--depth", str(depth)]
+    if recurse_submodules:
+        cmd.append("--recurse-submodules")
     if ref:
         cmd += ["--branch", _guard_ref(ref)]
     cmd += [url, str(dest)]
@@ -343,6 +346,7 @@ def checkout(repo: Path, *, ref: str, env: dict[str, str] | None) -> GitResult:
 
 def clone_pinned_or_branch(
     url: str, dest: Path, *, ref: str | None, env: dict[str, str] | None,
+    recurse_submodules: bool = False,
 ) -> None:
     """Clone `url` into `dest`, honouring a possible SHA pin.
 
@@ -361,7 +365,13 @@ def clone_pinned_or_branch(
     origin-aware property.
     """
     pin = ref if looks_like_sha(ref) else None
-    clone(url, dest, ref=None if pin else ref, env=env)
+    clone_args = {
+        "ref": None if pin else ref,
+        "env": env,
+    }
+    if recurse_submodules:
+        clone_args["recurse_submodules"] = True
+    clone(url, dest, **clone_args)
     if pin and is_git_repo(dest):
         try:
             fetch_ref(dest, ref=pin, env=env)

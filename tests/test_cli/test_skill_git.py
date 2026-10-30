@@ -60,6 +60,39 @@ def test_clone_creates_working_tree(git_sandbox, tmp_path: Path):
     assert (dest / "SKILL.md").exists()
 
 
+def test_clone_recurses_submodules(git_sandbox, tmp_path: Path):
+    """Nested collection repositories must materialise their child skills."""
+    subprocess.run(
+        ["git", "-c", "protocol.file.allow=always", "-C",
+         str(git_sandbox.clone), "submodule", "add",
+         str(git_sandbox.upstream), "child"],
+        check=True, env=git_sandbox.env, capture_output=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(git_sandbox.clone), "add", ".gitmodules", "child"],
+        check=True, env=git_sandbox.env, capture_output=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(git_sandbox.clone), "commit", "-m", "submodule"],
+        check=True, env=git_sandbox.env, capture_output=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(git_sandbox.clone), "push", "origin", "main"],
+        check=True, env=git_sandbox.env, capture_output=True,
+    )
+
+    subprocess.run(
+        ["git", "config", "--global", "protocol.file.allow", "always"],
+        check=True, env=git_sandbox.env, capture_output=True,
+    )
+    dest = tmp_path / "recursive-out"
+    clone(
+        str(git_sandbox.upstream), dest, ref=None, env=git_sandbox.env,
+        recurse_submodules=True,
+    )
+    assert (dest / "child" / "SKILL.md").exists()
+
+
 def test_clone_failure_raises(tmp_path: Path):
     with pytest.raises(GitError):
         clone("file:///nonexistent.git", tmp_path / "x", ref=None, env={})

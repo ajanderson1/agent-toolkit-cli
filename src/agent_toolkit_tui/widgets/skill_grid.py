@@ -75,6 +75,11 @@ _GLOBAL_GLYPH   = "🌐"
 Op = Literal["link", "unlink"]
 
 
+def _collection_display_name(source: str) -> str:
+    """Return the short repository name used in collection rows."""
+    return source.rstrip("/").rsplit("/", 1)[-1].removesuffix(".git")
+
+
 class SkillDataTable(DataTable):
     """Name-column arrows expand/collapse before horizontal navigation."""
 
@@ -168,7 +173,7 @@ class SkillGrid(Vertical):
         for row in self._rows:
             if row.collection_key is not None:
                 self._collection_members.setdefault(row.collection_key, []).append(row)
-                self._collection_names.setdefault(row.source.rsplit("/", 1)[-1], set()).add(row.collection_key)
+                self._collection_names.setdefault(_collection_display_name(row.source), set()).add(row.collection_key)
 
     def set_rows(self, rows: list[SkillRow]) -> None:
         previous = {r.collection_key for r in self._rows if r.collection_key is not None}
@@ -783,7 +788,7 @@ class SkillGrid(Vertical):
         for row in visible:
             if row.is_collection:
                 disclosure = "▸" if row.collection_key in self._collapsed else "▾"
-                base = row.source.rsplit("/", 1)[-1]
+                base = _collection_display_name(row.source)
                 identities = self._collection_names.get(base, set())
                 if len(identities) > 1:
                     base = f"{row.source}@{row.collection_key[1] or 'default'}"

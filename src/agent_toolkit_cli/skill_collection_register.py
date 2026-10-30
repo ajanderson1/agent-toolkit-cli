@@ -72,7 +72,8 @@ def _register(
             discovery_root = Path(tmp) / "checkout"
             try:
                 skill_git.clone_pinned_or_branch(
-                    parsed.url, discovery_root, ref=parsed.ref, env=None
+                    parsed.url, discovery_root, ref=parsed.ref, env=None,
+                    recurse_submodules=True,
                 )
             except skill_git.GitError as exc:
                 raise click.ClickException(f"parent clone failed: {exc}") from exc
