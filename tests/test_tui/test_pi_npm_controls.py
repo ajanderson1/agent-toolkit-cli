@@ -49,6 +49,10 @@ async def test_space_apply_refresh_fresh_app_without_registration(environment, s
         await pilot.press("space")
         assert grid.pending_entries() == {(scope, "demo"): "unlink"}
         await pilot.press("ctrl+s"); await pilot.pause()
+        if scope == "project":
+            from agent_toolkit_tui.screens.pi_project_blocks import PiProjectBlocksScreen
+            assert isinstance(app.screen, PiProjectBlocksScreen)
+            await pilot.click("#apply-blocks"); await pilot.pause()
         assert grid.pending_entries() == {}
         current = pi_npm.read_npm_states(home=home, project=project)["demo"]
         assert not current.for_scope(scope).enabled

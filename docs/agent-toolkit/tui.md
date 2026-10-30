@@ -159,7 +159,29 @@ Pi intents and their original targets; **Ctrl+Z** discards them.
 For npm packages, enabled follows native package resource filters and scope
 precedence, not reference presence. Project scope inherits global selection unless
 an explicit override or project installation replaces it. **R → Ctrl+S** resets
-extension policy; for a global package's project delta this restores inheritance.
+extension policy; for a global package's project delta this restores inheritance,
+**not force-on**. If global policy is disabled, inheritance remains disabled.
+
+In the normal project grid, npm cells label **inherit** (follow global), **on**
+(explicit enable), or **block/off** (explicit disable); **policy** marks a mixed
+explicit selection. Pending cells show the intended policy, and guidance below
+the grid explains **Space** versus **R**. Unchecking an inherited package queues
+a **persistent project block**, not removal of a duplicate/local selection.
+Checking a blocked package instead queues explicit on; use **R** to follow global
+policy again. For a separate project installation, R resets its own filter.
+
+**Ctrl+S** requires review before applying any native npm project disable,
+including an off policy replacing a prior override. The review lists every
+affected npm package, the target project and `.pi/settings.json`, the persistent
+consequence, and the inheritance recovery action. It appears even from another
+asset tab or scope, after refresh, or if a drafted package is no longer visible.
+A pending-project-block reminder remains in the shared footer. **Cancel** is
+focused by default; Enter or Escape there retains every draft and writes nothing.
+Repeated Ctrl+S does not confirm. Explicit **Apply all changes** saves the entire
+cross-kind/cross-scope batch, not only the blocks. **Ctrl+Z** after cancelling
+discards all drafts; it does not undo previously applied policies. Freshness
+checks still reject changed native settings instead of overwriting them.
+
 Mixed packages show **◐** and a separate mixed count. Missing/repair-needed or
 ambiguous declarations are visible rather than falsely reported as enabled.
 Local filesystem packages remain read-only.

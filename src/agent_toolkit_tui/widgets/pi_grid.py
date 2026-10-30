@@ -37,7 +37,7 @@ from textual.containers import Vertical
 from textual.coordinate import Coordinate
 from textual.events import Resize
 from textual.message import Message
-from textual.widgets import DataTable, Input
+from textual.widgets import DataTable, Input, Static
 from textual.events import Resize
 from rich.text import Text
 from agent_toolkit_tui.widgets._support import sync_table
@@ -164,6 +164,16 @@ class PiGrid(CatalogPendingMixin, Vertical):
     def pending_npm_snapshots(self) -> dict[tuple[str, str], str]:
         return dict(self._npm_snapshots)
 
+    def pending_project_blocks(self) -> tuple[str, ...]:
+        """Retain review even if refresh no longer discovers a drafted package.
+
+        Review every native npm project disable, not just currently inherited
+        rows: an explicit off policy can also replace a prior override.
+        """
+        return tuple(sorted(slug for (scope, slug), op in self._pending.items()
+                            if scope == "project" and op == "unlink"
+                            and (scope, slug) in self._npm_snapshots))
+
     def clear_pending(self) -> None:
         self._catalog_pending = {}
         self._pending.clear()
@@ -203,6 +213,7 @@ class PiGrid(CatalogPendingMixin, Vertical):
         yield GridFilterInput(table_selector="#pi-table", id="pi-filter")
         table: DataTable[str] = DataTable(id="pi-table", cursor_type="cell", zebra_stripes=True)
         yield table
+        yield Static("", id="pi-policy-help", markup=False)
 
     def set_filter(self, text: str) -> None:
         self._filter = text.strip().lower()
@@ -619,6 +630,14 @@ class PiGrid(CatalogPendingMixin, Vertical):
 
         sync_table(table, columns, table_rows)
         self._adjust_source_column_width(table)
+        help_text = (
+            "npm project: inherit = global; on/off/block = explicit. "
+            "Space = explicit on/off; R = reset (global package: inherit, not force-on). "
+            "Ctrl+S reviews persistent project blocks."
+            if self._scope == "project" and any(row.npm_state for row in visible) else ""
+        )
+        self.query_one("#pi-policy-help", Static).update(help_text)
+        self.query_one("#pi-policy-help", Static).display = bool(help_text)
 
         if visible:
             max_row = len(visible) - 1
@@ -692,6 +711,30 @@ class PiGrid(CatalogPendingMixin, Vertical):
             base = _MIXED_GLYPH
         else:
             base = _LOADED_GLYPH if loaded else _UNLOADED_GLYPH
+        if scope == "project" and row.npm_state:
+            current = row.npm_state.project_scope
+            if pending == "reset":
+                label = "inherit" if current.mode in ("inherit", "override") else "reset"
+            elif pending == "unlink":
+                label = "block"
+            elif pending == "link":
+                label = "on"
+            elif current.ambiguous:
+                label = "ambiguous"
+            elif current.missing:
+                label = "repair"
+            elif not current.configured:
+                label = "available"
+            elif current.mode == "inherit":
+                label = "inherit"
+            elif current.mixed:
+                label = "policy"
+            elif current.enabled:
+                label = "on"
+            else:
+                label = "block" if current.mode == "override" else "off"
+            global_marker = f" {_GLOBAL_GLYPH}" if row.global_cell.global_loaded else ""
+            return f"{base} {label}{global_marker}"
         # In project scope, mark rows that are also loaded globally — same
         # indicator as the skill grid's global indicator (#349).
         if scope == "project" and row.global_cell.global_loaded:

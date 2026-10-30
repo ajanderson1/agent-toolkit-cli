@@ -193,8 +193,12 @@ def test_standard_project_marker_is_present_only_for_a_globally_linked_asset(
             "pi",
             "Loose local extensions are enabled by native discovery unless settings exclude them; "
             "project selection includes inherited global resources. ◐ means mixed entrypoints. "
-            "npm packages use native resource filters with project inheritance; declarations and files are retained. R resets the selected npm scope's extension policy. Library rows show symlink connections (linked). "
-            "Space queues Enable/Disable; Ctrl+S applies it without deleting source files.",
+            "npm packages use native resource filters with project inheritance; declarations and files are retained. "
+            "Project npm cells label inherit versus explicit on/off/block. "
+            "Space queues explicit Enable/Disable, not inheritance. Ctrl+S reviews persistent npm project blocks "
+            "before applying all kinds/scopes, without deleting source files. "
+            "R resets the selected npm scope's extension policy; for a global package's project override, "
+            "this restores inheritance rather than forcing on. Library rows show symlink connections (linked).",
         ),
     ],
 )
