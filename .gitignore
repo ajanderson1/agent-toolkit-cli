@@ -45,3 +45,6 @@ CLAUDE.md
 
 # Pi subagents scratch
 .pi-subagents/
+
+# Local Pi extension state
+pi-extensions-lock.json
