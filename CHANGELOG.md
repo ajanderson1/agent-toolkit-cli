@@ -1,5 +1,28 @@
 # Changelog
 
+## [7.5.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v7.4.0...v7.5.0) (2026-10-30)
+
+
+### Features
+
+* **tui:** show instructions by selected harness pointers ([4367ff6](https://github.com/ajanderson1/agent-toolkit-cli/commit/4367ff6d5314e7cb9e47a39e25ccd39469462b51))
+
+
+### Bug Fixes
+
+* **tui:** derive monorepo state from verified central backing ([0db0edf](https://github.com/ajanderson1/agent-toolkit-cli/commit/0db0edfc0b44c48be7c237a15ae2c0301ad45620))
+
+
+### Performance
+
+* **tui:** avoid scanning the active inventory twice on refresh ([ba4f446](https://github.com/ajanderson1/agent-toolkit-cli/commit/ba4f446dfd33b2167889b00aba1c2c9fad7d62c2))
+* **tui:** reuse backing and Git checks within skill inventory scans ([6ed154f](https://github.com/ajanderson1/agent-toolkit-cli/commit/6ed154f7dc2569438facb3ece132f3db9dede67d))
+
+
+### CI
+
+* enforce hosted Linux checks before every push ([774a59e](https://github.com/ajanderson1/agent-toolkit-cli/commit/774a59e95e1fa0d55f2ec0020ccabc0420823ba5))
+
 ## [7.4.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v7.3.1...v7.4.0) (2026-10-29)
 
 
