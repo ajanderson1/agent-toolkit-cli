@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.5.1](https://github.com/ajanderson1/agent-toolkit-cli/compare/v7.5.0...v7.5.1) (2026-10-30)
+
+
+### Bug Fixes
+
+* support nested collections and normalize TUI names ([fcf55d4](https://github.com/ajanderson1/agent-toolkit-cli/commit/fcf55d45d14c380cd5d2e0d9d378bb41a9f9f92f))
+* support nested collections and normalize TUI names ([42bc2a3](https://github.com/ajanderson1/agent-toolkit-cli/commit/42bc2a36c4872b7f466a6701583860d190a0bc44))
+
 ## [7.5.0](https://github.com/ajanderson1/agent-toolkit-cli/compare/v7.4.0...v7.5.0) (2026-10-30)
 
 
